@@ -1,0 +1,13 @@
+# Dev-only: a seeded Postgres to test query execution against.
+# (canal-query + anfra-node are spawned by the host, not compose.)
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: anfra
+      POSTGRES_PASSWORD: anfra
+      POSTGRES_DB: anfra
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./dev/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
