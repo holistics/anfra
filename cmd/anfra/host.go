@@ -47,15 +47,3 @@ func withProject(fn func(h hostContext) error) error {
 		},
 	})
 }
-
-// withSidecar runs fn with just the anfra-node sidecar spawned (ping/hold/generate).
-func withSidecar(fn func(ctx context.Context, node *sidecar.AnfraNodeClient, proj project.Project) error) error {
-	return withProject(func(h hostContext) error {
-		node := sidecar.NewAnfraNode(h.cfg)
-		if err := node.Start(h.ctx); err != nil {
-			return fmt.Errorf("start anfra-node sidecar: %w", err)
-		}
-		defer node.Close()
-		return fn(h.ctx, node.Client(), h.proj)
-	})
-}

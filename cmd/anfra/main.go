@@ -19,6 +19,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}
-	root.AddCommand(newPingCmd(), newHoldCmd(), newQueryCmd())
+	root.AddCommand(newServeCmd())
+	root.AddCommand(appCommands()...) // ping, query, … generated from the registry
 	return root
 }
