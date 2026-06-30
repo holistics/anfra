@@ -17,10 +17,23 @@ import (
 type CanalQueryClient struct {
 	baseURL string
 	http    *http.Client
+	pool    map[string]any // pool_options sent with each query
 }
 
-func NewCanalQueryClient(baseURL string) *CanalQueryClient {
-	return &CanalQueryClient{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{}}
+// NewCanalQueryClient builds a client for the canal-query at baseURL. With
+// enablePooling, canal-query reuses DB connections across requests from its
+// process-global pool — which only pays off when canal-query is long-lived
+// (under `anfra serve`); one-shot callers pass false. Sizes mirror the monolith.
+func NewCanalQueryClient(baseURL string, enablePooling bool) *CanalQueryClient {
+	pool := map[string]any{"enabled": false}
+	if enablePooling {
+		pool = map[string]any{"enabled": true, "max_total": 10, "max_idle": 5}
+	}
+	return &CanalQueryClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		http:    &http.Client{},
+		pool:    pool,
+	}
 }
 
 // WaitReady polls /health until canal-query answers or the deadline passes.
@@ -86,7 +99,7 @@ func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig 
 		Dbtype:       dbtype,
 		Dbconfig:     dbconfig,
 		Dbsetting:    map[string]any{},
-		PoolOptions:  map[string]any{"enabled": false},
+		PoolOptions:  c.pool,
 		TenantID:     1,
 		Job:          queryJob{ID: -1, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
 		SkipCache:    true,

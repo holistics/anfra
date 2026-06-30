@@ -43,13 +43,17 @@ func runServe() error {
 			return fmt.Errorf("anfra serve already running for this repo (socket %s)", serveSocketPath(h.repo))
 		}
 
-		// Keep both sidecars warm for the server's lifetime.
-		node := sidecar.NewAnfraNode(h.cfg)
+		// Warm sidecars live for the server's lifetime, so enable canal-query
+		// connection pooling — DB connections are reused across /call requests.
+		cfg := h.cfg
+		cfg.EnablePooling = true
+
+		node := sidecar.NewAnfraNode(cfg)
 		if err := node.Start(h.ctx); err != nil {
 			return fmt.Errorf("start anfra-node sidecar: %w", err)
 		}
 		defer node.Close()
-		canal := sidecar.NewCanalQuery(h.cfg)
+		canal := sidecar.NewCanalQuery(cfg)
 		if err := canal.Start(h.ctx); err != nil {
 			return fmt.Errorf("start canal-query sidecar: %w", err)
 		}

@@ -17,6 +17,10 @@ type Config struct {
 	StderrWriter     io.Writer // sidecar stderr sink (the log stream); defaults to os.Stderr
 	StdoutWriter     io.Writer // sidecar stdout sink (banners/incidental); defaults to io.Discard
 	Logger           *slog.Logger
+	// EnablePooling turns on canal-query connection pooling. Only useful when the
+	// sidecar is long-lived (the pool is reused across requests under `anfra
+	// serve`); ignored by anfra-node.
+	EnablePooling bool
 }
 
 // AnfraNode supervises a host-spawned anfra-node sidecar (the AML/AQL engine).

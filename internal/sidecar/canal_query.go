@@ -50,7 +50,7 @@ func (c *CanalQuery) Start(ctx context.Context) error {
 		return err
 	}
 	c.proc = proc
-	c.client = NewCanalQueryClient(fmt.Sprintf("http://127.0.0.1:%d", port))
+	c.client = NewCanalQueryClient(fmt.Sprintf("http://127.0.0.1:%d", port), c.cfg.EnablePooling)
 
 	if err := c.client.WaitReady(ctx); err != nil {
 		c.Close()
