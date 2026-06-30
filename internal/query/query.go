@@ -1,5 +1,5 @@
 // Package query is the query use-case layer: it turns a (dataset, AQL) request
-// into SQL (and later, results) by loading the project's data sources and
+// into SQL (and later, results) by loading the repo's data sources and
 // driving the sidecars via their clients. It depends on the clients (not the
 // process managers), so it works equally against host-spawned or external
 // sidecars. The CLI command and the future HTTP/MCP handler are thin shells
@@ -11,7 +11,7 @@ import (
 	"fmt"
 
 	"github.com/anfra-ai/anfra/internal/datasource"
-	"github.com/anfra-ai/anfra/internal/project"
+	"github.com/anfra-ai/anfra/internal/repo"
 	"github.com/anfra-ai/anfra/internal/sidecar"
 )
 
@@ -24,14 +24,14 @@ func compileDataSources(m map[string]datasource.DataSource) map[string]sidecar.C
 }
 
 // GenerateSQL compiles an AQL query against a dataset into SQL, using the
-// dialects declared in the project's data_sources.yml.
-func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, proj project.Project, dataset, aql string) (string, error) {
-	sources, err := datasource.Load(proj.ConfigDir)
+// dialects declared in the repo's data_sources.yml.
+func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (string, error) {
+	sources, err := datasource.Load(repo.ConfigDir)
 	if err != nil {
 		return "", fmt.Errorf("load data sources: %w", err)
 	}
 	res, err := node.CompileToSQL(ctx, sidecar.CompileToSQLRequest{
-		ProjectPath: proj.Dir,
+		RepoPath:    repo.Dir,
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: compileDataSources(sources),
@@ -51,13 +51,13 @@ type RunResult struct {
 
 // Run compiles an AQL query to SQL and executes it via canal-query against the
 // data source the dataset targets, returning the SQL and the result rows.
-func Run(ctx context.Context, node *sidecar.AnfraNodeClient, canal *sidecar.CanalQueryClient, proj project.Project, dataset, aql string) (*RunResult, error) {
-	sources, err := datasource.Load(proj.ConfigDir)
+func Run(ctx context.Context, node *sidecar.AnfraNodeClient, canal *sidecar.CanalQueryClient, repo repo.Repo, dataset, aql string) (*RunResult, error) {
+	sources, err := datasource.Load(repo.ConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("load data sources: %w", err)
 	}
 	compiled, err := node.CompileToSQL(ctx, sidecar.CompileToSQLRequest{
-		ProjectPath: proj.Dir,
+		RepoPath:    repo.Dir,
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: compileDataSources(sources),

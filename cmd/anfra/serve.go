@@ -15,16 +15,16 @@ import (
 	"time"
 
 	"github.com/anfra-ai/anfra/internal/app"
-	"github.com/anfra-ai/anfra/internal/project"
+	"github.com/anfra-ai/anfra/internal/repo"
 	"github.com/anfra-ai/anfra/internal/sidecar"
 	"github.com/spf13/cobra"
 )
 
-// serveSocketPath is the per-project UDS the server listens on and CLI calls
+// serveSocketPath is the per-repo UDS the server listens on and CLI calls
 // dial. Kept in the temp dir (short path, UDS sun_path is ~108 bytes) and keyed
-// by project ID so each project has its own warm server.
-func serveSocketPath(proj project.Project) string {
-	return filepath.Join(os.TempDir(), "anfra-serve-"+proj.ID+".sock")
+// by repo ID so each repo has its own warm server.
+func serveSocketPath(repo repo.Repo) string {
+	return filepath.Join(os.TempDir(), "anfra-serve-"+repo.ID+".sock")
 }
 
 func newServeCmd() *cobra.Command {
@@ -38,9 +38,9 @@ func newServeCmd() *cobra.Command {
 }
 
 func runServe() error {
-	return withProject(func(h hostContext) error {
-		if isServeRunning(h.proj) {
-			return fmt.Errorf("anfra serve already running for this project (socket %s)", serveSocketPath(h.proj))
+	return withRepo(func(h hostContext) error {
+		if isServeRunning(h.repo) {
+			return fmt.Errorf("anfra serve already running for this repo (socket %s)", serveSocketPath(h.repo))
 		}
 
 		// Keep both sidecars warm for the server's lifetime.
@@ -57,7 +57,7 @@ func runServe() error {
 
 		clients := app.Clients{Node: node.Client(), Canal: canal.Client()}
 
-		sockPath := serveSocketPath(h.proj)
+		sockPath := serveSocketPath(h.repo)
 		_ = os.Remove(sockPath)
 		ln, err := net.Listen("unix", sockPath)
 		if err != nil {
@@ -116,7 +116,7 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 			return
 		}
 
-		res, err := app.Dispatch(r.Context(), clients, h.proj, req)
+		res, err := app.Dispatch(r.Context(), clients, h.repo, req)
 		if err != nil {
 			writeCallError(w, http.StatusUnprocessableEntity, err.Error())
 			return
@@ -138,8 +138,8 @@ func writeCallError(w http.ResponseWriter, status int, msg string) {
 
 // --- serve client (used by one-shot CLI calls to reach a warm server) ---
 
-func serveHTTPClient(proj project.Project) *http.Client {
-	sockPath := serveSocketPath(proj)
+func serveHTTPClient(repo repo.Repo) *http.Client {
+	sockPath := serveSocketPath(repo)
 	return &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -149,9 +149,9 @@ func serveHTTPClient(proj project.Project) *http.Client {
 	}
 }
 
-// isServeRunning reports whether a warm server is reachable for this project.
-func isServeRunning(proj project.Project) bool {
-	conn, err := net.DialTimeout("unix", serveSocketPath(proj), 200*time.Millisecond)
+// isServeRunning reports whether a warm server is reachable for this repo.
+func isServeRunning(repo repo.Repo) bool {
+	conn, err := net.DialTimeout("unix", serveSocketPath(repo), 200*time.Millisecond)
 	if err != nil {
 		return false
 	}
@@ -161,7 +161,7 @@ func isServeRunning(proj project.Project) bool {
 
 // callServe POSTs the request to the warm server and returns the raw response
 // body (JSON), surfacing a structured {error} as a Go error.
-func callServe(proj project.Project, req app.Request) ([]byte, error) {
+func callServe(repo repo.Repo, req app.Request) ([]byte, error) {
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
@@ -172,7 +172,7 @@ func callServe(proj project.Project, req app.Request) ([]byte, error) {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := serveHTTPClient(proj).Do(httpReq)
+	resp, err := serveHTTPClient(repo).Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("call serve: %w", err)
 	}

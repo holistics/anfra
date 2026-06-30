@@ -120,7 +120,7 @@ type CompileDataSource struct {
 
 // CompileToSQLRequest / Result mirror the sidecar's aql.compile_to_sql method.
 type CompileToSQLRequest struct {
-	ProjectPath string                       `json:"projectPath"`
+	RepoPath    string                       `json:"repoPath"`
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`

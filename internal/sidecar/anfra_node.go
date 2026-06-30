@@ -10,10 +10,10 @@ import (
 )
 
 // Config is shared by the sidecar managers: how to tag and forward their output,
-// and where per-project state lives.
+// and where per-repo state lives.
 type Config struct {
-	ProjectID        string    // passed to the sidecar as ANFRA_PROJECT_ID; tags its logs
-	CompileCachePath string    // anfra-node's AML compile cache dir (per-project); passed as ANFRA_COMPILE_CACHE_PATH
+	RepoID           string    // passed to the sidecar as ANFRA_REPO_ID; tags its logs
+	CompileCachePath string    // anfra-node's AML compile cache dir (per-repo); passed as ANFRA_COMPILE_CACHE_PATH
 	StderrWriter     io.Writer // sidecar stderr sink (the log stream); defaults to os.Stderr
 	StdoutWriter     io.Writer // sidecar stdout sink (banners/incidental); defaults to io.Discard
 	Logger           *slog.Logger
@@ -42,11 +42,11 @@ func (a *AnfraNode) Start(ctx context.Context) error {
 	}
 
 	// UDS paths are capped at ~108 bytes (sun_path), so keep it short and in the
-	// temp dir; per-pid so multiple projects don't collide.
+	// temp dir; per-pid so multiple repos don't collide.
 	a.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("anfra-%d.sock", os.Getpid()))
 	_ = os.Remove(a.socketPath)
 
-	env := []string{"ANFRA_PROJECT_ID=" + a.cfg.ProjectID}
+	env := []string{"ANFRA_REPO_ID=" + a.cfg.RepoID}
 	if a.cfg.CompileCachePath != "" {
 		env = append(env, "ANFRA_COMPILE_CACHE_PATH="+a.cfg.CompileCachePath)
 	}

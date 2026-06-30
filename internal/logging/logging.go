@@ -1,7 +1,7 @@
 // Package logging provides the host's structured, aggregated logger.
 //
 // The host is the only component that touches log files: it writes its own JSON
-// records and forwards each sidecar's stderr (via Writer) into one per-project
+// records and forwards each sidecar's stderr (via Writer) into one per-repo
 // log file plus its own stderr. Services only write to stderr.
 package logging
 
@@ -49,13 +49,13 @@ func parseLevel(s string) slog.Level {
 
 // Setup ensures logsDir exists, opens anfra.log there, and returns a host logger
 // (and the same Writer the sidecars' output is forwarded into). The envelope
-// ({ts, level, msg, service, project, pid}) matches the Node sidecar's. Level
+// ({ts, level, msg, service, repo, pid}) matches the Node sidecar's. Level
 // comes from LOG_LEVEL (default info).
 //
 // By default logs go ONLY to the file, keeping the command's console output
 // clean (results on stdout, command errors via cobra). Set ANFRA_LOG_STDERR=1
 // to also stream logs to stderr (useful for `anfra serve` / debugging).
-func Setup(logsDir, project string) (*Logging, error) {
+func Setup(logsDir, repo string) (*Logging, error) {
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func Setup(logsDir, project string) (*Logging, error) {
 	})
 	logger := slog.New(handler).With(
 		"service", "anfra-host",
-		"project", project,
+		"repo", repo,
 		"pid", os.Getpid(),
 	)
 

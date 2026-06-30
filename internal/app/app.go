@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anfra-ai/anfra/internal/project"
+	"github.com/anfra-ai/anfra/internal/repo"
 	"github.com/anfra-ai/anfra/internal/sidecar"
 )
 
@@ -60,7 +60,7 @@ type Command struct {
 	// Needs declares the sidecars required for the given args (arg-dependent).
 	// nil => no sidecars.
 	Needs func(args map[string]any) Sidecars
-	Run   func(ctx context.Context, clients Clients, proj project.Project, args map[string]any) (any, error)
+	Run   func(ctx context.Context, clients Clients, repo repo.Repo, args map[string]any) (any, error)
 }
 
 // Find returns the registered command by name.
@@ -74,7 +74,7 @@ func Find(name string) (Command, bool) {
 }
 
 // Dispatch runs a registered command. An empty command lists the commands.
-func Dispatch(ctx context.Context, clients Clients, proj project.Project, req Request) (any, error) {
+func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request) (any, error) {
 	if req.Command == "" {
 		names := make([]string, len(Commands))
 		for i, c := range Commands {
@@ -86,7 +86,7 @@ func Dispatch(ctx context.Context, clients Clients, proj project.Project, req Re
 	if !ok {
 		return nil, fmt.Errorf("unknown command %q", req.Command)
 	}
-	return cmd.Run(ctx, clients, proj, req.Args)
+	return cmd.Run(ctx, clients, repo, req.Args)
 }
 
 // Help renders help text from the registry. Empty command → the command list.

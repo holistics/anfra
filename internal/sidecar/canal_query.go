@@ -39,7 +39,7 @@ func (c *CanalQuery) Start(ctx context.Context) error {
 		ExtraEnv: []string{
 			"PORT=" + strconv.Itoa(port),
 			"SKIP_HOLISTICS_DB=1", // standalone: no monolith DB / job ops
-			"ANFRA_PROJECT_ID=" + c.cfg.ProjectID,
+			"ANFRA_REPO_ID=" + c.cfg.RepoID,
 		},
 		Stdout:    c.cfg.StdoutWriter,
 		Stderr:    c.cfg.StderrWriter,

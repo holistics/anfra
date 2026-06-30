@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/anfra-ai/anfra/internal/app"
-	"github.com/anfra-ai/anfra/internal/project"
+	"github.com/anfra-ai/anfra/internal/repo"
 	"github.com/anfra-ai/anfra/internal/sidecar"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -77,31 +77,31 @@ func applyStdin(c app.Command, args map[string]any) error {
 }
 
 // runCommand routes a command to the warm server when one is running for this
-// project, otherwise runs it one-shot (spawning only the sidecars it needs).
+// repo, otherwise runs it one-shot (spawning only the sidecars it needs).
 func runCommand(c app.Command, args map[string]any) error {
-	projectDir, err := os.Getwd()
+	repoDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("resolve project dir: %w", err)
+		return fmt.Errorf("resolve repo dir: %w", err)
 	}
-	proj := project.Resolve(projectDir)
+	repo := repo.Resolve(repoDir)
 	req := app.Request{Command: c.Name, Args: args}
 
-	if isServeRunning(proj) {
-		body, err := callServe(proj, req)
+	if isServeRunning(repo) {
+		body, err := callServe(repo, req)
 		if err != nil {
 			return err
 		}
 		return render(c.Name, body)
 	}
 
-	return withProject(func(h hostContext) error {
+	return withRepo(func(h hostContext) error {
 		clients, closeSidecars, err := startNeededSidecars(h, c, args)
 		if err != nil {
 			return err
 		}
 		defer closeSidecars()
 
-		res, err := app.Dispatch(h.ctx, clients, h.proj, req)
+		res, err := app.Dispatch(h.ctx, clients, h.repo, req)
 		if err != nil {
 			return err
 		}

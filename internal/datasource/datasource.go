@@ -1,4 +1,4 @@
-// Package datasource reads a project's data_sources.yml. The host owns this
+// Package datasource reads a repo's data_sources.yml. The host owns this
 // (it holds connection config / credentials and runs queries); only the
 // name->dbtype mapping is ever passed to the sidecar for SQL-dialect selection,
 // so secrets never cross the IPC boundary.
@@ -12,8 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// FileName is the data source manifest, inside the project's config dir
-// (project.Project.ConfigDir()).
+// FileName is the data source manifest, inside the repo's config dir
+// (repo.Repo.ConfigDir()).
 const FileName = "data_sources.yml"
 
 // DataSource describes one data source. Name/DBType are what the sidecar needs
