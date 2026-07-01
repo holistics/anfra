@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/anfra-ai/anfra/internal/repo"
@@ -42,11 +43,20 @@ const (
 	ArgBool   ArgType = "bool"
 )
 
+// Alias is an alternate name for an Arg (an extra CLI flag + /call key), folded
+// into the canonical Name by NormalizeReqArgs. Usage overrides the help text for
+// this name; if empty it falls back to the Arg's Usage.
+type Alias struct {
+	Name  string
+	Usage string
+}
+
 // Arg declares a command argument: a CLI flag + a /call args key.
 type Arg struct {
-	Name  string
-	Type  ArgType
-	Usage string
+	Name    string
+	Type    ArgType
+	Usage   string
+	Aliases []Alias
 }
 
 // Command is the single definition of an anfra operation.
@@ -84,9 +94,66 @@ func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request)
 	}
 	cmd, ok := Find(req.Command)
 	if !ok {
-		return nil, fmt.Errorf("unknown command %q", req.Command)
+		return nil, fmt.Errorf(`unknown command %q; send {"help": true} to list commands`, req.Command)
+	}
+	NormalizeReqArgs(cmd, req.Args)
+	if err := validateReqArgs(cmd, req.Args); err != nil {
+		return nil, err
 	}
 	return cmd.Run(ctx, clients, repo, req.Args)
+}
+
+// validateReqArgs rejects args the command doesn't declare (the /call analog of
+// cobra's "unknown flag" rejection). Call after NormalizeReqArgs so folded
+// aliases don't trip it. `help` is always allowed (it's the universal arg).
+func validateReqArgs(c Command, args map[string]any) error {
+	known := map[string]bool{"help": true}
+	for _, a := range c.Args {
+		known[a.Name] = true
+		for _, alias := range a.Aliases {
+			known[alias.Name] = true
+		}
+	}
+	var unknown []string
+	for k := range args {
+		if !known[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return fmt.Errorf(`unknown arg(s) %s for command %q; send {"command": %q, "help": true} for its args`,
+		strings.Join(unknown, ", "), c.Name, c.Name)
+}
+
+// NormalizeReqArgs folds each arg's aliases into its canonical name and drops the
+// alias keys, so command logic (and Needs) only ever reads the canonical arg.
+// Safe to call more than once (idempotent) and on a nil map.
+func NormalizeReqArgs(c Command, args map[string]any) {
+	if args == nil {
+		return
+	}
+	for _, a := range c.Args {
+		for _, alias := range a.Aliases {
+			v, ok := args[alias.Name]
+			if !ok {
+				continue
+			}
+			delete(args, alias.Name)
+			switch a.Type {
+			case ArgBool:
+				if !IsTruthy(args[a.Name]) && IsTruthy(v) {
+					args[a.Name] = true
+				}
+			case ArgString:
+				if s, _ := args[a.Name].(string); strings.TrimSpace(s) == "" {
+					args[a.Name] = v
+				}
+			}
+		}
+	}
 }
 
 // Help renders help text from the registry. Empty command → the command list.
@@ -107,7 +174,15 @@ func Help(command string) (string, error) {
 	if len(c.Args) > 0 {
 		b.WriteString("\nArgs:\n")
 		for _, a := range c.Args {
-			fmt.Fprintf(&b, "  %-12s (%s) %s\n", a.Name, a.Type, a.Usage)
+			fmt.Fprintf(&b, "  %-12s (%s) %s", a.Name, a.Type, a.Usage)
+			if len(a.Aliases) > 0 {
+				names := make([]string, len(a.Aliases))
+				for i, al := range a.Aliases {
+					names[i] = al.Name
+				}
+				fmt.Fprintf(&b, " [aliases: %s]", strings.Join(names, ", "))
+			}
+			b.WriteByte('\n')
 		}
 	}
 	return b.String(), nil

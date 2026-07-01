@@ -29,12 +29,39 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 	strVals := map[string]*string{}
 	boolVals := map[string]*bool{}
 	cmd := &cobra.Command{Use: c.Name, Short: c.Short}
+	// Show flags in declaration order (else pflag sorts alphabetically, scattering
+	// an alias like --validate away from its canonical --generate).
+	cmd.Flags().SortFlags = false
 	for _, a := range c.Args {
-		switch a.Type {
-		case app.ArgString:
-			strVals[a.Name] = cmd.Flags().String(a.Name, "", a.Usage)
-		case app.ArgBool:
-			boolVals[a.Name] = cmd.Flags().Bool(a.Name, false, a.Usage)
+		// pflag has no native flag aliases, so register the canonical name and each
+		// alias as their own flags (all set the same arg, folded by NormalizeReqArgs).
+		// Each flag keeps its own usage (aliases may override) and cross-references
+		// the others.
+		names := []string{a.Name}
+		usageOf := map[string]string{a.Name: a.Usage}
+		for _, al := range a.Aliases {
+			names = append(names, al.Name)
+			if usageOf[al.Name] = al.Usage; al.Usage == "" {
+				usageOf[al.Name] = a.Usage
+			}
+		}
+		for _, name := range names {
+			usage := usageOf[name]
+			var others []string
+			for _, n := range names {
+				if n != name {
+					others = append(others, "--"+n)
+				}
+			}
+			if len(others) > 0 {
+				usage += " (alias: " + strings.Join(others, ", ") + ")"
+			}
+			switch a.Type {
+			case app.ArgString:
+				strVals[name] = cmd.Flags().String(name, "", usage)
+			case app.ArgBool:
+				boolVals[name] = cmd.Flags().Bool(name, false, usage)
+			}
 		}
 	}
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
@@ -45,6 +72,9 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 		for k, v := range boolVals {
 			args[k] = *v
 		}
+		// Fold aliases into canonical names here too, so Needs (evaluated before
+		// Dispatch in the one-shot path) sees the right values.
+		app.NormalizeReqArgs(c, args)
 		if err := applyStdin(c, args); err != nil {
 			return err
 		}
@@ -87,11 +117,11 @@ func runCommand(c app.Command, args map[string]any) error {
 	req := app.Request{Command: c.Name, Args: args}
 
 	if isServeRunning(repo) {
-		body, err := callServe(repo, req)
+		body, contentType, err := callServe(repo, req)
 		if err != nil {
 			return err
 		}
-		return render(c.Name, body)
+		return render(body, contentType)
 	}
 
 	return withRepo(func(h hostContext) error {
@@ -109,7 +139,8 @@ func runCommand(c app.Command, args map[string]any) error {
 		if err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
-		return render(c.Name, body)
+		// A Dispatch result is a Go value we just marshalled, so it's JSON.
+		return render(body, "application/json")
 	})
 }
 
@@ -149,46 +180,25 @@ func startNeededSidecars(h hostContext, c app.Command, args map[string]any) (app
 	return clients, closeAll, nil
 }
 
-// render prints a command result. The body is the raw /call JSON (server path)
-// or the JSON-marshalled Dispatch result (one-shot) — same shape either way.
-// query gets pipe-friendly presentation; anything else prints as YAML.
-func render(command string, body []byte) error {
-	if command == "query" {
-		var q app.QueryResult
-		if err := json.Unmarshal(body, &q); err != nil {
-			return fmt.Errorf("decode query result: %w", err)
-		}
-		if q.Result == nil { // --generate: just the SQL, pipe-friendly
-			fmt.Println(q.SQL)
-			return nil
-		}
-		var out queryOutput
-		out.SQL = q.SQL
-		out.Result.Fields = q.Result.Fields
-		out.Result.Records = q.Result.Records
-		return printYAML(out)
+// render prints a command response. A JSON body (per its Content-Type) is
+// converted to YAML for readability; anything else is written through unchanged.
+func render(body []byte, contentType string) error {
+	if !isJSONContentType(contentType) {
+		_, err := os.Stdout.Write(body)
+		return err
 	}
 	var v any
 	if err := json.Unmarshal(body, &v); err != nil {
-		return fmt.Errorf("decode result: %w", err)
+		return fmt.Errorf("decode response: %w", err)
 	}
-	return printYAML(v)
-}
-
-// queryOutput is the YAML shape printed for an executed query.
-type queryOutput struct {
-	SQL    string `yaml:"sql"`
-	Result struct {
-		Fields  []string `yaml:"fields"`
-		Records [][]any  `yaml:"records"`
-	} `yaml:"result"`
-}
-
-func printYAML(v any) error {
 	b, err := yaml.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("marshal result: %w", err)
 	}
 	fmt.Print(string(b))
 	return nil
+}
+
+func isJSONContentType(contentType string) bool {
+	return strings.HasPrefix(strings.TrimSpace(contentType), "application/json")
 }

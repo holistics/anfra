@@ -25,7 +25,7 @@ var Commands = []Command{
 		Args: []Arg{
 			{Name: "dataset", Type: ArgString, Usage: "unique name of the dataset to compile against (required)"},
 			{Name: "aql", Type: ArgString, Usage: "the AQL query; if omitted, read from stdin"},
-			{Name: "generate", Type: ArgBool, Usage: "output the generated SQL instead of running the query"},
+			{Name: "generate", Type: ArgBool, Usage: "output the generated SQL instead of running the query", Aliases: []Alias{{Name: "validate", Usage: "validate the query without running it"}}},
 		},
 		StdinArg: "aql",
 		Needs: func(args map[string]any) Sidecars {

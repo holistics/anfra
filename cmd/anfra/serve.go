@@ -163,37 +163,37 @@ func isServeRunning(repo repo.Repo) bool {
 	return true
 }
 
-// callServe POSTs the request to the warm server and returns the raw response
-// body (JSON), surfacing a structured {error} as a Go error.
-func callServe(repo repo.Repo, req app.Request) ([]byte, error) {
+// callServe POSTs the request to the warm server and returns the response body
+// plus its Content-Type, surfacing a structured {error} as a Go error.
+func callServe(repo repo.Repo, req app.Request) (body []byte, contentType string, err error) {
 	payload, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return nil, "", fmt.Errorf("marshal request: %w", err)
 	}
 	httpReq, err := http.NewRequest(http.MethodPost, "http://unix/call", bytes.NewReader(payload))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := serveHTTPClient(repo).Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("call serve: %w", err)
+		return nil, "", fmt.Errorf("call serve: %w", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read serve response: %w", err)
+		return nil, "", fmt.Errorf("read serve response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		var e struct {
 			Error string `json:"error"`
 		}
 		if json.Unmarshal(data, &e) == nil && e.Error != "" {
-			return nil, fmt.Errorf("%s", e.Error)
+			return nil, "", fmt.Errorf("%s", e.Error)
 		}
-		return nil, fmt.Errorf("serve returned status %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("serve returned status %d", resp.StatusCode)
 	}
-	return data, nil
+	return data, resp.Header.Get("Content-Type"), nil
 }
