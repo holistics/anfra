@@ -36,6 +36,23 @@ func NewCanalQueryClient(baseURL string, enablePooling bool) *CanalQueryClient {
 	}
 }
 
+// Health does a single /health check (unlike WaitReady, which polls).
+func (c *CanalQueryClient) Health(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("canal-query health status %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // WaitReady polls /health until canal-query answers or the deadline passes.
 func (c *CanalQueryClient) WaitReady(ctx context.Context) error {
 	deadline := time.Now().Add(15 * time.Second)

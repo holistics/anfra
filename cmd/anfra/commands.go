@@ -28,7 +28,11 @@ func appCommands() []*cobra.Command {
 func buildCobraCommand(c app.Command) *cobra.Command {
 	strVals := map[string]*string{}
 	boolVals := map[string]*bool{}
-	cmd := &cobra.Command{Use: c.Name, Short: c.Short}
+	cmd := &cobra.Command{Use: c.Name, Short: c.Short, Args: cobra.NoArgs}
+	if c.Positional != nil {
+		cmd.Use = fmt.Sprintf("%s [%s...]", c.Name, c.Positional.Name)
+		cmd.Args = cobra.ArbitraryArgs
+	}
 	// Show flags in declaration order (else pflag sorts alphabetically, scattering
 	// an alias like --validate away from its canonical --generate).
 	cmd.Flags().SortFlags = false
@@ -64,13 +68,16 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 			}
 		}
 	}
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
+	cmd.RunE = func(_ *cobra.Command, posArgs []string) error {
 		args := map[string]any{}
 		for k, v := range strVals {
 			args[k] = *v
 		}
 		for k, v := range boolVals {
 			args[k] = *v
+		}
+		if c.Positional != nil {
+			args[c.Positional.Name] = posArgs
 		}
 		// Fold aliases into canonical names here too, so Needs (evaluated before
 		// Dispatch in the one-shot path) sees the right values.
@@ -121,7 +128,7 @@ func runCommand(c app.Command, args map[string]any) error {
 		if err != nil {
 			return err
 		}
-		return render(body, contentType)
+		return present(body, contentType)
 	}
 
 	return withRepo(func(h hostContext) error {
@@ -131,17 +138,41 @@ func runCommand(c app.Command, args map[string]any) error {
 		}
 		defer closeSidecars()
 
-		res, err := app.Dispatch(h.ctx, clients, h.repo, req)
+		resp, err := app.Dispatch(h.ctx, clients, h.repo, req)
 		if err != nil {
 			return err
 		}
-		body, err := json.Marshal(res)
+		body, err := json.Marshal(resp)
 		if err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
-		// A Dispatch result is a Go value we just marshalled, so it's JSON.
-		return render(body, "application/json")
+		// resp is a {status, data} envelope we just marshalled, so it's JSON.
+		return present(body, "application/json")
 	})
+}
+
+// present shows a {status, data} response envelope: it renders just Data (the CLI
+// stays clean), and maps a non-ok Status to a silent non-zero exit — /call
+// callers get the full envelope instead. Non-JSON bodies pass through unchanged.
+func present(body []byte, contentType string) error {
+	if !isJSONContentType(contentType) {
+		_, err := os.Stdout.Write(body)
+		return err
+	}
+	var env struct {
+		Status app.Status      `json:"status"`
+		Data   json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	if err := render(env.Data, contentType); err != nil {
+		return err
+	}
+	if env.Status != app.StatusOK {
+		return &exitCodeError{code: 1}
+	}
+	return nil
 }
 
 // startNeededSidecars spawns just the sidecars the command declares it needs

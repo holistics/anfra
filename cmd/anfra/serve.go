@@ -109,14 +109,14 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 			return
 		}
 
-		// `help` (truthy) → help text from the registry, mirroring `anfra <cmd> --help`.
+		// `help` (truthy) → the command's cobra help text, identical to `anfra <cmd> --help`.
 		if app.IsTruthy(req.Args["help"]) {
-			text, err := app.Help(req.Command)
+			text, err := commandHelp(req.Command)
 			if err != nil {
 				writeCallError(w, http.StatusNotFound, err.Error())
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"help": text})
+			writeJSON(w, http.StatusOK, app.Response{Status: app.StatusOK, Data: map[string]any{"help": text}})
 			return
 		}
 
@@ -128,6 +128,26 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 	return mux
+}
+
+// commandHelp returns cobra's help text for a command (empty name = the root),
+// so /call help is identical to the CLI's `--help` — one help renderer, not two.
+func commandHelp(name string) (string, error) {
+	root := newRootCmd()
+	target := root
+	if name != "" {
+		found, _, err := root.Find([]string{name})
+		if err != nil || found == root {
+			return "", fmt.Errorf(`unknown command %q; send {"help": true} to list commands`, name)
+		}
+		target = found
+	}
+	var buf bytes.Buffer
+	target.SetOut(&buf)
+	if err := target.Help(); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

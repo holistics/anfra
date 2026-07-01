@@ -6,17 +6,23 @@ import (
 
 	"github.com/anfra-ai/anfra/internal/query"
 	"github.com/anfra-ai/anfra/internal/repo"
+	"github.com/anfra-ai/anfra/internal/validate"
 )
 
 // Commands is the registry — the single source for the CLI and /call. Add a
 // command here and it appears on both surfaces (and in help).
 var Commands = []Command{
 	{
-		Name:  "ping",
-		Short: "Round-trip a liveness ping to the anfra-node sidecar",
-		Needs: func(map[string]any) Sidecars { return Sidecars{Node: true} },
+		Name:  "status",
+		Short: "Report the health of anfra's sidecars (node + canal-query)",
+		Needs: func(map[string]any) Sidecars { return Sidecars{Node: true, Canal: true} },
 		Run: func(ctx context.Context, c Clients, _ repo.Repo, _ map[string]any) (any, error) {
-			return c.Node.Ping(ctx)
+			res := checkSidecars(ctx, c)
+			st := StatusOK
+			if res.Node != "ok" || res.Canal != "ok" {
+				st = StatusInvalid
+			}
+			return Response{Status: st, Data: res}, nil
 		},
 	},
 	{
@@ -35,6 +41,53 @@ var Commands = []Command{
 			return RunQuery(ctx, c, repo, args)
 		},
 	},
+	{
+		Name:       "validate",
+		Short:      "Type-check the AML repo and report diagnostics",
+		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files"},
+		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true} },
+		Run: func(ctx context.Context, c Clients, repo repo.Repo, args map[string]any) (any, error) {
+			res, err := validate.Run(ctx, c.Node, repo, argStrings(args, "globs"))
+			if err != nil {
+				return nil, err
+			}
+			st := StatusOK
+			if res.Invalid() {
+				st = StatusInvalid
+			}
+			return Response{Status: st, Data: res}, nil
+		},
+	},
+}
+
+// sidecarStatus is the `status` result: per-sidecar health, "ok" or the error.
+type sidecarStatus struct {
+	Node  string `json:"node"`
+	Canal string `json:"canal"`
+}
+
+// checkSidecars health-checks each sidecar the invocation can reach. Under a warm
+// server these are the long-lived sidecars; one-shot spawns fresh ones (a smoke
+// test that they come up).
+func checkSidecars(ctx context.Context, c Clients) sidecarStatus {
+	res := sidecarStatus{Node: "ok", Canal: "ok"}
+	switch {
+	case c.Node == nil:
+		res.Node = "unavailable"
+	default:
+		if _, err := c.Node.Ping(ctx); err != nil {
+			res.Node = err.Error()
+		}
+	}
+	switch {
+	case c.Canal == nil:
+		res.Canal = "unavailable"
+	default:
+		if err := c.Canal.Health(ctx); err != nil {
+			res.Canal = err.Error()
+		}
+	}
+	return res
 }
 
 // QueryResult is the `query` result. Result is nil for --generate (compile only).

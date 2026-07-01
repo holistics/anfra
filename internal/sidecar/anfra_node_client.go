@@ -137,3 +137,61 @@ func (c *AnfraNodeClient) CompileToSQL(ctx context.Context, req CompileToSQLRequ
 	err := c.Call(ctx, "aql.compile_to_sql", req, &res)
 	return res, err
 }
+
+// ValidateAMLRequest mirrors the sidecar's aml.validate params. Paths are
+// file/dir/glob selectors relative to the repo; empty validates the whole repo.
+// No data sources are involved — this type-checks AML.
+type ValidateAMLRequest struct {
+	RepoPath string   `json:"repoPath"`
+	Paths    []string `json:"paths,omitempty"`
+}
+
+// CompileError is an AML file that failed to compile (interpret). Row/Col are
+// 1-based when a location is known.
+type CompileError struct {
+	FilePath string `json:"filePath,omitempty"`
+	Message  string `json:"message"`
+	Row      *int   `json:"row,omitempty"`
+	Col      *int   `json:"col,omitempty"`
+}
+
+// ReportTraceLoc / ReportTrace locate a validator finding within the AML source.
+type ReportTraceLoc struct {
+	FilePath string `json:"filePath"`
+	Line     *int   `json:"line,omitempty"`
+	Column   *int   `json:"column,omitempty"`
+}
+
+type ReportTrace struct {
+	Kind string          `json:"kind"`
+	Name string          `json:"name"`
+	Loc  *ReportTraceLoc `json:"loc,omitempty"`
+}
+
+// ValidationReport is one finding from the validator suite. Severity is
+// "error", "warning", or "info".
+type ValidationReport struct {
+	Validator string        `json:"validator"`
+	FilePath  string        `json:"filePath"`
+	Type      string        `json:"type"`
+	Fqn       string        `json:"fqn"`
+	Severity  string        `json:"severity"`
+	Message   string        `json:"message"`
+	Code      any           `json:"code,omitempty"`
+	Trace     []ReportTrace `json:"trace,omitempty"`
+}
+
+// ValidateAMLResult mirrors the sidecar's aml.validate result: files that failed
+// to compile, plus the validator suite's findings.
+type ValidateAMLResult struct {
+	CompileErrors []CompileError     `json:"compileErrors"`
+	Reports       []ValidationReport `json:"reports"`
+}
+
+// ValidateAML validates an AML repo (compile + validator suite) for the selected
+// paths and returns the findings.
+func (c *AnfraNodeClient) ValidateAML(ctx context.Context, req ValidateAMLRequest) (ValidateAMLResult, error) {
+	var res ValidateAMLResult
+	err := c.Call(ctx, "aml.validate", req, &res)
+	return res, err
+}

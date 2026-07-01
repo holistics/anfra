@@ -59,11 +59,20 @@ type Arg struct {
 	Aliases []Alias
 }
 
+// Positional describes a command's variadic positional arg: on the CLI it's the
+// trailing args (`validate a.aml b.aml`), on /call a string-array arg by Name.
+type Positional struct {
+	Name  string
+	Usage string
+}
+
 // Command is the single definition of an anfra operation.
 type Command struct {
 	Name  string
 	Short string
 	Args  []Arg
+	// Positional, if set, collects the command's trailing positional args.
+	Positional *Positional
 	// StdinArg, if set, is the one string arg that falls back to piped stdin when
 	// empty (CLI only). Only one arg per command may read stdin.
 	StdinArg string
@@ -83,24 +92,49 @@ func Find(name string) (Command, bool) {
 	return Command{}, false
 }
 
-// Dispatch runs a registered command. An empty command lists the commands.
-func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request) (any, error) {
+// Status is the explicit outcome of a command, carried in every Response.
+type Status string
+
+const (
+	StatusOK      Status = "ok"
+	StatusInvalid Status = "invalid" // command ran fine but its result isn't valid (e.g. validation errors)
+)
+
+// Response is the envelope every command returns: an explicit status plus the
+// result payload. The CLI renders Data and maps Status to its exit code; /call
+// callers get both. A command that needs a non-ok status returns a Response from
+// its Run; anything else is wrapped as StatusOK.
+type Response struct {
+	Status Status `json:"status"`
+	Data   any    `json:"data"`
+}
+
+// Dispatch runs a registered command and returns its Response envelope. An empty
+// command lists the commands.
+func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request) (Response, error) {
 	if req.Command == "" {
 		names := make([]string, len(Commands))
 		for i, c := range Commands {
 			names[i] = c.Name
 		}
-		return map[string]any{"commands": names}, nil
+		return Response{Status: StatusOK, Data: map[string]any{"commands": names}}, nil
 	}
 	cmd, ok := Find(req.Command)
 	if !ok {
-		return nil, fmt.Errorf(`unknown command %q; send {"help": true} to list commands`, req.Command)
+		return Response{}, fmt.Errorf(`unknown command %q; send {"help": true} to list commands`, req.Command)
 	}
 	NormalizeReqArgs(cmd, req.Args)
 	if err := validateReqArgs(cmd, req.Args); err != nil {
-		return nil, err
+		return Response{}, err
 	}
-	return cmd.Run(ctx, clients, repo, req.Args)
+	res, err := cmd.Run(ctx, clients, repo, req.Args)
+	if err != nil {
+		return Response{}, err
+	}
+	if resp, ok := res.(Response); ok {
+		return resp, nil // command set its own status
+	}
+	return Response{Status: StatusOK, Data: res}, nil
 }
 
 // validateReqArgs rejects args the command doesn't declare (the /call analog of
@@ -113,6 +147,9 @@ func validateReqArgs(c Command, args map[string]any) error {
 		for _, alias := range a.Aliases {
 			known[alias.Name] = true
 		}
+	}
+	if c.Positional != nil {
+		known[c.Positional.Name] = true
 	}
 	var unknown []string
 	for k := range args {
@@ -156,38 +193,6 @@ func NormalizeReqArgs(c Command, args map[string]any) {
 	}
 }
 
-// Help renders help text from the registry. Empty command → the command list.
-func Help(command string) (string, error) {
-	var b strings.Builder
-	if command == "" {
-		b.WriteString("Commands:\n")
-		for _, c := range Commands {
-			fmt.Fprintf(&b, "  %-10s %s\n", c.Name, c.Short)
-		}
-		return b.String(), nil
-	}
-	c, ok := Find(command)
-	if !ok {
-		return "", fmt.Errorf("unknown command %q", command)
-	}
-	fmt.Fprintf(&b, "%s — %s\n", c.Name, c.Short)
-	if len(c.Args) > 0 {
-		b.WriteString("\nArgs:\n")
-		for _, a := range c.Args {
-			fmt.Fprintf(&b, "  %-12s (%s) %s", a.Name, a.Type, a.Usage)
-			if len(a.Aliases) > 0 {
-				names := make([]string, len(a.Aliases))
-				for i, al := range a.Aliases {
-					names[i] = al.Name
-				}
-				fmt.Fprintf(&b, " [aliases: %s]", strings.Join(names, ", "))
-			}
-			b.WriteByte('\n')
-		}
-	}
-	return b.String(), nil
-}
-
 // IsTruthy reports whether a /call arg value (which arrives as arbitrary JSON)
 // is true. Only these are falsy: absent/null, false, a numeric zero, and an
 // empty/whitespace string. Everything else is truthy — including non-empty
@@ -214,4 +219,22 @@ func IsTruthy(v any) bool {
 func argString(args map[string]any, key string) string {
 	s, _ := args[key].(string)
 	return s
+}
+
+// argStrings reads a string-list arg, accepting []string (CLI positional) or
+// []any (a JSON array over /call).
+func argStrings(args map[string]any, key string) []string {
+	switch v := args[key].(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
