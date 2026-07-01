@@ -23,19 +23,30 @@ func compileDataSources(m map[string]datasource.DataSource) map[string]sidecar.C
 	return out
 }
 
-// GenerateSQL compiles an AQL query against a dataset into SQL, using the
-// dialects declared in the repo's data_sources.yml.
-func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (string, error) {
-	sources, err := datasource.Load(repo.ConfigDir)
+// CompileRequest loads the repo's data sources and builds the sidecar compile
+// request for a (dataset, aql). Shared by SQL generation and AQL validation
+// (both feed the same {repoPath, datasetFqn, aql, dataSources} to the sidecar).
+func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLRequest, error) {
+	sources, err := datasource.Load(r.ConfigDir)
 	if err != nil {
-		return "", fmt.Errorf("load data sources: %w", err)
+		return sidecar.CompileToSQLRequest{}, fmt.Errorf("load data sources: %w", err)
 	}
-	res, err := node.CompileToSQL(ctx, sidecar.CompileToSQLRequest{
-		RepoPath:    repo.Dir,
+	return sidecar.CompileToSQLRequest{
+		RepoPath:    r.Dir,
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: compileDataSources(sources),
-	})
+	}, nil
+}
+
+// GenerateSQL compiles an AQL query against a dataset into SQL, using the
+// dialects declared in the repo's data_sources.yml.
+func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (string, error) {
+	req, err := CompileRequest(repo, dataset, aql)
+	if err != nil {
+		return "", err
+	}
+	res, err := node.CompileToSQL(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
 	}

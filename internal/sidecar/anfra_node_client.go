@@ -195,3 +195,24 @@ func (c *AnfraNodeClient) ValidateAML(ctx context.Context, req ValidateAMLReques
 	err := c.Call(ctx, "aml.validate", req, &res)
 	return res, err
 }
+
+// AQLDiagnostic is one AQL type-check finding. Severity is "error" or "warning";
+// Line/Column are 1-based positions when known.
+type AQLDiagnostic struct {
+	Message  string `json:"message"`
+	Severity string `json:"severity"`
+	Line     *int   `json:"line,omitempty"`
+	Column   *int   `json:"column,omitempty"`
+}
+
+type ValidateAQLResult struct {
+	Diagnostics []AQLDiagnostic `json:"diagnostics"`
+}
+
+// ValidateAQL type-checks a single AQL query against a dataset (same inputs as
+// CompileToSQL) and returns its diagnostics instead of throwing on the first error.
+func (c *AnfraNodeClient) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (ValidateAQLResult, error) {
+	var res ValidateAQLResult
+	err := c.Call(ctx, "aql.validate", req, &res)
+	return res, err
+}
