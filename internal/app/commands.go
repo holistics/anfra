@@ -21,7 +21,7 @@ var Commands = []Command{
 		Run: func(ctx context.Context, c Clients, _ repo.Repo, _ map[string]any) (any, error) {
 			res := checkStatus(ctx, c)
 			st := StatusOK
-			if res.Server != "running" || res.Sidecars == nil || res.Sidecars.Node != "ok" || res.Sidecars.Canal != "ok" {
+			if res.Server != "running" || res.Sidecars == nil || res.Sidecars.Node != "ok" || res.Sidecars.CanalQuery != "ok" {
 				st = StatusInvalid
 			}
 			return Response{Status: st, Data: res}, nil
@@ -39,7 +39,7 @@ var Commands = []Command{
 		StdinArg: "aql",
 		Needs: func(args map[string]any) Sidecars {
 			// canal-query is only needed to actually run — not to generate SQL or validate.
-			return Sidecars{Node: true, Canal: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}
+			return Sidecars{Node: true, CanalQuery: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}
 		},
 		Run: func(ctx context.Context, c Clients, repo repo.Repo, args map[string]any) (any, error) {
 			if IsTruthy(args["validate"]) {
@@ -100,27 +100,27 @@ type statusResult struct {
 
 // sidecarHealth is each sidecar's health: "ok" or the error message.
 type sidecarHealth struct {
-	Node  string `json:"node"`
-	Canal string `json:"canal-query"`
+	Node       string `json:"node"`
+	CanalQuery string `json:"canal-query"`
 }
 
 // checkStatus reports the warm server's health. status spawns no sidecars, so in
 // one-shot mode (no warm server) both clients are nil → "not running"; under a
 // warm server the clients are live and get health-checked.
 func checkStatus(ctx context.Context, c Clients) statusResult {
-	if c.Node == nil && c.Canal == nil {
+	if c.Node == nil && c.CanalQuery == nil {
 		return statusResult{Server: "not running"}
 	}
-	sc := &sidecarHealth{Node: "ok", Canal: "ok"}
+	sc := &sidecarHealth{Node: "ok", CanalQuery: "ok"}
 	if c.Node == nil {
 		sc.Node = "unavailable"
 	} else if _, err := c.Node.Ping(ctx); err != nil {
 		sc.Node = err.Error()
 	}
-	if c.Canal == nil {
-		sc.Canal = "unavailable"
-	} else if err := c.Canal.Health(ctx); err != nil {
-		sc.Canal = err.Error()
+	if c.CanalQuery == nil {
+		sc.CanalQuery = "unavailable"
+	} else if err := c.CanalQuery.Health(ctx); err != nil {
+		sc.CanalQuery = err.Error()
 	}
 	return statusResult{Server: "running", Sidecars: sc}
 }
@@ -155,10 +155,10 @@ func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, args map[str
 		return QueryResult{SQL: sql}, nil
 	}
 
-	if clients.Canal == nil {
+	if clients.CanalQuery == nil {
 		return QueryResult{}, fmt.Errorf("query execution requires the canal-query sidecar")
 	}
-	r, err := query.Run(ctx, clients.Node, clients.Canal, repo, dataset, aql)
+	r, err := query.Run(ctx, clients.Node, clients.CanalQuery, repo, dataset, aql)
 	if err != nil {
 		return QueryResult{}, err
 	}

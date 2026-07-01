@@ -24,15 +24,15 @@ type Request struct {
 // Clients are the sidecar clients a command runs against. A client is nil when
 // the command doesn't need that sidecar (see Command.Needs).
 type Clients struct {
-	Node  *sidecar.AnfraNodeClient
-	Canal *sidecar.CanalQueryClient
+	Node       *sidecar.AnfraNodeClient
+	CanalQuery *sidecar.CanalQueryClient
 }
 
 // Sidecars declares which sidecars a command needs (so the one-shot CLI knows
 // what to spawn; under `serve` they're all warm regardless).
 type Sidecars struct {
-	Node  bool
-	Canal bool
+	Node       bool
+	CanalQuery bool
 }
 
 // ArgType is the type of a command argument (drives the generated CLI flag).

@@ -199,14 +199,14 @@ func startNeededSidecars(h hostContext, c app.Command, args map[string]any) (app
 		closers = append(closers, node.Close)
 		clients.Node = node.Client()
 	}
-	if need.Canal {
+	if need.CanalQuery {
 		canal := sidecar.NewCanalQuery(h.cfg)
 		if err := canal.Start(h.ctx); err != nil {
 			closeAll()
 			return app.Clients{}, nil, fmt.Errorf("start canal-query sidecar: %w", err)
 		}
 		closers = append(closers, canal.Close)
-		clients.Canal = canal.Client()
+		clients.CanalQuery = canal.Client()
 	}
 	return clients, closeAll, nil
 }

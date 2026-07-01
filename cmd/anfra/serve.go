@@ -59,7 +59,7 @@ func runServe() error {
 		}
 		defer canal.Close()
 
-		clients := app.Clients{Node: node.Client(), Canal: canal.Client()}
+		clients := app.Clients{Node: node.Client(), CanalQuery: canal.Client()}
 
 		sockPath := serveSocketPath(h.repo)
 		_ = os.Remove(sockPath)

@@ -38,7 +38,8 @@ func (c *CanalQuery) Start(ctx context.Context) error {
 		Path: binPath,
 		ExtraEnv: []string{
 			"PORT=" + strconv.Itoa(port),
-			"SKIP_HOLISTICS_DB=1", // standalone: no monolith DB / job ops
+			"SKIP_HOLISTICS_DB=1",       // standalone: no monolith DB / job ops
+			"ENABLE_DUCKDB_CONNECTOR=1", // duckdb connector on by default under anfra
 			"ANFRA_REPO_ID=" + c.cfg.RepoID,
 		},
 		Stdout:    c.cfg.StdoutWriter,
