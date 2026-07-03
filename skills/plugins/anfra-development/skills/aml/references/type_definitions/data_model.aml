@@ -1,0 +1,156 @@
+Type Dimension (elem_name_as: 'name') {
+  label                                     : String
+  type                                      : DimensionType
+  hidden        (default: false)            : Boolean
+  description   (optional)                  : String
+  definition    (optional)                  : Heredoc[Any] | Slot[Heredoc[Any]]
+  format        (optional)                  : Format
+  primary_key   (default: false)            : Boolean
+}
+
+Type Measure (elem_name_as: 'name') {
+  label                                     : String
+  type                                      : MeasureType
+  hidden        (default: false)            : Boolean
+  description   (optional)                  : String
+  definition                                : Heredoc[Any]
+  aggregation_type (default: 'custom')      : String
+  format        (optional)                  : Format
+}
+
+Type Param (elem_name_as: 'name') {
+  label                                     : String
+  type                                      : ParamType
+  hidden        (default: false)            : Boolean
+  description   (optional)                  : String
+  allowed_values (optional)                 : List[Any]
+}
+
+Type TableModel (elem_name_as: 'name') {
+  type                        : 'table'
+  label             (optional): String
+  description       (optional): String
+  owner             (optional): String // email
+  data_source_name  (optional): String | Slot[String]
+  table_name: String | Slot[String]
+
+  import_source            (optional): ImportSource
+
+  dimension (
+    elem_name_as: 'name',
+    multiple: true,
+    unique_elem_name,
+    root_namespace
+  ): Dimension
+
+  measure (
+    elem_name_as: 'name',
+    multiple: true,
+    unique_elem_name,
+    root_namespace
+  ): Measure
+
+  param (
+    elem_name_as: 'name',
+    multiple: true,
+    unique_elem_name,
+    root_namespace
+  ): Param
+}
+
+Type QueryModel (elem_name_as: 'name') {
+  type                           : 'query'
+  label             (optional)   : String
+  description       (optional)   : String
+  owner             (optional)   : String // email
+  data_source_name  (optional)   : String | Slot[String]
+  query                          : Heredoc[Any] | Slot[Heredoc[Any]]
+  models            (default: []): List[Any]             // List of models that the query used
+
+  persistence (optional): FullPersistence | IncrementalPersistence
+
+  dimension (
+    elem_name_as: 'name',
+    multiple: true,
+    unique_elem_name,
+    root_namespace
+  ): Dimension
+
+  measure (
+    elem_name_as: 'name',
+    multiple: true,
+    unique_elem_name,
+    root_namespace
+  ): Measure
+
+  param (
+    elem_name_as: 'name',
+    multiple: true,
+    unique_elem_name,
+    root_namespace
+  ): Param
+}
+
+Type Model = TableModel | QueryModel
+
+Type PartialModel = Partial[TableModel] | Partial[QueryModel]
+Type PartialTableModel = Partial[TableModel]
+Type PartialQueryModel = Partial[QueryModel]
+
+Type DimensionType = 'text' | 'number' | 'date' | 'datetime' | 'truefalse' | 'json' | 'unknown'
+
+Type MeasureType = DimensionType
+
+Type ParamType = 'text' | 'number' | 'date' | 'datetime' | 'truefalse'
+
+Type AggregationType = 'avg' | 'sum' | 'count' | 'count distinct' | 'min' |
+                       'max' | 'median' | 'stdev' | 'stdevp' | 'var' | 'varp' |
+                       'running sum' | 'running avg' | 'running count' | 'running min' | 'running max' |
+                       'custom'
+
+Type FieldRef {
+  model: String
+  field: String
+}
+
+// r is the new syntax for building a FieldRef. Prefer using r instead of ref.
+//
+// Unlike ref, which takes model/field as strings (e.g. ref('users', 'id')) and is only
+// validated at runtime, r takes an access expression (e.g. r(users.id))
+// that the AML compiler statically typechecks at compile time — surfacing invalid references
+// as compile-time diagnostics rather than runtime errors.
+//
+// Field kinds (what is being referenced):
+//   - dimension : a MODEL field (defined on the model). May also be defined in a dataset,
+//                 in which case it is tied to a specific model.
+//   - measure   : a MODEL field, defined on the model.
+//   - metric    : a DATASET field, defined on the dataset itself (not on any model).
+//
+// How to reference each:
+//   Func r(expr: AccessExpression) => FieldRef
+//     model dimension : r(model_name.dimension_name)     e.g. r(users.country)
+//     model measure   : r(model_name.measure_name)       e.g. r(orders.total_amount)
+//     dataset metric  : r(dataset_name.metric_name)      e.g. r(ecommerce.revenue)
+//
+//   Func r(dataset: Dataset, expr: AccessExpression) => FieldRef
+//     dataset dimension : r(dataset_name, model_name.dimension_name)
+//                         e.g. r(ecommerce, users.user_acquired_at)
+//     (For a dimension defined in the dataset; the model must be specified. The compiler first
+//      checks the model is included in the dataset, otherwise it raises a typecheck error.)
+//
+// Func r(expr: AccessExpression) {
+//   // resolve the expr, get model/dataset name and field/metric name
+//   FieldRef { model: model_name, field: field_name }
+// }
+//
+// Func r(dataset: Dataset, expr: AccessExpression) {
+//   // resolve the expr, lookup model in dataset, get model_name and field_name
+//   // if model not found in dataset, generate diagnostics
+//   FieldRef { model: model_name, field: field_name }
+// }
+Func r() {}
+
+// Legacy. Prefer the r(...) syntax instead — see the r usage comment above for how to use it.
+Func ref(model_name: String, field_name: String) {
+  FieldRef { model: model_name, field: field_name }
+}
