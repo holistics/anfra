@@ -1,0 +1,17 @@
+{
+  "name": "anfra-development",
+  "description": "Skills for developing analytics with Anfra: writing AQL queries and AML models against a local AMQL repo.",
+  "version": "0.0.0",
+  "author": {
+    "name": "Anfra"
+  },
+  "homepage": "https://anfra.ai",
+  "keywords": [
+    "anfra",
+    "amql",
+    "aml",
+    "aql",
+    "analytics",
+    "modeling"
+  ]
+}

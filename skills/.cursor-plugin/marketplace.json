@@ -1,0 +1,17 @@
+{
+  "name": "anfra-skills",
+  "owner": {
+    "name": "Anfra"
+  },
+  "metadata": {
+    "description": "Skills for working with Anfra — building and exploring analytics via AML and AQL.",
+    "version": "0.0.0"
+  },
+  "plugins": [
+    {
+      "name": "anfra-development",
+      "source": "plugins/anfra-development",
+      "description": "Skills for developing analytics with Anfra: writing AQL queries and AML models against a local AMQL repo."
+    }
+  ]
+}
