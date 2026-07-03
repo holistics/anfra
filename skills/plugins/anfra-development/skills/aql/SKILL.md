@@ -9,14 +9,10 @@ AQL is Analytic Querying Language for data analytics. This skill is
 the knowledge base you consult while authoring AQL. It doesn't run queries — pair
 it with actionable skills such as [](../write-aql/), [](../validate-aql/), etc.
 
-## How to use these references (progressive disclosure)
-Load only what the task needs — don't read everything up front.
+## How to use these references
+**AQL is not SQL — don't write it from general or SQL knowledge.** Read the core lessons *before* writing your first AQL; then pull in the specific per-function docs and examples your task needs (that part is on-demand — you needn't read everything).
 
-1. **`references/aqlearn.md` — read this first.** The single, complete AQL
-   lessons + rules + glossary reference (aggregation, dimensions/measures, level
-   of detail, nested aggregation, window functions, ranking, relationships, SQL
-   passthrough, …). Don't skip it — it holds the vital details you won't find by
-   guessing.
+1. **`references/aqlearn.md` — read this first, before writing any AQL.** The single, complete AQL lessons + rules + glossary reference (aggregation, dimensions/measures, level of detail, nested aggregation, window functions, ranking, relationships, SQL passthrough, …). Don't skip it — it holds the vital details you won't find by guessing, and reading it up front is faster than writing wrong AQL and fixing it.
 2. **`references/aql/` — per-function reference docs.** Look up the exact
    syntax, semantics, and argument order for a specific function or operator.
    Files are named by function/operator (e.g. `sum.md`, `rank.md`, `where.md`);
