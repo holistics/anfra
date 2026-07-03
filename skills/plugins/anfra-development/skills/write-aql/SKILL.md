@@ -12,7 +12,7 @@ run it.
 > **Read the [](../aql/) references _before_ you write — not after you fail.**
 > Looking things up first is faster than guessing and retrying.
 
-> **Tip — delegate to a sub-agent to save context.** Reading the AQL references consumes context. If your runtime supports sub-agents (e.g. a task/subagent tool), delegate the AQL writing to one: tell it to use the `aql`, `write-aql`, and `validate-aql` skills, do the lookups, and return only the final validated AQL (and its result). The heavy reference reading stays in the sub-agent's context, keeping your main context lean.
+> **Prefer delegating to a sub-agent (to save context).** Reading the AQL references consumes context. If an `aql-writer` sub-agent is available, hand the request to it and let it do the lookups + write/validate/run — it returns only the final AQL and result, keeping your main context lean. Otherwise, if your runtime has a generic task/subagent tool, spawn one and tell it to use the `aql`, `write-aql`, and `validate-aql` skills. (If you *are* the `aql-writer` sub-agent, ignore this and do the work yourself.)
 
 ## Prerequisites
 * Work inside an AMQL repo. Discover the available datasets/models/fields — that's your `dataset_fields`. Use only those models and fields, with their **EXACT** names.
