@@ -31,11 +31,13 @@ var Commands = []Command{
 		Name:  "query",
 		Short: "Compile and run an AQL query against a dataset",
 		Args: []Arg{
-			{Name: "dataset", Type: ArgString, Usage: "unique name of the dataset to compile against (required)"},
-			{Name: "aql", Type: ArgString, Usage: "the AQL query; if omitted, read from stdin"},
-			{Name: "generate", Type: ArgBool, Usage: "output the generated SQL instead of running the query"},
-			{Name: "validate", Type: ArgBool, Usage: "type-check the query and report diagnostics instead of running it (same as `anfra validate --aql`)"},
+			{Name: "dataset", Shorthand: "d", Type: ArgString, Usage: "unique name of the dataset to compile against (required)"},
+			{Name: "aql", Shorthand: "a", Type: ArgString, Usage: "the AQL query; if omitted, read from stdin"},
+			{Name: "generate", Shorthand: "g", Type: ArgBool, Usage: "output the generated SQL instead of running the query"},
+			{Name: "validate", Shorthand: "c", Type: ArgBool, Usage: "type-check the query and report diagnostics instead of running it", Aliases: []Alias{{Name: "check"}}},
 		},
+		// --generate and --validate each pick a "don't run" mode, so they conflict.
+		ExclusiveArgs: [][]string{{"generate", "validate"}},
 		StdinArg: "aql",
 		Needs: func(args map[string]any) Sidecars {
 			// canal-query is only needed to actually run — not to generate SQL or validate.
@@ -49,20 +51,11 @@ var Commands = []Command{
 		},
 	},
 	{
-		Name:  "validate",
-		Short: "Validate the AML repo, or a single AQL query with --aql",
-		Args: []Arg{
-			{Name: "aql", Type: ArgString, Usage: "validate a single AQL query instead of repo files; if omitted, read from stdin"},
-			{Name: "dataset", Type: ArgString, Usage: "dataset to validate --aql against (required with --aql)"},
-		},
-		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files (repo mode)"},
-		StdinArg:   "aql",
+		Name:       "validate",
+		Short:      "Validate the AML repo, optionally scoped to file globs",
+		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files"},
 		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true} },
 		Run: func(ctx context.Context, c Clients, repo repo.Repo, args map[string]any) (any, error) {
-			// --aql (or piped stdin) selects single-query mode; otherwise validate repo files.
-			if aql := argString(args, "aql"); aql != "" {
-				return validateAQLResponse(ctx, c, repo, argString(args, "dataset"), aql)
-			}
 			res, err := validate.Repo(ctx, c.Node, repo, argStrings(args, "globs"))
 			if err != nil {
 				return nil, err
@@ -77,8 +70,7 @@ var Commands = []Command{
 }
 
 // validateAQLResponse type-checks a single AQL query and wraps the result in a
-// status envelope. Shared by `validate --aql` and `query --validate` so the two
-// behave identically.
+// status envelope (used by `query --validate`).
 func validateAQLResponse(ctx context.Context, c Clients, r repo.Repo, dataset, aql string) (Response, error) {
 	res, err := validate.AQL(ctx, c.Node, r, dataset, aql)
 	if err != nil {
@@ -136,31 +128,42 @@ type QueryRows struct {
 	Records [][]any  `json:"records"`
 }
 
-// RunQuery compiles an AQL query to SQL and, unless generate is set, executes it.
-func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, args map[string]any) (QueryResult, error) {
+// RunQuery compiles an AQL query and, unless generate is set, executes it. On a
+// compile failure it surfaces the same structured diagnostics as --validate with
+// an "invalid" status (which the CLI maps to a non-zero exit), so callers see
+// what's wrong without re-running the query.
+func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, args map[string]any) (any, error) {
 	dataset := argString(args, "dataset")
 	aql := argString(args, "aql")
 	if dataset == "" {
-		return QueryResult{}, fmt.Errorf("dataset is required")
+		return nil, fmt.Errorf("dataset is required")
 	}
 	if aql == "" {
-		return QueryResult{}, fmt.Errorf("aql is required")
+		return nil, fmt.Errorf("aql is required")
+	}
+	generate := IsTruthy(args["generate"])
+	if !generate && clients.CanalQuery == nil {
+		return nil, fmt.Errorf("query execution requires the canal-query sidecar")
 	}
 
-	if IsTruthy(args["generate"]) {
-		sql, err := query.GenerateSQL(ctx, clients.Node, repo, dataset, aql)
-		if err != nil {
-			return QueryResult{}, err
-		}
-		return QueryResult{SQL: sql}, nil
-	}
-
-	if clients.CanalQuery == nil {
-		return QueryResult{}, fmt.Errorf("query execution requires the canal-query sidecar")
-	}
-	r, err := query.Run(ctx, clients.Node, clients.CanalQuery, repo, dataset, aql)
+	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql)
 	if err != nil {
-		return QueryResult{}, err
+		// A parse/type error in the AQL: report the diagnostics (same as --validate)
+		// rather than a bare message. StatusInvalid → the CLI exits non-zero.
+		// Structural failures (unknown dataset/data source) aren't diagnostic-shaped,
+		// so fall back to the original error.
+		if diags, verr := validate.AQL(ctx, clients.Node, repo, dataset, aql); verr == nil && diags.Invalid() {
+			return Response{Status: StatusInvalid, Data: diags}, nil
+		}
+		return nil, err
+	}
+
+	if generate {
+		return QueryResult{SQL: compiled.SQL}, nil
+	}
+	r, err := query.Execute(ctx, clients.CanalQuery, repo, compiled)
+	if err != nil {
+		return nil, err
 	}
 	return QueryResult{SQL: r.SQL, Result: &QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 }

@@ -53,10 +53,13 @@ type Alias struct {
 
 // Arg declares a command argument: a CLI flag + a /call args key.
 type Arg struct {
-	Name    string
-	Type    ArgType
-	Usage   string
-	Aliases []Alias
+	Name string
+	// Shorthand is an optional single-character CLI short flag (e.g. "d" for -d).
+	// CLI-only sugar: /call and validateReqArgs always use Name.
+	Shorthand string
+	Type      ArgType
+	Usage     string
+	Aliases   []Alias
 }
 
 // Positional describes a command's variadic positional arg: on the CLI it's the
@@ -76,6 +79,10 @@ type Command struct {
 	// StdinArg, if set, is the one string arg that falls back to piped stdin when
 	// empty (CLI only). Only one arg per command may read stdin.
 	StdinArg string
+	// Exclusive lists groups of args that are mutually exclusive: at most one arg
+	// in each group may be set. Checked after alias folding, so it applies to both
+	// the CLI and /call (and counts an alias as its canonical arg).
+	ExclusiveArgs [][]string
 	// Needs declares the sidecars required for the given args (arg-dependent).
 	// nil => no sidecars.
 	Needs func(args map[string]any) Sidecars
@@ -127,6 +134,9 @@ func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request)
 	if err := validateReqArgs(cmd, req.Args); err != nil {
 		return Response{}, err
 	}
+	if err := checkExclusiveArgs(cmd, req.Args); err != nil {
+		return Response{}, err
+	}
 	res, err := cmd.Run(ctx, clients, repo, req.Args)
 	if err != nil {
 		return Response{}, err
@@ -163,6 +173,24 @@ func validateReqArgs(c Command, args map[string]any) error {
 	sort.Strings(unknown)
 	return fmt.Errorf(`unknown arg(s) %s for command %q; send {"command": %q, "help": true} for its args`,
 		strings.Join(unknown, ", "), c.Name, c.Name)
+}
+
+// checkExclusiveArgs enforces each of the command's ExclusiveArgs groups: at most
+// one arg per group may be set. Call after NormalizeReqArgs so alias flags are
+// already folded into their canonical arg and counted correctly.
+func checkExclusiveArgs(c Command, args map[string]any) error {
+	for _, group := range c.ExclusiveArgs {
+		var set []string
+		for _, name := range group {
+			if IsTruthy(args[name]) {
+				set = append(set, "--"+name)
+			}
+		}
+		if len(set) > 1 {
+			return fmt.Errorf("at most one of %s may be set", strings.Join(set, ", "))
+		}
+	}
+	return nil
 }
 
 // NormalizeReqArgs folds each arg's aliases into its canonical name and drops the

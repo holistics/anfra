@@ -60,11 +60,17 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 			if len(others) > 0 {
 				usage += " (alias: " + strings.Join(others, ", ") + ")"
 			}
+			// The shorthand attaches to the canonical name only (aliases stay long-only,
+			// and pflag allows one shorthand per flag).
+			short := ""
+			if name == a.Name {
+				short = a.Shorthand
+			}
 			switch a.Type {
 			case app.ArgString:
-				strVals[name] = cmd.Flags().String(name, "", usage)
+				strVals[name] = cmd.Flags().StringP(name, short, "", usage)
 			case app.ArgBool:
-				boolVals[name] = cmd.Flags().Bool(name, false, usage)
+				boolVals[name] = cmd.Flags().BoolP(name, short, false, usage)
 			}
 		}
 	}

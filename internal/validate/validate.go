@@ -41,7 +41,7 @@ func Repo(ctx context.Context, node *sidecar.AnfraNodeClient, r repo.Repo, paths
 	return &Result{CompileErrors: res.CompileErrors, Reports: res.Reports}, nil
 }
 
-// AQLResult is the `validate --aql` result: type-check diagnostics for a single
+// AQLResult is the `query --validate` result: type-check diagnostics for a single
 // AQL query. No error-severity diagnostics means the query is valid.
 type AQLResult struct {
 	Diagnostics []sidecar.AQLDiagnostic `json:"diagnostics"`

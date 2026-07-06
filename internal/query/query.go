@@ -39,16 +39,27 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 	}, nil
 }
 
-// GenerateSQL compiles an AQL query against a dataset into SQL, using the
-// dialects declared in the repo's data_sources.yml.
-func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (string, error) {
+// Compile compiles an AQL query against a dataset into SQL plus the data source
+// it targets (dialect + execution routing), without executing. Shared by
+// --generate and the run path so both fail identically on a bad query.
+func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (sidecar.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
 	if err != nil {
-		return "", err
+		return sidecar.CompileToSQLResult{}, err
 	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
+		return sidecar.CompileToSQLResult{}, fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
+	}
+	return res, nil
+}
+
+// GenerateSQL compiles an AQL query against a dataset into SQL, using the
+// dialects declared in the repo's data_sources.yml.
+func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (string, error) {
+	res, err := Compile(ctx, node, repo, dataset, aql)
+	if err != nil {
+		return "", err
 	}
 	return res.SQL, nil
 }
@@ -60,34 +71,35 @@ type RunResult struct {
 	Records [][]any
 }
 
-// Run compiles an AQL query to SQL and executes it via canal-query against the
-// data source the dataset targets, returning the SQL and the result rows.
-func Run(ctx context.Context, node *sidecar.AnfraNodeClient, canal *sidecar.CanalQueryClient, repo repo.Repo, dataset, aql string) (*RunResult, error) {
+// Execute runs already-compiled SQL via canal-query against the data source the
+// dataset targets, returning the SQL and the result rows. Split from Compile so
+// callers can distinguish a compile failure (a query problem) from an execution
+// failure (a data-source/DB problem).
+func Execute(ctx context.Context, canal *sidecar.CanalQueryClient, repo repo.Repo, compiled sidecar.CompileToSQLResult) (*RunResult, error) {
 	sources, err := datasource.Load(repo.ConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("load data sources: %w", err)
 	}
-	compiled, err := node.CompileToSQL(ctx, sidecar.CompileToSQLRequest{
-		RepoPath:    repo.Dir,
-		DatasetFqn:  dataset,
-		AQL:         aql,
-		DataSources: compileDataSources(sources),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
-	}
-
 	ds, ok := sources[compiled.DataSource.Name]
 	if !ok {
-		return nil, fmt.Errorf("data source %q (used by dataset %q) is not defined in data_sources.yml", compiled.DataSource.Name, dataset)
+		return nil, fmt.Errorf("data source %q is not defined in data_sources.yml", compiled.DataSource.Name)
 	}
 	if ds.Connection == nil {
 		return nil, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
 	}
-
 	result, err := canal.Execute(ctx, compiled.DataSource.DBType, ds.Connection, compiled.SQL)
 	if err != nil {
 		return nil, fmt.Errorf("execute query on data source %q: %w", ds.Name, err)
 	}
 	return &RunResult{SQL: compiled.SQL, Fields: result.Fields, Records: result.Rows}, nil
+}
+
+// Run compiles an AQL query to SQL and executes it via canal-query against the
+// data source the dataset targets, returning the SQL and the result rows.
+func Run(ctx context.Context, node *sidecar.AnfraNodeClient, canal *sidecar.CanalQueryClient, repo repo.Repo, dataset, aql string) (*RunResult, error) {
+	compiled, err := Compile(ctx, node, repo, dataset, aql)
+	if err != nil {
+		return nil, err
+	}
+	return Execute(ctx, canal, repo, compiled)
 }
