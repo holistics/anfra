@@ -9,9 +9,9 @@ description: Validate an AQL query (or a single expression) without running it. 
 Default (Anfra) — type-check without running:
 
 ```sh
-anfra validate --dataset <uname> --aql '<query>'
+anfra query --validate --dataset <uname> --aql '<query>'
 # or
-cat query.aql | anfra validate --dataset <uname> --aql
+cat query.aql | anfra query --validate --dataset <uname>
 ```
 
 You can validate a **single expression** (a metric, a filter, one calculation) —
