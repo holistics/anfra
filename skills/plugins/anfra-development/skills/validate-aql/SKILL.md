@@ -10,6 +10,8 @@ Default (Anfra) — type-check without running:
 
 ```sh
 anfra validate --dataset <uname> --aql '<query>'
+# or
+cat query.aql | anfra validate --dataset <uname> --aql
 ```
 
 You can validate a **single expression** (a metric, a filter, one calculation) —
