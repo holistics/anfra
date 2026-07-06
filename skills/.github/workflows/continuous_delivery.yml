@@ -1,0 +1,70 @@
+name: Continuous Delivery
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: continuous_delivery
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yaml
+    secrets: inherit
+
+  test_passed:
+    needs: [test]
+    # https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks#handling-skipped-but-required-checks
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      anfra_development: ${{ steps.filter.outputs.anfra_development_any_changed }}
+      marketplace: ${{ steps.filter.outputs.marketplace_any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: tj-actions/changed-files@v45
+        id: filter
+        with:
+          files_yaml: |
+            anfra_development:
+              - 'plugins/anfra-development/.claude-plugin/plugin.json'
+            marketplace:
+              - '.claude-plugin/marketplace.json'
+      - name: Show changes
+        run: echo "$OUTPUTS"
+        shell: bash
+        env:
+          OUTPUTS: ${{ toJSON(steps.filter.outputs) }}
+
+  tag_anfra_development:
+    needs: [test_passed, changes]
+    runs-on: ubuntu-24.04
+    if: needs.changes.outputs.anfra_development == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.ANFRA_DEPLOY_KEY }}
+      - name: Tag version for anfra-development
+        uses: ./.github/actions/tag_version_plugin
+        with:
+          plugin: anfra-development
+
+  tag_marketplace:
+    needs: [test_passed, changes]
+    runs-on: ubuntu-24.04
+    if: needs.changes.outputs.marketplace == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.ANFRA_DEPLOY_KEY }}
+      - name: Tag version for marketplace
+        uses: ./.github/actions/tag_version_marketplace
