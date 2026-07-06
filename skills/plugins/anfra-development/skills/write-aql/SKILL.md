@@ -28,7 +28,7 @@ run it.
 4. **Inspect opaque fields.** For structs / JSON / "settings"-type fields, never guess the structure — run a preview query to see a sample, then write the real query using the observed shape.
 5. **Write a single `explore`** using what you read in step 2.
 6. **Validate** with [](../validate-aql/) and fix any errors.
-7. **Run** it with `anfra query` and answer from the result.
+7. **Run** it with [](../run-aql/) and answer from the result.
 
 ## Core principles
 * Think **metric-centric**, not table-centric (SQL). Do **NOT** write joins — AQL joins automatically through relationships.
@@ -40,3 +40,4 @@ run it.
 * [](../aql/) — AQL knowledge and reference docs.
 * [](../lookup-values/) — verify exact filter values before filtering.
 * [](../validate-aql/) — validate a query or expression before running it.
+* [](../run-aql/) — run a validated query and get its result.
