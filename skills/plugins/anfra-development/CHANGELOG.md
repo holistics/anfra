@@ -1,3 +1,9 @@
+## 0.0.3 (2026-07-06)
+
+### Features
+
+* **plugins.anfra-development:** knowledge for aql having ([c615d13](https://github.com/anfra-ai/skills/commit/c615d132f12edb573515f71a9b5ec8754d288e7c))
+
 ## 0.0.2 (2026-07-06)
 
 ### Features
