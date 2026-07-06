@@ -88,6 +88,13 @@ This calculates the average order discount per year.
 **Caveat**: **CANNOT** use `date_trunc()`, `year()`, etc. inside `explore.filters`.
 
 ## 4. Explore Filters
+
+Explore-level filtering uses two blocks (same syntax, both AND-combined, both applied to all explore measures):
+* `explore.filters {}` — conditions on **dimensions** (like SQL `WHERE`). E.g. `orders.status == 'delivered'`.
+* `explore.having {}` — conditions on **metrics / measures / aggregations** (like SQL `HAVING`). E.g. `order_count > 10`.
+
+Put each condition in the block matching its left operand — dimension conditions in `filters`, metric conditions in `having`.
+
 Filter expressions use AQL Operators:
 ```aql
 orders.created_at > @2024
@@ -150,7 +157,7 @@ For date/time filtering, you can use time expressions via this syntax `matches @
 <description>Orders that are **not** created in 2018 and 2019</description>
 </example>
 
-Examples for filtering with metrics:
+Examples for filtering on metrics (metric conditions go in `explore.having`):
 ```aql
 metric delivered_orders = orders | count(orders.id) | where(orders.status == 'delivered');
 metric cancelled_orders = orders | count(orders.id) | where(orders.status == 'cancelled');
@@ -163,7 +170,7 @@ explore {
   dimensions {
     product_name: products.name,
   }
-  filters {
+  having {
     orders_diff > 10,
   }
   sorts {
@@ -517,6 +524,9 @@ Some nested aggregation examples:
 ## 13. Filter on Aggregation
 
 Filter on aggregation can be performed by `unique()` **followed by** `filter()`.
+
+To filter the **explore result** by a metric/aggregation, use the `explore.having {}` block instead (see §4) — e.g. `having { order_count > 10 }`.
+
 
 ## 14. Window functions
 ### Window functions are **metrics**
@@ -1077,8 +1087,9 @@ metric total_area =
   | sum(square.area);
 ```
 
-`explore.filters` is a smart shortcut that can act like `where()` or `filter()` depending on the left operand.
-Prefer using `explore.filters` (instead of local `where()` or `filter()`) when the filtering need to be applied to **all** explore measures.
+
+`explore.filters` filters on **dimensions** (acts like `where()`); `explore.having` filters on **metrics/measures/aggregations** (acts like `filter()`). Both apply to **all** explore measures — prefer them over local `where()`/`filter()` for explore-wide filtering.
+
 
 ### Avoid <= and >=
 **Avoid** using `<=` and `>=` whenever possible!
@@ -1176,7 +1187,7 @@ explore {
   measures {
     order_count: order_count,
   }
-  filters {
+  having {
     user_count > 0, // added (hidden) metric on one-side model
   }
 }
