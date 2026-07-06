@@ -96,6 +96,7 @@ type queryRequest struct {
 	Job          queryJob       `json:"job"`
 	SkipCache    bool           `json:"skip_cache"`
 	StreamResult bool           `json:"stream_result"`
+	TruncateRows int            `json:"truncate_rows"` // cap returned rows; negative = no truncation
 }
 
 type streamTrailer struct {
@@ -110,7 +111,8 @@ type streamTrailer struct {
 
 // Execute runs SQL against a data source (dbtype + dbconfig) and returns the
 // rows. dbconfig is passed straight through to canal as the connection config.
-func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string) (*QueryResult, error) {
+// truncateRows caps how many rows canal returns (negative = no truncation).
+func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int) (*QueryResult, error) {
 	body, err := json.Marshal(queryRequest{
 		SQL:          sql,
 		Dbtype:       dbtype,
@@ -121,6 +123,7 @@ func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig 
 		Job:          queryJob{ID: -1, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
 		SkipCache:    true,
 		StreamResult: true,
+		TruncateRows: truncateRows,
 	})
 	if err != nil {
 		return nil, err

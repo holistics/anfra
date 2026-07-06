@@ -44,10 +44,17 @@ var Commands = []Command{
 			return Sidecars{Node: true, CanalQuery: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}
 		},
 		Run: func(ctx context.Context, c Clients, repo repo.Repo, args map[string]any) (any, error) {
-			if IsTruthy(args["validate"]) {
-				return validateAQLResponse(ctx, c, repo, argString(args, "dataset"), argString(args, "aql"))
+			// The AQL engine doesn't support `limit:`; strip it here (see query.ExtractLimit)
+			// and apply it at execution time via canal's truncate_rows.
+			aql, limit, err := query.ExtractLimit(argString(args, "aql"))
+			if err != nil {
+				return nil, err
 			}
-			return RunQuery(ctx, c, repo, args)
+			dataset := argString(args, "dataset")
+			if IsTruthy(args["validate"]) {
+				return validateAQLResponse(ctx, c, repo, dataset, aql)
+			}
+			return RunQuery(ctx, c, repo, dataset, aql, limit, IsTruthy(args["generate"]))
 		},
 	},
 	{
@@ -128,20 +135,18 @@ type QueryRows struct {
 	Records [][]any  `json:"records"`
 }
 
-// RunQuery compiles an AQL query and, unless generate is set, executes it. On a
-// compile failure it surfaces the same structured diagnostics as --validate with
-// an "invalid" status (which the CLI maps to a non-zero exit), so callers see
-// what's wrong without re-running the query.
-func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, args map[string]any) (any, error) {
-	dataset := argString(args, "dataset")
-	aql := argString(args, "aql")
+// RunQuery compiles an AQL query and, unless generate is set, executes it (with
+// canal truncating to limit rows; query.NoLimit for all). On a compile failure it
+// surfaces the same structured diagnostics as --validate with an "invalid" status
+// (which the CLI maps to a non-zero exit), so callers see what's wrong without
+// re-running the query.
+func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, limit int, generate bool) (any, error) {
 	if dataset == "" {
 		return nil, fmt.Errorf("dataset is required")
 	}
 	if aql == "" {
 		return nil, fmt.Errorf("aql is required")
 	}
-	generate := IsTruthy(args["generate"])
 	if !generate && clients.CanalQuery == nil {
 		return nil, fmt.Errorf("query execution requires the canal-query sidecar")
 	}
@@ -161,7 +166,7 @@ func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, args map[str
 	if generate {
 		return QueryResult{SQL: compiled.SQL}, nil
 	}
-	r, err := query.Execute(ctx, clients.CanalQuery, repo, compiled)
+	r, err := query.Execute(ctx, clients.CanalQuery, repo, compiled, limit)
 	if err != nil {
 		return nil, err
 	}

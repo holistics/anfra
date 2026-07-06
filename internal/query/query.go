@@ -9,11 +9,46 @@ package query
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/anfra-ai/anfra/internal/datasource"
 	"github.com/anfra-ai/anfra/internal/repo"
 	"github.com/anfra-ai/anfra/internal/sidecar"
 )
+
+// NoLimit is the row limit meaning "no truncation" (canal's truncate_rows uses a
+// negative value for this).
+const NoLimit = -1
+
+// limitDirectiveRe matches an anfra-level `limit:` directive trailing an AQL
+// query — the closing brace of the query block, whitespace, then `limit: <n>` to
+// end of line (e.g. "...} limit: 100"). The brace is kept; only the directive is
+// stripped.
+var limitDirectiveRe = regexp.MustCompile(`\}\s+limit:\s*([^\n]*)`)
+
+// ExtractLimit pulls an anfra-level `limit:` directive out of an AQL query and
+// returns the query with the directive removed plus the row limit. The AQL engine
+// does not support `limit`, so anfra strips it here and applies it at execution
+// time via canal's truncate_rows. Returns NoLimit when no directive is present.
+// TODO: remove this when AQL supports limit
+func ExtractLimit(aql string) (string, int, error) {
+	m := limitDirectiveRe.FindStringSubmatch(aql)
+	if m == nil {
+		return aql, NoLimit, nil
+	}
+	raw := strings.TrimSpace(m[1])
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return aql, NoLimit, fmt.Errorf("invalid limit %q: expected a non-negative integer", raw)
+	}
+	if n < 0 {
+		return aql, NoLimit, fmt.Errorf("invalid limit %d: must be >= 0", n)
+	}
+	cleaned := limitDirectiveRe.ReplaceAllString(aql, "}")
+	return cleaned, n, nil
+}
 
 func compileDataSources(m map[string]datasource.DataSource) map[string]sidecar.CompileDataSource {
 	out := make(map[string]sidecar.CompileDataSource, len(m))
@@ -54,16 +89,6 @@ func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo,
 	return res, nil
 }
 
-// GenerateSQL compiles an AQL query against a dataset into SQL, using the
-// dialects declared in the repo's data_sources.yml.
-func GenerateSQL(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (string, error) {
-	res, err := Compile(ctx, node, repo, dataset, aql)
-	if err != nil {
-		return "", err
-	}
-	return res.SQL, nil
-}
-
 // RunResult is the compiled SQL plus the executed result.
 type RunResult struct {
 	SQL     string
@@ -74,8 +99,9 @@ type RunResult struct {
 // Execute runs already-compiled SQL via canal-query against the data source the
 // dataset targets, returning the SQL and the result rows. Split from Compile so
 // callers can distinguish a compile failure (a query problem) from an execution
-// failure (a data-source/DB problem).
-func Execute(ctx context.Context, canal *sidecar.CanalQueryClient, repo repo.Repo, compiled sidecar.CompileToSQLResult) (*RunResult, error) {
+// failure (a data-source/DB problem). truncateRows caps the rows canal returns
+// (NoLimit for all rows); it's how anfra applies the AQL `limit:` directive.
+func Execute(ctx context.Context, canal *sidecar.CanalQueryClient, repo repo.Repo, compiled sidecar.CompileToSQLResult, truncateRows int) (*RunResult, error) {
 	sources, err := datasource.Load(repo.ConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("load data sources: %w", err)
@@ -87,19 +113,9 @@ func Execute(ctx context.Context, canal *sidecar.CanalQueryClient, repo repo.Rep
 	if ds.Connection == nil {
 		return nil, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
 	}
-	result, err := canal.Execute(ctx, compiled.DataSource.DBType, ds.Connection, compiled.SQL)
+	result, err := canal.Execute(ctx, compiled.DataSource.DBType, ds.Connection, compiled.SQL, truncateRows)
 	if err != nil {
 		return nil, fmt.Errorf("execute query on data source %q: %w", ds.Name, err)
 	}
 	return &RunResult{SQL: compiled.SQL, Fields: result.Fields, Records: result.Rows}, nil
-}
-
-// Run compiles an AQL query to SQL and executes it via canal-query against the
-// data source the dataset targets, returning the SQL and the result rows.
-func Run(ctx context.Context, node *sidecar.AnfraNodeClient, canal *sidecar.CanalQueryClient, repo repo.Repo, dataset, aql string) (*RunResult, error) {
-	compiled, err := Compile(ctx, node, repo, dataset, aql)
-	if err != nil {
-		return nil, err
-	}
-	return Execute(ctx, canal, repo, compiled)
 }
