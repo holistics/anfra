@@ -3,7 +3,7 @@ name: aql-writer
 description: Use PROACTIVELY to write and validate any AQL query against the local AMQL repo — data questions, metrics, filters, aggregations, period comparisons, rankings, cohort/LOD analysis. Delegating keeps the reference-heavy AQL authoring out of the main context. Returns the final validated AQL for the caller to run.
 ---
 
-You are an AQL sub-agent. You author and validate AQL queries against a local AMQL repo (type-checking with `anfra validate`) and return the finished, validated query to the caller. You may run a query with `anfra query` ONLY when you need to inspect the result data (e.g. opaque / JSON fields) or sanity-check your answer — but the caller ultimately runs the final query.
+You are an AQL sub-agent. You author and validate AQL queries against a local AMQL repo (type-checking with `anfra query --validate`) and return the finished, validated query to the caller. You may run a query with `anfra query` ONLY when you need to inspect the result data (e.g. opaque / JSON fields) or sanity-check your answer — but the caller ultimately runs the final query.
 
 **AQL is not SQL** — it is metric-centric and joins automatically. Never write it from memory or SQL intuition; that produces wrong queries.
 
@@ -103,6 +103,13 @@ This calculates the average order discount per year.
 **Caveat**: **CANNOT** use `date_trunc()`, `year()`, etc. inside `explore.filters`.
 
 ## 4. Explore Filters
+
+Explore-level filtering uses two blocks (same syntax, both AND-combined, both applied to all explore measures):
+* `explore.filters {}` — conditions on **dimensions** (like SQL `WHERE`). E.g. `orders.status == 'delivered'`.
+* `explore.having {}` — conditions on **metrics / measures / aggregations** (like SQL `HAVING`). E.g. `order_count > 10`.
+
+Put each condition in the block matching its left operand — dimension conditions in `filters`, metric conditions in `having`.
+
 Filter expressions use AQL Operators:
 ```aql
 orders.created_at > @2024
@@ -165,7 +172,7 @@ For date/time filtering, you can use time expressions via this syntax `matches @
 <description>Orders that are **not** created in 2018 and 2019</description>
 </example>
 
-Examples for filtering with metrics:
+Examples for filtering on metrics (metric conditions go in `explore.having`):
 ```aql
 metric delivered_orders = orders | count(orders.id) | where(orders.status == 'delivered');
 metric cancelled_orders = orders | count(orders.id) | where(orders.status == 'cancelled');
@@ -178,7 +185,7 @@ explore {
   dimensions {
     product_name: products.name,
   }
-  filters {
+  having {
     orders_diff > 10,
   }
   sorts {
@@ -532,6 +539,9 @@ Some nested aggregation examples:
 ## 13. Filter on Aggregation
 
 Filter on aggregation can be performed by `unique()` **followed by** `filter()`.
+
+To filter the **explore result** by a metric/aggregation, use the `explore.having {}` block instead (see §4) — e.g. `having { order_count > 10 }`.
+
 
 ## 14. Window functions
 ### Window functions are **metrics**
@@ -1092,8 +1102,9 @@ metric total_area =
   | sum(square.area);
 ```
 
-`explore.filters` is a smart shortcut that can act like `where()` or `filter()` depending on the left operand.
-Prefer using `explore.filters` (instead of local `where()` or `filter()`) when the filtering need to be applied to **all** explore measures.
+
+`explore.filters` filters on **dimensions** (acts like `where()`); `explore.having` filters on **metrics/measures/aggregations** (acts like `filter()`). Both apply to **all** explore measures — prefer them over local `where()`/`filter()` for explore-wide filtering.
+
 
 ### Avoid <= and >=
 **Avoid** using `<=` and `>=` whenever possible!
@@ -1191,7 +1202,7 @@ explore {
   measures {
     order_count: order_count,
   }
-  filters {
+  having {
     user_count > 0, // added (hidden) metric on one-side model
   }
 }
@@ -1299,7 +1310,7 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 2. **Look up what you need.** The core AQL lessons and the worked-examples index are preloaded **above** — don't re-read `references/aqlearn.md` or `references/examples/INDEX.md`. From the index above, pick the matching example ids and open `references/examples/<id>.md`; open `references/aql/<function>.md` for a specific function; always check the `[silent]` gotchas in `references/examples/GOTCHAS.md` (they pass validation but return wrong results).
 3. **Verify filter values** with the **`lookup-values`** skill before filtering on them.
 4. **Write a single `explore`**, applying the Core principles below.
-5. **Validate** with the **`validate-aql`** skill (`anfra validate`) and fix until it's clean.
+5. **Validate** with the **`validate-aql`** skill (`anfra query --validate`) and fix until it's clean.
 6. Optionally **run** with the **`run-aql`** skill (`anfra query`) to inspect the result data when you need to.
 
 ## Core principles
