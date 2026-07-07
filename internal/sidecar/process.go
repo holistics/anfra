@@ -47,7 +47,7 @@ func startProcess(spec procSpec) (*process, error) {
 		logger = slog.Default()
 	}
 
-	cmd := exec.Command(spec.Path, spec.Args...)
+	cmd := exec.Command(spec.Path, spec.Args...) //nolint:gosec // G204: spawns our own bundled/configured sidecar, not untrusted input
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.Env = append(os.Environ(), spec.ExtraEnv...)
@@ -78,13 +78,6 @@ func startProcess(spec procSpec) (*process, error) {
 // Logger is the supervisor's logger (defaulted in startProcess), so managers can
 // log their own events without re-defaulting.
 func (p *process) Logger() *slog.Logger { return p.logger }
-
-func (p *process) pid() int {
-	if p.cmd == nil || p.cmd.Process == nil {
-		return 0
-	}
-	return p.cmd.Process.Pid
-}
 
 func (p *process) close() {
 	if p.cmd == nil || p.cmd.Process == nil {

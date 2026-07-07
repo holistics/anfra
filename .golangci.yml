@@ -1,0 +1,59 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+
+# https://golangci-lint.run/usage/linters
+linters:
+  enable:
+    - contextcheck
+    - dupl
+    - gocritic
+    - gosec
+    - misspell
+    - reassign
+    - spancheck
+    - unconvert
+    - wastedassign
+  settings:
+    gosec:
+      excludes:
+        - G115 # https://github.com/securego/gosec/issues/1212
+    staticcheck:
+      checks:
+        - all
+        - "-QF1008" # omitting embedded field from selector
+        - "-QF1011" # redundant type declaration
+        - "-SA9003" # empty branch - can be useful for readability/commenting purposes
+        - "-ST1003" # follow common variables (e.g. URL instead of Url)
+        - "-ST1005" # error punctuation
+        - "-ST1012" # error variable name
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gocritic
+        path: cmd\/.*\/main\.go$
+        # it's our intention to exit immediately with error code
+        text: exitAfterDefer
+      - path: '(.+)_test\.go'
+        linters:
+          - dupl
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -69,7 +69,7 @@ func runServe() error {
 		}
 		defer os.Remove(sockPath)
 
-		srv := &http.Server{Handler: serveMux(h, clients)}
+		srv := &http.Server{Handler: serveMux(h, clients), ReadHeaderTimeout: 10 * time.Second}
 
 		go func() {
 			sig := make(chan os.Signal, 1)
