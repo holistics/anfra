@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anfra-ai/anfra/internal/datasource"
-	"github.com/anfra-ai/anfra/internal/repo"
-	"github.com/anfra-ai/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
 // NoLimit is the row limit meaning "no truncation" (canal's truncate_rows uses a

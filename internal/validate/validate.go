@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/anfra-ai/anfra/internal/query"
-	"github.com/anfra-ai/anfra/internal/repo"
-	"github.com/anfra-ai/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
 // Result is the outcome of validating a repo: files that failed to compile plus

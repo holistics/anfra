@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/anfra-ai/anfra/internal/query"
-	"github.com/anfra-ai/anfra/internal/repo"
-	"github.com/anfra-ai/anfra/internal/validate"
+	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/validate"
 )
 
 // Commands is the registry — the single source for the CLI and /call. Add a
@@ -38,7 +38,7 @@ var Commands = []Command{
 		},
 		// --generate and --validate each pick a "don't run" mode, so they conflict.
 		ExclusiveArgs: [][]string{{"generate", "validate"}},
-		StdinArg: "aql",
+		StdinArg:      "aql",
 		Needs: func(args map[string]any) Sidecars {
 			// canal-query is only needed to actually run — not to generate SQL or validate.
 			return Sidecars{Node: true, CanalQuery: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}

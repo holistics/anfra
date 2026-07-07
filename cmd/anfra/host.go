@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/anfra-ai/anfra/internal/logging"
-	"github.com/anfra-ai/anfra/internal/repo"
-	"github.com/anfra-ai/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/logging"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
 // hostContext carries the per-invocation repo + the sidecar Config (with the

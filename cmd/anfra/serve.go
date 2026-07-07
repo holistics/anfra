@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anfra-ai/anfra/internal/app"
-	"github.com/anfra-ai/anfra/internal/repo"
-	"github.com/anfra-ai/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/spf13/cobra"
 )
 

@@ -1,4 +1,4 @@
-module github.com/anfra-ai/anfra
+module github.com/holistics/anfra
 
 go 1.25
 
