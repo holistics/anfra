@@ -1,3 +1,6 @@
 /internal/sidecar/assets/*
 /release/
 /anfra
+
+# Node tooling (commitlint / conventional-changelog)
+node_modules/

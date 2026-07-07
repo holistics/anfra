@@ -73,7 +73,7 @@ func Setup(logsDir, repo string) (*Logging, error) {
 	}
 	// Sidecar stdout (banners / incidental output) → discarded by default; to the
 	// host's stdout when ANFRA_SIDECAR_STDOUT is set.
-	var stdoutWriter io.Writer = io.Discard
+	stdoutWriter := io.Discard
 	if os.Getenv("ANFRA_SIDECAR_STDOUT") != "" {
 		stdoutWriter = os.Stdout
 	}

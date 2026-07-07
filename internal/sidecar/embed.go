@@ -53,7 +53,7 @@ func extractRuntime(name string, data []byte) (string, error) {
 
 	if info, err := os.Stat(path); err != nil || info.Size() != int64(len(data)) {
 		tmp := path + ".tmp"
-		if err := os.WriteFile(tmp, data, 0o755); err != nil {
+		if err := os.WriteFile(tmp, data, 0o755); err != nil { //nolint:gosec // G306: an extracted sidecar binary must be executable
 			return "", err
 		}
 		if err := os.Rename(tmp, path); err != nil {
