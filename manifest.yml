@@ -1,0 +1,10 @@
+# Release manifest for the anfra single binary — the single source of truth for a
+# release. To cut a release: bump `version` (and pin the sidecar release tags this
+# version embeds), merge to master. anfra_tag.yml then pushes `anfra-v<version>`,
+# which triggers build_release.yml to download the pinned sidecars, cross-build,
+# and publish. Always bump `version` when changing a pin — otherwise the tag
+# already exists and no new release is cut.
+version: 0.1.0
+sidecars:
+  anfra_node: anfra-node-v0.1.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
+  canal_query: query-v2.12.0 # holistics/canal release tag (build_and_release_binaries.yml)

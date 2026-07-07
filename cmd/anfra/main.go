@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/holistics/anfra/internal/meta"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +32,9 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "anfra",
 		Short: "Anfra — local-first agentic analytics infrastructure",
+		// Setting Version makes cobra add `--version` (and `-v`, since it's free) to
+		// the root. Mirrors the `version` subcommand, which also serves it over /call.
+		Version: meta.Version,
 		// We print errors ourselves in main (so exitCodeError stays silent).
 		SilenceUsage:  true,
 		SilenceErrors: true,

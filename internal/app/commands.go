@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/validate"
@@ -12,6 +13,14 @@ import (
 // Commands is the registry — the single source for the CLI and /call. Add a
 // command here and it appears on both surfaces (and in help).
 var Commands = []Command{
+	{
+		Name:  "version",
+		Short: "Print the anfra version",
+		// No Needs: pure metadata, spawns nothing.
+		Run: func(_ context.Context, _ Clients, _ repo.Repo, _ map[string]any) (any, error) {
+			return map[string]string{"version": meta.Version}, nil
+		},
+	},
 	{
 		Name:  "status",
 		Short: "Report whether a warm server is running and its sidecars are healthy",
