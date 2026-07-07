@@ -1,0 +1,55 @@
+# Cut an anfra release. When manifest.yml lands on master with a `version` that has
+# no matching tag yet, create `anfra-v<version>` and then assemble + publish in the
+# SAME run (via workflow_call) — so no deploy key / PAT is needed for the tag: a
+# GITHUB_TOKEN-pushed tag wouldn't trigger build_release.yml's `on: push: tags`
+# (GitHub blocks recursive runs), so we invoke it directly instead.
+#
+# Flow to cut a release: bump `version` (and sidecar pins) in manifest.yml in a PR
+# -> merge to master -> this tags and publishes.
+name: Tag & release anfra
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - manifest.yml
+  workflow_dispatch: # manual re-run
+
+permissions:
+  contents: write # create + push the tag; the called assembler publishes the Release
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.t.outputs.tag }}
+      created: ${{ steps.t.outputs.created }}
+    steps:
+      - uses: actions/checkout@v4
+        # default GITHUB_TOKEN (persist-credentials) is enough to push a tag
+
+      - name: Create tag if new
+        id: t
+        run: |
+          version="$(yq '.version' manifest.yml)"
+          test -n "$version" && test "$version" != null || { echo "no version in manifest.yml"; exit 1; }
+          tag="anfra-v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag already exists — bump manifest.yml version to cut a release"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            git tag "$tag" HEAD
+            git push origin "$tag"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+            echo "pushed $tag"
+          fi
+
+  release:
+    needs: tag
+    if: ${{ needs.tag.outputs.created == 'true' }}
+    uses: ./.github/workflows/build_release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+    secrets: inherit # passes ANFRA_DIST_TOKEN (cross-repo download) + GITHUB_TOKEN

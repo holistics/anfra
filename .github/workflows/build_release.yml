@@ -1,0 +1,112 @@
+# Assemble the anfra single binary for every target: collect the pinned sidecar
+# binaries (built by their own repos' workflows and attached to Releases), embed
+# them, and cross-build the Go host. The anfra host is pure Go so all targets build
+# on one runner; anfra-node is already cross-compiled to every target, and
+# canal-query is prebuilt per target — so this job only *collects* and cross-builds.
+#
+# Normally called by tag_and_release.yml in the same run after it creates the `anfra-v*`
+# tag (workflow_call with that tag) — so publishing doesn't depend on a tag-push
+# event. The manifest.yml at that commit pins the sidecar releases to embed and the
+# version baked into the binary. Also runs on a manual/human `anfra-v*` tag push, or
+# workflow_dispatch for a test build (artifacts only, no release).
+name: Build anfra release
+
+on:
+  push:
+    tags:
+      - "anfra-v*"
+    # TEMPORARY — remove before merge. Lets us test the assembler on this branch
+    # (a non-tag push isn't a release, so it just uploads artifacts). Needs
+    # ANFRA_DIST_TOKEN present to download the pinned sidecars.
+    branches:
+      - init
+  workflow_dispatch: # manual test build (uploads artifacts, no release)
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: write # publish the anfra release
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    # Release when called with a tag or on a tag push; TAG is the input (call) or
+    # the pushed ref. On workflow_dispatch neither is set → artifacts only.
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      IS_RELEASE: ${{ inputs.tag != '' || startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v4 # on a tag push this is the tag's commit (manifest pinned there)
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Read manifest
+        id: m
+        run: |
+          {
+            echo "version=$(yq '.version' manifest.yml)"
+            echo "node_tag=$(yq '.sidecars.anfra_node' manifest.yml)"
+            echo "canal_tag=$(yq '.sidecars.canal_query' manifest.yml)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches manifest
+        if: ${{ env.IS_RELEASE == 'true' }}
+        env:
+          VERSION: ${{ steps.m.outputs.version }}
+        run: test "anfra-v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
+
+      - name: Collect sidecar binaries
+        env:
+          # Cross-repo READ token for `gh release download`. This must be an HTTP
+          # token (fine-grained PAT or GitHub App installation token) — NOT an SSH
+          # deploy key (gh can't use one) and NOT the per-repo GITHUB_TOKEN (it can't
+          # read other repos). Fine-grained PAT settings:
+          #   Resource owner:     holistics
+          #   Repository access:  holistics/holistics-core, holistics/canal
+          #   Permissions:        Contents → Read-only   (Releases live under Contents)
+          GH_TOKEN: ${{ secrets.ANFRA_DIST_TOKEN }}
+          NODE_TAG: ${{ steps.m.outputs.node_tag }}
+          CANAL_TAG: ${{ steps.m.outputs.canal_tag }}
+        run: |
+          mkdir -p sidecars
+          gh release download -R holistics/holistics-core "$NODE_TAG"  -D sidecars -p 'anfra-node-*'
+          gh release download -R holistics/canal          "$CANAL_TAG" -D sidecars -p 'canal-query-*'
+          ls -la sidecars
+
+      - name: Cross-build every target
+        env:
+          VERSION: ${{ steps.m.outputs.version }}
+        run: |
+          declare -A OS=([linux-x64]=linux [linux-arm64]=linux [darwin-x64]=darwin [darwin-arm64]=darwin)
+          declare -A ARCH=([linux-x64]=amd64 [linux-arm64]=arm64 [darwin-x64]=amd64 [darwin-arm64]=arm64)
+          mkdir -p release internal/sidecar/assets
+          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            cp "sidecars/anfra-node-$t"  internal/sidecar/assets/anfra-node
+            cp "sidecars/canal-query-$t" internal/sidecar/assets/canal-query
+            GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
+              -ldflags "-X github.com/holistics/anfra/internal/meta.Version=$VERSION" \
+              -o "release/anfra-$t" ./cmd/anfra
+            file "release/anfra-$t" || true
+          done
+          ls -la release
+
+      - name: Publish release
+        if: ${{ env.IS_RELEASE == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # native contents:write on this repo
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          gh release upload "$TAG" release/anfra-* --clobber
+
+      - name: Upload artifacts
+        if: ${{ env.IS_RELEASE != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: anfra-binaries
+          path: release/anfra-*
+          if-no-files-found: error
