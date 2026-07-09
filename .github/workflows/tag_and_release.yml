@@ -52,4 +52,6 @@ jobs:
     uses: ./.github/workflows/build_release.yml
     with:
       tag: ${{ needs.tag.outputs.tag }}
-    secrets: inherit # passes ANFRA_DIST_TOKEN (cross-repo download) + GITHUB_TOKEN
+    # Pass only what the assembler needs (not `inherit`); GITHUB_TOKEN is automatic.
+    secrets:
+      ANFRA_DIST_TOKEN: ${{ secrets.ANFRA_DIST_TOKEN }}
