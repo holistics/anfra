@@ -26,6 +26,11 @@ on:
       tag:
         type: string
         required: true
+    secrets:
+      # Only the cross-repo download token is passed in (least privilege);
+      # GITHUB_TOKEN is provided to the called workflow automatically.
+      ANFRA_DIST_TOKEN:
+        required: true
 
 permissions:
   contents: write # publish the anfra release
