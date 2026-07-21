@@ -1,6 +1,6 @@
 # Release manifest for the anfra single binary — the single source of truth for a
 # release. To cut a release: bump `version` (and pin the sidecar release tags this
-# version embeds), merge to master. anfra_tag.yml then pushes `anfra-v<version>`,
+# version embeds), merge to main. anfra_tag.yml then pushes `anfra-v<version>`,
 # which triggers build_release.yml to download the pinned sidecars, cross-build,
 # and publish. Always bump `version` when changing a pin — otherwise the tag
 # already exists and no new release is cut.
