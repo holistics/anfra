@@ -1,8 +1,8 @@
 # Assemble the anfra single binary for every target: collect the pinned sidecar
 # binaries (built by their own repos' workflows and attached to Releases), embed
 # them, and cross-build the Go host. The anfra host is pure Go so all targets build
-# on one runner; anfra-node is already cross-compiled to every target, and
-# canal-query is prebuilt per target — so this job only *collects* and cross-builds.
+# on one runner; both sidecars are prebuilt per target by their own repos'
+# workflows — so this job only *collects* and cross-builds.
 #
 # Normally called by tag_and_release.yml in the same run after it creates the `anfra-v*`
 # tag (workflow_call with that tag) — so publishing doesn't depend on a tag-push
