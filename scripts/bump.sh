@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bump the anfra release version and regenerate CHANGELOG.md from conventional
-# commits. Review + commit the result and merge to master; tag_and_release.yml then
+# commits. Review + commit the result and merge to main; tag_and_release.yml then
 # tags `anfra-v<version>` (read from manifest.yml) and the assembler publishes it.
 #
 # Usage: pnpm bump <version>     e.g. pnpm bump 0.2.0
@@ -16,4 +16,4 @@ git fetch --tags --quiet
 pnpm run changelog
 
 echo "Bumped manifest.yml -> ${version} and updated CHANGELOG.md."
-echo "Review both, commit, and merge to master to cut anfra-v${version}."
+echo "Review both, commit, and merge to main to cut anfra-v${version}."

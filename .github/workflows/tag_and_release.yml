@@ -1,17 +1,17 @@
-# Cut an anfra release. When manifest.yml lands on master with a `version` that has
+# Cut an anfra release. When manifest.yml lands on main with a `version` that has
 # no matching tag yet, create `anfra-v<version>` and then assemble + publish in the
 # SAME run (via workflow_call) — so no deploy key / PAT is needed for the tag: a
 # GITHUB_TOKEN-pushed tag wouldn't trigger build_release.yml's `on: push: tags`
 # (GitHub blocks recursive runs), so we invoke it directly instead.
 #
 # Flow to cut a release: bump `version` (and sidecar pins) in manifest.yml in a PR
-# -> merge to master -> this tags and publishes.
+# -> merge to main -> this tags and publishes.
 name: Tag & release anfra
 
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - manifest.yml
   workflow_dispatch: # manual re-run
