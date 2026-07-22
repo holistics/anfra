@@ -12,9 +12,9 @@
 #   ANFRA_INSTALL_DIR    install location (default: $HOME/.anfra/bin)
 #   ANFRA_VERSION        pin a version, e.g. 0.1.0 (default: latest)
 #   ANFRA_NO_MODIFY_PATH if set, don't touch shell rc files; just print the hint
-#   GITHUB_TOKEN         optional; sent as a bearer token (for pre-public access)
 #
-# Trust model: downloads over HTTPS from GitHub Releases (TOFU). Signature
+# Downloads from public GitHub Releases (no auth). Trust model: downloads over
+# HTTPS from GitHub Releases (TOFU). Signature
 # verification is not done here yet — `anfra update` is where verification will
 # live (see .agents/projects/anfra/signing.md).
 
@@ -53,16 +53,11 @@ else
     url="https://github.com/${REPO}/releases/latest/download/${asset}"
 fi
 
-auth=()
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-    auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-fi
-
 # --- download ---
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 echo "Downloading ${asset} (~250 MB) for ${os}/${arch}..."
-if ! curl -fL ${auth[@]+"${auth[@]}"} -o "${tmp}/${BIN_NAME}" "$url"; then
+if ! curl -fL -o "${tmp}/${BIN_NAME}" "$url"; then
     err "download failed from ${url} (is the release published for this platform?)"
 fi
 

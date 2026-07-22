@@ -25,6 +25,11 @@ func TestIsNewer(t *testing.T) {
 		{"dev", "0.1.0", true}, // local build is always outdated
 		{"", "0.1.0", true},    // unset behaves like dev
 		{"1.0.0", "0.9.9", false},
+		// Mixed prefixes must normalize, not degrade to a 0/invalid compare.
+		{"v0.1.0", "0.2.0", true},
+		{"0.1.0", "v0.2.0", true},
+		{"v1.0.0", "v1.0.0", false},
+		{"anfra-v0.1.0", "0.2.0", true},
 	}
 	for _, c := range cases {
 		meta.Version = c.current
