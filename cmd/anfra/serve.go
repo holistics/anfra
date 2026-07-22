@@ -111,7 +111,11 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 
 		// `help` (truthy) → the command's cobra help text, identical to `anfra <cmd> --help`.
 		if app.IsTruthy(req.Args["help"]) {
-			text, err := commandHelp(req.Command)
+			// commandHelp only renders help text; it builds the command tree but never
+			// executes a RunE, so there is no request context to thread into the update
+			// command's HTTP client (which is why contextcheck is suppressed here).
+			text, err := commandHelp(req.Command) //nolint:contextcheck
+
 			if err != nil {
 				writeCallError(w, http.StatusNotFound, err.Error())
 				return
