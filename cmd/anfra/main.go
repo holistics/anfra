@@ -16,10 +16,14 @@ type exitCodeError struct{ code int }
 func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 func main() {
-	err := newRootCmd().Execute()
+	// ExecuteC returns the command that actually ran, so we get the real
+	// subcommand name (handles flags/args/aliases) rather than parsing os.Args.
+	executed, err := newRootCmd().ExecuteC()
 	// After the command runs, surface a cached "update available" notice (and, if
 	// opted in, kick a background update). Best-effort; never affects exit status.
-	maybeNotifyUpdate(invokedCommand())
+	if executed != nil {
+		maybeNotifyUpdate(executed.Name())
+	}
 
 	if err == nil {
 		return
@@ -30,17 +34,6 @@ func main() {
 	}
 	fmt.Fprintln(os.Stderr, "Error:", err)
 	os.Exit(1)
-}
-
-// invokedCommand returns the first non-flag CLI arg (the subcommand name), or ""
-// for a bare `anfra`. Used to suppress the notice on update/serve commands.
-func invokedCommand() string {
-	for _, a := range os.Args[1:] {
-		if len(a) > 0 && a[0] != '-' {
-			return a
-		}
-	}
-	return ""
 }
 
 func newRootCmd() *cobra.Command {

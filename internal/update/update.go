@@ -154,7 +154,17 @@ func (r *Release) IsNewer() bool {
 	if cur == "dev" || cur == "" {
 		return true
 	}
-	return semver.Compare("v"+r.Version, "v"+cur) > 0
+	// Normalize to canonical vX.Y.Z so a stray "v"/"anfra-v" prefix on either side
+	// can't produce an invalid string (e.g. "vv0.2.0"), which Compare treats as 0.
+	return semver.Compare(canonicalVersion(r.Version), canonicalVersion(cur)) > 0
+}
+
+// canonicalVersion strips any anfra-v / v prefix and re-adds a single "v", so
+// semver.Compare always sees a valid version regardless of the input format.
+func canonicalVersion(v string) string {
+	v = strings.TrimPrefix(v, tagPrefix)
+	v = strings.TrimPrefix(v, "v")
+	return "v" + v
 }
 
 // Apply downloads the platform asset and atomically replaces the running binary.
