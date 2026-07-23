@@ -19,19 +19,18 @@ func newUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update anfra to the latest release (use --check to only report)",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return runUpdate(checkOnly)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runUpdate(cmd.Context(), checkOnly)
 		},
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "only check for an update; do not install")
 	return cmd
 }
 
-func runUpdate(checkOnly bool) error {
-	// Root at Background (repo convention, see host.go/runServe); timeouts are
-	// bounded per-request inside the update package (a quick lookup, then a large
-	// download).
-	ctx := context.Background()
+func runUpdate(ctx context.Context, checkOnly bool) error {
+	// ctx is the signal-cancelable root from main, so Ctrl-C aborts the download
+	// (its request is context-aware). Per-request timeouts are bounded inside the
+	// update package (a quick lookup, then a large download).
 	rel, err := update.Latest(ctx)
 	if err != nil {
 		return err
@@ -68,8 +67,8 @@ func newUpdateCheckCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:    "__update-check",
 		Hidden: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return update.Refresh(context.Background())
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return update.Refresh(cmd.Context())
 		},
 	}
 }

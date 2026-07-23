@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/spf13/cobra"
@@ -16,9 +19,15 @@ type exitCodeError struct{ code int }
 func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 func main() {
-	// ExecuteC returns the command that actually ran, so we get the real
-	// subcommand name (handles flags/args/aliases) rather than parsing os.Args.
-	executed, err := newRootCmd().ExecuteC()
+	// A single signal-cancelable root context, threaded down through cobra so
+	// Ctrl-C (SIGINT/SIGTERM) cancels in-flight work — an update download, a
+	// query, or the serve loop.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// ExecuteContextC sets that root context and returns the command that actually
+	// ran, so we get the real subcommand name (handles flags/args/aliases).
+	executed, err := newRootCmd().ExecuteContextC(ctx)
 	// After the command runs, surface a cached "update available" notice (and, if
 	// opted in, kick a background update). Best-effort; never affects exit status.
 	if executed != nil {

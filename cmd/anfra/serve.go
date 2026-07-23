@@ -9,9 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/holistics/anfra/internal/app"
@@ -31,14 +29,14 @@ func newServeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
 		Short: "Run the anfra server: keep sidecars warm and expose POST /call for agents and subsequent CLI calls",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return runServe()
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runServe(cmd.Context())
 		},
 	}
 }
 
-func runServe() error {
-	return withRepo(func(h hostContext) error {
+func runServe(ctx context.Context) error {
+	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
 		if isServeRunning(h.repo) {
 			return fmt.Errorf("anfra serve already running for this repo (socket %s)", serveSocketPath(h.repo))
 		}
@@ -49,12 +47,12 @@ func runServe() error {
 		cfg.EnablePooling = true
 
 		node := sidecar.NewAnfraNode(cfg)
-		if err := node.Start(h.ctx); err != nil {
+		if err := node.Start(ctx); err != nil {
 			return fmt.Errorf("start anfra-node sidecar: %w", err)
 		}
 		defer node.Close()
 		canal := sidecar.NewCanalQuery(cfg)
-		if err := canal.Start(h.ctx); err != nil {
+		if err := canal.Start(ctx); err != nil {
 			return fmt.Errorf("start canal-query sidecar: %w", err)
 		}
 		defer canal.Close()
@@ -72,12 +70,12 @@ func runServe() error {
 		srv := &http.Server{Handler: serveMux(h, clients), ReadHeaderTimeout: 10 * time.Second}
 
 		go func() {
-			sig := make(chan os.Signal, 1)
-			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-			<-sig
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			<-ctx.Done() // cancelled on SIGINT/SIGTERM by the root context in main
+			// Drain with a fresh deadline: WithoutCancel keeps ctx's values but drops
+			// its (already-fired) cancellation, so Shutdown gets the full 5s.
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
-			_ = srv.Shutdown(ctx)
+			_ = srv.Shutdown(shutdownCtx)
 		}()
 
 		h.cfg.Logger.Info("serve.listening", "socket", sockPath)
@@ -111,11 +109,10 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 
 		// `help` (truthy) → the command's cobra help text, identical to `anfra <cmd> --help`.
 		if app.IsTruthy(req.Args["help"]) {
-			// commandHelp only renders help text; it builds the command tree but never
-			// executes a RunE, so there is no request context to thread into the update
-			// command's HTTP client (which is why contextcheck is suppressed here).
+			// commandHelp only builds the command tree to render help text; it never
+			// executes a RunE, so there's no request context to thread into a command
+			// body. False positive — the rest of the tree is properly ctx-threaded.
 			text, err := commandHelp(req.Command) //nolint:contextcheck
-
 			if err != nil {
 				writeCallError(w, http.StatusNotFound, err.Error())
 				return
