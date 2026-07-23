@@ -26,6 +26,16 @@ INSTALL_DIR="${ANFRA_INSTALL_DIR:-${HOME}/.anfra/bin}"
 
 err() { echo "anfra-install: $*" >&2; exit 1; }
 
+# --- required tools (fail early with a clear message, not mid-run) ---
+command -v curl >/dev/null 2>&1 || err "curl is required but not found"
+if command -v gunzip >/dev/null 2>&1; then
+    gunzip_cmd="gunzip"
+elif command -v gzip >/dev/null 2>&1; then
+    gunzip_cmd="gzip -d"
+else
+    err "gzip/gunzip is required to decompress the download but was not found"
+fi
+
 # --- detect platform, mapped to the release asset names (anfra-<os>-<arch>) ---
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$os" in
@@ -41,7 +51,9 @@ case "$arch" in
     *)             err "unsupported architecture: $arch" ;;
 esac
 
-asset="${BIN_NAME}-${os}-${arch}"
+# Release binaries are published gzip-compressed for transport (see the anfra
+# compression plan); we gunzip after download.
+asset="${BIN_NAME}-${os}-${arch}.gz"
 
 # --- resolve the download URL (avoid the GitHub API + its 60 req/hr limit) ---
 # The /releases/latest/download/<asset> and /releases/download/<tag>/<asset>
@@ -53,12 +65,15 @@ else
     url="https://github.com/${REPO}/releases/latest/download/${asset}"
 fi
 
-# --- download ---
+# --- download + decompress ---
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-echo "Downloading ${asset} (~250 MB) for ${os}/${arch}..."
-if ! curl -fL -o "${tmp}/${BIN_NAME}" "$url"; then
+echo "Downloading ${asset} for ${os}/${arch}..."
+if ! curl -fL -o "${tmp}/${BIN_NAME}.gz" "$url"; then
     err "download failed from ${url} (is the release published for this platform?)"
+fi
+if ! $gunzip_cmd "${tmp}/${BIN_NAME}.gz"; then   # -> ${tmp}/${BIN_NAME}
+    err "failed to decompress ${asset}"
 fi
 
 # Log the checksum for the record (TOFU; no verification yet).

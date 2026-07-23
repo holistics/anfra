@@ -8,6 +8,7 @@
 package update
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -111,10 +112,13 @@ func get(ctx context.Context, url, accept string, timeout time.Duration) (*http.
 
 // Latest fetches the newest release and resolves the asset for this platform.
 func Latest(ctx context.Context) (*Release, error) {
-	want, err := assetName()
+	base, err := assetName()
 	if err != nil {
 		return nil, err
 	}
+	// Release binaries are published gzip-compressed for transport (see the
+	// compression plan); Apply decompresses on the way in.
+	want := base + ".gz"
 	resp, err := get(ctx, fmt.Sprintf("%s/repos/%s/releases/latest", apiBase, repoSlug), "application/vnd.github+json", lookupTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("check latest release: %w", err)
@@ -179,11 +183,18 @@ func Apply(ctx context.Context, r *Release, progress io.Writer) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: GitHub returned %s", r.Tag, resp.Status)
 	}
-	var body io.Reader = resp.Body
+	// Progress tracks the compressed bytes actually transferred; gzip.Reader then
+	// decompresses to the real binary for the self-replace (embed stays uncompressed).
+	var src io.Reader = resp.Body
 	if progress != nil {
-		body = &progressReader{r: resp.Body, total: resp.ContentLength, w: progress}
+		src = &progressReader{r: resp.Body, total: resp.ContentLength, w: progress}
 	}
-	if err := selfupdate.Apply(body, selfupdate.Options{}); err != nil {
+	gz, err := gzip.NewReader(src)
+	if err != nil {
+		return fmt.Errorf("decompress %s: %w", r.Tag, err)
+	}
+	defer gz.Close()
+	if err := selfupdate.Apply(gz, selfupdate.Options{}); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return fmt.Errorf("update failed and rollback also failed: %v (rollback: %v)", err, rerr)
 		}
