@@ -29,9 +29,9 @@ err() { echo "anfra-install: $*" >&2; exit 1; }
 # --- required tools (fail early with a clear message, not mid-run) ---
 command -v curl >/dev/null 2>&1 || err "curl is required but not found"
 if command -v gunzip >/dev/null 2>&1; then
-    gunzip_cmd="gunzip"
+    gunzip_cmd="gunzip -c"
 elif command -v gzip >/dev/null 2>&1; then
-    gunzip_cmd="gzip -d"
+    gunzip_cmd="gzip -dc"
 else
     err "gzip/gunzip is required to decompress the download but was not found"
 fi
@@ -72,7 +72,7 @@ echo "Downloading ${asset} for ${os}/${arch}..."
 if ! curl -fL -o "${tmp}/${BIN_NAME}.gz" "$url"; then
     err "download failed from ${url} (is the release published for this platform?)"
 fi
-if ! $gunzip_cmd "${tmp}/${BIN_NAME}.gz"; then   # -> ${tmp}/${BIN_NAME}
+if ! $gunzip_cmd "${tmp}/${BIN_NAME}.gz" > "${tmp}/${BIN_NAME}"; then
     err "failed to decompress ${asset}"
 fi
 
