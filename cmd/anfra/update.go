@@ -47,7 +47,7 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 		return nil
 	}
 
-	fmt.Printf("Downloading %s (~250 MB)...\n", rel.Tag)
+	fmt.Printf("Downloading %s...\n", rel.Tag)
 	// Show a progress line only on an interactive terminal; stay silent when
 	// output is piped/captured (agent, CI).
 	var progress io.Writer

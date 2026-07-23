@@ -93,10 +93,14 @@ jobs:
           for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
             cp "sidecars/anfra-node-$t"  internal/sidecar/assets/anfra-node
             cp "sidecars/canal-query-$t" internal/sidecar/assets/canal-query
+            # -s -w strips the host's symbol table + DWARF (Phase 0).
             GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
-              -ldflags "-X github.com/holistics/anfra/internal/meta.Version=$VERSION" \
+              -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION" \
               -o "release/anfra-$t" ./cmd/anfra
-            file "release/anfra-$t" || true
+            # Transport compression (Phase 1, see compression.md): publish only the
+            # .gz. The embed stays uncompressed so the binary remains delta-friendly.
+            gzip -9 "release/anfra-$t"   # replaces anfra-$t with anfra-$t.gz
+            file "release/anfra-$t.gz" || true
           done
           ls -la release
 
