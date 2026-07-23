@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,7 +75,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 			}
 		}
 	}
-	cmd.RunE = func(_ *cobra.Command, posArgs []string) error {
+	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
 		args := map[string]any{}
 		for k, v := range strVals {
 			args[k] = *v
@@ -91,7 +92,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 		if err := applyStdin(c, args); err != nil {
 			return err
 		}
-		return runCommand(c, args)
+		return runCommand(runCmd.Context(), c, args)
 	}
 	return cmd
 }
@@ -121,7 +122,7 @@ func applyStdin(c app.Command, args map[string]any) error {
 
 // runCommand routes a command to the warm server when one is running for this
 // repo, otherwise runs it one-shot (spawning only the sidecars it needs).
-func runCommand(c app.Command, args map[string]any) error {
+func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
 	repoDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
@@ -137,14 +138,14 @@ func runCommand(c app.Command, args map[string]any) error {
 		return present(body, contentType)
 	}
 
-	return withRepo(func(h hostContext) error {
-		clients, closeSidecars, err := startNeededSidecars(h, c, args)
+	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
+		clients, closeSidecars, err := startNeededSidecars(ctx, h, c, args)
 		if err != nil {
 			return err
 		}
 		defer closeSidecars()
 
-		resp, err := app.Dispatch(h.ctx, clients, h.repo, req)
+		resp, err := app.Dispatch(ctx, clients, h.repo, req)
 		if err != nil {
 			return err
 		}
@@ -183,7 +184,7 @@ func present(body []byte, contentType string) error {
 
 // startNeededSidecars spawns just the sidecars the command declares it needs
 // for these args, returning the clients and a single close func (LIFO).
-func startNeededSidecars(h hostContext, c app.Command, args map[string]any) (app.Clients, func(), error) {
+func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, args map[string]any) (app.Clients, func(), error) {
 	var need app.Sidecars
 	if c.Needs != nil {
 		need = c.Needs(args)
@@ -198,7 +199,7 @@ func startNeededSidecars(h hostContext, c app.Command, args map[string]any) (app
 
 	if need.Node {
 		node := sidecar.NewAnfraNode(h.cfg)
-		if err := node.Start(h.ctx); err != nil {
+		if err := node.Start(ctx); err != nil {
 			closeAll()
 			return app.Clients{}, nil, fmt.Errorf("start anfra-node sidecar: %w", err)
 		}
@@ -207,7 +208,7 @@ func startNeededSidecars(h hostContext, c app.Command, args map[string]any) (app
 	}
 	if need.CanalQuery {
 		canal := sidecar.NewCanalQuery(h.cfg)
-		if err := canal.Start(h.ctx); err != nil {
+		if err := canal.Start(ctx); err != nil {
 			closeAll()
 			return app.Clients{}, nil, fmt.Errorf("start canal-query sidecar: %w", err)
 		}
