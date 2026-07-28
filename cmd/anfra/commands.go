@@ -135,7 +135,7 @@ func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
 		if err != nil {
 			return err
 		}
-		return present(body, contentType)
+		return present(c.Name, body, contentType)
 	}
 
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
@@ -154,16 +154,20 @@ func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
 			return fmt.Errorf("marshal result: %w", err)
 		}
 		// resp is a {status, data} envelope we just marshalled, so it's JSON.
-		return present(body, "application/json")
+		return present(c.Name, body, "application/json")
 	})
 }
 
 // present shows a {status, data} response envelope: it renders just Data (the CLI
 // stays clean), and maps a non-ok Status to a silent non-zero exit — /call
 // callers get the full envelope instead. Non-JSON bodies pass through unchanged.
-func present(body []byte, contentType string) error {
+func present(commandName string, body []byte, contentType string) error {
+	return presentTo(commandName, body, contentType, os.Stdout)
+}
+
+func presentTo(commandName string, body []byte, contentType string, out io.Writer) error {
 	if !isJSONContentType(contentType) {
-		_, err := os.Stdout.Write(body)
+		_, err := out.Write(body)
 		return err
 	}
 	var env struct {
@@ -173,7 +177,13 @@ func present(body []byte, contentType string) error {
 	if err := json.Unmarshal(body, &env); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
-	if err := render(env.Data, contentType); err != nil {
+	var err error
+	if commandName == "search" {
+		err = renderSearchResults(env.Data, out)
+	} else {
+		err = renderTo(env.Data, contentType, out)
+	}
+	if err != nil {
 		return err
 	}
 	if env.Status != app.StatusOK {
@@ -218,11 +228,11 @@ func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, args
 	return clients, closeAll, nil
 }
 
-// render prints a command response. A JSON body (per its Content-Type) is
+// renderTo prints a command response. A JSON body (per its Content-Type) is
 // converted to YAML for readability; anything else is written through unchanged.
-func render(body []byte, contentType string) error {
+func renderTo(body []byte, contentType string, out io.Writer) error {
 	if !isJSONContentType(contentType) {
-		_, err := os.Stdout.Write(body)
+		_, err := out.Write(body)
 		return err
 	}
 	var v any
@@ -233,7 +243,30 @@ func render(body []byte, contentType string) error {
 	if err != nil {
 		return fmt.Errorf("marshal result: %w", err)
 	}
-	fmt.Print(string(b))
+	_, err = out.Write(b)
+	return err
+}
+
+func renderSearchResults(body []byte, out io.Writer) error {
+	var data struct {
+		Results []struct {
+			DisplayName *string `json:"display_name"`
+			Source      string  `json:"source"`
+			Type        string  `json:"type"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return fmt.Errorf("decode search results: %w", err)
+	}
+	for _, result := range data.Results {
+		displayName := ""
+		if result.DisplayName != nil {
+			displayName = *result.DisplayName
+		}
+		if _, err := fmt.Fprintf(out, "%s | %s | %s\n", result.Source, result.Type, displayName); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

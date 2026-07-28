@@ -216,3 +216,39 @@ func (c *AnfraNodeClient) ValidateAQL(ctx context.Context, req CompileToSQLReque
 	err := c.Call(ctx, "aql.validate", req, &res)
 	return res, err
 }
+
+// CatalogIngestRequest mirrors anfra-node's catalog.ingest params. The Go host
+// starts sidecars and passes runtime paths/URLs; anfra-node owns source parsing
+// and ingestion internals.
+type CatalogIngestRequest struct {
+	RepoPath          string `json:"repoPath"`
+	SourcesPath       string `json:"sourcesPath"`
+	CatalogPath       string `json:"catalogPath"`
+	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
+	Source            string `json:"source,omitempty"`
+}
+
+// IngestCatalog builds the local search catalog through anfra-node. The
+// anfra-node method is a void RPC: success means the catalog was written, while
+// failures are returned through the JSON-RPC error channel.
+func (c *AnfraNodeClient) IngestCatalog(ctx context.Context, req CatalogIngestRequest) error {
+	return c.Call(ctx, "catalog.ingest", req, nil)
+}
+
+// CatalogSearchRequest mirrors anfra-node's catalog.search params. The Go host
+// supplies the local catalog path and canal-query URL; anfra-node owns search
+// parsing, planning, and result shaping.
+type CatalogSearchRequest struct {
+	CatalogPath       string `json:"catalogPath"`
+	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
+	Query             string `json:"query"`
+}
+
+type CatalogSearchResult map[string]any
+
+// SearchCatalog searches the active local catalog through anfra-node.
+func (c *AnfraNodeClient) SearchCatalog(ctx context.Context, req CatalogSearchRequest) (CatalogSearchResult, error) {
+	var res CatalogSearchResult
+	err := c.Call(ctx, "catalog.search", req, &res)
+	return res, err
+}

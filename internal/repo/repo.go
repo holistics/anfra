@@ -34,6 +34,10 @@ type Repo struct {
 func (p Repo) LogsDir() string    { return filepath.Join(p.DataDir, "logs") }
 func (p Repo) CacheDir() string   { return filepath.Join(p.DataDir, "cache") }
 func (p Repo) RuntimeDir() string { return filepath.Join(p.DataDir, "runtime") }
+func (p Repo) CatalogDir() string { return filepath.Join(p.DataDir, "catalog") }
+func (p Repo) CatalogPath() string {
+	return filepath.Join(p.CatalogDir(), "catalog.duckdb")
+}
 
 // ID is the stable per-repo identifier: <basename>-<sha8(realpath)>. Stable
 // across restarts and disambiguates same-named directories in different paths.
