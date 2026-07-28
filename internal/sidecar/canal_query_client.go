@@ -36,6 +36,10 @@ func NewCanalQueryClient(baseURL string, enablePooling bool) *CanalQueryClient {
 	}
 }
 
+// BaseURL exposes the canal-query HTTP endpoint for runtimes that own their own
+// query client, such as anfra-node catalog ingestion.
+func (c *CanalQueryClient) BaseURL() string { return c.baseURL }
+
 // Health does a single /health check (unlike WaitReady, which polls).
 func (c *CanalQueryClient) Health(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)

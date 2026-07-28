@@ -249,6 +249,13 @@ func argString(args map[string]any, key string) string {
 	return s
 }
 
+func argText(args map[string]any, key string) string {
+	if s, ok := args[key].(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return strings.TrimSpace(strings.Join(argStrings(args, key), " "))
+}
+
 // argStrings reads a string-list arg, accepting []string (CLI positional) or
 // []any (a JSON array over /call).
 func argStrings(args map[string]any, key string) []string {

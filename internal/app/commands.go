@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
+	searchcmd "github.com/holistics/anfra/internal/search"
 	"github.com/holistics/anfra/internal/validate"
 )
 
@@ -64,6 +66,26 @@ var Commands = []Command{
 				return validateAQLResponse(ctx, c, repo, dataset, aql)
 			}
 			return RunQuery(ctx, c, repo, dataset, aql, limit, IsTruthy(args["generate"]))
+		},
+	},
+	{
+		Name:  "ingest",
+		Short: "Build the local search catalog from context sources",
+		Args: []Arg{
+			{Name: "source", Shorthand: "s", Type: ArgString, Usage: "optional context source key to ingest"},
+		},
+		Needs: func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Run: func(ctx context.Context, c Clients, r repo.Repo, args map[string]any) (any, error) {
+			return ingest.Run(ctx, c.Node, c.CanalQuery, r, argString(args, "source"))
+		},
+	},
+	{
+		Name:       "search",
+		Short:      "Search the local catalog",
+		Positional: &Positional{Name: "query", Usage: "search query"},
+		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Run: func(ctx context.Context, c Clients, r repo.Repo, args map[string]any) (any, error) {
+			return searchcmd.Run(ctx, c.Node, c.CanalQuery, r, argText(args, "query"))
 		},
 	},
 	{
