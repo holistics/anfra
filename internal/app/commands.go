@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/holistics/anfra/internal/authz"
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
@@ -19,7 +20,8 @@ var Commands = []Command{
 		Name:  "version",
 		Short: "Print the anfra version",
 		// No Needs: pure metadata, spawns nothing.
-		Run: func(_ context.Context, _ Clients, _ repo.Repo, _ map[string]any) (any, error) {
+		Requires: authz.Public,
+		Run: func(_ context.Context, _ CommandContext, _ map[string]any) (any, error) {
 			return map[string]string{"version": meta.Version}, nil
 		},
 	},
@@ -29,8 +31,9 @@ var Commands = []Command{
 		// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
 		// server) then honestly reports "not running" instead of starting the
 		// sidecars just to declare them healthy.
-		Run: func(ctx context.Context, c Clients, _ repo.Repo, _ map[string]any) (any, error) {
-			res := checkStatus(ctx, c)
+		Requires: authz.Public,
+		Run: func(ctx context.Context, cc CommandContext, _ map[string]any) (any, error) {
+			res := checkStatus(ctx, cc.Clients)
 			st := StatusOK
 			if res.Server != "running" || res.Sidecars == nil || res.Sidecars.Node != "ok" || res.Sidecars.CanalQuery != "ok" {
 				st = StatusInvalid
@@ -54,7 +57,8 @@ var Commands = []Command{
 			// canal-query is only needed to actually run — not to generate SQL or validate.
 			return Sidecars{Node: true, CanalQuery: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}
 		},
-		Run: func(ctx context.Context, c Clients, repo repo.Repo, args map[string]any) (any, error) {
+		Requires: authz.Public,
+		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
 			// The AQL engine doesn't support `limit:`; strip it here (see query.ExtractLimit)
 			// and apply it at execution time via canal's truncate_rows.
 			aql, limit, err := query.ExtractLimit(argString(args, "aql"))
@@ -63,9 +67,9 @@ var Commands = []Command{
 			}
 			dataset := argString(args, "dataset")
 			if IsTruthy(args["validate"]) {
-				return validateAQLResponse(ctx, c, repo, dataset, aql)
+				return validateAQLResponse(ctx, cc.Clients, cc.Repo, dataset, aql)
 			}
-			return RunQuery(ctx, c, repo, dataset, aql, limit, IsTruthy(args["generate"]))
+			return RunQuery(ctx, cc.Clients, cc.Repo, dataset, aql, limit, IsTruthy(args["generate"]))
 		},
 	},
 	{
@@ -74,9 +78,10 @@ var Commands = []Command{
 		Args: []Arg{
 			{Name: "source", Shorthand: "s", Type: ArgString, Usage: "optional context source key to ingest"},
 		},
-		Needs: func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Run: func(ctx context.Context, c Clients, r repo.Repo, args map[string]any) (any, error) {
-			return ingest.Run(ctx, c.Node, c.CanalQuery, r, argString(args, "source"))
+		Needs:    func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Requires: authz.Public,
+		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
+			return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, argString(args, "source"))
 		},
 	},
 	{
@@ -84,8 +89,9 @@ var Commands = []Command{
 		Short:      "Search the local catalog",
 		Positional: &Positional{Name: "query", Usage: "search query"},
 		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Run: func(ctx context.Context, c Clients, r repo.Repo, args map[string]any) (any, error) {
-			return searchcmd.Run(ctx, c.Node, c.CanalQuery, r, argText(args, "query"))
+		Requires:   authz.Public,
+		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
+			return searchcmd.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, argText(args, "query"))
 		},
 	},
 	{
@@ -93,8 +99,9 @@ var Commands = []Command{
 		Short:      "Validate the AML repo, optionally scoped to file globs",
 		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files"},
 		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true} },
-		Run: func(ctx context.Context, c Clients, repo repo.Repo, args map[string]any) (any, error) {
-			res, err := validate.Repo(ctx, c.Node, repo, argStrings(args, "globs"))
+		Requires:   authz.Public,
+		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
+			res, err := validate.Repo(ctx, cc.Clients.Node, cc.Repo, argStrings(args, "globs"))
 			if err != nil {
 				return nil, err
 			}
