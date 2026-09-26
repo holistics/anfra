@@ -7,11 +7,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/holistics/anfra/internal/authz"
+	"github.com/holistics/anfra/internal/attribution"
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 )
@@ -30,14 +32,24 @@ type Clients struct {
 }
 
 // CommandContext is everything a command runs against, other than its args: the
-// sidecars to call, the repo to act on, and who is asking with what they may do.
-// It is host-constructed and never deserialized — Request is the caller-supplied
-// half of an invocation, this is the trusted half.
+// sidecars to call, the repo to act on, the data restrictions to apply, and who
+// the invocation is for. It is host-constructed and never deserialized —
+// Request is the caller-supplied half of an invocation, this is the trusted
+// half, and that boundary is why the two are not one struct.
+//
+// Note what is absent: there is no principal, role or policy. The engine makes
+// no access decisions. A host decides whether a caller may run a command before
+// it builds one of these; what reaches the engine is the consequence of that
+// decision, not its inputs.
 type CommandContext struct {
-	Clients   Clients
-	Repo      repo.Repo
-	Principal authz.Principal
-	Policy    authz.Policy
+	Clients Clients
+	Repo    repo.Repo
+	// DataPerms are the restrictions to compile into queries. Required for
+	// EVERY invocation, not only the ones that read data — see Dispatch.
+	DataPerms dataperm.Set
+	// Attribution names the caller for logs and audit. Never read by a command,
+	// and never by the query layer — see internal/attribution.
+	Attribution attribution.Fields
 }
 
 // Sidecars declares which sidecars a command needs (so the one-shot CLI knows
@@ -98,14 +110,7 @@ type Command struct {
 	// Needs declares the sidecars required for the given args (arg-dependent).
 	// nil => no sidecars.
 	Needs func(args map[string]any) Sidecars
-	// Requires declares the permissions this command needs for the given args,
-	// mirroring Needs: state the requirement as a function of args and let
-	// Dispatch act on it. Return authz.Public for a command that needs none.
-	//
-	// Never nil. nil means no one decided, which Dispatch refuses rather than
-	// waves through — and which the registry's completeness test catches first.
-	Requires func(args map[string]any) []authz.Permission
-	Run      func(ctx context.Context, cc CommandContext, args map[string]any) (any, error)
+	Run   func(ctx context.Context, cc CommandContext, args map[string]any) (any, error)
 }
 
 // Find returns the registered command by name.
@@ -138,10 +143,23 @@ type Response struct {
 // Dispatch runs a registered command and returns its Response envelope. An empty
 // command lists the commands.
 //
-// This is the single policy enforcement point: every surface (CLI, /call, and
-// later the BI server) reaches commands through here, so authorization is decided
-// once rather than per-surface.
+// This is not a policy enforcement point and has nothing to enforce: the engine
+// makes no access decisions (see CommandContext). What it does guarantee is that
+// nothing runs until the host has stated what the caller may see.
+//
+// That requirement applies to EVERY command, including ones that read no data.
+// Exempting them would mean maintaining a list of which commands are exempt, and
+// such a list is only ever wrong in one direction: mark a data-reading command
+// exempt and it silently runs unrestricted. There is no list, so there is
+// nothing to get wrong — and a host that knows who is calling already has the
+// answer, so being asked for it costs nothing. The check is a precondition on
+// the context rather than on the request, so it runs before the command is even
+// looked up.
 func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, error) {
+	if !cc.DataPerms.Decided() {
+		return Response{}, errors.New("no data permissions supplied: every invocation must " +
+			"state what the caller may see (dataperm.Unrestricted() when nothing is restricted)")
+	}
 	if req.Command == "" {
 		names := make([]string, len(Commands))
 		for i, c := range Commands {
@@ -160,9 +178,6 @@ func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, er
 	if err := checkExclusiveArgs(cmd, req.Args); err != nil {
 		return Response{}, err
 	}
-	if err := authorize(ctx, cc, cmd, req.Args); err != nil {
-		return Response{}, err
-	}
 	res, err := cmd.Run(ctx, cc, req.Args)
 	if err != nil {
 		return Response{}, err
@@ -171,23 +186,6 @@ func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, er
 		return resp, nil // command set its own status
 	}
 	return Response{Status: StatusOK, Data: res}, nil
-}
-
-// authorize applies the command's declared permissions. Both a missing Requires
-// and a missing Policy are refusals, not defaults: each means an authorization
-// decision was never made, and the safe reading of "undecided" is no.
-func authorize(ctx context.Context, cc CommandContext, cmd Command, args map[string]any) error {
-	if cmd.Requires == nil {
-		return fmt.Errorf("command %q declares no permissions; refusing to run it", cmd.Name)
-	}
-	perms := cmd.Requires(args)
-	if len(perms) == 0 {
-		return nil // authz.Public
-	}
-	if cc.Policy == nil {
-		return fmt.Errorf("command %q requires permissions but no policy was supplied", cmd.Name)
-	}
-	return cc.Policy.Authorize(ctx, cc.Principal, perms)
 }
 
 // validateReqArgs rejects args the command doesn't declare (the /call analog of

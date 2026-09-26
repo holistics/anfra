@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/holistics/anfra/internal/authz"
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
@@ -20,7 +19,6 @@ var Commands = []Command{
 		Name:  "version",
 		Short: "Print the anfra version",
 		// No Needs: pure metadata, spawns nothing.
-		Requires: authz.Public,
 		Run: func(_ context.Context, _ CommandContext, _ map[string]any) (any, error) {
 			return map[string]string{"version": meta.Version}, nil
 		},
@@ -31,7 +29,6 @@ var Commands = []Command{
 		// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
 		// server) then honestly reports "not running" instead of starting the
 		// sidecars just to declare them healthy.
-		Requires: authz.Public,
 		Run: func(ctx context.Context, cc CommandContext, _ map[string]any) (any, error) {
 			res := checkStatus(ctx, cc.Clients)
 			st := StatusOK
@@ -57,7 +54,6 @@ var Commands = []Command{
 			// canal-query is only needed to actually run — not to generate SQL or validate.
 			return Sidecars{Node: true, CanalQuery: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}
 		},
-		Requires: authz.Public,
 		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
 			// The AQL engine doesn't support `limit:`; strip it here (see query.ExtractLimit)
 			// and apply it at execution time via canal's truncate_rows.
@@ -78,8 +74,7 @@ var Commands = []Command{
 		Args: []Arg{
 			{Name: "source", Shorthand: "s", Type: ArgString, Usage: "optional context source key to ingest"},
 		},
-		Needs:    func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Requires: authz.Public,
+		Needs: func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
 		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
 			return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, argString(args, "source"))
 		},
@@ -89,7 +84,6 @@ var Commands = []Command{
 		Short:      "Search the local catalog",
 		Positional: &Positional{Name: "query", Usage: "search query"},
 		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Requires:   authz.Public,
 		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
 			return searchcmd.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, argText(args, "query"))
 		},
@@ -99,7 +93,6 @@ var Commands = []Command{
 		Short:      "Validate the AML repo, optionally scoped to file globs",
 		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files"},
 		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true} },
-		Requires:   authz.Public,
 		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
 			res, err := validate.Repo(ctx, cc.Clients.Node, cc.Repo, argStrings(args, "globs"))
 			if err != nil {
