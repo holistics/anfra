@@ -12,7 +12,11 @@ import (
 // Config is shared by the sidecar managers: how to tag and forward their output,
 // and where per-repo state lives.
 type Config struct {
-	RepoID           string    // passed to the sidecar as ANFRA_REPO_ID; tags its logs
+	// RepoID is passed to the sidecar as ANFRA_REPO_ID, which tags the sidecar's
+	// logs and nothing else. It is deliberately not a cache or isolation identity:
+	// a sidecar may serve many repos, so each request names its own repo (see
+	// CompileToSQLRequest.RepoID) and the sidecar refuses requests that don't.
+	RepoID           string
 	CompileCachePath string    // anfra-node's AML compile cache dir (per-repo); passed as ANFRA_COMPILE_CACHE_PATH
 	StderrWriter     io.Writer // sidecar stderr sink (the log stream); defaults to os.Stderr
 	StdoutWriter     io.Writer // sidecar stdout sink (banners/incidental); defaults to io.Discard
@@ -21,6 +25,21 @@ type Config struct {
 	// sidecar is long-lived (the pool is reused across requests under `anfra
 	// serve`); ignored by anfra-node.
 	EnablePooling bool
+
+	// NodeURL / CanalQueryURL address sidecars this process does not own, as in a
+	// docker-compose / k8s deployment. When set, the manager resolves no binary,
+	// starts no process, and Close is a no-op. Empty means spawn one.
+	NodeURL       string
+	CanalQueryURL string
+}
+
+// logger returns the configured logger, or the default. The spawn path gets one
+// from the started process; the external path has no process to ask.
+func (c Config) logger() *slog.Logger {
+	if c.Logger != nil {
+		return c.Logger
+	}
+	return slog.Default()
 }
 
 // AnfraNode supervises a host-spawned anfra-node sidecar (the AML/AQL engine).
@@ -38,8 +57,20 @@ func NewAnfraNode(cfg Config) *AnfraNode {
 	return &AnfraNode{cfg: cfg}
 }
 
-// Start spawns the sidecar and waits until its client reports healthy.
+// Start connects to the sidecar and waits until it reports healthy: to an
+// external one when Config.NodeURL is set, otherwise to one it spawns.
 func (a *AnfraNode) Start(ctx context.Context) error {
+	// Before binary resolution: a build with no embedded sidecar must still be
+	// able to use a remote one.
+	if a.cfg.NodeURL != "" {
+		a.client = NewAnfraNodeClientHTTP(a.cfg.NodeURL)
+		if err := a.client.WaitReady(ctx); err != nil {
+			return fmt.Errorf("anfra-node at %s not ready: %w", a.cfg.NodeURL, err)
+		}
+		a.cfg.logger().Info("sidecar.ready", "name", "anfra-node", "url", a.cfg.NodeURL, "owned", false)
+		return nil
+	}
+
 	binPath, err := resolveAnfraNodeBinary()
 	if err != nil {
 		return fmt.Errorf("resolve anfra-node binary: %w", err)
@@ -81,7 +112,8 @@ func (a *AnfraNode) Start(ctx context.Context) error {
 // Client returns the RPC client for the spawned sidecar.
 func (a *AnfraNode) Client() *AnfraNodeClient { return a.client }
 
-// Close stops the sidecar and removes its socket file.
+// Close stops the sidecar and removes its socket file. A no-op for an external
+// sidecar, which this process never owned.
 func (a *AnfraNode) Close() {
 	if a.proc != nil {
 		a.proc.close()

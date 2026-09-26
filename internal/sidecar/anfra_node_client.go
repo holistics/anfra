@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,6 +41,20 @@ func NewAnfraNodeClientHTTP(baseURL string) *AnfraNodeClient {
 	return &AnfraNodeClient{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{}}
 }
 
+// checkRepoID guards the repo-scoped RPCs. anfra-node holds no repo identity of
+// its own — one process can serve many repos — so it requires RepoID on every
+// such request and rejects it as INVALID_PARAMS otherwise. Checking here too
+// means a caller that forgets fails in its own process, with a stack that names
+// it, rather than reading an error off the wire.
+func checkRepoID(repoID string) error {
+	if repoID == "" {
+		return errors.New("anfra-node: RepoID is required on repo-scoped requests; " +
+			"anfra-node keeps no repo identity of its own, so the caller names the repo " +
+			"(tenant-qualified where the deployment is shared)")
+	}
+	return nil
+}
+
 // WaitReady polls /health until the sidecar answers or the deadline passes.
 func (c *AnfraNodeClient) WaitReady(ctx context.Context) error {
 	deadline := time.Now().Add(10 * time.Second)
@@ -55,7 +70,13 @@ func (c *AnfraNodeClient) WaitReady(ctx context.Context) error {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("anfra-node not ready within deadline")
 		}
-		time.Sleep(20 * time.Millisecond)
+		// Give up immediately if the caller is done; otherwise an unreachable
+		// address blocks for the whole deadline.
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("anfra-node not ready: %w", ctx.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
 }
 
@@ -120,7 +141,12 @@ type CompileDataSource struct {
 
 // CompileToSQLRequest / Result mirror the sidecar's aql.compile_to_sql method.
 type CompileToSQLRequest struct {
-	RepoPath    string                       `json:"repoPath"`
+	RepoPath string `json:"repoPath"`
+	// RepoID is the sidecar's compile-cache identity for this repo. One sidecar
+	// may serve many repos (and, when shared, many tenants), so it travels per
+	// request rather than per process. Omitted, the sidecar derives one from
+	// RepoPath.
+	RepoID      string                       `json:"repoId,omitempty"`
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`
@@ -134,6 +160,9 @@ type CompileToSQLResult struct {
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
 func (c *AnfraNodeClient) CompileToSQL(ctx context.Context, req CompileToSQLRequest) (CompileToSQLResult, error) {
 	var res CompileToSQLResult
+	if err := checkRepoID(req.RepoID); err != nil {
+		return res, err
+	}
 	err := c.Call(ctx, "aql.compile_to_sql", req, &res)
 	return res, err
 }
@@ -142,8 +171,10 @@ func (c *AnfraNodeClient) CompileToSQL(ctx context.Context, req CompileToSQLRequ
 // file/dir/glob selectors relative to the repo; empty validates the whole repo.
 // No data sources are involved — this type-checks AML.
 type ValidateAMLRequest struct {
-	RepoPath string   `json:"repoPath"`
-	Paths    []string `json:"paths,omitempty"`
+	RepoPath string `json:"repoPath"`
+	// RepoID is the compile-cache identity; see CompileToSQLRequest.RepoID.
+	RepoID string   `json:"repoId,omitempty"`
+	Paths  []string `json:"paths,omitempty"`
 }
 
 // CompileError is an AML file that failed to compile (interpret). Row/Col are
@@ -192,6 +223,9 @@ type ValidateAMLResult struct {
 // paths and returns the findings.
 func (c *AnfraNodeClient) ValidateAML(ctx context.Context, req ValidateAMLRequest) (ValidateAMLResult, error) {
 	var res ValidateAMLResult
+	if err := checkRepoID(req.RepoID); err != nil {
+		return res, err
+	}
 	err := c.Call(ctx, "aml.validate", req, &res)
 	return res, err
 }
@@ -213,6 +247,9 @@ type ValidateAQLResult struct {
 // CompileToSQL) and returns its diagnostics instead of throwing on the first error.
 func (c *AnfraNodeClient) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (ValidateAQLResult, error) {
 	var res ValidateAQLResult
+	if err := checkRepoID(req.RepoID); err != nil {
+		return res, err
+	}
 	err := c.Call(ctx, "aql.validate", req, &res)
 	return res, err
 }

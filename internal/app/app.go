@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/holistics/anfra/internal/authz"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 )
@@ -26,6 +27,17 @@ type Request struct {
 type Clients struct {
 	Node       *sidecar.AnfraNodeClient
 	CanalQuery *sidecar.CanalQueryClient
+}
+
+// CommandContext is everything a command runs against, other than its args: the
+// sidecars to call, the repo to act on, and who is asking with what they may do.
+// It is host-constructed and never deserialized — Request is the caller-supplied
+// half of an invocation, this is the trusted half.
+type CommandContext struct {
+	Clients   Clients
+	Repo      repo.Repo
+	Principal authz.Principal
+	Policy    authz.Policy
 }
 
 // Sidecars declares which sidecars a command needs (so the one-shot CLI knows
@@ -86,7 +98,14 @@ type Command struct {
 	// Needs declares the sidecars required for the given args (arg-dependent).
 	// nil => no sidecars.
 	Needs func(args map[string]any) Sidecars
-	Run   func(ctx context.Context, clients Clients, repo repo.Repo, args map[string]any) (any, error)
+	// Requires declares the permissions this command needs for the given args,
+	// mirroring Needs: state the requirement as a function of args and let
+	// Dispatch act on it. Return authz.Public for a command that needs none.
+	//
+	// Never nil. nil means no one decided, which Dispatch refuses rather than
+	// waves through — and which the registry's completeness test catches first.
+	Requires func(args map[string]any) []authz.Permission
+	Run      func(ctx context.Context, cc CommandContext, args map[string]any) (any, error)
 }
 
 // Find returns the registered command by name.
@@ -118,7 +137,11 @@ type Response struct {
 
 // Dispatch runs a registered command and returns its Response envelope. An empty
 // command lists the commands.
-func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request) (Response, error) {
+//
+// This is the single policy enforcement point: every surface (CLI, /call, and
+// later the BI server) reaches commands through here, so authorization is decided
+// once rather than per-surface.
+func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, error) {
 	if req.Command == "" {
 		names := make([]string, len(Commands))
 		for i, c := range Commands {
@@ -137,7 +160,10 @@ func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request)
 	if err := checkExclusiveArgs(cmd, req.Args); err != nil {
 		return Response{}, err
 	}
-	res, err := cmd.Run(ctx, clients, repo, req.Args)
+	if err := authorize(ctx, cc, cmd, req.Args); err != nil {
+		return Response{}, err
+	}
+	res, err := cmd.Run(ctx, cc, req.Args)
 	if err != nil {
 		return Response{}, err
 	}
@@ -145,6 +171,23 @@ func Dispatch(ctx context.Context, clients Clients, repo repo.Repo, req Request)
 		return resp, nil // command set its own status
 	}
 	return Response{Status: StatusOK, Data: res}, nil
+}
+
+// authorize applies the command's declared permissions. Both a missing Requires
+// and a missing Policy are refusals, not defaults: each means an authorization
+// decision was never made, and the safe reading of "undecided" is no.
+func authorize(ctx context.Context, cc CommandContext, cmd Command, args map[string]any) error {
+	if cmd.Requires == nil {
+		return fmt.Errorf("command %q declares no permissions; refusing to run it", cmd.Name)
+	}
+	perms := cmd.Requires(args)
+	if len(perms) == 0 {
+		return nil // authz.Public
+	}
+	if cc.Policy == nil {
+		return fmt.Errorf("command %q requires permissions but no policy was supplied", cmd.Name)
+	}
+	return cc.Policy.Authorize(ctx, cc.Principal, perms)
 }
 
 // validateReqArgs rejects args the command doesn't declare (the /call analog of
