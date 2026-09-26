@@ -7,21 +7,23 @@ import (
 	"path/filepath"
 
 	"github.com/holistics/anfra/internal/app"
-	"github.com/holistics/anfra/internal/authz"
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 )
 
 // commandContext is the CommandContext both surfaces run commands with — the
-// one-shot CLI and serve's /call. The local user owns the repo they pointed anfra
-// at, so the policy is allow-all.
+// one-shot CLI and serve's /call. The local user owns the repo they pointed
+// anfra at, so no data restrictions apply. That is stated rather than
+// defaulted: a zero dataperm.Set is refused, not treated as permissive.
+//
+// No Attribution: there is one user and they are reading their own logs.
 func (h hostContext) commandContext(clients app.Clients) app.CommandContext {
 	return app.CommandContext{
 		Clients:   clients,
 		Repo:      h.repo,
-		Principal: authz.LocalOwner(),
-		Policy:    authz.AllowAll{},
+		DataPerms: dataperm.Unrestricted(),
 	}
 }
 
