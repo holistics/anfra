@@ -121,7 +121,7 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 			return
 		}
 
-		res, err := app.Dispatch(r.Context(), clients, h.repo, req)
+		res, err := app.Dispatch(r.Context(), h.commandContext(clients), req)
 		if err != nil {
 			writeCallError(w, http.StatusUnprocessableEntity, err.Error())
 			return

@@ -72,7 +72,13 @@ func (c *CanalQueryClient) WaitReady(ctx context.Context) error {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("canal-query not ready within deadline")
 		}
-		time.Sleep(50 * time.Millisecond)
+		// Give up immediately if the caller is done; otherwise an unreachable
+		// address blocks for the whole deadline.
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("canal-query not ready: %w", ctx.Err())
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 
