@@ -21,8 +21,20 @@ func NewCanalQuery(cfg Config) *CanalQuery {
 	return &CanalQuery{cfg: cfg}
 }
 
-// Start spawns canal-query on a free loopback port and waits until it's healthy.
+// Start connects to canal-query and waits until it's healthy: to an external one
+// when Config.CanalQueryURL is set, otherwise to one it spawns on a free
+// loopback port.
 func (c *CanalQuery) Start(ctx context.Context) error {
+	// Before binary resolution — see AnfraNode.Start.
+	if c.cfg.CanalQueryURL != "" {
+		c.client = NewCanalQueryClient(c.cfg.CanalQueryURL, c.cfg.EnablePooling)
+		if err := c.client.WaitReady(ctx); err != nil {
+			return fmt.Errorf("canal-query at %s not ready: %w", c.cfg.CanalQueryURL, err)
+		}
+		c.cfg.logger().Info("sidecar.ready", "name", "canal-query", "url", c.cfg.CanalQueryURL, "owned", false)
+		return nil
+	}
+
 	binPath, err := resolveCanalQueryBinary()
 	if err != nil {
 		return fmt.Errorf("resolve canal-query binary: %w", err)
@@ -64,7 +76,7 @@ func (c *CanalQuery) Start(ctx context.Context) error {
 // Client returns the query client for the spawned canal-query.
 func (c *CanalQuery) Client() *CanalQueryClient { return c.client }
 
-// Close stops canal-query.
+// Close stops canal-query. A no-op for an external one — see AnfraNode.Close.
 func (c *CanalQuery) Close() {
 	if c.proc != nil {
 		c.proc.close()

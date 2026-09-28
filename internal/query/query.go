@@ -68,6 +68,7 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 	}
 	return sidecar.CompileToSQLRequest{
 		RepoPath:    r.Dir,
+		RepoID:      r.ID,
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: compileDataSources(sources),

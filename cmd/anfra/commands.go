@@ -145,7 +145,7 @@ func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
 		}
 		defer closeSidecars()
 
-		resp, err := app.Dispatch(ctx, clients, h.repo, req)
+		resp, err := app.Dispatch(ctx, h.commandContext(clients), req)
 		if err != nil {
 			return err
 		}

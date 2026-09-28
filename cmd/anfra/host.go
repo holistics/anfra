@@ -6,10 +6,26 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 )
+
+// commandContext is the CommandContext both surfaces run commands with — the
+// one-shot CLI and serve's /call. The local user owns the repo they pointed
+// anfra at, so no data restrictions apply. That is stated rather than
+// defaulted: a zero dataperm.Set is refused, not treated as permissive.
+//
+// No Attribution: there is one user and they are reading their own logs.
+func (h hostContext) commandContext(clients app.Clients) app.CommandContext {
+	return app.CommandContext{
+		Clients:   clients,
+		Repo:      h.repo,
+		DataPerms: dataperm.Unrestricted(),
+	}
+}
 
 // hostContext carries the per-invocation repo + the sidecar Config (with the
 // host-aggregated log sink) so commands can spawn whichever sidecars they need.
@@ -45,6 +61,12 @@ func withRepo(ctx context.Context, fn func(ctx context.Context, h hostContext) e
 			StderrWriter:     lg.StderrWriter, // sidecar stderr -> the log stream (anfra.log)
 			StdoutWriter:     lg.StdoutWriter, // sidecar stdout -> discarded / host stdout
 			Logger:           lg.Logger,
+			// Point the CLI at sidecars it does not own. Unset (the normal case)
+			// means spawn them; set means a compose/k8s deployment already runs
+			// them, and this process only dials. Useful for development against
+			// `docker compose up` without rebuilding an embedded binary.
+			NodeURL:       os.Getenv("ANFRA_NODE_URL"),
+			CanalQueryURL: os.Getenv("ANFRA_CANAL_QUERY_URL"),
 		},
 	})
 }

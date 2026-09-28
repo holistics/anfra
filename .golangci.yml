@@ -6,6 +6,7 @@ run:
 linters:
   enable:
     - contextcheck
+    - depguard
     - dupl
     - gocritic
     - gosec
@@ -15,6 +16,25 @@ linters:
     - unconvert
     - wastedassign
   settings:
+    depguard:
+      rules:
+        # Tenant and user identity is tracing baggage: it names who an
+        # invocation is for, and it must never become an input to what a query
+        # returns. The compile path is where row predicates are injected, so
+        # these are the packages where reading an identity would silently turn
+        # it into an access decision. internal/dataperm carries what MAY affect
+        # a result; internal/attribution carries what may not.
+        attribution-is-not-a-decision:
+          files:
+            - "**/internal/query/**"
+            - "**/internal/sidecar/**"
+            - "**/internal/datasource/**"
+          deny:
+            - pkg: github.com/holistics/anfra/internal/attribution
+              desc: >-
+                internal/attribution is for logs and audit only. If a value must
+                change which rows a query returns, it belongs in
+                internal/dataperm.Attributes, passed explicitly by the host.
     gosec:
       excludes:
         - G115 # https://github.com/securego/gosec/issues/1212
