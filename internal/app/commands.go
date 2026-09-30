@@ -124,7 +124,8 @@ func validateAQLResponse(ctx context.Context, c Clients, r repo.Repo, dataset, a
 // statusResult is the `status` result: whether the warm server is running and,
 // when it is, its sidecars' health nested under `sidecars`.
 type statusResult struct {
-	Server   string         `json:"server"` // "running" | "not running"
+	Server   string         `json:"server"`         // "running" | "not running"
+	HTTP     string         `json:"http,omitempty"` // TCP listen address when serving with --http
 	Sidecars *sidecarHealth `json:"sidecars,omitempty"`
 }
 
@@ -152,7 +153,7 @@ func checkStatus(ctx context.Context, c Clients) statusResult {
 	} else if err := c.CanalQuery.Health(ctx); err != nil {
 		sc.CanalQuery = err.Error()
 	}
-	return statusResult{Server: "running", Sidecars: sc}
+	return statusResult{Server: "running", HTTP: c.HTTPAddr, Sidecars: sc}
 }
 
 // QueryResult is the `query` result. Result is nil for --generate (compile only).
