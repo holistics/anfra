@@ -107,16 +107,47 @@ func ParseInput(v any) (json.RawMessage, error) {
 	return json.RawMessage(bytes.TrimSpace(raw)), nil
 }
 
+// Run is how one query run is shaped beyond its AQL: its Query Input (see
+// ParseInput) and its Execution Options. Pagination nil means all rows;
+// Timezone empty means the sidecar's default.
+type Run struct {
+	Input      json.RawMessage
+	Pagination *sidecar.Pagination
+	Timezone   string
+}
+
+// ParsePagination builds the run's page from the `page` and `page-size` args
+// (absent: nil, all rows). A page size alone means the first page; a page
+// without a size is an error, since there's no sensible default size.
+func ParsePagination(page, pageSize int) (*sidecar.Pagination, error) {
+	switch {
+	case page == 0 && pageSize == 0:
+		return nil, nil
+	case pageSize == 0:
+		return nil, fmt.Errorf("--page needs --page-size")
+	case page == 0:
+		page = 1
+	}
+	if page < 1 || pageSize < 1 {
+		return nil, fmt.Errorf("invalid paging: --page and --page-size must be >= 1")
+	}
+	return &sidecar.Pagination{Page: page, PageSize: pageSize}, nil
+}
+
 // Compile compiles an AQL query against a dataset into SQL plus the data source
 // it targets (dialect + execution routing), without executing. Shared by
-// --generate and the run path so both fail identically on a bad query. input is
-// the optional Query Input (see ParseInput); the result's AQL is the Executed AQL.
-func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, input json.RawMessage) (sidecar.CompileToSQLResult, error) {
+// --generate and the run path so both fail identically on a bad query. The
+// result's AQL is the Executed AQL (the query with run.Input applied).
+func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, run Run) (sidecar.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
 	if err != nil {
 		return sidecar.CompileToSQLResult{}, err
 	}
-	req.Input = input
+	req.Input = run.Input
+	req.Pagination = run.Pagination
+	if run.Timezone != "" {
+		req.Options = &sidecar.CompileOptions{TimezoneRegion: run.Timezone}
+	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err != nil {
 		return sidecar.CompileToSQLResult{}, fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
