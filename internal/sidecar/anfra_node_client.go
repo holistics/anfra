@@ -167,6 +167,7 @@ func (c *AnfraNodeClient) CompileToSQL(ctx context.Context, req CompileToSQLRequ
 // No data sources are involved — this type-checks AML.
 type ValidateAMLRequest struct {
 	RepoPath string   `json:"repoPath"`
+	RepoID   string   `json:"repoId"` // the sidecar's compile-cache identity for the repo (required)
 	Paths    []string `json:"paths,omitempty"`
 }
 
