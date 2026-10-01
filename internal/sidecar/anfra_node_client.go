@@ -119,15 +119,21 @@ type CompileDataSource struct {
 }
 
 // CompileToSQLRequest / Result mirror the sidecar's aql.compile_to_sql method.
+// RepoID is the sidecar's compile-cache identity for the repo (required).
+// Input is the query's Query Input (filters, conditions, sorts, date drills),
+// passed through as-is: the sidecar applies it by rewriting the AQL.
 type CompileToSQLRequest struct {
 	RepoPath    string                       `json:"repoPath"`
+	RepoID      string                       `json:"repoId"`
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
+	Input       json.RawMessage              `json:"input,omitempty"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`
 }
 
 type CompileToSQLResult struct {
 	SQL        string            `json:"sql"`
+	AQL        string            `json:"aql"`        // the Executed AQL: the query with its Query Input applied
 	DataSource CompileDataSource `json:"dataSource"` // the data source the SQL targets (for execution routing)
 }
 

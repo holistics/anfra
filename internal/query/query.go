@@ -7,7 +7,9 @@
 package query
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -68,20 +70,53 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 	}
 	return sidecar.CompileToSQLRequest{
 		RepoPath:    r.Dir,
+		RepoID:      r.ID,
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: compileDataSources(sources),
 	}, nil
 }
 
+// ParseInput normalizes a `query` Query Input arg into raw JSON for the sidecar.
+// It arrives as a JSON string from the CLI (--input) or as an object over /call;
+// absent or empty means no Query Input. anfra doesn't interpret the contents —
+// the sidecar does — it only checks that it's a JSON object.
+func ParseInput(v any) (json.RawMessage, error) {
+	var raw []byte
+	switch t := v.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		if strings.TrimSpace(t) == "" {
+			return nil, nil
+		}
+		raw = []byte(t)
+	case map[string]any:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return nil, fmt.Errorf("invalid input: %w", err)
+		}
+		raw = b
+	default:
+		return nil, fmt.Errorf("invalid input: expected a JSON object")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
+		return nil, fmt.Errorf("invalid input: expected a JSON object")
+	}
+	return json.RawMessage(bytes.TrimSpace(raw)), nil
+}
+
 // Compile compiles an AQL query against a dataset into SQL plus the data source
 // it targets (dialect + execution routing), without executing. Shared by
-// --generate and the run path so both fail identically on a bad query.
-func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (sidecar.CompileToSQLResult, error) {
+// --generate and the run path so both fail identically on a bad query. input is
+// the optional Query Input (see ParseInput); the result's AQL is the Executed AQL.
+func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, input json.RawMessage) (sidecar.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
 	if err != nil {
 		return sidecar.CompileToSQLResult{}, err
 	}
+	req.Input = input
 	res, err := node.CompileToSQL(ctx, req)
 	if err != nil {
 		return sidecar.CompileToSQLResult{}, fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)

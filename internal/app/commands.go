@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/holistics/anfra/internal/ingest"
@@ -46,9 +47,11 @@ var Commands = []Command{
 			{Name: "aql", Shorthand: "a", Type: ArgString, Usage: "the AQL query; if omitted, read from stdin"},
 			{Name: "generate", Shorthand: "g", Type: ArgBool, Usage: "output the generated SQL instead of running the query"},
 			{Name: "validate", Shorthand: "c", Type: ArgBool, Usage: "type-check the query and report diagnostics instead of running it", Aliases: []Alias{{Name: "check"}}},
+			{Name: "input", Type: ArgString, Usage: "Query Input as a JSON object ({filters, conditions, sorts, dateDrills}) applied to the AQL before it compiles"},
 		},
 		// --generate and --validate each pick a "don't run" mode, so they conflict.
-		ExclusiveArgs: [][]string{{"generate", "validate"}},
+		// --validate type-checks the AQL as written, so a Query Input has nothing to apply to.
+		ExclusiveArgs: [][]string{{"generate", "validate"}, {"validate", "input"}},
 		StdinArg:      "aql",
 		Needs: func(args map[string]any) Sidecars {
 			// canal-query is only needed to actually run — not to generate SQL or validate.
@@ -61,11 +64,15 @@ var Commands = []Command{
 			if err != nil {
 				return nil, err
 			}
+			input, err := query.ParseInput(args["input"])
+			if err != nil {
+				return nil, err
+			}
 			dataset := argString(args, "dataset")
 			if IsTruthy(args["validate"]) {
 				return validateAQLResponse(ctx, c, repo, dataset, aql)
 			}
-			return RunQuery(ctx, c, repo, dataset, aql, limit, IsTruthy(args["generate"]))
+			return RunQuery(ctx, c, repo, dataset, aql, input, limit, IsTruthy(args["generate"]))
 		},
 	},
 	{
@@ -155,9 +162,11 @@ func checkStatus(ctx context.Context, c Clients) statusResult {
 	return statusResult{Server: "running", Sidecars: sc}
 }
 
-// QueryResult is the `query` result. Result is nil for --generate (compile only).
+// QueryResult is the `query` result. AQL is the Executed AQL (the query with its
+// Query Input applied). Result is nil for --generate (compile only).
 type QueryResult struct {
 	SQL    string     `json:"sql"`
+	AQL    string     `json:"aql"`
 	Result *QueryRows `json:"result,omitempty"`
 }
 
@@ -171,7 +180,7 @@ type QueryRows struct {
 // surfaces the same structured diagnostics as --validate with an "invalid" status
 // (which the CLI maps to a non-zero exit), so callers see what's wrong without
 // re-running the query.
-func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, limit int, generate bool) (any, error) {
+func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, input json.RawMessage, limit int, generate bool) (any, error) {
 	if dataset == "" {
 		return nil, fmt.Errorf("dataset is required")
 	}
@@ -182,7 +191,7 @@ func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql
 		return nil, fmt.Errorf("query execution requires the canal-query sidecar")
 	}
 
-	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql)
+	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql, input)
 	if err != nil {
 		// A parse/type error in the AQL: report the diagnostics (same as --validate)
 		// rather than a bare message. StatusInvalid → the CLI exits non-zero.
@@ -195,11 +204,11 @@ func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql
 	}
 
 	if generate {
-		return QueryResult{SQL: compiled.SQL}, nil
+		return QueryResult{SQL: compiled.SQL, AQL: compiled.AQL}, nil
 	}
 	r, err := query.Execute(ctx, clients.CanalQuery, repo, compiled, limit)
 	if err != nil {
 		return nil, err
 	}
-	return QueryResult{SQL: r.SQL, Result: &QueryRows{Fields: r.Fields, Records: r.Records}}, nil
+	return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Result: &QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 }
