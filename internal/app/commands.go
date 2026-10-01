@@ -2,8 +2,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
@@ -48,6 +49,9 @@ var Commands = []Command{
 			{Name: "generate", Shorthand: "g", Type: ArgBool, Usage: "output the generated SQL instead of running the query"},
 			{Name: "validate", Shorthand: "c", Type: ArgBool, Usage: "type-check the query and report diagnostics instead of running it", Aliases: []Alias{{Name: "check"}}},
 			{Name: "input", Type: ArgString, Usage: "Query Input as a JSON object ({filters, conditions, sorts, dateDrills}) applied to the AQL before it compiles"},
+			{Name: "page", Type: ArgString, Usage: "1-based page of rows to return (needs --page-size)"},
+			{Name: "page-size", Type: ArgString, Usage: "rows per page; alone, returns the first page"},
+			{Name: "timezone", Type: ArgString, Usage: "IANA time zone for relative dates and date truncation (e.g. Asia/Ho_Chi_Minh)"},
 		},
 		// --generate and --validate each pick a "don't run" mode, so they conflict.
 		// --validate type-checks the AQL as written, so a Query Input has nothing to apply to.
@@ -64,15 +68,19 @@ var Commands = []Command{
 			if err != nil {
 				return nil, err
 			}
-			input, err := query.ParseInput(args["input"])
+			run, err := queryRun(args)
 			if err != nil {
 				return nil, err
+			}
+			// Paging replaces the old `limit:` directive; using both is ambiguous.
+			if run.Pagination != nil && limit != query.NoLimit {
+				return nil, fmt.Errorf("use either --page/--page-size or a `limit:` directive, not both")
 			}
 			dataset := argString(args, "dataset")
 			if IsTruthy(args["validate"]) {
 				return validateAQLResponse(ctx, c, repo, dataset, aql)
 			}
-			return RunQuery(ctx, c, repo, dataset, aql, input, limit, IsTruthy(args["generate"]))
+			return RunQuery(ctx, c, repo, dataset, aql, run, limit, IsTruthy(args["generate"]))
 		},
 	},
 	{
@@ -112,6 +120,53 @@ var Commands = []Command{
 			return Response{Status: st, Data: res}, nil
 		},
 	},
+}
+
+// queryRun reads a `query`'s Query Input and Execution Options from its args.
+func queryRun(args map[string]any) (query.Run, error) {
+	input, err := query.ParseInput(args["input"])
+	if err != nil {
+		return query.Run{}, err
+	}
+	page, err := argCount(args, "page")
+	if err != nil {
+		return query.Run{}, err
+	}
+	pageSize, err := argCount(args, "page-size")
+	if err != nil {
+		return query.Run{}, err
+	}
+	pagination, err := query.ParsePagination(page, pageSize)
+	if err != nil {
+		return query.Run{}, err
+	}
+	return query.Run{Input: input, Pagination: pagination, Timezone: strings.TrimSpace(argString(args, "timezone"))}, nil
+}
+
+// argCount reads a whole-number arg that arrives as a CLI string or a /call
+// JSON number; absent or empty is 0.
+func argCount(args map[string]any, key string) (int, error) {
+	switch v := args[key].(type) {
+	case nil:
+		return 0, nil
+	case float64:
+		if v != float64(int(v)) || v < 1 {
+			return 0, fmt.Errorf("invalid --%s %v: expected a whole number >= 1", key, v)
+		}
+		return int(v), nil
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return 0, nil
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 {
+			return 0, fmt.Errorf("invalid --%s %q: expected a whole number >= 1", key, v)
+		}
+		return n, nil
+	default:
+		return 0, fmt.Errorf("invalid --%s: expected a whole number >= 1", key)
+	}
 }
 
 // validateAQLResponse type-checks a single AQL query and wraps the result in a
@@ -180,7 +235,7 @@ type QueryRows struct {
 // surfaces the same structured diagnostics as --validate with an "invalid" status
 // (which the CLI maps to a non-zero exit), so callers see what's wrong without
 // re-running the query.
-func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, input json.RawMessage, limit int, generate bool) (any, error) {
+func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, run query.Run, limit int, generate bool) (any, error) {
 	if dataset == "" {
 		return nil, fmt.Errorf("dataset is required")
 	}
@@ -191,7 +246,7 @@ func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql
 		return nil, fmt.Errorf("query execution requires the canal-query sidecar")
 	}
 
-	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql, input)
+	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql, run)
 	if err != nil {
 		// A parse/type error in the AQL: report the diagnostics (same as --validate)
 		// rather than a bare message. StatusInvalid → the CLI exits non-zero.

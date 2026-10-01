@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/holistics/anfra/internal/repo"
@@ -42,6 +43,45 @@ func TestParseInput(t *testing.T) {
 	}
 }
 
+func TestParsePagination(t *testing.T) {
+	tests := []struct {
+		name           string
+		page, pageSize int
+		want           *sidecar.Pagination
+		wantErr        bool
+	}{
+		{name: "no paging", want: nil},
+		{name: "a page size alone is the first page", pageSize: 20, want: &sidecar.Pagination{Page: 1, PageSize: 20}},
+		{name: "page and size", page: 3, pageSize: 20, want: &sidecar.Pagination{Page: 3, PageSize: 20}},
+		{name: "a page without a size", page: 2, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParsePagination(tt.page, tt.pageSize)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// Without paging or a timezone, the request carries neither, so the sidecar's
+// defaults (all rows, its own timezone) apply.
+func TestCompileOmitsUnsetExecutionOptions(t *testing.T) {
+	b, err := json.Marshal(sidecar.CompileToSQLRequest{RepoID: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"pagination"`, `"options"`, `"input"`} {
+		if strings.Contains(string(b), key) {
+			t.Errorf("request %s should omit %s", b, key)
+		}
+	}
+}
+
 // Compile must send the sidecar the repo's cache identity and the Query Input
 // untouched, and surface the Executed AQL it returns.
 func TestCompileSendsRepoIDAndInput(t *testing.T) {
@@ -51,7 +91,7 @@ func TestCompileSendsRepoIDAndInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest := "data_sources:\n  demo_pg:\n    type: postgresql\n"
-	if err := os.WriteFile(filepath.Join(r.ConfigDir, "data_sources.yml"), []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(r.ConfigDir, "data_sources.yml"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,7 +109,8 @@ func TestCompileSendsRepoIDAndInput(t *testing.T) {
 	defer srv.Close()
 
 	input := json.RawMessage(`{"filters":[{"field":"a.b","operator":"is","values":["x"]}]}`)
-	res, err := Compile(context.Background(), sidecar.NewAnfraNodeClientHTTP(srv.URL), r, "ecommerce", "explore { }", input)
+	run := Run{Input: input, Pagination: &sidecar.Pagination{Page: 2, PageSize: 10}, Timezone: "Asia/Tokyo"}
+	res, err := Compile(context.Background(), sidecar.NewAnfraNodeClientHTTP(srv.URL), r, "ecommerce", "explore { }", run)
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
@@ -82,6 +123,12 @@ func TestCompileSendsRepoIDAndInput(t *testing.T) {
 	}
 	if string(got.Params.Input) != string(input) {
 		t.Errorf("input = %s, want %s", got.Params.Input, input)
+	}
+	if p := got.Params.Pagination; p == nil || p.Page != 2 || p.PageSize != 10 {
+		t.Errorf("pagination = %+v, want page 2 of 10", p)
+	}
+	if o := got.Params.Options; o == nil || o.TimezoneRegion != "Asia/Tokyo" {
+		t.Errorf("options = %+v, want timezoneRegion Asia/Tokyo", o)
 	}
 	if res.AQL != "explore { filters { a.b is 'x' } }" {
 		t.Errorf("executed AQL = %q", res.AQL)

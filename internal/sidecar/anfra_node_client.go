@@ -128,7 +128,22 @@ type CompileToSQLRequest struct {
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
 	Input       json.RawMessage              `json:"input,omitempty"`
+	Pagination  *Pagination                  `json:"pagination,omitempty"`
+	Options     *CompileOptions              `json:"options,omitempty"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`
+}
+
+// Pagination asks the sidecar for one page of rows (1-based Page), compiled
+// into the SQL as LIMIT/OFFSET.
+type Pagination struct {
+	Page     int `json:"page"`
+	PageSize int `json:"pageSize"`
+}
+
+// CompileOptions are the sidecar's per-query compile options anfra sets.
+// TimezoneRegion is an IANA zone used for relative dates and truncation.
+type CompileOptions struct {
+	TimezoneRegion string `json:"timezoneRegion,omitempty"`
 }
 
 type CompileToSQLResult struct {
