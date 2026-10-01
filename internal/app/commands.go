@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -219,11 +220,13 @@ func checkStatus(ctx context.Context, c Clients) statusResult {
 }
 
 // QueryResult is the `query` result. AQL is the Executed AQL (the query with its
-// Query Input applied). Result is nil for --generate (compile only).
+// Query Input applied) and Columns describes its output columns, for an explore
+// query. Result is nil for --generate (compile only).
 type QueryResult struct {
-	SQL    string     `json:"sql"`
-	AQL    string     `json:"aql"`
-	Result *QueryRows `json:"result,omitempty"`
+	SQL     string          `json:"sql"`
+	AQL     string          `json:"aql"`
+	Columns json.RawMessage `json:"columns,omitempty"`
+	Result  *QueryRows      `json:"result,omitempty"`
 }
 
 type QueryRows struct {
@@ -260,11 +263,11 @@ func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql
 	}
 
 	if generate {
-		return QueryResult{SQL: compiled.SQL, AQL: compiled.AQL}, nil
+		return QueryResult{SQL: compiled.SQL, AQL: compiled.AQL, Columns: compiled.Columns}, nil
 	}
 	r, err := query.Execute(ctx, clients.CanalQuery, repo, compiled, limit)
 	if err != nil {
 		return nil, err
 	}
-	return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Result: &QueryRows{Fields: r.Fields, Records: r.Records}}, nil
+	return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Columns: compiled.Columns, Result: &QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 }

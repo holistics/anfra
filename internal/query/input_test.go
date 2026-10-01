@@ -104,7 +104,7 @@ func TestCompileSendsRepoIDAndInput(t *testing.T) {
 			t.Errorf("decode request: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"sql":"SELECT 1","aql":"explore { filters { a.b is 'x' } }","dataSource":{"name":"demo_pg","dbtype":"postgresql"}}}`))
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"sql":"SELECT 1","aql":"explore { filters { a.b is 'x' } }","columns":[{"name":"b","fieldName":"b","modelId":"a"}],"dataSource":{"name":"demo_pg","dbtype":"postgresql"}}}`))
 	}))
 	defer srv.Close()
 
@@ -129,6 +129,9 @@ func TestCompileSendsRepoIDAndInput(t *testing.T) {
 	}
 	if o := got.Params.Options; o == nil || o.TimezoneRegion != "Asia/Tokyo" {
 		t.Errorf("options = %+v, want timezoneRegion Asia/Tokyo", o)
+	}
+	if string(res.Columns) != `[{"name":"b","fieldName":"b","modelId":"a"}]` {
+		t.Errorf("columns = %s, want them passed through", res.Columns)
 	}
 	if res.AQL != "explore { filters { a.b is 'x' } }" {
 		t.Errorf("executed AQL = %q", res.AQL)
