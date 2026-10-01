@@ -150,6 +150,9 @@ type CompileToSQLResult struct {
 	SQL        string            `json:"sql"`
 	AQL        string            `json:"aql"`        // the Executed AQL: the query with its Query Input applied
 	DataSource CompileDataSource `json:"dataSource"` // the data source the SQL targets (for execution routing)
+	// Columns describes each output column of an explore query (row key, dataset
+	// field, measure or not), passed through as-is; absent for other query shapes.
+	Columns json.RawMessage `json:"columns,omitempty"`
 }
 
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
