@@ -7,7 +7,9 @@
 package query
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -68,19 +70,83 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 	}
 	return sidecar.CompileToSQLRequest{
 		RepoPath:    r.Dir,
+		RepoID:      r.ID,
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: compileDataSources(sources),
 	}, nil
 }
 
+// ParseInput normalizes a `query` Query Input arg into raw JSON for the sidecar.
+// It arrives as a JSON string from the CLI (--input) or as an object over /call;
+// absent or empty means no Query Input. anfra doesn't interpret the contents —
+// the sidecar does — it only checks that it's a JSON object.
+func ParseInput(v any) (json.RawMessage, error) {
+	var raw []byte
+	switch t := v.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		if strings.TrimSpace(t) == "" {
+			return nil, nil
+		}
+		raw = []byte(t)
+	case map[string]any:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return nil, fmt.Errorf("invalid input: %w", err)
+		}
+		raw = b
+	default:
+		return nil, fmt.Errorf("invalid input: expected a JSON object")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
+		return nil, fmt.Errorf("invalid input: expected a JSON object")
+	}
+	return json.RawMessage(bytes.TrimSpace(raw)), nil
+}
+
+// Run is how one query run is shaped beyond its AQL: its Query Input (see
+// ParseInput) and its Execution Options. Pagination nil means all rows;
+// Timezone empty means the sidecar's default.
+type Run struct {
+	Input      json.RawMessage
+	Pagination *sidecar.Pagination
+	Timezone   string
+}
+
+// ParsePagination builds the run's page from the `page` and `page-size` args
+// (absent: nil, all rows). A page size alone means the first page; a page
+// without a size is an error, since there's no sensible default size.
+func ParsePagination(page, pageSize int) (*sidecar.Pagination, error) {
+	switch {
+	case page == 0 && pageSize == 0:
+		return nil, nil
+	case pageSize == 0:
+		return nil, fmt.Errorf("--page needs --page-size")
+	case page == 0:
+		page = 1
+	}
+	if page < 1 || pageSize < 1 {
+		return nil, fmt.Errorf("invalid paging: --page and --page-size must be >= 1")
+	}
+	return &sidecar.Pagination{Page: page, PageSize: pageSize}, nil
+}
+
 // Compile compiles an AQL query against a dataset into SQL plus the data source
 // it targets (dialect + execution routing), without executing. Shared by
-// --generate and the run path so both fail identically on a bad query.
-func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (sidecar.CompileToSQLResult, error) {
+// --generate and the run path so both fail identically on a bad query. The
+// result's AQL is the Executed AQL (the query with run.Input applied).
+func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, run Run) (sidecar.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
 	if err != nil {
 		return sidecar.CompileToSQLResult{}, err
+	}
+	req.Input = run.Input
+	req.Pagination = run.Pagination
+	if run.Timezone != "" {
+		req.Options = &sidecar.CompileOptions{TimezoneRegion: run.Timezone}
 	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err != nil {

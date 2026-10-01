@@ -34,7 +34,7 @@ func (r *Result) Invalid() bool {
 // Repo validates the AML repo via the node sidecar. paths (optional) are the
 // file/dir/glob selectors — expanded in the node; empty validates the whole repo.
 func Repo(ctx context.Context, node *sidecar.AnfraNodeClient, r repo.Repo, paths []string) (*Result, error) {
-	res, err := node.ValidateAML(ctx, sidecar.ValidateAMLRequest{RepoPath: r.Dir, Paths: paths})
+	res, err := node.ValidateAML(ctx, sidecar.ValidateAMLRequest{RepoPath: r.Dir, RepoID: r.ID, Paths: paths})
 	if err != nil {
 		return nil, fmt.Errorf("validate AML for repo %q: %w", r.Dir, err)
 	}

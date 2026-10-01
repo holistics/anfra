@@ -29,3 +29,26 @@ anfra update --check  # check for a newer release without installing
 ## Usage
 
 Run `anfra --help` for commands, or `anfra <command> --help` for a specific one.
+
+## Serving over HTTP
+
+`anfra serve` keeps the sidecars warm and serves `GET /health` and `POST /call`
+(`{"command": "...", "args": {...}}`) on a per-repo Unix socket, which later CLI
+calls in the same repo use automatically. For clients that can't use a Unix
+socket, `--http` also serves the same API over TCP:
+
+```sh
+anfra serve --http 8080             # 127.0.0.1:8080
+anfra serve --http :0               # 127.0.0.1, any free port (the address is printed)
+anfra serve --http 0.0.0.0:8080     # all interfaces — warns: /call has no auth
+```
+
+```sh
+curl -X POST http://127.0.0.1:8080/call -H 'Content-Type: application/json' \
+  -d '{"command":"query","args":{"dataset":"<dataset>","aql":"<aql>"}}'
+```
+
+The TCP listener blocks browser-originated requests: `POST /call` must send
+`Content-Type: application/json` (else 415), and the `Host` header must be a
+loopback name or the bound address (else 403; skipped for a `0.0.0.0`/`::` bind).
+`anfra status` shows the HTTP address of a running server.

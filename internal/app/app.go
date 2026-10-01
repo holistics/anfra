@@ -26,6 +26,9 @@ type Request struct {
 type Clients struct {
 	Node       *sidecar.AnfraNodeClient
 	CanalQuery *sidecar.CanalQueryClient
+	// HTTPAddr is the warm server's TCP listen address (serve --http), or empty.
+	// Not a sidecar, but it's how `status` learns about the listener.
+	HTTPAddr string
 }
 
 // Sidecars declares which sidecars a command needs (so the one-shot CLI knows

@@ -119,16 +119,40 @@ type CompileDataSource struct {
 }
 
 // CompileToSQLRequest / Result mirror the sidecar's aql.compile_to_sql method.
+// RepoID is the sidecar's compile-cache identity for the repo (required).
+// Input is the query's Query Input (filters, conditions, sorts, date drills),
+// passed through as-is: the sidecar applies it by rewriting the AQL.
 type CompileToSQLRequest struct {
 	RepoPath    string                       `json:"repoPath"`
+	RepoID      string                       `json:"repoId"`
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
+	Input       json.RawMessage              `json:"input,omitempty"`
+	Pagination  *Pagination                  `json:"pagination,omitempty"`
+	Options     *CompileOptions              `json:"options,omitempty"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`
+}
+
+// Pagination asks the sidecar for one page of rows (1-based Page), compiled
+// into the SQL as LIMIT/OFFSET.
+type Pagination struct {
+	Page     int `json:"page"`
+	PageSize int `json:"pageSize"`
+}
+
+// CompileOptions are the sidecar's per-query compile options anfra sets.
+// TimezoneRegion is an IANA zone used for relative dates and truncation.
+type CompileOptions struct {
+	TimezoneRegion string `json:"timezoneRegion,omitempty"`
 }
 
 type CompileToSQLResult struct {
 	SQL        string            `json:"sql"`
+	AQL        string            `json:"aql"`        // the Executed AQL: the query with its Query Input applied
 	DataSource CompileDataSource `json:"dataSource"` // the data source the SQL targets (for execution routing)
+	// Columns describes each output column of an explore query (row key, dataset
+	// field, measure or not), passed through as-is; absent for other query shapes.
+	Columns json.RawMessage `json:"columns,omitempty"`
 }
 
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
@@ -143,6 +167,7 @@ func (c *AnfraNodeClient) CompileToSQL(ctx context.Context, req CompileToSQLRequ
 // No data sources are involved — this type-checks AML.
 type ValidateAMLRequest struct {
 	RepoPath string   `json:"repoPath"`
+	RepoID   string   `json:"repoId"` // the sidecar's compile-cache identity for the repo (required)
 	Paths    []string `json:"paths,omitempty"`
 }
 
