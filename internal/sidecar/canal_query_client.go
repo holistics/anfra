@@ -119,6 +119,29 @@ type streamTrailer struct {
 	Error    map[string]any `json:"error"`
 }
 
+// CanalQueryError is canal-query's error object: its message, its type, and
+// which side it says is responsible. Scope "User" covers both a data source
+// canal cannot connect to (its config is the user's) and a query the database
+// refused, so it does not say whether the query was at fault.
+type CanalQueryError struct {
+	Message string
+	Type    string
+	Scope   string
+}
+
+func (e *CanalQueryError) Error() string {
+	return fmt.Sprintf("canal query error (%s, %s): %s", e.Scope, e.Type, e.Message)
+}
+
+func canalError(m map[string]any) *CanalQueryError {
+	str := func(k string) string { s, _ := m[k].(string); return s }
+	e := &CanalQueryError{Message: str("message"), Type: str("type"), Scope: str("scope")}
+	if e.Message == "" {
+		e.Message = fmt.Sprint(m)
+	}
+	return e
+}
+
 // Execute runs SQL against a data source (dbtype + dbconfig) and returns the
 // rows. dbconfig is passed straight through to canal as the connection config.
 // truncateRows caps how many rows canal returns (negative = no truncation).
@@ -162,7 +185,7 @@ func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig 
 			var tr streamTrailer
 			if err := json.Unmarshal(line, &tr); err == nil && tr.HolisticsTrailer {
 				if len(tr.Error) > 0 {
-					return nil, fmt.Errorf("canal query error: %v", tr.Error)
+					return nil, canalError(tr.Error)
 				}
 				if tr.Metadata != nil {
 					result.Fields = tr.Metadata.Fields

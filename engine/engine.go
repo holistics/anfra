@@ -122,11 +122,19 @@ var (
 	InvalidArgs = errcode.InvalidArgs
 	// DataPermsMissing: the Invocation's DataPerms were never decided.
 	DataPermsMissing = errcode.DataPermsMissing
+	// DataPermsUnenforceable: the Invocation's DataPerms are Restricted, and the
+	// query cannot apply restrictions (raw SQL). A host that authorized the
+	// caller on the data source states Unrestricted.
+	DataPermsUnenforceable = errcode.DataPermsUnenforceable
 	// SidecarUnavailable: a sidecar the command needs did not respond, or is
 	// not connected.
 	SidecarUnavailable = errcode.SidecarUnavailable
 	// QueryInvalid: a query that cannot run or compile, with its diagnostics.
 	QueryInvalid = validate.QueryInvalid
+	// QueryFailed: the data source could not run the query — unreachable,
+	// credentials refused, or the database rejecting it. Not classified further
+	// yet.
+	QueryFailed = errcode.QueryFailed
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.

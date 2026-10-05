@@ -34,8 +34,11 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 				{Field: "query", Code: "required", Message: "query is required"},
 				{Field: "dataset", Code: "required", Message: "one of dataset, data_source is required"}}},
 		{"an unsupported input", unrestricted,
+			engine.Request{Command: "query", Args: map[string]any{"query": "x", "ds": "w"}},
+			engine.InvalidArgs, apperr.Violations{{Field: "data_source", Code: "unsupported", Message: "an AQL query against a data source is not supported yet"}}},
+		{"SQL for a restricted caller", engine.Invocation{DataPerms: engine.Restricted(nil)},
 			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "ds": "w"}},
-			engine.InvalidArgs, apperr.Violations{{Field: "lang", Code: "unsupported", Message: "SQL queries are not supported yet"}}},
+			engine.DataPermsUnenforceable, nil},
 		{"no sidecars to run on", unrestricted, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "query": "x"}},
 			engine.SidecarUnavailable, nil},
 	} {
@@ -61,7 +64,7 @@ func TestErrorCodes(t *testing.T) {
 		}
 		names = append(names, c.String())
 	}
-	want := []string{"data_perms_missing", "invalid_args", "query_invalid", "sidecar_unavailable", "unknown_command"}
+	want := []string{"data_perms_missing", "data_perms_unenforceable", "invalid_args", "query_failed", "query_invalid", "sidecar_unavailable", "unknown_command"}
 	if !reflect.DeepEqual(names, want) {
 		t.Errorf("ErrorCodes() = %v, want %v", names, want)
 	}

@@ -20,4 +20,21 @@ var (
 	InvalidArgs        = apperr.DefinePublicCodeWith[apperr.Violations](NS, "invalid_args", apperr.Client, "The arguments are invalid.")
 	DataPermsMissing   = apperr.DefinePublicCode(NS, "data_perms_missing", apperr.Client, "No data permissions were decided.")
 	SidecarUnavailable = apperr.DefinePublicCode(NS, "sidecar_unavailable", apperr.Server, "A sidecar is unavailable.")
+	// QueryFailed: canal-query could not run a query on its data source — the
+	// data source unreachable, the credentials refused, the database rejecting
+	// the query, or canal itself failing. canal-query scopes the first three all
+	// "User" and does not say which, so they are not classified further yet.
+	//
+	// TODO: classify by canal's scope, re-decided here, never copied: "User"
+	// splits into a query the database rejects (the caller's: query_invalid)
+	// and a data source it cannot reach or log in to (not the caller's);
+	// "Server" is a dependency failing; "Client" is a request the engine built
+	// wrong — its own bug, and already left unclassified.
+	QueryFailed = apperr.DefinePublicCode(NS, "query_failed", apperr.Server, "The query failed to run on its data source.")
+	// DataPermsUnenforceable: the caller's data permissions are restricted, and
+	// the query cannot apply them — raw SQL, which no restriction is compiled
+	// into. The host decided the caller may run it; it states that with
+	// Unrestricted.
+	DataPermsUnenforceable = apperr.DefinePublicCode(NS, "data_perms_unenforceable", apperr.Client,
+		"These data permissions cannot be applied to this query.")
 )

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/validate"
@@ -68,6 +69,10 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query compile, invalid", valid, clients, Request{Command: "query.compile", Args: q("nosuch | select(x.y)")}, "", validate.QueryInvalid},
 		{"query validate, valid", valid, clients, Request{Command: "query.validate", Args: q("products | select(products.id)")}, ok, nil},
 		{"query validate, invalid", valid, clients, Request{Command: "query.validate", Args: q("nosuch | select(x.y)")}, invalid, nil},
+		{"query, SQL", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "ds": "demo", "query": "select id, name from products order by id"}}, ok, nil},
+		{"query, SQL the database refuses", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "ds": "demo", "query": "select nosuch from products"}}, "", errcode.QueryFailed},
+		{"query, SQL on a data source it cannot reach", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "ds": "unreachable", "query": "select 1"}}, "", errcode.QueryFailed},
+		{"query compile, SQL", valid, clients, Request{Command: "query.compile", Args: map[string]any{"lang": "sql", "ds": "demo", "query": "select 1"}}, ok, nil},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
 		{"validate, valid", valid, clients, Request{Command: "validate"}, ok, nil},

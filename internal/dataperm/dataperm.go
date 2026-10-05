@@ -42,6 +42,7 @@ type Attributes map[string]any
 // then changing it does.
 type Set struct {
 	decided    bool
+	restricted bool
 	attributes Attributes
 }
 
@@ -53,12 +54,17 @@ func Unrestricted() Set { return Set{decided: true} }
 // Restricted carries the attributes of a caller whose access is conditional on
 // them.
 func Restricted(attrs Attributes) Set {
-	return Set{decided: true, attributes: attrs}
+	return Set{decided: true, restricted: true, attributes: attrs}
 }
 
 // Decided reports whether anyone has stated what applies. A zero Set has not,
 // and Dispatch refuses to run a data-reading command with one.
 func (s Set) Decided() bool { return s.decided }
+
+// Restricted reports whether the caller's access is conditional — Restricted,
+// even with no attributes — rather than stated Unrestricted. A query nothing can
+// restrict (raw SQL) runs only when it is false.
+func (s Set) Restricted() bool { return s.restricted }
 
 // Attributes returns the attributes restrictions are evaluated against. The map
 // is copied, so a caller cannot reach back into the Set and change what applies

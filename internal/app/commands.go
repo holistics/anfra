@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 
+	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
@@ -40,11 +42,27 @@ var Commands = []Command{
 		},
 	}),
 	Define(Def[QueryInput, QueryResult]{
-		Name:   "query",
-		Short:  "Run a query: its rows, and the SQL that produced them",
-		Needs:  func(QueryInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Errors: []apperr.AnyCode{validate.QueryInvalid},
+		Name:  "query",
+		Short: "Run a query: its rows, and the SQL that produced them",
+		Needs: func(in QueryInput) Sidecars {
+			return Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
+		},
+		Errors: []apperr.AnyCode{validate.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable},
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (QueryResult, error) {
+			if in.Lang == "sql" {
+				ds, err := in.dataSource(cc)
+				if err != nil {
+					return QueryResult{}, err
+				}
+				if err := requireSidecars(cc, Sidecars{CanalQuery: true}); err != nil {
+					return QueryResult{}, err
+				}
+				r, err := query.ExecuteSQL(ctx, cc.Clients.CanalQuery, ds, in.Query)
+				if err != nil {
+					return QueryResult{}, failed(err)
+				}
+				return QueryResult{SQL: r.SQL, Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
+			}
 			aql, limit, err := in.aql()
 			if err != nil {
 				return QueryResult{}, err
@@ -58,7 +76,7 @@ var Commands = []Command{
 			}
 			r, err := query.Execute(ctx, cc.Clients.CanalQuery, cc.Repo, compiled, limit)
 			if err != nil {
-				return QueryResult{}, err
+				return QueryResult{}, failed(err)
 			}
 			return QueryResult{SQL: r.SQL, Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 		},
@@ -66,9 +84,16 @@ var Commands = []Command{
 	Define(Def[QueryInput, CompiledQuery]{
 		Name:   "query.compile",
 		Short:  "Compile a query to SQL, without running it",
-		Needs:  func(QueryInput) Sidecars { return Sidecars{Node: true} },
-		Errors: []apperr.AnyCode{validate.QueryInvalid},
+		Needs:  func(in QueryInput) Sidecars { return Sidecars{Node: in.Lang != "sql"} },
+		Errors: []apperr.AnyCode{validate.QueryInvalid, errcode.DataPermsUnenforceable},
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (CompiledQuery, error) {
+			if in.Lang == "sql" {
+				// Already the SQL that would run.
+				if _, err := in.dataSource(cc); err != nil {
+					return CompiledQuery{}, err
+				}
+				return CompiledQuery{SQL: in.Query}, nil
+			}
 			aql, _, err := in.aql()
 			if err != nil {
 				return CompiledQuery{}, err
@@ -88,6 +113,11 @@ var Commands = []Command{
 		Short: "Validate a query: its diagnostics, without running it",
 		Needs: func(QueryInput) Sidecars { return Sidecars{Node: true} },
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (validate.QueryValidation, error) {
+			if in.Lang == "sql" {
+				// The intent is a dry run on the data source; not every dialect has
+				// one through canal-query, and its errors carry no positions yet.
+				return validate.QueryValidation{}, invalidArg("lang", "unsupported", "validating a SQL query is not supported yet")
+			}
 			aql, _, err := in.aql()
 			if err != nil {
 				return validate.QueryValidation{}, err
@@ -130,8 +160,8 @@ var Commands = []Command{
 type NoInput struct{}
 
 // QueryInput is a query: its text, the language it is written in, and the
-// target it runs against. Which combinations run is aql's to say: today, only
-// AQL against a dataset.
+// target it runs against. Which combinations run is aql's and dataSource's to
+// say: AQL against a dataset, and SQL against a data source.
 type QueryInput struct {
 	Query      string `arg:"query" cli:"positional,stdin" required:"true" usage:"the query; read from stdin when omitted"`
 	Lang       string `arg:"lang" short:"l" enum:"aql,sql" default:"aql" usage:"the language the query is written in"`
@@ -139,19 +169,14 @@ type QueryInput struct {
 	DataSource string `arg:"data_source" alias:"ds" group:"target" usage:"the data source to query (SQL)"`
 }
 
-// aql is the query's AQL, with its `limit:` taken out, for a query that can
-// run: AQL against a dataset. SQL, and AQL against a data source, are refused
-// as unsupported until the engine runs them.
+// aql is an AQL query's text, with its `limit:` taken out. It runs against a
+// dataset; against a data source (an ad-hoc dataset declared inline) it is
+// refused as unsupported until the engine runs it.
 //
 // The AQL engine doesn't support `limit:`, so it is stripped here (see
 // query.ExtractLimit) and applied at execution time as canal's truncate_rows.
 func (in QueryInput) aql() (aql string, limit int, err error) {
-	switch {
-	case in.Lang == "sql" && in.Dataset != "":
-		return "", 0, invalidArg("dataset", "invalid", "a SQL query runs against a data source, not a dataset")
-	case in.Lang == "sql":
-		return "", 0, invalidArg("lang", "unsupported", "SQL queries are not supported yet")
-	case in.DataSource != "":
+	if in.DataSource != "" {
 		return "", 0, invalidArg("data_source", "unsupported", "an AQL query against a data source is not supported yet")
 	}
 	aql, limit, err = query.ExtractLimit(in.Query)
@@ -174,6 +199,27 @@ func requireSidecars(cc CommandContext, need Sidecars) error {
 	return nil
 }
 
+// dataSource is a SQL query's data source. SQL runs against one, never a
+// dataset; nothing restricts it, so it runs only when the host stated the
+// caller is unrestricted (it authorizes the caller on the data source itself).
+func (in QueryInput) dataSource(cc CommandContext) (datasource.DataSource, error) {
+	if in.Dataset != "" {
+		return datasource.DataSource{}, invalidArg("dataset", "invalid", "a SQL query runs against a data source, not a dataset")
+	}
+	if cc.DataPerms.Restricted() {
+		return datasource.DataSource{}, apperr.New(errcode.DataPermsUnenforceable,
+			"a SQL query runs only for a caller with unrestricted data permissions: no restriction can be applied to it")
+	}
+	ds, ok, err := query.DataSource(cc.Repo, in.DataSource)
+	if err != nil {
+		return datasource.DataSource{}, err
+	}
+	if !ok {
+		return datasource.DataSource{}, invalidArg("data_source", "invalid", "no data source "+in.DataSource+" in data_sources.yml")
+	}
+	return ds, nil
+}
+
 func invalidArg(field, code, msg string) error {
 	return apperr.NewWith(errcode.InvalidArgs, msg, apperr.Violations{{Field: field, Code: code, Message: msg}})
 }
@@ -191,6 +237,18 @@ type SearchInput struct {
 // ValidateInput is validate's input.
 type ValidateInput struct {
 	Globs []string `arg:"globs" cli:"positional" usage:"optional file globs; report only diagnostics for matching files"`
+}
+
+// failed formalises canal-query's failure to run a query as query_failed, with
+// canal's message. A client-scope error from canal is a request the engine
+// built wrong — the engine's bug, not the data source's — and stays
+// unclassified, as does anything else.
+func failed(err error) error {
+	e, ok := errors.AsType[*sidecar.CanalQueryError](err)
+	if !ok || e.Scope == "Client" {
+		return err
+	}
+	return apperr.Encapsulate(err, errcode.QueryFailed, e.Message)
 }
 
 // compileAQL compiles a query, failing with query_invalid and its diagnostics
