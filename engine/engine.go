@@ -37,6 +37,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/attribution"
@@ -211,7 +212,7 @@ func Commands() []string { return app.Names() }
 // where one short-lived process owns its children, and it is the wrong shape for
 // a server: a long-lived host wants sidecars with their own lifecycle, restart
 // policy and scaling.
-func Connect(ctx context.Context, nodeURL, canalQueryURL string) (Clients, io.Closer, error) {
+func Connect(ctx context.Context, nodeURL, canalQueryURL string, opts ...ConnectOption) (Clients, io.Closer, error) {
 	if nodeURL == "" || canalQueryURL == "" {
 		return Clients{}, nil, errors.New("engine.Connect: both nodeURL and canalQueryURL are required")
 	}
@@ -221,6 +222,11 @@ func Connect(ctx context.Context, nodeURL, canalQueryURL string) (Clients, io.Cl
 		// Long-lived host: canal reuses warehouse connections across requests.
 		EnablePooling: true,
 	}
+	var opt connectConfig
+	for _, o := range opts {
+		o(&opt)
+	}
+	cfg.WrapTransport = opt.wrap
 
 	node := sidecar.NewAnfraNode(cfg)
 	if err := node.Start(ctx); err != nil {
@@ -238,6 +244,25 @@ func Connect(ctx context.Context, nodeURL, canalQueryURL string) (Clients, io.Cl
 		node.Close()
 		return nil
 	}), nil
+}
+
+// ConnectOption configures Connect.
+type ConnectOption func(*connectConfig)
+
+type connectConfig struct {
+	wrap func(sidecar string, rt http.RoundTripper) http.RoundTripper
+}
+
+// WithTransport wraps each sidecar client's HTTP transport, e.g. with
+// otelhttp.NewTransport, so a host traces calls to the sidecars and propagates
+// its trace context into them. wrap receives the engine's own transport, so its
+// settings (timeouts, pooling) are kept, and the sidecar's name ("anfra-node",
+// "canal-query") to label spans by. It applies once a sidecar is ready:
+// readiness polling is not wrapped.
+//
+// The engine takes no tracing dependency for this: the host brings the wrapper.
+func WithTransport(wrap func(sidecar string, rt http.RoundTripper) http.RoundTripper) ConnectOption {
+	return func(c *connectConfig) { c.wrap = wrap }
 }
 
 type closerFunc func() error
