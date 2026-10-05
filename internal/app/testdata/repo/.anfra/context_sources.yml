@@ -1,0 +1,5 @@
+# The repo's own AML, for ingest and search.
+sources:
+  - name: repo
+    type: aml
+    path: ..

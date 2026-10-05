@@ -1,0 +1,107 @@
+package app
+
+import (
+	"reflect"
+	"slices"
+	"testing"
+
+	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/validate"
+	"github.com/holistics/anfra/shared/apperr"
+)
+
+// Every registered command is described, in registry order.
+func TestDescribeCoversTheRegistry(t *testing.T) {
+	specs := Describe()
+	if len(specs) != len(Commands) {
+		t.Fatalf("%d specs for %d commands", len(specs), len(Commands))
+	}
+	for i, c := range Commands {
+		if specs[i].Name != c.Name() || specs[i].Short != c.Short() {
+			t.Errorf("spec %d is %q, want %q", i, specs[i].Name, c.Name())
+		}
+	}
+}
+
+// A spec is derived from the definition: its args from In, its answer from Out,
+// whether it can be invalid from Valid. The CLI's sugar stays out.
+func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
+	byName := map[string]CommandSpec{}
+	for _, s := range Describe() {
+		byName[s.Name] = s
+	}
+	q := byName["query"]
+	want := []ArgSpec{
+		{Name: "query", Type: ArgString, Required: true, Usage: "the query; read from stdin when omitted"},
+		{Name: "lang", Type: ArgString, Enum: []string{"aql", "sql"}, Default: "aql", Usage: "the language the query is written in"},
+		{Name: "dataset", Type: ArgString, Usage: "the dataset to query (AQL)"},
+		{Name: "data_source", Type: ArgString, Usage: "the data source to query (SQL)"},
+	}
+	if !reflect.DeepEqual(q.Args, want) {
+		t.Errorf("query's args =\n  %+v\nwant\n  %+v", q.Args, want)
+	}
+	if !reflect.DeepEqual(q.ExactlyOne, [][]string{{"dataset", "data_source"}}) {
+		t.Errorf("query.ExactlyOne = %v", q.ExactlyOne)
+	}
+
+	for name, out := range map[string]reflect.Type{
+		"query":          reflect.TypeFor[QueryResult](),
+		"query.compile":  reflect.TypeFor[CompiledQuery](),
+		"query.validate": reflect.TypeFor[validate.QueryValidation](),
+		"validate":       reflect.TypeFor[validate.RepoValidation](),
+	} {
+		if byName[name].Output != out {
+			t.Errorf("%s answers %v, want %v", name, byName[name].Output, out)
+		}
+	}
+	for name, invalid := range map[string]bool{"query": false, "query.compile": false, "query.validate": true, "validate": true, "status": true, "version": false} {
+		if byName[name].CanBeInvalid != invalid {
+			t.Errorf("%s: CanBeInvalid = %v", name, !invalid)
+		}
+	}
+
+	if got, want := byName["version"].ErrorCodes, []apperr.Code{errcode.DataPermsMissing, errcode.InvalidArgs.Code()}; !reflect.DeepEqual(got, want) {
+		t.Errorf("version can fail with %v, want %v", got, want)
+	}
+	for _, c := range []apperr.Code{errcode.SidecarUnavailable, validate.QueryInvalid.Code()} {
+		if !slices.Contains(byName["query"].ErrorCodes, c) {
+			t.Errorf("query cannot fail with %s", c)
+		}
+	}
+	if slices.Contains(byName["query.validate"].ErrorCodes, validate.QueryInvalid.Code()) {
+		t.Error("query.validate reports an invalid query; it does not fail with one")
+	}
+}
+
+// A spec is a copy: changing it leaves the registry alone.
+func TestDescribeReturnsCopies(t *testing.T) {
+	for _, s := range Describe() {
+		if s.Name == "query" {
+			s.Args[1].Enum[0] = "clobbered"
+		}
+	}
+	c, _ := Find("query")
+	if c.Args()[1].Enum[0] == "clobbered" {
+		t.Error("changing a spec changed the registry")
+	}
+}
+
+// What a spec says is what Dispatch accepts: every command's args, set
+// validly as the spec describes them, decode.
+func TestSpecsRoundTripThroughDecoding(t *testing.T) {
+	for _, s := range Describe() {
+		c, _ := Find(s.Name)
+		valid := map[string]any{}
+		for _, a := range s.Args {
+			if a.Required {
+				valid[a.Name] = "x"
+			}
+		}
+		for _, g := range s.ExactlyOne {
+			valid[g[0]] = "x"
+		}
+		if err := c.(interface{ decodeOnly(map[string]any) error }).decodeOnly(valid); err != nil {
+			t.Errorf("%s: %v refused: %v", s.Name, valid, err)
+		}
+	}
+}

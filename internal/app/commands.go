@@ -2,136 +2,226 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
-	"github.com/holistics/anfra/internal/repo"
 	searchcmd "github.com/holistics/anfra/internal/search"
+	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/validate"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Commands is the registry — the single source for the CLI and /call. Add a
-// command here and it appears on both surfaces (and in help).
+// Commands is the registry — the single source for the CLI, /call and
+// Describe. Add a command here and it appears on every surface (and in help).
+// Each answers one type: a command's answer never depends on its args.
 var Commands = []Command{
-	{
+	Define(Def[NoInput, VersionResult]{
 		Name:  "version",
 		Short: "Print the anfra version",
 		// No Needs: pure metadata, spawns nothing.
-		Run: func(_ context.Context, _ CommandContext, _ map[string]any) (any, error) {
-			return map[string]string{"version": meta.Version}, nil
+		Run: func(context.Context, CommandContext, NoInput) (VersionResult, error) {
+			return VersionResult{Version: meta.Version}, nil
 		},
-	},
-	{
+	}),
+	Define(Def[NoInput, StatusResult]{
 		Name:  "status",
 		Short: "Report whether a warm server is running and its sidecars are healthy",
 		// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
 		// server) then honestly reports "not running" instead of starting the
 		// sidecars just to declare them healthy.
-		Run: func(ctx context.Context, cc CommandContext, _ map[string]any) (any, error) {
-			res := checkStatus(ctx, cc.Clients)
-			st := StatusOK
-			if res.Server != "running" || res.Sidecars == nil || res.Sidecars.Node != "ok" || res.Sidecars.CanalQuery != "ok" {
-				st = StatusInvalid
-			}
-			return Response{Status: st, Data: res}, nil
+		Run: func(ctx context.Context, cc CommandContext, _ NoInput) (StatusResult, error) {
+			return checkStatus(ctx, cc.Clients), nil
 		},
-	},
-	{
-		Name:  "query",
-		Short: "Compile and run an AQL query against a dataset",
-		Args: []Arg{
-			{Name: "dataset", Shorthand: "d", Type: ArgString, Usage: "unique name of the dataset to compile against (required)"},
-			{Name: "aql", Shorthand: "a", Type: ArgString, Usage: "the AQL query; if omitted, read from stdin"},
-			{Name: "generate", Shorthand: "g", Type: ArgBool, Usage: "output the generated SQL instead of running the query"},
-			{Name: "validate", Shorthand: "c", Type: ArgBool, Usage: "type-check the query and report diagnostics instead of running it", Aliases: []Alias{{Name: "check"}}},
+		Valid: func(r StatusResult) bool {
+			return r.Server == "running" && r.Sidecars != nil && r.Sidecars.Node == "ok" && r.Sidecars.CanalQuery == "ok"
 		},
-		// --generate and --validate each pick a "don't run" mode, so they conflict.
-		ExclusiveArgs: [][]string{{"generate", "validate"}},
-		StdinArg:      "aql",
-		Needs: func(args map[string]any) Sidecars {
-			// canal-query is only needed to actually run — not to generate SQL or validate.
-			return Sidecars{Node: true, CanalQuery: !IsTruthy(args["generate"]) && !IsTruthy(args["validate"])}
-		},
-		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
-			// The AQL engine doesn't support `limit:`; strip it here (see query.ExtractLimit)
-			// and apply it at execution time via canal's truncate_rows.
-			aql, limit, err := query.ExtractLimit(argString(args, "aql"))
+	}),
+	Define(Def[QueryInput, QueryResult]{
+		Name:   "query",
+		Short:  "Run a query: its rows, and the SQL that produced them",
+		Needs:  func(QueryInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Errors: []apperr.AnyCode{validate.QueryInvalid},
+		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (QueryResult, error) {
+			aql, limit, err := in.aql()
 			if err != nil {
-				return nil, apperr.EncapsulateWith(err, errcode.InvalidArgs, err.Error(),
-					apperr.Violations{{Field: "aql", Code: "invalid", Message: err.Error()}})
+				return QueryResult{}, err
 			}
-			dataset := argString(args, "dataset")
-			if IsTruthy(args["validate"]) {
-				return validateAQLResponse(ctx, cc.Clients, cc.Repo, dataset, aql)
+			if err := requireSidecars(cc, Sidecars{Node: true, CanalQuery: true}); err != nil {
+				return QueryResult{}, err
 			}
-			return RunQuery(ctx, cc.Clients, cc.Repo, dataset, aql, limit, IsTruthy(args["generate"]))
+			compiled, err := compileAQL(ctx, cc, in.Dataset, aql)
+			if err != nil {
+				return QueryResult{}, err
+			}
+			r, err := query.Execute(ctx, cc.Clients.CanalQuery, cc.Repo, compiled, limit)
+			if err != nil {
+				return QueryResult{}, err
+			}
+			return QueryResult{SQL: r.SQL, Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 		},
-	},
-	{
+	}),
+	Define(Def[QueryInput, CompiledQuery]{
+		Name:   "query.compile",
+		Short:  "Compile a query to SQL, without running it",
+		Needs:  func(QueryInput) Sidecars { return Sidecars{Node: true} },
+		Errors: []apperr.AnyCode{validate.QueryInvalid},
+		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (CompiledQuery, error) {
+			aql, _, err := in.aql()
+			if err != nil {
+				return CompiledQuery{}, err
+			}
+			if err := requireSidecars(cc, Sidecars{Node: true}); err != nil {
+				return CompiledQuery{}, err
+			}
+			compiled, err := compileAQL(ctx, cc, in.Dataset, aql)
+			if err != nil {
+				return CompiledQuery{}, err
+			}
+			return CompiledQuery{SQL: compiled.SQL}, nil
+		},
+	}),
+	Define(Def[QueryInput, validate.QueryValidation]{
+		Name:  "query.validate",
+		Short: "Validate a query: its diagnostics, without running it",
+		Needs: func(QueryInput) Sidecars { return Sidecars{Node: true} },
+		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (validate.QueryValidation, error) {
+			aql, _, err := in.aql()
+			if err != nil {
+				return validate.QueryValidation{}, err
+			}
+			if err := requireSidecars(cc, Sidecars{Node: true}); err != nil {
+				return validate.QueryValidation{}, err
+			}
+			return validate.AQL(ctx, cc.Clients.Node, cc.Repo, in.Dataset, aql)
+		},
+		Valid: func(r validate.QueryValidation) bool { return !r.Invalid() },
+	}),
+	Define(Def[IngestInput, string]{
 		Name:  "ingest",
 		Short: "Build the local search catalog from context sources",
-		Args: []Arg{
-			{Name: "source", Shorthand: "s", Type: ArgString, Usage: "optional context source key to ingest"},
+		Needs: func(IngestInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Run: func(ctx context.Context, cc CommandContext, in IngestInput) (string, error) {
+			return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, in.Source)
 		},
-		Needs: func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
-			return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, argString(args, "source"))
+	}),
+	Define(Def[SearchInput, sidecar.CatalogSearchResult]{
+		Name:  "search",
+		Short: "Search the local catalog",
+		Needs: func(SearchInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Run: func(ctx context.Context, cc CommandContext, in SearchInput) (sidecar.CatalogSearchResult, error) {
+			return searchcmd.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, strings.TrimSpace(strings.Join(in.Query, " ")))
 		},
-	},
-	{
-		Name:       "search",
-		Short:      "Search the local catalog",
-		Positional: &Positional{Name: "query", Usage: "search query"},
-		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
-		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
-			return searchcmd.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, argText(args, "query"))
+	}),
+	Define(Def[ValidateInput, validate.RepoValidation]{
+		Name:  "validate",
+		Short: "Validate the AML repo, optionally scoped to file globs",
+		Needs: func(ValidateInput) Sidecars { return Sidecars{Node: true} },
+		Run: func(ctx context.Context, cc CommandContext, in ValidateInput) (validate.RepoValidation, error) {
+			return validate.Repo(ctx, cc.Clients.Node, cc.Repo, in.Globs)
 		},
-	},
-	{
-		Name:       "validate",
-		Short:      "Validate the AML repo, optionally scoped to file globs",
-		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files"},
-		Needs:      func(map[string]any) Sidecars { return Sidecars{Node: true} },
-		Run: func(ctx context.Context, cc CommandContext, args map[string]any) (any, error) {
-			res, err := validate.Repo(ctx, cc.Clients.Node, cc.Repo, argStrings(args, "globs"))
-			if err != nil {
-				return nil, err
-			}
-			st := StatusOK
-			if res.Invalid() {
-				st = StatusInvalid
-			}
-			return Response{Status: st, Data: res}, nil
-		},
-	},
+		Valid: func(r validate.RepoValidation) bool { return !r.Invalid() },
+	}),
 }
 
-// validateAQLResponse type-checks a single AQL query and wraps the result in a
-// status envelope (used by `query --validate`).
-func validateAQLResponse(ctx context.Context, c Clients, r repo.Repo, dataset, aql string) (Response, error) {
-	res, err := validate.AQL(ctx, c.Node, r, dataset, aql)
+// NoInput is the input of a command that takes no args.
+type NoInput struct{}
+
+// QueryInput is a query: its text, the language it is written in, and the
+// target it runs against. Which combinations run is aql's to say: today, only
+// AQL against a dataset.
+type QueryInput struct {
+	Query      string `arg:"query" cli:"positional,stdin" required:"true" usage:"the query; read from stdin when omitted"`
+	Lang       string `arg:"lang" short:"l" enum:"aql,sql" default:"aql" usage:"the language the query is written in"`
+	Dataset    string `arg:"dataset" short:"d" group:"target" usage:"the dataset to query (AQL)"`
+	DataSource string `arg:"data_source" alias:"ds" group:"target" usage:"the data source to query (SQL)"`
+}
+
+// aql is the query's AQL, with its `limit:` taken out, for a query that can
+// run: AQL against a dataset. SQL, and AQL against a data source, are refused
+// as unsupported until the engine runs them.
+//
+// The AQL engine doesn't support `limit:`, so it is stripped here (see
+// query.ExtractLimit) and applied at execution time as canal's truncate_rows.
+func (in QueryInput) aql() (aql string, limit int, err error) {
+	switch {
+	case in.Lang == "sql" && in.Dataset != "":
+		return "", 0, invalidArg("dataset", "invalid", "a SQL query runs against a data source, not a dataset")
+	case in.Lang == "sql":
+		return "", 0, invalidArg("lang", "unsupported", "SQL queries are not supported yet")
+	case in.DataSource != "":
+		return "", 0, invalidArg("data_source", "unsupported", "an AQL query against a data source is not supported yet")
+	}
+	aql, limit, err = query.ExtractLimit(in.Query)
 	if err != nil {
-		return Response{}, err
+		return "", 0, apperr.EncapsulateWith(err, errcode.InvalidArgs, err.Error(),
+			apperr.Violations{{Field: "query", Code: "invalid", Message: err.Error()}})
 	}
-	st := StatusOK
-	if res.Invalid() {
-		st = StatusInvalid
-	}
-	return Response{Status: st, Data: res}, nil
+	return aql, limit, nil
 }
 
-// statusResult is the `status` result: whether the warm server is running and,
+// requireSidecars refuses a command whose sidecars are not connected, before it
+// calls one: a host that dialled none, or the one-shot CLI before it spawned.
+func requireSidecars(cc CommandContext, need Sidecars) error {
+	switch {
+	case need.Node && cc.Clients.Node == nil:
+		return apperr.New(errcode.SidecarUnavailable, "this command requires the anfra-node sidecar")
+	case need.CanalQuery && cc.Clients.CanalQuery == nil:
+		return apperr.New(errcode.SidecarUnavailable, "this command requires the canal-query sidecar")
+	}
+	return nil
+}
+
+func invalidArg(field, code, msg string) error {
+	return apperr.NewWith(errcode.InvalidArgs, msg, apperr.Violations{{Field: field, Code: code, Message: msg}})
+}
+
+// IngestInput is ingest's input.
+type IngestInput struct {
+	Source string `arg:"source" short:"s" usage:"optional context source key to ingest"`
+}
+
+// SearchInput is search's input.
+type SearchInput struct {
+	Query []string `arg:"query" cli:"positional" usage:"search query"`
+}
+
+// ValidateInput is validate's input.
+type ValidateInput struct {
+	Globs []string `arg:"globs" cli:"positional" usage:"optional file globs; report only diagnostics for matching files"`
+}
+
+// compileAQL compiles a query, failing with query_invalid and its diagnostics
+// when it does not compile. A failure that is not the query's (an unknown
+// dataset, a missing data source) is not diagnostic-shaped, and is returned as
+// it is.
+func compileAQL(ctx context.Context, cc CommandContext, dataset, aql string) (sidecar.CompileToSQLResult, error) {
+	compiled, err := query.Compile(ctx, cc.Clients.Node, cc.Repo, dataset, aql)
+	if err == nil {
+		return compiled, nil
+	}
+	if diags, verr := validate.AQL(ctx, cc.Clients.Node, cc.Repo, dataset, aql); verr == nil && diags.Invalid() {
+		return sidecar.CompileToSQLResult{}, apperr.EncapsulateWith(err, validate.QueryInvalid, "", diags)
+	}
+	return sidecar.CompileToSQLResult{}, err
+}
+
+// VersionResult is the `version` result.
+type VersionResult struct {
+	Version string `json:"version"`
+}
+
+// StatusResult is the `status` result: whether the warm server is running and,
 // when it is, its sidecars' health nested under `sidecars`.
-type statusResult struct {
+type StatusResult struct {
 	Server   string         `json:"server"` // "running" | "not running"
-	Sidecars *sidecarHealth `json:"sidecars,omitempty"`
+	Sidecars *SidecarHealth `json:"sidecars,omitempty"`
 }
 
-// sidecarHealth is each sidecar's health: "ok" or the error message.
-type sidecarHealth struct {
+// SidecarHealth is each sidecar's health: "ok" or the error message.
+type SidecarHealth struct {
 	Node       string `json:"node"`
 	CanalQuery string `json:"canal-query"`
 }
@@ -139,11 +229,11 @@ type sidecarHealth struct {
 // checkStatus reports the warm server's health. status spawns no sidecars, so in
 // one-shot mode (no warm server) both clients are nil → "not running"; under a
 // warm server the clients are live and get health-checked.
-func checkStatus(ctx context.Context, c Clients) statusResult {
+func checkStatus(ctx context.Context, c Clients) StatusResult {
 	if c.Node == nil && c.CanalQuery == nil {
-		return statusResult{Server: "not running"}
+		return StatusResult{Server: "not running"}
 	}
-	sc := &sidecarHealth{Node: "ok", CanalQuery: "ok"}
+	sc := &SidecarHealth{Node: "ok", CanalQuery: "ok"}
 	if c.Node == nil {
 		sc.Node = "unavailable"
 	} else if _, err := c.Node.Ping(ctx); err != nil {
@@ -154,13 +244,13 @@ func checkStatus(ctx context.Context, c Clients) statusResult {
 	} else if err := c.CanalQuery.Health(ctx); err != nil {
 		sc.CanalQuery = err.Error()
 	}
-	return statusResult{Server: "running", Sidecars: sc}
+	return StatusResult{Server: "running", Sidecars: sc}
 }
 
-// QueryResult is the `query` result. Result is nil for --generate (compile only).
+// QueryResult is the `query` result: the SQL that ran, and its rows.
 type QueryResult struct {
-	SQL    string     `json:"sql"`
-	Result *QueryRows `json:"result,omitempty"`
+	SQL    string    `json:"sql"`
+	Result QueryRows `json:"result"`
 }
 
 type QueryRows struct {
@@ -168,44 +258,7 @@ type QueryRows struct {
 	Records [][]any  `json:"records"`
 }
 
-// RunQuery compiles an AQL query and, unless generate is set, executes it (with
-// canal truncating to limit rows; query.NoLimit for all). On a compile failure it
-// surfaces the same structured diagnostics as --validate with an "invalid" status
-// (which the CLI maps to a non-zero exit), so callers see what's wrong without
-// re-running the query.
-func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, limit int, generate bool) (any, error) {
-	var missing apperr.Violations
-	if dataset == "" {
-		missing = append(missing, apperr.Violation{Field: "dataset", Code: "required", Message: "dataset is required"})
-	}
-	if aql == "" {
-		missing = append(missing, apperr.Violation{Field: "aql", Code: "required", Message: "aql is required"})
-	}
-	if len(missing) > 0 {
-		return nil, apperr.NewWith(errcode.InvalidArgs, missing[0].Message, missing)
-	}
-	if !generate && clients.CanalQuery == nil {
-		return nil, apperr.New(errcode.SidecarUnavailable, "query execution requires the canal-query sidecar")
-	}
-
-	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql)
-	if err != nil {
-		// A parse/type error in the AQL: report the diagnostics (same as --validate)
-		// rather than a bare message. StatusInvalid → the CLI exits non-zero.
-		// Structural failures (unknown dataset/data source) aren't diagnostic-shaped,
-		// so fall back to the original error.
-		if diags, verr := validate.AQL(ctx, clients.Node, repo, dataset, aql); verr == nil && diags.Invalid() {
-			return Response{Status: StatusInvalid, Data: diags}, nil
-		}
-		return nil, err
-	}
-
-	if generate {
-		return QueryResult{SQL: compiled.SQL}, nil
-	}
-	r, err := query.Execute(ctx, clients.CanalQuery, repo, compiled, limit)
-	if err != nil {
-		return nil, err
-	}
-	return QueryResult{SQL: r.SQL, Result: &QueryRows{Fields: r.Fields, Records: r.Records}}, nil
+// CompiledQuery is the `query compile` result: the SQL the query compiles to.
+type CompiledQuery struct {
+	SQL string `json:"sql"`
 }

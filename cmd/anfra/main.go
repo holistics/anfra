@@ -47,7 +47,7 @@ func main() {
 	if errors.As(err, &ec) {
 		os.Exit(ec.code) // result already rendered; exit quietly
 	}
-	fmt.Fprintln(os.Stderr, "Error:", err)
+	printError(os.Stderr, err)
 	os.Exit(1)
 }
 

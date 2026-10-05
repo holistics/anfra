@@ -1,0 +1,10 @@
+# The warehouse of docker-compose.dev.yml (dev/seed.sql), from the host.
+data_sources:
+  demo:
+    type: postgresql
+    connection:
+      host: localhost
+      port: 5433
+      user: anfra
+      password: anfra
+      dbname: anfra
