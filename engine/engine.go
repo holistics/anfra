@@ -1,5 +1,6 @@
-// Package engine is the anfra engine's public Go API: the one package outside
-// internal/ that another module may import.
+// Package engine is the anfra engine's public Go API: with the shared packages
+// it classifies its errors with (shared/apperr, shared/appstep and shared/apptracing), the
+// only packages outside internal/ that another module may import.
 //
 // It exists so that a separate application — a server, a hosted product, a
 // different front end — can run anfra commands in-process, with the same
@@ -40,8 +41,10 @@ import (
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // The types below are aliases, not wrappers: an engine.Request IS an
@@ -106,6 +109,30 @@ const (
 	// not a failure to run.
 	StatusInvalid = app.StatusInvalid
 )
+
+// The codes Dispatch fails with. They carry a scope and no status: a host
+// translates them to its own codes where it calls Dispatch (apperr.Translate),
+// and treats anything else Dispatch returns as an internal error.
+var (
+	// UnknownCommand: the request names no registered command.
+	UnknownCommand = errcode.UnknownCommand
+	// InvalidArgs: an arg is unknown, missing, malformed or conflicts with
+	// another; its violations name each one.
+	InvalidArgs = errcode.InvalidArgs
+	// DataPermsMissing: the Invocation's DataPerms were never decided.
+	DataPermsMissing = errcode.DataPermsMissing
+	// SidecarUnavailable: a sidecar the command needs did not respond, or is
+	// not connected.
+	SidecarUnavailable = errcode.SidecarUnavailable
+)
+
+// Namespace is the engine's namespace, for its codes and its steps: anfra.
+var Namespace = errcode.NS
+
+// ErrorCodes lists every code Dispatch can fail with, with its scope and
+// details type: for a host to test that it translates each of them, and fail
+// its build on one added by an engine upgrade.
+func ErrorCodes() []apperr.Code { return apperr.Codes(errcode.NS) }
 
 // Unrestricted states that no data restrictions apply to this caller. It is an
 // answer, not a default: Dispatch refuses an Invocation whose DataPerms nobody

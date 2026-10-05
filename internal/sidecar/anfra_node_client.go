@@ -108,7 +108,7 @@ func (c *AnfraNodeClient) Call(ctx context.Context, method string, params any, o
 	req.Header.Set("content-type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("rpc %s: %w", method, err)
+		return unreachable(ctx, "anfra-node", fmt.Errorf("rpc %s: %w", method, err))
 	}
 	defer resp.Body.Close()
 
@@ -117,6 +117,12 @@ func (c *AnfraNodeClient) Call(ctx context.Context, method string, params any, o
 		return fmt.Errorf("decode %s response: %w", method, err)
 	}
 	if rpcResp.Error != nil {
+		// TODO: classify anfra-node's errors. They reach a host unclassified, so as
+		// internal_server_error: an unknown dataset or data source, or a model that
+		// does not compile, is the caller's, not an outage. anfra-node should
+		// return a stable error code per kind (in rpcResp.Error.Code or its data),
+		// mapped here to engine codes — not.found-like and invalid-input-like ones,
+		// with the AML location where there is one — and added to errcode.
 		return fmt.Errorf("rpc %s error %d: %s", method, rpcResp.Error.Code, rpcResp.Error.Message)
 	}
 	if out != nil && rpcResp.Result != nil {

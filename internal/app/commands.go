@@ -2,14 +2,15 @@ package app
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	searchcmd "github.com/holistics/anfra/internal/search"
 	"github.com/holistics/anfra/internal/validate"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // Commands is the registry — the single source for the CLI and /call. Add a
@@ -59,7 +60,8 @@ var Commands = []Command{
 			// and apply it at execution time via canal's truncate_rows.
 			aql, limit, err := query.ExtractLimit(argString(args, "aql"))
 			if err != nil {
-				return nil, err
+				return nil, apperr.EncapsulateWith(err, errcode.InvalidArgs, err.Error(),
+					apperr.Violations{{Field: "aql", Code: "invalid", Message: err.Error()}})
 			}
 			dataset := argString(args, "dataset")
 			if IsTruthy(args["validate"]) {
@@ -172,14 +174,18 @@ type QueryRows struct {
 // (which the CLI maps to a non-zero exit), so callers see what's wrong without
 // re-running the query.
 func RunQuery(ctx context.Context, clients Clients, repo repo.Repo, dataset, aql string, limit int, generate bool) (any, error) {
+	var missing apperr.Violations
 	if dataset == "" {
-		return nil, fmt.Errorf("dataset is required")
+		missing = append(missing, apperr.Violation{Field: "dataset", Code: "required", Message: "dataset is required"})
 	}
 	if aql == "" {
-		return nil, fmt.Errorf("aql is required")
+		missing = append(missing, apperr.Violation{Field: "aql", Code: "required", Message: "aql is required"})
+	}
+	if len(missing) > 0 {
+		return nil, apperr.NewWith(errcode.InvalidArgs, missing[0].Message, missing)
 	}
 	if !generate && clients.CanalQuery == nil {
-		return nil, fmt.Errorf("query execution requires the canal-query sidecar")
+		return nil, apperr.New(errcode.SidecarUnavailable, "query execution requires the canal-query sidecar")
 	}
 
 	compiled, err := query.Compile(ctx, clients.Node, repo, dataset, aql)

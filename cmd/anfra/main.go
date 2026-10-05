@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,11 @@ type exitCodeError struct{ code int }
 func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 func main() {
+	// The CLI and `anfra serve` are local: their user is the operator, who needs
+	// an error's cause where the error shows, not only in a log. A host serving
+	// other people embeds the engine package and keeps the default.
+	apperr.DisableErrorEncapsulation()
+
 	// A single signal-cancelable root context, threaded down through cobra so
 	// Ctrl-C (SIGINT/SIGTERM) cancels in-flight work — an update download, a
 	// query, or the serve loop.
