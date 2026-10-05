@@ -9,11 +9,16 @@ description: Run an AQL query against a dataset and return its result rows (or c
 Default (Anfra) — compile and run against a dataset:
 
 ```sh
-anfra query --dataset <uname> --aql '<query>'
+anfra query --dataset <uname> '<query>'
 # or
 cat query.aql | anfra query --dataset <uname>
-# add --generate to emit the compiled SQL without running it
+
+# the compiled SQL, without running it
+anfra query compile --dataset <uname> '<query>'
 ```
+
+An invalid query fails (exit 1) and prints its diagnostics; fix it with
+[](../validate-aql/).
 
 > Replace this command for other runtimes if needed.
 

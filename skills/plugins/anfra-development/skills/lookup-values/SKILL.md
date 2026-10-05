@@ -30,10 +30,10 @@ batching several patterns with `or`:
 
 ```sh
 # distinct values of a (small) column
-anfra query --dataset <uname> --aql 'unique(products.type)'
+anfra query --dataset <uname> 'unique(products.type)'
 
 # batch 2–3 candidate patterns for "second-hand" in one query
-anfra query --dataset <uname> --aql "unique(products.type) | where(products.type ilike '%second%' or products.type ilike '%sh%' or products.type ilike '%used%')"
+anfra query --dataset <uname> "unique(products.type) | where(products.type ilike '%second%' or products.type ilike '%sh%' or products.type ilike '%used%')"
 ```
 
 > Replace this command for other runtimes if needed. The guidance above is stable; only the command changes.
