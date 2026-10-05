@@ -26,19 +26,30 @@ func serveSocketPath(repo repo.Repo) string {
 }
 
 func newServeCmd() *cobra.Command {
-	return &cobra.Command{
+	var socket string
+	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the anfra server: keep sidecars warm and expose POST /call for agents and subsequent CLI calls",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context())
+			return runServe(cmd.Context(), socket)
 		},
 	}
+	cmd.Flags().StringVar(&socket, "socket", "",
+		"listen on this Unix socket instead of the repo's default one; CLI calls only reach a server on the default socket")
+	return cmd
 }
 
-func runServe(ctx context.Context) error {
+// runServe serves on sockPath, or on the repo's default socket when it is empty.
+func runServe(ctx context.Context, sockPath string) error {
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
-		if isServeRunning(h.repo) {
-			return fmt.Errorf("anfra serve already running for this repo (socket %s)", serveSocketPath(h.repo))
+		if sockPath == "" {
+			sockPath = serveSocketPath(h.repo)
+		}
+		// Only a live server on this same path blocks us: a server on another path
+		// (the default one, or another --socket) has its own sidecars and leaves this
+		// socket alone. A dead socket file is stale and is replaced below.
+		if isSocketLive(sockPath) {
+			return fmt.Errorf("anfra serve already running on socket %s", sockPath)
 		}
 
 		// Warm sidecars live for the server's lifetime, so enable canal-query
@@ -59,7 +70,6 @@ func runServe(ctx context.Context) error {
 
 		clients := app.Clients{Node: node.Client(), CanalQuery: canal.Client()}
 
-		sockPath := serveSocketPath(h.repo)
 		_ = os.Remove(sockPath)
 		ln, err := net.Listen("unix", sockPath)
 		if err != nil {
@@ -176,7 +186,12 @@ func serveHTTPClient(repo repo.Repo) *http.Client {
 
 // isServeRunning reports whether a warm server is reachable for this repo.
 func isServeRunning(repo repo.Repo) bool {
-	conn, err := net.DialTimeout("unix", serveSocketPath(repo), 200*time.Millisecond)
+	return isSocketLive(serveSocketPath(repo))
+}
+
+// isSocketLive reports whether a server answers on the Unix socket at path.
+func isSocketLive(path string) bool {
+	conn, err := net.DialTimeout("unix", path, 200*time.Millisecond)
 	if err != nil {
 		return false
 	}

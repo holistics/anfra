@@ -29,3 +29,19 @@ anfra update --check  # check for a newer release without installing
 ## Usage
 
 Run `anfra --help` for commands, or `anfra <command> --help` for a specific one.
+
+## Serving
+
+`anfra serve` keeps the sidecars warm and serves `GET /health` and `POST /call`
+(`{"command": "...", "args": {...}}`) on a per-repo Unix socket, which later CLI
+calls in the same repo use automatically.
+
+A program that runs its own server (rather than sharing the repo's) can pick the
+socket with `--socket <path>`. Only a live server on that same path stops it from
+starting, and later CLI calls don't use it: they only reach the default socket.
+
+```sh
+anfra serve --socket /tmp/my-tool/anfra.sock
+curl --unix-socket /tmp/my-tool/anfra.sock -X POST http://anfra/call \
+  -H 'Content-Type: application/json' -d '{"command":"status"}'
+```
