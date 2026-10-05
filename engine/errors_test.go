@@ -25,16 +25,18 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 		{"an unknown command", unrestricted, engine.Request{Command: "no-such-command"}, engine.UnknownCommand, nil},
 		{"an unknown arg", unrestricted, engine.Request{Command: "version", Args: map[string]any{"bogus": true}},
 			engine.InvalidArgs, apperr.Violations{{Field: "bogus", Code: "unknown", Message: "Not an arg of version."}}},
-		{"conflicting args", unrestricted,
-			engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "aql": "x", "generate": true, "validate": true}},
+		{"two targets", unrestricted,
+			engine.Request{Command: "query", Args: map[string]any{"query": "x", "dataset": "d", "data_source": "w"}},
 			engine.InvalidArgs, apperr.Violations{
-				{Field: "generate", Code: "invalid", Message: "at most one of --generate, --validate may be set"},
-				{Field: "validate", Code: "invalid", Message: "at most one of --generate, --validate may be set"}}},
-		{"missing args", unrestricted, engine.Request{Command: "query", Args: map[string]any{"generate": true}},
+				{Field: "data_source", Code: "invalid", Message: "only one of dataset, data_source may be set"}}},
+		{"missing args", unrestricted, engine.Request{Command: "query.compile", Args: map[string]any{}},
 			engine.InvalidArgs, apperr.Violations{
-				{Field: "dataset", Code: "required", Message: "dataset is required"},
-				{Field: "aql", Code: "required", Message: "aql is required"}}},
-		{"no canal-query to run on", unrestricted, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "aql": "x"}},
+				{Field: "query", Code: "required", Message: "query is required"},
+				{Field: "dataset", Code: "required", Message: "one of dataset, data_source is required"}}},
+		{"an unsupported input", unrestricted,
+			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "ds": "w"}},
+			engine.InvalidArgs, apperr.Violations{{Field: "lang", Code: "unsupported", Message: "SQL queries are not supported yet"}}},
+		{"no sidecars to run on", unrestricted, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "query": "x"}},
 			engine.SidecarUnavailable, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -59,7 +61,7 @@ func TestErrorCodes(t *testing.T) {
 		}
 		names = append(names, c.String())
 	}
-	want := []string{"data_perms_missing", "invalid_args", "sidecar_unavailable", "unknown_command"}
+	want := []string{"data_perms_missing", "invalid_args", "query_invalid", "sidecar_unavailable", "unknown_command"}
 	if !reflect.DeepEqual(names, want) {
 		t.Errorf("ErrorCodes() = %v, want %v", names, want)
 	}

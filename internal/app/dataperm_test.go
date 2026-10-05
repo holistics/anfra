@@ -18,10 +18,10 @@ import (
 // list is only ever wrong in one direction.
 func TestEveryCommandRefusedWithoutDataPerms(t *testing.T) {
 	for _, c := range Commands {
-		t.Run(c.Name, func(t *testing.T) {
-			_, err := Dispatch(context.Background(), CommandContext{}, Request{Command: c.Name})
+		t.Run(c.Name(), func(t *testing.T) {
+			_, err := Dispatch(context.Background(), CommandContext{}, Request{Command: c.Name()})
 			if err == nil {
-				t.Fatalf("command %q ran with undecided DataPerms", c.Name)
+				t.Fatalf("command %q ran with undecided DataPerms", c.Name())
 			}
 			if !strings.Contains(err.Error(), "no data permissions") {
 				t.Errorf("want a data-permissions refusal, got: %v", err)
@@ -53,14 +53,14 @@ func withProbe(t *testing.T) *bool {
 	ran := false
 	orig := Commands
 	t.Cleanup(func() { Commands = orig })
-	Commands = append(append([]Command{}, orig...), Command{
+	Commands = append(append([]Command{}, orig...), Define(Def[NoInput, string]{
 		Name:  "dataperm-probe",
 		Short: "test-only",
-		Run: func(context.Context, CommandContext, map[string]any) (any, error) {
+		Run: func(context.Context, CommandContext, NoInput) (string, error) {
 			ran = true
 			return "ok", nil
 		},
-	})
+	}))
 	return &ran
 }
 

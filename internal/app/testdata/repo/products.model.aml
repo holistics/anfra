@@ -1,0 +1,19 @@
+Model products {
+  type: 'table'
+  label: 'Products'
+  data_source_name: 'demo'
+
+  dimension id {
+    label: 'ID'
+    type: 'number'
+    definition: @sql {{ #SOURCE.id }};;
+  }
+
+  dimension name {
+    label: 'Name'
+    type: 'text'
+    definition: @sql {{ #SOURCE.name }};;
+  }
+
+  table_name: "products"
+}

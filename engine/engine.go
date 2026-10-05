@@ -44,6 +44,7 @@ import (
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/validate"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -124,6 +125,8 @@ var (
 	// SidecarUnavailable: a sidecar the command needs did not respond, or is
 	// not connected.
 	SidecarUnavailable = errcode.SidecarUnavailable
+	// QueryInvalid: a query that cannot run or compile, with its diagnostics.
+	QueryInvalid = validate.QueryInvalid
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.
@@ -150,6 +153,36 @@ func Restricted(attrs Attributes) DataPerms { return dataperm.Restricted(attrs) 
 // no meaningful working directory and must be told.
 func OpenRepo(dir string) Repo { return repo.Resolve(dir) }
 
+// The command metadata Describe returns: aliases, not wrappers, like the types
+// above.
+type (
+	// CommandSpec is a command as an API caller sees it.
+	CommandSpec = app.CommandSpec
+	// ArgSpec is one of a command's args as an API caller sees it.
+	ArgSpec = app.ArgSpec
+	// ArgType is an arg's type: ArgString, ArgBool or ArgStringArray.
+	ArgType = app.ArgType
+)
+
+const (
+	ArgString      = app.ArgString
+	ArgBool        = app.ArgBool
+	ArgStringArray = app.ArgStringArray
+)
+
+// Describe returns every registered command, in registry order, in the shape an
+// API caller sees: its args with their types, which are required and which are
+// closed to a set of values, the groups of which exactly one must be set, the
+// type of its answer and whether it can be invalid, and the codes it can fail
+// with. A host publishes each as an operation (an OpenAPI
+// path, an MCP tool, a usage page) without re-declaring what the engine knows.
+//
+// It is the API's view, not the CLI's: aliases, shorthands and stdin are left
+// out. Dispatch enforces what it says, and every field is derived from the
+// command's definition, so it cannot drift from what the command does. The specs
+// are copies.
+func Describe() []CommandSpec { return app.Describe() }
+
 // Commands returns the names of every registered command, in registry order.
 //
 // Names only: what a command *requires* of a caller is not the engine's
@@ -157,13 +190,7 @@ func OpenRepo(dir string) Repo { return repo.Resolve(dir) }
 // host that maintains its own command-to-permission mapping can test that the
 // mapping still covers the registry after an engine upgrade — and fail its
 // build rather than silently exposing a new command.
-func Commands() []string {
-	names := make([]string, len(app.Commands))
-	for i, c := range app.Commands {
-		names[i] = c.Name
-	}
-	return names
-}
+func Commands() []string { return app.Names() }
 
 // Connect dials sidecars that something else is running — the compose or
 // Kubernetes topology, where anfra-node and canal-query are separate

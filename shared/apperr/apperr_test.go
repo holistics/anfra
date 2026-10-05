@@ -368,12 +368,12 @@ func TestAsAnswersWhatItIs(t *testing.T) {
 	inner := apperr.New(apperr.NotFound, "No such dataset.")
 	err := step(apperr.Encapsulate(inner, brokenReference, ""), renderDashboard)
 
-	got, ok := asError(err)
+	got, ok := errors.AsType[*apperr.Error](err)
 	if !ok || got.Code != brokenReference {
 		t.Fatalf("errors.As found %v, want the outer broken_reference", got)
 	}
 
-	bare, ok := asError(step(forbidden, anyStep))
+	bare, ok := errors.AsType[*apperr.Error](step(forbidden, anyStep))
 	if !ok || bare.Code != forbidden || bare.Message != "You do not have permission to do this." {
 		t.Errorf("errors.As on a bare code found %+v, want forbidden with its default message", bare)
 	}
@@ -381,7 +381,7 @@ func TestAsAnswersWhatItIs(t *testing.T) {
 	// Documented divergence: errors.As looks through a foreign wrap, the
 	// response does not. The linter keeps such wraps out of our code.
 	wrapped := fmt.Errorf("load: %w", inner)
-	if got, ok := asError(wrapped); !ok || got.Code != apperr.NotFound {
+	if got, ok := errors.AsType[*apperr.Error](wrapped); !ok || got.Code != apperr.NotFound {
 		t.Error("errors.As should still find the formal error beneath a fmt.Errorf wrap")
 	}
 	if apperr.From(wrapped).Code != apperr.InternalServerError {
@@ -391,7 +391,7 @@ func TestAsAnswersWhatItIs(t *testing.T) {
 	// Once a step passes over the foreign wrap, it is formalised, and "what is
 	// it" agrees with the response again.
 	stepped := step(wrapped, resolve)
-	if got, ok := asError(stepped); !ok || got.Code != apperr.InternalServerError {
+	if got, ok := errors.AsType[*apperr.Error](stepped); !ok || got.Code != apperr.InternalServerError {
 		t.Errorf("errors.As after a step over a foreign wrap found %v, want internal", got)
 	}
 }
@@ -424,7 +424,7 @@ func TestResponseCarriesOnlyWhatWasWrittenForTheClient(t *testing.T) {
 // code, and is never mutated.
 func TestWithStepDoesNotMutate(t *testing.T) {
 	err := apperr.New(apperr.NotFound, "")
-	original, _ := asError(err)
+	original, _ := errors.AsType[*apperr.Error](err)
 
 	first := step(err, load)
 	second := step(first, invite)
@@ -482,7 +482,7 @@ func TestCodeAccessor(t *testing.T) {
 	if apperr.NotFound.Code() != apperr.NotFound {
 		t.Error("Code() on a Code is not the identity")
 	}
-	e, ok := asError(apperr.NewWith(validationFailed, "", apperr.Violations{}))
+	e, ok := errors.AsType[*apperr.Error](apperr.NewWith(validationFailed, "", apperr.Violations{}))
 	if !ok || e.Code != validationFailed.Code() {
 		t.Errorf("an error made from a TypedCode holds %v, want its Code()", e.Code)
 	}
@@ -557,11 +557,4 @@ func TestNamespaces(t *testing.T) {
 	if internal := apperr.DefineInternalCode(other, "not_found", apperr.NotFound, "x"); internal.Public() != apperr.NotFound {
 		t.Error("an internal code named like a generic one does not map to it")
 	}
-}
-
-// asError is errors.As for a formal error. (errors.AsType needs Go 1.26.)
-func asError(err error) (*apperr.Error, bool) {
-	var e *apperr.Error
-	ok := errors.As(err, &e)
-	return e, ok
 }

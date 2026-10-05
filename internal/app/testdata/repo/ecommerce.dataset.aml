@@ -1,0 +1,8 @@
+Dataset ecommerce {
+  label: 'Ecommerce'
+  data_source_name: 'demo'
+  models: [
+    products,
+  ]
+  relationships: []
+}

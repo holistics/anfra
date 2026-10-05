@@ -71,7 +71,7 @@ func TestEndKeepsTheMeaning(t *testing.T) {
 	if !errors.Is(err, apperr.NotFound) {
 		t.Error("the step hid the code from errors.Is")
 	}
-	if got, ok := asError(err); !ok || got.Code != apperr.NotFound {
+	if got, ok := errors.AsType[*apperr.Error](err); !ok || got.Code != apperr.NotFound {
 		t.Error("the step hid the formal error from errors.As")
 	}
 	if apperr.From(err).Code != apperr.NotFound {
@@ -210,11 +210,4 @@ func TestSpanSeesAPanic(t *testing.T) {
 	if s := spans(t)["test.parse_file"]; s == nil || s.Status().Code != codes.Error {
 		t.Errorf("span = %v", s)
 	}
-}
-
-// asError is errors.As for a formal error. (errors.AsType needs Go 1.26.)
-func asError(err error) (*apperr.Error, bool) {
-	var e *apperr.Error
-	ok := errors.As(err, &e)
-	return e, ok
 }

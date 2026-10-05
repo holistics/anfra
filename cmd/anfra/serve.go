@@ -10,11 +10,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/spf13/cobra"
 )
 
@@ -98,12 +101,12 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 	})
 	mux.HandleFunc("/call", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			writeCallError(w, http.StatusMethodNotAllowed, "use POST")
+			writeCallError(w, apperr.New(apperr.InvalidRequest, "use POST"))
 			return
 		}
 		var req app.Request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeCallError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			writeCallError(w, apperr.Encapsulate(err, apperr.InvalidRequest, "invalid JSON body: "+err.Error()))
 			return
 		}
 
@@ -114,7 +117,7 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 			// body. False positive — the rest of the tree is properly ctx-threaded.
 			text, err := commandHelp(req.Command) //nolint:contextcheck
 			if err != nil {
-				writeCallError(w, http.StatusNotFound, err.Error())
+				writeCallError(w, apperr.Encapsulate(err, errcode.UnknownCommand, err.Error()))
 				return
 			}
 			writeJSON(w, http.StatusOK, app.Response{Status: app.StatusOK, Data: map[string]any{"help": text}})
@@ -123,7 +126,7 @@ func serveMux(h hostContext, clients app.Clients) http.Handler {
 
 		res, err := app.Dispatch(r.Context(), h.commandContext(clients), req)
 		if err != nil {
-			writeCallError(w, http.StatusUnprocessableEntity, err.Error())
+			writeCallError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
@@ -137,7 +140,7 @@ func commandHelp(name string) (string, error) {
 	root := newRootCmd()
 	target := root
 	if name != "" {
-		found, _, err := root.Find([]string{name})
+		found, _, err := root.Find(strings.Split(name, ".")) // "query.compile" is `query compile`
 		if err != nil || found == root {
 			return "", fmt.Errorf(`unknown command %q; send {"help": true} to list commands`, name)
 		}
@@ -157,8 +160,29 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeCallError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]any{"error": msg})
+// writeCallError answers a failed /call with the error's wire form, the same
+// {"error": {...}} body a host renders: its code, scope, message, context and
+// typed details. The status follows the code.
+func writeCallError(w http.ResponseWriter, err error) {
+	e := apperr.From(err)
+	writeJSON(w, callStatus(e.Code), apperr.Envelope{Error: e.Response("")})
+}
+
+// callStatus is the HTTP status /call answers a code with. The engine's codes
+// carry none; this is the local server's own choice.
+func callStatus(c apperr.Code) int {
+	switch c.Public() {
+	case apperr.InvalidRequest.Code():
+		return http.StatusBadRequest
+	case errcode.UnknownCommand:
+		return http.StatusNotFound
+	case errcode.SidecarUnavailable:
+		return http.StatusServiceUnavailable
+	}
+	if c.Scope() == apperr.Server {
+		return http.StatusInternalServerError
+	}
+	return http.StatusUnprocessableEntity
 }
 
 // --- serve client (used by one-shot CLI calls to reach a warm server) ---
@@ -208,13 +232,11 @@ func callServe(repo repo.Repo, req app.Request) (body []byte, contentType string
 		return nil, "", fmt.Errorf("read serve response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Error string `json:"error"`
+		var env apperr.Envelope
+		if json.Unmarshal(data, &env) == nil && env.Error.Code != "" {
+			return nil, "", &remoteError{resp: env.Error}
 		}
-		if json.Unmarshal(data, &e) == nil && e.Error != "" {
-			return nil, "", fmt.Errorf("%s", e.Error)
-		}
-		return nil, "", fmt.Errorf("serve returned status %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("serve returned status %d: %s", resp.StatusCode, bytes.TrimSpace(data))
 	}
 	return data, resp.Header.Get("Content-Type"), nil
 }

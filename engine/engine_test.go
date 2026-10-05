@@ -115,3 +115,17 @@ func TestOpenRepoResolvesIdentity(t *testing.T) {
 		t.Error("OpenRepo returned a repo with no Dir")
 	}
 }
+
+// Describe covers what Commands lists, through the public API alone.
+func TestDescribeMatchesCommands(t *testing.T) {
+	specs := engine.Describe()
+	names := engine.Commands()
+	if len(specs) != len(names) {
+		t.Fatalf("%d specs for %d commands", len(specs), len(names))
+	}
+	for i, s := range specs {
+		if s.Name != names[i] || s.Short == "" || len(s.ErrorCodes) == 0 {
+			t.Errorf("spec %d: %+v", i, s)
+		}
+	}
+}
