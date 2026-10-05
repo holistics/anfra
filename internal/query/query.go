@@ -111,12 +111,34 @@ func Execute(ctx context.Context, canal *sidecar.CanalQueryClient, repo repo.Rep
 	if !ok {
 		return nil, fmt.Errorf("data source %q is not defined in data_sources.yml", compiled.DataSource.Name)
 	}
+	return run(ctx, canal, ds, compiled.DataSource.DBType, compiled.SQL, truncateRows)
+}
+
+// DataSource is the repo's data source by name, from data_sources.yml. ok is
+// false when there is none by that name.
+func DataSource(r repo.Repo, name string) (ds datasource.DataSource, ok bool, err error) {
+	sources, err := datasource.Load(r.ConfigDir)
+	if err != nil {
+		return datasource.DataSource{}, false, fmt.Errorf("load data sources: %w", err)
+	}
+	ds, ok = sources[name]
+	return ds, ok, nil
+}
+
+// ExecuteSQL runs sql on ds as it is: the caller wrote it in the data source's
+// dialect, with its own LIMIT. Nothing is compiled into it — no restriction
+// applies.
+func ExecuteSQL(ctx context.Context, canal *sidecar.CanalQueryClient, ds datasource.DataSource, sql string) (*RunResult, error) {
+	return run(ctx, canal, ds, ds.DBType, sql, NoLimit)
+}
+
+func run(ctx context.Context, canal *sidecar.CanalQueryClient, ds datasource.DataSource, dbType, sql string, truncateRows int) (*RunResult, error) {
 	if ds.Connection == nil {
 		return nil, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
 	}
-	result, err := canal.Execute(ctx, compiled.DataSource.DBType, ds.Connection, compiled.SQL, truncateRows)
+	result, err := canal.Execute(ctx, dbType, ds.Connection, sql, truncateRows)
 	if err != nil {
 		return nil, fmt.Errorf("execute query on data source %q: %w", ds.Name, err)
 	}
-	return &RunResult{SQL: compiled.SQL, Fields: result.Fields, Records: result.Rows}, nil
+	return &RunResult{SQL: sql, Fields: result.Fields, Records: result.Rows}, nil
 }

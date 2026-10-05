@@ -8,3 +8,12 @@ data_sources:
       user: anfra
       password: anfra
       dbname: anfra
+  # Nothing listens on port 1: a data source the engine cannot reach.
+  unreachable:
+    type: postgresql
+    connection:
+      host: localhost
+      port: 1
+      user: anfra
+      password: anfra
+      dbname: anfra

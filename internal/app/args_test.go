@@ -1,11 +1,18 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -102,25 +109,80 @@ func TestParseArgsRefusesMistakes(t *testing.T) {
 	}
 }
 
-// What runs today is AQL against a dataset; the rest is refused as
-// unsupported, on the arg that makes it so, before anything runs.
-func TestUnsupportedQueryInputs(t *testing.T) {
+// AQL runs against a dataset and SQL against a data source; the rest is refused
+// before anything runs, on the arg that makes it so.
+func TestQueryInputs(t *testing.T) {
+	fixture, err := filepath.Abs("testdata/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cc := CommandContext{Repo: repo.Resolve(fixture), DataPerms: dataperm.Unrestricted()}
 	for _, tc := range []struct {
+		name  string
+		cmd   string
 		in    QueryInput
+		cc    CommandContext
 		field string
 		code  string
 	}{
-		{QueryInput{Query: "q", Lang: "sql", DataSource: "w"}, "lang", "unsupported"},
-		{QueryInput{Query: "q", Lang: "aql", DataSource: "w"}, "data_source", "unsupported"},
-		{QueryInput{Query: "q", Lang: "sql", Dataset: "d"}, "dataset", "invalid"},
+		{"AQL against a data source, for now", "query", QueryInput{Query: "q", Lang: "aql", DataSource: "demo"}, cc, "data_source", "unsupported"},
+		{"SQL against a dataset", "query", QueryInput{Query: "q", Lang: "sql", Dataset: "ecommerce"}, cc, "dataset", "invalid"},
+		{"SQL against an unknown data source", "query.compile", QueryInput{Query: "q", Lang: "sql", DataSource: "nosuch"}, cc, "data_source", "invalid"},
+		{"validating SQL, for now", "query.validate", QueryInput{Query: "q", Lang: "sql", DataSource: "demo"}, cc, "lang", "unsupported"},
 	} {
-		_, _, err := tc.in.aql()
-		v, _ := apperr.DetailsOf(err, errcode.InvalidArgs)
-		if len(v) != 1 || v[0].Field != tc.field || v[0].Code != tc.code {
-			t.Errorf("%+v: %v", tc.in, v)
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := run(t, tc.cmd, tc.cc, tc.in)
+			v, _ := apperr.DetailsOf(err, errcode.InvalidArgs)
+			if len(v) != 1 || v[0].Field != tc.field || v[0].Code != tc.code {
+				t.Errorf("got %v, %+v; want %s on %s", err, v, tc.code, tc.field)
+			}
+		})
+	}
+
+	// Nothing restricts raw SQL, so a restricted caller cannot run it at all.
+	restricted := cc
+	restricted.DataPerms = dataperm.Restricted(nil)
+	for _, cmd := range []string{"query", "query.compile"} {
+		if _, err := run(t, cmd, restricted, QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"}); !errors.Is(err, errcode.DataPermsUnenforceable) {
+			t.Errorf("%s: a restricted caller's SQL got %v, want data_perms_unenforceable", cmd, err)
 		}
 	}
+
+	// Compiling SQL returns it as it is, and needs no sidecar.
+	res, err := run(t, "query.compile", cc, QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"})
+	if err != nil || res.Data != (CompiledQuery{SQL: "select 1"}) {
+		t.Errorf("compiling SQL: %+v, %v", res, err)
+	}
+	c, _ := Find("query")
+	if got := c.Needs(map[string]any{"query": "select 1", "lang": "sql", "ds": "demo"}); got != (Sidecars{CanalQuery: true}) {
+		t.Errorf("SQL needs %+v, want canal-query alone", got)
+	}
+
 	if aql, limit, err := (QueryInput{Query: "explore { products } limit: 5", Lang: "aql", Dataset: "d"}).aql(); err != nil || limit != 5 || strings.Contains(aql, "limit") {
 		t.Errorf("AQL against a dataset: %q, %d, %v", aql, limit, err)
+	}
+}
+
+// run dispatches cmd with in, as /call would send it.
+func run(t *testing.T, cmd string, cc CommandContext, in QueryInput) (Response, error) {
+	t.Helper()
+	args := map[string]any{"query": in.Query, "lang": in.Lang}
+	if in.Dataset != "" {
+		args["dataset"] = in.Dataset
+	}
+	if in.DataSource != "" {
+		args["data_source"] = in.DataSource
+	}
+	return Dispatch(context.Background(), cc, Request{Command: cmd, Args: args})
+}
+
+// canal-query's failures are query_failed, except a client-scope one: a request
+// the engine built wrong is the engine's bug, and stays unclassified.
+func TestFailed(t *testing.T) {
+	for scope, want := range map[string]bool{"User": true, "Server": true, "Client": false} {
+		err := failed(fmt.Errorf("execute: %w", &sidecar.CanalQueryError{Message: "boom", Scope: scope}))
+		if got := errors.Is(err, errcode.QueryFailed); got != want {
+			t.Errorf("canal scope %s: query_failed = %v, want %v", scope, got, want)
+		}
 	}
 }
