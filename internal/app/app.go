@@ -7,15 +7,16 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // Request mirrors a CLI invocation: a command name + its args.
@@ -157,7 +158,7 @@ type Response struct {
 // looked up.
 func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, error) {
 	if !cc.DataPerms.Decided() {
-		return Response{}, errors.New("no data permissions supplied: every invocation must " +
+		return Response{}, apperr.New(errcode.DataPermsMissing, "no data permissions supplied: every invocation must "+
 			"state what the caller may see (dataperm.Unrestricted() when nothing is restricted)")
 	}
 	if req.Command == "" {
@@ -169,7 +170,8 @@ func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, er
 	}
 	cmd, ok := Find(req.Command)
 	if !ok {
-		return Response{}, fmt.Errorf(`unknown command %q; send {"help": true} to list commands`, req.Command)
+		return Response{}, apperr.New(errcode.UnknownCommand,
+			fmt.Sprintf(`unknown command %q; send {"help": true} to list commands`, req.Command))
 	}
 	NormalizeReqArgs(cmd, req.Args)
 	if err := validateReqArgs(cmd, req.Args); err != nil {
@@ -212,8 +214,12 @@ func validateReqArgs(c Command, args map[string]any) error {
 		return nil
 	}
 	sort.Strings(unknown)
-	return fmt.Errorf(`unknown arg(s) %s for command %q; send {"command": %q, "help": true} for its args`,
-		strings.Join(unknown, ", "), c.Name, c.Name)
+	v := make(apperr.Violations, len(unknown))
+	for i, k := range unknown {
+		v[i] = apperr.Violation{Field: k, Code: "unknown", Message: "Not an arg of " + c.Name + "."}
+	}
+	return apperr.NewWith(errcode.InvalidArgs, fmt.Sprintf(`unknown arg(s) %s for command %q; send {"command": %q, "help": true} for its args`,
+		strings.Join(unknown, ", "), c.Name, c.Name), v)
 }
 
 // checkExclusiveArgs enforces each of the command's ExclusiveArgs groups: at most
@@ -228,7 +234,14 @@ func checkExclusiveArgs(c Command, args map[string]any) error {
 			}
 		}
 		if len(set) > 1 {
-			return fmt.Errorf("at most one of %s may be set", strings.Join(set, ", "))
+			msg := fmt.Sprintf("at most one of %s may be set", strings.Join(set, ", "))
+			var v apperr.Violations
+			for _, name := range group {
+				if IsTruthy(args[name]) {
+					v = append(v, apperr.Violation{Field: name, Code: "invalid", Message: msg})
+				}
+			}
+			return apperr.NewWith(errcode.InvalidArgs, msg, v)
 		}
 	}
 	return nil

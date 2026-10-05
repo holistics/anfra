@@ -7,9 +7,16 @@ import (
 	"testing"
 )
 
-// The engine package is meant to be the ONLY importable package outside
-// internal/. That is the property the repo split rests on: everything else can
-// be refactored freely because no other module can reach it.
+// The engine package, and the shared packages it classifies its errors with
+// (shared/: apperr, appstep, apptracing), are meant to be the ONLY importable
+// packages outside internal/. That is
+// the property the repo split rests on: everything else can be refactored
+// freely because no other module can reach it.
+//
+// The shared packages are public because a host shares them: an engine error
+// reaches it as a formal error, with typed details and the engine's steps,
+// rendered by the host's own renderer. They are grouped under shared/ so they can
+// move to a module of their own.
 //
 // It is also the property that erodes silently. Adding a package at the top
 // level is a one-line mistake that nothing else would catch — the build stays
@@ -18,8 +25,13 @@ import (
 //
 // Listing what is allowed rather than what is forbidden is deliberate: a new
 // top-level package fails this test by default.
-func TestEngineIsTheOnlyExportedPackage(t *testing.T) {
-	allowed := map[string]bool{"engine": true}
+func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
+	allowed := map[string]bool{
+		"engine":            true,
+		"shared/apperr":     true,
+		"shared/appstep":    true,
+		"shared/apptracing": true,
+	}
 
 	root, err := filepath.Abs("..")
 	if err != nil {
@@ -53,7 +65,7 @@ func TestEngineIsTheOnlyExportedPackage(t *testing.T) {
 			return filepath.SkipDir
 		}
 		if hasGoLibrary(t, path) {
-			exported = append(exported, rel)
+			exported = append(exported, filepath.ToSlash(rel))
 		}
 		return nil
 	})
@@ -64,7 +76,7 @@ func TestEngineIsTheOnlyExportedPackage(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"the engine package is meant to be the only one. Move it under internal/, "+
+				"only engine and shared/{apperr,appstep,apptracing} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}

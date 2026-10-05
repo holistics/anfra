@@ -11,12 +11,20 @@ export default {
       [
         'cli',
         'serve',
-        'query',
-        'validate',
-        'sidecar',
-        'repo',
-        'datasource',
+
+        'engine',
+        'engine.query',
+        'engine.validate',
+        'engine.sidecar',
+        'engine.repo',
+        'engine.datasource',
+
         'meta',
+
+        'shared',
+        'shared.appstep',
+        'shared.apperr',
+        'shared.apptracing',
 
         'deps',
       ],

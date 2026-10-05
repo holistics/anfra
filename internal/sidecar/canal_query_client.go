@@ -145,7 +145,7 @@ func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig 
 	req.Header.Set("content-type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("canal query: %w", err)
+		return nil, unreachable(ctx, "canal-query", fmt.Errorf("canal query: %w", err))
 	}
 	defer resp.Body.Close()
 

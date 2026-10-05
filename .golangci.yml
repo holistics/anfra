@@ -35,6 +35,11 @@ linters:
                 internal/attribution is for logs and audit only. If a value must
                 change which rows a query returns, it belongs in
                 internal/dataperm.Attributes, passed explicitly by the host.
+    spancheck:
+      # apptracing.Start starts a span its caller must End: every caller is held
+      # to it, as with OpenTelemetry's own Start.
+      extra-start-span-signatures:
+        - "github.com/holistics/anfra/shared/apptracing.Start:opentelemetry"
     gosec:
       excludes:
         - G115 # https://github.com/securego/gosec/issues/1212
