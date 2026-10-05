@@ -31,6 +31,7 @@ func (c *CanalQuery) Start(ctx context.Context) error {
 		if err := c.client.WaitReady(ctx); err != nil {
 			return fmt.Errorf("canal-query at %s not ready: %w", c.cfg.CanalQueryURL, err)
 		}
+		c.cfg.wrap("canal-query", c.client.http)
 		c.cfg.logger().Info("sidecar.ready", "name", "canal-query", "url", c.cfg.CanalQueryURL, "owned", false)
 		return nil
 	}
@@ -69,6 +70,7 @@ func (c *CanalQuery) Start(ctx context.Context) error {
 		c.Close()
 		return err
 	}
+	c.cfg.wrap("canal-query", c.client.http)
 	c.proc.Logger().Info("sidecar.ready", "name", "canal-query", "port", port)
 	return nil
 }

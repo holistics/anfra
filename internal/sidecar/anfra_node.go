@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 )
@@ -31,6 +32,26 @@ type Config struct {
 	// starts no process, and Close is a no-op. Empty means spawn one.
 	NodeURL       string
 	CanalQueryURL string
+
+	// WrapTransport, if set, wraps each sidecar client's transport once the
+	// sidecar is ready — e.g. with otelhttp, so a host traces the calls and
+	// propagates its trace into the sidecar. It receives the client's own
+	// transport, so the engine's settings (the Unix socket dialer, pooling) are
+	// kept; sidecar names the sidecar ("anfra-node", "canal-query"). Readiness
+	// polling is not wrapped: it would trace every poll.
+	WrapTransport func(sidecar string, rt http.RoundTripper) http.RoundTripper
+}
+
+// wrap applies WrapTransport to a ready sidecar's client.
+func (c Config) wrap(sidecar string, hc *http.Client) {
+	if c.WrapTransport == nil {
+		return
+	}
+	rt := hc.Transport
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	hc.Transport = c.WrapTransport(sidecar, rt)
 }
 
 // logger returns the configured logger, or the default. The spawn path gets one
@@ -67,6 +88,7 @@ func (a *AnfraNode) Start(ctx context.Context) error {
 		if err := a.client.WaitReady(ctx); err != nil {
 			return fmt.Errorf("anfra-node at %s not ready: %w", a.cfg.NodeURL, err)
 		}
+		a.cfg.wrap("anfra-node", a.client.http)
 		a.cfg.logger().Info("sidecar.ready", "name", "anfra-node", "url", a.cfg.NodeURL, "owned", false)
 		return nil
 	}
@@ -105,6 +127,7 @@ func (a *AnfraNode) Start(ctx context.Context) error {
 		a.Close()
 		return err
 	}
+	a.cfg.wrap("anfra-node", a.client.http)
 	a.proc.Logger().Info("sidecar.ready", "name", "anfra-node", "socket", a.socketPath)
 	return nil
 }
