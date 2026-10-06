@@ -16,13 +16,6 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// decodeOnly decodes args without running the command: for tests that hold
-// the specs to the decoder.
-func (c *command[In, Out]) decodeOnly(args map[string]any) error {
-	_, err := decode[In](c.def.Name, c.args, args)
-	return err
-}
-
 // Every command, in every mode, against real sidecars: what it answers, and
 // with which status, or how it fails. The answer's type is the compiler's to
 // hold; this holds the behaviour. Every command is covered, and every command
@@ -69,10 +62,10 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query compile, invalid", valid, clients, Request{Command: "query.compile", Args: q("nosuch | select(x.y)")}, "", validate.QueryInvalid},
 		{"query validate, valid", valid, clients, Request{Command: "query.validate", Args: q("products | select(products.id)")}, ok, nil},
 		{"query validate, invalid", valid, clients, Request{Command: "query.validate", Args: q("nosuch | select(x.y)")}, invalid, nil},
-		{"query, SQL", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "ds": "demo", "query": "select id, name from products order by id"}}, ok, nil},
-		{"query, SQL the database refuses", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "ds": "demo", "query": "select nosuch from products"}}, "", errcode.QueryFailed},
-		{"query, SQL on a data source it cannot reach", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "ds": "unreachable", "query": "select 1"}}, "", errcode.QueryFailed},
-		{"query compile, SQL", valid, clients, Request{Command: "query.compile", Args: map[string]any{"lang": "sql", "ds": "demo", "query": "select 1"}}, ok, nil},
+		{"query, SQL", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select id, name from products order by id"}}, ok, nil},
+		{"query, SQL the database refuses", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select nosuch from products"}}, "", errcode.QueryFailed},
+		{"query, SQL on a data source it cannot reach", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "unreachable", "query": "select 1"}}, "", errcode.QueryFailed},
+		{"query compile, SQL", valid, clients, Request{Command: "query.compile", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select 1"}}, ok, nil},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
 		{"validate, valid", valid, clients, Request{Command: "validate"}, ok, nil},

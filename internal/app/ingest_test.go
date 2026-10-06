@@ -9,7 +9,7 @@ func TestIngestDeclaresRequiredSidecars(t *testing.T) {
 	if !ok {
 		t.Fatal("ingest command was not registered")
 	}
-	needs := cmd.Needs(map[string]any{})
+	needs := cmd.Needs(nil)
 	if !needs.Node || !needs.CanalQuery {
 		t.Fatalf("ingest sidecars = %+v, want both anfra-node and canal-query", needs)
 	}
@@ -20,7 +20,7 @@ func TestSearchDeclaresRequiredSidecars(t *testing.T) {
 	if !ok {
 		t.Fatal("search command was not registered")
 	}
-	needs := cmd.Needs(map[string]any{})
+	needs := cmd.Needs(nil)
 	if !needs.Node || !needs.CanalQuery {
 		t.Fatalf("search sidecars = %+v, want both anfra-node and canal-query", needs)
 	}

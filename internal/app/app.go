@@ -1,14 +1,14 @@
 // Package app is the single registry of anfra operations. Each command is
 // defined once (in commands.go), as a Def, and drives every surface: the `anfra`
-// CLI generates its commands and flags from it, `anfra serve`'s `POST /call`
-// dispatches to it by name, and Describe publishes it. Add a command in one
-// place and it shows up everywhere — no per-side registration to forget.
+// CLI generates its commands and flags from it, the command is an apikit op
+// (core.<command>) that `anfra serve` serves and the CLI invokes, and Describe
+// publishes it. Add a command in one place and it shows up everywhere — no
+// per-side registration to forget.
 package app
 
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
@@ -18,7 +18,8 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Request mirrors a CLI invocation: a command name + its args.
+// Request mirrors a CLI invocation: a command name + its args, as the op's JSON
+// input has them.
 type Request struct {
 	Command string         `json:"command"`
 	Args    map[string]any `json:"args"`
@@ -50,6 +51,16 @@ type CommandContext struct {
 	// Attribution names the caller for logs and audit. Never read by a command,
 	// and never by the query layer — see internal/attribution.
 	Attribution attribution.Fields
+	// Server is the warm server the command runs in, for status to report: nil
+	// one-shot, and in a host that embeds the engine.
+	Server *ServerInfo
+}
+
+// ServerInfo is a running `anfra serve`, as status reports it.
+type ServerInfo struct {
+	URL        string `json:"url"`
+	InstanceID string `json:"instance_id"`
+	Version    string `json:"version"`
 }
 
 // Sidecars declares which sidecars a command needs (so the one-shot CLI knows
@@ -67,10 +78,10 @@ const (
 	StatusInvalid Status = "invalid" // command ran fine but its result isn't valid (e.g. validation errors)
 )
 
-// Response is the envelope every command returns: an explicit status plus its
-// answer. The CLI renders Data and maps Status to its exit code; /call callers
-// get both. The status is StatusInvalid when the command's Valid judges the
-// answer invalid, and StatusOK otherwise.
+// Response is what Dispatch returns: the answer, and its verdict as a status —
+// StatusInvalid when the command's Valid judges the answer invalid, StatusOK
+// otherwise. Over HTTP an answer stands alone and carries its verdict itself
+// (valid, state); the envelope is Dispatch's, for a host embedding the engine.
 type Response struct {
 	Status Status `json:"status"`
 	Data   any    `json:"data"`
@@ -93,39 +104,28 @@ type Response struct {
 // looked up.
 func Dispatch(ctx context.Context, cc CommandContext, req Request) (Response, error) {
 	if !cc.DataPerms.Decided() {
-		return Response{}, apperr.New(errcode.DataPermsMissing, "no data permissions supplied: every invocation must "+
-			"state what the caller may see (dataperm.Unrestricted() when nothing is restricted)")
+		return Response{}, errDataPermsMissing()
 	}
 	if req.Command == "" {
 		return Response{Status: StatusOK, Data: map[string]any{"commands": Names()}}, nil
 	}
 	cmd, ok := Find(req.Command)
 	if !ok {
-		return Response{}, apperr.New(errcode.UnknownCommand,
-			fmt.Sprintf(`unknown command %q; send {"help": true} to list commands`, req.Command))
+		return Response{}, apperr.New(errcode.UnknownCommand, fmt.Sprintf("unknown command %q", req.Command))
 	}
-	return cmd.dispatch(ctx, cc, req.Args)
-}
-
-// IsTruthy reports whether a /call arg value (which arrives as arbitrary JSON)
-// is true. Only these are falsy: absent/null, false, a numeric zero, and an
-// empty/whitespace string. Everything else is truthy — including non-empty
-// strings ("1", "10", even "false"), objects, and arrays.
-func IsTruthy(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return t
-	case string:
-		return strings.TrimSpace(t) != ""
-	case float64:
-		return t != 0
-	case int:
-		return t != 0
-	case int64:
-		return t != 0
-	default:
-		return true
+	input, err := inputOf(req.Args)
+	if err != nil {
+		return Response{}, apperr.Encapsulate(err, apperr.InvalidRequest, "The args are not JSON.")
 	}
+	out, err := Invoke(ctx, cc, req.Command, input)
+	if err != nil {
+		return Response{}, err
+	}
+	st := StatusOK
+	if valid, err := cmd.Valid(out); err != nil {
+		return Response{}, err
+	} else if !valid {
+		st = StatusInvalid
+	}
+	return Response{Status: st, Data: out}, nil
 }

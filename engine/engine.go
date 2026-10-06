@@ -146,7 +146,7 @@ var Namespace = errcode.NS
 // ErrorCodes lists the engine's own codes Dispatch can fail with — every one
 // but the generic validation_failed — with its scope and details type: for a
 // host to test that it translates each of them, and fail its build on one added
-// by an engine upgrade.
+// by an anfra core upgrade.
 func ErrorCodes() []apperr.Code { return apperr.Codes(errcode.NS) }
 
 // Unrestricted states that no data restrictions apply to this caller. It is an
@@ -200,7 +200,7 @@ func Describe() []CommandSpec { return app.Describe() }
 // Names only: what a command *requires* of a caller is not the engine's
 // question, so no permission vocabulary crosses this boundary. This exists so a
 // host that maintains its own command-to-permission mapping can test that the
-// mapping still covers the registry after an engine upgrade — and fail its
+// mapping still covers the registry after an anfra core upgrade — and fail its
 // build rather than silently exposing a new command.
 func Commands() []string { return app.Names() }
 
