@@ -17,18 +17,18 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 		want string
 	}{
 		{"one violation", apperr.NewWith(apperr.ValidationFailed, "name the data source to run the SQL query against",
-			apperr.Violations{{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"}}),
+			apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"})),
 			"Error: --data-source: name the data source to run the SQL query against\nRun `anfra query --help` for usage.\n"},
-		{"several, a schema's", apperr.NewWith(apperr.InvalidRequest, "", apperr.Violations{
-			{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
-			{Field: "query", Code: "required", Message: "Required."},
-		}),
+		{"several, a schema's", apperr.NewWith(apperr.InvalidRequest, "", apperr.Violate(
+			apperr.Violation{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
+			apperr.Violation{Field: "query", Code: "required", Message: "Required."},
+		)),
 			"Error: these arguments are not valid:\n" +
 				"  --lang  must be one of: aql, sql; got \"cobol\"\n" +
 				"  query   required: pass it as an argument, or pipe it on stdin\n" +
 				"Run `anfra query --help` for usage.\n"},
 		{"a remote server's", &remoteError{resp: apperr.Response{Code: "validation_failed", Message: "x",
-			Details: []any{map[string]any{"field": "dataset", "code": "invalid", "message": "x"}}}},
+			Details: map[string]any{"violations": []any{map[string]any{"field": "dataset", "code": "invalid", "message": "x"}}}}},
 			"Error: --dataset: x\nRun `anfra query --help` for usage.\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

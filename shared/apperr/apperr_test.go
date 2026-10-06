@@ -117,22 +117,22 @@ func TestCases(t *testing.T) {
 			name: "typed details reach the client",
 			chain: func() error {
 				return apperr.NewWith(validationFailed, "The address is not valid.",
-					apperr.Violations{{Field: "slug", Code: "invalid", Message: "not a valid address"}})
+					apperr.Violate(apperr.Violation{Field: "slug", Code: "invalid", Message: "not a valid address"}))
 			},
 			code:    validationFailed.Code(),
 			message: "The address is not valid.",
-			details: apperr.Violations{{Field: "slug", Code: "invalid", Message: "not a valid address"}},
+			details: apperr.Violate(apperr.Violation{Field: "slug", Code: "invalid", Message: "not a valid address"}),
 			log:     "apperr.validation_failed: The address is not valid.",
 		},
 		{
 			name: "a structural error carries the caller's field paths",
 			chain: func() error {
 				return apperr.NewWith(apperr.InvalidRequest, "",
-					apperr.Violations{{Field: "items[1].role", Code: "invalid", Message: "Must be one of: admin, analyst."}})
+					apperr.Violate(apperr.Violation{Field: "items[1].role", Code: "invalid", Message: "Must be one of: admin, analyst."}))
 			},
 			code:    apperr.InvalidRequest.Code(),
 			message: "The request is not valid.",
-			details: apperr.Violations{{Field: "items[1].role", Code: "invalid", Message: "Must be one of: admin, analyst."}},
+			details: apperr.Violate(apperr.Violation{Field: "items[1].role", Code: "invalid", Message: "Must be one of: admin, analyst."}),
 			log:     "apperr.invalid_request: The request is not valid.",
 		},
 		{
@@ -147,11 +147,11 @@ func TestCases(t *testing.T) {
 		{
 			name: "an internal code renders as its public code, message and details carried over",
 			chain: func() error {
-				return apperr.NewWith(slugTaken, "", apperr.Violations{{Field: "slug", Code: "taken", Message: "already in use"}})
+				return apperr.NewWith(slugTaken, "", apperr.Violate(apperr.Violation{Field: "slug", Code: "taken", Message: "already in use"}))
 			},
 			code:    validationFailed.Code(),
 			message: "This address is already in use.",
-			details: apperr.Violations{{Field: "slug", Code: "taken", Message: "already in use"}},
+			details: apperr.Violate(apperr.Violation{Field: "slug", Code: "taken", Message: "already in use"}),
 			log:     "host.slug_taken: This address is already in use.",
 		},
 		{
@@ -216,7 +216,7 @@ func TestCases(t *testing.T) {
 			name: "encapsulating a formal error: the outer one is shown, the inner one and its details are hidden",
 			chain: func() error {
 				inner := apperr.NewWith(validationFailed, "The address is not valid.",
-					apperr.Violations{{Field: "slug", Code: "invalid", Message: "not valid"}})
+					apperr.Violate(apperr.Violation{Field: "slug", Code: "invalid", Message: "not valid"}))
 				return apperr.Encapsulate(inner, apperr.NotFound, "This invitation is no longer valid.")
 			},
 			code:    apperr.NotFound,
@@ -344,7 +344,7 @@ func TestCases(t *testing.T) {
 // and encapsulation, matched by the code itself or by the public code an
 // internal code maps to.
 func TestIsAnswersCausedBy(t *testing.T) {
-	inner := apperr.NewWith(slugTaken, "", apperr.Violations{})
+	inner := apperr.NewWith(slugTaken, "", apperr.Violate())
 	err := step(apperr.Encapsulate(inner, apperr.InternalServerError, "setup found a leftover tenant"), setup)
 
 	for _, c := range []apperr.AnyCode{apperr.InternalServerError, slugTaken, validationFailed} {
@@ -419,6 +419,24 @@ func TestResponseCarriesOnlyWhatWasWrittenForTheClient(t *testing.T) {
 	}
 }
 
+// Violations are an object on the wire, as every details type is: the key says
+// what the details are. None is an empty list, never null.
+func TestViolationsOnTheWire(t *testing.T) {
+	for _, tc := range []struct {
+		details apperr.Violations
+		want    string
+	}{
+		{apperr.Violate(apperr.Violation{Field: "slug", Code: "taken", Message: "already in use"}),
+			`{"violations":[{"field":"slug","code":"taken","message":"already in use"}]}`},
+		{apperr.Violate(), `{"violations":[]}`},
+	} {
+		b, err := json.Marshal(apperr.From(apperr.NewWith(apperr.ValidationFailed, "", tc.details)).Response("").Details)
+		if err != nil || string(b) != tc.want {
+			t.Errorf("details = %s, %v; want %s", b, err, tc.want)
+		}
+	}
+}
+
 // From returns a copy: other code may hold the formal error it found.
 // WithStep copies: the formal error it was given may still be held by other
 // code, and is never mutated.
@@ -482,7 +500,7 @@ func TestCodeAccessor(t *testing.T) {
 	if apperr.NotFound.Code() != apperr.NotFound {
 		t.Error("Code() on a Code is not the identity")
 	}
-	e, ok := errors.AsType[*apperr.Error](apperr.NewWith(validationFailed, "", apperr.Violations{}))
+	e, ok := errors.AsType[*apperr.Error](apperr.NewWith(validationFailed, "", apperr.Violate()))
 	if !ok || e.Code != validationFailed.Code() {
 		t.Errorf("an error made from a TypedCode holds %v, want its Code()", e.Code)
 	}

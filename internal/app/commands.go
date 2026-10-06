@@ -235,7 +235,7 @@ func (in QueryInput) aql() (aql string, limit int, err error) {
 	aql, limit, err = query.ExtractLimit(in.Query)
 	if err != nil {
 		return "", 0, apperr.EncapsulateWith(err, apperr.ValidationFailed, err.Error(),
-			apperr.Violations{{Field: "query", Code: "invalid", Message: err.Error()}})
+			apperr.Violate(apperr.Violation{Field: "query", Code: "invalid", Message: err.Error()}))
 	}
 	return aql, limit, nil
 }
@@ -271,7 +271,7 @@ func (in QueryInput) dataSource(cc CommandContext) (datasource.DataSource, error
 }
 
 func invalidArg(field, code, msg string) error {
-	return apperr.NewWith(apperr.ValidationFailed, msg, apperr.Violations{{Field: field, Code: code, Message: msg}})
+	return apperr.NewWith(apperr.ValidationFailed, msg, apperr.Violate(apperr.Violation{Field: field, Code: code, Message: msg}))
 }
 
 // IngestInput is ingest's input.

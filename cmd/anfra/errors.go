@@ -84,7 +84,7 @@ func printError(w io.Writer, err error) {
 
 // violationsOf reads details as violations, through JSON: a remote error's are
 // decoded as any. None when they are another kind of detail.
-func violationsOf(details any) apperr.Violations {
+func violationsOf(details any) []apperr.Violation {
 	if details == nil {
 		return nil
 	}
@@ -92,10 +92,11 @@ func violationsOf(details any) apperr.Violations {
 	if err != nil {
 		return nil
 	}
-	var vs apperr.Violations
-	if json.Unmarshal(b, &vs) != nil {
+	var d apperr.Violations
+	if json.Unmarshal(b, &d) != nil {
 		return nil
 	}
+	vs := d.Violations
 	for _, v := range vs {
 		if v.Field == "" || v.Code == "" {
 			return nil

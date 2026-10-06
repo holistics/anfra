@@ -68,7 +68,7 @@ func InputTo[In any](reg huma.Registry, schema *huma.Schema, raw []byte) (In, er
 	res := &huma.ValidateResult{}
 	huma.Validate(reg, schema, huma.NewPathBuffer(nil, 0), huma.ModeWriteToServer, parsed, res)
 	if len(res.Errors) > 0 {
-		return in, apperr.NewWith(apperr.InvalidRequest, "", violations(res.Errors, exactlyOneGroups(reg, schema), parsed))
+		return in, apperr.NewWith(apperr.InvalidRequest, "", apperr.Violate(violations(res.Errors, exactlyOneGroups(reg, schema), parsed)...))
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		// Unreachable once the schema accepted it. If reached, the schema and the

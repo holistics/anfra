@@ -141,8 +141,8 @@ func compile(rs []rule) []rule {
 // (ExactlyOne): huma reports a group set wrong as the whole input failing to
 // match one schema, so those errors are replaced by one violation per field to
 // fix, worked out from the input itself.
-func violations(errs []error, groups [][]string, input any) apperr.Violations {
-	out := make(apperr.Violations, 0, len(errs))
+func violations(errs []error, groups [][]string, input any) []apperr.Violation {
+	out := make([]apperr.Violation, 0, len(errs))
 	for _, err := range errs {
 		d, ok := err.(*huma.ErrorDetail)
 		if !ok {
@@ -213,7 +213,7 @@ func groupOf(subs []*huma.Schema) ([]string, bool) {
 
 // exactlyOne is what is wrong with group in obj: none set, at the group's first
 // field, or more than one, at each after the first.
-func exactlyOne(group []string, obj map[string]any) apperr.Violations {
+func exactlyOne(group []string, obj map[string]any) []apperr.Violation {
 	var set []string
 	for _, f := range group {
 		if _, ok := obj[f]; ok {
@@ -223,9 +223,9 @@ func exactlyOne(group []string, obj map[string]any) apperr.Violations {
 	list := strings.Join(group, ", ")
 	switch {
 	case len(set) == 0:
-		return apperr.Violations{{Field: group[0], Code: "required", Message: "Set exactly one of: " + list + "."}}
+		return []apperr.Violation{{Field: group[0], Code: "required", Message: "Set exactly one of: " + list + "."}}
 	case len(set) > 1:
-		out := make(apperr.Violations, 0, len(set)-1)
+		out := make([]apperr.Violation, 0, len(set)-1)
 		for _, f := range set[1:] {
 			out = append(out, apperr.Violation{Field: f, Code: "invalid", Message: "Set only one of: " + list + "."})
 		}

@@ -29,7 +29,7 @@ func TestRequiredListRefusesNull(t *testing.T) {
 	if !ok || e.Code.Public() != apperr.InvalidRequest.Code() {
 		t.Fatalf("got %v, want invalid_request", err)
 	}
-	if v := e.Details.(apperr.Violations); len(v) != 1 || v[0].Field != "items" {
+	if v := e.Details.(apperr.Violations).Violations; len(v) != 1 || v[0].Field != "items" {
 		t.Errorf("violations = %+v, want one at items", v)
 	}
 }

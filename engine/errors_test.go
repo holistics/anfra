@@ -21,23 +21,23 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 		code       apperr.AnyCode
 		violations apperr.Violations
 	}{
-		{"undecided permissions", engine.Invocation{}, engine.Request{Command: "version"}, engine.DataPermsMissing, nil},
-		{"an unknown command", unrestricted, engine.Request{Command: "no-such-command"}, engine.UnknownCommand, nil},
+		{"undecided permissions", engine.Invocation{}, engine.Request{Command: "version"}, engine.DataPermsMissing, apperr.Violations{}},
+		{"an unknown command", unrestricted, engine.Request{Command: "no-such-command"}, engine.UnknownCommand, apperr.Violations{}},
 		{"an unknown arg", unrestricted, engine.Request{Command: "version", Args: map[string]any{"bogus": true}},
-			apperr.InvalidRequest, apperr.Violations{{Field: "bogus", Code: "unknown",
-				Message: "Not a field of this input. Field names are snake_case and case-sensitive."}}},
+			apperr.InvalidRequest, apperr.Violate(apperr.Violation{Field: "bogus", Code: "unknown",
+				Message: "Not a field of this input. Field names are snake_case and case-sensitive."})},
 		{"missing args", unrestricted, engine.Request{Command: "query.compile", Args: map[string]any{}},
-			apperr.InvalidRequest, apperr.Violations{{Field: "query", Code: "required", Message: "Required."}}},
+			apperr.InvalidRequest, apperr.Violate(apperr.Violation{Field: "query", Code: "required", Message: "Required."})},
 		{"no target", unrestricted, engine.Request{Command: "query.compile", Args: map[string]any{"query": "select 1", "lang": "sql"}},
-			apperr.ValidationFailed, apperr.Violations{{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"}}},
+			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"})},
 		{"an unsupported input", unrestricted,
 			engine.Request{Command: "query", Args: map[string]any{"query": "x", "data_source": "w"}},
-			apperr.ValidationFailed, apperr.Violations{{Field: "data_source", Code: "unsupported", Message: "an AQL query runs against a dataset"}}},
+			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "unsupported", Message: "an AQL query runs against a dataset"})},
 		{"SQL for a restricted caller", engine.Invocation{DataPerms: engine.Restricted(nil)},
 			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "data_source": "w"}},
-			engine.DataPermsUnenforceable, nil},
+			engine.DataPermsUnenforceable, apperr.Violations{}},
 		{"no sidecars to run on", unrestricted, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "query": "x"}},
-			engine.SidecarUnavailable, nil},
+			engine.SidecarUnavailable, apperr.Violations{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := engine.Dispatch(context.Background(), tc.inv, tc.req)
