@@ -36,28 +36,31 @@ const defaultAddr = "127.0.0.1:7878"
 
 func newServeCmd() *cobra.Command {
 	var addr string
+	var withMCP bool
 	var idle time.Duration
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the core API over HTTP, keeping the sidecars warm for it and for CLI calls in this repo",
 		Long: "Serve the core API over HTTP: every command as POST /api/core.<command>, its OpenAPI at\n" +
-			"/api/openapi.json, and /health. CLI calls in this repo use it while it runs, found through\n" +
-			"the repo's runtime file, so they skip starting the sidecars.\n\n" +
+			"/api/openapi.json, the operations to discover at /api/ops, and /health. With --mcp, also the\n" +
+			"same operations as MCP tools at /mcp. CLI calls in this repo use the server while it runs,\n" +
+			"found through the repo's runtime file, so they skip starting the sidecars.\n\n" +
 			"It listens on " + defaultAddr + ", or on a free port when another repo's server holds that one;\n" +
 			"`anfra status` says where. It has no authentication: keep it on a loopback address.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context(), addr, idle)
+			return runServe(cmd.Context(), addr, withMCP, idle)
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", "", "the address to listen on, host:port (default "+defaultAddr+", or a free port)")
+	cmd.Flags().BoolVar(&withMCP, "mcp", false, "also serve the operations as MCP tools, at /mcp (streamable HTTP)")
 	// For a server someone else started (serve_daemon.md); a foreground one never times out.
 	cmd.Flags().DurationVar(&idle, "idle-timeout", 0, "stop after this long without a request; 0 never")
 	_ = cmd.Flags().MarkHidden("idle-timeout")
 	return cmd
 }
 
-func runServe(ctx context.Context, addr string, idle time.Duration) error {
+func runServe(ctx context.Context, addr string, withMCP bool, idle time.Duration) error {
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
 		if f, ok := findServer(ctx, h.repo); ok {
 			return fmt.Errorf("anfra serve is already running for this repo, at %s", f.URL)
@@ -94,7 +97,7 @@ func runServe(ctx context.Context, addr string, idle time.Duration) error {
 
 		ctx, stop := context.WithCancel(ctx)
 		defer stop()
-		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr())
+		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr(), withMCP)
 		if idle > 0 {
 			handler = stopWhenIdle(ctx, handler, idle, stop)
 		}
@@ -120,6 +123,9 @@ func runServe(ctx context.Context, addr string, idle time.Duration) error {
 
 		h.cfg.Logger.Info("serve.listening", "url", info.URL)
 		fmt.Printf("anfra serve listening on %s (Ctrl-C to stop)\n", info.URL)
+		if withMCP {
+			fmt.Printf("MCP at %s/mcp\n", info.URL)
+		}
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
@@ -159,10 +165,11 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// serveHandler is the whole HTTP surface: /health, and the core API under /api
-// with its OpenAPI, behind the request id, root span, log line and recovery, and
-// the guards that keep a web page from using it (guard).
-func serveHandler(logger *slog.Logger, r repo.Repo, cc app.CommandContext, addr net.Addr) http.Handler {
+// serveHandler is the whole HTTP surface: /health, the core API under /api with
+// its OpenAPI and discovery, and with withMCP the same ops as MCP tools at /mcp —
+// behind the request id, root span, log line and recovery, and the guards that
+// keep a web page from using it (guard).
+func serveHandler(logger *slog.Logger, r repo.Repo, cc app.CommandContext, addr net.Addr, withMCP bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		id := ""
@@ -171,7 +178,14 @@ func serveHandler(logger *slog.Logger, r repo.Repo, cc app.CommandContext, addr 
 		}
 		httpkit.WriteJSON(w, http.StatusOK, health{Status: "ok", RepoID: r.ID, InstanceID: id, Version: meta.Version})
 	})
-	mux.Handle("/api/", coreAPI(cc).Handler(app.NewRuntime(), app.NewRegistry()))
+	rt, reg := app.NewRuntime(), app.NewRegistry()
+	mux.Handle("/api/", coreAPI(cc).Handler(rt, reg))
+	if withMCP {
+		mux.Handle("/mcp", apikit.MCP[app.CommandContext]{
+			Name: "anfra", Version: meta.Version, Codes: codes,
+			Request: func(*http.Request) (app.CommandContext, error) { return cc, nil },
+		}.Handler(rt, reg))
+	}
 	return httpkit.Wrap(guard(mux, addr), httpkit.Config{Logger: logger, Codes: codes})
 }
 
@@ -213,7 +227,8 @@ var codes = httpkit.Codes{
 //     host name may reach it; that is the operator's warned choice.
 //   - a cross-origin request that changes anything (http.CrossOriginProtection),
 //     or one whose body is not JSON — a form can only send what needs no
-//     preflight, and this server grants none.
+//     preflight, and this server grants none. An MCP session's DELETE, which
+//     ends it, has no body.
 func guard(next http.Handler, addr net.Addr) http.Handler {
 	host, _, _ := net.SplitHostPort(addr.String())
 	anyHost := net.ParseIP(host) != nil && net.ParseIP(host).IsUnspecified()
@@ -234,7 +249,8 @@ func guard(next http.Handler, addr net.Addr) http.Handler {
 				httpkit.WriteError(w, r, apperr.Encapsulate(err, apperr.InvalidRequest, "Cross-origin request refused."))
 				return
 			}
-			if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+			mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if r.Method != http.MethodDelete && (err != nil || mt != "application/json") {
 				httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, "Requests must be application/json."))
 				return
 			}

@@ -18,6 +18,7 @@ type team string
 
 func library() *apikit.Registry[team] {
 	reg := apikit.NewRegistry(apikit.RegistryConfig[team]{Namespace: libNS})
+	reg.Group("core", "The library's commands.")
 	adm := apikit.Admission[team, team]{Admit: func(_ context.Context, t team) (team, error) { return t, nil }}
 	apikit.Register(reg, adm, &apikit.Def[team, greetIn, greetOut]{
 		Name: "core.greet", Summary: "Greet someone.", Doc: "The library's doc.", HTTP: true, Timeout: time.Minute,

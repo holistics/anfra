@@ -66,11 +66,19 @@ func greet(name string) *apikit.Def[string, greetIn, greetOut] {
 	}
 }
 
+// newRegistry is the host's registry, its groups declared — all but core, which
+// a mounted library describes.
 func newRegistry() *apikit.Registry[request] {
-	return apikit.NewRegistry(apikit.RegistryConfig[request]{
+	reg := apikit.NewRegistry(apikit.RegistryConfig[request]{
 		Namespace:  hostNS,
 		StepParams: func(r request) []any { return []any{"user", r.user} },
 	})
+	for group, summary := range map[string]string{
+		"a": "Letters.", "greetings": "Greet people.", "slow": "Take long.", "strict": "Test strict mode.", "teams": "Greet as a team.",
+	} {
+		reg.Group(group, summary)
+	}
+	return reg
 }
 
 func runtime() *apikit.Runtime {

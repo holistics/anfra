@@ -26,7 +26,7 @@ func handler(t *testing.T) (http.Handler, repo.Repo) {
 	r := repo.Resolve(t.TempDir())
 	cc := app.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted(),
 		Server: &app.ServerInfo{URL: "http://127.0.0.1:7878", InstanceID: "i-1", Version: "dev"}}
-	return serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr), r
+	return serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, true), r
 }
 
 func do(h http.Handler, method, path, body string, headers ...string) *httptest.ResponseRecorder {
@@ -62,6 +62,12 @@ func TestServeRoutes(t *testing.T) {
 		{"not a POST", http.MethodGet, "/api/core.version", ``, nil, 400, `Every operation is a POST`},
 		{"no /call", http.MethodPost, "/call", `{"command":"version"}`, nil, 404, ``},
 		{"the contract", http.MethodGet, "/api/openapi.json", ``, nil, 200, `"/core.query"`},
+		{"the index", http.MethodGet, "/api/ops", ``, nil, 200, `{"groups":[{"name":"core","summary":"anfra core's commands`},
+		{"a group", http.MethodGet, "/api/ops?group=core", ``, nil, 200, `"name":"core.query.compile"`},
+		{"an op's usage", http.MethodGet, "/api/ops/core.query", ``, nil, 200, `"input":{`},
+		{"MCP", http.MethodPost, "/mcp",
+			`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`,
+			[]string{"Accept", "application/json, text/event-stream"}, 200, `"serverInfo":{"name":"anfra"`},
 		{"health says who it is", http.MethodGet, "/health", ``, nil, 200, `"repo_id":"` + r.ID + `","instance_id":"i-1"`},
 		// The guards.
 		{"another host: DNS rebinding", http.MethodPost, "/api/core.version", `{}`, []string{"Host", "evil.example:7878"}, 400, `Unknown host`},

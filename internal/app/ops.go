@@ -16,6 +16,8 @@ import (
 // the one-shot CLI one over the sidecars it spawned.
 func NewRegistry() *apikit.Registry[CommandContext] {
 	reg := apikit.NewRegistry(apikit.RegistryConfig[CommandContext]{Namespace: errcode.NS})
+	reg.Group("core", "anfra core's commands: query a dataset of the semantic layer, compile or validate a query, "+
+		"validate the repo, and build and search its catalog.")
 	for _, c := range Commands {
 		c.register(reg)
 	}
