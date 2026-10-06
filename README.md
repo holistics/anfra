@@ -1,6 +1,11 @@
-# Anfra
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-wordmark-dark.svg">
+    <img src="docs/images/logo-wordmark-light.svg" alt="Anfra" width="240">
+  </picture>
+</p>
 
-**Anfra is the open source framework for vibe-coding your custom BI application.**
+<p align="center"><b>The open source framework for vibe-coding your custom BI application.</b></p>
 
 Use your own HTML, JavaScript, and charting library. Anfra connects the app to reusable metrics, live warehouse queries, and analytics interactions such as filtering, drill-down, and period comparisons.
 
