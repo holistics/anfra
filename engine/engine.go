@@ -1,6 +1,8 @@
 // Package engine is the anfra engine's public Go API: with the shared packages
-// it classifies its errors with (shared/apperr, shared/appstep and shared/apptracing), the
-// only packages outside internal/ that another module may import.
+// hosts build on (shared/apperr, appstep and apptracing, which classify its
+// errors; shared/apikit, httpkit and requestid, the API framework its operations
+// are served by), the only packages outside internal/ that another module may
+// import.
 //
 // It exists so that a separate application — a server, a hosted product, a
 // different front end — can run anfra commands in-process, with the same

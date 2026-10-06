@@ -7,16 +7,18 @@ import (
 	"testing"
 )
 
-// The engine package, and the shared packages it classifies its errors with
-// (shared/: apperr, appstep, apptracing), are meant to be the ONLY importable
-// packages outside internal/. That is
+// The engine package, and the shared packages hosts build on (shared/: apperr,
+// appstep, apptracing, apikit, httpkit, requestid), are meant to be the ONLY
+// importable packages outside internal/. That is
 // the property the repo split rests on: everything else can be refactored
 // freely because no other module can reach it.
 //
 // The shared packages are public because a host shares them: an engine error
 // reaches it as a formal error, with typed details and the engine's steps,
-// rendered by the host's own renderer. They are grouped under shared/ so they can
-// move to a module of their own.
+// rendered by the host's own renderer; and the engine's operations are served by
+// the same API framework (apikit, over httpkit and requestid) in `anfra serve`
+// and in a host. They are grouped under shared/ so they can move to a module of
+// their own.
 //
 // It is also the property that erodes silently. Adding a package at the top
 // level is a one-line mistake that nothing else would catch — the build stays
@@ -31,6 +33,9 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 		"shared/apperr":     true,
 		"shared/appstep":    true,
 		"shared/apptracing": true,
+		"shared/apikit":     true,
+		"shared/httpkit":    true,
+		"shared/requestid":  true,
 	}
 
 	root, err := filepath.Abs("..")
@@ -76,7 +81,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine and shared/{apperr,appstep,apptracing} are meant to be. Move it under internal/, "+
+				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,requestid} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}
