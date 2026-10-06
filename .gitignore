@@ -4,3 +4,10 @@
 
 # Node tooling (commitlint / conventional-changelog)
 node_modules/
+
+# Data App serving: build outputs embedded into the binary (pnpm build:apps), and e2e output
+/internal/apps/assets/shell/dist/
+/internal/apps/assets/sdk/*.js
+/test-results/
+/playwright-report/
+/bin/

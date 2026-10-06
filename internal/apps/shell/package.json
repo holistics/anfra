@@ -1,0 +1,22 @@
+{
+  "name": "anfra-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Shell: anfra's UI for browsing and running a Repo's Data Apps, embedded into the anfra binary",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && cp ../../../sdk/dist/anfra-sdk.global.js ../assets/sdk/",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "anfra-sdk": "workspace:*",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vue-tsc": "^3.3.11"
+  }
+}
