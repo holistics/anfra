@@ -124,19 +124,7 @@ curl -fsSL https://raw.githubusercontent.com/holistics/anfra/main/install.sh | b
 
 The installer downloads the latest release for your platform, places the `anfra` binary in `~/.anfra/bin`, and prints the line to add it to your `PATH`.
 
-Supported platforms: linux (x64/arm64) and macOS (x64/arm64).
-
-You can configure the installer with environment variables:
-
-- `ANFRA_INSTALL_DIR` — install somewhere else (default: `~/.anfra/bin`)
-- `ANFRA_VERSION` — install a specific version, e.g. `0.1.0` (default: latest)
-
-To update later:
-
-```sh
-anfra update          # replace the binary with the latest release
-anfra update --check  # check for a newer release without installing
-```
+Linux and macOS are supported. See [Installation](https://docs.anfra.ai/docs/self-hosted/installation) for installer options and updates.
 
 Then install the `build-anfra-app` skill, which teaches your coding agent how to model data in AMQL and build apps with the Anfra SDK:
 
