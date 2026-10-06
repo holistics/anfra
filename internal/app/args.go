@@ -22,7 +22,7 @@ const (
 
 // Arg is one of a command's args, parsed from a field of its In struct:
 //
-//	Dataset string `json:"dataset,omitempty" short:"d" group:"target" doc:"the dataset to query"`
+//	Dataset string `json:"dataset,omitempty" short:"d" doc:"the dataset an AQL query runs against"`
 //
 // In is also the op's input type, so its schema — validated by apikit, published
 // in OpenAPI — is huma's reading of the same tags. Tags:

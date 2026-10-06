@@ -30,17 +30,11 @@ func TestInputSchema(t *testing.T) {
 			{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
 			{Field: "query", Code: "required", Message: "Required."},
 			{Field: "bogus", Code: "unknown", Message: "Not a field of this input. Field names are snake_case and case-sensitive."},
-			{Field: "dataset", Code: "required", Message: "Set exactly one of: dataset, data_source."},
 		}},
-		{"two of a group", `{"query":"q","dataset":"d","data_source":"w"}`, apperr.Violations{
-			{Field: "data_source", Code: "invalid", Message: "Set only one of: dataset, data_source."}}},
 		{"a value of the wrong type", `{"query":42,"dataset":"d"}`, apperr.Violations{
 			{Field: "query", Code: "invalid", Message: "Must be a string; got a number."}}},
 		{"a blank required string", `{"query":"","dataset":"d"}`, apperr.Violations{
 			{Field: "query", Code: "too_short", Message: "Must be at least 1 character long."}}},
-		{"an alias, which is the CLI's", `{"query":"q","ds":"w"}`, apperr.Violations{
-			{Field: "ds", Code: "unknown", Message: "Not a field of this input. Field names are snake_case and case-sensitive."},
-			{Field: "dataset", Code: "required", Message: "Set exactly one of: dataset, data_source."}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Invoke(context.Background(), cc, "query.compile", []byte(tc.body))
@@ -104,7 +98,8 @@ func TestParseArgsRefusesMistakes(t *testing.T) {
 }
 
 // AQL runs against a dataset and SQL against a data source; the rest is refused
-// before anything runs, on the arg that makes it so.
+// before anything runs, on the arg that makes it so: the target a query's
+// language needs, missing, or the other one, set.
 func TestQueryInputs(t *testing.T) {
 	fixture, err := filepath.Abs("testdata/repo")
 	if err != nil {
@@ -119,10 +114,16 @@ func TestQueryInputs(t *testing.T) {
 		field string
 		code  string
 	}{
+		{"AQL with no dataset", "query", QueryInput{Query: "q", Lang: "aql"}, cc, "dataset", "required"},
 		{"AQL against a data source, for now", "query", QueryInput{Query: "q", Lang: "aql", DataSource: "demo"}, cc, "data_source", "unsupported"},
+		{"AQL against both", "query.compile", QueryInput{Query: "q", Lang: "aql", Dataset: "d", DataSource: "demo"}, cc, "data_source", "unsupported"},
+		{"SQL with no data source", "query", QueryInput{Query: "q", Lang: "sql"}, cc, "data_source", "required"},
+		{"SQL with a blank data source", "query", QueryInput{Query: "q", Lang: "sql", DataSource: " "}, cc, "data_source", "required"},
 		{"SQL against a dataset", "query", QueryInput{Query: "q", Lang: "sql", Dataset: "ecommerce"}, cc, "dataset", "invalid"},
+		{"SQL against both", "query.compile", QueryInput{Query: "q", Lang: "sql", Dataset: "ecommerce", DataSource: "demo"}, cc, "dataset", "invalid"},
 		{"SQL against an unknown data source", "query.compile", QueryInput{Query: "q", Lang: "sql", DataSource: "nosuch"}, cc, "data_source", "invalid"},
 		{"validating SQL, for now", "query.validate", QueryInput{Query: "q", Lang: "sql", DataSource: "demo"}, cc, "lang", "unsupported"},
+		{"validating SQL, before its target", "query.validate", QueryInput{Query: "q", Lang: "sql"}, cc, "lang", "unsupported"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := run(t, tc.cmd, tc.cc, tc.in)
@@ -153,6 +154,10 @@ func TestQueryInputs(t *testing.T) {
 	}
 	if got := c.Needs([]byte(`{"query":"q","dataset":"d"}`)); got != (Sidecars{Node: true, CanalQuery: true}) {
 		t.Errorf("AQL, by default, needs %+v, want both", got)
+	}
+	// One the command refuses needs none: the one-shot CLI spawns nothing to refuse it.
+	if got := c.Needs([]byte(`{"query":"select 1","lang":"sql"}`)); got != (Sidecars{}) {
+		t.Errorf("SQL with no data source needs %+v, want none", got)
 	}
 
 	if aql, limit, err := (QueryInput{Query: "explore { products } limit: 5", Lang: "aql", Dataset: "d"}).aql(); err != nil || limit != 5 || strings.Contains(aql, "limit") {

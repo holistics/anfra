@@ -53,6 +53,7 @@ var Commands = []Command{
 		Needs: func(in QueryInput) Sidecars {
 			return Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 		},
+		Check:  QueryInput.target,
 		Errors: []apperr.AnyCode{validate.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable},
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (QueryResult, error) {
 			if in.Lang == "sql" {
@@ -93,6 +94,7 @@ var Commands = []Command{
 		ReadOnly: true,
 		Timeout:  2 * time.Minute,
 		Needs:    func(in QueryInput) Sidecars { return Sidecars{Node: in.Lang != "sql"} },
+		Check:    QueryInput.target,
 		Errors:   []apperr.AnyCode{validate.QueryInvalid, errcode.DataPermsUnenforceable},
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (CompiledQuery, error) {
 			if in.Lang == "sql" {
@@ -122,12 +124,15 @@ var Commands = []Command{
 		ReadOnly: true,
 		Timeout:  2 * time.Minute,
 		Needs:    func(QueryInput) Sidecars { return Sidecars{Node: true} },
-		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (validate.QueryValidation, error) {
+		Check: func(in QueryInput) error {
 			if in.Lang == "sql" {
 				// The intent is a dry run on the data source; not every dialect has
 				// one through canal-query, and its errors carry no positions yet.
-				return validate.QueryValidation{}, invalidArg("lang", "unsupported", "a SQL query cannot be validated without running it; run it, or validate an AQL query")
+				return invalidArg("lang", "unsupported", "validating a SQL query is not supported yet; you can still run it directly")
 			}
+			return in.target()
+		},
+		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (validate.QueryValidation, error) {
 			aql, _, err := in.aql()
 			if err != nil {
 				return validate.QueryValidation{}, err
@@ -184,30 +189,49 @@ var Commands = []Command{
 type NoInput struct{}
 
 // QueryInput is a query: its text, the language it is written in, and the
-// target it runs against. Which combinations run is aql's and dataSource's to
+// target it runs against. Which target a language runs against is target's to
 // say: AQL against a dataset, and SQL against a data source.
 type QueryInput struct {
 	Query      string `json:"query" cli:"positional,stdin" doc:"the query"`
 	Lang       string `json:"lang,omitempty" short:"l" enum:"aql,sql" default:"aql" doc:"the language the query is written in"`
-	Dataset    string `json:"dataset,omitempty" short:"d" group:"target" doc:"the dataset to query (AQL)"`
-	DataSource string `json:"data_source,omitempty" alias:"ds" group:"target" doc:"the data source to query (SQL)"`
+	Dataset    string `json:"dataset,omitempty" short:"d" doc:"the dataset an AQL query runs against"`
+	DataSource string `json:"data_source,omitempty" short:"s" doc:"the data source a SQL query runs against"`
 }
 
-// TransformSchema publishes the target group and the required query (argsSchema).
+// TransformSchema publishes the required query (argsSchema). The target is not
+// a group in the schema: which one is required depends on lang, which a group
+// cannot say, so target checks it.
 func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
 	return argsSchema[QueryInput](s)
 }
 
-// aql is an AQL query's text, with its `limit:` taken out. It runs against a
-// dataset; against a data source (an ad-hoc dataset declared inline) it is
-// refused as unsupported until the engine runs it.
+// target refuses a query without the target its language runs against, or
+// with the other one. AQL against a data source (an ad-hoc dataset declared
+// inline) is refused as unsupported until the engine runs it.
+func (in QueryInput) target() error {
+	if in.Lang == "sql" {
+		switch {
+		case in.Dataset != "":
+			return invalidArg("dataset", "invalid", "a SQL query runs against a data source, not a dataset")
+		case strings.TrimSpace(in.DataSource) == "":
+			return invalidArg("data_source", "required", "name the data source to run the SQL query against")
+		}
+		return nil
+	}
+	switch {
+	case in.DataSource != "":
+		return invalidArg("data_source", "unsupported", "an AQL query runs against a dataset")
+	case strings.TrimSpace(in.Dataset) == "":
+		return invalidArg("dataset", "required", "name the dataset to run the AQL query against")
+	}
+	return nil
+}
+
+// aql is an AQL query's text, with its `limit:` taken out.
 //
 // The AQL engine doesn't support `limit:`, so it is stripped here (see
 // query.ExtractLimit) and applied at execution time as canal's truncate_rows.
 func (in QueryInput) aql() (aql string, limit int, err error) {
-	if in.DataSource != "" {
-		return "", 0, invalidArg("data_source", "unsupported", "an AQL query runs against a dataset; to query a data source, use SQL (lang sql)")
-	}
 	aql, limit, err = query.ExtractLimit(in.Query)
 	if err != nil {
 		return "", 0, apperr.EncapsulateWith(err, apperr.ValidationFailed, err.Error(),
@@ -228,13 +252,10 @@ func requireSidecars(cc CommandContext, need Sidecars) error {
 	return nil
 }
 
-// dataSource is a SQL query's data source. SQL runs against one, never a
-// dataset; nothing restricts it, so it runs only when the host stated the
-// caller is unrestricted (it authorizes the caller on the data source itself).
+// dataSource is a SQL query's data source. Nothing restricts SQL, so it runs
+// only when the host stated the caller is unrestricted (it authorizes the
+// caller on the data source itself).
 func (in QueryInput) dataSource(cc CommandContext) (datasource.DataSource, error) {
-	if in.Dataset != "" {
-		return datasource.DataSource{}, invalidArg("dataset", "invalid", "a SQL query runs against a data source, not a dataset")
-	}
 	if cc.DataPerms.Restricted() {
 		return datasource.DataSource{}, apperr.New(errcode.DataPermsUnenforceable,
 			"a SQL query runs only for a caller with unrestricted data permissions: no restriction can be applied to it")
