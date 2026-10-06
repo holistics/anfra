@@ -30,6 +30,11 @@ type Def[In, Out any] struct {
 	// Needs declares the sidecars the command needs for in (so the one-shot CLI
 	// knows what to spawn; under `serve` they are all warm regardless). Nil: none.
 	Needs func(in In) Sidecars
+	// Check refuses an input its schema accepts but the command cannot run: a
+	// rule between args, which the schema does not state. It runs before Run,
+	// with defaults applied, and a refused input needs no sidecar, so the
+	// one-shot CLI spawns none for it. Nil: the schema is all.
+	Check func(in In) error
 	Run   func(ctx context.Context, cc CommandContext, in In) (Out, error)
 	// Valid reports whether an answer is valid. Set for a command whose job is
 	// to judge something (a validator, a health check): an answer it reports
@@ -64,7 +69,7 @@ type Command interface {
 	// CanBeInvalid reports whether the command's answer carries a verdict.
 	CanBeInvalid() bool
 	// Needs is the sidecars the command needs for this input, as the op's JSON;
-	// none when it does not decode, since the op will refuse it.
+	// none when it does not decode or Check refuses it, since the op will refuse it.
 	Needs(input []byte) Sidecars
 	// Valid is an answer's verdict: an Out from an in-process call, or its JSON
 	// from a server. A command that judges nothing answers true.
@@ -115,6 +120,9 @@ func (c *command[In, Out]) Needs(input []byte) Sidecars {
 		return Sidecars{}
 	}
 	applyDefaults(c.args, &in)
+	if c.def.Check != nil && c.def.Check(in) != nil {
+		return Sidecars{}
+	}
 	return c.def.Needs(in)
 }
 
@@ -136,7 +144,7 @@ func (c *command[In, Out]) Valid(out any) (bool, error) {
 }
 
 // register serves the command as the op core.<Name>: its In validated against
-// its schema, its unset defaults applied, then Run.
+// its schema, its unset defaults applied, Check, then Run.
 func (c *command[In, Out]) register(reg *apikit.Registry[CommandContext]) {
 	// The codes that mean the host built the invocation wrong are not the core
 	// API's: a host that states the caller's data permissions, as every host
@@ -153,6 +161,12 @@ func (c *command[In, Out]) register(reg *apikit.Registry[CommandContext]) {
 		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, Timeout: c.def.Timeout, HTTP: true, MCP: true,
 		Handle: func(ctx context.Context, cc CommandContext, in In) (Out, error) {
 			applyDefaults(c.args, &in)
+			if c.def.Check != nil {
+				if err := c.def.Check(in); err != nil {
+					var zero Out
+					return zero, err
+				}
+			}
 			return c.def.Run(ctx, cc, in)
 		},
 	})

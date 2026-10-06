@@ -130,7 +130,10 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 		if err := applyStdin(args, values); err != nil {
 			return err
 		}
-		return runCommand(runCmd.Context(), c, values)
+		if err := runCommand(runCmd.Context(), c, values); err != nil {
+			return &commandError{path: runCmd.CommandPath(), args: args, err: err}
+		}
+		return nil
 	}
 	return cmd
 }

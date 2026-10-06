@@ -35,14 +35,15 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	want := []ArgSpec{
 		{Name: "query", Type: ArgString, Required: true, Usage: "the query"},
 		{Name: "lang", Type: ArgString, Enum: []string{"aql", "sql"}, Default: "aql", Usage: "the language the query is written in"},
-		{Name: "dataset", Type: ArgString, Usage: "the dataset to query (AQL)"},
-		{Name: "data_source", Type: ArgString, Usage: "the data source to query (SQL)"},
+		{Name: "dataset", Type: ArgString, Usage: "the dataset an AQL query runs against"},
+		{Name: "data_source", Type: ArgString, Usage: "the data source a SQL query runs against"},
 	}
 	if !reflect.DeepEqual(q.Args, want) {
 		t.Errorf("query's args =\n  %+v\nwant\n  %+v", q.Args, want)
 	}
-	if !reflect.DeepEqual(q.ExactlyOne, [][]string{{"dataset", "data_source"}}) {
-		t.Errorf("query.ExactlyOne = %v", q.ExactlyOne)
+	// Which target is required depends on lang, which a group cannot say.
+	if len(q.ExactlyOne) != 0 {
+		t.Errorf("query.ExactlyOne = %v, want none", q.ExactlyOne)
 	}
 
 	for name, out := range map[string]reflect.Type{
