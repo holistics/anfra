@@ -126,7 +126,7 @@ var Commands = []Command{
 			if in.Lang == "sql" {
 				// The intent is a dry run on the data source; not every dialect has
 				// one through canal-query, and its errors carry no positions yet.
-				return validate.QueryValidation{}, invalidArg("lang", "unsupported", "validating a SQL query is not supported yet")
+				return validate.QueryValidation{}, invalidArg("lang", "unsupported", "a SQL query cannot be validated without running it; run it, or validate an AQL query")
 			}
 			aql, _, err := in.aql()
 			if err != nil {
@@ -146,6 +146,9 @@ var Commands = []Command{
 		Timeout:    30 * time.Minute,
 		Needs:      func(IngestInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
 		Run: func(ctx context.Context, cc CommandContext, in IngestInput) (string, error) {
+			if err := requireSidecars(cc, Sidecars{Node: true, CanalQuery: true}); err != nil {
+				return "", err
+			}
 			return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, in.Source)
 		},
 	}),
@@ -155,6 +158,9 @@ var Commands = []Command{
 		ReadOnly: true,
 		Needs:    func(SearchInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
 		Run: func(ctx context.Context, cc CommandContext, in SearchInput) (sidecar.CatalogSearchResult, error) {
+			if err := requireSidecars(cc, Sidecars{Node: true, CanalQuery: true}); err != nil {
+				return nil, err
+			}
 			return searchcmd.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, strings.TrimSpace(strings.Join(in.Query, " ")))
 		},
 	}),
@@ -165,6 +171,9 @@ var Commands = []Command{
 		Timeout:  5 * time.Minute,
 		Needs:    func(ValidateInput) Sidecars { return Sidecars{Node: true} },
 		Run: func(ctx context.Context, cc CommandContext, in ValidateInput) (validate.RepoValidation, error) {
+			if err := requireSidecars(cc, Sidecars{Node: true}); err != nil {
+				return validate.RepoValidation{}, err
+			}
 			return validate.Repo(ctx, cc.Clients.Node, cc.Repo, in.Globs)
 		},
 		Valid: func(r validate.RepoValidation) bool { return r.Valid },
@@ -197,7 +206,7 @@ func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema 
 // query.ExtractLimit) and applied at execution time as canal's truncate_rows.
 func (in QueryInput) aql() (aql string, limit int, err error) {
 	if in.DataSource != "" {
-		return "", 0, invalidArg("data_source", "unsupported", "an AQL query against a data source is not supported yet")
+		return "", 0, invalidArg("data_source", "unsupported", "an AQL query runs against a dataset; to query a data source, use SQL (lang sql)")
 	}
 	aql, limit, err = query.ExtractLimit(in.Query)
 	if err != nil {

@@ -60,9 +60,6 @@ type Def[C, In, Out any] struct {
 	HTTP bool // served at POST /api/<Name>
 	MCP  bool // served as an MCP tool named Name
 
-	// Core is set for an op whose types are known only at run time; see Core.
-	Core *Core
-
 	// Ext is the host's own declaration of the op, carried to Meta for the host's
 	// transports: who may call it, its rate limit. apikit never reads it.
 	Ext any
@@ -84,26 +81,10 @@ type Admission[R, C any] struct {
 	Authorize func(ctx context.Context, r R, c C, in any) error
 }
 
-// Args is the input of an op with a Core: its args by name, as JSON decodes them.
-type Args = map[string]any
-
-// Core describes an op whose input and output types are known only at run time:
-// a command another registry describes, served through this one. Its Def is a
-// Def[C, Args, any]; its input is validated against In, as any op's against its
-// type's schema, and its answer published and checked as Out's.
-type Core struct {
-	// InName is In's name in the contract: "CoreQueryIn".
-	InName string
-	// In is the input's schema: an object, one property per arg. Exactly-one
-	// groups are ExactlyOne entries in its OneOf, or one per AllOf entry.
-	In *huma.Schema
-	// Out is the answer's type; its schema is reflected, as any op's output's.
-	Out reflect.Type
-}
-
-// ExactlyOne is the schema of a group of args of which exactly one must be set,
-// for a Core's In to carry in OneOf: a oneOf over each arg being required. A
-// caller missing the group, or setting more than one, is told which args to fix.
+// ExactlyOne is the schema of a group of fields of which exactly one must be
+// set, for an input type's schema to carry in OneOf (huma.SchemaTransformer): a
+// oneOf over each field being required. A caller missing the group, or setting
+// more than one, is told which fields to fix.
 func ExactlyOne(args []string) []*huma.Schema { return decode.ExactlyOne(args) }
 
 // Meta is an op's declaration without its types.
@@ -152,54 +133,16 @@ func Register[R, C, In, Out any](reg *Registry[R], adm Admission[R, C], d *Def[C
 	case d.Timeout < 0:
 		panic(fmt.Sprintf("op %q: negative timeout", d.Name))
 	}
-	checkCore(d)
-	if d.Core == nil {
-		for _, t := range []reflect.Type{reflect.TypeFor[In](), reflect.TypeFor[Out]()} {
-			if t.Kind() == reflect.Struct && t.Name() == "" && t.NumField() > 0 {
-				// An unnamed struct has no name to publish its schema under, so it
-				// could not be referenced from the API contract.
-				panic(fmt.Sprintf("op %q: name the input and output types; an anonymous struct has no schema name", d.Name))
-			}
+	for _, t := range []reflect.Type{reflect.TypeFor[In](), reflect.TypeFor[Out]()} {
+		if t.Kind() == reflect.Struct && t.Name() == "" && t.NumField() > 0 {
+			// An unnamed struct has no name to publish its schema under, so it
+			// could not be referenced from the API contract.
+			panic(fmt.Sprintf("op %q: name the input and output types; an anonymous struct has no schema name", d.Name))
 		}
 	}
 	frozen := *d
 	frozen.Errors = slices.Clone(d.Errors)
-	if d.Core != nil {
-		c := *d.Core
-		frozen.Core = &c
-	}
 	reg.add(&registered[R, C, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params})
-}
-
-// checkCore refuses a Core that does not describe the op's types. Its schema is
-// prepared here, once, for validation.
-func checkCore[C, In, Out any](d *Def[C, In, Out]) {
-	c := d.Core
-	if c == nil {
-		return
-	}
-	switch {
-	case reflect.TypeFor[In]() != reflect.TypeFor[Args]() || reflect.TypeFor[Out]() != reflect.TypeFor[any]():
-		panic(fmt.Sprintf("op %q: an op with a Core is a Def[C, apikit.Args, any]; its Core holds the schemas", d.Name))
-	case c.InName == "" || c.In == nil || c.In.Type != huma.TypeObject || c.Out == nil:
-		panic(fmt.Sprintf("op %q: a Core needs an InName, an object In and an Out", d.Name))
-	}
-	prepare(c.In)
-}
-
-// prepare readies a schema built by hand for validation, as huma does for the
-// schemas it reflects. huma's own PrecomputeMessages skips AllOf.
-func prepare(s *huma.Schema) {
-	if s == nil {
-		return
-	}
-	s.PrecomputeMessages()
-	for _, sub := range s.AllOf {
-		prepare(sub)
-	}
-	for _, sub := range s.OneOf {
-		prepare(sub) // PrecomputeMessages reaches these, but not their AllOf
-	}
 }
 
 // registered is a registered op: the frozen copy of its declaration, its
@@ -227,26 +170,9 @@ func (o *registered[R, C, In, Out]) Meta() Meta {
 	}
 }
 
-// InSchema is a reference to In's schema in rt.Schemas: reflected from In, or
-// for an op with a Core its Core's, added under its name on first use.
+// InSchema is a reference to In's schema in rt.Schemas, reflected from In.
 func (o *registered[R, C, In, Out]) InSchema(rt *Runtime) *huma.Schema {
-	c := o.decl.Core
-	if c == nil {
-		return rt.Schema(reflect.TypeFor[In]())
-	}
-	schemas := rt.Schemas.Map()
-	if existing, ok := schemas[c.InName]; !ok {
-		schemas[c.InName] = c.In
-	} else if existing != c.In && !reflect.DeepEqual(existing, c.In) {
-		panic(fmt.Sprintf("op %q: schema %s is already another", o.decl.Name, c.InName))
-	}
-	return &huma.Schema{Ref: "#/components/schemas/" + c.InName}
+	return rt.Schema(reflect.TypeFor[In]())
 }
 
-// OutType is Out, or for an op with a Core its Core's.
-func (o *registered[R, C, In, Out]) OutType() reflect.Type {
-	if o.decl.Core != nil {
-		return o.decl.Core.Out
-	}
-	return reflect.TypeFor[Out]()
-}
+func (o *registered[R, C, In, Out]) OutType() reflect.Type { return reflect.TypeFor[Out]() }

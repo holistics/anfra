@@ -196,59 +196,6 @@ func TestTimeout(t *testing.T) {
 	}
 }
 
-// coreDef has args a, then exactly one of b and c, and of d and e.
-func coreDef() *apikit.Def[string, apikit.Args, any] {
-	in := &huma.Schema{Type: huma.TypeObject, AdditionalProperties: false, Required: []string{"a"},
-		Properties: map[string]*huma.Schema{
-			"a": {Type: huma.TypeString}, "b": {Type: huma.TypeString}, "c": {Type: huma.TypeString},
-			"d": {Type: huma.TypeBoolean}, "e": {Type: huma.TypeBoolean},
-		},
-		AllOf: []*huma.Schema{{OneOf: apikit.ExactlyOne([]string{"b", "c"})}, {OneOf: apikit.ExactlyOne([]string{"d", "e"})}},
-	}
-	return &apikit.Def[string, apikit.Args, any]{
-		Name: "core.thing", Summary: "x",
-		Core: &apikit.Core{InName: "CoreThingIn", In: in, Out: reflect.TypeFor[greetOut]()},
-		Handle: func(_ context.Context, _ string, in apikit.Args) (any, error) {
-			return map[string]any{"text": in["a"], "tags": []any{}}, nil
-		},
-	}
-}
-
-// An op whose schemas are given at run time validates against them, and an
-// exactly-one group set wrong says which args to fix.
-func TestCoreInput(t *testing.T) {
-	bad := coreDef()
-	bad.Core.In = &huma.Schema{Type: huma.TypeString}
-	mustPanic(t, "object", func() { apikit.Register(newRegistry(), admission, bad) })
-
-	o := one(t, coreDef())
-	ann := request{user: "ann"}
-	if out, err := o.Invoke(context.Background(), runtime(), ann, []byte(`{"a":"ok","b":"x","e":true}`)); err != nil {
-		t.Fatalf("a valid input was refused: %v", err)
-	} else if out.(map[string]any)["text"] != "ok" {
-		t.Errorf("the handler got the wrong args: %v", out)
-	}
-	for body, want := range map[string]apperr.Violations{
-		`{"a":"ok","e":true}`: {{Field: "b", Code: "required", Message: "Set exactly one of: b, c."}},
-		`{"a":"ok","b":"x","c":"y","d":true,"e":false}`: {
-			{Field: "c", Code: "invalid", Message: "Set only one of: b, c."},
-			{Field: "e", Code: "invalid", Message: "Set only one of: d, e."},
-		},
-	} {
-		_, err := o.Invoke(context.Background(), runtime(), ann, []byte(body))
-		if got, _ := apperr.From(err).Details.(apperr.Violations); code(err) != "invalid_request" || !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: got %v %+v, want %+v", body, err, got, want)
-		}
-	}
-	rt := runtime()
-	if ref := o.InSchema(rt).Ref; ref != "#/components/schemas/CoreThingIn" || rt.Schemas.Map()["CoreThingIn"] == nil {
-		t.Errorf("the input schema is not published by name: %q", ref)
-	}
-	if o.OutType() != reflect.TypeFor[greetOut]() {
-		t.Errorf("output type = %v, want the Core's", o.OutType())
-	}
-}
-
 // The HTTP adapter, with every hook.
 
 var codes = httpkit.Codes{

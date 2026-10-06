@@ -48,6 +48,7 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/validate"
+	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -194,6 +195,14 @@ const (
 // command's definition, so it cannot drift from what the command does. The specs
 // are copies.
 func Describe() []CommandSpec { return app.Describe() }
+
+// Ops is every command as an apikit op, core.<command>, admitted from an
+// Invocation: the core API, for a host to serve as it is. A host mounts each op
+// it serves (apikit.Mount) under its own admission, building the Invocation for
+// the caller it admitted; the ops' names, schemas, handlers and codes are
+// anfra core's, so a client of the core API meets the same contract on every
+// host. Each call returns a new registry.
+func Ops() *apikit.Registry[Invocation] { return app.NewRegistry() }
 
 // Commands returns the names of every registered command, in registry order.
 //

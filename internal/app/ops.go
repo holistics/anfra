@@ -22,11 +22,17 @@ func NewRegistry() *apikit.Registry[CommandContext] {
 	return reg
 }
 
-// NewRuntime is the runtime the ops run with. The codes admission produces are
+// hostMistakes are the codes that mean the host built an invocation wrong: no
+// data permissions stated, or restrictions on a query that cannot apply them.
+// They are not part of the core API: no op declares them, and a host that hits
+// one has a bug of its own.
+var hostMistakes = []apperr.Code{errcode.DataPermsMissing, errcode.DataPermsUnenforceable}
+
+// NewRuntime is the runtime the ops run with. The host-mistake codes are
 // implied for every op.
 func NewRuntime() *apikit.Runtime {
 	rt := apikit.NewRuntime()
-	rt.Implied = []apperr.Code{errcode.DataPermsMissing}
+	rt.Implied = hostMistakes
 	return rt
 }
 
