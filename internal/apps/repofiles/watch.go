@@ -12,12 +12,12 @@ import (
 
 // Watch reports, debounced, which Data Apps changed and whether any AML did. fsnotify isn't
 // recursive, so every directory (dot-directories aside) is watched, including ones created later.
-func Watch(dataFolder string, notify func(Change)) (stop func(), err error) {
+func Watch(repoDir string, notify func(Change)) (stop func(), err error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
-	root, _ := filepath.Abs(dataFolder)
+	root, _ := filepath.Abs(repoDir)
 	addTree := func(dir string) {
 		_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 			if err != nil || !d.IsDir() {

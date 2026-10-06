@@ -19,14 +19,14 @@ const selectedPath = ref(pathFromLocation(window.location.pathname));
 const revision = ref(0);
 
 interface AmlProblem { file?: string, line?: number, column?: number, message: string }
-// anfra's health, and whether the Shell can still hear the demo server at all.
+// anfra's health, and whether the Shell can still hear the anfra server at all.
 const anfraStatus = ref<'up' | 'down' | 'unknown'>('unknown');
 const serverReachable = ref(true);
 const problems = ref<AmlProblem[]>([]);
-const dataFolder = ref<string>();
+const repoName = ref<string>();
 
 const statusLabel = computed(() => {
-  if (!serverReachable.value) return 'Demo server unreachable';
+  if (!serverReachable.value) return 'anfra server unreachable';
   if (anfraStatus.value === 'up') return 'anfra is running';
   if (anfraStatus.value === 'down') return 'anfra is down';
   return 'Checking anfra…';
@@ -34,10 +34,10 @@ const statusLabel = computed(() => {
 
 async function loadStatus (): Promise<void> {
   try {
-    const status = await fetch('/_anfra/api/status').then((r) => r.json()) as { anfra: 'up' | 'down', problems: AmlProblem[], dataFolder?: string };
+    const status = await fetch('/_anfra/api/status').then((r) => r.json()) as { anfra: 'up' | 'down', problems: AmlProblem[], repo?: string };
     anfraStatus.value = status.anfra;
     problems.value = status.problems ?? [];
-    dataFolder.value = status.dataFolder;
+    repoName.value = status.repo;
   } catch {
     anfraStatus.value = 'unknown';
   }
@@ -48,7 +48,7 @@ function where (problem: AmlProblem): string {
   return problem.line ? `${problem.file}:${problem.line}${problem.column ? `:${problem.column}` : ''}` : problem.file;
 }
 
-const COLLAPSED_KEY = 'anfra-demo:collapsed-folders';
+const COLLAPSED_KEY = 'anfra-apps:collapsed-folders';
 function loadCollapsed (): Set<string> {
   try {
     return new Set(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY) ?? '[]') as string[]);
@@ -86,7 +86,7 @@ const searchInput = ref<HTMLInputElement>();
 const filtered = computed(() => filterEntries(entries.value, search.value));
 const searching = computed(() => search.value.trim() !== '');
 
-const THEME_KEY = 'anfra-demo:theme';
+const THEME_KEY = 'anfra-apps:theme';
 function systemTheme (): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
@@ -111,7 +111,7 @@ const problemsOpen = ref(false);
 // The Inspect panel belongs to one Data App: it closes when another is picked, and survives Reload.
 const inspectOpen = ref(false);
 const inspected = ref<InspectedApp[]>();
-const WIDTH_KEY = 'anfra-demo:inspect-width';
+const WIDTH_KEY = 'anfra-apps:inspect-width';
 const MIN_WIDTH = 280;
 function loadWidth (): number {
   try {
@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
     <nav class="sidebar" aria-label="Data Apps" :inert="!sidebarOpen">
       <div class="brand">
         <span class="logo"><Icon name="brand" /></span>
-        <h1 data-testid="brand">{{ dataFolder || 'anfra demo' }}</h1>
+        <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
       </div>
       <label class="search">
         <Icon name="search" />
@@ -290,7 +290,7 @@ onBeforeUnmount(() => {
       <div class="tree-scroll">
         <p v-if="loadError" class="notice error" role="alert">{{ loadError }}</p>
         <p v-else-if="loaded && entries.length === 0" class="notice empty" data-testid="empty-state">
-          No Data Apps yet. Add an <code>.html</code> file to the Data Folder's <code>apps/</code>
+          No Data Apps yet. Add an <code>.html</code> file to the Repo's <code>apps/</code>
           directory.
         </p>
         <p v-else-if="searching && filtered.length === 0" class="notice" data-testid="no-matches">No matches</p>
@@ -360,7 +360,7 @@ onBeforeUnmount(() => {
               <Icon name="alert" />{{ problems.length === 1 ? '1 problem' : `${problems.length} problems` }}
             </button>
             <section v-if="problemsOpen" class="popover" role="alert" data-testid="aml-banner">
-              <strong>The Data Folder's AML has {{ problems.length === 1 ? 'a problem' : `${problems.length} problems` }}.</strong>
+              <strong>The Repo's AML has {{ problems.length === 1 ? 'a problem' : `${problems.length} problems` }}.</strong>
               <span class="hint">Queries may fail until it's fixed.</span>
               <ul>
                 <li v-for="(problem, i) in problems" :key="i">

@@ -1,6 +1,6 @@
 /**
  * The Shell's half of the Data App bridge. The frame's Backend posts `anfra:request` messages; this
- * answers each by calling the demo server, and aborts the request on `anfra:cancel`. Only messages
+ * answers each by calling the anfra server, and aborts the request on `anfra:cancel`. Only messages
  * from the given frame are served: a sandboxed frame has an opaque origin, so its window is what
  * identifies it.
  */

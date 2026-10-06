@@ -1,4 +1,4 @@
-// Package repofiles reads a Data Folder: its anfra config, its Data Apps, and changes to either.
+// Package repofiles reads a Repo: its anfra config, its Data Apps, and changes to either.
 package repofiles
 
 import (
@@ -17,12 +17,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func configDir(dataFolder string) string {
+func configDir(repoDir string) string {
 	name := os.Getenv("ANFRA_DIR_NAME")
 	if name == "" {
 		name = ".anfra"
 	}
-	return filepath.Join(dataFolder, name)
+	return filepath.Join(repoDir, name)
 }
 
 // Address is where a Data Source's database listens.
@@ -35,11 +35,11 @@ type Address struct {
 var defaultPorts = map[string]int{"postgresql": 5432, "mysql": 3306, "sqlserver": 1433}
 
 // DataSources reads the network address of each Data Source in the anfra config.
-func DataSources(dataFolder string) ([]Address, error) {
-	file := filepath.Join(configDir(dataFolder), "data_sources.yml")
+func DataSources(repoDir string) ([]Address, error) {
+	file := filepath.Join(configDir(repoDir), "data_sources.yml")
 	raw, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("No Data Source config at %s. Is the Data Folder right?", file)
+		return nil, fmt.Errorf("No Data Source config at %s. Is anfra running in the right Repo?", file)
 	}
 	var parsed struct {
 		DataSources map[string]struct {
@@ -78,8 +78,8 @@ func DataSources(dataFolder string) ([]Address, error) {
 
 // CheckDataSources refuses to start when a Data Source's database can't be reached, rather than
 // serve empty Data Apps.
-func CheckDataSources(dataFolder string) error {
-	sources, err := DataSources(dataFolder)
+func CheckDataSources(repoDir string) error {
+	sources, err := DataSources(repoDir)
 	if err != nil {
 		return err
 	}
@@ -94,16 +94,16 @@ func CheckDataSources(dataFolder string) error {
 	}
 	if len(down) > 0 {
 		return fmt.Errorf("Can't reach the database for these Data Sources:\n%s\nStart the database, or fix %s.",
-			strings.Join(down, "\n"), filepath.Join(configDir(dataFolder), "data_sources.yml"))
+			strings.Join(down, "\n"), filepath.Join(configDir(repoDir), "data_sources.yml"))
 	}
 	return nil
 }
 
-// CheckContextSources says how to fix a Data Folder anfra can't read datasets from.
-func CheckContextSources(dataFolder string) error {
-	file := filepath.Join(configDir(dataFolder), "context_sources.yml")
+// CheckContextSources says how to fix a Repo anfra can't read datasets from.
+func CheckContextSources(repoDir string) error {
+	file := filepath.Join(configDir(repoDir), "context_sources.yml")
 	if _, err := os.Stat(file); err != nil {
-		return fmt.Errorf("No %s. anfra needs it to read the Data Folder's datasets; add:\n\nsources:\n  - name: aml\n    type: aml\n    path: ..\n", file)
+		return fmt.Errorf("No %s. anfra needs it to read the Repo's datasets; add:\n\nsources:\n  - name: aml\n    type: aml\n    path: ..\n", file)
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func labelOf(file string) string {
 	return filepath.Base(file)
 }
 
-// ReservedName is the top-level name the demo keeps for its own routes (the Shell's reserved namespace).
+// ReservedName is the top-level name Data App serving keeps for its own routes (the Shell's reserved namespace).
 const ReservedName = "_anfra"
 
 // reserved is whether a top-level entry of apps/ would put a Data App URL inside the reserved namespace.
@@ -138,9 +138,9 @@ func reserved(name string) bool {
 }
 
 // ReservedApps are the entries of apps/ left out of the catalog because their URL would be reserved.
-func ReservedApps(dataFolder string) []string {
+func ReservedApps(repoDir string) []string {
 	var out []string
-	dirents, _ := os.ReadDir(filepath.Join(dataFolder, "apps"))
+	dirents, _ := os.ReadDir(filepath.Join(repoDir, "apps"))
 	for _, d := range dirents {
 		if reserved(d.Name()) {
 			out = append(out, "apps/"+d.Name())
@@ -174,9 +174,9 @@ func scan(root, rel string) []Entry {
 	return append(append([]Entry{}, folders...), apps...)
 }
 
-// Catalog is every Data App under the Data Folder's apps/, as a tree.
-func Catalog(dataFolder string) []Entry {
-	entries := scan(filepath.Join(dataFolder, "apps"), "")
+// Catalog is every Data App under the Repo's apps/, as a tree.
+func Catalog(repoDir string) []Entry {
+	entries := scan(filepath.Join(repoDir, "apps"), "")
 	if entries == nil {
 		return []Entry{}
 	}
@@ -184,8 +184,8 @@ func Catalog(dataFolder string) []Entry {
 }
 
 // AppFile is the file for a Data App path, or "" when it isn't one (outside apps/, or not HTML).
-func AppFile(dataFolder, appPath string) string {
-	apps, _ := filepath.Abs(filepath.Join(dataFolder, "apps"))
+func AppFile(repoDir, appPath string) string {
+	apps, _ := filepath.Abs(filepath.Join(repoDir, "apps"))
 	file, _ := filepath.Abs(filepath.Join(apps, filepath.FromSlash(appPath)))
 	if !strings.HasPrefix(file, apps+string(os.PathSeparator)) || !strings.HasSuffix(strings.ToLower(file), ".html") {
 		return ""
@@ -204,7 +204,7 @@ type Change struct {
 	AML bool
 }
 
-// classify says what a changed path under the Data Folder is, if anything the demo cares about.
+// classify says what a changed path under the Repo is, if anything Data App serving cares about.
 func classify(rel string) (app string, aml bool, ok bool) {
 	rel = filepath.ToSlash(rel)
 	for _, part := range strings.Split(rel, "/") {

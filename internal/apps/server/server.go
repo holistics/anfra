@@ -1,4 +1,4 @@
-// Package server is the demo's HTTP surface: the Shell, its API, Data Apps, and live events.
+// Package server is Data App serving's HTTP surface: the Shell, its API, Data Apps, and live events.
 package server
 
 import (
@@ -23,13 +23,13 @@ import (
 	"github.com/holistics/anfra/internal/apps/repofiles"
 )
 
-// Server holds the demo's state: anfra, the Data Folder, its Datasets and AML problems, and the
+// Server holds Data App serving's state: anfra, the Repo, its Datasets and AML problems, and the
 // Shells listening for events.
 type Server struct {
-	Anfra      dispatch.Caller
-	DataFolder string
-	SDKBundle  string
-	Shell      fs.FS
+	Anfra     dispatch.Caller
+	RepoDir   string
+	SDKBundle string
+	Shell     fs.FS
 
 	mu       sync.RWMutex
 	datasets map[string]descriptors.Dataset
@@ -42,12 +42,12 @@ type Server struct {
 }
 
 // New builds the Server's starting state: the Datasets and the AML's problems.
-func New(ctx context.Context, a dispatch.Caller, dataFolder, sdkBundle string, shell fs.FS) (*Server, error) {
-	s := &Server{Anfra: a, DataFolder: dataFolder, SDKBundle: sdkBundle, Shell: shell, subs: map[chan string]struct{}{}}
+func New(ctx context.Context, a dispatch.Caller, repoDir, sdkBundle string, shell fs.FS) (*Server, error) {
+	s := &Server{Anfra: a, RepoDir: repoDir, SDKBundle: sdkBundle, Shell: shell, subs: map[chan string]struct{}{}}
 	s.revalidate(ctx)
 	datasets, err := descriptors.Build(ctx, a)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't read the Data Folder's datasets from anfra: %v", err)
+		return nil, fmt.Errorf("Couldn't read the Repo's datasets from anfra: %v", err)
 	}
 	s.datasets = datasets
 	return s, nil
@@ -76,7 +76,7 @@ func (s *Server) revalidate(ctx context.Context) {
 	s.broadcast(map[string]any{"type": "validation", "problems": problems})
 }
 
-// OnChange reacts to the Data Folder changing: Data Apps refresh the Shell's tree (and reload the
+// OnChange reacts to the Repo changing: Data Apps refresh the Shell's tree (and reload the
 // running one); AML re-validates and rebuilds the Datasets, one rebuild at a time.
 func (s *Server) OnChange(change repofiles.Change) {
 	if len(change.Apps) > 0 {
@@ -93,7 +93,7 @@ func (s *Server) OnChange(change repofiles.Change) {
 		datasets, err := descriptors.Build(ctx, s.Anfra)
 		if err != nil {
 			// Keep serving the last good descriptors; the banner says why the AML is broken.
-			log.Printf("anfra-demo: couldn't rebuild the datasets: %v", err)
+			log.Printf("anfra serve: couldn't rebuild the datasets: %v", err)
 			return
 		}
 		s.mu.Lock()
@@ -117,7 +117,7 @@ func queryError(w http.ResponseWriter, message string) {
 // redirecting, and would turn /_anfra/data-apps/..%2F… into a Shell page instead of a 404.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
-	// Everything the demo owns is under the reserved namespace; any other path is a Data App URL, for the Shell.
+	// Everything Data App serving owns is under the reserved namespace; any other path is a Data App URL, for the Shell.
 	const reserved = "/" + repofiles.ReservedName
 	if p == reserved || strings.HasPrefix(p, reserved+"/") {
 		s.internal(w, r, strings.TrimPrefix(p, reserved))
@@ -129,7 +129,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) internal(w http.ResponseWriter, r *http.Request, p string) {
 	switch {
 	case p == "/api/apps" && r.Method == http.MethodGet:
-		writeJSON(w, http.StatusOK, repofiles.Catalog(s.DataFolder))
+		writeJSON(w, http.StatusOK, repofiles.Catalog(s.RepoDir))
 	case p == "/api/status" && r.Method == http.MethodGet:
 		status := "down"
 		if s.Anfra.Healthy(r.Context()) {
@@ -138,7 +138,7 @@ func (s *Server) internal(w http.ResponseWriter, r *http.Request, p string) {
 		s.mu.RLock()
 		problems := s.problems
 		s.mu.RUnlock()
-		writeJSON(w, http.StatusOK, map[string]any{"anfra": status, "problems": problems, "dataFolder": filepath.Base(s.DataFolder)})
+		writeJSON(w, http.StatusOK, map[string]any{"anfra": status, "problems": problems, "repo": filepath.Base(s.RepoDir)})
 	case p == "/api/events" && r.Method == http.MethodGet:
 		s.events(w, r)
 	case p == "/api/query" && r.Method == http.MethodPost:
@@ -240,12 +240,13 @@ func (s *Server) answer(w http.ResponseWriter, result any, err error) {
 }
 
 func (s *Server) dataApp(w http.ResponseWriter, r *http.Request, appPath string) {
-	file := repofiles.AppFile(s.DataFolder, appPath)
+	file := repofiles.AppFile(s.RepoDir, appPath)
 	if file == "" {
 		http.Error(w, "No such Data App.", http.StatusNotFound)
 		return
 	}
-	raw, err := os.ReadFile(file)
+	// AppFile only returns a file inside the Repo's apps/, so the path can't escape it.
+	raw, err := os.ReadFile(file) //nolint:gosec // G703: confined by AppFile
 	if err != nil {
 		http.Error(w, "No such Data App.", http.StatusNotFound)
 		return
@@ -261,7 +262,8 @@ func (s *Server) dataApp(w http.ResponseWriter, r *http.Request, appPath string)
 	})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(html))
+	// Serving the author's HTML is the point: it runs in the Shell's sandboxed frame.
+	_, _ = w.Write([]byte(html)) //nolint:gosec // G705: a Data App is HTML by design
 }
 
 // shellOrigin is the origin the browser loaded the Shell from. Behind a TLS-terminating proxy the

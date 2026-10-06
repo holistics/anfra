@@ -1,5 +1,5 @@
 // Runs inside a Data App's sandboxed frame, right after the Anfra SDK's IIFE bundle and before any
-// author code. It provisions the SDK from the data the demo server inlined, with a Backend that
+// author code. It provisions the SDK from the data the anfra server inlined, with a Backend that
 // forwards every call to the Shell over postMessage, then installs it as the `Anfra` global.
 (function bootstrap () {
   var provision = JSON.parse(document.getElementById('anfra-provision').textContent);

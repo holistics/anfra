@@ -31,7 +31,7 @@ const tree = (page: Page) => page.getByRole('navigation', { name: 'Data Apps' })
 const appLink = (page: Page, path: string) => tree(page).locator(`[data-app="${path}"]`);
 const search = (page: Page) => page.getByTestId('search');
 
-test('names the sidebar after the Data Folder', async ({ page }) => {
+test('names the sidebar after the Repo', async ({ page }) => {
   await open(page);
   await expect(page.getByTestId('brand')).toHaveText(folder.dir.split('/').pop() as string);
 });

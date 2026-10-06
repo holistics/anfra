@@ -154,7 +154,7 @@ func Run(ctx context.Context, a dispatch.Caller, req Request) (*Result, error) {
 		Columns: columnsFor(data.Result.Fields, data.Columns),
 		Values:  values,
 		Meta:    Meta{Page: req.Page, PageSize: req.PageSize, NumRows: len(values)},
-		// A local demo has one reader, who may see everything.
+		// Data App serving is local, with one reader, who may see everything.
 		Debug: Debug{ExecutedAQL: data.AQL, ExecutedSQL: data.SQL, ExecutedAt: time.Now().UTC().Format(time.RFC3339Nano)},
 	}, nil
 }
@@ -217,7 +217,7 @@ type Problem struct {
 	Message string `json:"message"`
 }
 
-// Validate returns the AML problems that break the Data Folder: files that don't compile, and
+// Validate returns the AML problems that break the Repo: files that don't compile, and
 // error-severity findings. Warnings are left out of the banner.
 func Validate(ctx context.Context, a dispatch.Caller) ([]Problem, error) {
 	_, raw, err := a.Call(ctx, "validate", nil)
@@ -240,7 +240,7 @@ func Validate(ctx context.Context, a dispatch.Caller) ([]Problem, error) {
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, err
 	}
-	// anfra reports paths relative to the Data Folder, with a leading `/`.
+	// anfra reports paths relative to the Repo, with a leading `/`.
 	file := func(p string) string { return strings.TrimLeft(p, "/") }
 	problems := []Problem{}
 	for _, e := range data.CompileErrors {

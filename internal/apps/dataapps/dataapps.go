@@ -11,7 +11,7 @@ import (
 	"github.com/holistics/anfra/internal/apps/descriptors"
 )
 
-// User is who every Data App runs as: this is a local demo with one reader.
+// User is who every Data App runs as: Data App serving is local, with one reader.
 type User struct {
 	ID          int         `json:"id"`
 	Name        string      `json:"name"`
