@@ -55,34 +55,6 @@ components:
         - step
         - text
       type: object
-    ErrorBodyDataPermsUnenforceable:
-      additionalProperties: false
-      description: These data permissions cannot be applied to this query.
-      properties:
-        code:
-          const: data_perms_unenforceable
-          type: string
-        context:
-          items:
-            $ref: "#/components/schemas/ContextEntry"
-          type: array
-        message:
-          type: string
-        request_id:
-          type: string
-        scope:
-          const: client
-          type: string
-        status:
-          const: 500
-          type: integer
-      required:
-        - code
-        - scope
-        - status
-        - message
-        - request_id
-      type: object
     ErrorBodyInternalServerError:
       additionalProperties: false
       description: Something went wrong on our side.
@@ -613,13 +585,11 @@ paths:
               schema:
                 properties:
                   error:
-                    oneOf:
-                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
-                      - $ref: "#/components/schemas/ErrorBodyDataPermsUnenforceable"
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
                 required:
                   - error
                 type: object
-          description: internal_server_error, data_perms_unenforceable
+          description: internal_server_error
         "502":
           content:
             application/json:
@@ -691,13 +661,11 @@ paths:
               schema:
                 properties:
                   error:
-                    oneOf:
-                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
-                      - $ref: "#/components/schemas/ErrorBodyDataPermsUnenforceable"
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
                 required:
                   - error
                 type: object
-          description: internal_server_error, data_perms_unenforceable
+          description: internal_server_error
         "503":
           content:
             application/json:

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -138,11 +138,13 @@ func (c *command[In, Out]) Valid(out any) (bool, error) {
 // register serves the command as the op core.<Name>: its In validated against
 // its schema, its unset defaults applied, then Run.
 func (c *command[In, Out]) register(reg *apikit.Registry[CommandContext]) {
-	// data_perms_missing is admission's, and implied (NewRuntime): a host that
-	// states its context, as every host must, never answers with it.
+	// The codes that mean the host built the invocation wrong are not the core
+	// API's: a host that states the caller's data permissions, as every host
+	// must, and refuses what they cannot apply, never answers with them
+	// (NewRuntime implies them).
 	var errs []apperr.AnyCode
 	for _, code := range errorCodes(c) {
-		if code != errcode.DataPermsMissing {
+		if !slices.Contains(hostMistakes, code) {
 			errs = append(errs, code)
 		}
 	}

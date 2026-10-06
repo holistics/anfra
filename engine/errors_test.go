@@ -36,7 +36,7 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 				{Field: "dataset", Code: "required", Message: "Set exactly one of: dataset, data_source."}}},
 		{"an unsupported input", unrestricted,
 			engine.Request{Command: "query", Args: map[string]any{"query": "x", "data_source": "w"}},
-			apperr.ValidationFailed, apperr.Violations{{Field: "data_source", Code: "unsupported", Message: "an AQL query against a data source is not supported yet"}}},
+			apperr.ValidationFailed, apperr.Violations{{Field: "data_source", Code: "unsupported", Message: "an AQL query runs against a dataset; to query a data source, use SQL (lang sql)"}}},
 		{"SQL for a restricted caller", engine.Invocation{DataPerms: engine.Restricted(nil)},
 			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "data_source": "w"}},
 			engine.DataPermsUnenforceable, nil},
