@@ -181,8 +181,8 @@ Anfra supports popular warehouses and databases, including Snowflake, BigQuery, 
 Open the folder in Claude Code or Cursor and ask the agent for an app. Start the prompt with `/build-anfra-app` so the agent uses the skill:
 
 ```text
-/build-anfra-app Look at the orders data and build me a revenue overview: monthly trend,
-revenue by region with a region filter, and a table of top products.
+/build-anfra-app Look at the orders data and build me a revenue overview:
+monthly trend, revenue by region with a region filter, and a table of top products.
 Clicking a region should filter everything else.
 ```
 
@@ -221,7 +221,7 @@ A project you build with open-source Anfra runs unchanged on Anfra Cloud. Moving
 | Audit trail, usage monitoring                 | —                   | ✅           |
 | Snapshots, versioning                         | —                   | ✅           |
 
-Anfra Cloud isn't available yet. [Join the waitlist](#) to get access when it opens. A paid self-hosted edition with the same features is planned. <!-- TODO: add the waitlist link -->
+Anfra Cloud isn't available yet. Join the waitlist to get access when it opens. A paid self-hosted edition with the same features is planned. <!-- TODO: link the waitlist -->
 
 ## FAQ
 
