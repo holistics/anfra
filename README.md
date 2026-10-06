@@ -171,7 +171,7 @@ data_sources:
       dbname: analytics
 ```
 
-Supported `type` values: `postgresql`, `redshift`, `bigquery`, `snowflake`, `databricks`, `clickhouse`, `mysql`, `sqlserver`, `oracledb`, `aws_athena`, `prestodb`, `duckdb` and `motherduck`. Each type takes different connection fields; see [Data sources](https://docs.anfra.ai/docs/self-hosted/data-sources).
+Anfra supports popular warehouses and databases, including Snowflake, BigQuery, Databricks, Redshift, PostgreSQL, ClickHouse and DuckDB. See [Data sources](https://docs.anfra.ai/docs/self-hosted/data-sources) for the full list, the `type` value for each, and its connection fields.
 
 ### 4. Start building
 
