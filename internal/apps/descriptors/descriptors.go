@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/holistics/anfra/internal/apps/anfra"
+	"github.com/holistics/anfra/internal/apps/dispatch"
 )
 
 // Field is one model field, as the SDK's DatasetDescriptor has it.
@@ -52,7 +52,7 @@ func (e entity) str(key string) string {
 	return ""
 }
 
-func search(ctx context.Context, a *anfra.Anfra, query string) ([]entity, error) {
+func search(ctx context.Context, a dispatch.Caller, query string) ([]entity, error) {
 	_, data, err := a.Call(ctx, "search", map[string]any{"query": query})
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func or(s, fallback string) string {
 // Build reads every Dataset from anfra's catalog: the dataset, the models it joins, each model's
 // dimensions and measures with their types, and its metrics. Deliberately one function, so a
 // dedicated catalog tool can replace it later (issue 01).
-func Build(ctx context.Context, a *anfra.Anfra) (map[string]Dataset, error) {
+func Build(ctx context.Context, a dispatch.Caller) (map[string]Dataset, error) {
 	if _, _, err := a.Call(ctx, "ingest", nil); err != nil {
 		return nil, err
 	}

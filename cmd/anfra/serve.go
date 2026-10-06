@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/apps"
+	"github.com/holistics/anfra/internal/apps/dispatch"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/spf13/cobra"
@@ -25,41 +27,83 @@ func serveSocketPath(repo repo.Repo) string {
 	return filepath.Join(os.TempDir(), "anfra-serve-"+repo.ID+".sock")
 }
 
+// serveOptions are `anfra serve`'s flags.
+type serveOptions struct {
+	// Apps also serves the repo's Data Apps through the Shell, on Port at 127.0.0.1.
+	Apps bool
+	Port int
+}
+
 func newServeCmd() *cobra.Command {
-	return &cobra.Command{
+	var opts serveOptions
+	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the anfra server: keep sidecars warm and expose POST /call for agents and subsequent CLI calls",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context())
+			if cmd.Flags().Changed("port") && !opts.Apps {
+				return fmt.Errorf("--port is where --apps serves Data Apps; pass --apps too")
+			}
+			return runServe(cmd.Context(), opts)
 		},
 	}
+	cmd.Flags().BoolVar(&opts.Apps, "apps", false,
+		"also serve the repo's Data Apps (apps/*.html) in a browser, at http://127.0.0.1:<port>/")
+	cmd.Flags().IntVar(&opts.Port, "port", 5173, "the port --apps serves Data Apps on")
+	return cmd
 }
 
-func runServe(ctx context.Context) error {
+// runServe serves on the repo's socket and, with opts.Apps, serves the repo's Data Apps alongside.
+func runServe(ctx context.Context, opts serveOptions) error {
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
 		if isServeRunning(h.repo) {
 			return fmt.Errorf("anfra serve already running for this repo (socket %s)", serveSocketPath(h.repo))
 		}
-
-		// Warm sidecars live for the server's lifetime, so enable canal-query
-		// connection pooling — DB connections are reused across /call requests.
-		cfg := h.cfg
-		cfg.EnablePooling = true
-
-		node := sidecar.NewAnfraNode(cfg)
-		if err := node.Start(ctx); err != nil {
-			return fmt.Errorf("start anfra-node sidecar: %w", err)
-		}
-		defer node.Close()
-		canal := sidecar.NewCanalQuery(cfg)
-		if err := canal.Start(ctx); err != nil {
-			return fmt.Errorf("start canal-query sidecar: %w", err)
-		}
-		defer canal.Close()
-
-		clients := app.Clients{Node: node.Client(), CanalQuery: canal.Client()}
-
 		sockPath := serveSocketPath(h.repo)
+
+		// Data App serving checks the repo and claims its port before the sidecars start, so a
+		// mistake there fails fast.
+		var built apps.Built
+		var appsLn net.Listener
+		if opts.Apps {
+			var warnings []string
+			var err error
+			if built, warnings, err = apps.Check(h.repo.Dir); err != nil {
+				return err
+			}
+			for _, w := range warnings {
+				fmt.Fprintf(os.Stderr, "anfra serve: %s\n", w)
+			}
+			if appsLn, err = apps.Listen(opts.Port); err != nil {
+				return err
+			}
+			defer appsLn.Close()
+		}
+
+		var clients app.Clients
+		var caller dispatch.Caller
+		if fake := dispatch.Fake(); fake != nil && opts.Apps {
+			caller = fake // an e2e build: canned answers, no sidecars
+		} else {
+			// Warm sidecars live for the server's lifetime, so enable canal-query
+			// connection pooling — DB connections are reused across /call requests.
+			cfg := h.cfg
+			cfg.EnablePooling = true
+
+			node := sidecar.NewAnfraNode(cfg)
+			if err := node.Start(ctx); err != nil {
+				return fmt.Errorf("start anfra-node sidecar: %w", err)
+			}
+			defer node.Close()
+			canal := sidecar.NewCanalQuery(cfg)
+			if err := canal.Start(ctx); err != nil {
+				return fmt.Errorf("start canal-query sidecar: %w", err)
+			}
+			defer canal.Close()
+
+			clients = app.Clients{Node: node.Client(), CanalQuery: canal.Client()}
+			caller = dispatch.InProcess{Clients: clients, Repo: h.repo}
+		}
+
 		_ = os.Remove(sockPath)
 		ln, err := net.Listen("unix", sockPath)
 		if err != nil {
@@ -68,6 +112,19 @@ func runServe(ctx context.Context) error {
 		defer os.Remove(sockPath)
 
 		srv := &http.Server{Handler: serveMux(h, clients), ReadHeaderTimeout: 10 * time.Second}
+
+		// Data App serving failing (say, the repo's datasets don't load) stops the whole server.
+		ctx, stop := context.WithCancel(ctx)
+		defer stop()
+		appsErr := make(chan error, 1)
+		if opts.Apps {
+			go func() {
+				if err := apps.Serve(ctx, appsLn, caller, h.repo.Dir, built); err != nil {
+					appsErr <- err
+					stop()
+				}
+			}()
+		}
 
 		go func() {
 			<-ctx.Done() // cancelled on SIGINT/SIGTERM by the root context in main
@@ -80,10 +137,18 @@ func runServe(ctx context.Context) error {
 
 		h.cfg.Logger.Info("serve.listening", "socket", sockPath)
 		fmt.Printf("anfra serve listening on %s (Ctrl-C to stop)\n", sockPath)
+		if opts.Apps {
+			fmt.Printf("anfra serve: Data Apps at http://%s/\n", appsLn.Addr())
+		}
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			return err
 		}
-		return nil
+		select {
+		case err := <-appsErr:
+			return err
+		default:
+			return nil
+		}
 	})
 }
 

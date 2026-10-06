@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/holistics/anfra/internal/apps/anfra"
 )
 
 func configDir(dataFolder string) string {
@@ -41,7 +39,7 @@ func DataSources(dataFolder string) ([]Address, error) {
 	file := filepath.Join(configDir(dataFolder), "data_sources.yml")
 	raw, err := os.ReadFile(file)
 	if err != nil {
-		return nil, anfra.Startupf("No Data Source config at %s. Is the Data Folder right?", file)
+		return nil, fmt.Errorf("No Data Source config at %s. Is the Data Folder right?", file)
 	}
 	var parsed struct {
 		DataSources map[string]struct {
@@ -53,7 +51,7 @@ func DataSources(dataFolder string) ([]Address, error) {
 		} `yaml:"data_sources"`
 	}
 	if err := yaml.Unmarshal(raw, &parsed); err != nil {
-		return nil, anfra.Startupf("Couldn't parse %s: %v", file, err)
+		return nil, fmt.Errorf("Couldn't parse %s: %v", file, err)
 	}
 	var out []Address
 	for name, source := range parsed.DataSources {
@@ -95,7 +93,7 @@ func CheckDataSources(dataFolder string) error {
 		_ = conn.Close()
 	}
 	if len(down) > 0 {
-		return anfra.Startupf("Can't reach the database for these Data Sources:\n%s\nStart the database, or fix %s.",
+		return fmt.Errorf("Can't reach the database for these Data Sources:\n%s\nStart the database, or fix %s.",
 			strings.Join(down, "\n"), filepath.Join(configDir(dataFolder), "data_sources.yml"))
 	}
 	return nil
@@ -105,7 +103,7 @@ func CheckDataSources(dataFolder string) error {
 func CheckContextSources(dataFolder string) error {
 	file := filepath.Join(configDir(dataFolder), "context_sources.yml")
 	if _, err := os.Stat(file); err != nil {
-		return anfra.Startupf("No %s. anfra needs it to read the Data Folder's datasets; add:\n\nsources:\n  - name: aml\n    type: aml\n    path: ..\n", file)
+		return fmt.Errorf("No %s. anfra needs it to read the Data Folder's datasets; add:\n\nsources:\n  - name: aml\n    type: aml\n    path: ..\n", file)
 	}
 	return nil
 }

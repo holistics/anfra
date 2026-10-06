@@ -1,7 +1,7 @@
-// Package assets holds everything the demo binary carries with it: the built Shell, the Anfra SDK's
-// IIFE bundle, the Data App frame bootstrap and, in a distributable build, an anfra binary.
+// Package assets holds what Data App serving carries in the anfra binary: the built Shell, the
+// Anfra SDK's IIFE bundle and the Data App frame bootstrap.
 //
-// The Shell and SDK bundle are build outputs (see scripts/build.sh), copied under shell/dist and
+// The Shell and SDK bundle are build outputs (`pnpm build:apps`), written under shell/dist and
 // sdk/ before `go build`. The committed .gitkeep files keep the embed patterns valid without them.
 package assets
 
@@ -27,7 +27,7 @@ func Shell() (fs.FS, error) {
 		return nil, err
 	}
 	if _, err := fs.Stat(dist, "index.html"); err != nil {
-		return nil, errors.New("the Shell isn't built into this binary: run scripts/build.sh (or `pnpm build:shell`) first")
+		return nil, errors.New("the Shell isn't built into this binary: run `pnpm build:apps` first")
 	}
 	return dist, nil
 }
@@ -36,7 +36,7 @@ func Shell() (fs.FS, error) {
 func SDKBundle() (string, error) {
 	b, err := sdkFS.ReadFile("sdk/anfra-sdk.global.js")
 	if err != nil {
-		return "", errors.New("the Anfra SDK isn't built into this binary: run scripts/build.sh (or `pnpm build:sdk`) first")
+		return "", errors.New("the Anfra SDK isn't built into this binary: run `pnpm build:apps` first")
 	}
 	return string(b), nil
 }

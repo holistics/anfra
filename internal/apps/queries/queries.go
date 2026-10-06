@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/holistics/anfra/internal/apps/anfra"
+	"github.com/holistics/anfra/internal/apps/dispatch"
 )
 
 // Failure is a query anfra rejected or failed to run; it reaches the Data App as a QueryError.
@@ -110,7 +110,7 @@ func columnsFor(fields []string, described []json.RawMessage) []json.RawMessage 
 }
 
 // Run runs one SDK query on anfra: the AQL, its Query Input and its Execution Options.
-func Run(ctx context.Context, a *anfra.Anfra, req Request) (*Result, error) {
+func Run(ctx context.Context, a dispatch.Caller, req Request) (*Result, error) {
 	args := map[string]any{
 		"dataset": req.Dataset,
 		"aql":     req.AQL,
@@ -129,7 +129,7 @@ func Run(ctx context.Context, a *anfra.Anfra, req Request) (*Result, error) {
 
 	status, raw, err := a.Call(ctx, "query", args)
 	if err != nil {
-		var callErr *anfra.CallError
+		var callErr *dispatch.CallError
 		if errors.As(err, &callErr) {
 			return nil, &Failure{Message: callErr.Message}
 		}
@@ -173,7 +173,7 @@ const SuggestionLimit = 100
 // Suggest offers a field-backed filter its field's values: one distinct-values explore through the
 // same Query Input path as any query, sorted and capped. Text the reader typed narrows a text
 // field, case-insensitively. The caller must have checked the field exists: it is spliced into AQL.
-func Suggest(ctx context.Context, a *anfra.Anfra, req SuggestionRequest, fieldType string) ([]json.RawMessage, error) {
+func Suggest(ctx context.Context, a dispatch.Caller, req SuggestionRequest, fieldType string) ([]json.RawMessage, error) {
 	field := req.Model + "." + req.Field
 	filters := []any{}
 	if q := strings.TrimSpace(req.Q); q != "" && fieldType == "text" {
@@ -219,7 +219,7 @@ type Problem struct {
 
 // Validate returns the AML problems that break the Data Folder: files that don't compile, and
 // error-severity findings. Warnings are left out of the banner.
-func Validate(ctx context.Context, a *anfra.Anfra) ([]Problem, error) {
+func Validate(ctx context.Context, a dispatch.Caller) ([]Problem, error) {
 	_, raw, err := a.Call(ctx, "validate", nil)
 	if err != nil {
 		return nil, err

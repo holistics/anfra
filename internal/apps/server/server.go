@@ -15,18 +15,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/holistics/anfra/internal/apps/anfra"
 	"github.com/holistics/anfra/internal/apps/assets"
 	"github.com/holistics/anfra/internal/apps/dataapps"
-	"github.com/holistics/anfra/internal/apps/repofiles"
 	"github.com/holistics/anfra/internal/apps/descriptors"
+	"github.com/holistics/anfra/internal/apps/dispatch"
 	"github.com/holistics/anfra/internal/apps/queries"
+	"github.com/holistics/anfra/internal/apps/repofiles"
 )
 
 // Server holds the demo's state: anfra, the Data Folder, its Datasets and AML problems, and the
 // Shells listening for events.
 type Server struct {
-	Anfra      *anfra.Anfra
+	Anfra      dispatch.Caller
 	DataFolder string
 	SDKBundle  string
 	Shell      fs.FS
@@ -42,15 +42,14 @@ type Server struct {
 }
 
 // New builds the Server's starting state: the Datasets and the AML's problems.
-func New(ctx context.Context, a *anfra.Anfra, dataFolder, sdkBundle string, shell fs.FS) (*Server, error) {
+func New(ctx context.Context, a dispatch.Caller, dataFolder, sdkBundle string, shell fs.FS) (*Server, error) {
 	s := &Server{Anfra: a, DataFolder: dataFolder, SDKBundle: sdkBundle, Shell: shell, subs: map[chan string]struct{}{}}
 	s.revalidate(ctx)
 	datasets, err := descriptors.Build(ctx, a)
 	if err != nil {
-		return nil, anfra.Startupf("Couldn't read the Data Folder's datasets from anfra: %v", err)
+		return nil, fmt.Errorf("Couldn't read the Data Folder's datasets from anfra: %v", err)
 	}
 	s.datasets = datasets
-	a.OnExit(func() { s.broadcast(map[string]any{"type": "anfra", "status": "down"}) })
 	return s, nil
 }
 
@@ -133,7 +132,7 @@ func (s *Server) internal(w http.ResponseWriter, r *http.Request, p string) {
 		writeJSON(w, http.StatusOK, repofiles.Catalog(s.DataFolder))
 	case p == "/api/status" && r.Method == http.MethodGet:
 		status := "down"
-		if s.Anfra.Running() && s.Anfra.Healthy(r.Context()) {
+		if s.Anfra.Healthy(r.Context()) {
 			status = "up"
 		}
 		s.mu.RLock()
@@ -233,7 +232,7 @@ func (s *Server) answer(w http.ResponseWriter, result any, err error) {
 		writeJSON(w, http.StatusOK, result)
 	case errors.As(err, &failure):
 		queryError(w, failure.Message)
-	case anfra.IsAbort(err):
+	case dispatch.IsAbort(err):
 		// The client is gone; there is no one to answer.
 	default:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
