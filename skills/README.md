@@ -27,6 +27,16 @@ Cursor's plugin marketplaces are managed at the team/org level (Teams or Enterpr
 3. Review the parsed plugins, set Team Access groups if needed, name the marketplace, and save.
 4. Teammates open the marketplace panel in Cursor and install the plugins they want (required plugins install automatically).
 
+### Codex
+Add the marketplace with the Codex CLI:
+```bash
+codex plugin marketplace add holistics/anfra-skills
+```
+
+Then install the plugins you want from the Plugins Directory. Upgrade later with `codex plugin marketplace upgrade`.
+
+The Codex plugin includes the skills and the AML validation hook. The `aql-writer` agent is only available in Claude Code, because the Codex plugin format doesn't document support for subagents.
+
 ## Plugins
 
 ### `anfra-development`
@@ -47,7 +57,7 @@ Develop analytics with Anfra.
 
 | Hook | What it does |
 |---|---|
-| Validate AML | After each `Write`/`Edit` of an AML file, runs `anfra validate` on it and reports diagnostics. |
+| Validate AML | After each `Write`/`Edit` (or Codex `apply_patch`) of an AML file, runs `anfra validate` on it and reports diagnostics. |
 
 More plugins (e.g. for consumers/explorers) may be added to this marketplace over time.
 
@@ -68,7 +78,7 @@ plugin as scope, e.g. `feat(plugins.anfra-development): ...`.
 `main` is protected, so releases go through a PR:
 
 1. On a branch, run `pnpm bump plugins/<plugin> <version>`. This bumps the plugin's
-   `plugin.json` (Claude and Cursor), the matching marketplace version, and the
+   `plugin.json` (Claude, Cursor and Codex), the matching marketplace version, and the
    plugin's `CHANGELOG.md`.
 2. Commit as `release(plugins.<plugin>): <version>` and open a PR.
 3. After the PR merges, CI tags the commit as `<plugin>-v<version>` and

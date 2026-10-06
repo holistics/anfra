@@ -1,0 +1,27 @@
+{
+  "name": "anfra-development",
+  "description": "Skills for developing analytics with Anfra: writing AQL queries and AML models against a local AMQL repo.",
+  "version": "0.0.3",
+  "author": {
+    "name": "Anfra"
+  },
+  "homepage": "https://anfra.ai",
+  "repository": "https://github.com/holistics/anfra-skills",
+  "keywords": [
+    "anfra",
+    "amql",
+    "aml",
+    "aql",
+    "analytics",
+    "modeling"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Anfra Development",
+    "shortDescription": "Write AQL queries and AML models against a local AMQL repo.",
+    "developerName": "Anfra",
+    "category": "Data & Analytics",
+    "websiteURL": "https://anfra.ai"
+  }
+}
