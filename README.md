@@ -138,11 +138,17 @@ anfra update          # replace the binary with the latest release
 anfra update --check  # check for a newer release without installing
 ```
 
-### 2. Create a project
+Then install the `build-anfra-app` skill, which teaches your coding agent how to model data in AMQL and build apps with the Anfra SDK:
 
-<!-- TODO: `anfra setup` and `anfra init` are not in the CLI yet -->
+<!-- TODO: `anfra setup` is not in the CLI yet; confirm where it installs the skill and which agents it supports -->
 ```sh
 anfra setup
+```
+
+### 2. Create a project
+
+<!-- TODO: `anfra init` is not in the CLI yet -->
+```sh
 anfra init custom-bi
 cd custom-bi/
 ```
@@ -157,7 +163,7 @@ custom-bi/
 ├── models/                # model definitions (AMQL)
 ├── datasets/              # dataset definitions (AMQL)
 ├── apps/                  # one folder per app (HTML + JS)
-└── AGENTS.md              # instructions and skills for coding agents
+└── AGENTS.md              # instructions for coding agents
 ```
 
 ### 3. Connect a warehouse
@@ -179,12 +185,10 @@ data_sources:
 
 ### 4. Start building
 
-Open the folder in Claude Code or Cursor. `anfra setup` has already registered the skills. <!-- TODO: confirm what `anfra setup` does -->
-
-Then ask the agent for an app:
+Open the folder in Claude Code or Cursor and ask the agent for an app. Start the prompt with `/build-anfra-app` so the agent uses the skill:
 
 ```text
-Look at the orders data and build me a revenue overview: monthly trend,
+/build-anfra-app Look at the orders data and build me a revenue overview: monthly trend,
 revenue by region with a region filter, and a table of top products.
 Clicking a region should filter everything else.
 ```
@@ -255,7 +259,7 @@ Asking a chatbot works for a question you ask once. For questions your team asks
 <details>
 <summary><b>Do I have to learn AMQL?</b></summary>
 
-No. Your coding agent drafts and edits models using the bundled skills, and you review changes like any other code. AMQL compiles to plain SQL you can read.
+No. Your coding agent drafts and edits models using the `build-anfra-app` skill, and you review changes like any other code. AMQL compiles to plain SQL you can read.
 </details>
 
 <details>
