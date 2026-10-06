@@ -150,7 +150,7 @@ func (c *command[In, Out]) register(reg *apikit.Registry[CommandContext]) {
 	}
 	apikit.Register(reg, admission, &apikit.Def[CommandContext, In, Out]{
 		Name: OpName(c.def.Name), Summary: c.def.Short, Doc: c.def.Long, Errors: errs,
-		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, Timeout: c.def.Timeout, HTTP: true,
+		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, Timeout: c.def.Timeout, HTTP: true, MCP: true,
 		Handle: func(ctx context.Context, cc CommandContext, in In) (Out, error) {
 			applyDefaults(c.args, &in)
 			return c.def.Run(ctx, cc, in)

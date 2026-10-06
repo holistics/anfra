@@ -55,6 +55,9 @@ type HTTP[R any] struct {
 	// Errors are the codes the host's admission and Guard can answer an op with,
 	// published with the codes it declares, in this order.
 	Errors func(m Meta) []apperr.Code
+	// Visible reports which ops the caller may call, for discovery (Discovery).
+	// Nil: every op.
+	Visible func(ctx context.Context, r R, ops []Meta) ([]bool, error)
 }
 
 // Base is a path below /api that ops are served under, with variables:
@@ -106,12 +109,60 @@ func (h HTTP[R]) api(rt *Runtime, reg *Registry[R]) (huma.API, *http.ServeMux) {
 	cfg.OpenAPI.Extensions = h.Extensions
 	api := humago.New(mux, cfg)
 
+	servers := map[string]bool{root: true}
 	for _, o := range reg.Ops() {
 		if o.Meta().HTTP {
 			h.register(api, mux, rt, o)
+			servers[h.server(o.Meta())] = true
 		}
 	}
+	for server := range servers {
+		h.discover(mux, rt, reg, server)
+	}
 	return api, mux
+}
+
+// server is the path an op is served below: /api, or its base.
+func (h HTTP[R]) server(m Meta) string {
+	if h.Base != nil {
+		if b := h.Base(m); b != nil {
+			return root + b.Path
+		}
+	}
+	return root
+}
+
+// discover serves discovery for the ops served below server — the index at
+// GET <server>/ops, a group at GET <server>/ops?group=<name>, an op's usage at
+// GET <server>/ops/<name> — each showing only what the caller may call.
+func (h HTTP[R]) discover(mux *http.ServeMux, rt *Runtime, reg *Registry[R], server string) {
+	d := Discovery[R]{Visible: h.Visible, Errors: h.Errors, Codes: h.Codes}
+	here := func(m Meta) bool { return m.HTTP && h.server(m) == server }
+	serve := func(route string, answer func(ctx context.Context, req R, r *http.Request) (any, error)) {
+		mux.HandleFunc(http.MethodGet+" "+route, func(w http.ResponseWriter, r *http.Request) {
+			httpkit.Routed(r.Context(), "ops", route)
+			req, err := h.Request(w, r)
+			if err != nil {
+				httpkit.WriteError(w, r, err)
+				return
+			}
+			out, err := answer(r.Context(), req, r)
+			if err != nil {
+				httpkit.WriteError(w, r, err)
+				return
+			}
+			httpkit.WriteJSON(w, http.StatusOK, out)
+		})
+	}
+	serve(server+"/ops", func(ctx context.Context, req R, r *http.Request) (any, error) {
+		if group := r.URL.Query().Get("group"); group != "" {
+			return d.Group(ctx, reg, req, here, group)
+		}
+		return d.Index(ctx, reg, req, here)
+	})
+	serve(server+"/ops/{name}", func(ctx context.Context, req R, r *http.Request) (any, error) {
+		return d.Usage(ctx, rt, reg, req, here, r.PathValue("name"))
+	})
 }
 
 // register serves o at POST <server>/<name>, and refuses other methods there

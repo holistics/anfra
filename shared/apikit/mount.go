@@ -57,6 +57,11 @@ func Mount[R, C, From any](into *Registry[R], from *Registry[From], name string,
 			panic(fmt.Sprintf("op %q: an overlay may not rename an op or change its codes", name))
 		}
 	}
+	if group := GroupOf(name); into.groups[group] == "" {
+		// The mounted op's group, as its registry describes it, unless the host
+		// describes it itself.
+		into.groups[group] = from.groups[group]
+	}
 	into.add(&mounted[R, C, From]{inner: inner, m: m, meta: meta, step: stepFor(into.ns, name), params: into.params})
 }
 

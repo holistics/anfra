@@ -3,6 +3,7 @@ package apikit
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -20,6 +21,7 @@ type Registry[R any] struct {
 	params func(R) []any
 	ops    []Op[R]
 	byName map[string]Op[R]
+	groups map[string]string // group name → its one-line summary
 }
 
 // RegistryConfig is what a registry needs of its host.
@@ -36,7 +38,27 @@ func NewRegistry[R any](c RegistryConfig[R]) *Registry[R] {
 	if c.Namespace.String() == "" {
 		panic("apikit: a registry needs its host's namespace")
 	}
-	return &Registry[R]{ns: c.Namespace, params: c.StepParams, byName: map[string]Op[R]{}}
+	return &Registry[R]{ns: c.Namespace, params: c.StepParams, byName: map[string]Op[R]{}, groups: map[string]string{}}
+}
+
+// Group declares a group of ops — the first segment of their names — with its
+// one-line summary: the index level of discovery. An op is registered only into
+// a declared group, so the index never shows a blank. Declaring a group twice
+// panics.
+func (r *Registry[R]) Group(name, summary string) {
+	switch _, dup := r.groups[name]; {
+	case dup:
+		panic(fmt.Sprintf("group %q: declared twice", name))
+	case name == "" || strings.Contains(name, ".") || summary == "":
+		panic(fmt.Sprintf("group %q: a group is one name segment, with a summary", name))
+	}
+	r.groups[name] = summary
+}
+
+// GroupOf is the group an op name belongs to: its first segment.
+func GroupOf(op string) string {
+	group, _, _ := strings.Cut(op, ".")
+	return group
 }
 
 // add holds o; a name the registry already holds panics. It is unexported so
@@ -45,6 +67,9 @@ func (r *Registry[R]) add(o Op[R]) {
 	n := o.Meta().Name
 	if _, dup := r.byName[n]; dup {
 		panic(fmt.Sprintf("op %q: registered twice", n))
+	}
+	if _, ok := r.groups[GroupOf(n)]; !ok {
+		panic(fmt.Sprintf("op %q: its group %q is not declared (Registry.Group)", n, GroupOf(n)))
 	}
 	r.byName[n] = o
 	r.ops = append(r.ops, o)
