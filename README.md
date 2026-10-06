@@ -18,14 +18,16 @@ Sample custom BI apps built with Anfra.
 
 | | |
 |---|---|
-| [![Funnel analysis](docs/demo-images/funnel-analysis.png)](https://anfra-demo.pages.holistics.dev/fancy-demos/funnel-analysis) | **[Funnel analysis](https://anfra-demo.pages.holistics.dev/fancy-demos/funnel-analysis)**<br>A customer journey funnel where users add, remove, and reorder steps (signed up, placed an order, reached N orders, bought from a category, total spend). Filter by country, order status, and conversion window, then click a bar to see who converted or dropped off. Breakdown and signup-cohort charts cross-filter the funnel. |
-| [![Cohort analysis](docs/demo-images/cohort-analysis.png)](https://anfra-demo.pages.holistics.dev/fancy-demos/cohort-heatmap) | **[Cohort analysis](https://anfra-demo.pages.holistics.dev/fancy-demos/cohort-heatmap)**<br>A retention heatmap with signup-month cohorts as rows and months since signup as columns. Switch between revenue, orders, and units, or show values per customer. Click a cell or cohort to filter the panels below, and right-click a cell to see its underlying data. |
-| [![Cashflow reports](docs/demo-images/cashflow-reports.png)](https://anfra-demo.pages.holistics.dev/reports/cashflow) | **[Cashflow statement](https://anfra-demo.pages.holistics.dev/reports/cashflow)**<br>A financial statement grouped into operating, investing, and financing activities, with subtotals, net change in cash, and ending cash. Switch between monthly and quarterly periods. In-cell bars show positive and negative values at a glance. |
-| [![Flex canvas](docs/demo-images/flex-canvas.png)](https://anfra-demo.pages.holistics.dev/builders/flex) | **[Canvas builder](https://anfra-demo.pages.holistics.dev/builders/flex)**<br>A free-form canvas where users add chart blocks, move them around, and zoom. Click a mark on a chart to drill down by another dimension, such as country or category, and the new chart appears linked to the one it came from. |
+| [![Funnel analysis](docs/images/gallery/funnel-analysis.png)](https://anfra-demo.pages.holistics.dev/fancy-demos/funnel-analysis) | **[Funnel analysis](https://anfra-demo.pages.holistics.dev/fancy-demos/funnel-analysis)**<br>A customer journey funnel where users add, remove, and reorder steps (signed up, placed an order, reached N orders, bought from a category, total spend). Filter by country, order status, and conversion window, then click a bar to see who converted or dropped off. Breakdown and signup-cohort charts cross-filter the funnel. |
+| [![Cohort analysis](docs/images/gallery/cohort-analysis.png)](https://anfra-demo.pages.holistics.dev/fancy-demos/cohort-heatmap) | **[Cohort analysis](https://anfra-demo.pages.holistics.dev/fancy-demos/cohort-heatmap)**<br>A retention heatmap with signup-month cohorts as rows and months since signup as columns. Switch between revenue, orders, and units, or show values per customer. Click a cell or cohort to filter the panels below, and right-click a cell to see its underlying data. |
+| [![Cashflow reports](docs/images/gallery/cashflow-reports.png)](https://anfra-demo.pages.holistics.dev/reports/cashflow) | **[Cashflow statement](https://anfra-demo.pages.holistics.dev/reports/cashflow)**<br>A financial statement grouped into operating, investing, and financing activities, with subtotals, net change in cash, and ending cash. Switch between monthly and quarterly periods. In-cell bars show positive and negative values at a glance. |
+| [![Flex canvas](docs/images/gallery/flex-canvas.png)](https://anfra-demo.pages.holistics.dev/builders/flex) | **[Canvas builder](https://anfra-demo.pages.holistics.dev/builders/flex)**<br>A free-form canvas where users add chart blocks, move them around, and zoom. Click a mark on a chart to drill down by another dimension, such as country or category, and the new chart appears linked to the one it came from. |
 
 [View more demos →](https://anfra-demo.pages.holistics.dev/)
 
 ## How Anfra works
+
+<img src="docs/images/how-anfra-works.png" alt="How Anfra works" align="right" width="420">
 
 Anfra comes with a few components:
 - A semantic layer to define your models, datasets, and metrics as code
