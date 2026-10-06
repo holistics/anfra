@@ -33,6 +33,20 @@ the type definition.**
 * **Datasets** bundle models + relationships and expose dataset-level `metric`s and `dimension`s. A dataset is what AQL queries target.
 * **`data_source_name`** on a model/dataset names a source configured in the repo's `.anfra/data_sources.yml` — data sources aren't defined in AML here.
 
+## Studying the data source
+`anfra query --lang sql` runs raw SQL against a data source:
+
+```bash
+anfra query --lang sql --data-source <name> '<sql>'   # -s <name> for short; SQL read from stdin when omitted
+```
+
+`<name>` is a source in `.anfra/data_sources.yml`. Use it **only** to study the source schema (tables, columns,
+types) and a high-level data profile (row counts, cardinality, null rates, value
+ranges, key uniqueness) so you can model the data in AML more accurately and
+effectively — e.g. pick the right primary key, field types, and relationship
+direction. **Never** use it to answer data questions; those go through AQL against a
+dataset ([](../write-aql/)).
+
 ## Best practices
 * **Always define a model's primary key** — mark the identifying `dimension` with `primary_key: true`. Relationships and correct aggregation rely on it.
 * **Prefer AQL definitions**; only fall back to raw SQL when referencing #SOURCE columns.
