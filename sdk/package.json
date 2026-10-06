@@ -1,0 +1,37 @@
+{
+  "name": "anfra-sdk",
+  "version": "0.1.0",
+  "description": "Headless SDK for declaring and running Data Apps against a semantic layer, through a provisioned Backend",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./iife": "./dist/anfra-sdk.global.js",
+    "./ambient": {
+      "types": "./ambient.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "ambient.d.ts"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "TZ=\"Asia/Kuala_Lumpur\" vitest run",
+    "test:watch": "TZ=\"Asia/Kuala_Lumpur\" vitest watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "jsdom": "^26.1.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

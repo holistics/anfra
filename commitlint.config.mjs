@@ -17,6 +17,8 @@ export default {
         'repo',
         'datasource',
         'meta',
+        'sdk',
+        'apps',
 
         'deps',
       ],

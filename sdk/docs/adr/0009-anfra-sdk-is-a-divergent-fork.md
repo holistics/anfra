@@ -1,0 +1,3 @@
+# anfra-sdk is a divergent fork of the Holistics Data App SDK
+
+This package started as a verbatim copy of hdev's `packages/data-app-sdk` (at `d782f424ac9`) and is renamed: the package is `anfra-sdk` and the sandbox global is `Anfra`. hdev keeps its own copy, untouched. The two are expected to drift until a later, separate job unifies them from the hdev side, so a Data App written for one is not guaranteed to run on the other. We forked rather than moving the package out of hdev so that building on anfra neither waits on nor risks changes to Holistics. ADRs 0001–0008 are the history this fork inherited; where a later ADR here contradicts one of them, the later one wins.
