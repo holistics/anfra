@@ -4,13 +4,23 @@
 
 Use your own HTML, JavaScript, and charting library. Anfra connects the app to reusable metrics, live warehouse queries, and analytics interactions such as filtering, drill-down, and period comparisons.
 
+<p align="center">
+  <a href="https://docs.anfra.ai">Docs</a> · <a href="https://anfra-demo.pages.holistics.dev/">Live demos</a> · <a href="#quickstart">Quickstart</a>
+</p>
+
+<!-- TODO: replace with a GIF of the funnel demo: click a bar, the other charts filter -->
+<p align="center">
+  <a href="https://anfra-demo.pages.holistics.dev/fancy-demos/funnel-analysis"><img src="docs/images/gallery/funnel-analysis.png" alt="Funnel analysis app built with Anfra" width="720"></a>
+</p>
+<p align="center">
+  <em>A funnel analysis app built by a coding agent with Anfra. <a href="https://anfra-demo.pages.holistics.dev/fancy-demos/funnel-analysis">Try it live →</a></em>
+</p>
+
 ## Why Anfra?
 
 Traditional BI tools make it easier to trust the numbers, but often limit teams to fixed dashboard layouts and interactions. On the other hand, coding agents can build custom dashboard apps with HTML and JavaScript easily, but wiring each view to the warehouse — and getting filters, drill-downs, and comparisons right — is easy to get wrong and hard to reuse.
 
-Anfra is an **open-source SDK and semantic backend for those apps**. Define datasets and metrics once, then let agents build custom interfaces using reusable queries and analytics interactions resolved by the engine.
-
-Every result can also be traced to its query and model, so teams get flexible apps without redefining the numbers each time.
+With Anfra, you define metrics once, the agent writes the UI, and Anfra turns every click into a query on those metrics. [See what that looks like](#what-it-looks-like).
 
 ## Demo gallery
 
@@ -43,20 +53,36 @@ How it works in a few steps:
 4. Run `anfra serve`. The server resolves each query through the semantic layer, runs it on the warehouse, and returns results to the page.
 5. Check any number in the app to see the query and metric definitions behind it.
 
-## Semantic UI
+## What it looks like
 
-A vibe-coded app connected directly to a semantic layer still has to handle every interaction itself. When a user picks a region, clicks a bar, or compares to last period, the agent writes code to rebuild each affected query: which filters apply to which charts, how a drill changes the grain, how to calculate the prior period. Every app does this differently, and this code is where the numbers usually go wrong.
+A revenue page with two charts: revenue by region and a monthly revenue trend. Clicking a region filters the trend.
 
-Anfra adds a Semantic UI layer between your frontend code and the semantic layer. Your page declares three kinds of objects:
+<!-- TODO: verify the AMQL metric, the `grain` field, and the generated SQL against the real implementation -->
 
-- **Queries**: the data each view needs, by dataset, dimension, and metric.
-- **Controls**: inputs such as a region filter, a date drill, or a parameter.
-- **Mappings**: which controls and selections affect which queries.
+**1. Define a metric once** in the semantic layer:
 
-Anfra Server turns each interaction into a new semantic query. The page reports what the user did and redraws the results:
+```text
+Dataset sales {
+  metric revenue {
+    definition: @aql sum(orders.amount) ;;
+  }
+}
+```
+
+**2. Your agent writes the page.** It declares two queries and a mapping that says a click on one filters the other:
 
 ```js
-// byRegion and trend are query objects behind two charts
+const byRegion = app.createQuery('byRegion', {
+  dataset: 'sales',
+  dimensions: { region: { field: 'users.region' } },
+  measures: { revenue: { field: 'revenue' } },
+})
+const trend = app.createQuery('trend', {
+  dataset: 'sales',
+  dimensions: { month: { field: 'orders.created_at', grain: 'month' } },
+  measures: { revenue: { field: 'revenue' } },
+})
+
 app.mapCrossFilter(byRegion, trend)
 
 regionChart.on('click', (row) => {
@@ -65,7 +91,23 @@ regionChart.on('click', (row) => {
 })
 ```
 
-Clicking a region filters the trend chart. The page contains no filter logic and computes no numbers.
+Queries, controls, and mappings like these are what we call Semantic UI. The page declares what each view shows and how views are connected, and Anfra handles the queries.
+
+**3. A user clicks "APAC".** Anfra Server rewrites the trend query and runs:
+
+```sql
+SELECT date_trunc('month', orders.created_at) AS month, SUM(orders.amount) AS revenue
+FROM orders
+JOIN users ON orders.user_id = users.id
+WHERE users.region = 'APAC'
+GROUP BY 1
+```
+
+The page never wrote that SQL, and `revenue` means the same thing in every app that uses it.
+
+**4. Inspect any number** to see the query and metric definitions behind it.
+
+<!-- TODO: add a screenshot or JSON sample of what inspect returns -->
 
 See the [Semantic UI guide](https://docs.anfra.ai/docs/sdk) for queries, controls, and interaction mappings in detail.
 
@@ -148,76 +190,15 @@ With no models yet, the agent proposes datasets and metrics as code in the `mode
 
 Run `anfra serve`. The app opens at `http://localhost:4000/<name>`. <!-- TODO: confirm port and app path -->
 
-## What you can do with Anfra
+## Also works for AI artifacts
 
-### 1. Vibe-code sophisticated data apps
-
-For data and analytics teams who want more than a dashboard grid: funnels, cohort retention, a Mixpanel-style event explorer, a P&L with period-over-period and drill-down, a personalized "my accounts" view for every sales rep.
-
-Describe the app to Claude or Cursor. The agent reads your semantic layer through the Anfra MCP server and writes the page with the SDK. You iterate in plain language.
-
-```text
-Build a signup → activation → paid funnel by week, split by acquisition channel.
-Clicking a step should cross-filter a table of accounts that dropped off there.
-```
-
-→ [Funnel](https://anfra.dev/gallery/funnel) · [Cohort retention](https://anfra.dev/gallery/cohorts) · [P&L with PoP](https://anfra.dev/gallery/pnl) <!-- TODO: build these samples -->
-
-### 2. Put AI artifacts on governed data
-
-For data leaders whose business users already make reports in Claude or ChatGPT.
-
-Connect everyone's agent to one Anfra server instead of straight to the warehouse. The artifacts they create:
+Business users already make reports in Claude or ChatGPT. Connect their agents to one Anfra server instead of straight to the warehouse, and the artifacts they create:
 
 - query shared metric definitions rather than improvised SQL;
 - keep no data in the file and refresh when opened;
 - can be inspected back to the query and metric behind every number.
 
-Your users keep the Claude experience. You keep one semantic layer. The open-source server does not manage users or permissions. When artifacts need to be shared with permissions, audited and revoked across the company, that's [Anfra Cloud](#anfra-oss-vs-anfra-cloud).
-
-
-## Core concepts
-
-| Concept                    | What it is                                                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Model**                  | A mapping from a warehouse table or SQL query to dimensions and measures, defined in AMQL in `models/`.                                                |
-| **Dataset**                | A set of related models the agent is allowed to query, defined in AMQL in `datasets/`.                                                                 |
-| **Metric**                 | A named, reusable measure (`revenue`, `active_users`, `conversion_rate`) defined once and composable with others. In AMQL it is written as a `measure`. |
-| **Query**                  | A declared request against a dataset: dimensions, measures, filters. Written as AMQL or structured fields; query-local metrics are allowed.            |
-| **Control**                | A filter, date drill or parameter whose value flows into the queries it's mapped to.                                                                   |
-| **Mapping / cross-filter** | Explicit edges between controls, selections and queries. Nothing cascades implicitly, so behaviour is predictable.                                     |
-| **Inspect**                | Every result carries provenance: executed query, fields, metric definitions, timing, cache status and lineage.                                         |
-
-AMQL is the language for defining models and datasets and for querying them.
-
-## CLI
-
-Run `anfra --help` for commands, or `anfra <command> --help` for a specific one.
-
-| Command | What it does |
-| --- | --- |
-| `anfra serve` | Start a warm server for the current repo. Other commands route to it when it is running. |
-| `anfra query` | Compile and run an AMQL query against a dataset (`--generate` prints the SQL, `--validate` type-checks). |
-| `anfra validate` | Validate the AMQL repo, optionally scoped to file globs. |
-| `anfra ingest` | Build the local search catalog from context sources. |
-| `anfra search` | Search the local catalog. |
-| `anfra status` | Report whether a warm server is running and its sidecars are healthy. |
-| `anfra update` | Update the binary to the latest release. |
-| `anfra version` | Print the anfra version. |
-
-## Architecture
-
-| Package | Description |
-| --- | --- |
-| `core` | The engine: semantic layer, modeling language, query compiler, connections, catalog and lineage. No server, no UI. |
-| `server` | HTTP semantic API and MCP server, wrapping `core`. |
-| `cli` | `anfra init`, `anfra serve`, `anfra validate` and friends. |
-| `sdk` (`@anfra/sdk`) | Headless browser SDK: queries, controls, interactions, state, provenance. |
-| `skills` | Agent skills and worked examples for the SDK and modeling language. |
-
-<!-- TODO: confirm repo layout (single repo vs engine + SDK repos — open item with Hoàng). -->
-
-The built-in semantic layer uses AMQL, the language behind [Holistics](https://www.holistics.io), which runs in production at hundreds of companies. Support for other semantic layers is planned. <!-- TODO: verify customer-count claim before publishing -->
+The open-source server does not manage users or permissions. To share artifacts with permissions, audit them, and revoke access across the company, use [Anfra Cloud](#anfra-oss-vs-anfra-cloud).
 
 ## Anfra OSS vs Anfra Cloud
 
@@ -234,8 +215,6 @@ The open-source engine is complete for building, running and self-hosting apps f
 | Hosted apps: sharing, public links, discovery | —                   | ✅           |
 | Audit trail, usage monitoring                 | —                   | ✅           |
 | Snapshots, versioning                         | —                   | ✅           |
-
-
 
 ## FAQ
 
@@ -274,3 +253,48 @@ Not yet. It's on the roadmap. Direct SQL datasets are supported today. <!-- TODO
 
 Source data is resolved by the server at view time. Page code *can* transform returned rows in JavaScript. Inspect shows the server query, and anything computed on top of it in the page is the page's responsibility.
 </details>
+
+## Reference
+
+### Core concepts
+
+| Concept                    | What it is                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Model**                  | A mapping from a warehouse table or SQL query to dimensions and measures, defined in AMQL in `models/`.                                                |
+| **Dataset**                | A set of related models the agent is allowed to query, defined in AMQL in `datasets/`.                                                                 |
+| **Metric**                 | A named, reusable measure (`revenue`, `active_users`, `conversion_rate`) defined once and composable with others. In AMQL it is written as a `measure`. |
+| **Query**                  | A declared request against a dataset: dimensions, measures, filters. Written as AMQL or structured fields; query-local metrics are allowed.            |
+| **Control**                | A filter, date drill or parameter whose value flows into the queries it's mapped to.                                                                   |
+| **Mapping / cross-filter** | Explicit edges between controls, selections and queries. Nothing cascades implicitly, so behaviour is predictable.                                     |
+| **Inspect**                | Every result carries provenance: executed query, fields, metric definitions, timing, cache status and lineage.                                         |
+
+AMQL is the language for defining models and datasets and for querying them.
+
+### CLI
+
+Run `anfra --help` for commands, or `anfra <command> --help` for a specific one.
+
+| Command | What it does |
+| --- | --- |
+| `anfra serve` | Start a warm server for the current repo. Other commands route to it when it is running. |
+| `anfra query` | Compile and run an AMQL query against a dataset (`--generate` prints the SQL, `--validate` type-checks). |
+| `anfra validate` | Validate the AMQL repo, optionally scoped to file globs. |
+| `anfra ingest` | Build the local search catalog from context sources. |
+| `anfra search` | Search the local catalog. |
+| `anfra status` | Report whether a warm server is running and its sidecars are healthy. |
+| `anfra update` | Update the binary to the latest release. |
+| `anfra version` | Print the anfra version. |
+
+### Architecture
+
+| Package | Description |
+| --- | --- |
+| `core` | The engine: semantic layer, modeling language, query compiler, connections, catalog and lineage. No server, no UI. |
+| `server` | HTTP semantic API and MCP server, wrapping `core`. |
+| `cli` | `anfra init`, `anfra serve`, `anfra validate` and friends. |
+| `sdk` (`@anfra/sdk`) | Headless browser SDK: queries, controls, interactions, state, provenance. |
+| `skills` | Agent skills and worked examples for the SDK and modeling language. |
+
+<!-- TODO: confirm repo layout (single repo vs engine + SDK repos — open item with Hoàng). -->
+
+The built-in semantic layer uses AMQL, the language behind [Holistics](https://www.holistics.io), which runs in production at hundreds of companies. Support for other semantic layers is planned. <!-- TODO: verify customer-count claim before publishing -->
