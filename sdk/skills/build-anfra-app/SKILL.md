@@ -1,15 +1,15 @@
 ---
 name: build-anfra-app
-description: Build an anfra Data App — one self-contained HTML file in a Data Folder's `apps/` that queries datasets through the `Anfra` SDK global — from a short description, then iterate on the user's test feedback.
+description: Build an anfra Data App — one self-contained HTML file in an anfra Repo's `apps/` that queries datasets through the `Anfra` SDK global — from a short description, then iterate on the user's test feedback.
 disable-model-invocation: true
 ---
 
 # Building a Data App
 
-A **Data App** is one HTML file saved under a Data Folder's `apps/` directory. The anfra demo lists
-it by its `<title>` and runs it in a sandboxed frame where a provisioned SDK already sits on the
+A **Data App** is one HTML file saved under an anfra Repo's `apps/` directory. The Shell
+(`anfra serve --apps`, run in the Repo) lists it by its `<title>` and runs it in a sandboxed frame where a provisioned SDK already sits on the
 global `Anfra`. The SDK supplies data and state; every pixel is yours. You don't run the app
-yourself: the user opens it in the demo and reports back, so their console output is your only
+yourself: the user opens it in the Shell and reports back, so their console output is your only
 debugger.
 
 Reference, read when a step needs it:
@@ -22,7 +22,7 @@ Reference, read when a step needs it:
 
 ### 1. Collect the environment
 
-The Data Folder is plain files, so read it directly:
+The Repo is plain files, so read it directly:
 
 - `datasets/*.dataset.aml`: each `Dataset <name> { … }`. The name is what `dataset:` takes. Its
   `models:` list says which models it joins, `relationships:` how, and each `metric <name> { … }` is
@@ -33,7 +33,7 @@ The Data Folder is plain files, so read it directly:
 - Descriptions and labels carry the modeler's caveats on grain, fan-out and which date to use:
   follow them.
 
-If you can't read the folder, ask the user to save this as `apps/env.html`, open it in the demo, and
+If you can't read the folder, ask the user to save this as `apps/env.html`, open it in the Shell, and
 copy back the JSON it prints:
 
 ```html
@@ -75,14 +75,14 @@ Show that list to the user and get a yes before writing code.
 
 ### 3. Write the file
 
-One `.html` file in the Data Folder's `apps/` (subfolders group apps in the demo's list), with a
+One `.html` file in the Repo's `apps/` (subfolders group apps in the Shell's list), with a
 `<title>` the list will show. Everything inline except libraries loaded from a CDN, with pinned
 versions. Follow the skeleton in [example.html](example.html): declare everything, subscribe a render
 function, `execute()`, then wire controls and clicks to set state and call `execute()` again.
 
 The frame is a **sandbox** (`allow-scripts` only). Write for it:
 
-- Data comes only from the SDK. Don't call the demo server or anfra yourself.
+- Data comes only from the SDK. Don't call the anfra server yourself.
 - The origin is opaque: keep state in variables, since `localStorage`, `sessionStorage` and cookies
   throw.
 - Forms, popups and navigation are blocked. Use buttons and `change` listeners, never `<form>`.
@@ -132,12 +132,12 @@ four states, and the metadata block contains all five fields with known values o
 
 ### 4. Hand over and iterate
 
-Save the file (or give it to the user to save) and ask them to open it in the demo and report:
+Save the file (or give it to the user to save) and ask them to open it in the Shell and report:
 
 - what they see, against what they expected;
 - the browser console for the Data App's frame.
 
-The demo reloads a Data App when its file changes, so each revision is one save away.
+The Shell reloads a Data App when its file changes, so each revision is one save away.
 
 Read their report against [API.md](API.md#errors): a `ValidationError` points at a declaring line; a
 `QueryError` carries anfra's message about the AQL or names the bad entry (`filters[0].field`).

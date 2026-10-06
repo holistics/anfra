@@ -35,7 +35,7 @@ report in different zones.
 
 **Provisioner**:
 Whoever builds the SDK instance and hands it to the author's code — the page hosting a Data App,
-such as the anfra demo's Shell. Author code never provisions; it receives an SDK that is already
+such as anfra's Shell. Author code never provisions; it receives an SDK that is already
 provisioned.
 
 **Backend**:
@@ -47,10 +47,12 @@ _Avoid_: "transport", "API", "server" — those name one way of being a backend.
 **Query Input**:
 The structured additions a query carries on each run: the filters and conditions reaching it
 through mappings and cross-filters, the reader's sort, and its date drills. Sent beside the AQL,
-never spliced into it; the backend decides how to apply them.
+never spliced into it; the backend decides how to apply them. anfra rewrites the AQL with them
+(the root `CONTEXT.md` defines it as anfra applies it).
 
 **Execution options**:
 Per-run settings that are not AQL: page, page size, timezone, and whether to skip a result cache.
+anfra applies them when it compiles the query (the root `CONTEXT.md`).
 
 **Dataset descriptor**:
 The metadata for one dataset — its id, models, fields, and metrics. Part of the environment: it
