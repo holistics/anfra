@@ -202,7 +202,12 @@ The open-source server does not manage users or permissions. To share artifacts 
 
 ## Anfra OSS vs Anfra Cloud
 
-The open-source engine is complete for building, running and self-hosting apps for your team. It is an engine, not the whole car: it doesn't manage users or enforce who can see what.
+Anfra Cloud is our hosted product, built on the same open-source engine. It adds what a team needs to share apps: users and SSO, row-level permissions, hosted apps with sharing links, audit logs and version history.
+
+A project you build with open-source Anfra runs unchanged on Anfra Cloud. Moving it takes one publish step, with no changes to your models or apps. <!-- TODO: name the command (`git push` or `anfra publish`) once it exists -->
+
+- **Use open-source Anfra** to build and run apps on your own infrastructure, for yourself or a team that doesn't need per-user permissions.
+- **Use Anfra Cloud** to share apps across your company with logins, permissions and audit logs, without running the server yourself.
 
 |                                               | Anfra (open source) | Anfra Cloud |
 | --------------------------------------------- | ------------------- | ----------- |
@@ -215,6 +220,8 @@ The open-source engine is complete for building, running and self-hosting apps f
 | Hosted apps: sharing, public links, discovery | —                   | ✅           |
 | Audit trail, usage monitoring                 | —                   | ✅           |
 | Snapshots, versioning                         | —                   | ✅           |
+
+Anfra Cloud isn't available yet. [Join the waitlist](#) to get access when it opens. A paid self-hosted edition with the same features is planned. <!-- TODO: add the waitlist link -->
 
 ## FAQ
 
@@ -288,7 +295,7 @@ Numbers come from queries the server runs on your warehouse. Page code can still
 <details>
 <summary><b>How does Anfra relate to Holistics? Will I be locked in?</b></summary>
 
-Anfra is built by the team behind Holistics, and AMQL is the semantic layer Holistics runs on. Anfra is a separate open-source project and doesn't need a Holistics account. Your models and apps are plain files in your own repository, and AMQL compiles to SQL you can read.
+Anfra is built by the team behind Holistics, and AMQL is the semantic layer Holistics runs on. Anfra is a separate open-source project, licensed under Apache 2.0, and doesn't need a Holistics account. Your models and apps are plain files in your own repository, and AMQL compiles to SQL you can read.
 </details>
 
 ## Learn more
@@ -297,3 +304,7 @@ Anfra is built by the team behind Holistics, and AMQL is the semantic layer Holi
 - [Semantic UI](https://docs.anfra.ai/docs/sdk): queries, controls, interaction mappings, and inspect
 - [CLI reference](https://docs.anfra.ai/docs/self-hosted/cli)
 - [Installation](https://docs.anfra.ai/docs/self-hosted/installation)
+
+## License
+
+Anfra is licensed under the [Apache License 2.0](LICENSE). <!-- TODO: add the LICENSE file to the repo -->
