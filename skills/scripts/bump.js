@@ -35,10 +35,11 @@ const pluginName = basename(path)
 execSync('git fetch --tags', { stdio: 'inherit' })
 
 // Bump each ecosystem's plugin manifest and its own marketplace in lockstep.
-// A plugin version only affects its own marketplace — Claude and Cursor evolve independently.
+// A plugin version only affects its own marketplace — Claude, Cursor and Codex evolve independently.
 const ecosystems = [
   { name: 'claude', pluginManifest: '.claude-plugin/plugin.json', marketplace: '.claude-plugin/marketplace.json' },
   { name: 'cursor', pluginManifest: '.cursor-plugin/plugin.json', marketplace: '.cursor-plugin/marketplace.json' },
+  { name: 'codex', pluginManifest: '.codex-plugin/plugin.json', marketplace: '.agents/plugins/marketplace.json' },
 ]
 
 let bumpedAny = false

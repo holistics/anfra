@@ -1,0 +1,24 @@
+{
+  "name": "anfra-skills",
+  "interface": {
+    "displayName": "Anfra Skills"
+  },
+  "metadata": {
+    "description": "Skills for working with Anfra — building and exploring analytics via AML and AQL.",
+    "version": "0.0.3"
+  },
+  "plugins": [
+    {
+      "name": "anfra-development",
+      "source": {
+        "source": "local",
+        "path": "./plugins/anfra-development"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Data & Analytics"
+    }
+  ]
+}
