@@ -55,7 +55,7 @@ func TestDecode(t *testing.T) {
 				}
 				return
 			}
-			v, _ := apperr.DetailsOf(err, errcode.InvalidArgs)
+			v, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
 			if !reflect.DeepEqual(v, tc.bad) {
 				t.Errorf("violations =\n  %+v\nwant\n  %+v", v, tc.bad)
 			}
@@ -132,7 +132,7 @@ func TestQueryInputs(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := run(t, tc.cmd, tc.cc, tc.in)
-			v, _ := apperr.DetailsOf(err, errcode.InvalidArgs)
+			v, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
 			if len(v) != 1 || v[0].Field != tc.field || v[0].Code != tc.code {
 				t.Errorf("got %v, %+v; want %s on %s", err, v, tc.code, tc.field)
 			}

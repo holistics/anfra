@@ -112,15 +112,15 @@ const (
 	StatusInvalid = app.StatusInvalid
 )
 
-// The codes Dispatch fails with. They carry a scope and no status: a host
-// translates them to its own codes where it calls Dispatch (apperr.Translate),
-// and treats anything else Dispatch returns as an internal error.
+// The codes Dispatch fails with, beside apperr.ValidationFailed for args it
+// refuses (an arg unknown, missing, malformed, conflicting with another, or not
+// applicable; its violations name each one). They carry a scope and no status:
+// a host translates them to its own codes where it calls Dispatch
+// (apperr.Translate), and treats anything else Dispatch returns as an internal
+// error.
 var (
 	// UnknownCommand: the request names no registered command.
 	UnknownCommand = errcode.UnknownCommand
-	// InvalidArgs: an arg is unknown, missing, malformed or conflicts with
-	// another; its violations name each one.
-	InvalidArgs = errcode.InvalidArgs
 	// DataPermsMissing: the Invocation's DataPerms were never decided.
 	DataPermsMissing = errcode.DataPermsMissing
 	// DataPermsUnenforceable: the Invocation's DataPerms are Restricted, and the
@@ -141,9 +141,10 @@ var (
 // Namespace is the engine's namespace, for its codes and its steps: anfra.
 var Namespace = errcode.NS
 
-// ErrorCodes lists every code Dispatch can fail with, with its scope and
-// details type: for a host to test that it translates each of them, and fail
-// its build on one added by an engine upgrade.
+// ErrorCodes lists the engine's own codes Dispatch can fail with — every one
+// but the generic validation_failed — with its scope and details type: for a
+// host to test that it translates each of them, and fail its build on one added
+// by an engine upgrade.
 func ErrorCodes() []apperr.Code { return apperr.Codes(errcode.NS) }
 
 // Unrestricted states that no data restrictions apply to this caller. It is an

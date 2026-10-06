@@ -71,7 +71,7 @@ func describe(c Command) CommandSpec {
 // it runs — undecided permissions, invalid args — one that needs a sidecar can
 // find it unavailable, and a command declares the codes of its own.
 func errorCodes(c Command) []apperr.Code {
-	codes := []apperr.Code{errcode.DataPermsMissing, errcode.InvalidArgs.Code()}
+	codes := []apperr.Code{errcode.DataPermsMissing, apperr.ValidationFailed.Code()}
 	if c.needsSidecars() {
 		codes = append(codes, errcode.SidecarUnavailable)
 	}

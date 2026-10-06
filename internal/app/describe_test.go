@@ -60,7 +60,7 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 		}
 	}
 
-	if got, want := byName["version"].ErrorCodes, []apperr.Code{errcode.DataPermsMissing, errcode.InvalidArgs.Code()}; !reflect.DeepEqual(got, want) {
+	if got, want := byName["version"].ErrorCodes, []apperr.Code{errcode.DataPermsMissing, apperr.ValidationFailed.Code()}; !reflect.DeepEqual(got, want) {
 		t.Errorf("version can fail with %v, want %v", got, want)
 	}
 	for _, c := range []apperr.Code{errcode.SidecarUnavailable, validate.QueryInvalid.Code()} {
