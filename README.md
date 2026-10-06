@@ -60,7 +60,7 @@ How it works in a few steps:
 
 A revenue page with two charts: revenue by region and a monthly revenue trend. Clicking a region filters the trend.
 
-<!-- TODO: verify the AMQL metric, the `grain` field, and the generated SQL against the real implementation -->
+<!-- TODO: verify the generated SQL in step 3 against the real implementation -->
 
 **1. Define a metric once** in the semantic layer:
 
@@ -72,24 +72,28 @@ Dataset sales {
 }
 ```
 
-**2. Your agent writes the page.** It declares two queries and a mapping that says a click on one filters the other:
+**2. Your agent writes the page.** It declares two queries in AQL and a mapping that says a click on one filters the other:
 
 ```js
 const byRegion = app.createQuery('byRegion', {
   dataset: 'sales',
-  dimensions: { region: { field: 'users.region' } },
-  measures: { revenue: { field: 'revenue' } },
+  aql: `explore {
+    dimensions { region: users.region }
+    measures { revenue: revenue }
+  }`,
 })
 const trend = app.createQuery('trend', {
   dataset: 'sales',
-  dimensions: { month: { field: 'orders.created_at', grain: 'month' } },
-  measures: { revenue: { field: 'revenue' } },
+  aql: `explore {
+    dimensions { month: date_trunc(orders.created_at, 'month') }
+    measures { revenue: revenue }
+  }`,
 })
 
 app.mapCrossFilter(byRegion, trend)
 
-regionChart.on('click', (row) => {
-  byRegion.select([row])
+regionChart.on('click', (p) => {
+  byRegion.select([byRegion.result.rows[p.dataIndex]])
   app.execute()
 })
 ```
