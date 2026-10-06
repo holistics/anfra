@@ -65,7 +65,11 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 			if long == "" {
 				long = c.Short()
 			}
-			cmd.Long = long + "\n\nArguments:\n  " + a.Name + "  " + a.Usage
+			usage := a.Usage
+			if a.Stdin {
+				usage += "; read from stdin when omitted"
+			}
+			cmd.Long = long + "\n\nArguments:\n  " + a.Name + "  " + usage
 			if a.Type == app.ArgStringArray {
 				cmd.Use += " [" + a.Name + "...]"
 				cmd.Args = cobra.ArbitraryArgs
@@ -75,7 +79,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 			}
 			continue
 		}
-		// What Dispatch enforces, said once for every name of the arg.
+		// What the op's schema enforces, said once for every name of the arg.
 		usage := a.Usage
 		if a.Required {
 			usage += " (required)"
@@ -86,19 +90,19 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 		if len(a.Enum) > 0 {
 			usage += " (one of: " + strings.Join(a.Enum, ", ") + ")"
 		}
-		// pflag has no native aliases, so each alias is a flag of its own, folded
-		// into the arg by Dispatch.
+		// pflag has no native aliases, so each alias is a flag of its own, setting
+		// the same arg: the op knows each arg by one name.
 		addFlag(cmd, a, a.Flag(), a.Shorthand, usage)
 		flagArg[a.Flag()] = a.Name
 		for _, al := range a.Aliases {
 			addFlag(cmd, a, al, "", "alias of --"+a.Flag())
-			flagArg[al] = al
+			flagArg[al] = a.Name
 		}
 	}
 
 	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
 		values := map[string]any{}
-		// Only the flags the user set: an unset one is absent, so Dispatch applies
+		// Only the flags the user set: an unset one is absent, so the op applies
 		// its default and sees which of a group are set.
 		runCmd.Flags().Visit(func(f *pflag.Flag) {
 			key, ok := flagArg[f.Name]
@@ -179,73 +183,66 @@ func applyStdin(args []app.Arg, values map[string]any) error {
 	return nil
 }
 
-// runCommand routes a command to the warm server when one is running for this
-// repo, otherwise runs it one-shot (spawning only the sidecars it needs).
+// runCommand runs a command as its op: on the repo's running server when there
+// is one (found through its runtime file), otherwise in this process, spawning
+// only the sidecars it needs.
 func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
 	repoDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
 	}
-	repo := repo.Resolve(repoDir)
-	req := app.Request{Command: c.Name(), Args: args}
-
-	if isServeRunning(repo) {
-		body, contentType, err := callServe(repo, req)
+	input, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("encode args: %w", err)
+	}
+	if srv, ok := findServer(ctx, repo.Resolve(repoDir)); ok {
+		body, err := callServe(ctx, srv.URL, c.Name(), input)
 		if err != nil {
 			return err
 		}
-		return present(c.Name(), body, contentType)
+		return present(c, body)
 	}
 
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
-		clients, closeSidecars, err := startNeededSidecars(ctx, h, c, args)
+		clients, closeSidecars, err := startNeededSidecars(ctx, h, c, input)
 		if err != nil {
 			return err
 		}
 		defer closeSidecars()
 
-		resp, err := app.Dispatch(ctx, h.commandContext(clients), req)
+		out, err := app.Invoke(ctx, h.commandContext(clients), c.Name(), input)
 		if err != nil {
 			return err
 		}
-		body, err := json.Marshal(resp)
+		body, err := json.Marshal(out)
 		if err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
-		// resp is a {status, data} envelope we just marshalled, so it's JSON.
-		return present(c.Name(), body, "application/json")
+		return present(c, body)
 	})
 }
 
-// present shows a {status, data} response envelope: it renders just Data (the CLI
-// stays clean), and maps a non-ok Status to a silent non-zero exit — /call
-// callers get the full envelope instead. Non-JSON bodies pass through unchanged.
-func present(commandName string, body []byte, contentType string) error {
-	return presentTo(commandName, body, contentType, os.Stdout)
+// present shows an answer — its JSON, as YAML; search's as a compact list — and
+// turns an invalid verdict into a silent exit code 1: the answer says why.
+func present(c app.Command, body []byte) error {
+	return presentTo(c, body, os.Stdout)
 }
 
-func presentTo(commandName string, body []byte, contentType string, out io.Writer) error {
-	if !isJSONContentType(contentType) {
-		_, err := out.Write(body)
-		return err
-	}
-	var env struct {
-		Status app.Status      `json:"status"`
-		Data   json.RawMessage `json:"data"`
-	}
-	if err := json.Unmarshal(body, &env); err != nil {
-		return fmt.Errorf("decode response: %w", err)
-	}
+func presentTo(c app.Command, body []byte, out io.Writer) error {
 	var err error
-	if commandName == "search" {
-		err = renderSearchResults(env.Data, out)
+	if c.Name() == "search" {
+		err = renderSearchResults(body, out)
 	} else {
-		err = renderTo(env.Data, contentType, out)
+		err = renderTo(body, "application/json", out)
 	}
 	if err != nil {
 		return err
 	}
-	if env.Status != app.StatusOK {
+	valid, err := c.Valid(body)
+	if err != nil {
+		return err
+	}
+	if !valid {
 		return &exitCodeError{code: 1}
 	}
 	return nil
@@ -253,8 +250,8 @@ func presentTo(commandName string, body []byte, contentType string, out io.Write
 
 // startNeededSidecars spawns just the sidecars the command declares it needs
 // for these args, returning the clients and a single close func (LIFO).
-func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, args map[string]any) (app.Clients, func(), error) {
-	need := c.Needs(args)
+func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, input []byte) (app.Clients, func(), error) {
+	need := c.Needs(input)
 	var clients app.Clients
 	var closers []func()
 	closeAll := func() {

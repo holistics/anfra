@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/ingest"
@@ -16,32 +18,38 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Commands is the registry — the single source for the CLI, /call and
-// Describe. Add a command here and it appears on every surface (and in help).
+// Commands is the registry — the single source for the CLI, the ops `anfra
+// serve` serves, and Describe. Add a command here and it appears on every surface (and in help).
 // Each answers one type: a command's answer never depends on its args.
 var Commands = []Command{
 	Define(Def[NoInput, VersionResult]{
-		Name:  "version",
-		Short: "Print the anfra version",
+		Name:     "version",
+		Short:    "Print the anfra version",
+		ReadOnly: true,
 		// No Needs: pure metadata, spawns nothing.
 		Run: func(context.Context, CommandContext, NoInput) (VersionResult, error) {
 			return VersionResult{Version: meta.Version}, nil
 		},
 	}),
 	Define(Def[NoInput, StatusResult]{
-		Name:  "status",
-		Short: "Report whether a warm server is running and its sidecars are healthy",
+		Name:     "status",
+		Short:    "Report whether a warm server is running and its sidecars are healthy",
+		ReadOnly: true,
 		// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
 		// server) then honestly reports not_running instead of starting the
 		// sidecars just to declare them healthy.
 		Run: func(ctx context.Context, cc CommandContext, _ NoInput) (StatusResult, error) {
-			return checkStatus(ctx, cc.Clients), nil
+			r := checkStatus(ctx, cc.Clients)
+			r.Server = cc.Server
+			return r, nil
 		},
 		Valid: func(r StatusResult) bool { return r.State == StateHealthy },
 	}),
 	Define(Def[QueryInput, QueryResult]{
-		Name:  "query",
-		Short: "Run a query: its rows, and the SQL that produced them",
+		Name:     "query",
+		Short:    "Run a query: its rows, and the SQL that produced them",
+		ReadOnly: true,
+		Timeout:  10 * time.Minute,
 		Needs: func(in QueryInput) Sidecars {
 			return Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 		},
@@ -80,10 +88,12 @@ var Commands = []Command{
 		},
 	}),
 	Define(Def[QueryInput, CompiledQuery]{
-		Name:   "query.compile",
-		Short:  "Compile a query to SQL, without running it",
-		Needs:  func(in QueryInput) Sidecars { return Sidecars{Node: in.Lang != "sql"} },
-		Errors: []apperr.AnyCode{validate.QueryInvalid, errcode.DataPermsUnenforceable},
+		Name:     "query.compile",
+		Short:    "Compile a query to SQL, without running it",
+		ReadOnly: true,
+		Timeout:  2 * time.Minute,
+		Needs:    func(in QueryInput) Sidecars { return Sidecars{Node: in.Lang != "sql"} },
+		Errors:   []apperr.AnyCode{validate.QueryInvalid, errcode.DataPermsUnenforceable},
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (CompiledQuery, error) {
 			if in.Lang == "sql" {
 				// Already the SQL that would run.
@@ -107,9 +117,11 @@ var Commands = []Command{
 		},
 	}),
 	Define(Def[QueryInput, validate.QueryValidation]{
-		Name:  "query.validate",
-		Short: "Validate a query: its diagnostics, without running it",
-		Needs: func(QueryInput) Sidecars { return Sidecars{Node: true} },
+		Name:     "query.validate",
+		Short:    "Validate a query: its diagnostics, without running it",
+		ReadOnly: true,
+		Timeout:  2 * time.Minute,
+		Needs:    func(QueryInput) Sidecars { return Sidecars{Node: true} },
 		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (validate.QueryValidation, error) {
 			if in.Lang == "sql" {
 				// The intent is a dry run on the data source; not every dialect has
@@ -128,25 +140,30 @@ var Commands = []Command{
 		Valid: func(r validate.QueryValidation) bool { return r.Valid },
 	}),
 	Define(Def[IngestInput, string]{
-		Name:  "ingest",
-		Short: "Build the local search catalog from context sources",
-		Needs: func(IngestInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Name:       "ingest",
+		Short:      "Build the local search catalog from context sources",
+		Idempotent: true, // rebuilds the same catalog
+		Timeout:    30 * time.Minute,
+		Needs:      func(IngestInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
 		Run: func(ctx context.Context, cc CommandContext, in IngestInput) (string, error) {
 			return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, in.Source)
 		},
 	}),
 	Define(Def[SearchInput, sidecar.CatalogSearchResult]{
-		Name:  "search",
-		Short: "Search the local catalog",
-		Needs: func(SearchInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
+		Name:     "search",
+		Short:    "Search the local catalog",
+		ReadOnly: true,
+		Needs:    func(SearchInput) Sidecars { return Sidecars{Node: true, CanalQuery: true} },
 		Run: func(ctx context.Context, cc CommandContext, in SearchInput) (sidecar.CatalogSearchResult, error) {
 			return searchcmd.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, strings.TrimSpace(strings.Join(in.Query, " ")))
 		},
 	}),
 	Define(Def[ValidateInput, validate.RepoValidation]{
-		Name:  "validate",
-		Short: "Validate the AML repo, optionally scoped to file globs",
-		Needs: func(ValidateInput) Sidecars { return Sidecars{Node: true} },
+		Name:     "validate",
+		Short:    "Validate the AML repo, optionally scoped to file globs",
+		ReadOnly: true,
+		Timeout:  5 * time.Minute,
+		Needs:    func(ValidateInput) Sidecars { return Sidecars{Node: true} },
 		Run: func(ctx context.Context, cc CommandContext, in ValidateInput) (validate.RepoValidation, error) {
 			return validate.Repo(ctx, cc.Clients.Node, cc.Repo, in.Globs)
 		},
@@ -161,10 +178,15 @@ type NoInput struct{}
 // target it runs against. Which combinations run is aql's and dataSource's to
 // say: AQL against a dataset, and SQL against a data source.
 type QueryInput struct {
-	Query      string `arg:"query" cli:"positional,stdin" required:"true" usage:"the query; read from stdin when omitted"`
-	Lang       string `arg:"lang" short:"l" enum:"aql,sql" default:"aql" usage:"the language the query is written in"`
-	Dataset    string `arg:"dataset" short:"d" group:"target" usage:"the dataset to query (AQL)"`
-	DataSource string `arg:"data_source" alias:"ds" group:"target" usage:"the data source to query (SQL)"`
+	Query      string `json:"query" cli:"positional,stdin" doc:"the query"`
+	Lang       string `json:"lang,omitempty" short:"l" enum:"aql,sql" default:"aql" doc:"the language the query is written in"`
+	Dataset    string `json:"dataset,omitempty" short:"d" group:"target" doc:"the dataset to query (AQL)"`
+	DataSource string `json:"data_source,omitempty" alias:"ds" group:"target" doc:"the data source to query (SQL)"`
+}
+
+// TransformSchema publishes the target group and the required query (argsSchema).
+func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return argsSchema[QueryInput](s)
 }
 
 // aql is an AQL query's text, with its `limit:` taken out. It runs against a
@@ -224,17 +246,29 @@ func invalidArg(field, code, msg string) error {
 
 // IngestInput is ingest's input.
 type IngestInput struct {
-	Source string `arg:"source" short:"s" usage:"optional context source key to ingest"`
+	Source string `json:"source,omitempty" short:"s" doc:"optional context source key to ingest"`
+}
+
+func (IngestInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return argsSchema[IngestInput](s)
 }
 
 // SearchInput is search's input.
 type SearchInput struct {
-	Query []string `arg:"query" cli:"positional" usage:"search query"`
+	Query []string `json:"query,omitempty" cli:"positional" doc:"search query"`
+}
+
+func (SearchInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return argsSchema[SearchInput](s)
 }
 
 // ValidateInput is validate's input.
 type ValidateInput struct {
-	Globs []string `arg:"globs" cli:"positional" usage:"optional file globs; report only diagnostics for matching files"`
+	Globs []string `json:"globs,omitempty" cli:"positional" doc:"optional file globs; report only diagnostics for matching files"`
+}
+
+func (ValidateInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return argsSchema[ValidateInput](s)
 }
 
 // failed formalises canal-query's failure to run a query as query_failed, with
@@ -270,9 +304,10 @@ type VersionResult struct {
 }
 
 // StatusResult is the `status` result: the warm server's state and, when it is
-// running, its sidecars' health nested under `sidecars`.
+// running, where it is and its sidecars' health.
 type StatusResult struct {
-	State    State          `json:"state"`
+	State    State          `json:"state" enum:"healthy,degraded,not_running"`
+	Server   *ServerInfo    `json:"server,omitempty"`
 	Sidecars *SidecarHealth `json:"sidecars,omitempty"`
 }
 

@@ -53,11 +53,11 @@ var rules = compile([]rule{
 
 	{format: validation.MsgExpectedMinLength, code: "too_short",
 		render: func(f string, a []string, _ any) string {
-			return must(f, fmt.Sprintf("be at least %s characters long.", a[0]))
+			return must(f, fmt.Sprintf("be at least %s %s long.", a[0], plural(a[0], "character")))
 		}},
 	{format: validation.MsgExpectedMaxLength, code: "too_long",
 		render: func(f string, a []string, _ any) string {
-			return must(f, fmt.Sprintf("be at most %s characters long.", a[0]))
+			return must(f, fmt.Sprintf("be at most %s %s long.", a[0], plural(a[0], "character")))
 		}},
 	{format: validation.MsgExpectedMinItems, code: "too_short",
 		render: func(f string, a []string, _ any) string {

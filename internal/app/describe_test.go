@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/danielgtaylor/huma/v2"
 	"reflect"
 	"slices"
 	"testing"
@@ -32,7 +33,7 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	}
 	q := byName["query"]
 	want := []ArgSpec{
-		{Name: "query", Type: ArgString, Required: true, Usage: "the query; read from stdin when omitted"},
+		{Name: "query", Type: ArgString, Required: true, Usage: "the query"},
 		{Name: "lang", Type: ArgString, Enum: []string{"aql", "sql"}, Default: "aql", Usage: "the language the query is written in"},
 		{Name: "dataset", Type: ArgString, Usage: "the dataset to query (AQL)"},
 		{Name: "data_source", Type: ArgString, Usage: "the data source to query (SQL)"},
@@ -86,11 +87,11 @@ func TestDescribeReturnsCopies(t *testing.T) {
 	}
 }
 
-// What a spec says is what Dispatch accepts: every command's args, set
-// validly as the spec describes them, decode.
-func TestSpecsRoundTripThroughDecoding(t *testing.T) {
+// What a spec says is what the op's schema accepts: every command's args, set
+// validly as the spec describes them, validate.
+func TestSpecsAgreeWithTheSchema(t *testing.T) {
+	reg, rt := NewRegistry(), NewRuntime()
 	for _, s := range Describe() {
-		c, _ := Find(s.Name)
 		valid := map[string]any{}
 		for _, a := range s.Args {
 			if a.Required {
@@ -100,8 +101,11 @@ func TestSpecsRoundTripThroughDecoding(t *testing.T) {
 		for _, g := range s.ExactlyOne {
 			valid[g[0]] = "x"
 		}
-		if err := c.(interface{ decodeOnly(map[string]any) error }).decodeOnly(valid); err != nil {
-			t.Errorf("%s: %v refused: %v", s.Name, valid, err)
+		o, _ := reg.Lookup(OpName(s.Name))
+		res := &huma.ValidateResult{}
+		huma.Validate(rt.Schemas, o.InSchema(rt), huma.NewPathBuffer(nil, 0), huma.ModeWriteToServer, valid, res)
+		if len(res.Errors) > 0 {
+			t.Errorf("%s: %v refused: %v", s.Name, valid, res.Errors)
 		}
 	}
 }

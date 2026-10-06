@@ -54,7 +54,7 @@ func withProbe(t *testing.T) *bool {
 	orig := Commands
 	t.Cleanup(func() { Commands = orig })
 	Commands = append(append([]Command{}, orig...), Define(Def[NoInput, string]{
-		Name:  "dataperm-probe",
+		Name:  "dataperm_probe",
 		Short: "test-only",
 		Run: func(context.Context, CommandContext, NoInput) (string, error) {
 			ran = true
@@ -65,7 +65,7 @@ func withProbe(t *testing.T) *bool {
 }
 
 func dispatchProbe(cc CommandContext) (Response, error) {
-	return Dispatch(context.Background(), cc, Request{Command: "dataperm-probe"})
+	return Dispatch(context.Background(), cc, Request{Command: "dataperm_probe"})
 }
 
 // The refused command's body never runs.

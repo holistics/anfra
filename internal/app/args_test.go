@@ -16,55 +16,46 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// decode reads /call's JSON and the CLI's values alike, folds aliases, applies
-// defaults, and refuses everything the In does not take, all at once.
-func TestDecode(t *testing.T) {
-	specs, err := parseArgs(reflect.TypeFor[QueryInput]())
-	if err != nil {
-		t.Fatal(err)
-	}
+// An op's input is checked against its schema — huma's reading of the In's
+// tags, with argsSchema's groups and required strings — before the command
+// runs: everything a correct client could have got right, at once, as
+// invalid_request.
+func TestInputSchema(t *testing.T) {
+	cc := CommandContext{DataPerms: dataperm.Unrestricted()}
 	for _, tc := range []struct {
-		name string
-		args map[string]any
-		want QueryInput
-		bad  apperr.Violations
+		name, body string
+		bad        apperr.Violations
 	}{
-		{name: "the default language", args: map[string]any{"query": "q", "dataset": "d"},
-			want: QueryInput{Query: "q", Lang: "aql", Dataset: "d"}},
-		{name: "an alias folds into its name", args: map[string]any{"query": "q", "ds": "warehouse", "lang": "sql"},
-			want: QueryInput{Query: "q", Lang: "sql", DataSource: "warehouse"}},
-		{name: "help is every command's", args: map[string]any{"query": "q", "dataset": "d", "help": true},
-			want: QueryInput{Query: "q", Lang: "aql", Dataset: "d"}},
-		{name: "every refusal at once", args: map[string]any{"lang": "cobol", "bogus": 1},
-			bad: apperr.Violations{
-				{Field: "bogus", Code: "unknown", Message: "Not an arg of query."},
-				{Field: "query", Code: "required", Message: "query is required"},
-				{Field: "lang", Code: "invalid", Message: "lang must be one of: aql, sql"},
-				{Field: "dataset", Code: "required", Message: "one of dataset, data_source is required"},
-			}},
-		{name: "two of a group", args: map[string]any{"query": "q", "dataset": "d", "data_source": "w"},
-			bad: apperr.Violations{{Field: "data_source", Code: "invalid", Message: "only one of dataset, data_source may be set"}}},
-		{name: "a value of the wrong type", args: map[string]any{"query": 42, "dataset": "d"},
-			bad: apperr.Violations{{Field: "query", Code: "invalid", Message: "query must be a string"}}},
+		{"every refusal at once", `{"lang":"cobol","bogus":1}`, apperr.Violations{
+			{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
+			{Field: "query", Code: "required", Message: "Required."},
+			{Field: "bogus", Code: "unknown", Message: "Not a field of this input. Field names are snake_case and case-sensitive."},
+			{Field: "dataset", Code: "required", Message: "Set exactly one of: dataset, data_source."},
+		}},
+		{"two of a group", `{"query":"q","dataset":"d","data_source":"w"}`, apperr.Violations{
+			{Field: "data_source", Code: "invalid", Message: "Set only one of: dataset, data_source."}}},
+		{"a value of the wrong type", `{"query":42,"dataset":"d"}`, apperr.Violations{
+			{Field: "query", Code: "invalid", Message: "Must be a string; got a number."}}},
+		{"a blank required string", `{"query":"","dataset":"d"}`, apperr.Violations{
+			{Field: "query", Code: "too_short", Message: "Must be at least 1 character long."}}},
+		{"an alias, which is the CLI's", `{"query":"q","ds":"w"}`, apperr.Violations{
+			{Field: "ds", Code: "unknown", Message: "Not a field of this input. Field names are snake_case and case-sensitive."},
+			{Field: "dataset", Code: "required", Message: "Set exactly one of: dataset, data_source."}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := decode[QueryInput]("query", specs, tc.args)
-			if tc.bad == nil {
-				if err != nil || got != tc.want {
-					t.Errorf("got %+v, %v; want %+v", got, err, tc.want)
-				}
-				return
-			}
-			v, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
+			_, err := Invoke(context.Background(), cc, "query.compile", []byte(tc.body))
+			v, _ := apperr.DetailsOf(err, apperr.InvalidRequest)
 			if !reflect.DeepEqual(v, tc.bad) {
-				t.Errorf("violations =\n  %+v\nwant\n  %+v", v, tc.bad)
+				t.Errorf("got %v, violations =\n  %+v\nwant\n  %+v", err, v, tc.bad)
 			}
 		})
 	}
 
-	list, _ := parseArgs(reflect.TypeFor[SearchInput]())
-	if got, err := decode[SearchInput]("search", list, map[string]any{"query": []any{"a", "b"}}); err != nil || !reflect.DeepEqual(got.Query, []string{"a", "b"}) {
-		t.Errorf("a JSON list decodes to %v, %v", got.Query, err)
+	// A default the input leaves unset is applied before the command runs: lang
+	// is aql, so AQL against a data source is refused as such.
+	_, err := Invoke(context.Background(), cc, "query.compile", []byte(`{"query":"q","data_source":"demo"}`))
+	if v, _ := apperr.DetailsOf(err, apperr.ValidationFailed); len(v) != 1 || v[0].Field != "data_source" || v[0].Code != "unsupported" {
+		t.Errorf("the default language was not applied: %v", err)
 	}
 }
 
@@ -72,33 +63,36 @@ func TestDecode(t *testing.T) {
 func TestParseArgsRefusesMistakes(t *testing.T) {
 	for name, in := range map[string]any{
 		"an unsupported type": struct {
-			N int `arg:"n" usage:"x"`
+			N int `json:"n,omitempty" doc:"x"`
 		}{},
-		"no usage": struct {
-			S string `arg:"s"`
+		"no doc": struct {
+			S string `json:"s,omitempty"`
 		}{},
 		"a required bool": struct {
-			B bool `arg:"b" required:"true" usage:"x"`
+			B bool `json:"b" doc:"x"`
+		}{},
+		"a required string with a default": struct {
+			S string `json:"s" default:"a" doc:"x"`
 		}{},
 		"a default outside its enum": struct {
-			S string `arg:"s" enum:"a,b" default:"c" usage:"x"`
+			S string `json:"s,omitempty" enum:"a,b" default:"c" doc:"x"`
 		}{},
 		"a group of one": struct {
-			S string `arg:"s" group:"g" usage:"x"`
+			S string `json:"s,omitempty" group:"g" doc:"x"`
 		}{},
 		"a repeated name": struct {
-			A string `arg:"a" usage:"x"`
-			B string `arg:"b" alias:"a" usage:"x"`
+			A string `json:"a,omitempty" doc:"x"`
+			B string `json:"b,omitempty" alias:"a" doc:"x"`
 		}{},
 		"a long shorthand": struct {
-			S string `arg:"s" short:"ss" usage:"x"`
+			S string `json:"s,omitempty" short:"ss" doc:"x"`
 		}{},
 		"two positionals": struct {
-			A string `arg:"a" cli:"positional" usage:"x"`
-			B string `arg:"b" cli:"positional" usage:"x"`
+			A string `json:"a,omitempty" cli:"positional" doc:"x"`
+			B string `json:"b,omitempty" cli:"positional" doc:"x"`
 		}{},
 		"help, which every command has": struct {
-			H bool `arg:"help" usage:"x"`
+			H bool `json:"help,omitempty" doc:"x"`
 		}{},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -154,8 +148,11 @@ func TestQueryInputs(t *testing.T) {
 		t.Errorf("compiling SQL: %+v, %v", res, err)
 	}
 	c, _ := Find("query")
-	if got := c.Needs(map[string]any{"query": "select 1", "lang": "sql", "ds": "demo"}); got != (Sidecars{CanalQuery: true}) {
+	if got := c.Needs([]byte(`{"query":"select 1","lang":"sql","data_source":"demo"}`)); got != (Sidecars{CanalQuery: true}) {
 		t.Errorf("SQL needs %+v, want canal-query alone", got)
+	}
+	if got := c.Needs([]byte(`{"query":"q","dataset":"d"}`)); got != (Sidecars{Node: true, CanalQuery: true}) {
+		t.Errorf("AQL, by default, needs %+v, want both", got)
 	}
 
 	if aql, limit, err := (QueryInput{Query: "explore { products } limit: 5", Lang: "aql", Dataset: "d"}).aql(); err != nil || limit != 5 || strings.Contains(aql, "limit") {
@@ -163,7 +160,7 @@ func TestQueryInputs(t *testing.T) {
 	}
 }
 
-// run dispatches cmd with in, as /call would send it.
+// run dispatches cmd with in, as a host would.
 func run(t *testing.T, cmd string, cc CommandContext, in QueryInput) (Response, error) {
 	t.Helper()
 	args := map[string]any{"query": in.Query, "lang": in.Lang}

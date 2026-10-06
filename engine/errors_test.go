@@ -24,20 +24,21 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 		{"undecided permissions", engine.Invocation{}, engine.Request{Command: "version"}, engine.DataPermsMissing, nil},
 		{"an unknown command", unrestricted, engine.Request{Command: "no-such-command"}, engine.UnknownCommand, nil},
 		{"an unknown arg", unrestricted, engine.Request{Command: "version", Args: map[string]any{"bogus": true}},
-			apperr.ValidationFailed, apperr.Violations{{Field: "bogus", Code: "unknown", Message: "Not an arg of version."}}},
+			apperr.InvalidRequest, apperr.Violations{{Field: "bogus", Code: "unknown",
+				Message: "Not a field of this input. Field names are snake_case and case-sensitive."}}},
 		{"two targets", unrestricted,
 			engine.Request{Command: "query", Args: map[string]any{"query": "x", "dataset": "d", "data_source": "w"}},
-			apperr.ValidationFailed, apperr.Violations{
-				{Field: "data_source", Code: "invalid", Message: "only one of dataset, data_source may be set"}}},
+			apperr.InvalidRequest, apperr.Violations{
+				{Field: "data_source", Code: "invalid", Message: "Set only one of: dataset, data_source."}}},
 		{"missing args", unrestricted, engine.Request{Command: "query.compile", Args: map[string]any{}},
-			apperr.ValidationFailed, apperr.Violations{
-				{Field: "query", Code: "required", Message: "query is required"},
-				{Field: "dataset", Code: "required", Message: "one of dataset, data_source is required"}}},
+			apperr.InvalidRequest, apperr.Violations{
+				{Field: "query", Code: "required", Message: "Required."},
+				{Field: "dataset", Code: "required", Message: "Set exactly one of: dataset, data_source."}}},
 		{"an unsupported input", unrestricted,
-			engine.Request{Command: "query", Args: map[string]any{"query": "x", "ds": "w"}},
+			engine.Request{Command: "query", Args: map[string]any{"query": "x", "data_source": "w"}},
 			apperr.ValidationFailed, apperr.Violations{{Field: "data_source", Code: "unsupported", Message: "an AQL query against a data source is not supported yet"}}},
 		{"SQL for a restricted caller", engine.Invocation{DataPerms: engine.Restricted(nil)},
-			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "ds": "w"}},
+			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "data_source": "w"}},
 			engine.DataPermsUnenforceable, nil},
 		{"no sidecars to run on", unrestricted, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "query": "x"}},
 			engine.SidecarUnavailable, nil},
@@ -48,7 +49,8 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 			if e == nil || e.Code != tc.code.Code() || !errors.Is(err, tc.code) {
 				t.Fatalf("got %v, want %s", err, tc.code.Code().Qualified())
 			}
-			if got, _ := apperr.DetailsOf(err, apperr.ValidationFailed); !reflect.DeepEqual(got, tc.violations) {
+			got, _ := e.Details.(apperr.Violations)
+			if !reflect.DeepEqual(got, tc.violations) {
 				t.Errorf("violations = %+v, want %+v", got, tc.violations)
 			}
 		})

@@ -2,21 +2,28 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
 // Def is the single definition of one anfra operation: what it takes (In),
 // what it answers (Out), and how it runs. It drives every surface: the CLI
-// builds the command and its flags from it, /call dispatches to it by Name,
-// and Describe publishes it.
+// builds the command and its flags from it, `anfra serve` serves it as the op
+// core.<Name>, and Describe publishes it.
 //
 // In is a struct whose fields are the command's args, described by field tags
-// (see Arg). Out is the answer: Run returns one, and Valid, if set, judges it.
+// (see Arg); it is also the op's input type. Out is the answer: Run returns one,
+// and Valid, if set, judges it.
 type Def[In, Out any] struct {
-	// Name is dotted by group: "query.compile" is the CLI's `query compile`.
+	// Name is dotted by group: "query.compile" is the CLI's `query compile`, and
+	// the op core.query.compile.
 	Name  string
 	Short string // one line
 	Long  string // optional; full usage
@@ -26,14 +33,23 @@ type Def[In, Out any] struct {
 	Run   func(ctx context.Context, cc CommandContext, in In) (Out, error)
 	// Valid reports whether an answer is valid. Set for a command whose job is
 	// to judge something (a validator, a health check): an answer it reports
-	// invalid is StatusInvalid, which is an outcome, not an error. Nil: every
-	// answer is StatusOK.
+	// invalid is still an answer, carrying its verdict, not an error. Nil: every
+	// answer is valid.
 	Valid func(out Out) bool
 	// Errors are the codes Run itself fails with, beyond those every command can
 	// (undecided permissions, invalid args) and sidecar_unavailable, implied by
 	// Needs.
 	Errors []apperr.AnyCode
+	// ReadOnly: the command changes nothing. Idempotent: running it again with
+	// the same input has no further effect. Published on the op.
+	ReadOnly   bool
+	Idempotent bool
+	// Timeout bounds the command as an op; zero means apikit's default.
+	Timeout time.Duration
 }
+
+// OpName is the op a command is served as: core.<command>.
+func OpName(command string) string { return "core." + command }
 
 // Command is a registered Def, its types erased: what the registry holds and
 // every surface reads. Only Define makes one.
@@ -45,14 +61,17 @@ type Command interface {
 	Args() []Arg
 	// Output is the type of the command's answer.
 	Output() reflect.Type
-	// CanBeInvalid reports whether the command can answer StatusInvalid.
+	// CanBeInvalid reports whether the command's answer carries a verdict.
 	CanBeInvalid() bool
-	// Needs is the sidecars the command needs for these args; none when they do
-	// not decode, since Dispatch will refuse them.
-	Needs(args map[string]any) Sidecars
+	// Needs is the sidecars the command needs for this input, as the op's JSON;
+	// none when it does not decode, since the op will refuse it.
+	Needs(input []byte) Sidecars
+	// Valid is an answer's verdict: an Out from an in-process call, or its JSON
+	// from a server. A command that judges nothing answers true.
+	Valid(out any) (bool, error)
 	errors() []apperr.AnyCode
 	needsSidecars() bool
-	dispatch(ctx context.Context, cc CommandContext, args map[string]any) (Response, error)
+	register(reg *apikit.Registry[CommandContext])
 }
 
 // Define registers nothing: it checks d and returns it as a Command, for the
@@ -65,6 +84,10 @@ func Define[In, Out any](d Def[In, Out]) Command {
 	args, err := parseArgs(reflect.TypeFor[In]())
 	if err != nil {
 		panic(fmt.Sprintf("app: command %s: %v", d.Name, err))
+	}
+	if _, ok := any(new(In)).(huma.SchemaTransformer); len(args) > 0 && !ok {
+		// Without it, the op's schema would miss the groups and required strings.
+		panic(fmt.Sprintf("app: command %s: its input needs TransformSchema, returning argsSchema", d.Name))
 	}
 	return &command[In, Out]{def: d, args: args}
 }
@@ -83,31 +106,54 @@ func (c *command[In, Out]) CanBeInvalid() bool       { return c.def.Valid != nil
 func (c *command[In, Out]) errors() []apperr.AnyCode { return c.def.Errors }
 func (c *command[In, Out]) needsSidecars() bool      { return c.def.Needs != nil }
 
-func (c *command[In, Out]) Needs(args map[string]any) Sidecars {
+func (c *command[In, Out]) Needs(input []byte) Sidecars {
 	if c.def.Needs == nil {
 		return Sidecars{}
 	}
-	in, err := decode[In](c.def.Name, c.args, args)
-	if err != nil {
+	var in In
+	if len(input) > 0 && json.Unmarshal(input, &in) != nil {
 		return Sidecars{}
 	}
+	applyDefaults(c.args, &in)
 	return c.def.Needs(in)
 }
 
-func (c *command[In, Out]) dispatch(ctx context.Context, cc CommandContext, args map[string]any) (Response, error) {
-	in, err := decode[In](c.def.Name, c.args, args)
-	if err != nil {
-		return Response{}, err
+func (c *command[In, Out]) Valid(out any) (bool, error) {
+	if c.def.Valid == nil {
+		return true, nil
 	}
-	out, err := c.def.Run(ctx, cc, in)
-	if err != nil {
-		return Response{}, err
+	switch v := out.(type) {
+	case []byte:
+		var o Out
+		if err := json.Unmarshal(v, &o); err != nil {
+			return false, fmt.Errorf("decode %s's answer: %w", c.def.Name, err)
+		}
+		return c.def.Valid(o), nil
+	case Out:
+		return c.def.Valid(v), nil
 	}
-	st := StatusOK
-	if c.def.Valid != nil && !c.def.Valid(out) {
-		st = StatusInvalid
+	return false, fmt.Errorf("%s answered a %T, not a %s", c.def.Name, out, reflect.TypeFor[Out]())
+}
+
+// register serves the command as the op core.<Name>: its In validated against
+// its schema, its unset defaults applied, then Run.
+func (c *command[In, Out]) register(reg *apikit.Registry[CommandContext]) {
+	// data_perms_missing is admission's, and implied (NewRuntime): a host that
+	// states its context, as every host must, never answers with it.
+	var errs []apperr.AnyCode
+	for _, code := range errorCodes(c) {
+		if code != errcode.DataPermsMissing {
+			errs = append(errs, code)
+		}
 	}
-	return Response{Status: st, Data: out}, nil
+	apikit.Register(reg, admission, &apikit.Def[CommandContext, In, Out]{
+		Name: OpName(c.def.Name), Summary: c.def.Short, Doc: c.def.Long, Errors: errs,
+		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, Timeout: c.def.Timeout, HTTP: true,
+		Handle: func(ctx context.Context, cc CommandContext, in In) (Out, error) {
+			applyDefaults(c.args, &in)
+			return c.def.Run(ctx, cc, in)
+		},
+	})
 }
 
 // Find returns the registered command by name.

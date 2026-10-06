@@ -10,7 +10,7 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// remoteError is a warm server's error, as its /call body carried it.
+// remoteError is a running server's error, as its body carried it.
 type remoteError struct{ resp apperr.Response }
 
 func (e *remoteError) Error() string { return e.resp.Code + ": " + e.resp.Message }

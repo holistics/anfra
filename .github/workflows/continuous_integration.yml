@@ -52,10 +52,39 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
 
+  # The core API's contract: the committed api/openapi.yaml is what the registry
+  # publishes, and a breaking change against the base branch is declared by a
+  # commit (`feat!:`, or a `BREAKING CHANGE:` footer). See scripts/openapi.sh.
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the base branch's spec, and the PR's commits
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: the contract is fresh
+        run: scripts/openapi.sh diff
+      - name: no undeclared breaking change
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          if ! git cat-file -e "$BASE:api/openapi.yaml" 2>/dev/null; then
+            echo "the base branch has no api/openapi.yaml yet: nothing to compare"; exit 0
+          fi
+          git show "$BASE:api/openapi.yaml" > "$RUNNER_TEMP/base.yaml"
+          if scripts/openapi.sh breaking "$RUNNER_TEMP/base.yaml"; then exit 0; fi
+          if git log --format=%B "$BASE..HEAD" | grep -Eq '^[a-z]+(\([^)]*\))?!:|^BREAKING CHANGE:'; then
+            echo "breaking, and declared by a commit: ok"; exit 0
+          fi
+          echo "a breaking change to the core API, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
+          exit 1
+
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [commitlint, lint, test]
+    needs: [commitlint, lint, test, api]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:

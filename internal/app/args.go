@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 
-	"github.com/holistics/anfra/shared/apperr"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/holistics/anfra/shared/apikit"
 )
 
 // ArgType is the type of a command argument, from its field's Go type.
@@ -22,24 +22,31 @@ const (
 
 // Arg is one of a command's args, parsed from a field of its In struct:
 //
-//	Dataset string `arg:"dataset" short:"d" group:"target" usage:"the dataset to query"`
+//	Dataset string `json:"dataset,omitempty" short:"d" group:"target" doc:"the dataset to query"`
 //
-// Tags:
+// In is also the op's input type, so its schema — validated by apikit, published
+// in OpenAPI — is huma's reading of the same tags. Tags:
 //
-//	arg       the name: the /call key; the CLI flag is the name with _ as -. Required.
-//	usage     the help text.
-//	short     a one-letter CLI shorthand.
-//	alias     other names, comma-separated: extra CLI flags and /call keys, folded into
-//	          the name.
-//	required  "true": a string arg that must be set (non-blank).
+//	json      the name, the op input's field; the CLI flag is the name with _ as -.
+//	          Without omitempty the arg is required (a string: non-blank); only a
+//	          string arg can be. Required.
+//	doc       the help text: the schema's description and the CLI flag's usage.
 //	enum      the allowed values of a string arg, comma-separated.
 //	default   a string arg's value when unset; one of its enum, if it has one.
-//	group     a group name: exactly one arg of the group must be set.
+//	group     a group name: exactly one arg of the group must be set. The schema
+//	          says so as a oneOf (argsSchema).
+//
+// and the CLI's alone, which the schema does not see:
+//
+//	short     a one-letter CLI shorthand.
+//	alias     other CLI flag names, comma-separated, folded into the name.
 //	cli       "positional": the CLI takes it as trailing args (one string, or all of
 //	          them for a []string); "stdin": the CLI reads it from piped stdin when
 //	          unset. Comma-separated.
 //
-// Fields without an arg tag are not args.
+// Fields without a json tag are not args. An In with args implements
+// huma.SchemaTransformer with argsSchema, so its groups and required strings are
+// in its schema.
 type Arg struct {
 	Name       string
 	Type       ArgType
@@ -82,12 +89,13 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 	positional := 0
 	for i := range t.NumField() {
 		f := t.Field(i)
-		name, ok := f.Tag.Lookup("arg")
-		if !ok {
+		tag, ok := f.Tag.Lookup("json")
+		if !ok || tag == "-" {
 			continue
 		}
-		a := Arg{Name: name, Usage: f.Tag.Get("usage"), Shorthand: f.Tag.Get("short"), Default: f.Tag.Get("default"),
-			Group: f.Tag.Get("group"), Required: f.Tag.Get("required") == "true", field: i}
+		name, opts, _ := strings.Cut(tag, ",")
+		a := Arg{Name: name, Usage: f.Tag.Get("doc"), Shorthand: f.Tag.Get("short"), Default: f.Tag.Get("default"),
+			Group: f.Tag.Get("group"), Required: !slices.Contains(strings.Split(opts, ","), "omitempty"), field: i}
 		switch f.Type {
 		case reflect.TypeFor[string]():
 			a.Type = ArgString
@@ -120,7 +128,9 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 		case name == "" || a.Usage == "":
 			return nil, fmt.Errorf("field %s: an arg needs a name and a usage", f.Name)
 		case (a.Required || len(a.Enum) > 0 || a.Default != "" || a.Stdin) && a.Type != ArgString:
-			return nil, fmt.Errorf("arg %s: only a string arg can be required, closed, defaulted or read from stdin", name)
+			return nil, fmt.Errorf("arg %s: only a string arg can be required (no omitempty), closed, defaulted or read from stdin", name)
+		case a.Required && a.Default != "":
+			return nil, fmt.Errorf("arg %s: a required arg has no default; add omitempty", name)
 		case a.Default != "" && len(a.Enum) > 0 && !slices.Contains(a.Enum, a.Default):
 			return nil, fmt.Errorf("arg %s: default %q is not in its enum", name, a.Default)
 		case a.Required && a.Group != "":
@@ -153,143 +163,43 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 	return args, nil
 }
 
-// decode reads args — a /call body's, or the CLI's flags — into an In, and
-// refuses what the command does not take: unknown args, values of the wrong
-// type, required ones left unset, values outside an enum, and groups with not
-// exactly one set. Every refusal is in one validation_failed error, a violation
-// each.
-//
-// Aliases are folded into their names first, so a command never sees one.
-// help is every command's, and ignored here.
-func decode[In any](command string, specs []Arg, args map[string]any) (In, error) {
-	var in In
-	v := reflect.ValueOf(&in).Elem()
-	known := map[string]bool{"help": true}
-	vals := map[string]any{}
-	for _, a := range specs {
-		known[a.Name] = true
-		vals[a.Name] = args[a.Name]
-		for _, alias := range a.Aliases {
-			known[alias] = true
-			if av, ok := args[alias]; ok && isZero(vals[a.Name]) {
-				vals[a.Name] = av
-			}
+// argsSchema completes an In's schema with what huma cannot read from its tags:
+// each group as a oneOf over its args being set (apikit names the args to fix),
+// and a required string's minimum length, so a blank one is refused as unset.
+// Each In with args calls it from its TransformSchema.
+func argsSchema[In any](s *huma.Schema) *huma.Schema {
+	args, err := parseArgs(reflect.TypeFor[In]())
+	if err != nil {
+		panic(fmt.Sprintf("app: %s: %v", reflect.TypeFor[In](), err)) // Define refused it already
+	}
+	one := 1
+	for _, a := range args {
+		if a.Required && a.Type == ArgString && s.Properties[a.Name] != nil {
+			s.Properties[a.Name].MinLength = &one
 		}
 	}
-
-	var bad apperr.Violations
-	var msgs []string
-	refuse := func(field, code, msg string) {
-		bad = append(bad, apperr.Violation{Field: field, Code: code, Message: msg})
-		msgs = append(msgs, msg)
-	}
-
-	var unknown []string
-	for k := range args {
-		if !known[k] {
-			unknown = append(unknown, k)
+	groups := groupNames(args)
+	switch len(groups) {
+	case 0:
+	case 1:
+		s.OneOf = apikit.ExactlyOne(groupMembers(args, groups[0]))
+	default:
+		for _, g := range groups {
+			s.AllOf = append(s.AllOf, &huma.Schema{OneOf: apikit.ExactlyOne(groupMembers(args, g))})
 		}
 	}
-	sort.Strings(unknown)
-	for _, k := range unknown {
-		bad = append(bad, apperr.Violation{Field: k, Code: "unknown", Message: "Not an arg of " + command + "."})
-	}
-	if len(unknown) > 0 {
-		msgs = append(msgs, fmt.Sprintf(`unknown arg(s) %s for command %q; send {"command": %q, "help": true} for its args`,
-			strings.Join(unknown, ", "), command, command))
-	}
-
-	set := map[string][]string{} // group -> its args that are set
-	for _, a := range specs {
-		f := v.Field(a.field)
-		raw := vals[a.Name]
-		switch a.Type {
-		case ArgString:
-			s, ok := raw.(string)
-			if raw != nil && !ok {
-				refuse(a.Name, "invalid", a.Name+" must be a string")
-				continue
-			}
-			if strings.TrimSpace(s) == "" {
-				s = a.Default
-			}
-			switch {
-			case a.Required && strings.TrimSpace(s) == "":
-				refuse(a.Name, "required", a.Name+" is required")
-			case s != "" && len(a.Enum) > 0 && !slices.Contains(a.Enum, s):
-				refuse(a.Name, "invalid", fmt.Sprintf("%s must be one of: %s", a.Name, strings.Join(a.Enum, ", ")))
-			}
-			f.SetString(s)
-		case ArgBool:
-			b, ok := raw.(bool)
-			if raw != nil && !ok {
-				refuse(a.Name, "invalid", a.Name+" must be true or false")
-				continue
-			}
-			f.SetBool(b)
-		case ArgStringArray:
-			ss, ok := stringList(raw)
-			if !ok {
-				refuse(a.Name, "invalid", a.Name+" must be a list of strings")
-				continue
-			}
-			f.Set(reflect.ValueOf(ss))
-		}
-		if a.Group != "" && !isZero(f.Interface()) {
-			set[a.Group] = append(set[a.Group], a.Name)
-		}
-	}
-	for _, g := range groupNames(specs) {
-		members := groupMembers(specs, g)
-		switch n := len(set[g]); {
-		case n == 0:
-			refuse(members[0], "required", "one of "+strings.Join(members, ", ")+" is required")
-		case n > 1:
-			refuse(set[g][1], "invalid", "only one of "+strings.Join(set[g], ", ")+" may be set")
-		}
-	}
-
-	if len(bad) > 0 {
-		return in, apperr.NewWith(apperr.ValidationFailed, strings.Join(msgs, "; "), bad)
-	}
-	return in, nil
+	return s
 }
 
-// stringList reads a list of strings: []string from the CLI, []any from JSON.
-func stringList(raw any) ([]string, bool) {
-	switch x := raw.(type) {
-	case nil:
-		return nil, true
-	case []string:
-		return x, true
-	case []any:
-		out := make([]string, len(x))
-		for i, e := range x {
-			s, ok := e.(string)
-			if !ok {
-				return nil, false
-			}
-			out[i] = s
+// applyDefaults sets each unset string arg with a default to it. The schema
+// publishes defaults but validation does not apply them, so the handler does.
+func applyDefaults(args []Arg, in any) {
+	v := reflect.ValueOf(in).Elem()
+	for _, a := range args {
+		if f := v.Field(a.field); a.Default != "" && strings.TrimSpace(f.String()) == "" {
+			f.SetString(a.Default)
 		}
-		return out, true
 	}
-	return nil, false
-}
-
-func isZero(v any) bool {
-	switch x := v.(type) {
-	case nil:
-		return true
-	case string:
-		return strings.TrimSpace(x) == ""
-	case bool:
-		return !x
-	case []string:
-		return len(x) == 0
-	case []any:
-		return len(x) == 0
-	}
-	return false
 }
 
 // groupNames are the groups of specs, in the order their first arg appears.

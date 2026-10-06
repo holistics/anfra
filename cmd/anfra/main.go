@@ -56,13 +56,13 @@ func newRootCmd() *cobra.Command {
 		Use:   "anfra",
 		Short: "Anfra — local-first agentic analytics infrastructure",
 		// Setting Version makes cobra add `--version` (and `-v`, since it's free) to
-		// the root. Mirrors the `version` subcommand, which also serves it over /call.
+		// the root. Mirrors the `version` command, which the server also serves.
 		Version: meta.Version,
 		// We print errors ourselves in main (so exitCodeError stays silent).
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newServeCmd())
+	root.AddCommand(newServeCmd(), newOpenAPICmd())
 	root.AddCommand(newUpdateCmd(), newUpdateCheckCmd())
 	root.AddCommand(appCommands()...) // ping, query, … generated from the registry
 	return root
