@@ -32,14 +32,12 @@ var Commands = []Command{
 		Name:  "status",
 		Short: "Report whether a warm server is running and its sidecars are healthy",
 		// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
-		// server) then honestly reports "not running" instead of starting the
+		// server) then honestly reports not_running instead of starting the
 		// sidecars just to declare them healthy.
 		Run: func(ctx context.Context, cc CommandContext, _ NoInput) (StatusResult, error) {
 			return checkStatus(ctx, cc.Clients), nil
 		},
-		Valid: func(r StatusResult) bool {
-			return r.Server == "running" && r.Sidecars != nil && r.Sidecars.Node == "ok" && r.Sidecars.CanalQuery == "ok"
-		},
+		Valid: func(r StatusResult) bool { return r.State == StateHealthy },
 	}),
 	Define(Def[QueryInput, QueryResult]{
 		Name:  "query",
@@ -127,7 +125,7 @@ var Commands = []Command{
 			}
 			return validate.AQL(ctx, cc.Clients.Node, cc.Repo, in.Dataset, aql)
 		},
-		Valid: func(r validate.QueryValidation) bool { return !r.Invalid() },
+		Valid: func(r validate.QueryValidation) bool { return r.Valid },
 	}),
 	Define(Def[IngestInput, string]{
 		Name:  "ingest",
@@ -152,7 +150,7 @@ var Commands = []Command{
 		Run: func(ctx context.Context, cc CommandContext, in ValidateInput) (validate.RepoValidation, error) {
 			return validate.Repo(ctx, cc.Clients.Node, cc.Repo, in.Globs)
 		},
-		Valid: func(r validate.RepoValidation) bool { return !r.Invalid() },
+		Valid: func(r validate.RepoValidation) bool { return r.Valid },
 	}),
 }
 
@@ -181,7 +179,7 @@ func (in QueryInput) aql() (aql string, limit int, err error) {
 	}
 	aql, limit, err = query.ExtractLimit(in.Query)
 	if err != nil {
-		return "", 0, apperr.EncapsulateWith(err, errcode.InvalidArgs, err.Error(),
+		return "", 0, apperr.EncapsulateWith(err, apperr.ValidationFailed, err.Error(),
 			apperr.Violations{{Field: "query", Code: "invalid", Message: err.Error()}})
 	}
 	return aql, limit, nil
@@ -221,7 +219,7 @@ func (in QueryInput) dataSource(cc CommandContext) (datasource.DataSource, error
 }
 
 func invalidArg(field, code, msg string) error {
-	return apperr.NewWith(errcode.InvalidArgs, msg, apperr.Violations{{Field: field, Code: code, Message: msg}})
+	return apperr.NewWith(apperr.ValidationFailed, msg, apperr.Violations{{Field: field, Code: code, Message: msg}})
 }
 
 // IngestInput is ingest's input.
@@ -260,7 +258,7 @@ func compileAQL(ctx context.Context, cc CommandContext, dataset, aql string) (si
 	if err == nil {
 		return compiled, nil
 	}
-	if diags, verr := validate.AQL(ctx, cc.Clients.Node, cc.Repo, dataset, aql); verr == nil && diags.Invalid() {
+	if diags, verr := validate.AQL(ctx, cc.Clients.Node, cc.Repo, dataset, aql); verr == nil && !diags.Valid {
 		return sidecar.CompileToSQLResult{}, apperr.EncapsulateWith(err, validate.QueryInvalid, "", diags)
 	}
 	return sidecar.CompileToSQLResult{}, err
@@ -271,12 +269,24 @@ type VersionResult struct {
 	Version string `json:"version"`
 }
 
-// StatusResult is the `status` result: whether the warm server is running and,
-// when it is, its sidecars' health nested under `sidecars`.
+// StatusResult is the `status` result: the warm server's state and, when it is
+// running, its sidecars' health nested under `sidecars`.
 type StatusResult struct {
-	Server   string         `json:"server"` // "running" | "not running"
+	State    State          `json:"state"`
 	Sidecars *SidecarHealth `json:"sidecars,omitempty"`
 }
+
+// State is the warm server's state.
+type State string
+
+const (
+	// StateHealthy: the server is running, and every sidecar answers.
+	StateHealthy State = "healthy"
+	// StateDegraded: the server is running, and a sidecar does not answer.
+	StateDegraded State = "degraded"
+	// StateNotRunning: no warm server.
+	StateNotRunning State = "not_running"
+)
 
 // SidecarHealth is each sidecar's health: "ok" or the error message.
 type SidecarHealth struct {
@@ -285,11 +295,11 @@ type SidecarHealth struct {
 }
 
 // checkStatus reports the warm server's health. status spawns no sidecars, so in
-// one-shot mode (no warm server) both clients are nil → "not running"; under a
+// one-shot mode (no warm server) both clients are nil → not_running; under a
 // warm server the clients are live and get health-checked.
 func checkStatus(ctx context.Context, c Clients) StatusResult {
 	if c.Node == nil && c.CanalQuery == nil {
-		return StatusResult{Server: "not running"}
+		return StatusResult{State: StateNotRunning}
 	}
 	sc := &SidecarHealth{Node: "ok", CanalQuery: "ok"}
 	if c.Node == nil {
@@ -302,7 +312,11 @@ func checkStatus(ctx context.Context, c Clients) StatusResult {
 	} else if err := c.CanalQuery.Health(ctx); err != nil {
 		sc.CanalQuery = err.Error()
 	}
-	return StatusResult{Server: "running", Sidecars: sc}
+	state := StateHealthy
+	if sc.Node != "ok" || sc.CanalQuery != "ok" {
+		state = StateDegraded
+	}
+	return StatusResult{State: state, Sidecars: sc}
 }
 
 // QueryResult is the `query` result: the SQL that ran, and its rows.

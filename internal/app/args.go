@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -157,7 +156,8 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 // decode reads args — a /call body's, or the CLI's flags — into an In, and
 // refuses what the command does not take: unknown args, values of the wrong
 // type, required ones left unset, values outside an enum, and groups with not
-// exactly one set. Every refusal is in one invalid_args error, a violation each.
+// exactly one set. Every refusal is in one validation_failed error, a violation
+// each.
 //
 // Aliases are folded into their names first, so a command never sees one.
 // help is every command's, and ignored here.
@@ -250,7 +250,7 @@ func decode[In any](command string, specs []Arg, args map[string]any) (In, error
 	}
 
 	if len(bad) > 0 {
-		return in, apperr.NewWith(errcode.InvalidArgs, strings.Join(msgs, "; "), bad)
+		return in, apperr.NewWith(apperr.ValidationFailed, strings.Join(msgs, "; "), bad)
 	}
 	return in, nil
 }

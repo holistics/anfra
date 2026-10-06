@@ -282,16 +282,20 @@ var (
 	InternalServerError = DefinePublicCode(Generic, "internal_server_error", Server, "Something went wrong on our side.")
 	InvalidRequest      = DefinePublicCodeWith[Violations](Generic, "invalid_request", Client, "The request is not valid.")
 	NotFound            = DefinePublicCode(Generic, "not_found", User, "Not found.")
+	// ValidationFailed: the request was well-formed, and its input's meaning is
+	// refused — a value out of range, a name already taken, an arg that does not
+	// apply. Its violations name each field.
+	ValidationFailed = DefinePublicCodeWith[Violations](Generic, "validation_failed", User, "Some of the input is not valid.")
 )
 
 // Violations are field-level details: one entry per field the caller got
-// wrong. invalid_request carries them for structural errors, and a host's own
-// codes may carry them too.
+// wrong. invalid_request carries them for structural errors, validation_failed
+// for the input's meaning, and a host's own codes may carry them too.
 type Violations []Violation
 
 // Violation is one field-level problem. Field is the request field or engine
 // arg name as the caller sent it; Code is from a small generic set (required,
-// invalid, unknown, too_short, too_long, taken).
+// invalid, unknown, unsupported, too_short, too_long, taken).
 type Violation struct {
 	Field   string `json:"field"`
 	Code    string `json:"code"`

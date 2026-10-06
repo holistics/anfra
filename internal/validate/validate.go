@@ -17,25 +17,26 @@ import (
 // command that judges the query answers a QueryValidation instead.
 var QueryInvalid = apperr.DefinePublicCodeWith[QueryValidation](errcode.NS, "query_invalid", apperr.User, "The query is invalid.")
 
-// RepoValidation is the outcome of validating the repo: files that
-// failed to compile plus the validator suite's findings.
+// RepoValidation is the outcome of validating the repo: its verdict, files that
+// failed to compile, and the validator suite's findings.
 type RepoValidation struct {
+	// Valid: no file failed to compile, and no validator reported an
+	// "error"-severity finding.
+	Valid         bool                       `json:"valid"`
 	CompileErrors []sidecar.CompileError     `json:"compileErrors"`
 	Reports       []sidecar.ValidationReport `json:"reports"`
 }
 
-// Invalid reports whether the repo is invalid: any file failed to compile, or any
-// validator reported an "error"-severity finding.
-func (r RepoValidation) Invalid() bool {
-	if len(r.CompileErrors) > 0 {
-		return true
+func repoValid(compileErrors []sidecar.CompileError, reports []sidecar.ValidationReport) bool {
+	if len(compileErrors) > 0 {
+		return false
 	}
-	for _, rep := range r.Reports {
+	for _, rep := range reports {
 		if rep.Severity == "error" {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // Repo validates the AML repo via the node sidecar. paths (optional) are the
@@ -45,23 +46,28 @@ func Repo(ctx context.Context, node *sidecar.AnfraNodeClient, r repo.Repo, paths
 	if err != nil {
 		return RepoValidation{}, fmt.Errorf("validate AML for repo %q: %w", r.Dir, err)
 	}
-	return RepoValidation{CompileErrors: res.CompileErrors, Reports: res.Reports}, nil
+	return RepoValidation{
+		Valid:         repoValid(res.CompileErrors, res.Reports),
+		CompileErrors: res.CompileErrors,
+		Reports:       res.Reports,
+	}, nil
 }
 
-// QueryValidation is the outcome of validating a query: type-check diagnostics
-// for a single AQL query. No error-severity diagnostics means the query is valid.
+// QueryValidation is the outcome of validating a query: its verdict, and the
+// type-check diagnostics for a single AQL query.
 type QueryValidation struct {
+	// Valid: no diagnostic has "error" severity.
+	Valid       bool                    `json:"valid"`
 	Diagnostics []sidecar.AQLDiagnostic `json:"diagnostics"`
 }
 
-// Invalid reports whether the query has any error-severity diagnostic.
-func (r QueryValidation) Invalid() bool {
-	for _, d := range r.Diagnostics {
+func queryValid(diags []sidecar.AQLDiagnostic) bool {
+	for _, d := range diags {
 		if d.Severity == "error" {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // AQL type-checks a single AQL query against a dataset and returns its
@@ -76,5 +82,5 @@ func AQL(ctx context.Context, node *sidecar.AnfraNodeClient, r repo.Repo, datase
 	if err != nil {
 		return QueryValidation{}, fmt.Errorf("validate AQL for dataset %q: %w", dataset, err)
 	}
-	return QueryValidation{Diagnostics: res.Diagnostics}, nil
+	return QueryValidation{Valid: queryValid(res.Diagnostics), Diagnostics: res.Diagnostics}, nil
 }

@@ -25,7 +25,7 @@ var (
 var host = apperr.DefineNamespace("host")
 
 var (
-	validationFailed = apperr.DefinePublicCodeWith[apperr.Violations](host, "validation_failed", apperr.User, "Some of the input is not valid.")
+	validationFailed = apperr.ValidationFailed
 	unauthenticated  = apperr.DefinePublicCode(host, "unauthenticated", apperr.User, "Sign in to continue.")
 	forbidden        = apperr.DefinePublicCode(host, "forbidden", apperr.User, "You do not have permission to do this.")
 	unavailable      = apperr.DefinePublicCodeWith[retryAfter](host, "unavailable", apperr.Server, "The service is temporarily unavailable. Try again shortly.")
@@ -122,7 +122,7 @@ func TestCases(t *testing.T) {
 			code:    validationFailed.Code(),
 			message: "The address is not valid.",
 			details: apperr.Violations{{Field: "slug", Code: "invalid", Message: "not a valid address"}},
-			log:     "host.validation_failed: The address is not valid.",
+			log:     "apperr.validation_failed: The address is not valid.",
 		},
 		{
 			name: "a structural error carries the caller's field paths",
@@ -221,7 +221,7 @@ func TestCases(t *testing.T) {
 			},
 			code:    apperr.NotFound,
 			message: "This invitation is no longer valid.",
-			log:     "apperr.not_found: This invitation is no longer valid.: host.validation_failed: The address is not valid.",
+			log:     "apperr.not_found: This invitation is no longer valid.: apperr.validation_failed: The address is not valid.",
 		},
 
 		// ---- Context: the chain from the top down to the formal error.
@@ -463,8 +463,8 @@ func TestCatalog(t *testing.T) {
 			}
 		}
 	}
-	if got := apperr.Codes(apperr.Generic); len(got) != 3 {
-		t.Errorf("generic codes = %v, want internal_server_error, invalid_request, not_found", got)
+	if got := apperr.Codes(apperr.Generic); len(got) != 4 {
+		t.Errorf("generic codes = %v, want internal_server_error, invalid_request, not_found, validation_failed", got)
 	}
 	for _, c := range apperr.Codes(host) {
 		if c == slugTaken.Code() {
