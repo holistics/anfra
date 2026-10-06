@@ -222,9 +222,9 @@ The open-source engine is complete for building, running and self-hosting apps f
 ## FAQ
 
 <details>
-<summary><b>How is this different from giving Claude a warehouse or dbt MCP?</b></summary>
+<summary><b>How is this different from connecting Claude to my warehouse, or a BigQuery, Metabase or dbt MCP?</b></summary>
 
-For a one-off question, not much. The difference shows up when you *build*: reusable metrics instead of re-derived SQL, interactions (drill, cross-filter, PoP) resolved by the engine, apps that refresh instead of holding pasted data, and a trace from every number back to its definition.
+For a one-off question, not much. The difference shows up when you build apps: metrics defined once instead of re-derived SQL in every app, interactions like drill-down, cross-filter, funnels and period comparisons resolved by the engine, apps that query live data instead of holding pasted numbers, and the query and metric behind each number.
 </details>
 
 <details>
@@ -234,27 +234,64 @@ Those give you a framework to write the app in. Anfra gives you a semantic backe
 </details>
 
 <details>
+<summary><b>I already have a BI tool. Why would I switch?</b></summary>
+
+Anfra is built to replace dashboard BI tools, not to sit beside them. Those tools were designed for building reports by hand in a fixed grid of charts and filters. With a coding agent, your team can build the app they actually need, and Anfra keeps it governed: metrics are defined once in the semantic layer, and every number can be inspected back to its query and definition. Anfra Cloud adds users, permissions and sharing.
+
+Compared with a traditional BI tool, Anfra gives you:
+- any layout and interaction your team can describe, instead of a fixed set of chart types;
+- a semantic layer that handles funnels, cohorts, drill-downs and period comparisons as built-in operations;
+- an open-source engine you can self-host for free.
+
+You don't need to switch all at once. Run Anfra next to your current tool, rebuild reports in it as you need them, and decide at renewal whether you still need the old subscription.
+</details>
+
+<details>
+<summary><b>Why build an app instead of asking the chatbot each time?</b></summary>
+
+Asking a chatbot works for a question you ask once. For questions your team asks every week, an app is built once and then just runs: no tokens spent on each repeat question, and everyone who opens it sees the same numbers computed the same way.
+</details>
+
+<details>
 <summary><b>Do I have to learn AMQL?</b></summary>
 
-No. The agent reads and writes it for you, and the skill package teaches it how. You review model changes as code.
+No. Your coding agent drafts and edits models using the bundled skills, and you review changes like any other code. AMQL compiles to plain SQL you can read.
 </details>
 
 <details>
-<summary><b>I already have a BI tool.</b></summary>
+<summary><b>Can the AI change my metric definitions?</b></summary>
 
-Keep it for certified reporting. Use Anfra for the AI-built, exploratory and highly custom apps that don't fit a dashboard grid.
+Apps query metrics through the SDK; they don't edit the model. Models are files in your project, so when your coding agent proposes a change to a metric, you review it like any other code change before it takes effect. <!-- TODO: confirm default for AI-generated ad hoc AQL inside apps -->
 </details>
 
 <details>
-<summary><b>Can I use my existing semantic layer (dbt, Cube, Snowflake semantic views)?</b></summary>
+<summary><b>Can I use my existing semantic layer?</b></summary>
 
-Not yet. It's on the roadmap. Direct SQL datasets are supported today. <!-- TODO: confirm what ships in v0.1 -->
+Not today. Anfra ships with AMQL. We plan to support other semantic layers such as Cube, dbt, Snowflake and Databricks, though advanced interactions like funnels and period comparisons will depend on AMQL.
 </details>
 
 <details>
-<summary><b>Is the browser computing any numbers?</b></summary>
+<summary><b>Does my data leave my warehouse? Which AI does Anfra use?</b></summary>
 
-Source data is resolved by the server at view time. Page code *can* transform returned rows in JavaScript. Inspect shows the server query, and anything computed on top of it in the page is the page's responsibility.
+Queries run on your warehouse, and the Anfra server sends results straight to the page. Apps don't store query results or warehouse credentials by default. Anfra doesn't include an AI model: you use your own coding agent, so what the agent can see depends on what you connect it to. <!-- TODO: verify "apps don't store results or credentials by default" against the implementation -->
+</details>
+
+<details>
+<summary><b>How do I control who can see what?</b></summary>
+
+The open-source server has no login or permissions: anyone who can reach it can open its apps. To restrict access, run it behind your own SSO proxy. For per-viewer permissions (the same app showing different numbers to different users), sharing and audit, use [Anfra Cloud](#anfra-oss-vs-anfra-cloud).
+</details>
+
+<details>
+<summary><b>Are the numbers computed in the browser?</b></summary>
+
+Numbers come from queries the server runs on your warehouse. Page code can still transform the returned rows in JavaScript; Inspect shows the server query, so anything computed on top of it is visible as page code, not hidden in a metric.
+</details>
+
+<details>
+<summary><b>How does Anfra relate to Holistics? Will I be locked in?</b></summary>
+
+Anfra is built by the team behind Holistics, and AMQL is the semantic layer Holistics runs on. Anfra is a separate open-source project and doesn't need a Holistics account. Your models and apps are plain files in your own repository, and AMQL compiles to SQL you can read. <!-- TODO: confirm no Holistics account is required -->
 </details>
 
 ## Learn more
