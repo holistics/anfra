@@ -81,7 +81,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 
 		var clients app.Clients
 		var caller dispatch.Caller
-		if fake := dispatch.Fake(); fake != nil && opts.Apps {
+		if fake := appsFake(opts); fake != nil {
 			caller = fake // an e2e build: canned answers, no sidecars
 		} else {
 			// Warm sidecars live for the server's lifetime, so enable canal-query
@@ -282,4 +282,12 @@ func callServe(repo repo.Repo, req app.Request) (body []byte, contentType string
 		return nil, "", fmt.Errorf("serve returned status %d", resp.StatusCode)
 	}
 	return data, resp.Header.Get("Content-Type"), nil
+}
+
+// appsFake is the e2e build's canned-answer Caller for --apps, or nil.
+func appsFake(opts serveOptions) dispatch.Caller {
+	if !opts.Apps {
+		return nil
+	}
+	return dispatch.Fake()
 }

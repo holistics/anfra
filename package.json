@@ -2,6 +2,7 @@
   "name": "anfra-tooling",
   "private": true,
   "description": "Node tooling for the anfra Go repo: commitlint, conventional-changelog, and building and testing Data App serving (the Anfra SDK and the Shell).",
+  "type": "module",
   "scripts": {
     "prepare": "husky",
     "commit": "cz",
