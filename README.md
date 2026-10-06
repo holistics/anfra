@@ -162,7 +162,7 @@ Open `.anfra/data_sources.yml` and fill in your database credentials:
 # .anfra/data_sources.yml
 data_sources:
   warehouse:
-    type: postgresql            # TODO: list supported types
+    type: postgresql
     connection:
       host: localhost
       port: 5432
@@ -170,6 +170,8 @@ data_sources:
       password: anfra
       dbname: analytics
 ```
+
+Supported `type` values: `postgresql`, `redshift`, `bigquery`, `snowflake`, `databricks`, `clickhouse`, `mysql`, `sqlserver`, `oracledb`, `aws_athena`, `prestodb`, `duckdb` and `motherduck`. Each type takes different connection fields; see [Data sources](https://docs.anfra.ai/docs/self-hosted/data-sources).
 
 ### 4. Start building
 
