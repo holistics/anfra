@@ -1,11 +1,7 @@
 name: Test
 
 on:
-  workflow_call:
-    inputs:
-      all:
-        type: boolean
-        default: false
+  workflow_call: {}
 
 jobs:
   commitlint:
@@ -15,6 +11,8 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v6
 
   validate:
