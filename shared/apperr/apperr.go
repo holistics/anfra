@@ -290,8 +290,21 @@ var (
 
 // Violations are field-level details: one entry per field the caller got
 // wrong. invalid_request carries them for structural errors, validation_failed
-// for the input's meaning, and a host's own codes may carry them too.
-type Violations []Violation
+// for the input's meaning, and a host's own codes may carry them too. Like
+// every details type, they are an object, so the wire says what they are:
+// `{"violations": [...]}`.
+type Violations struct {
+	Violations []Violation `json:"violations"`
+}
+
+// Violate is the details of the violations vs: never a null list, though
+// there are none.
+func Violate(vs ...Violation) Violations {
+	if vs == nil {
+		vs = []Violation{}
+	}
+	return Violations{Violations: vs}
+}
 
 // Violation is one field-level problem. Field is the request field or engine
 // arg name as the caller sent it; Code is from a small generic set (required,

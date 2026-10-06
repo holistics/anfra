@@ -76,7 +76,7 @@ func TestTranslate(t *testing.T) {
 		},
 		{
 			name: "the host re-decides scope: a client error to the library is the host's bug",
-			err:  apperr.Translate(libFails(apperr.NewWith(libArgsInvalid, "", apperr.Violations{})), apperr.InternalServerError),
+			err:  apperr.Translate(libFails(apperr.NewWith(libArgsInvalid, "", apperr.Violate())), apperr.InternalServerError),
 			want: apperr.Response{Code: "internal_server_error", Scope: apperr.Server, Context: []apperr.ContextEntry{compile},
 				Message: generic},
 		},

@@ -95,9 +95,7 @@ components:
             $ref: "#/components/schemas/ContextEntry"
           type: array
         details:
-          items:
-            $ref: "#/components/schemas/Violation"
-          type: array
+          $ref: "#/components/schemas/Violations"
         message:
           type: string
         request_id:
@@ -213,9 +211,7 @@ components:
             $ref: "#/components/schemas/ContextEntry"
           type: array
         details:
-          items:
-            $ref: "#/components/schemas/Violation"
-          type: array
+          $ref: "#/components/schemas/Violations"
         message:
           type: string
         request_id:
@@ -245,23 +241,12 @@ components:
       type: object
     QueryInput:
       additionalProperties: false
-      oneOf:
-        - properties:
-            dataset: {}
-          required:
-            - dataset
-          type: object
-        - properties:
-            data_source: {}
-          required:
-            - data_source
-          type: object
       properties:
         data_source:
-          description: the data source to query (SQL)
+          description: the data source a SQL query runs against
           type: string
         dataset:
-          description: the dataset to query (AQL)
+          description: the dataset an AQL query runs against
           type: string
         lang:
           default: aql
@@ -470,6 +455,16 @@ components:
         - field
         - code
         - message
+      type: object
+    Violations:
+      additionalProperties: false
+      properties:
+        violations:
+          items:
+            $ref: "#/components/schemas/Violation"
+          type: array
+      required:
+        - violations
       type: object
 info:
   title: anfra

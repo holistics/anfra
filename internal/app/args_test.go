@@ -26,15 +26,15 @@ func TestInputSchema(t *testing.T) {
 		name, body string
 		bad        apperr.Violations
 	}{
-		{"every refusal at once", `{"lang":"cobol","bogus":1}`, apperr.Violations{
-			{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
-			{Field: "query", Code: "required", Message: "Required."},
-			{Field: "bogus", Code: "unknown", Message: "Not a field of this input. Field names are snake_case and case-sensitive."},
-		}},
-		{"a value of the wrong type", `{"query":42,"dataset":"d"}`, apperr.Violations{
-			{Field: "query", Code: "invalid", Message: "Must be a string; got a number."}}},
-		{"a blank required string", `{"query":"","dataset":"d"}`, apperr.Violations{
-			{Field: "query", Code: "too_short", Message: "Must be at least 1 character long."}}},
+		{"every refusal at once", `{"lang":"cobol","bogus":1}`, apperr.Violate(
+			apperr.Violation{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
+			apperr.Violation{Field: "query", Code: "required", Message: "Required."},
+			apperr.Violation{Field: "bogus", Code: "unknown", Message: "Not a field of this input. Field names are snake_case and case-sensitive."},
+		)},
+		{"a value of the wrong type", `{"query":42,"dataset":"d"}`, apperr.Violate(
+			apperr.Violation{Field: "query", Code: "invalid", Message: "Must be a string; got a number."})},
+		{"a blank required string", `{"query":"","dataset":"d"}`, apperr.Violate(
+			apperr.Violation{Field: "query", Code: "too_short", Message: "Must be at least 1 character long."})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Invoke(context.Background(), cc, "query.compile", []byte(tc.body))
@@ -48,7 +48,7 @@ func TestInputSchema(t *testing.T) {
 	// A default the input leaves unset is applied before the command runs: lang
 	// is aql, so AQL against a data source is refused as such.
 	_, err := Invoke(context.Background(), cc, "query.compile", []byte(`{"query":"q","data_source":"demo"}`))
-	if v, _ := apperr.DetailsOf(err, apperr.ValidationFailed); len(v) != 1 || v[0].Field != "data_source" || v[0].Code != "unsupported" {
+	if d, _ := apperr.DetailsOf(err, apperr.ValidationFailed); len(d.Violations) != 1 || d.Violations[0].Field != "data_source" || d.Violations[0].Code != "unsupported" {
 		t.Errorf("the default language was not applied: %v", err)
 	}
 }
@@ -127,7 +127,8 @@ func TestQueryInputs(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := run(t, tc.cmd, tc.cc, tc.in)
-			v, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
+			d, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
+			v := d.Violations
 			if len(v) != 1 || v[0].Field != tc.field || v[0].Code != tc.code {
 				t.Errorf("got %v, %+v; want %s on %s", err, v, tc.code, tc.field)
 			}
