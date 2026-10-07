@@ -42,21 +42,26 @@ describe('problems', () => {
 describe('datasets', () => {
   it("are the ones that load, with the problems of the ones that don't", async () => {
     answer('core.show', {
-      object: { kind: 'repo', datasets: [{ kind: 'dataset', fqn: 'shop.sales', name: 'sales' }, { kind: 'dataset', fqn: 'shop.broken', name: 'broken' }] },
-      diagnostics: [{ filePath: 'a.aml', message: 'Unexpected }' }],
+      object: {
+        kind: 'repo',
+        datasets: [
+          { kind: 'dataset', fqn: 'shop.sales', name: 'sales', models: [], metrics: [] },
+          { kind: 'dataset', fqn: 'shop.broken', name: 'broken' },
+        ],
+      },
+      diagnostics: [
+        { filePath: 'a.aml', message: 'Unexpected }' },
+        { message: 'Data source "pg" is not configured.' },
+        { message: 'Dataset "shop.broken" can\'t be shown in full: boom' },
+      ],
     });
-    answer('core.show shop.sales', {
-      object: { kind: 'dataset', fqn: 'shop.sales', name: 'sales', models: [], metrics: [] },
-      diagnostics: [{ message: 'Data source "pg" is not configured.' }],
-    });
-    answer('core.show shop.broken', { error: { code: 'internal_server_error', scope: 'server', message: 'Something went wrong.' } }, 500);
 
     const loaded = await server.datasets();
     expect(Object.keys(loaded.datasets)).toEqual(['shop.sales']);
     // The files that don't compile are left to problems().
     expect(loaded.problems).toEqual([
-      { message: 'Dataset "shop.broken" couldn\'t be loaded: Something went wrong.' },
       { message: 'Data source "pg" is not configured.' },
+      { message: 'Dataset "shop.broken" can\'t be shown in full: boom' },
     ]);
   });
 });

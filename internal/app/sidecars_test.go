@@ -129,7 +129,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		}
 	})
 
-	// show answers the repo in outline, a dataset in full; a broken file comes
+	// show answers the repo with every dataset in full, and a dataset in full; a broken file comes
 	// with it, and does not stop what compiles from being shown.
 	t.Run("show, its answers", func(t *testing.T) {
 		cc := command.CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted()}
@@ -138,7 +138,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := res.Data.(anfranode.ShowResult)
-		if r.Object.Repo == nil || len(r.Object.Repo.Datasets) != 1 || r.Object.Repo.Datasets[0].Fqn != "ecommerce" || r.Object.Repo.Datasets[0].Models != nil {
+		if r.Object.Repo == nil || len(r.Object.Repo.Datasets) != 1 || r.Object.Repo.Datasets[0].Fqn != "ecommerce" || len(r.Object.Repo.Datasets[0].Models) != 1 {
 			t.Errorf("the repo: %+v", r.Object)
 		}
 		res, err = Dispatch(ctx, cc, Request{Command: "show", Args: map[string]any{"fqn": "ecommerce"}})

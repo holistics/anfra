@@ -56,7 +56,9 @@ func (a *Sidecar) Start(ctx context.Context) error {
 	a.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("anfra-%d.sock", os.Getpid()))
 	_ = os.Remove(a.socketPath)
 
-	env := []string{"ANFRA_REPO_ID=" + a.cfg.RepoID}
+	// It serves this one repo, so it keeps that repo's compiled program in
+	// memory between requests: anfra-node keeps none unless told how many.
+	env := []string{"ANFRA_REPO_ID=" + a.cfg.RepoID, "ANFRA_PROGRAM_MEMORY_SIZE=1"}
 	if a.cfg.CompileCachePath != "" {
 		env = append(env, "ANFRA_COMPILE_CACHE_PATH="+a.cfg.CompileCachePath)
 	}

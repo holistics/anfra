@@ -37,49 +37,25 @@ export function toDescriptor (dataset: ShowDataset): DatasetDescriptor {
 }
 
 /**
- * Every dataset of the repo that could be shown, in full, by name; the ones that could not, and
- * why; and what is wrong in the repo for them (its files that do not compile, a data source it
- * does not configure).
+ * Every dataset of the repo that could be shown in full, by name; and what is wrong in the repo for
+ * them (its files that do not compile, a data source it does not configure, a dataset it cannot
+ * show in full).
  */
 export interface LoadedDatasets {
   datasets: Record<string, DatasetDescriptor>;
-  failed: { fqn: string, message: string }[];
   diagnostics: CompileError[];
 }
 
-async function show (client: CoreClient, body: { fqn?: string }, signal?: AbortSignal) {
-  const { data, error, response } = await client.POST('/core.show', { body, signal });
-  if (!data) throw toSdkError(response.status, (error as { error?: ApiErrorBody } | undefined)?.error);
-  return data;
-}
-
 /**
- * What a Data App is provisioned with: `core.show` of the repo, then of each of its datasets, in
- * parallel. A dataset that cannot be shown is left out and reported, rather than failing the rest:
- * a Data App that does not use it still runs.
+ * What a Data App is provisioned with: `core.show` of the repo, which answers every dataset in
+ * full. A dataset that cannot be shown in full comes in outline, with a diagnostic saying why: it
+ * is left out, rather than failing the rest, as a Data App that does not use it still runs.
  */
 export async function loadDatasets (client: CoreClient, signal?: AbortSignal): Promise<LoadedDatasets> {
-  const repo = await show(client, {}, signal);
-  if (repo.object.kind !== 'repo') throw new TransportError(`core.show answered a ${repo.object.kind}, not the repo.`);
-  const fqns = repo.object.datasets.map((d) => d.fqn);
-  const shown = await Promise.allSettled(fqns.map((fqn) => show(client, { fqn }, signal)));
-
-  const loaded: LoadedDatasets = { datasets: {}, failed: [], diagnostics: [...repo.diagnostics] };
-  const seen = new Set(loaded.diagnostics.map((d) => JSON.stringify(d)));
-  shown.forEach((result, i) => {
-    if (result.status === 'rejected') {
-      loaded.failed.push({ fqn: fqns[i], message: (result.reason as Error).message });
-      return;
-    }
-    const { object, diagnostics } = result.value;
-    if (object.kind === 'dataset') loaded.datasets[object.fqn] = toDescriptor(object);
-    diagnostics.forEach((d) => {
-      const key = JSON.stringify(d);
-      if (!seen.has(key)) {
-        seen.add(key);
-        loaded.diagnostics.push(d);
-      }
-    });
-  });
-  return loaded;
+  const { data, error, response } = await client.POST('/core.show', { body: {}, signal });
+  if (!data) throw toSdkError(response.status, (error as { error?: ApiErrorBody } | undefined)?.error);
+  if (data.object.kind !== 'repo') throw new TransportError(`core.show answered a ${data.object.kind}, not the repo.`);
+  const datasets: Record<string, DatasetDescriptor> = {};
+  data.object.datasets.filter((d) => d.models).forEach((d) => { datasets[d.fqn] = toDescriptor(d); });
+  return { datasets, diagnostics: data.diagnostics };
 }

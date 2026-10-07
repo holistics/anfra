@@ -30,10 +30,7 @@ export async function datasets (): Promise<{ datasets: Record<string, DatasetDes
   const loaded = await loadDatasets(api);
   return {
     datasets: loaded.datasets,
-    problems: [
-      ...loaded.failed.map((f) => ({ message: `Dataset "${f.fqn}" couldn't be loaded: ${f.message}` })),
-      ...loaded.diagnostics.filter((d) => !d.filePath).map((d) => ({ message: d.message })),
-    ],
+    problems: loaded.diagnostics.filter((d) => !d.filePath).map((d) => ({ message: d.message })),
   };
 }
 
