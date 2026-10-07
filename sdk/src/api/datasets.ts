@@ -36,9 +36,14 @@ export function toDescriptor (dataset: ShowDataset): DatasetDescriptor {
   };
 }
 
-/** Every dataset of the repo, in full, by name; and the repo's files that do not compile. */
+/**
+ * Every dataset of the repo that could be shown, in full, by name; the ones that could not, and
+ * why; and what is wrong in the repo for them (its files that do not compile, a data source it
+ * does not configure).
+ */
 export interface LoadedDatasets {
   datasets: Record<string, DatasetDescriptor>;
+  failed: { fqn: string, message: string }[];
   diagnostics: CompileError[];
 }
 
@@ -50,15 +55,31 @@ async function show (client: CoreClient, body: { fqn?: string }, signal?: AbortS
 
 /**
  * What a Data App is provisioned with: `core.show` of the repo, then of each of its datasets, in
- * parallel.
+ * parallel. A dataset that cannot be shown is left out and reported, rather than failing the rest:
+ * a Data App that does not use it still runs.
  */
 export async function loadDatasets (client: CoreClient, signal?: AbortSignal): Promise<LoadedDatasets> {
   const repo = await show(client, {}, signal);
   if (repo.object.kind !== 'repo') throw new TransportError(`core.show answered a ${repo.object.kind}, not the repo.`);
-  const shown = await Promise.all(repo.object.datasets.map((d) => show(client, { fqn: d.fqn }, signal)));
-  const datasets: Record<string, DatasetDescriptor> = {};
-  shown.forEach(({ object }) => {
-    if (object.kind === 'dataset') datasets[object.fqn] = toDescriptor(object);
+  const fqns = repo.object.datasets.map((d) => d.fqn);
+  const shown = await Promise.allSettled(fqns.map((fqn) => show(client, { fqn }, signal)));
+
+  const loaded: LoadedDatasets = { datasets: {}, failed: [], diagnostics: [...repo.diagnostics] };
+  const seen = new Set(loaded.diagnostics.map((d) => JSON.stringify(d)));
+  shown.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      loaded.failed.push({ fqn: fqns[i], message: (result.reason as Error).message });
+      return;
+    }
+    const { object, diagnostics } = result.value;
+    if (object.kind === 'dataset') loaded.datasets[object.fqn] = toDescriptor(object);
+    diagnostics.forEach((d) => {
+      const key = JSON.stringify(d);
+      if (!seen.has(key)) {
+        seen.add(key);
+        loaded.diagnostics.push(d);
+      }
+    });
   });
-  return { datasets, diagnostics: repo.diagnostics };
+  return loaded;
 }

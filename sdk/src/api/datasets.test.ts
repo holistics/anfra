@@ -45,19 +45,44 @@ describe('toDescriptor', () => {
 });
 
 describe('loadDatasets', () => {
-  it('shows the repo, then each of its datasets, and keys them by fqn', async () => {
+  /** A core API whose show answers the repo, then each dataset as `datasets` says. */
+  function api (datasets: Record<string, { status: number, body: unknown }>) {
     const sent: unknown[] = [];
     const fetchImpl = vi.fn(async (input: Request) => {
       const body = await input.clone().json() as { fqn?: string };
       sent.push(body);
-      const answer = body.fqn
-        ? { object: sales, diagnostics: [] }
-        : { object: { kind: 'repo', datasets: [{ kind: 'dataset', fqn: 'shop.sales', name: 'sales' }] }, diagnostics: [{ filePath: 'x.aml', message: 'broken' }] };
-      return new Response(JSON.stringify(answer), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const answer = body.fqn ? datasets[body.fqn] : {
+        status: 200,
+        body: {
+          object: { kind: 'repo', datasets: Object.keys(datasets).map((fqn) => ({ kind: 'dataset', fqn, name: fqn })) },
+          diagnostics: [{ filePath: 'x.aml', message: 'broken' }],
+        },
+      };
+      return new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } });
     });
-    const loaded = await loadDatasets(coreClient('http://host/api', fetchImpl as unknown as typeof fetch));
+    return { client: coreClient('http://host/api', fetchImpl as unknown as typeof fetch), sent };
+  }
+
+  it('shows the repo, then each of its datasets, and keys them by fqn', async () => {
+    const { client, sent } = api({ 'shop.sales': { status: 200, body: { object: sales, diagnostics: [] } } });
+    const loaded = await loadDatasets(client);
     expect(sent).toEqual([{}, { fqn: 'shop.sales' }]);
     expect(Object.keys(loaded.datasets)).toEqual(['shop.sales']);
+    expect(loaded.failed).toEqual([]);
     expect(loaded.diagnostics).toEqual([{ filePath: 'x.aml', message: 'broken' }]);
+  });
+
+  it('leaves out a dataset it cannot show, and keeps the rest', async () => {
+    const { client } = api({
+      'shop.sales': { status: 200, body: { object: sales, diagnostics: [{ message: 'Data source "pg" is not configured.' }] } },
+      'shop.broken': { status: 500, body: { error: { code: 'internal_server_error', scope: 'server', message: 'Something went wrong.' } } },
+    });
+    const loaded = await loadDatasets(client);
+    expect(Object.keys(loaded.datasets)).toEqual(['shop.sales']);
+    expect(loaded.failed).toEqual([{ fqn: 'shop.broken', message: 'Something went wrong.' }]);
+    expect(loaded.diagnostics).toEqual([
+      { filePath: 'x.aml', message: 'broken' },
+      { message: 'Data source "pg" is not configured.' },
+    ]);
   });
 });

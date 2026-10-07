@@ -10,7 +10,10 @@
     "build:sdk": "pnpm --filter anfra-sdk build",
     "dev:sdk": "pnpm --filter anfra-sdk dev",
     "test:sdk": "pnpm --filter anfra-sdk test",
-    "build:apps": "pnpm build:sdk"
+    "build:apps": "pnpm build:sdk && pnpm build:appserve",
+    "build:appserve": "pnpm --filter anfra-appserve build",
+    "dev:appserve": "pnpm --filter anfra-appserve dev",
+    "test:appserve": "pnpm --filter anfra-appserve test"
   },
   "config": {
     "commitizen": {
