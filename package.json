@@ -1,12 +1,15 @@
 {
   "name": "anfra-tooling",
   "private": true,
-  "description": "Node tooling for the anfra Go repo: commitlint (conventional commits) + conventional-changelog.",
+  "description": "Node tooling for the anfra Go repo: commitlint (conventional commits), conventional-changelog, and the Anfra SDK's workspace.",
   "scripts": {
     "prepare": "husky",
     "commit": "cz",
     "changelog": "conventional-changelog -n conventional-changelog.config.mjs -i CHANGELOG.md -s -t anfra-v",
-    "bump": "bash scripts/bump.sh"
+    "bump": "bash scripts/bump.sh",
+    "build:sdk": "pnpm --filter anfra-sdk build",
+    "dev:sdk": "pnpm --filter anfra-sdk dev",
+    "test:sdk": "pnpm --filter anfra-sdk test"
   },
   "config": {
     "commitizen": {
@@ -22,11 +25,5 @@
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "husky": "^9.1.7"
   },
-  "packageManager": "pnpm@10.22.0",
-  "pnpm": {
-    "overrides": {
-      "fast-uri@<3.1.6": "3.1.8",
-      "js-yaml@>=4.0.0 <4.3.2": "4.3.2"
-    }
-  }
+  "packageManager": "pnpm@10.22.0"
 }

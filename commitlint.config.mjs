@@ -19,13 +19,18 @@ export default {
         'engine.repo',
         'engine.datasource',
 
-        'meta',
-
         'shared',
         'shared.appstep',
         'shared.apperr',
         'shared.apptracing',
 
+        'sdk',
+        'sdk.common',
+        'sdk.api',
+        'sdk.host',
+        'sdk.app',
+
+        'meta',
         'deps',
       ],
     ],
