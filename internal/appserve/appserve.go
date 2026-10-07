@@ -5,12 +5,14 @@
 package appserve
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
@@ -20,7 +22,7 @@ import (
 type Options struct {
 	// RepoDir is the repo whose Data Apps are served, under its apps/.
 	RepoDir string
-	// Watch turns live reload on: the repo is watched, and a change is an event.
+	// Watch turns live reload on: while a Data App is open, a change in the repo is an event.
 	Watch  bool
 	Logger *slog.Logger
 }
@@ -30,10 +32,15 @@ type Server struct {
 	opts     Options
 	frontend http.Handler // nil: this binary was built without the appserve frontend
 	events   *broadcaster
+	// live is live reload's state: the repo is watched while event streams are open.
+	live struct {
+		mu      sync.Mutex
+		streams int
+		stop    context.CancelFunc // the running watcher's; nil while none runs
+	}
 }
 
-// New is a Server for opts, with the frontend built into this binary. With opts.Watch, Watch
-// starts live reload.
+// New is a Server for opts, with the frontend built into this binary.
 func New(opts Options) *Server {
 	built, _ := frontend()
 	return newServer(opts, built)
@@ -68,6 +75,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/appserve/context":
 		writeJSON(w, Context{Repo: RepoInfo{Name: filepath.Base(s.opts.RepoDir)}, Reader: LocalReader(), Watch: s.opts.Watch})
 	case p == "/appserve/events" && s.opts.Watch:
+		s.listening() //nolint:contextcheck // the watcher outlives this request: it runs while any stream is open
+		defer s.unlistening()
 		s.events.serve(w, r)
 	case strings.HasPrefix(p, "/appserve/files/"):
 		s.file(w, r, strings.TrimPrefix(p, "/appserve/files/"))

@@ -1,5 +1,5 @@
 # The Go server for maintainers (make dev's `server`): rebuild anfra on a Go change, and run
-# `anfra serve --apps` in the repo $ANFRA_DEV_REPO names, so its Data Apps are what you work against.
+# `anfra serve` in the repo $ANFRA_DEV_REPO names, so its Data Apps are what you work against.
 root = "."
 tmp_dir = "tmp"
 

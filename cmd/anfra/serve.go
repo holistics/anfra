@@ -38,41 +38,41 @@ import (
 // the OS picks a port, and the runtime file says which.
 const defaultAddr = "127.0.0.1:7878"
 
-// serveOptions are anfra serve's flags.
+// serveOptions are anfra serve's flags. Everything is served unless turned off.
 type serveOptions struct {
-	addr string
-	mcp  bool
-	// apps serves the repo's Data Apps, at /apps/; watch live-reloads them.
-	apps  bool
-	watch bool
-	idle  time.Duration
+	addr  string
+	noMCP bool
+	// noApps leaves out the repo's Data Apps, at /apps/; noWatch, their live reload.
+	noApps  bool
+	noWatch bool
+	idle    time.Duration
 }
 
 func newServeCmd() *cobra.Command {
 	var opts serveOptions
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Serve the core API over HTTP, keeping the sidecars warm for it and for CLI calls in this repo",
-		Long: "Serve the core API over HTTP: every command as POST /api/core.<command>, its OpenAPI at\n" +
-			"/api/openapi.json, the operations to discover at /api/ops, and /health. With --mcp, also the\n" +
-			"same operations as MCP tools at /mcp. CLI calls in this repo use the server while it runs,\n" +
-			"found through the repo's runtime file, so they skip starting the sidecars.\n\n" +
+		Short: "Serve the repo over HTTP: the core API, MCP and the Data Apps, with the sidecars kept warm",
+		Long: "Serve the repo over HTTP:\n\n" +
+			"  /api/core.<command>  every command, as POST; its OpenAPI at /api/openapi.json, the\n" +
+			"                       operations to discover at /api/ops\n" +
+			"  /mcp                 the same operations as MCP tools (streamable HTTP)\n" +
+			"  /apps/<path>         the repo's Data Apps (apps/**.html) in a browser, live-reloading as\n" +
+			"                       their files or the AML change\n" +
+			"  /health\n\n" +
+			"CLI calls in this repo use the server while it runs, found through the repo's runtime file,\n" +
+			"so they skip starting the sidecars.\n\n" +
 			"It listens on " + defaultAddr + ", or on a free port when another repo's server holds that one;\n" +
-			"`anfra status` says where. It has no authentication: keep it on a loopback address.\n\n" +
-			"With --apps, also the repo's Data Apps (apps/**.html) in a browser, at /apps/<path>, live-reloading\n" +
-			"as their definitions or the AML change; --watch=false turns that off, to host them for others.",
+			"`anfra status` says where. It has no authentication: keep it on a loopback address.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if cmd.Flags().Changed("watch") && !opts.apps {
-				return fmt.Errorf("--watch is about the Data Apps --apps serves; pass --apps too")
-			}
 			return runServe(cmd.Context(), opts)
 		},
 	}
 	cmd.Flags().StringVar(&opts.addr, "addr", "", "the address to listen on, host:port (default "+defaultAddr+", or a free port)")
-	cmd.Flags().BoolVar(&opts.mcp, "mcp", false, "also serve the operations as MCP tools, at /mcp (streamable HTTP)")
-	cmd.Flags().BoolVar(&opts.apps, "apps", false, "also serve the repo's Data Apps in a browser, at /apps/<path>")
-	cmd.Flags().BoolVar(&opts.watch, "watch", true, "with --apps, live-reload the Data Apps as their files or the AML change")
+	cmd.Flags().BoolVar(&opts.noMCP, "no-mcp", false, "don't serve the operations as MCP tools")
+	cmd.Flags().BoolVar(&opts.noApps, "no-apps", false, "don't serve the repo's Data Apps")
+	cmd.Flags().BoolVar(&opts.noWatch, "no-watch", false, "serve the Data Apps without live reload, e.g. to host them for others")
 	// For a server someone else started (serve_daemon.md); a foreground one never times out.
 	cmd.Flags().DurationVar(&opts.idle, "idle-timeout", 0, "stop after this long without a request; 0 never")
 	_ = cmd.Flags().MarkHidden("idle-timeout")
@@ -117,18 +117,13 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		ctx, stop := context.WithCancel(ctx)
 		defer stop()
 		var apps *appserve.Server
-		if opts.apps {
-			apps = appserve.New(appserve.Options{RepoDir: h.repo.Dir, Watch: opts.watch, Logger: h.cfg.Logger})
+		if !opts.noApps {
+			apps = appserve.New(appserve.Options{RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger})
 			if !apps.FrontendBuilt() {
 				fmt.Fprintln(os.Stderr, "warning: this anfra was built without its Data App pages; /apps/ says how to build them")
 			}
-			if opts.watch {
-				if err := apps.Watch(ctx); err != nil {
-					return fmt.Errorf("watch the repo for live reload: %w", err)
-				}
-			}
 		}
-		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr(), opts.mcp, apps)
+		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr(), !opts.noMCP, apps)
 		if opts.idle > 0 {
 			handler = stopWhenIdle(ctx, handler, opts.idle, stop)
 		}
@@ -158,11 +153,11 @@ func runServe(ctx context.Context, opts serveOptions) error {
 
 		h.cfg.Logger.Info("serve.listening", "url", info.URL)
 		fmt.Printf("anfra serve listening on %s (Ctrl-C to stop)\n", info.URL)
-		if opts.mcp {
-			fmt.Printf("MCP at %s/mcp\n", info.URL)
+		if apps != nil {
+			fmt.Printf("  Data Apps  %s/apps/\n", info.URL)
 		}
-		if opts.apps {
-			fmt.Printf("Data Apps at %s/apps/\n", info.URL)
+		if !opts.noMCP {
+			fmt.Printf("  MCP        %s/mcp\n", info.URL)
 		}
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
