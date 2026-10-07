@@ -1,8 +1,9 @@
 # Anfra skills
 
 A marketplace of agent skills for working with [Anfra](https://anfra.ai) —
-building and exploring analytics via **AML** (modeling) and **AQL** (querying)
-against a local AMQL repo, using the `anfra` CLI (`anfra query`, `anfra validate`).
+building and exploring analytics via **AML** (modeling), **AQL** (querying) and
+**Data Apps** (interactive pages) in a local Anfra repo, using the `anfra` CLI (`anfra init`,
+`anfra query`, `anfra validate`, `anfra serve --apps`).
 
 The skills are self-contained: they assume only the `anfra` command, not any
 other tools or platform.

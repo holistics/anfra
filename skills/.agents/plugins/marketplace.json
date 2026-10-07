@@ -4,8 +4,8 @@
     "displayName": "Anfra Skills"
   },
   "metadata": {
-    "description": "Skills for working with Anfra — building and exploring analytics via AML and AQL.",
-    "version": "0.0.3"
+    "description": "Skills for working with Anfra — building and exploring analytics via AMQL and Data Apps.",
+    "version": "0.1.0"
   },
   "plugins": [
     {

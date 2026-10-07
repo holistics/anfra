@@ -1,7 +1,7 @@
 {
   "name": "anfra-development",
-  "description": "Skills for developing analytics with Anfra: writing AQL queries and AML models against a local AMQL repo.",
-  "version": "0.0.3",
+  "description": "Skills for developing analytics with Anfra: setting up a repo and its data source, modeling data in AML, querying it with AQL, and building Data Apps.",
+  "version": "0.1.0",
   "author": {
     "name": "Anfra"
   },
@@ -12,6 +12,7 @@
     "aml",
     "aql",
     "analytics",
-    "modeling"
+    "modeling",
+    "data-apps"
   ]
 }
