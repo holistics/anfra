@@ -1,3 +1,9 @@
+## [0.1.1](https://github.com/holistics/anfra-skills/compare/anfra-development-v0.1.0...anfra-development-v0.1.1) (2026-10-07)
+
+### Features
+
+* **plugins.anfra-development:** adapt to new cli serve args ([8fe1cad](https://github.com/holistics/anfra-skills/commit/8fe1cad6a202ea680641bb18b6007c54eea565ed))
+
 ## [0.1.0](https://github.com/holistics/anfra-skills/compare/anfra-development-v0.0.3...anfra-development-v0.1.0) (2026-10-07)
 
 ### Features
