@@ -3,7 +3,7 @@
 A marketplace of agent skills for working with [Anfra](https://anfra.ai) —
 building and exploring analytics via **AML** (modeling), **AQL** (querying) and
 **Data Apps** (interactive pages) in a local Anfra repo, using the `anfra` CLI (`anfra init`,
-`anfra query`, `anfra validate`, `anfra serve --apps`).
+`anfra query`, `anfra validate`, `anfra serve`).
 
 The skills are self-contained: they assume only the `anfra` command, not any
 other tools or platform.
@@ -52,7 +52,7 @@ Develop analytics with Anfra.
 | `lookup-values` | Verify a field's exact stored values before filtering. |
 | `aml` | Write and edit AML models, fields, relationships, and datasets. |
 | `setup-repo` | Set up a new Anfra repo: `anfra init`, connect a data source, a first model and dataset. |
-| `build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve --apps`. |
+| `build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve`. |
 
 | Agent | What it does |
 |---|---|

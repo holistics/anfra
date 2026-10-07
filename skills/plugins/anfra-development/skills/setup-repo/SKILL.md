@@ -97,7 +97,7 @@ well-formed, not that the numbers are right.
 
 ## Then
 
-- `anfra serve --apps` serves the repo's Data Apps at `http://127.0.0.1:7878/apps/`: build one with
+- `anfra serve` serves the repo's Data Apps at `http://127.0.0.1:7878/apps/`: build one with
   [](../build-data-app/).
 - `anfra ingest`, then `anfra search <words>`, finds models, fields and metrics by meaning.
 - `anfra skills install` installs these skills into the user's coding agents.
