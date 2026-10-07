@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -98,5 +99,37 @@ func TestPresentNonSearchUsesYAML(t *testing.T) {
 	want := "version: 1.2.3\n"
 	if out.String() != want {
 		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+}
+
+// A flag reaches the op as its arg's type: an int as a number, an object's JSON
+// as the object; JSON that is not an object is refused before anything runs.
+func TestFlagValues(t *testing.T) {
+	c := command(t, "query")
+	cmd := buildCobraCommand(c)
+	if err := cmd.ParseFlags([]string{"-d", "sales", "--page-size", "20", "--input", ` {"filters":[]} `}); err != nil {
+		t.Fatal(err)
+	}
+	flagArg := map[string]string{}
+	for _, a := range c.Args() {
+		flagArg[a.Flag()] = a.Name
+	}
+	values, err := flagValues(cmd.Flags(), c.Args(), flagArg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(values)
+	if want := `{"dataset":"sales","input":{"filters":[]},"page_size":20}`; string(got) != want {
+		t.Errorf("input = %s, want %s", got, want)
+	}
+
+	for _, bad := range []string{"filters", "[1]", "null"} {
+		cmd := buildCobraCommand(c)
+		if err := cmd.ParseFlags([]string{"--input", bad}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := flagValues(cmd.Flags(), c.Args(), flagArg); err == nil {
+			t.Errorf("--input %s was accepted", bad)
+		}
 	}
 }

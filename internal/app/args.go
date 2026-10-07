@@ -18,6 +18,8 @@ const (
 	ArgString      ArgType = "string"       // a string field
 	ArgBool        ArgType = "bool"         // a bool field
 	ArgStringArray ArgType = "string_array" // a []string field
+	ArgInt         ArgType = "int"          // an int field
+	ArgObject      ArgType = "object"       // a pointer to a struct; the CLI takes it as JSON
 )
 
 // Arg is one of a command's args, parsed from a field of its In struct:
@@ -44,9 +46,10 @@ const (
 //	          them for a []string); "stdin": the CLI reads it from piped stdin when
 //	          unset. Comma-separated.
 //
-// Fields without a json tag are not args. An In with args implements
-// huma.SchemaTransformer with argsSchema, so its groups and required strings are
-// in its schema.
+// Fields without a json tag are not args, except an embedded struct, whose args
+// are In's own (as huma and encoding/json flatten it too). An In with args
+// implements huma.SchemaTransformer with argsSchema, so its groups and required
+// strings are in its schema.
 type Arg struct {
 	Name       string
 	Type       ArgType
@@ -60,7 +63,7 @@ type Arg struct {
 	Positional bool
 	Stdin      bool
 
-	field int // the field's index in In
+	field []int // the field's index path in In
 }
 
 // Flag is the arg's CLI flag name: its name with _ as -.
@@ -71,6 +74,7 @@ func cloneArgs(args []Arg) []Arg {
 	for i := range out {
 		out[i].Aliases = slices.Clone(out[i].Aliases)
 		out[i].Enum = slices.Clone(out[i].Enum)
+		out[i].field = slices.Clone(out[i].field)
 	}
 	return out
 }
@@ -87,22 +91,31 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 	shorts := map[string]bool{}
 	groups := map[string]int{}
 	positional := 0
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for _, f := range reflect.VisibleFields(t) {
+		if f.Anonymous {
+			if f.Type.Kind() != reflect.Struct {
+				return nil, fmt.Errorf("field %s: only a struct can be embedded, not %s", f.Name, f.Type)
+			}
+			continue // its fields are visited themselves
+		}
 		tag, ok := f.Tag.Lookup("json")
 		if !ok || tag == "-" {
 			continue
 		}
 		name, opts, _ := strings.Cut(tag, ",")
 		a := Arg{Name: name, Usage: f.Tag.Get("doc"), Shorthand: f.Tag.Get("short"), Default: f.Tag.Get("default"),
-			Group: f.Tag.Get("group"), Required: !slices.Contains(strings.Split(opts, ","), "omitempty"), field: i}
-		switch f.Type {
-		case reflect.TypeFor[string]():
+			Group: f.Tag.Get("group"), Required: !slices.Contains(strings.Split(opts, ","), "omitempty"), field: f.Index}
+		switch {
+		case f.Type == reflect.TypeFor[string]():
 			a.Type = ArgString
-		case reflect.TypeFor[bool]():
+		case f.Type == reflect.TypeFor[bool]():
 			a.Type = ArgBool
-		case reflect.TypeFor[[]string]():
+		case f.Type == reflect.TypeFor[[]string]():
 			a.Type = ArgStringArray
+		case f.Type == reflect.TypeFor[int]():
+			a.Type = ArgInt
+		case f.Type.Kind() == reflect.Pointer && f.Type.Elem().Kind() == reflect.Struct:
+			a.Type = ArgObject
 		default:
 			return nil, fmt.Errorf("arg %s: unsupported type %s", name, f.Type)
 		}
@@ -127,6 +140,8 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 		switch {
 		case name == "" || a.Usage == "":
 			return nil, fmt.Errorf("field %s: an arg needs a name and a usage", f.Name)
+		case a.Positional && a.Type != ArgString && a.Type != ArgStringArray:
+			return nil, fmt.Errorf("arg %s: only a string or []string arg can be positional", name)
 		case (a.Required || len(a.Enum) > 0 || a.Default != "" || a.Stdin) && a.Type != ArgString:
 			return nil, fmt.Errorf("arg %s: only a string arg can be required (no omitempty), closed, defaulted or read from stdin", name)
 		case a.Required && a.Default != "":
@@ -196,7 +211,7 @@ func argsSchema[In any](s *huma.Schema) *huma.Schema {
 func applyDefaults(args []Arg, in any) {
 	v := reflect.ValueOf(in).Elem()
 	for _, a := range args {
-		if f := v.Field(a.field); a.Default != "" && strings.TrimSpace(f.String()) == "" {
+		if f := v.FieldByIndex(a.field); a.Default != "" && strings.TrimSpace(f.String()) == "" {
 			f.SetString(a.Default)
 		}
 	}

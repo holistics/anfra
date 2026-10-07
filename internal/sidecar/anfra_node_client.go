@@ -90,9 +90,41 @@ type rpcRequest struct {
 type rpcResponse struct {
 	Result json.RawMessage `json:"result"`
 	Error  *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
 	} `json:"error"`
+}
+
+// RPCInvalidParams is the JSON-RPC code anfra-node answers a request it
+// refuses as invalid input with (its InvalidInputError).
+const RPCInvalidParams = -32602
+
+// RPCError is an error anfra-node answered a call with. Data is the error's
+// JSON-RPC data, when it carries one: for invalid input, the {path} of what is
+// wrong, e.g. a Query Input entry.
+type RPCError struct {
+	Method  string
+	Code    int
+	Message string
+	Data    json.RawMessage
+}
+
+func (e *RPCError) Error() string {
+	return fmt.Sprintf("rpc %s error %d: %s", e.Method, e.Code, e.Message)
+}
+
+// Path is where invalid input is wrong, from the error's data, e.g. a Query
+// Input entry's "filters[2].operator"; "" for the input as a whole. ok is false
+// when the error does not say: not invalid input, or no path in its data.
+func (e *RPCError) Path() (path string, ok bool) {
+	var d struct {
+		Path *string `json:"path"`
+	}
+	if e.Code != RPCInvalidParams || json.Unmarshal(e.Data, &d) != nil || d.Path == nil {
+		return "", false
+	}
+	return *d.Path, true
 }
 
 // Call invokes a JSON-RPC method and unmarshals the result into out (if non-nil).
@@ -123,7 +155,7 @@ func (c *AnfraNodeClient) Call(ctx context.Context, method string, params any, o
 		// return a stable error code per kind (in rpcResp.Error.Code or its data),
 		// mapped here to engine codes — not.found-like and invalid-input-like ones,
 		// with the AML location where there is one — and added to errcode.
-		return fmt.Errorf("rpc %s error %d: %s", method, rpcResp.Error.Code, rpcResp.Error.Message)
+		return &RPCError{Method: method, Code: rpcResp.Error.Code, Message: rpcResp.Error.Message, Data: rpcResp.Error.Data}
 	}
 	if out != nil && rpcResp.Result != nil {
 		return json.Unmarshal(rpcResp.Result, out)
@@ -156,11 +188,79 @@ type CompileToSQLRequest struct {
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`
+	// Input is the query's Query Input, applied by rewriting the AQL before it
+	// compiles. Nil: none.
+	Input *QueryInput `json:"input,omitempty"`
+	// Pagination asks for one page of rows, compiled into LIMIT/OFFSET. Nil: every
+	// row. Refused for a pivot query.
+	Pagination *Pagination     `json:"pagination,omitempty"`
+	Options    *CompileOptions `json:"options,omitempty"`
+}
+
+// QueryInput mirrors anfra-node's Query Input: the structured additions a query
+// carries on one run, in its wire names.
+type QueryInput struct {
+	Filters    []QueryInputFilter    `json:"filters,omitempty"`
+	Conditions []QueryInputCondition `json:"conditions,omitempty"`
+	Sorts      []QueryInputSort      `json:"sorts,omitempty"`
+	DateDrills []QueryInputDateDrill `json:"dateDrills,omitempty"`
+}
+
+type QueryInputFilter struct {
+	Field       string `json:"field"`
+	Operator    string `json:"operator"`
+	Values      []any  `json:"values"`
+	Modifier    string `json:"modifier,omitempty"`
+	Aggregation string `json:"aggregation,omitempty"`
+}
+
+type QueryInputCondition struct {
+	Expr string `json:"expr"`
+}
+
+type QueryInputSort struct {
+	Field     string `json:"field"`
+	Direction string `json:"direction"`
+}
+
+type QueryInputDateDrill struct {
+	Field string `json:"field"`
+	Grain string `json:"grain"`
+}
+
+// Pagination is one 1-based page of rows.
+type Pagination struct {
+	Page     int `json:"page"`
+	PageSize int `json:"pageSize"`
+}
+
+// CompileOptions are the compile options anfra sets. TimezoneRegion is an IANA
+// zone, for relative dates and date truncation.
+type CompileOptions struct {
+	TimezoneRegion string `json:"timezoneRegion,omitempty"`
 }
 
 type CompileToSQLResult struct {
-	SQL        string            `json:"sql"`
+	SQL string `json:"sql"`
+	// AQL is the query that compiled: the AQL with its Query Input applied.
+	AQL        string            `json:"aql"`
 	DataSource CompileDataSource `json:"dataSource"` // the data source the SQL targets (for execution routing)
+	// Columns describes each output column of an explore query; absent for other
+	// query shapes.
+	Columns []ExploreColumn `json:"columns,omitempty"`
+}
+
+// ExploreColumn is one output column of an explore query: the key it comes back
+// under, the dataset field it draws, whether it is a measure. Adhoc: a
+// query-local expression, not a field the dataset defines.
+type ExploreColumn struct {
+	Name        string `json:"name"`
+	FieldName   string `json:"fieldName"`
+	ModelID     string `json:"modelId,omitempty"`
+	Label       string `json:"label"`
+	Adhoc       bool   `json:"adhoc"`
+	IsMeasure   bool   `json:"isMeasure"`
+	Aggregation string `json:"aggregation,omitempty"`
 }
 
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
