@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/repo"
@@ -19,8 +19,8 @@ import (
 // defaulted: a zero dataperm.Set is refused, not treated as permissive.
 //
 // No Attribution: there is one user and they are reading their own logs.
-func (h hostContext) commandContext(clients app.Clients) app.CommandContext {
-	return app.CommandContext{
+func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
+	return command.CommandContext{
 		Clients:   clients,
 		Repo:      h.repo,
 		DataPerms: dataperm.Unrestricted(),

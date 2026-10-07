@@ -10,7 +10,7 @@ import (
 // The args a command got wrong are named as the user passes them, its flags
 // and its positional, with a pointer to its help; a remote server's alike.
 func TestPrintErrorNamesTheArgs(t *testing.T) {
-	args := command(t, "query").Args()
+	args := registered(t, "query").Args()
 	for _, tc := range []struct {
 		name string
 		err  error

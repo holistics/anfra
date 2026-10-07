@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/command"
 )
 
-func command(t *testing.T, name string) app.Command {
+func registered(t *testing.T, name string) command.Command {
 	t.Helper()
 	c, ok := app.Find(name)
 	if !ok {
@@ -22,7 +23,7 @@ func command(t *testing.T, name string) app.Command {
 // silently, since the answer says why.
 func TestPresentExitsOneOnAnInvalidVerdict(t *testing.T) {
 	var out bytes.Buffer
-	err := presentTo(command(t, "query.validate"), []byte(`{"valid":false,"diagnostics":[{"severity":"error","message":"no such field"}]}`), &out)
+	err := presentTo(registered(t, "query.validate"), []byte(`{"valid":false,"diagnostics":[{"severity":"error","message":"no such field"}]}`), &out)
 	var ec *exitCodeError
 	if !errors.As(err, &ec) || ec.code != 1 {
 		t.Errorf("an invalid verdict: got %v, want exit code 1", err)
@@ -30,7 +31,7 @@ func TestPresentExitsOneOnAnInvalidVerdict(t *testing.T) {
 	if out.Len() == 0 {
 		t.Error("the invalid answer was not printed")
 	}
-	if err := presentTo(command(t, "query.validate"), []byte(`{"valid":true,"diagnostics":[]}`), &out); err != nil {
+	if err := presentTo(registered(t, "query.validate"), []byte(`{"valid":true,"diagnostics":[]}`), &out); err != nil {
 		t.Errorf("a valid verdict: got %v", err)
 	}
 }
@@ -46,7 +47,7 @@ func TestPresentSearchRendersCompactResults(t *testing.T) {
 	}`)
 	var out bytes.Buffer
 
-	if err := presentTo(command(t, "search"), body, &out); err != nil {
+	if err := presentTo(registered(t, "search"), body, &out); err != nil {
 		t.Fatalf("presentTo returned error: %v", err)
 	}
 
@@ -60,7 +61,7 @@ func TestPresentSearchRendersEmptyOutputForNoResults(t *testing.T) {
 	body := []byte(`{"results":[],"meta":{"total":0}}`)
 	var out bytes.Buffer
 
-	if err := presentTo(command(t, "search"), body, &out); err != nil {
+	if err := presentTo(registered(t, "search"), body, &out); err != nil {
 		t.Fatalf("presentTo returned error: %v", err)
 	}
 
@@ -78,7 +79,7 @@ func TestPresentSearchRendersEmptyDisplayName(t *testing.T) {
 	}`)
 	var out bytes.Buffer
 
-	if err := presentTo(command(t, "search"), body, &out); err != nil {
+	if err := presentTo(registered(t, "search"), body, &out); err != nil {
 		t.Fatalf("presentTo returned error: %v", err)
 	}
 
@@ -92,7 +93,7 @@ func TestPresentNonSearchUsesYAML(t *testing.T) {
 	body := []byte(`{"version":"1.2.3"}`)
 	var out bytes.Buffer
 
-	if err := presentTo(command(t, "version"), body, &out); err != nil {
+	if err := presentTo(registered(t, "version"), body, &out); err != nil {
 		t.Fatalf("presentTo returned error: %v", err)
 	}
 
@@ -105,7 +106,7 @@ func TestPresentNonSearchUsesYAML(t *testing.T) {
 // A flag reaches the op as its arg's type: an int as a number, an object's JSON
 // as the object; JSON that is not an object is refused before anything runs.
 func TestFlagValues(t *testing.T) {
-	c := command(t, "query")
+	c := registered(t, "query")
 	cmd := buildCobraCommand(c)
 	if err := cmd.ParseFlags([]string{"-d", "sales", "--page-size", "20", "--input", ` {"filters":[]} `}); err != nil {
 		t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/internal/attribution"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
 )
 
@@ -19,7 +20,7 @@ import (
 func TestEveryCommandRefusedWithoutDataPerms(t *testing.T) {
 	for _, c := range Commands {
 		t.Run(c.Name(), func(t *testing.T) {
-			_, err := Dispatch(context.Background(), CommandContext{}, Request{Command: c.Name()})
+			_, err := Dispatch(context.Background(), command.CommandContext{}, Request{Command: c.Name()})
 			if err == nil {
 				t.Fatalf("command %q ran with undecided DataPerms", c.Name())
 			}
@@ -39,7 +40,7 @@ func TestDispatchRefusesWithoutDataPermsBeforeLookingAtRequest(t *testing.T) {
 		{Command: "no-such-command"}, // never resolves
 		{Command: "query"},           // resolves, but missing required args
 	} {
-		_, err := Dispatch(context.Background(), CommandContext{}, req)
+		_, err := Dispatch(context.Background(), command.CommandContext{}, req)
 		if err == nil || !strings.Contains(err.Error(), "no data permissions") {
 			t.Errorf("request %+v: want a data-permissions refusal, got: %v", req, err)
 		}
@@ -53,10 +54,10 @@ func withProbe(t *testing.T) *bool {
 	ran := false
 	orig := Commands
 	t.Cleanup(func() { Commands = orig })
-	Commands = append(append([]Command{}, orig...), Define(Def[NoInput, string]{
+	Commands = append(append([]command.Command{}, orig...), command.Define(command.Def[command.NoInput, string]{
 		Name:  "dataperm_probe",
 		Short: "test-only",
-		Run: func(context.Context, CommandContext, NoInput) (string, error) {
+		Run: func(context.Context, command.CommandContext, command.NoInput) (string, error) {
 			ran = true
 			return "ok", nil
 		},
@@ -64,7 +65,7 @@ func withProbe(t *testing.T) *bool {
 	return &ran
 }
 
-func dispatchProbe(cc CommandContext) (Response, error) {
+func dispatchProbe(cc command.CommandContext) (Response, error) {
 	return Dispatch(context.Background(), cc, Request{Command: "dataperm_probe"})
 }
 
@@ -72,7 +73,7 @@ func dispatchProbe(cc CommandContext) (Response, error) {
 func TestRefusalStopsTheCommandBody(t *testing.T) {
 	ran := withProbe(t)
 
-	if _, err := dispatchProbe(CommandContext{}); err == nil {
+	if _, err := dispatchProbe(command.CommandContext{}); err == nil {
 		t.Fatal("expected a refusal with undecided DataPerms")
 	}
 	if *ran {
@@ -84,7 +85,7 @@ func TestRefusalStopsTheCommandBody(t *testing.T) {
 func TestUnrestrictedIsADecision(t *testing.T) {
 	ran := withProbe(t)
 
-	res, err := dispatchProbe(CommandContext{DataPerms: dataperm.Unrestricted()})
+	res, err := dispatchProbe(command.CommandContext{DataPerms: dataperm.Unrestricted()})
 	if err != nil {
 		t.Fatalf("expected the command to run under Unrestricted, got: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestRestrictedIsADecision(t *testing.T) {
 	ran := withProbe(t)
 
 	perms := dataperm.Restricted(dataperm.Attributes{"region": "APAC"})
-	if _, err := dispatchProbe(CommandContext{DataPerms: perms}); err != nil {
+	if _, err := dispatchProbe(command.CommandContext{DataPerms: perms}); err != nil {
 		t.Fatalf("expected the command to run under Restricted, got: %v", err)
 	}
 	if !*ran {
@@ -116,7 +117,7 @@ func TestRestrictedIsADecision(t *testing.T) {
 func TestAttributionIsNotAPermission(t *testing.T) {
 	ran := withProbe(t)
 
-	_, err := dispatchProbe(CommandContext{
+	_, err := dispatchProbe(command.CommandContext{
 		Attribution: attribution.Fields{"tenant": "acme", "user": "u-1"},
 	})
 	if err == nil {

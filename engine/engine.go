@@ -43,11 +43,12 @@ import (
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/attribution"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
-	"github.com/holistics/anfra/internal/validate"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -73,7 +74,7 @@ type (
 
 	// Clients are the sidecar clients commands run against. Build one with
 	// Connect.
-	Clients = app.Clients
+	Clients = command.Clients
 
 	// Repo is a resolved AML repo: its directory, its identity, and where its
 	// state lives. Build one with OpenRepo.
@@ -103,7 +104,7 @@ type (
 	// Invocation is everything a command runs against other than its arguments.
 	// It is the trusted half of a call: build it server-side and never decode it
 	// from a request body, or a caller could assert their own permissions.
-	Invocation = app.CommandContext
+	Invocation = command.CommandContext
 )
 
 const (
@@ -134,7 +135,7 @@ var (
 	// not connected.
 	SidecarUnavailable = errcode.SidecarUnavailable
 	// QueryInvalid: a query that cannot run or compile, with its diagnostics.
-	QueryInvalid = validate.QueryInvalid
+	QueryInvalid = query.QueryInvalid
 	// QueryFailed: the data source could not run the query — unreachable,
 	// credentials refused, or the database rejecting it. Not classified further
 	// yet.
@@ -175,15 +176,15 @@ type (
 	ArgSpec = app.ArgSpec
 	// ArgType is an arg's type: ArgString, ArgBool, ArgStringArray, ArgInt or
 	// ArgObject.
-	ArgType = app.ArgType
+	ArgType = command.ArgType
 )
 
 const (
-	ArgString      = app.ArgString
-	ArgBool        = app.ArgBool
-	ArgStringArray = app.ArgStringArray
-	ArgInt         = app.ArgInt
-	ArgObject      = app.ArgObject
+	ArgString      = command.ArgString
+	ArgBool        = command.ArgBool
+	ArgStringArray = command.ArgStringArray
+	ArgInt         = command.ArgInt
+	ArgObject      = command.ArgObject
 )
 
 // Describe returns every registered command, in registry order, in the shape an

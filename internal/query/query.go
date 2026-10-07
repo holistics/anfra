@@ -1,6 +1,7 @@
-// Package query is the query use-case layer: it turns a (dataset, AQL) request
-// into SQL (and later, results) by loading the repo's data sources and
-// driving the sidecars via their clients. It depends on the clients (not the
+// Package query is the query use-case layer: it checks a (dataset, AQL)
+// request, turns it into SQL and runs it, by loading the repo's data sources
+// and driving the sidecars via their clients. What an invalid query is, and the
+// code it fails with, are its own. It depends on the clients (not the
 // process managers), so it works equally against host-spawned or external
 // sidecars. The CLI command and the future HTTP/MCP handler are thin shells
 // over these functions.
@@ -8,6 +9,7 @@ package query
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -16,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // NoLimit is the row limit meaning "no truncation" (canal's truncate_rows uses a
@@ -80,14 +83,17 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 // the time zone relative dates and date truncation use ("": anfra-node's
 // default).
 type Run struct {
-	Input      *sidecar.QueryInput
+	Input      *sidecar.QueryTransforms
 	Pagination *sidecar.Pagination
 	Timezone   string
 }
 
 // Compile compiles an AQL query against a dataset into SQL plus the data source
 // it targets (dialect + execution routing), without executing. Shared by
-// --generate and the run path so both fail identically on a bad query. The
+// --generate and the run path so both fail identically on a bad query: with
+// QueryInvalid and its diagnostics when the query does not compile. A failure
+// that is not the query's (an unknown dataset, a missing data source, the run's
+// shaping refused) is not diagnostic-shaped, and is returned as it is. The
 // result's AQL is the query with run's Query Input applied.
 func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, run Run) (sidecar.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
@@ -99,10 +105,21 @@ func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo,
 		req.Options = &sidecar.CompileOptions{TimezoneRegion: run.Timezone}
 	}
 	res, err := node.CompileToSQL(ctx, req)
-	if err != nil {
-		return sidecar.CompileToSQLResult{}, fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
+	if err == nil {
+		return res, nil
 	}
-	return res, nil
+	err = fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
+	// anfra-node refusing what shapes the run (a Query Input entry, a page) is
+	// not the query's fault: the caller says which arg is wrong.
+	if e, ok := errors.AsType[*sidecar.RPCError](err); ok {
+		if _, ok := e.Path(); ok {
+			return sidecar.CompileToSQLResult{}, err
+		}
+	}
+	if diags, verr := Check(ctx, node, repo, dataset, aql); verr == nil && !diags.Valid {
+		return sidecar.CompileToSQLResult{}, apperr.EncapsulateWith(err, QueryInvalid, "", diags)
+	}
+	return sidecar.CompileToSQLResult{}, err
 }
 
 // RunResult is the compiled SQL plus the executed result.

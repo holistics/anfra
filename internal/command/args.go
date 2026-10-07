@@ -1,4 +1,4 @@
-package app
+package command
 
 import (
 	"errors"
@@ -36,7 +36,7 @@ const (
 //	enum      the allowed values of a string arg, comma-separated.
 //	default   a string arg's value when unset; one of its enum, if it has one.
 //	group     a group name: exactly one arg of the group must be set. The schema
-//	          says so as a oneOf (argsSchema).
+//	          says so as a oneOf (ArgsSchema).
 //
 // and the CLI's alone, which the schema does not see:
 //
@@ -48,7 +48,7 @@ const (
 //
 // Fields without a json tag are not args, except an embedded struct, whose args
 // are In's own (as huma and encoding/json flatten it too). An In with args
-// implements huma.SchemaTransformer with argsSchema, so its groups and required
+// implements huma.SchemaTransformer with ArgsSchema, so its groups and required
 // strings are in its schema.
 type Arg struct {
 	Name       string
@@ -178,14 +178,14 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 	return args, nil
 }
 
-// argsSchema completes an In's schema with what huma cannot read from its tags:
+// ArgsSchema completes an In's schema with what huma cannot read from its tags:
 // each group as a oneOf over its args being set (apikit names the args to fix),
 // and a required string's minimum length, so a blank one is refused as unset.
 // Each In with args calls it from its TransformSchema.
-func argsSchema[In any](s *huma.Schema) *huma.Schema {
+func ArgsSchema[In any](s *huma.Schema) *huma.Schema {
 	args, err := parseArgs(reflect.TypeFor[In]())
 	if err != nil {
-		panic(fmt.Sprintf("app: %s: %v", reflect.TypeFor[In](), err)) // Define refused it already
+		panic(fmt.Sprintf("command: %s: %v", reflect.TypeFor[In](), err)) // Define refused it already
 	}
 	one := 1
 	for _, a := range args {
@@ -215,6 +215,16 @@ func applyDefaults(args []Arg, in any) {
 			f.SetString(a.Default)
 		}
 	}
+}
+
+// ExactlyOne is args' groups, each as the names of its args, of which exactly
+// one must be set.
+func ExactlyOne(args []Arg) [][]string {
+	var out [][]string
+	for _, g := range groupNames(args) {
+		out = append(out, groupMembers(args, g))
+	}
+	return out
 }
 
 // groupNames are the groups of specs, in the order their first arg appears.

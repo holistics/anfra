@@ -190,42 +190,45 @@ type CompileToSQLRequest struct {
 	DataSources map[string]CompileDataSource `json:"dataSources"`
 	// Input is the query's Query Input, applied by rewriting the AQL before it
 	// compiles. Nil: none.
-	Input *QueryInput `json:"input,omitempty"`
+	Input *QueryTransforms `json:"input,omitempty"`
 	// Pagination asks for one page of rows, compiled into LIMIT/OFFSET. Nil: every
 	// row. Refused for a pivot query.
 	Pagination *Pagination     `json:"pagination,omitempty"`
 	Options    *CompileOptions `json:"options,omitempty"`
 }
 
-// QueryInput mirrors anfra-node's Query Input: the structured additions a query
-// carries on one run, in its wire names.
-type QueryInput struct {
-	Filters    []QueryInputFilter    `json:"filters,omitempty"`
-	Conditions []QueryInputCondition `json:"conditions,omitempty"`
-	Sorts      []QueryInputSort      `json:"sorts,omitempty"`
-	DateDrills []QueryInputDateDrill `json:"dateDrills,omitempty"`
+// QueryTransforms is a query's Query Input: the structured transforms it
+// carries on one run (a Data App's control filters, cross-filter conditions,
+// sorts and date drills), applied by anfra-node rewriting its AQL before it
+// compiles. The core API passes it through in these names, amql's and the Anfra
+// SDK's: anfra-node checks the values (an operator, a grain).
+type QueryTransforms struct {
+	Filters    []QueryFilter    `json:"filters,omitempty" doc:"conditions on fields, ANDed with the query's own filters"`
+	Conditions []QueryCondition `json:"conditions,omitempty" doc:"AQL conditions ANDed with the query's own filters"`
+	Sorts      []QuerySort      `json:"sorts,omitempty" doc:"sorts by result column, replacing the query's own"`
+	DateDrills []QueryDateDrill `json:"dateDrills,omitempty" doc:"date fields redrawn at another grain, their columns' names kept"`
 }
 
-type QueryInputFilter struct {
-	Field       string `json:"field"`
-	Operator    string `json:"operator"`
-	Values      []any  `json:"values"`
-	Modifier    string `json:"modifier,omitempty"`
-	Aggregation string `json:"aggregation,omitempty"`
+type QueryFilter struct {
+	Field       string `json:"field" doc:"model.field for a dataset field, or the name of a dataset metric"`
+	Operator    string `json:"operator" doc:"the operator, such as is, contains, between, last"`
+	Values      []any  `json:"values" doc:"the operator's values: strings, numbers or booleans; empty for an operator that takes none"`
+	Modifier    string `json:"modifier,omitempty" doc:"the date unit of a relative operator, such as day"`
+	Aggregation string `json:"aggregation,omitempty" doc:"the condition applies to this aggregate of field, such as sum"`
 }
 
-type QueryInputCondition struct {
-	Expr string `json:"expr"`
+type QueryCondition struct {
+	Expr string `json:"expr" doc:"an AQL condition"`
 }
 
-type QueryInputSort struct {
-	Field     string `json:"field"`
-	Direction string `json:"direction"`
+type QuerySort struct {
+	Field     string `json:"field" doc:"a result column's name"`
+	Direction string `json:"direction" enum:"asc,desc" doc:"the direction"`
 }
 
-type QueryInputDateDrill struct {
-	Field string `json:"field"`
-	Grain string `json:"grain"`
+type QueryDateDrill struct {
+	Field string `json:"field" doc:"model.field: a date field"`
+	Grain string `json:"grain" doc:"the grain, such as month"`
 }
 
 // Pagination is one 1-based page of rows.
@@ -250,17 +253,18 @@ type CompileToSQLResult struct {
 	Columns []ExploreColumn `json:"columns,omitempty"`
 }
 
-// ExploreColumn is one output column of an explore query: the key it comes back
-// under, the dataset field it draws, whether it is a measure. Adhoc: a
-// query-local expression, not a field the dataset defines.
+// ExploreColumn is one column of a query's answer: the key its values come back
+// under, and the dataset field it draws, in the names AQL uses in the dataset.
+// anfra-node describes an explore query's; the core API passes them through in
+// these names, amql's and the Anfra SDK's.
 type ExploreColumn struct {
-	Name        string `json:"name"`
-	FieldName   string `json:"fieldName"`
-	ModelID     string `json:"modelId,omitempty"`
+	Name        string `json:"name" doc:"the column's key, as in fields"`
+	FieldName   string `json:"fieldName" doc:"the field it draws; for an adhoc column, its name"`
+	ModelID     string `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column"`
 	Label       string `json:"label"`
-	Adhoc       bool   `json:"adhoc"`
+	Adhoc       bool   `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
 	IsMeasure   bool   `json:"isMeasure"`
-	Aggregation string `json:"aggregation,omitempty"`
+	Aggregation string `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
 }
 
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
