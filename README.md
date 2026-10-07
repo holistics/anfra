@@ -45,7 +45,7 @@ Anfra sits between your app and your semantic layer. It isn't a semantic layer i
 - **Anfra SDK**: a JavaScript library your app uses to request data and wire up filters, drill-downs, and period comparisons. It asks for data by dataset and metric names, not SQL.
 - **Anfra Server** (`anfra serve`): serves your apps, takes each request from the SDK, turns the interaction (a filter, a drill-down, a comparison) into a query on your semantic layer, runs it on the warehouse, and returns the results. It also serves MCP so coding agents can read your models.
 
-Anfra runs on **your semantic layer**: your models, datasets, and metrics, defined as code. Anfra ships with AMQL built in, so you can start without one. AMQL is the semantic layer behind [Holistics](https://www.holistics.io), which runs in production at hundreds of companies. Support for external semantic layers such as dbt, Cube, Snowflake and Databricks is planned ([details](#faq)).
+Anfra runs on **your semantic layer**: your models, datasets, and metrics, defined as code. Anfra ships with [AMQL](https://amql.org) built in. Support for external semantic layers such as dbt, Cube, Snowflake and Databricks is planned ([details](#faq)).
 
 <p align="center">
   <img src="docs/images/how-anfra-works.webp" alt="How Anfra works" width="500">
