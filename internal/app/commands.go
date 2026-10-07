@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
+	_ "time/tzdata" // the time zone check, on a machine without a zone database
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/datasource"
@@ -45,17 +47,17 @@ var Commands = []Command{
 		},
 		Valid: func(r StatusResult) bool { return r.State == StateHealthy },
 	}),
-	Define(Def[QueryInput, QueryResult]{
+	Define(Def[QueryRunInput, QueryResult]{
 		Name:     "query",
 		Short:    "Run a query: its rows, and the SQL that produced them",
 		ReadOnly: true,
 		Timeout:  10 * time.Minute,
-		Needs: func(in QueryInput) Sidecars {
+		Needs: func(in QueryRunInput) Sidecars {
 			return Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 		},
-		Check:  QueryInput.target,
+		Check:  QueryRunInput.check,
 		Errors: []apperr.AnyCode{validate.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable},
-		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (QueryResult, error) {
+		Run: func(ctx context.Context, cc CommandContext, in QueryRunInput) (QueryResult, error) {
 			if in.Lang == "sql" {
 				ds, err := in.dataSource(cc)
 				if err != nil {
@@ -68,7 +70,8 @@ var Commands = []Command{
 				if err != nil {
 					return QueryResult{}, failed(err)
 				}
-				return QueryResult{SQL: r.SQL, Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
+				return QueryResult{SQL: r.SQL, Columns: columnsFor(r.Fields, nil),
+					Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 			}
 			aql, limit, err := in.aql()
 			if err != nil {
@@ -77,7 +80,7 @@ var Commands = []Command{
 			if err := requireSidecars(cc, Sidecars{Node: true, CanalQuery: true}); err != nil {
 				return QueryResult{}, err
 			}
-			compiled, err := compileAQL(ctx, cc, in.Dataset, aql)
+			compiled, err := compileAQL(ctx, cc, in.Dataset, aql, in.run())
 			if err != nil {
 				return QueryResult{}, err
 			}
@@ -85,18 +88,19 @@ var Commands = []Command{
 			if err != nil {
 				return QueryResult{}, failed(err)
 			}
-			return QueryResult{SQL: r.SQL, Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
+			return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Columns: columnsFor(r.Fields, compiled.Columns),
+				Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 		},
 	}),
-	Define(Def[QueryInput, CompiledQuery]{
+	Define(Def[QueryRunInput, CompiledQuery]{
 		Name:     "query.compile",
 		Short:    "Compile a query to SQL, without running it",
 		ReadOnly: true,
 		Timeout:  2 * time.Minute,
-		Needs:    func(in QueryInput) Sidecars { return Sidecars{Node: in.Lang != "sql"} },
-		Check:    QueryInput.target,
+		Needs:    func(in QueryRunInput) Sidecars { return Sidecars{Node: in.Lang != "sql"} },
+		Check:    QueryRunInput.check,
 		Errors:   []apperr.AnyCode{validate.QueryInvalid, errcode.DataPermsUnenforceable},
-		Run: func(ctx context.Context, cc CommandContext, in QueryInput) (CompiledQuery, error) {
+		Run: func(ctx context.Context, cc CommandContext, in QueryRunInput) (CompiledQuery, error) {
 			if in.Lang == "sql" {
 				// Already the SQL that would run.
 				if _, err := in.dataSource(cc); err != nil {
@@ -111,11 +115,11 @@ var Commands = []Command{
 			if err := requireSidecars(cc, Sidecars{Node: true}); err != nil {
 				return CompiledQuery{}, err
 			}
-			compiled, err := compileAQL(ctx, cc, in.Dataset, aql)
+			compiled, err := compileAQL(ctx, cc, in.Dataset, aql, in.run())
 			if err != nil {
 				return CompiledQuery{}, err
 			}
-			return CompiledQuery{SQL: compiled.SQL}, nil
+			return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Columns: columnsFor(nil, compiled.Columns)}, nil
 		},
 	}),
 	Define(Def[QueryInput, validate.QueryValidation]{
@@ -203,6 +207,119 @@ type QueryInput struct {
 // cannot say, so target checks it.
 func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
 	return argsSchema[QueryInput](s)
+}
+
+// QueryRunInput is what query and query.compile take: a query, and what shapes
+// its run. query.validate takes the query alone (QueryInput), since none of it
+// applies to checking one.
+type QueryRunInput struct {
+	QueryInput
+	Input    *QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
+	Page     int              `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to answer; needs a page size"`
+	PageSize int              `json:"page_size,omitempty" minimum:"1" doc:"rows per page; alone, the first page"`
+	Timezone string           `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
+}
+
+func (QueryRunInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return argsSchema[QueryRunInput](s)
+}
+
+// QueryTransforms is a query's Query Input: the structured transforms it
+// carries on one run (a Data App's control filters, cross-filter conditions,
+// sorts and date drills), applied by rewriting its AQL before it compiles.
+// anfra-node checks the values (an operator, a grain); the engine passes them
+// through.
+type QueryTransforms struct {
+	Filters    []QueryFilter    `json:"filters,omitempty" doc:"conditions on fields, ANDed with the query's own filters"`
+	Conditions []QueryCondition `json:"conditions,omitempty" doc:"AQL conditions ANDed with the query's own filters"`
+	Sorts      []QuerySort      `json:"sorts,omitempty" doc:"sorts by result column, replacing the query's own"`
+	DateDrills []QueryDateDrill `json:"date_drills,omitempty" doc:"date fields redrawn at another grain, their columns' names kept"`
+}
+
+type QueryFilter struct {
+	Field       string `json:"field" doc:"model.field for a dataset field, or the name of a dataset metric"`
+	Operator    string `json:"operator" doc:"the operator, such as is, contains, between, last"`
+	Values      []any  `json:"values,omitempty" doc:"the operator's values: strings, numbers or booleans"`
+	Modifier    string `json:"modifier,omitempty" doc:"the date unit of a relative operator, such as day"`
+	Aggregation string `json:"aggregation,omitempty" doc:"the condition applies to this aggregate of field, such as sum"`
+}
+
+type QueryCondition struct {
+	Expr string `json:"expr" doc:"an AQL condition"`
+}
+
+type QuerySort struct {
+	Field     string `json:"field" doc:"a result column's name"`
+	Direction string `json:"direction" enum:"asc,desc" doc:"the direction"`
+}
+
+type QueryDateDrill struct {
+	Field string `json:"field" doc:"model.field: a date field"`
+	Grain string `json:"grain" doc:"the grain, such as month"`
+}
+
+// check refuses what the run cannot do: the target check, plus what applies to
+// AQL alone, a page without its size, paging beside a limit: directive, and a
+// time zone that is not one.
+func (in QueryRunInput) check() error {
+	if err := in.target(); err != nil {
+		return err
+	}
+	if in.Lang == "sql" {
+		for _, a := range []struct {
+			name string
+			set  bool
+		}{{"input", in.Input != nil}, {"page", in.Page != 0}, {"page_size", in.PageSize != 0}, {"timezone", in.Timezone != ""}} {
+			if a.set {
+				return invalidArg(a.name, "unsupported", a.name+" applies to an AQL query only: a SQL query runs as it is written")
+			}
+		}
+		return nil
+	}
+	if in.Page != 0 && in.PageSize == 0 {
+		return invalidArg("page_size", "required", "a page needs a page size")
+	}
+	if in.PageSize != 0 {
+		if _, limit, err := query.ExtractLimit(in.Query); err == nil && limit != query.NoLimit {
+			return invalidArg("page_size", "invalid", "page the rows or end the query with a limit: directive, not both")
+		}
+	}
+	if tz := in.Timezone; tz != "" {
+		if _, err := time.LoadLocation(tz); err != nil || tz == "Local" {
+			return invalidArg("timezone", "invalid", fmt.Sprintf("%q is not an IANA time zone, such as Asia/Ho_Chi_Minh", tz))
+		}
+	}
+	return nil
+}
+
+// run is what shapes the query's run, as anfra-node takes it. A page size alone
+// is the first page.
+func (in QueryRunInput) run() query.Run {
+	r := query.Run{Timezone: in.Timezone}
+	if in.PageSize != 0 {
+		r.Pagination = &sidecar.Pagination{Page: max(in.Page, 1), PageSize: in.PageSize}
+	}
+	if a := in.Input; a != nil {
+		r.Input = &sidecar.QueryInput{}
+		for _, f := range a.Filters {
+			values := f.Values
+			if values == nil {
+				values = []any{}
+			}
+			r.Input.Filters = append(r.Input.Filters, sidecar.QueryInputFilter{Field: f.Field, Operator: f.Operator,
+				Values: values, Modifier: f.Modifier, Aggregation: f.Aggregation})
+		}
+		for _, c := range a.Conditions {
+			r.Input.Conditions = append(r.Input.Conditions, sidecar.QueryInputCondition(c))
+		}
+		for _, s := range a.Sorts {
+			r.Input.Sorts = append(r.Input.Sorts, sidecar.QueryInputSort(s))
+		}
+		for _, d := range a.DateDrills {
+			r.Input.DateDrills = append(r.Input.DateDrills, sidecar.QueryInputDateDrill(d))
+		}
+	}
+	return r
 }
 
 // target refuses a query without the target its language runs against, or
@@ -317,15 +434,69 @@ func failed(err error) error {
 // when it does not compile. A failure that is not the query's (an unknown
 // dataset, a missing data source) is not diagnostic-shaped, and is returned as
 // it is.
-func compileAQL(ctx context.Context, cc CommandContext, dataset, aql string) (sidecar.CompileToSQLResult, error) {
-	compiled, err := query.Compile(ctx, cc.Clients.Node, cc.Repo, dataset, aql)
+func compileAQL(ctx context.Context, cc CommandContext, dataset, aql string, run query.Run) (sidecar.CompileToSQLResult, error) {
+	compiled, err := query.Compile(ctx, cc.Clients.Node, cc.Repo, dataset, aql, run)
 	if err == nil {
 		return compiled, nil
+	}
+	if v, ok := runViolation(err); ok {
+		return sidecar.CompileToSQLResult{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 	}
 	if diags, verr := validate.AQL(ctx, cc.Clients.Node, cc.Repo, dataset, aql); verr == nil && !diags.Valid {
 		return sidecar.CompileToSQLResult{}, apperr.EncapsulateWith(err, validate.QueryInvalid, "", diags)
 	}
 	return sidecar.CompileToSQLResult{}, err
+}
+
+// runViolation is anfra-node's refusal of what shapes a run, as the violation of
+// the arg at fault: a Query Input entry, under input (its path in anfra-node's
+// names, the API's here), or the paging of a query that cannot be paged.
+func runViolation(err error) (apperr.Violation, bool) {
+	e, ok := errors.AsType[*sidecar.RPCError](err)
+	if !ok {
+		return apperr.Violation{}, false
+	}
+	path, ok := e.Path()
+	if !ok {
+		return apperr.Violation{}, false
+	}
+	msg := strings.TrimPrefix(e.Message, path+": ")
+	switch path {
+	case "pagination":
+		return apperr.Violation{Field: "page_size", Code: "unsupported", Message: msg}, true
+	case "":
+		return apperr.Violation{Field: "input", Code: "invalid", Message: msg}, true
+	}
+	if rest, ok := strings.CutPrefix(path, "dateDrills"); ok {
+		path = "date_drills" + rest
+	}
+	return apperr.Violation{Field: "input." + path, Code: "invalid", Message: msg}, true
+}
+
+// columnsFor is one Column per field, in order, as anfra-node described them.
+// A field it did not describe (any query but an explore, or SQL) is adhoc. With
+// no fields (a query compiled, not run), the described columns as they are.
+func columnsFor(fields []string, described []sidecar.ExploreColumn) []Column {
+	byName := make(map[string]sidecar.ExploreColumn, len(described))
+	for _, c := range described {
+		byName[c.Name] = c
+	}
+	if fields == nil {
+		for _, c := range described {
+			fields = append(fields, c.Name)
+		}
+	}
+	out := make([]Column, 0, len(fields))
+	for _, name := range fields {
+		c, ok := byName[name]
+		if !ok {
+			out = append(out, Column{Name: name, FieldName: name, Label: name, Adhoc: true})
+			continue
+		}
+		out = append(out, Column{Name: c.Name, FieldName: c.FieldName, ModelID: c.ModelID, Label: c.Label,
+			Adhoc: c.Adhoc, IsMeasure: c.IsMeasure, Aggregation: c.Aggregation})
+	}
+	return out
 }
 
 // VersionResult is the `version` result.
@@ -384,10 +555,25 @@ func checkStatus(ctx context.Context, c Clients) StatusResult {
 	return StatusResult{State: state, Sidecars: sc}
 }
 
-// QueryResult is the `query` result: the SQL that ran, and its rows.
+// QueryResult is the `query` result: the SQL that ran, the AQL it was compiled
+// from, what each column is, and the rows.
 type QueryResult struct {
-	SQL    string    `json:"sql"`
-	Result QueryRows `json:"result"`
+	SQL     string    `json:"sql"`
+	AQL     string    `json:"aql,omitempty" doc:"the AQL that ran: the query with its Query Input applied; absent for a SQL query"`
+	Columns []Column  `json:"columns" doc:"one per field of result, in order"`
+	Result  QueryRows `json:"result"`
+}
+
+// Column is one column of a query's answer: the key its values come back under,
+// and the dataset field it draws, in the names AQL uses in the dataset.
+type Column struct {
+	Name        string `json:"name" doc:"the column's key, as in fields"`
+	FieldName   string `json:"field_name" doc:"the field it draws; for an adhoc column, its name"`
+	ModelID     string `json:"model_id,omitempty" doc:"the model of field_name, as the dataset names it; absent for a dataset metric or an adhoc column"`
+	Label       string `json:"label"`
+	Adhoc       bool   `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
+	IsMeasure   bool   `json:"is_measure"`
+	Aggregation string `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
 }
 
 type QueryRows struct {
@@ -397,5 +583,7 @@ type QueryRows struct {
 
 // CompiledQuery is the `query compile` result: the SQL the query compiles to.
 type CompiledQuery struct {
-	SQL string `json:"sql"`
+	SQL     string   `json:"sql"`
+	AQL     string   `json:"aql,omitempty" doc:"the AQL compiled: the query with its Query Input applied; absent for a SQL query"`
+	Columns []Column `json:"columns,omitempty" doc:"what each column of an explore query's answer will be; absent for other queries"`
 }

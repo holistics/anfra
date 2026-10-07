@@ -75,13 +75,28 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 	}, nil
 }
 
+// Run is what shapes one run of a query beyond its AQL: its Query Input,
+// applied to the AQL before it compiles; a page of rows (nil: every row); and
+// the time zone relative dates and date truncation use ("": anfra-node's
+// default).
+type Run struct {
+	Input      *sidecar.QueryInput
+	Pagination *sidecar.Pagination
+	Timezone   string
+}
+
 // Compile compiles an AQL query against a dataset into SQL plus the data source
 // it targets (dialect + execution routing), without executing. Shared by
-// --generate and the run path so both fail identically on a bad query.
-func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string) (sidecar.CompileToSQLResult, error) {
+// --generate and the run path so both fail identically on a bad query. The
+// result's AQL is the query with run's Query Input applied.
+func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, run Run) (sidecar.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
 	if err != nil {
 		return sidecar.CompileToSQLResult{}, err
+	}
+	req.Input, req.Pagination = run.Input, run.Pagination
+	if run.Timezone != "" {
+		req.Options = &sidecar.CompileOptions{TimezoneRegion: run.Timezone}
 	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err != nil {

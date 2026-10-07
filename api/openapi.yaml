@@ -17,6 +17,35 @@ components:
         - message
         - severity
       type: object
+    Column:
+      additionalProperties: false
+      properties:
+        adhoc:
+          description: a query-local expression, not a field the dataset defines
+          type: boolean
+        aggregation:
+          description: an aggregated field's aggregation, such as sum or count distinct
+          type: string
+        field_name:
+          description: the field it draws; for an adhoc column, its name
+          type: string
+        is_measure:
+          type: boolean
+        label:
+          type: string
+        model_id:
+          description: the model of field_name, as the dataset names it; absent for a dataset metric or an adhoc column
+          type: string
+        name:
+          description: the column's key, as in fields
+          type: string
+      required:
+        - name
+        - field_name
+        - label
+        - adhoc
+        - is_measure
+      type: object
     CompileError:
       additionalProperties: false
       properties:
@@ -36,6 +65,14 @@ components:
     CompiledQuery:
       additionalProperties: false
       properties:
+        aql:
+          description: "the AQL compiled: the query with its Query Input applied; absent for a SQL query"
+          type: string
+        columns:
+          description: what each column of an explore query's answer will be; absent for other queries
+          items:
+            $ref: "#/components/schemas/Column"
+          type: array
         sql:
           type: string
       required:
@@ -239,6 +276,51 @@ components:
     NoInput:
       additionalProperties: false
       type: object
+    QueryCondition:
+      additionalProperties: false
+      properties:
+        expr:
+          description: an AQL condition
+          type: string
+      required:
+        - expr
+      type: object
+    QueryDateDrill:
+      additionalProperties: false
+      properties:
+        field:
+          description: "model.field: a date field"
+          type: string
+        grain:
+          description: the grain, such as month
+          type: string
+      required:
+        - field
+        - grain
+      type: object
+    QueryFilter:
+      additionalProperties: false
+      properties:
+        aggregation:
+          description: the condition applies to this aggregate of field, such as sum
+          type: string
+        field:
+          description: model.field for a dataset field, or the name of a dataset metric
+          type: string
+        modifier:
+          description: the date unit of a relative operator, such as day
+          type: string
+        operator:
+          description: the operator, such as is, contains, between, last
+          type: string
+        values:
+          description: "the operator's values: strings, numbers or booleans"
+          items: {}
+          type: array
+      required:
+        - field
+        - operator
+      type: object
     QueryInput:
       additionalProperties: false
       properties:
@@ -265,12 +347,21 @@ components:
     QueryResult:
       additionalProperties: false
       properties:
+        aql:
+          description: "the AQL that ran: the query with its Query Input applied; absent for a SQL query"
+          type: string
+        columns:
+          description: one per field of result, in order
+          items:
+            $ref: "#/components/schemas/Column"
+          type: array
         result:
           $ref: "#/components/schemas/QueryRows"
         sql:
           type: string
       required:
         - sql
+        - columns
         - result
       type: object
     QueryRows:
@@ -288,6 +379,85 @@ components:
       required:
         - fields
         - records
+      type: object
+    QueryRunInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        input:
+          $ref: "#/components/schemas/QueryTransforms"
+          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        page:
+          description: the 1-based page of rows to answer; needs a page size
+          format: int64
+          minimum: 1
+          type: integer
+        page_size:
+          description: rows per page; alone, the first page
+          format: int64
+          minimum: 1
+          type: integer
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          type: string
+      required:
+        - query
+      type: object
+    QuerySort:
+      additionalProperties: false
+      properties:
+        direction:
+          description: the direction
+          enum:
+            - asc
+            - desc
+          type: string
+        field:
+          description: a result column's name
+          type: string
+      required:
+        - field
+        - direction
+      type: object
+    QueryTransforms:
+      additionalProperties: false
+      properties:
+        conditions:
+          description: AQL conditions ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryCondition"
+          type: array
+        date_drills:
+          description: date fields redrawn at another grain, their columns' names kept
+          items:
+            $ref: "#/components/schemas/QueryDateDrill"
+          type: array
+        filters:
+          description: conditions on fields, ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryFilter"
+          type: array
+        sorts:
+          description: sorts by result column, replacing the query's own
+          items:
+            $ref: "#/components/schemas/QuerySort"
+          type: array
       type: object
     QueryValidation:
       additionalProperties: false
@@ -541,7 +711,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryInput"
+              $ref: "#/components/schemas/QueryRunInput"
         required: true
       responses:
         "200":
@@ -617,7 +787,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryInput"
+              $ref: "#/components/schemas/QueryRunInput"
         required: true
       responses:
         "200":

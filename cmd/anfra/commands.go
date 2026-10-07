@@ -90,6 +90,9 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 		if len(a.Enum) > 0 {
 			usage += " (one of: " + strings.Join(a.Enum, ", ") + ")"
 		}
+		if a.Type == app.ArgObject {
+			usage += " (a JSON object)"
+		}
 		// pflag has no native aliases, so each alias is a flag of its own, setting
 		// the same arg: the op knows each arg by one name.
 		addFlag(cmd, a, a.Flag(), a.Shorthand, usage)
@@ -101,25 +104,10 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 	}
 
 	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
-		values := map[string]any{}
-		// Only the flags the user set: an unset one is absent, so the op applies
-		// its default and sees which of a group are set.
-		runCmd.Flags().Visit(func(f *pflag.Flag) {
-			key, ok := flagArg[f.Name]
-			if !ok {
-				return
-			}
-			switch v := f.Value.(type) {
-			case pflag.SliceValue:
-				values[key] = v.GetSlice()
-			default:
-				if f.Value.Type() == "bool" {
-					values[key] = f.Value.String() == "true"
-				} else {
-					values[key] = f.Value.String()
-				}
-			}
-		})
+		values, err := flagValues(runCmd.Flags(), args, flagArg)
+		if err != nil {
+			return err
+		}
 		if positional != nil && len(posArgs) > 0 {
 			if positional.Type == app.ArgStringArray {
 				values[positional.Name] = posArgs
@@ -138,15 +126,63 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 	return cmd
 }
 
+// flagValues are the args the user set by flag, as the op's input has them:
+// only those set, so an unset one is absent, and the op applies its default and
+// sees which of a group are set. An object arg's flag is JSON, refused when it is
+// not an object.
+func flagValues(fs *pflag.FlagSet, args []app.Arg, flagArg map[string]string) (map[string]any, error) {
+	values := map[string]any{}
+	var err error
+	fs.Visit(func(f *pflag.Flag) {
+		key, ok := flagArg[f.Name]
+		if !ok || err != nil {
+			return
+		}
+		if v, ok := f.Value.(pflag.SliceValue); ok {
+			values[key] = v.GetSlice()
+			return
+		}
+		switch argType(args, key) {
+		case app.ArgBool:
+			values[key] = f.Value.String() == "true"
+		case app.ArgInt:
+			values[key] = json.Number(f.Value.String())
+		case app.ArgObject:
+			raw := json.RawMessage(strings.TrimSpace(f.Value.String()))
+			var obj map[string]any
+			if json.Unmarshal(raw, &obj) != nil || obj == nil {
+				err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
+				return
+			}
+			values[key] = raw
+		default:
+			values[key] = f.Value.String()
+		}
+	})
+	return values, err
+}
+
 func addFlag(cmd *cobra.Command, a app.Arg, name, short, usage string) {
 	switch a.Type {
-	case app.ArgString:
+	case app.ArgString, app.ArgObject:
 		cmd.Flags().StringP(name, short, a.Default, usage)
+	case app.ArgInt:
+		cmd.Flags().IntP(name, short, 0, usage)
 	case app.ArgBool:
 		cmd.Flags().BoolP(name, short, false, usage)
 	case app.ArgStringArray:
 		cmd.Flags().StringSliceP(name, short, nil, usage)
 	}
+}
+
+// argType is the type of the arg named name.
+func argType(args []app.Arg, name string) app.ArgType {
+	for _, a := range args {
+		if a.Name == name {
+			return a.Type
+		}
+	}
+	return ""
 }
 
 // groupFlags are the CLI flags of a group's args.

@@ -173,7 +173,8 @@ type (
 	CommandSpec = app.CommandSpec
 	// ArgSpec is one of a command's args as an API caller sees it.
 	ArgSpec = app.ArgSpec
-	// ArgType is an arg's type: ArgString, ArgBool or ArgStringArray.
+	// ArgType is an arg's type: ArgString, ArgBool, ArgStringArray, ArgInt or
+	// ArgObject.
 	ArgType = app.ArgType
 )
 
@@ -181,6 +182,8 @@ const (
 	ArgString      = app.ArgString
 	ArgBool        = app.ArgBool
 	ArgStringArray = app.ArgStringArray
+	ArgInt         = app.ArgInt
+	ArgObject      = app.ArgObject
 )
 
 // Describe returns every registered command, in registry order, in the shape an

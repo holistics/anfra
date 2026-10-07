@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,11 +68,59 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query, SQL the database refuses", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select nosuch from products"}}, "", errcode.QueryFailed},
 		{"query, SQL on a data source it cannot reach", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "unreachable", "query": "select 1"}}, "", errcode.QueryFailed},
 		{"query compile, SQL", valid, clients, Request{Command: "query.compile", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select 1"}}, ok, nil},
+		{"query, shaped", valid, clients, Request{Command: "query", Args: shaped(nil)}, ok, nil},
+		{"query compile, shaped", valid, clients, Request{Command: "query.compile", Args: shaped(nil)}, ok, nil},
+		{"query, a Query Input entry anfra-node refuses", valid, clients, Request{Command: "query", Args: shaped(map[string]any{
+			"input": map[string]any{"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}})}, "", apperr.ValidationFailed},
+		{"query, a pivot paged", valid, clients, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "page_size": 2,
+			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}}, "", apperr.ValidationFailed},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
 		{"validate, valid", valid, clients, Request{Command: "validate"}, ok, nil},
 		{"validate, invalid", broken, clients, Request{Command: "validate"}, invalid, nil},
 	}
+
+	// A shaped run answers what ran and what each column is, and only its page.
+	t.Run("query, shaped, its answer", func(t *testing.T) {
+		cc := CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted()}
+		res, err := Dispatch(ctx, cc, Request{Command: "query", Args: shaped(nil)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := res.Data.(QueryResult)
+		if !strings.Contains(r.AQL, "Widget") || len(r.Result.Records) != 1 {
+			t.Errorf("the input was not applied: aql %q, %d rows", r.AQL, len(r.Result.Records))
+		}
+		want := []Column{
+			{Name: "name", FieldName: "name", ModelID: "products", Label: r.Columns[0].Label},
+			{Name: "n", FieldName: "id", ModelID: "products", Label: r.Columns[1].Label, IsMeasure: true, Aggregation: "count"},
+		}
+		if !reflect.DeepEqual(r.Columns, want) {
+			t.Errorf("columns =\n  %+v\nwant\n  %+v", r.Columns, want)
+		}
+
+		// anfra-node's refusals land on the arg at fault.
+		for path, args := range map[string]map[string]any{
+			"input.filters[0].field": shaped(map[string]any{"input": map[string]any{
+				"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}}),
+			"page_size": {"dataset": "ecommerce", "page_size": 2,
+				"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"},
+		} {
+			_, err := Dispatch(ctx, cc, Request{Command: "query", Args: args})
+			if d, _ := apperr.DetailsOf(err, apperr.ValidationFailed); len(d.Violations) != 1 || d.Violations[0].Field != path {
+				t.Errorf("got %v, %+v; want a violation on %s", err, d.Violations, path)
+			}
+		}
+
+		res, err = Dispatch(ctx, cc, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "page": 2, "page_size": 2,
+			"query": "explore { dimensions { name: products.name } }"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := len(res.Data.(QueryResult).Result.Records); n != 1 {
+			t.Errorf("page 2 of 3 rows by 2: %d rows, want 1", n)
+		}
+	})
 
 	ran := map[string]bool{}
 	answered := map[string]map[Status]bool{}
@@ -107,6 +157,25 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 			t.Errorf("%s can answer invalid, but no case does", c.Name())
 		}
 	}
+}
+
+// shaped is a query on the fixture with everything that shapes a run, with
+// over's args over it.
+func shaped(over map[string]any) map[string]any {
+	args := map[string]any{
+		"dataset":   "ecommerce",
+		"query":     "explore { dimensions { name: products.name } measures { n: count(products.id) } }",
+		"page_size": 10,
+		"timezone":  "Asia/Ho_Chi_Minh",
+		"input": map[string]any{
+			"filters": []any{map[string]any{"field": "products.name", "operator": "is", "values": []any{"Widget"}}},
+			"sorts":   []any{map[string]any{"field": "name", "direction": "desc"}},
+		},
+	}
+	for k, v := range over {
+		args[k] = v
+	}
+	return args
 }
 
 // startSidecars spawns anfra-node and canal-query from their binaries, as the

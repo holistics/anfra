@@ -38,8 +38,21 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 		{Name: "dataset", Type: ArgString, Usage: "the dataset an AQL query runs against"},
 		{Name: "data_source", Type: ArgString, Usage: "the data source a SQL query runs against"},
 	}
-	if !reflect.DeepEqual(q.Args, want) {
-		t.Errorf("query's args =\n  %+v\nwant\n  %+v", q.Args, want)
+	// query.validate checks the query alone; query and query.compile also take
+	// what shapes its run.
+	if v := byName["query.validate"].Args; !reflect.DeepEqual(v, want) {
+		t.Errorf("query.validate's args =\n  %+v\nwant\n  %+v", v, want)
+	}
+	want = append(want,
+		ArgSpec{Name: "input", Type: ArgObject, Usage: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"},
+		ArgSpec{Name: "page", Type: ArgInt, Usage: "the 1-based page of rows to answer; needs a page size"},
+		ArgSpec{Name: "page_size", Type: ArgInt, Usage: "rows per page; alone, the first page"},
+		ArgSpec{Name: "timezone", Type: ArgString, Usage: "the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"},
+	)
+	for _, name := range []string{"query", "query.compile"} {
+		if args := byName[name].Args; !reflect.DeepEqual(args, want) {
+			t.Errorf("%s's args =\n  %+v\nwant\n  %+v", name, args, want)
+		}
 	}
 	// Which target is required depends on lang, which a group cannot say.
 	if len(q.ExactlyOne) != 0 {

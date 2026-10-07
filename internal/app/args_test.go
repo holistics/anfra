@@ -57,7 +57,16 @@ func TestInputSchema(t *testing.T) {
 func TestParseArgsRefusesMistakes(t *testing.T) {
 	for name, in := range map[string]any{
 		"an unsupported type": struct {
-			N int `json:"n,omitempty" doc:"x"`
+			N float64 `json:"n,omitempty" doc:"x"`
+		}{},
+		"a required int": struct {
+			N int `json:"n" doc:"x"`
+		}{},
+		"a positional object": struct {
+			O *struct{} `json:"o,omitempty" cli:"positional" doc:"x"`
+		}{},
+		"an embedded pointer": struct {
+			*QueryInput
 		}{},
 		"no doc": struct {
 			S string `json:"s,omitempty"`
@@ -146,7 +155,7 @@ func TestQueryInputs(t *testing.T) {
 
 	// Compiling SQL returns it as it is, and needs no sidecar.
 	res, err := run(t, "query.compile", cc, QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"})
-	if err != nil || res.Data != (CompiledQuery{SQL: "select 1"}) {
+	if err != nil || !reflect.DeepEqual(res.Data, CompiledQuery{SQL: "select 1"}) {
 		t.Errorf("compiling SQL: %+v, %v", res, err)
 	}
 	c, _ := Find("query")
