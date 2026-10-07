@@ -10,7 +10,7 @@
 Use your own HTML, JavaScript, and charting library. Anfra connects the app to reusable metrics, live warehouse queries, and analytics interactions such as filtering, drill-down, and period comparisons.
 
 <p align="center">
-  <a href="https://docs.anfra.ai">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
+  <a href="https://anfra.ai">Website</a> · <a href="https://docs.anfra.ai">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
 </p>
 
 <!-- TODO: replace with a GIF of the funnel demo: click a bar, the other charts filter -->
@@ -304,6 +304,7 @@ Anfra is built by the team behind Holistics, and AMQL is the semantic layer Holi
 - [Semantic UI](https://docs.anfra.ai/docs/sdk): queries, controls, interaction mappings, and inspect
 - [CLI reference](https://docs.anfra.ai/docs/self-hosted/cli)
 - [Installation](https://docs.anfra.ai/docs/self-hosted/installation)
+- [anfra.ai](https://anfra.ai): product overview
 
 ## License
 
