@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	"github.com/holistics/anfra/internal/ingest"
+	"github.com/holistics/anfra/internal/lineage"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	searchcmd "github.com/holistics/anfra/internal/search"
+	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/validate"
 )
 
@@ -105,6 +107,41 @@ var Commands = []Command{
 		},
 	},
 	{
+		Name:  "lineage",
+		Short: "Show the lineage of AML metrics, measures and dimensions",
+		Args: []Arg{
+			{Name: "dataset", Shorthand: "d", Type: ArgString, Usage: "dataset of the target (with --metric or --dimension)"},
+			{Name: "model", Shorthand: "m", Type: ArgString, Usage: "model of the target (with --measure or --dimension)"},
+			{Name: "metric", Type: ArgString, Usage: "dataset metric to run the lineage of"},
+			{Name: "measure", Type: ArgString, Usage: "model measure to run the lineage of"},
+			{Name: "dimension", Type: ArgString, Usage: "dataset or model dimension to run the lineage of"},
+			{Name: "targets", Type: ArgString, Usage: `targets as a JSON array, e.g. [{"dataset_name":"d","metric_name":"m"},{"model_name":"o","dimension_name":"x"}]`},
+			{Name: "limit", Type: ArgString, Usage: "page size: max entities to match per target (total counts every page)"},
+			{Name: "offset", Type: ArgString, Usage: "matched entities to skip, for the next page"},
+		},
+		// One target from the flags, or many from --targets.
+		ExclusiveArgs: [][]string{{"targets", "dataset", "model"}, {"targets", "metric", "measure", "dimension"}},
+		Needs:         func(map[string]any) Sidecars { return Sidecars{Node: true} },
+		Run: func(ctx context.Context, c Clients, r repo.Repo, args map[string]any) (any, error) {
+			targets, opts, err := lineageRun(args)
+			if err != nil {
+				return nil, err
+			}
+			res, err := lineage.Run(ctx, c.Node, r, targets, opts)
+			if err != nil {
+				return nil, err
+			}
+			// A target that failed carries its own error; the others still have diagrams.
+			st := StatusOK
+			for _, t := range res.Results {
+				if t.Error != "" {
+					st = StatusInvalid
+				}
+			}
+			return Response{Status: st, Data: res}, nil
+		},
+	},
+	{
 		Name:       "validate",
 		Short:      "Validate the AML repo, optionally scoped to file globs",
 		Positional: &Positional{Name: "globs", Usage: "optional file globs; report only diagnostics for matching files"},
@@ -144,29 +181,67 @@ func queryRun(args map[string]any) (query.Run, error) {
 	return query.Run{Input: input, Pagination: pagination, Timezone: strings.TrimSpace(argString(args, "timezone"))}, nil
 }
 
-// argCount reads a whole-number arg that arrives as a CLI string or a /call
-// JSON number; absent or empty is 0.
+// lineageRun reads a `lineage`'s targets (one from the flags, or --targets) and
+// options from its args.
+func lineageRun(args map[string]any) ([]sidecar.LineageTarget, lineage.Options, error) {
+	targets, err := lineage.ParseTargets(args["targets"])
+	if err != nil {
+		return nil, lineage.Options{}, err
+	}
+	flagTarget := sidecar.LineageTarget{
+		DatasetName:   strings.TrimSpace(argString(args, "dataset")),
+		ModelName:     strings.TrimSpace(argString(args, "model")),
+		MetricName:    strings.TrimSpace(argString(args, "metric")),
+		MeasureName:   strings.TrimSpace(argString(args, "measure")),
+		DimensionName: strings.TrimSpace(argString(args, "dimension")),
+	}
+	if flagTarget != (sidecar.LineageTarget{}) {
+		targets = append(targets, flagTarget)
+	}
+	limit, err := argInt(args, "limit", 0)
+	if err != nil {
+		return nil, lineage.Options{}, err
+	}
+	offset, err := argInt(args, "offset", 0)
+	if err != nil {
+		return nil, lineage.Options{}, err
+	}
+	return targets, lineage.Options{Limit: limit, Offset: offset}, nil
+}
+
+// argCount reads a whole-number arg >= 1; absent or empty is 0.
 func argCount(args map[string]any, key string) (int, error) {
+	n, err := argInt(args, key, 1)
+	if n == nil {
+		return 0, err
+	}
+	return *n, nil
+}
+
+// argInt reads a whole-number arg >= least that arrives as a CLI string or a
+// /call JSON number; absent or empty is nil.
+func argInt(args map[string]any, key string, least int) (*int, error) {
 	switch v := args[key].(type) {
 	case nil:
-		return 0, nil
+		return nil, nil
 	case float64:
-		if v != float64(int(v)) || v < 1 {
-			return 0, fmt.Errorf("invalid --%s %v: expected a whole number >= 1", key, v)
+		if v != float64(int(v)) || int(v) < least {
+			return nil, fmt.Errorf("invalid --%s %v: expected a whole number >= %d", key, v, least)
 		}
-		return int(v), nil
+		n := int(v)
+		return &n, nil
 	case string:
 		s := strings.TrimSpace(v)
 		if s == "" {
-			return 0, nil
+			return nil, nil
 		}
 		n, err := strconv.Atoi(s)
-		if err != nil || n < 1 {
-			return 0, fmt.Errorf("invalid --%s %q: expected a whole number >= 1", key, v)
+		if err != nil || n < least {
+			return nil, fmt.Errorf("invalid --%s %q: expected a whole number >= %d", key, v, least)
 		}
-		return n, nil
+		return &n, nil
 	default:
-		return 0, fmt.Errorf("invalid --%s: expected a whole number >= 1", key)
+		return nil, fmt.Errorf("invalid --%s: expected a whole number >= %d", key, least)
 	}
 }
 

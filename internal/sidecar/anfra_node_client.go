@@ -277,3 +277,47 @@ func (c *AnfraNodeClient) SearchCatalog(ctx context.Context, req CatalogSearchRe
 	err := c.Call(ctx, "catalog.search", req, &res)
 	return res, err
 }
+
+// LineageTarget is one AML field to run the lineage of: a dataset metric or
+// dimension, or a model measure or dimension. Exactly one of DatasetName and
+// ModelName is set, with one field name that fits it.
+type LineageTarget struct {
+	DatasetName   string `json:"dataset_name,omitempty"`
+	ModelName     string `json:"model_name,omitempty"`
+	MetricName    string `json:"metric_name,omitempty"`
+	MeasureName   string `json:"measure_name,omitempty"`
+	DimensionName string `json:"dimension_name,omitempty"`
+}
+
+// CatalogLineageRequest mirrors anfra-node's catalog.lineage params. anfra-node
+// builds the catalog from the repo (and the optional sources file) on each
+// call, so lineage needs no prior ingest.
+type CatalogLineageRequest struct {
+	RepoPath    string          `json:"repoPath"`
+	RepoID      string          `json:"repoId"`
+	SourcesPath string          `json:"sourcesPath,omitempty"`
+	Targets     []LineageTarget `json:"targets"`
+	Limit       *int            `json:"limit,omitempty"`
+	Offset      *int            `json:"offset,omitempty"`
+}
+
+// TargetDiagram is the lineage of one target: the catalog search query it ran
+// and its diagram (passed through as-is), or Error when the target failed.
+type TargetDiagram struct {
+	Target  LineageTarget   `json:"target"`
+	Query   string          `json:"query"`
+	Diagram json.RawMessage `json:"diagram,omitempty"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// CatalogLineageResult has one diagram per target, in the order of the targets.
+type CatalogLineageResult struct {
+	Results []TargetDiagram `json:"results"`
+}
+
+// LineageCatalog runs the lineage of AML fields through anfra-node.
+func (c *AnfraNodeClient) LineageCatalog(ctx context.Context, req CatalogLineageRequest) (CatalogLineageResult, error) {
+	var res CatalogLineageResult
+	err := c.Call(ctx, "catalog.lineage", req, &res)
+	return res, err
+}

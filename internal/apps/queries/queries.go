@@ -1,4 +1,4 @@
-// Package queries runs a Data App's queries and suggestions on anfra, and validates the AML.
+// Package queries runs a Data App's queries, suggestions and lineage on anfra, and validates the AML.
 package queries
 
 import (

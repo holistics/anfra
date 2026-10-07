@@ -145,6 +145,8 @@ func (s *Server) internal(w http.ResponseWriter, r *http.Request, p string) {
 		s.query(w, r)
 	case p == "/api/suggestions" && r.Method == http.MethodPost:
 		s.suggestions(w, r)
+	case p == "/api/lineage" && r.Method == http.MethodPost:
+		s.lineage(w, r)
 	case strings.HasPrefix(p, "/data-apps/") && r.Method == http.MethodGet:
 		s.dataApp(w, r, strings.TrimPrefix(p, "/data-apps/"))
 	case strings.HasPrefix(p, "/api/"):
@@ -223,6 +225,16 @@ func (s *Server) suggestions(w http.ResponseWriter, r *http.Request) {
 	}
 	values, err := queries.Suggest(r.Context(), s.Anfra, req, fieldType)
 	s.answer(w, values, err)
+}
+
+func (s *Server) lineage(w http.ResponseWriter, r *http.Request) {
+	var req queries.LineageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		queryError(w, "The lineage request isn't valid JSON.")
+		return
+	}
+	result, err := queries.Lineage(r.Context(), s.Anfra, req)
+	s.answer(w, result, err)
 }
 
 func (s *Server) answer(w http.ResponseWriter, result any, err error) {

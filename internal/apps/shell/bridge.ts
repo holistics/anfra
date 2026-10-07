@@ -8,7 +8,7 @@
 interface BridgeRequest {
   type: 'anfra:request';
   id: number;
-  method: 'submitQuery' | 'fieldSuggestions';
+  method: 'submitQuery' | 'fieldSuggestions' | 'lineage';
   request: unknown;
 }
 
@@ -20,6 +20,7 @@ interface BridgeCancel {
 const ROUTES: Record<BridgeRequest['method'], string> = {
   submitQuery: '/_anfra/api/query',
   fieldSuggestions: '/_anfra/api/suggestions',
+  lineage: '/_anfra/api/lineage',
 };
 
 async function post (route: string, body: unknown, signal: AbortSignal): Promise<unknown> {
