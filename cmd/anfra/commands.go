@@ -227,7 +227,13 @@ func applyStdin(args []command.Arg, values map[string]any) error {
 // runCommand runs a command as its op: on the repo's running server when there
 // is one (found through its runtime file), otherwise in this process, spawning
 // only the sidecars it needs.
+//
+// The command is the root of its trace: the op's span is under it, here or on
+// the server, which continues the trace it is sent.
 func runCommand(ctx context.Context, c command.Command, args map[string]any) error {
+	ctx, span := tracer.Start(ctx, "anfra "+c.Name())
+	defer span.End()
+
 	repoDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
