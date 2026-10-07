@@ -50,6 +50,8 @@ Develop analytics with Anfra.
 | `run-aql` | Run a validated AQL query and return rows (or compile it to SQL). |
 | `lookup-values` | Verify a field's exact stored values before filtering. |
 | `aml` | Write and edit AML models, fields, relationships, and datasets. |
+| `setup-repo` | Set up a new Anfra repo: `anfra init`, connect a data source, a first model and dataset. |
+| `build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve --apps`. |
 
 | Agent | What it does |
 |---|---|

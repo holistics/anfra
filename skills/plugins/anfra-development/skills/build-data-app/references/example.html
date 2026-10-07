@@ -1,0 +1,185 @@
+<!doctype html>
+<!--
+  A complete Data App: a region filter, a date grain switch, a bar chart that cross-filters a
+  trend line. Dataset `ecommerce` and the `orders` / `users` fields are placeholders: replace them
+  with names from `anfra show`.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sales Overview</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"></script>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #1f2933; }
+    .controls { display: flex; gap: 12px; align-items: end; margin-bottom: 16px; }
+    .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .panel { border: 1px solid #d9dee4; border-radius: 8px; padding: 12px; position: relative; }
+    .panel h2 { font-size: 14px; margin: 0 0 8px; }
+    .chart { height: 320px; }
+    .status { position: absolute; inset: 40px 12px 12px; display: none; align-items: center;
+              justify-content: center; background: rgb(255 255 255 / 0.8); text-align: center; }
+    .status.visible { display: flex; }
+    .status.error { color: #b42318; }
+  </style>
+</head>
+<body>
+  <h1 id="title"></h1>
+
+  <div class="controls">
+    <label>Region
+      <select id="region-select" multiple size="4"></select>
+    </label>
+    <label>Grain
+      <select id="grain-select">
+        <option value="week">Week</option>
+        <option value="month" selected>Month</option>
+        <option value="quarter">Quarter</option>
+      </select>
+    </label>
+    <button id="clear-selection" type="button">Clear selection</button>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Revenue by region</h2>
+      <div id="by-region" class="chart"></div>
+      <div id="by-region-status" class="status"></div>
+    </section>
+    <section class="panel">
+      <h2>Revenue over time</h2>
+      <div id="trend" class="chart"></div>
+      <div id="trend-status" class="status"></div>
+    </section>
+  </div>
+
+  <script>
+    const app = Anfra.createApp({ title: 'Sales Overview' });
+
+    const byRegion = app.createQuery('byRegion', {
+      dataset: 'ecommerce',
+      aql: `
+        explore {
+          dimensions { region: users.region }
+          measures { revenue: orders | sum(orders.amount) }
+          sorts { revenue desc }
+        }
+      `,
+    });
+
+    const trend = app.createQuery('trend', {
+      dataset: 'ecommerce',
+      aql: `
+        explore {
+          dimensions { period: orders.created_at }
+          measures { revenue: orders | sum(orders.amount) }
+          sorts { period asc }
+        }
+      `,
+    });
+
+    const region = app.createFilter('region', { dataset: 'ecommerce', field: 'users.region' });
+    const grain = app.createDateDrill('grain', { default: 'month' });
+
+    app.mapControl(region, byRegion, { field: 'users.region' });
+    app.mapControl(region, trend, { field: 'users.region' });
+    app.mapControl(grain, trend, { field: 'orders.created_at' });
+    app.mapCrossFilter(byRegion, trend);
+
+    document.getElementById('title').textContent = `Hi ${Anfra.user.name}`;
+
+    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const byRegionChart = echarts.init(document.getElementById('by-region'));
+    const trendChart = echarts.init(document.getElementById('trend'));
+    const logged = new Set();
+
+    function renderStatus (query, elementId) {
+      const el = document.getElementById(elementId);
+      el.classList.remove('error');
+      let text = '';
+      if (query.state === 'executing') text = 'Loading…';
+      else if (query.state === 'error') {
+        text = `Couldn't load: ${query.error.message}`;
+        el.classList.add('error');
+      } else if (query.state === 'success' && query.result.rows.length === 0) text = 'No data';
+      el.textContent = text;
+      el.classList.toggle('visible', text !== '');
+    }
+
+    function logFirstResult (query) {
+      if (query.state !== 'success' || logged.has(query.name)) return;
+      logged.add(query.name);
+      console.log(query.name, 'columns', query.result.columns, 'first row', query.result.rows[0],
+        'executed AQL', query.result.debug?.executedAql);
+    }
+
+    function render () {
+      renderStatus(byRegion, 'by-region-status');
+      renderStatus(trend, 'trend-status');
+      logFirstResult(byRegion);
+      logFirstResult(trend);
+
+      if (byRegion.result) {
+        const rows = byRegion.result.rows;
+        const selected = new Set(byRegion.selectedRows.map((row) => row.region));
+        byRegionChart.setOption({
+          tooltip: { valueFormatter: (v) => money.format(v) },
+          xAxis: { type: 'category', data: rows.map((row) => row.region) },
+          yAxis: { type: 'value', axisLabel: { formatter: (v) => money.format(v) } },
+          series: [{
+            type: 'bar',
+            data: rows.map((row) => ({
+              value: row.revenue,
+              itemStyle: { opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
+            })),
+          }],
+        });
+      }
+
+      if (trend.result) {
+        const rows = trend.result.rows;
+        trendChart.setOption({
+          tooltip: { trigger: 'axis', valueFormatter: (v) => money.format(v) },
+          xAxis: { type: 'category', data: rows.map((row) => String(row.period).slice(0, 10)) },
+          yAxis: { type: 'value', axisLabel: { formatter: (v) => money.format(v) } },
+          series: [{ type: 'line', smooth: true, data: rows.map((row) => row.revenue) }],
+        });
+      }
+    }
+
+    app.subscribe(render);
+
+    byRegionChart.on('click', (params) => {
+      byRegion.select([byRegion.result.rows[params.dataIndex]]);
+      app.execute();
+    });
+
+    document.getElementById('clear-selection').addEventListener('click', () => {
+      app.clearSelection();
+      app.execute();
+    });
+
+    const regionSelect = document.getElementById('region-select');
+    region.loadOptions().then((options) => {
+      regionSelect.replaceChildren(...options.map((value) => new Option(String(value), String(value))));
+    }).catch((err) => console.error('Could not load region options', err));
+    regionSelect.addEventListener('change', () => {
+      const values = [...regionSelect.selectedOptions].map((option) => option.value);
+      region.setCondition({ operator: 'is', values });
+      app.execute();
+    });
+
+    document.getElementById('grain-select').addEventListener('change', (event) => {
+      grain.setGrain(event.target.value);
+      app.execute();
+    });
+
+    window.addEventListener('resize', () => {
+      byRegionChart.resize();
+      trendChart.resize();
+    });
+
+    app.execute();
+  </script>
+</body>
+</html>
