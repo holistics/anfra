@@ -179,8 +179,8 @@ func TestStopWhenIdle(t *testing.T) {
 	}
 }
 
-// With --apps, the Data Apps are served beside the core API, behind the same guards; without it,
-// their routes do not exist.
+// The Data Apps are served beside the core API, behind the same guards; with --no-apps, their
+// routes do not exist.
 func TestServeApps(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	r := repo.Resolve(t.TempDir())
@@ -204,7 +204,31 @@ func TestServeApps(t *testing.T) {
 	without := serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, false, nil)
 	for _, path := range []string{"/apps/sales", "/appserve/apps"} {
 		if w := do(without, http.MethodGet, path, ""); w.Code != http.StatusNotFound {
-			t.Errorf("without --apps, %s: %d", path, w.Code)
+			t.Errorf("with --no-apps, %s: %d", path, w.Code)
+		}
+	}
+}
+
+// Everything is served unless turned off.
+func TestServeFlags(t *testing.T) {
+	cases := []struct {
+		args []string
+		want serveOptions
+	}{
+		{nil, serveOptions{}},
+		{[]string{"--no-mcp", "--no-apps", "--no-watch"}, serveOptions{noMCP: true, noApps: true, noWatch: true}},
+	}
+	for _, c := range cases {
+		cmd := newServeCmd()
+		if err := cmd.ParseFlags(c.args); err != nil {
+			t.Fatalf("%v: %v", c.args, err)
+		}
+		var got serveOptions
+		got.noMCP, _ = cmd.Flags().GetBool("no-mcp")
+		got.noApps, _ = cmd.Flags().GetBool("no-apps")
+		got.noWatch, _ = cmd.Flags().GetBool("no-watch")
+		if got != c.want {
+			t.Errorf("%v: %+v, want %+v", c.args, got, c.want)
 		}
 	}
 }

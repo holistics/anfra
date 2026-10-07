@@ -245,7 +245,7 @@ func TestWatch(t *testing.T) {
 	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := s.Watch(ctx); err != nil {
+	if err := s.watch(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -290,4 +290,69 @@ func TestWatch(t *testing.T) {
 			t.Fatal("a change in a directory made later was missed")
 		}
 	}
+}
+
+// Live reload watches the repo only while a Data App is open: the first event stream starts the
+// watcher, which hears a change, and the last one to close stops it, as Close does on shutdown.
+func TestLiveReloadWatchesOnlyWhileAStreamIsOpen(t *testing.T) {
+	dir := repo(t)
+	s := New(Options{RepoDir: dir, Watch: true})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+
+	watching := func() bool {
+		s.live.mu.Lock()
+		defer s.live.mu.Unlock()
+		return s.live.stop != nil
+	}
+	eventually := func(want bool, what string) {
+		t.Helper()
+		for deadline := time.Now().Add(2 * time.Second); watching() != want; time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatal(what)
+			}
+		}
+	}
+	if watching() {
+		t.Fatal("watching with no stream open")
+	}
+
+	streamCtx, closeStream := context.WithCancel(context.Background())
+	req, _ := http.NewRequestWithContext(streamCtx, http.MethodGet, srv.URL+"/appserve/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	eventually(true, "a stream opened, and nothing is watched")
+
+	lines := bufio.NewScanner(resp.Body)
+	lines.Scan() // ": connected"
+	go func() {
+		for range 20 {
+			_ = os.WriteFile(filepath.Join(dir, "apps", "sales.html"), []byte("<title>Sales 2</title>"), 0o600)
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+	for lines.Scan() {
+		if line := lines.Text(); strings.HasPrefix(line, "data: ") {
+			if line != `data: {"type":"apps","paths":["sales.html"]}` {
+				t.Errorf("event %q", line)
+			}
+			break
+		}
+	}
+
+	closeStream()
+	eventually(false, "the last stream closed, and the repo is still watched")
+
+	// On shutdown, Close ends the streams still open, and with them the watcher.
+	again, err := http.Get(srv.URL + "/appserve/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Body.Close()
+	eventually(true, "a stream opened again, and nothing is watched")
+	s.Close()
+	eventually(false, "Close ended the streams, and the repo is still watched")
 }

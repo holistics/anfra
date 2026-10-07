@@ -13,10 +13,43 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Watch publishes, debounced, what changed in the repo: paths under apps/, and whether any AML
+// listening counts an event stream in, starting the watcher for the first one. The repo is
+// watched only while at least one stream is open (a Data App open in a browser): the last one to
+// close stops the watcher, and Close, on shutdown, closes them all. A server only agents and CLI
+// calls use watches nothing.
+func (s *Server) listening() {
+	s.live.mu.Lock()
+	defer s.live.mu.Unlock()
+	s.live.streams++
+	if s.live.streams > 1 {
+		return
+	}
+	ctx, stop := context.WithCancel(context.Background())
+	if err := s.watch(ctx); err != nil {
+		stop()
+		if s.opts.Logger != nil {
+			s.opts.Logger.Warn("appserve.watch", "error", err.Error())
+		}
+		return
+	}
+	s.live.stop = stop
+}
+
+// unlistening counts an event stream out, stopping the watcher after the last.
+func (s *Server) unlistening() {
+	s.live.mu.Lock()
+	defer s.live.mu.Unlock()
+	s.live.streams--
+	if s.live.streams == 0 && s.live.stop != nil {
+		s.live.stop()
+		s.live.stop = nil
+	}
+}
+
+// watch publishes, debounced, what changed in the repo: paths under apps/, and whether any AML
 // did. fsnotify is not recursive, so every directory is watched, ones created later included;
 // dot-directories and node_modules are not. It stops when ctx ends.
-func (s *Server) Watch(ctx context.Context) error {
+func (s *Server) watch(ctx context.Context) error {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
