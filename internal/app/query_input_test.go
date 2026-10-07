@@ -35,6 +35,7 @@ func TestQueryRunChecks(t *testing.T) {
 		{"a sort direction that is not one", "query", `{"query":"q","dataset":"d","input":{"sorts":[{"field":"f","direction":"up"}]}}`, apperr.InvalidRequest, "input.sorts[0].direction", "invalid"},
 		{"a filter with no operator", "query", `{"query":"q","dataset":"d","input":{"filters":[{"field":"f","values":[]}]}}`, apperr.InvalidRequest, "input.filters[0].operator", "required"},
 		{"a filter with no values", "query", `{"query":"q","dataset":"d","input":{"filters":[{"field":"f","operator":"is_null"}]}}`, apperr.InvalidRequest, "input.filters[0].values", "required"},
+		{"a type show does not know", "show", `{"type":"aml.model","fqn":"orders"}`, apperr.InvalidRequest, "type", "invalid"},
 		{"input on query.validate", "query.validate", `{"query":"q","dataset":"d","input":{}}`, apperr.InvalidRequest, "input", "unknown"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

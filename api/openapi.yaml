@@ -476,7 +476,7 @@ components:
     RepoValidation:
       additionalProperties: false
       properties:
-        compileErrors:
+        diagnostics:
           items:
             $ref: "#/components/schemas/CompileError"
           type: array
@@ -488,7 +488,7 @@ components:
           type: boolean
       required:
         - valid
-        - compileErrors
+        - diagnostics
         - reports
       type: object
     ReportTrace:
@@ -540,6 +540,152 @@ components:
         - url
         - instance_id
         - version
+      type: object
+    ShowDataset:
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        fqn:
+          description: the dataset's fully qualified name, as AQL and the catalog name it
+          type: string
+        kind:
+          enum:
+            - dataset
+          type: string
+        label:
+          type: string
+        metrics:
+          description: the dataset's metrics; absent in outline
+          items:
+            $ref: "#/components/schemas/ShowField"
+          type: array
+        models:
+          description: the models the dataset uses; absent in outline
+          items:
+            $ref: "#/components/schemas/ShowModel"
+          type: array
+        name:
+          type: string
+      required:
+        - kind
+        - fqn
+        - name
+      type: object
+    ShowField:
+      additionalProperties: false
+      properties:
+        aggregation:
+          description: a measure's aggregation, such as sum or count distinct; custom for a custom one
+          type: string
+        definedInDataset:
+          description: a dimension the dataset declares on one of its models
+          type: boolean
+        definition:
+          description: the definition of a field or metric written in AQL
+          type: string
+        description:
+          type: string
+        format:
+          description: how a value displays, as the AML declares it
+        fqn:
+          description: "the catalog's identity: <model fqn>.<name>, or <dataset fqn>.<name> for a dataset-level field or a metric"
+          type: string
+        hidden:
+          type: boolean
+        label:
+          type: string
+        name:
+          description: AQL writes <model fqn>.<name>; a metric, its name alone
+          type: string
+        role:
+          enum:
+            - dimension
+            - measure
+            - param
+            - metric
+          type: string
+        type:
+          description: the compiled data type, such as number, text, date, datetime, truefalse
+          type: string
+      required:
+        - fqn
+        - name
+        - role
+        - type
+        - hidden
+      type: object
+    ShowInput:
+      additionalProperties: false
+      properties:
+        fqn:
+          description: the fqn of the object to show; absent, the repo
+          type: string
+        type:
+          default: aml.dataset
+          description: the catalog's entity type of fqn; aml.dataset is the only one for now
+          enum:
+            - aml.dataset
+          type: string
+      type: object
+    ShowModel:
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/ShowField"
+          type: array
+        fqn:
+          description: "the model's fully qualified name: what AQL writes before a field"
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+      required:
+        - fqn
+        - name
+        - fields
+      type: object
+    ShowRepo:
+      additionalProperties: false
+      properties:
+        datasets:
+          description: the repo's datasets, in outline
+          items:
+            $ref: "#/components/schemas/ShowDataset"
+          type: array
+        kind:
+          enum:
+            - repo
+          type: string
+      required:
+        - kind
+        - datasets
+      type: object
+    ShowResult:
+      additionalProperties: false
+      properties:
+        diagnostics:
+          description: the repo's files that do not compile; empty, what is shown is complete
+          items:
+            $ref: "#/components/schemas/CompileError"
+          type: array
+        object:
+          description: the object shown, by kind; a client must accept a kind it does not know
+          discriminator:
+            mapping:
+              dataset: "#/components/schemas/ShowDataset"
+              repo: "#/components/schemas/ShowRepo"
+            propertyName: kind
+          oneOf:
+            - $ref: "#/components/schemas/ShowRepo"
+            - $ref: "#/components/schemas/ShowDataset"
+      required:
+        - object
+        - diagnostics
       type: object
     SidecarHealth:
       additionalProperties: false
@@ -971,6 +1117,74 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Search the local catalog
+      x-idempotent: true
+      x-read-only: true
+  /core.show:
+    post:
+      description: |-
+        Show an object of the repo, read from its compiled AML: with no fqn, the repo and its datasets
+        in outline; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not
+        its implementation: names, labels, types, roles and AQL definitions, never SQL or tables. The
+        repo's files that do not compile come with it, as diagnostics.
+      operationId: core.show
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShowInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
+      summary: "Show the repo's datasets, or a dataset in full: its models, fields and metrics"
       x-idempotent: true
       x-read-only: true
   /core.status:

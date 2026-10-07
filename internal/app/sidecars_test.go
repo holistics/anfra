@@ -80,6 +80,9 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}}, "", apperr.ValidationFailed},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
+		{"show, the repo", valid, clients, Request{Command: "show"}, ok, nil},
+		{"show, a dataset", valid, clients, Request{Command: "show", Args: map[string]any{"fqn": "ecommerce"}}, ok, nil},
+		{"show, a dataset that is not there", valid, clients, Request{Command: "show", Args: map[string]any{"fqn": "nosuch"}}, "", apperr.ValidationFailed},
 		{"validate, valid", valid, clients, Request{Command: "validate"}, ok, nil},
 		{"validate, invalid", broken, clients, Request{Command: "validate"}, invalid, nil},
 	}
@@ -123,6 +126,41 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		}
 		if n := len(res.Data.(querycmd.QueryResult).Result.Records); n != 1 {
 			t.Errorf("page 2 of 3 rows by 2: %d rows, want 1", n)
+		}
+	})
+
+	// show answers the repo in outline, a dataset in full; a broken file comes
+	// with it, and does not stop what compiles from being shown.
+	t.Run("show, its answers", func(t *testing.T) {
+		cc := command.CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted()}
+		res, err := Dispatch(ctx, cc, Request{Command: "show"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := res.Data.(anfranode.ShowResult)
+		if r.Object.Repo == nil || len(r.Object.Repo.Datasets) != 1 || r.Object.Repo.Datasets[0].Fqn != "ecommerce" || r.Object.Repo.Datasets[0].Models != nil {
+			t.Errorf("the repo: %+v", r.Object)
+		}
+		res, err = Dispatch(ctx, cc, Request{Command: "show", Args: map[string]any{"fqn": "ecommerce"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := res.Data.(anfranode.ShowResult).Object.Dataset
+		if d == nil || len(d.Models) != 1 || d.Models[0].Fqn != "products" || len(d.Models[0].Fields) != 2 {
+			t.Fatalf("the dataset: %+v", d)
+		}
+		if f := d.Models[0].Fields[0]; f.Fqn != "products.id" || f.Role != "dimension" || f.Type != "number" || f.Label != "ID" {
+			t.Errorf("products.id: %+v", f)
+		}
+
+		cc.Repo = broken
+		res, err = Dispatch(ctx, cc, Request{Command: "show"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r = res.Data.(anfranode.ShowResult)
+		if len(r.Object.Repo.Datasets) != 1 || len(r.Diagnostics) == 0 || r.Diagnostics[0].FilePath != "broken.model.aml" {
+			t.Errorf("a broken repo: %+v, %+v", r.Object.Repo, r.Diagnostics)
 		}
 	})
 

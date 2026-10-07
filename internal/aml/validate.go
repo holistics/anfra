@@ -1,5 +1,5 @@
-// Package aml is the engine's work on the repo's AML as a whole: validating
-// it. (A single query is the query package's.)
+// Package aml is the engine's work on the repo's AML as a whole: validating it,
+// and showing its objects. (A single query is the query package's.)
 package aml
 
 import (
@@ -10,18 +10,20 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 )
 
-// RepoValidation is the outcome of validating the repo: its verdict, files that
+// RepoValidation is the outcome of validating the repo: its verdict, what in it
 // failed to compile, and the validator suite's findings.
 type RepoValidation struct {
 	// Valid: no file failed to compile, and no validator reported an
 	// "error"-severity finding.
-	Valid         bool                         `json:"valid"`
-	CompileErrors []anfranode.CompileError     `json:"compileErrors"`
-	Reports       []anfranode.ValidationReport `json:"reports"`
+	Valid bool `json:"valid"`
+	// Diagnostics are what could not be read, and why: today, the files that
+	// failed to compile. The key core.show uses for the same items.
+	Diagnostics []anfranode.CompileError     `json:"diagnostics"`
+	Reports     []anfranode.ValidationReport `json:"reports"`
 }
 
-func repoValid(compileErrors []anfranode.CompileError, reports []anfranode.ValidationReport) bool {
-	if len(compileErrors) > 0 {
+func repoValid(diagnostics []anfranode.CompileError, reports []anfranode.ValidationReport) bool {
+	if len(diagnostics) > 0 {
 		return false
 	}
 	for _, rep := range reports {
@@ -40,8 +42,8 @@ func Validate(ctx context.Context, node *anfranode.Client, r repo.Repo, paths []
 		return RepoValidation{}, fmt.Errorf("validate AML for repo %q: %w", r.Dir, err)
 	}
 	return RepoValidation{
-		Valid:         repoValid(res.CompileErrors, res.Reports),
-		CompileErrors: res.CompileErrors,
-		Reports:       res.Reports,
+		Valid:       repoValid(res.CompileErrors, res.Reports),
+		Diagnostics: res.CompileErrors,
+		Reports:     res.Reports,
 	}, nil
 }
