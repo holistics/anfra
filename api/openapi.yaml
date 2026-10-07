@@ -17,35 +17,6 @@ components:
         - message
         - severity
       type: object
-    Column:
-      additionalProperties: false
-      properties:
-        adhoc:
-          description: a query-local expression, not a field the dataset defines
-          type: boolean
-        aggregation:
-          description: an aggregated field's aggregation, such as sum or count distinct
-          type: string
-        field_name:
-          description: the field it draws; for an adhoc column, its name
-          type: string
-        is_measure:
-          type: boolean
-        label:
-          type: string
-        model_id:
-          description: the model of field_name, as the dataset names it; absent for a dataset metric or an adhoc column
-          type: string
-        name:
-          description: the column's key, as in fields
-          type: string
-      required:
-        - name
-        - field_name
-        - label
-        - adhoc
-        - is_measure
-      type: object
     CompileError:
       additionalProperties: false
       properties:
@@ -71,7 +42,7 @@ components:
         columns:
           description: what each column of an explore query's answer will be; absent for other queries
           items:
-            $ref: "#/components/schemas/Column"
+            $ref: "#/components/schemas/ExploreColumn"
           type: array
         sql:
           type: string
@@ -266,6 +237,35 @@ components:
         - message
         - request_id
       type: object
+    ExploreColumn:
+      additionalProperties: false
+      properties:
+        adhoc:
+          description: a query-local expression, not a field the dataset defines
+          type: boolean
+        aggregation:
+          description: an aggregated field's aggregation, such as sum or count distinct
+          type: string
+        fieldName:
+          description: the field it draws; for an adhoc column, its name
+          type: string
+        isMeasure:
+          type: boolean
+        label:
+          type: string
+        modelId:
+          description: the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column
+          type: string
+        name:
+          description: the column's key, as in fields
+          type: string
+      required:
+        - name
+        - fieldName
+        - label
+        - adhoc
+        - isMeasure
+      type: object
     IngestInput:
       additionalProperties: false
       properties:
@@ -314,12 +314,13 @@ components:
           description: the operator, such as is, contains, between, last
           type: string
         values:
-          description: "the operator's values: strings, numbers or booleans"
+          description: "the operator's values: strings, numbers or booleans; empty for an operator that takes none"
           items: {}
           type: array
       required:
         - field
         - operator
+        - values
       type: object
     QueryInput:
       additionalProperties: false
@@ -353,7 +354,7 @@ components:
         columns:
           description: one per field of result, in order
           items:
-            $ref: "#/components/schemas/Column"
+            $ref: "#/components/schemas/ExploreColumn"
           type: array
         result:
           $ref: "#/components/schemas/QueryRows"
@@ -443,7 +444,7 @@ components:
           items:
             $ref: "#/components/schemas/QueryCondition"
           type: array
-        date_drills:
+        dateDrills:
           description: date fields redrawn at another grain, their columns' names kept
           items:
             $ref: "#/components/schemas/QueryDateDrill"

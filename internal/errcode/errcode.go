@@ -1,6 +1,8 @@
-// Package errcode is the engine's catalog of error codes: what Dispatch can
-// fail with, for a caller to handle. The engine package re-exports them, and
-// lists them with engine.ErrorCodes.
+// Package errcode is the engine's namespace, and the error codes no one domain
+// owns: what Dispatch can fail with whatever a command does. A code that belongs
+// to a domain lives with it, beside the details it carries (query_invalid, with
+// its QueryValidation, is the query package's). The engine package re-exports
+// every code, and lists them all, by namespace, with engine.ErrorCodes.
 //
 // The codes carry a scope but no status: the CLI has none, and a host assigns
 // its own when it translates an engine error to one of its codes. Args the

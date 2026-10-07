@@ -12,7 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/command/status"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/repo"
 )
@@ -24,8 +25,8 @@ func handler(t *testing.T) (http.Handler, repo.Repo) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	r := repo.Resolve(t.TempDir())
-	cc := app.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted(),
-		Server: &app.ServerInfo{URL: "http://127.0.0.1:7878", InstanceID: "i-1", Version: "dev"}}
+	cc := command.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted(),
+		Server: &command.ServerInfo{URL: "http://127.0.0.1:7878", InstanceID: "i-1", Version: "dev"}}
 	return serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, true), r
 }
 
@@ -87,7 +88,7 @@ func TestServeRoutes(t *testing.T) {
 // status reports where the server is, when it runs in one.
 func TestStatusReportsTheServer(t *testing.T) {
 	h, _ := handler(t)
-	var got app.StatusResult
+	var got status.StatusResult
 	if err := json.NewDecoder(do(h, http.MethodPost, "/api/core.status", `{}`).Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}

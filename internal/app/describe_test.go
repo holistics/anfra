@@ -1,13 +1,16 @@
 package app
 
 import (
-	"github.com/danielgtaylor/huma/v2"
 	"reflect"
 	"slices"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/holistics/anfra/internal/aml"
+	"github.com/holistics/anfra/internal/command"
+	querycmd "github.com/holistics/anfra/internal/command/query"
 	"github.com/holistics/anfra/internal/errcode"
-	"github.com/holistics/anfra/internal/validate"
+	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -33,10 +36,10 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	}
 	q := byName["query"]
 	want := []ArgSpec{
-		{Name: "query", Type: ArgString, Required: true, Usage: "the query"},
-		{Name: "lang", Type: ArgString, Enum: []string{"aql", "sql"}, Default: "aql", Usage: "the language the query is written in"},
-		{Name: "dataset", Type: ArgString, Usage: "the dataset an AQL query runs against"},
-		{Name: "data_source", Type: ArgString, Usage: "the data source a SQL query runs against"},
+		{Name: "query", Type: command.ArgString, Required: true, Usage: "the query"},
+		{Name: "lang", Type: command.ArgString, Enum: []string{"aql", "sql"}, Default: "aql", Usage: "the language the query is written in"},
+		{Name: "dataset", Type: command.ArgString, Usage: "the dataset an AQL query runs against"},
+		{Name: "data_source", Type: command.ArgString, Usage: "the data source a SQL query runs against"},
 	}
 	// query.validate checks the query alone; query and query.compile also take
 	// what shapes its run.
@@ -44,10 +47,10 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 		t.Errorf("query.validate's args =\n  %+v\nwant\n  %+v", v, want)
 	}
 	want = append(want,
-		ArgSpec{Name: "input", Type: ArgObject, Usage: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"},
-		ArgSpec{Name: "page", Type: ArgInt, Usage: "the 1-based page of rows to answer; needs a page size"},
-		ArgSpec{Name: "page_size", Type: ArgInt, Usage: "rows per page; alone, the first page"},
-		ArgSpec{Name: "timezone", Type: ArgString, Usage: "the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"},
+		ArgSpec{Name: "input", Type: command.ArgObject, Usage: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"},
+		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "the 1-based page of rows to answer; needs a page size"},
+		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "rows per page; alone, the first page"},
+		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"},
 	)
 	for _, name := range []string{"query", "query.compile"} {
 		if args := byName[name].Args; !reflect.DeepEqual(args, want) {
@@ -60,10 +63,10 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	}
 
 	for name, out := range map[string]reflect.Type{
-		"query":          reflect.TypeFor[QueryResult](),
-		"query.compile":  reflect.TypeFor[CompiledQuery](),
-		"query.validate": reflect.TypeFor[validate.QueryValidation](),
-		"validate":       reflect.TypeFor[validate.RepoValidation](),
+		"query":          reflect.TypeFor[querycmd.QueryResult](),
+		"query.compile":  reflect.TypeFor[querycmd.CompiledQuery](),
+		"query.validate": reflect.TypeFor[query.QueryValidation](),
+		"validate":       reflect.TypeFor[aml.RepoValidation](),
 	} {
 		if byName[name].Output != out {
 			t.Errorf("%s answers %v, want %v", name, byName[name].Output, out)
@@ -78,12 +81,12 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	if got, want := byName["version"].ErrorCodes, []apperr.Code{errcode.DataPermsMissing, apperr.ValidationFailed.Code()}; !reflect.DeepEqual(got, want) {
 		t.Errorf("version can fail with %v, want %v", got, want)
 	}
-	for _, c := range []apperr.Code{errcode.SidecarUnavailable, validate.QueryInvalid.Code()} {
+	for _, c := range []apperr.Code{errcode.SidecarUnavailable, query.QueryInvalid.Code()} {
 		if !slices.Contains(byName["query"].ErrorCodes, c) {
 			t.Errorf("query cannot fail with %s", c)
 		}
 	}
-	if slices.Contains(byName["query.validate"].ErrorCodes, validate.QueryInvalid.Code()) {
+	if slices.Contains(byName["query.validate"].ErrorCodes, query.QueryInvalid.Code()) {
 		t.Error("query.validate reports an invalid query; it does not fail with one")
 	}
 }
@@ -115,7 +118,7 @@ func TestSpecsAgreeWithTheSchema(t *testing.T) {
 		for _, g := range s.ExactlyOne {
 			valid[g[0]] = "x"
 		}
-		o, _ := reg.Lookup(OpName(s.Name))
+		o, _ := reg.Lookup(command.OpName(s.Name))
 		res := &huma.ValidateResult{}
 		huma.Validate(rt.Schemas, o.InSchema(rt), huma.NewPathBuffer(nil, 0), huma.ModeWriteToServer, valid, res)
 		if len(res.Errors) > 0 {

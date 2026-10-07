@@ -2,9 +2,8 @@ package app
 
 import (
 	"reflect"
-	"slices"
 
-	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -32,8 +31,8 @@ type CommandSpec struct {
 
 // ArgSpec is an arg as an API caller sees it.
 type ArgSpec struct {
-	Name     string  // the /call key
-	Type     ArgType // string, bool, string_array, int or object
+	Name     string          // the /call key
+	Type     command.ArgType // string, bool, string_array, int or object
 	Required bool
 	Enum     []string // the allowed values, when closed
 	Default  string   // the value when unset, if any
@@ -54,31 +53,12 @@ func Describe() []CommandSpec {
 	return specs
 }
 
-func describe(c Command) CommandSpec {
+func describe(c command.Command) CommandSpec {
 	args := c.Args()
 	s := CommandSpec{Name: c.Name(), Short: c.Short(), Long: c.Long(), Output: c.Output(),
-		CanBeInvalid: c.CanBeInvalid(), ErrorCodes: errorCodes(c)}
+		CanBeInvalid: c.CanBeInvalid(), ErrorCodes: c.Errors(), ExactlyOne: command.ExactlyOne(args)}
 	for _, a := range args {
 		s.Args = append(s.Args, ArgSpec{Name: a.Name, Type: a.Type, Required: a.Required, Enum: a.Enum, Default: a.Default, Usage: a.Usage})
 	}
-	for _, g := range groupNames(args) {
-		s.ExactlyOne = append(s.ExactlyOne, groupMembers(args, g))
-	}
 	return s
-}
-
-// errorCodes are the codes c can fail with. Every command can be refused before
-// it runs — undecided permissions, invalid args — one that needs a sidecar can
-// find it unavailable, and a command declares the codes of its own.
-func errorCodes(c Command) []apperr.Code {
-	codes := []apperr.Code{errcode.DataPermsMissing, apperr.ValidationFailed.Code()}
-	if c.needsSidecars() {
-		codes = append(codes, errcode.SidecarUnavailable)
-	}
-	for _, e := range c.errors() {
-		if !slices.Contains(codes, e.Code()) {
-			codes = append(codes, e.Code())
-		}
-	}
-	return codes
 }

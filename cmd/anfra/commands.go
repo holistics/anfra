@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/spf13/cobra"
@@ -18,7 +19,7 @@ import (
 )
 
 // appCommands builds the cobra tree from the registry: one command per
-// registered app.Command, nested by its dotted name ("query.compile" is
+// registered command.Command, nested by its dotted name ("query.compile" is
 // `query compile`). Flags are generated from each command's args, so a command
 // added to the registry shows up in the CLI automatically — no separate CLI
 // registration to keep in sync.
@@ -28,7 +29,7 @@ func appCommands() []*cobra.Command {
 	// A group's command is registered before its subcommands (fewer dots first),
 	// so each subcommand finds its parent.
 	cmds := slices.Clone(app.Commands)
-	slices.SortStableFunc(cmds, func(a, b app.Command) int {
+	slices.SortStableFunc(cmds, func(a, b command.Command) int {
 		return strings.Count(a.Name(), ".") - strings.Count(b.Name(), ".")
 	})
 	for _, c := range cmds {
@@ -48,7 +49,7 @@ func appCommands() []*cobra.Command {
 	return top
 }
 
-func buildCobraCommand(c app.Command) *cobra.Command {
+func buildCobraCommand(c command.Command) *cobra.Command {
 	name := c.Name()[strings.LastIndex(c.Name(), ".")+1:]
 	cmd := &cobra.Command{Use: name, Short: c.Short(), Long: c.Long(), Args: cobra.NoArgs}
 	// Show flags in declaration order (else pflag sorts them alphabetically).
@@ -56,7 +57,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 
 	args := c.Args()
 	flagArg := map[string]string{} // flag name -> the arg it sets
-	var positional *app.Arg
+	var positional *command.Arg
 	for i, a := range args {
 		if a.Positional {
 			positional = &args[i]
@@ -70,7 +71,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 				usage += "; read from stdin when omitted"
 			}
 			cmd.Long = long + "\n\nArguments:\n  " + a.Name + "  " + usage
-			if a.Type == app.ArgStringArray {
+			if a.Type == command.ArgStringArray {
 				cmd.Use += " [" + a.Name + "...]"
 				cmd.Args = cobra.ArbitraryArgs
 			} else {
@@ -90,7 +91,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 		if len(a.Enum) > 0 {
 			usage += " (one of: " + strings.Join(a.Enum, ", ") + ")"
 		}
-		if a.Type == app.ArgObject {
+		if a.Type == command.ArgObject {
 			usage += " (a JSON object)"
 		}
 		// pflag has no native aliases, so each alias is a flag of its own, setting
@@ -109,7 +110,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 			return err
 		}
 		if positional != nil && len(posArgs) > 0 {
-			if positional.Type == app.ArgStringArray {
+			if positional.Type == command.ArgStringArray {
 				values[positional.Name] = posArgs
 			} else {
 				values[positional.Name] = posArgs[0]
@@ -130,7 +131,7 @@ func buildCobraCommand(c app.Command) *cobra.Command {
 // only those set, so an unset one is absent, and the op applies its default and
 // sees which of a group are set. An object arg's flag is JSON, refused when it is
 // not an object.
-func flagValues(fs *pflag.FlagSet, args []app.Arg, flagArg map[string]string) (map[string]any, error) {
+func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string) (map[string]any, error) {
 	values := map[string]any{}
 	var err error
 	fs.Visit(func(f *pflag.Flag) {
@@ -143,11 +144,11 @@ func flagValues(fs *pflag.FlagSet, args []app.Arg, flagArg map[string]string) (m
 			return
 		}
 		switch argType(args, key) {
-		case app.ArgBool:
+		case command.ArgBool:
 			values[key] = f.Value.String() == "true"
-		case app.ArgInt:
+		case command.ArgInt:
 			values[key] = json.Number(f.Value.String())
-		case app.ArgObject:
+		case command.ArgObject:
 			raw := json.RawMessage(strings.TrimSpace(f.Value.String()))
 			var obj map[string]any
 			if json.Unmarshal(raw, &obj) != nil || obj == nil {
@@ -162,21 +163,21 @@ func flagValues(fs *pflag.FlagSet, args []app.Arg, flagArg map[string]string) (m
 	return values, err
 }
 
-func addFlag(cmd *cobra.Command, a app.Arg, name, short, usage string) {
+func addFlag(cmd *cobra.Command, a command.Arg, name, short, usage string) {
 	switch a.Type {
-	case app.ArgString, app.ArgObject:
+	case command.ArgString, command.ArgObject:
 		cmd.Flags().StringP(name, short, a.Default, usage)
-	case app.ArgInt:
+	case command.ArgInt:
 		cmd.Flags().IntP(name, short, 0, usage)
-	case app.ArgBool:
+	case command.ArgBool:
 		cmd.Flags().BoolP(name, short, false, usage)
-	case app.ArgStringArray:
+	case command.ArgStringArray:
 		cmd.Flags().StringSliceP(name, short, nil, usage)
 	}
 }
 
 // argType is the type of the arg named name.
-func argType(args []app.Arg, name string) app.ArgType {
+func argType(args []command.Arg, name string) command.ArgType {
 	for _, a := range args {
 		if a.Name == name {
 			return a.Type
@@ -186,7 +187,7 @@ func argType(args []app.Arg, name string) app.ArgType {
 }
 
 // groupFlags are the CLI flags of a group's args.
-func groupFlags(args []app.Arg, group string) []string {
+func groupFlags(args []command.Arg, group string) []string {
 	var out []string
 	for _, a := range args {
 		if a.Group == group {
@@ -198,7 +199,7 @@ func groupFlags(args []app.Arg, group string) []string {
 
 // applyStdin fills a stdin arg from piped stdin when it was left unset, so
 // e.g. `cat query.aql | anfra query -d sales` works.
-func applyStdin(args []app.Arg, values map[string]any) error {
+func applyStdin(args []command.Arg, values map[string]any) error {
 	for _, a := range args {
 		if !a.Stdin {
 			continue
@@ -225,7 +226,7 @@ func applyStdin(args []app.Arg, values map[string]any) error {
 // runCommand runs a command as its op: on the repo's running server when there
 // is one (found through its runtime file), otherwise in this process, spawning
 // only the sidecars it needs.
-func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
+func runCommand(ctx context.Context, c command.Command, args map[string]any) error {
 	repoDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
@@ -263,11 +264,11 @@ func runCommand(ctx context.Context, c app.Command, args map[string]any) error {
 
 // present shows an answer — its JSON, as YAML; search's as a compact list — and
 // turns an invalid verdict into a silent exit code 1: the answer says why.
-func present(c app.Command, body []byte) error {
+func present(c command.Command, body []byte) error {
 	return presentTo(c, body, os.Stdout)
 }
 
-func presentTo(c app.Command, body []byte, out io.Writer) error {
+func presentTo(c command.Command, body []byte, out io.Writer) error {
 	var err error
 	if c.Name() == "search" {
 		err = renderSearchResults(body, out)
@@ -289,9 +290,9 @@ func presentTo(c app.Command, body []byte, out io.Writer) error {
 
 // startNeededSidecars spawns just the sidecars the command declares it needs
 // for these args, returning the clients and a single close func (LIFO).
-func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, input []byte) (app.Clients, func(), error) {
+func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, input []byte) (command.Clients, func(), error) {
 	need := c.Needs(input)
-	var clients app.Clients
+	var clients command.Clients
 	var closers []func()
 	closeAll := func() {
 		for i := len(closers) - 1; i >= 0; i-- {
@@ -303,7 +304,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, inpu
 		node := sidecar.NewAnfraNode(h.cfg)
 		if err := node.Start(ctx); err != nil {
 			closeAll()
-			return app.Clients{}, nil, fmt.Errorf("start anfra-node sidecar: %w", err)
+			return command.Clients{}, nil, fmt.Errorf("start anfra-node sidecar: %w", err)
 		}
 		closers = append(closers, node.Close)
 		clients.Node = node.Client()
@@ -312,7 +313,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c app.Command, inpu
 		canal := sidecar.NewCanalQuery(h.cfg)
 		if err := canal.Start(ctx); err != nil {
 			closeAll()
-			return app.Clients{}, nil, fmt.Errorf("start canal-query sidecar: %w", err)
+			return command.Clients{}, nil, fmt.Errorf("start canal-query sidecar: %w", err)
 		}
 		closers = append(closers, canal.Close)
 		clients.CanalQuery = canal.Client()

@@ -1,4 +1,4 @@
-package app
+package status
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/sidecar"
 )
 
@@ -22,12 +23,12 @@ func TestStatusState(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		clients Clients
+		clients command.Clients
 		want    State
 	}{
-		{"no warm server", Clients{}, StateNotRunning},
-		{"a sidecar not connected", Clients{CanalQuery: sidecar.NewCanalQueryClient(canal.URL, false)}, StateDegraded},
-		{"a sidecar down", Clients{
+		{"no warm server", command.Clients{}, StateNotRunning},
+		{"a sidecar not connected", command.Clients{CanalQuery: sidecar.NewCanalQueryClient(canal.URL, false)}, StateDegraded},
+		{"a sidecar down", command.Clients{
 			Node:       sidecar.NewAnfraNodeClientHTTP(down.URL),
 			CanalQuery: sidecar.NewCanalQueryClient(canal.URL, false),
 		}, StateDegraded},
@@ -39,10 +40,10 @@ func TestStatusState(t *testing.T) {
 			}
 		})
 	}
-	if c, _ := Find("status"); c.(*command[NoInput, StatusResult]).def.Valid(StatusResult{State: StateDegraded}) {
+	if valid, _ := Status.Valid(StatusResult{State: StateDegraded}); valid {
 		t.Error("degraded is valid")
 	}
-	if c, _ := Find("status"); !c.(*command[NoInput, StatusResult]).def.Valid(StatusResult{State: StateHealthy}) {
+	if valid, _ := Status.Valid(StatusResult{State: StateHealthy}); !valid {
 		t.Error("healthy is invalid")
 	}
 }

@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
-	"github.com/holistics/anfra/internal/validate"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
@@ -91,8 +92,8 @@ func runServe(ctx context.Context, addr string, withMCP bool, idle time.Duration
 		}
 		defer canal.Close()
 
-		info := app.ServerInfo{URL: "http://" + ln.Addr().String(), InstanceID: newInstanceID(), Version: meta.Version}
-		cc := h.commandContext(app.Clients{Node: node.Client(), CanalQuery: canal.Client()})
+		info := command.ServerInfo{URL: "http://" + ln.Addr().String(), InstanceID: newInstanceID(), Version: meta.Version}
+		cc := h.commandContext(command.Clients{Node: node.Client(), CanalQuery: canal.Client()})
 		cc.Server = &info
 
 		ctx, stop := context.WithCancel(ctx)
@@ -169,7 +170,7 @@ func isLoopback(host string) bool {
 // its OpenAPI and discovery, and with withMCP the same ops as MCP tools at /mcp —
 // behind the request id, root span, log line and recovery, and the guards that
 // keep a web page from using it (guard).
-func serveHandler(logger *slog.Logger, r repo.Repo, cc app.CommandContext, addr net.Addr, withMCP bool) http.Handler {
+func serveHandler(logger *slog.Logger, r repo.Repo, cc command.CommandContext, addr net.Addr, withMCP bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		id := ""
@@ -181,9 +182,9 @@ func serveHandler(logger *slog.Logger, r repo.Repo, cc app.CommandContext, addr 
 	rt, reg := app.NewRuntime(), app.NewRegistry()
 	mux.Handle("/api/", coreAPI(cc).Handler(rt, reg))
 	if withMCP {
-		mux.Handle("/mcp", apikit.MCP[app.CommandContext]{
+		mux.Handle("/mcp", apikit.MCP[command.CommandContext]{
 			Name: "anfra", Version: meta.Version, Codes: codes,
-			Request: func(*http.Request) (app.CommandContext, error) { return cc, nil },
+			Request: func(*http.Request) (command.CommandContext, error) { return cc, nil },
 		}.Handler(rt, reg))
 	}
 	return httpkit.Wrap(guard(mux, addr), httpkit.Config{Logger: logger, Codes: codes})
@@ -191,14 +192,14 @@ func serveHandler(logger *slog.Logger, r repo.Repo, cc app.CommandContext, addr 
 
 // coreAPI is the core API over HTTP, every op run with cc: the host's one
 // CommandContext — this repo, the warm sidecars, no data restrictions.
-func coreAPI(cc app.CommandContext) apikit.HTTP[app.CommandContext] {
-	return apikit.HTTP[app.CommandContext]{
+func coreAPI(cc command.CommandContext) apikit.HTTP[command.CommandContext] {
+	return apikit.HTTP[command.CommandContext]{
 		Codes: codes,
 		Title: "anfra",
 		// The contract's version, not the binary's: the committed document must
 		// not change with every release.
 		Version: "0",
-		Request: func(http.ResponseWriter, *http.Request) (app.CommandContext, error) { return cc, nil },
+		Request: func(http.ResponseWriter, *http.Request) (command.CommandContext, error) { return cc, nil },
 	}
 }
 
@@ -207,7 +208,7 @@ func coreAPI(cc app.CommandContext) apikit.HTTP[app.CommandContext] {
 var codes = httpkit.Codes{
 	Namespaces: []apperr.Namespace{errcode.NS},
 	Status: map[apperr.Code]int{
-		validate.QueryInvalid.Code(): http.StatusUnprocessableEntity,
+		query.QueryInvalid.Code(): http.StatusUnprocessableEntity,
 		// A data source failing to run a query is an upstream's failure.
 		errcode.QueryFailed:        http.StatusBadGateway,
 		errcode.SidecarUnavailable: http.StatusServiceUnavailable,
@@ -302,7 +303,7 @@ func newOpenAPICmd() *cobra.Command {
 			"give an agent the API.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			spec, err := coreAPI(app.CommandContext{}).Spec(app.NewRuntime(), app.NewRegistry())
+			spec, err := coreAPI(command.CommandContext{}).Spec(app.NewRuntime(), app.NewRegistry())
 			if err != nil {
 				return err
 			}
@@ -316,8 +317,8 @@ func newOpenAPICmd() *cobra.Command {
 
 // callServe runs a command on the server at url, and returns its answer's body.
 // An error answer is returned as a remoteError, carrying the server's body.
-func callServe(ctx context.Context, url, command string, input []byte) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url+"/api/"+app.OpName(command), bytes.NewReader(input))
+func callServe(ctx context.Context, url, name string, input []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url+"/api/"+command.OpName(name), bytes.NewReader(input))
 	if err != nil {
 		return nil, err
 	}

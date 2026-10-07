@@ -10,11 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/command"
+	querycmd "github.com/holistics/anfra/internal/command/query"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
-	"github.com/holistics/anfra/internal/validate"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -50,18 +52,18 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	cases := []struct {
 		name    string
 		repo    repo.Repo
-		clients Clients
+		clients command.Clients
 		req     Request
 		status  Status         // the answer's, when it answers
 		fails   apperr.AnyCode // the code it fails with, when it fails
 	}{
 		{"version", valid, clients, Request{Command: "version"}, ok, nil},
 		{"status, healthy", valid, clients, Request{Command: "status"}, ok, nil},
-		{"status, not running", valid, Clients{}, Request{Command: "status"}, invalid, nil},
+		{"status, not running", valid, command.Clients{}, Request{Command: "status"}, invalid, nil},
 		{"query", valid, clients, Request{Command: "query", Args: q("products | select(products.id, products.name)")}, ok, nil},
-		{"query, invalid", valid, clients, Request{Command: "query", Args: q("nosuch | select(x.y)")}, "", validate.QueryInvalid},
+		{"query, invalid", valid, clients, Request{Command: "query", Args: q("nosuch | select(x.y)")}, "", query.QueryInvalid},
 		{"query compile", valid, clients, Request{Command: "query.compile", Args: q("products | select(products.id)")}, ok, nil},
-		{"query compile, invalid", valid, clients, Request{Command: "query.compile", Args: q("nosuch | select(x.y)")}, "", validate.QueryInvalid},
+		{"query compile, invalid", valid, clients, Request{Command: "query.compile", Args: q("nosuch | select(x.y)")}, "", query.QueryInvalid},
 		{"query validate, valid", valid, clients, Request{Command: "query.validate", Args: q("products | select(products.id)")}, ok, nil},
 		{"query validate, invalid", valid, clients, Request{Command: "query.validate", Args: q("nosuch | select(x.y)")}, invalid, nil},
 		{"query, SQL", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select id, name from products order by id"}}, ok, nil},
@@ -82,16 +84,16 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 
 	// A shaped run answers what ran and what each column is, and only its page.
 	t.Run("query, shaped, its answer", func(t *testing.T) {
-		cc := CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted()}
+		cc := command.CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted()}
 		res, err := Dispatch(ctx, cc, Request{Command: "query", Args: shaped(nil)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		r := res.Data.(QueryResult)
+		r := res.Data.(querycmd.QueryResult)
 		if !strings.Contains(r.AQL, "Widget") || len(r.Result.Records) != 1 {
 			t.Errorf("the input was not applied: aql %q, %d rows", r.AQL, len(r.Result.Records))
 		}
-		want := []Column{
+		want := []sidecar.ExploreColumn{
 			{Name: "name", FieldName: "name", ModelID: "products", Label: r.Columns[0].Label},
 			{Name: "n", FieldName: "id", ModelID: "products", Label: r.Columns[1].Label, IsMeasure: true, Aggregation: "count"},
 		}
@@ -117,7 +119,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if n := len(res.Data.(QueryResult).Result.Records); n != 1 {
+		if n := len(res.Data.(querycmd.QueryResult).Result.Records); n != 1 {
 			t.Errorf("page 2 of 3 rows by 2: %d rows, want 1", n)
 		}
 	})
@@ -127,12 +129,12 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	for _, tc := range cases {
 		ran[tc.req.Command] = true
 		t.Run(tc.name, func(t *testing.T) {
-			res, err := Dispatch(ctx, CommandContext{Clients: tc.clients, Repo: tc.repo, DataPerms: dataperm.Unrestricted()}, tc.req)
+			res, err := Dispatch(ctx, command.CommandContext{Clients: tc.clients, Repo: tc.repo, DataPerms: dataperm.Unrestricted()}, tc.req)
 			if tc.fails != nil {
 				if !errors.Is(err, tc.fails) {
 					t.Fatalf("got %v, want %s", err, tc.fails.Code().Qualified())
 				}
-				if diags, ok := apperr.DetailsOf(err, validate.QueryInvalid); ok && len(diags.Diagnostics) == 0 {
+				if diags, ok := apperr.DetailsOf(err, query.QueryInvalid); ok && len(diags.Diagnostics) == 0 {
 					t.Error("query_invalid carries no diagnostics")
 				}
 				return
@@ -180,7 +182,7 @@ func shaped(over map[string]any) map[string]any {
 
 // startSidecars spawns anfra-node and canal-query from their binaries, as the
 // one-shot CLI does, for the whole test.
-func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) Clients {
+func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) command.Clients {
 	t.Helper()
 	cfg := sidecar.Config{RepoID: r.ID, CompileCachePath: filepath.Join(r.CacheDir(), "compile-cache")}
 	node := sidecar.NewAnfraNode(cfg)
@@ -193,7 +195,7 @@ func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) Clients {
 		t.Fatalf("start canal-query: %v", err)
 	}
 	t.Cleanup(canal.Close)
-	return Clients{Node: node.Client(), CanalQuery: canal.Client()}
+	return command.Clients{Node: node.Client(), CanalQuery: canal.Client()}
 }
 
 // brokenCopy is the fixture plus a model that does not parse.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -21,7 +21,7 @@ func (e *remoteError) Error() string { return e.resp.Code + ": " + e.resp.Messag
 // args as the user typed them: the command's path and its args.
 type commandError struct {
 	path string // "anfra query"
-	args []app.Arg
+	args []command.Arg
 	err  error
 }
 
@@ -107,7 +107,7 @@ func violationsOf(details any) []apperr.Violation {
 
 // argName is how the user passes the arg a violation is on: its flag, or the
 // positional's name. A field no arg has (an unknown one) is shown as it is.
-func argName(args []app.Arg, field string) string {
+func argName(args []command.Arg, field string) string {
 	a, ok := argOf(args, field)
 	switch {
 	case !ok:
@@ -120,7 +120,7 @@ func argName(args []app.Arg, field string) string {
 
 // argMessage is the violation's message, saying how to pass a missing
 // positional, which has no flag to show.
-func argMessage(args []app.Arg, v apperr.Violation) string {
+func argMessage(args []command.Arg, v apperr.Violation) string {
 	if a, ok := argOf(args, v.Field); ok && a.Positional && (v.Code == "required" || v.Code == "too_short") {
 		how := "pass it as an argument"
 		if a.Stdin {
@@ -141,11 +141,11 @@ func clause(s string) string {
 	return s
 }
 
-func argOf(args []app.Arg, field string) (app.Arg, bool) {
+func argOf(args []command.Arg, field string) (command.Arg, bool) {
 	for _, a := range args {
 		if a.Name == field {
 			return a, true
 		}
 	}
-	return app.Arg{}, false
+	return command.Arg{}, false
 }
