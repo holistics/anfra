@@ -10,17 +10,18 @@ import (
 	"time"
 )
 
-// process is the shared lifecycle of any spawned sidecar: orphan-prevention
+// Process is the shared lifecycle of any spawned sidecar: orphan-prevention
 // (process group + Pdeathsig) and stdio forwarded into the host log sink.
-// Protocol/readiness live in the per-sidecar manage/client files.
-type process struct {
+// Protocol/readiness live in each sidecar's own package.
+type Process struct {
 	name   string
 	cmd    *exec.Cmd
 	stdin  *os.File // held open; closing on host exit trips a stdin-EOF watchdog if the child has one
 	logger *slog.Logger
 }
 
-type procSpec struct {
+// ProcSpec is how to spawn a sidecar.
+type ProcSpec struct {
 	Name      string
 	Path      string
 	Args      []string
@@ -31,8 +32,10 @@ type procSpec struct {
 	PipeStdin bool // wire a stdin pipe so the child can use stdin-EOF as a parent-death signal (Node does; canal doesn't)
 }
 
-func startProcess(spec procSpec) (*process, error) {
-	// No sink supplied → discard. Callers (the sidecar managers / host) wire the
+// StartProcess spawns the sidecar spec describes. It does not wait for it to
+// be ready: that is the sidecar's protocol, its own package's to check.
+func StartProcess(spec ProcSpec) (*Process, error) {
+	// No sink supplied → discard. Callers (the sidecar supervisors / host) wire the
 	// real destinations; the supervisor takes no opinion on where output goes.
 	stdout := spec.Stdout
 	if stdout == nil {
@@ -72,14 +75,16 @@ func startProcess(spec procSpec) (*process, error) {
 		return nil, fmt.Errorf("start %s: %w", spec.Name, err)
 	}
 	logger.Info("sidecar.spawned", "name", spec.Name, "childPid", cmd.Process.Pid)
-	return &process{name: spec.Name, cmd: cmd, stdin: stdin, logger: logger}, nil
+	return &Process{name: spec.Name, cmd: cmd, stdin: stdin, logger: logger}, nil
 }
 
-// Logger is the supervisor's logger (defaulted in startProcess), so managers can
-// log their own events without re-defaulting.
-func (p *process) Logger() *slog.Logger { return p.logger }
+// Logger is the supervisor's logger (defaulted in StartProcess), so supervisors
+// can log their own events without re-defaulting.
+func (p *Process) Logger() *slog.Logger { return p.logger }
 
-func (p *process) close() {
+// Close stops the sidecar: SIGTERM, then SIGKILL to its process group if it has
+// not exited within 3s.
+func (p *Process) Close() {
 	if p.cmd == nil || p.cmd.Process == nil {
 		return
 	}

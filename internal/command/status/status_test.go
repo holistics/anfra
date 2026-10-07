@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/internal/command"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
 // status answers its verdict as state: not_running without a warm server,
@@ -27,10 +28,10 @@ func TestStatusState(t *testing.T) {
 		want    State
 	}{
 		{"no warm server", command.Clients{}, StateNotRunning},
-		{"a sidecar not connected", command.Clients{CanalQuery: sidecar.NewCanalQueryClient(canal.URL, false)}, StateDegraded},
+		{"a sidecar not connected", command.Clients{CanalQuery: canalquery.NewClient(canal.URL, false)}, StateDegraded},
 		{"a sidecar down", command.Clients{
-			Node:       sidecar.NewAnfraNodeClientHTTP(down.URL),
-			CanalQuery: sidecar.NewCanalQueryClient(canal.URL, false),
+			Node:       anfranode.NewClientHTTP(down.URL),
+			CanalQuery: canalquery.NewClient(canal.URL, false),
 		}, StateDegraded},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

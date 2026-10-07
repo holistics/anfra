@@ -4,14 +4,15 @@ import (
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
 // Clients are the sidecar clients a command runs against. A client is nil when
 // the command doesn't need that sidecar (see Def.Needs).
 type Clients struct {
-	Node       *sidecar.AnfraNodeClient
-	CanalQuery *sidecar.CanalQueryClient
+	Node       *anfranode.Client
+	CanalQuery *canalquery.Client
 }
 
 // CommandContext is everything a command runs against, other than its args: the

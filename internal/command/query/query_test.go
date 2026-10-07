@@ -10,7 +10,8 @@ import (
 
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -31,15 +32,15 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	}
 	want := query.Run{
 		Timezone:   "Asia/Ho_Chi_Minh",
-		Pagination: &sidecar.Pagination{Page: 1, PageSize: 20},
-		Input: &sidecar.QueryTransforms{
-			Filters: []sidecar.QueryFilter{
+		Pagination: &anfranode.Pagination{Page: 1, PageSize: 20},
+		Input: &anfranode.QueryTransforms{
+			Filters: []anfranode.QueryFilter{
 				{Field: "orders.status", Operator: "is_null", Values: []any{}},
 				{Field: "orders.amount", Operator: "greater_than", Values: []any{float64(10)}, Aggregation: "sum"},
 			},
-			Conditions: []sidecar.QueryCondition{{Expr: "orders.id > 1"}},
-			Sorts:      []sidecar.QuerySort{{Field: "status", Direction: "desc"}},
-			DateDrills: []sidecar.QueryDateDrill{{Field: "orders.created_at", Grain: "month"}},
+			Conditions: []anfranode.QueryCondition{{Expr: "orders.id > 1"}},
+			Sorts:      []anfranode.QuerySort{{Field: "status", Direction: "desc"}},
+			DateDrills: []anfranode.QueryDateDrill{{Field: "orders.created_at", Grain: "month"}},
 		},
 	}
 	if got := in.run(); !reflect.DeepEqual(got, want) {
@@ -69,7 +70,7 @@ func jsonHas(raw []byte, key string) bool {
 func TestRunViolation(t *testing.T) {
 	refusal := func(path, msg string) error {
 		data, _ := json.Marshal(map[string]string{"path": path})
-		return &sidecar.RPCError{Method: "aql.compile_to_sql", Code: sidecar.RPCInvalidParams, Message: msg, Data: data}
+		return &anfranode.RPCError{Method: "aql.compile_to_sql", Code: anfranode.RPCInvalidParams, Message: msg, Data: data}
 	}
 	for _, tc := range []struct {
 		name string
@@ -84,8 +85,8 @@ func TestRunViolation(t *testing.T) {
 			&apperr.Violation{Field: "input", Code: "invalid", Message: "Query Input can only be applied to a query with exactly one `explore { }` block."}},
 		{"paging a pivot", refusal("pagination", "Pagination for pivot queries isn't supported yet."),
 			&apperr.Violation{Field: "page_size", Code: "unsupported", Message: "Pagination for pivot queries isn't supported yet."}},
-		{"invalid params with no path", &sidecar.RPCError{Code: sidecar.RPCInvalidParams, Message: `Dataset "x" not found`}, nil},
-		{"another RPC error", &sidecar.RPCError{Code: -32603, Message: "boom", Data: json.RawMessage(`{"path":"filters[0]"}`)}, nil},
+		{"invalid params with no path", &anfranode.RPCError{Code: anfranode.RPCInvalidParams, Message: `Dataset "x" not found`}, nil},
+		{"another RPC error", &anfranode.RPCError{Code: -32603, Message: "boom", Data: json.RawMessage(`{"path":"filters[0]"}`)}, nil},
 		{"not an RPC error", errors.New("boom"), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -103,12 +104,12 @@ func TestRunViolation(t *testing.T) {
 // A query's answer has one column per field, in order: as anfra-node described
 // it, or adhoc when it did not.
 func TestDescribeFields(t *testing.T) {
-	described := []sidecar.ExploreColumn{
+	described := []anfranode.ExploreColumn{
 		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum"},
 		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status"},
 	}
 	got := describeFields([]string{"status", "total", "ratio"}, described)
-	want := []sidecar.ExploreColumn{
+	want := []anfranode.ExploreColumn{
 		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status"},
 		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum"},
 		{Name: "ratio", FieldName: "ratio", Label: "ratio", Adhoc: true},
@@ -132,7 +133,7 @@ func TestAQLTakesTheLimitOut(t *testing.T) {
 // the engine built wrong is the engine's bug, and stays unclassified.
 func TestFailed(t *testing.T) {
 	for scope, want := range map[string]bool{"User": true, "Server": true, "Client": false} {
-		err := failed(fmt.Errorf("execute: %w", &sidecar.CanalQueryError{Message: "boom", Scope: scope}))
+		err := failed(fmt.Errorf("execute: %w", &canalquery.Error{Message: "boom", Scope: scope}))
 		if got := errors.Is(err, errcode.QueryFailed); got != want {
 			t.Errorf("canal scope %s: query_failed = %v, want %v", scope, got, want)
 		}

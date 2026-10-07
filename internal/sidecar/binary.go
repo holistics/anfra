@@ -3,35 +3,23 @@ package sidecar
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// resolveAnfraNodeBinary returns a path to an executable anfra-node. Release
-// builds embed it (extracted to a content-addressed cache dir); dev builds take
-// it from ANFRA_NODE_BIN.
-func resolveAnfraNodeBinary() (string, error) {
-	if data, ok := embeddedAnfraNode(); ok {
-		return extractRuntime("anfra-node", data)
+// Binary returns a path to the sidecar name's executable. Release builds embed
+// it (embedded, extracted to a content-addressed cache dir); dev builds embed
+// nothing, and take it from the environment variable env.
+func Binary(name, env string, embedded []byte) (string, error) {
+	if len(embedded) > 0 {
+		return extractRuntime(name, embedded)
 	}
-	if env := os.Getenv("ANFRA_NODE_BIN"); env != "" {
-		return env, nil
+	if path := os.Getenv(env); path != "" {
+		return path, nil
 	}
-	return "", errors.New("no embedded anfra-node; set ANFRA_NODE_BIN")
-}
-
-// resolveCanalQueryBinary returns a path to an executable canal-query. Release
-// builds embed it; dev builds take it from ANFRA_CANAL_QUERY_BIN.
-func resolveCanalQueryBinary() (string, error) {
-	if data, ok := embeddedCanalQuery(); ok {
-		return extractRuntime("canal-query", data)
-	}
-	if env := os.Getenv("ANFRA_CANAL_QUERY_BIN"); env != "" {
-		return env, nil
-	}
-	return "", errors.New("no embedded canal-query; set ANFRA_CANAL_QUERY_BIN")
+	return "", fmt.Errorf("no embedded %s; set %s", name, env)
 }
 
 // extractRuntime writes an embedded sidecar binary to the per-user cache dir

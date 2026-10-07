@@ -17,7 +17,8 @@ import (
 
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -53,10 +54,10 @@ func ExtractLimit(aql string) (string, int, error) {
 	return cleaned, n, nil
 }
 
-func compileDataSources(m map[string]datasource.DataSource) map[string]sidecar.CompileDataSource {
-	out := make(map[string]sidecar.CompileDataSource, len(m))
+func compileDataSources(m map[string]datasource.DataSource) map[string]anfranode.CompileDataSource {
+	out := make(map[string]anfranode.CompileDataSource, len(m))
 	for name, ds := range m {
-		out[name] = sidecar.CompileDataSource{Name: ds.Name, DBType: ds.DBType}
+		out[name] = anfranode.CompileDataSource{Name: ds.Name, DBType: ds.DBType}
 	}
 	return out
 }
@@ -64,12 +65,12 @@ func compileDataSources(m map[string]datasource.DataSource) map[string]sidecar.C
 // CompileRequest loads the repo's data sources and builds the sidecar compile
 // request for a (dataset, aql). Shared by SQL generation and AQL validation
 // (both feed the same {repoPath, datasetFqn, aql, dataSources} to the sidecar).
-func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLRequest, error) {
+func CompileRequest(r repo.Repo, dataset, aql string) (anfranode.CompileToSQLRequest, error) {
 	sources, err := datasource.Load(r.ConfigDir)
 	if err != nil {
-		return sidecar.CompileToSQLRequest{}, fmt.Errorf("load data sources: %w", err)
+		return anfranode.CompileToSQLRequest{}, fmt.Errorf("load data sources: %w", err)
 	}
-	return sidecar.CompileToSQLRequest{
+	return anfranode.CompileToSQLRequest{
 		RepoPath:    r.Dir,
 		RepoID:      r.ID,
 		DatasetFqn:  dataset,
@@ -83,8 +84,8 @@ func CompileRequest(r repo.Repo, dataset, aql string) (sidecar.CompileToSQLReque
 // the time zone relative dates and date truncation use ("": anfra-node's
 // default).
 type Run struct {
-	Input      *sidecar.QueryTransforms
-	Pagination *sidecar.Pagination
+	Input      *anfranode.QueryTransforms
+	Pagination *anfranode.Pagination
 	Timezone   string
 }
 
@@ -95,14 +96,14 @@ type Run struct {
 // that is not the query's (an unknown dataset, a missing data source, the run's
 // shaping refused) is not diagnostic-shaped, and is returned as it is. The
 // result's AQL is the query with run's Query Input applied.
-func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo, dataset, aql string, run Run) (sidecar.CompileToSQLResult, error) {
+func Compile(ctx context.Context, node *anfranode.Client, repo repo.Repo, dataset, aql string, run Run) (anfranode.CompileToSQLResult, error) {
 	req, err := CompileRequest(repo, dataset, aql)
 	if err != nil {
-		return sidecar.CompileToSQLResult{}, err
+		return anfranode.CompileToSQLResult{}, err
 	}
 	req.Input, req.Pagination = run.Input, run.Pagination
 	if run.Timezone != "" {
-		req.Options = &sidecar.CompileOptions{TimezoneRegion: run.Timezone}
+		req.Options = &anfranode.CompileOptions{TimezoneRegion: run.Timezone}
 	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err == nil {
@@ -111,15 +112,15 @@ func Compile(ctx context.Context, node *sidecar.AnfraNodeClient, repo repo.Repo,
 	err = fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
 	// anfra-node refusing what shapes the run (a Query Input entry, a page) is
 	// not the query's fault: the caller says which arg is wrong.
-	if e, ok := errors.AsType[*sidecar.RPCError](err); ok {
+	if e, ok := errors.AsType[*anfranode.RPCError](err); ok {
 		if _, ok := e.Path(); ok {
-			return sidecar.CompileToSQLResult{}, err
+			return anfranode.CompileToSQLResult{}, err
 		}
 	}
 	if diags, verr := Check(ctx, node, repo, dataset, aql); verr == nil && !diags.Valid {
-		return sidecar.CompileToSQLResult{}, apperr.EncapsulateWith(err, QueryInvalid, "", diags)
+		return anfranode.CompileToSQLResult{}, apperr.EncapsulateWith(err, QueryInvalid, "", diags)
 	}
-	return sidecar.CompileToSQLResult{}, err
+	return anfranode.CompileToSQLResult{}, err
 }
 
 // RunResult is the compiled SQL plus the executed result.
@@ -134,7 +135,7 @@ type RunResult struct {
 // callers can distinguish a compile failure (a query problem) from an execution
 // failure (a data-source/DB problem). truncateRows caps the rows canal returns
 // (NoLimit for all rows); it's how anfra applies the AQL `limit:` directive.
-func Execute(ctx context.Context, canal *sidecar.CanalQueryClient, repo repo.Repo, compiled sidecar.CompileToSQLResult, truncateRows int) (*RunResult, error) {
+func Execute(ctx context.Context, canal *canalquery.Client, repo repo.Repo, compiled anfranode.CompileToSQLResult, truncateRows int) (*RunResult, error) {
 	sources, err := datasource.Load(repo.ConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("load data sources: %w", err)
@@ -160,11 +161,11 @@ func DataSource(r repo.Repo, name string) (ds datasource.DataSource, ok bool, er
 // ExecuteSQL runs sql on ds as it is: the caller wrote it in the data source's
 // dialect, with its own LIMIT. Nothing is compiled into it — no restriction
 // applies.
-func ExecuteSQL(ctx context.Context, canal *sidecar.CanalQueryClient, ds datasource.DataSource, sql string) (*RunResult, error) {
+func ExecuteSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string) (*RunResult, error) {
 	return run(ctx, canal, ds, ds.DBType, sql, NoLimit)
 }
 
-func run(ctx context.Context, canal *sidecar.CanalQueryClient, ds datasource.DataSource, dbType, sql string, truncateRows int) (*RunResult, error) {
+func run(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, dbType, sql string, truncateRows int) (*RunResult, error) {
 	if ds.Connection == nil {
 		return nil, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
 	}

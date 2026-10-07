@@ -11,7 +11,7 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/ingest"
 	"github.com/holistics/anfra/internal/search"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
 )
 
 // Ingest builds the local search catalog from context sources.
@@ -30,12 +30,12 @@ var Ingest = command.Define(command.Def[IngestInput, string]{
 })
 
 // Search searches the local catalog.
-var Search = command.Define(command.Def[SearchInput, sidecar.CatalogSearchResult]{
+var Search = command.Define(command.Def[SearchInput, anfranode.CatalogSearchResult]{
 	Name:     "search",
 	Short:    "Search the local catalog",
 	ReadOnly: true,
 	Needs:    func(SearchInput) command.Sidecars { return command.Sidecars{Node: true, CanalQuery: true} },
-	Run: func(ctx context.Context, cc command.CommandContext, in SearchInput) (sidecar.CatalogSearchResult, error) {
+	Run: func(ctx context.Context, cc command.CommandContext, in SearchInput) (anfranode.CatalogSearchResult, error) {
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return nil, err
 		}

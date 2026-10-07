@@ -23,7 +23,8 @@ import (
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
@@ -81,12 +82,12 @@ func runServe(ctx context.Context, addr string, withMCP bool, idle time.Duration
 		// connection pooling: DB connections are reused across requests.
 		cfg := h.cfg
 		cfg.EnablePooling = true
-		node := sidecar.NewAnfraNode(cfg)
+		node := anfranode.New(cfg)
 		if err := node.Start(ctx); err != nil {
 			return fmt.Errorf("start anfra-node sidecar: %w", err)
 		}
 		defer node.Close()
-		canal := sidecar.NewCanalQuery(cfg)
+		canal := canalquery.New(cfg)
 		if err := canal.Start(ctx); err != nil {
 			return fmt.Errorf("start canal-query sidecar: %w", err)
 		}

@@ -1,4 +1,4 @@
-/internal/sidecar/assets/*
+/internal/sidecar/*/assets/*
 /release/
 /anfra
 

@@ -10,18 +10,19 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
 func TestRunPassesQueryToRPC(t *testing.T) {
-	var captured sidecar.CatalogSearchRequest
+	var captured anfranode.CatalogSearchRequest
 	node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rpc" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		var req struct {
-			Method string                       `json:"method"`
-			Params sidecar.CatalogSearchRequest `json:"params"`
+			Method string                         `json:"method"`
+			Params anfranode.CatalogSearchRequest `json:"params"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode rpc request: %v", err)
@@ -50,8 +51,8 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
 	}
 	res, err := Run(context.Background(),
-		sidecar.NewAnfraNodeClientHTTP(node.URL),
-		sidecar.NewCanalQueryClient("http://127.0.0.1:9000/", false),
+		anfranode.NewClientHTTP(node.URL),
+		canalquery.NewClient("http://127.0.0.1:9000/", false),
 		r,
 		"type:aml.model orders",
 	)
@@ -76,8 +77,8 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 
 func TestRunRequiresQuery(t *testing.T) {
 	_, err := Run(context.Background(),
-		sidecar.NewAnfraNodeClientHTTP("http://127.0.0.1:9001"),
-		sidecar.NewCanalQueryClient("http://127.0.0.1:9000/", false),
+		anfranode.NewClientHTTP("http://127.0.0.1:9001"),
+		canalquery.NewClient("http://127.0.0.1:9000/", false),
 		repo.Repo{},
 		" ",
 	)
