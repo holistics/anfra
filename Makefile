@@ -27,6 +27,7 @@ build: ## Build the Data App frontend, then anfra with it, into bin/, as a relea
 	pnpm build:apps
 	go build -o bin/ ./cmd/anfra
 
-test: ## Run the Go and SDK tests
+test: ## Run the Go, SDK and frontend tests
 	go test ./...
 	pnpm test:sdk
+	pnpm test:appserve

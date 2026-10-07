@@ -1,6 +1,6 @@
-# PR CI: conventional-commit lint, golangci-lint, and build/vet/test. Mirrors
-# canal's continuous_integration.yml + test.yml, flattened (anfra is a single Go
-# module). `ci_passed` is the one required status check (via alls-green).
+# PR CI: conventional-commit lint, golangci-lint, build/vet/test, the core API's
+# contract, and the SDK and frontend (apps). Mirrors canal's
+# continuous_integration.yml + test.yml, flattened (anfra is a single Go module). `ci_passed` is the one required status check (via alls-green).
 name: Continuous Integration
 
 on:
@@ -81,10 +81,33 @@ jobs:
           echo "a breaking change to the core API, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
           exit 1
 
+  # The Anfra SDK and the appserve frontend (the pnpm workspace): typecheck, tests, the build a
+  # release embeds, and the SDK's API types fresh from api/openapi.yaml.
+  apps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # the version is package.json's packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter anfra-sdk typecheck
+      - run: pnpm test:sdk
+      - name: build, as a release does
+        run: pnpm build:apps # the SDK, then the frontend, type-checked (vue-tsc)
+      - run: pnpm test:appserve
+      - name: the SDK's API types are fresh
+        run: |
+          pnpm --filter anfra-sdk generate
+          git diff --exit-code -- sdk/src/api/schema.d.ts \
+            || { echo "sdk/src/api/schema.d.ts is stale: run pnpm --filter anfra-sdk generate" >&2; exit 1; }
+
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [commitlint, lint, test, api]
+    needs: [commitlint, lint, test, api, apps]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
