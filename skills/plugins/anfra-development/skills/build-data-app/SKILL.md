@@ -1,11 +1,11 @@
 ---
 name: build-data-app
-description: Build or change an Anfra Data App — one HTML file in the repo's `apps/` that queries datasets through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve --apps`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
+description: Build or change an Anfra Data App — one HTML file in the repo's `apps/` that queries datasets through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
 ---
 
 # Building a Data App
 
-A **Data App** is one HTML file under the repo's `apps/`. `anfra serve --apps` lists it by its
+A **Data App** is one HTML file under the repo's `apps/`. `anfra serve` lists it by its
 `<title>` and runs it in a sandboxed frame where the SDK is already on the global `Anfra`. The SDK
 supplies data and state; every pixel is yours.
 
@@ -96,7 +96,7 @@ any rounding a reader needs to trust a number.
 
 ```sh
 anfra status               # is a server already running for this repo, and where?
-anfra serve --apps         # if not: http://127.0.0.1:7878/apps/ (or the free port it prints)
+anfra serve                # if not: http://127.0.0.1:7878/apps/ (or the free port it prints)
 ```
 
 Leave it running: it reloads the open app whenever its file, or the AML, changes. Its header shows
