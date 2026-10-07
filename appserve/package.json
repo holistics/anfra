@@ -1,0 +1,26 @@
+{
+  "name": "anfra-appserve",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The appserve frontend: anfra serve's pages for browsing and running a repo's Data Apps, embedded into the anfra binary",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build && touch ../internal/appserve/dist/.gitkeep",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "anfra-sdk": "workspace:*",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.3",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.12"
+  }
+}

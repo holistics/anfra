@@ -1,2 +1,3 @@
 server: go tool -modfile=tools/go.mod air
 sdk: pnpm dev:sdk
+appserve: pnpm dev:appserve
