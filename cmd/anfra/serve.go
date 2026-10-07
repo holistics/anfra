@@ -30,6 +30,7 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // defaultAddr is where `anfra serve` listens unless told otherwise, when it is
@@ -230,7 +231,10 @@ func serveHandler(logger *slog.Logger, r repo.Repo, cc command.CommandContext, a
 		mux.Handle("/apps/", apps)
 		mux.Handle("/appserve/", apps)
 	}
-	return httpkit.Wrap(guard(mux, addr), httpkit.Config{Logger: logger, Codes: codes})
+	// On loopback, a caller is this machine's user, whose CLI sends its trace along:
+	// continue it. Exposed, a caller's trace is only linked.
+	host, _, _ := net.SplitHostPort(addr.String())
+	return httpkit.Wrap(guard(mux, addr), httpkit.Config{Logger: logger, Codes: codes, TrustTraceparent: isLoopback(host)})
 }
 
 // coreAPI is the core API over HTTP, every op run with cc: the host's one
@@ -358,6 +362,12 @@ func newOpenAPICmd() *cobra.Command {
 
 // --- the client: a CLI call routed to the repo's running server ---
 
+// serveClient calls the repo's running server, carrying the CLI's trace into it.
+var serveClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport,
+	otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+		return "anfra serve " + r.Method + " " + r.URL.Path
+	}))}
+
 // callServe runs a command on the server at url, and returns its answer's body.
 // An error answer is returned as a remoteError, carrying the server's body.
 func callServe(ctx context.Context, url, name string, input []byte) ([]byte, error) {
@@ -366,7 +376,7 @@ func callServe(ctx context.Context, url, name string, input []byte) ([]byte, err
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := serveClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("call anfra serve at %s: %w", url, err)
 	}

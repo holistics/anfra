@@ -31,6 +31,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Traces, when an OTEL_* endpoint asks for them; flushed before any exit below.
+	flush := startTelemetry(ctx)
+
 	// ExecuteContextC sets that root context and returns the command that actually
 	// ran, so we get the real subcommand name (handles flags/args/aliases).
 	executed, err := newRootCmd().ExecuteContextC(ctx)
@@ -40,6 +43,7 @@ func main() {
 		maybeNotifyUpdate(executed.Name())
 	}
 
+	flush()
 	if err == nil {
 		return
 	}

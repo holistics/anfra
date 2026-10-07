@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/logging"
@@ -52,6 +54,10 @@ func withRepo(ctx context.Context, fn func(ctx context.Context, h hostContext) e
 		return fmt.Errorf("set up logging: %w", err)
 	}
 	defer lg.Close()
+	// The exporter's failures (a collector down) go to the log, not the terminal.
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		lg.Logger.Warn("telemetry", "error", err)
+	}))
 
 	return fn(ctx, hostContext{
 		repo: repo,
@@ -67,6 +73,7 @@ func withRepo(ctx context.Context, fn func(ctx context.Context, h hostContext) e
 			// `docker compose up` without rebuilding an embedded binary.
 			NodeURL:       os.Getenv("ANFRA_NODE_URL"),
 			CanalQueryURL: os.Getenv("ANFRA_CANAL_QUERY_URL"),
+			WrapTransport: traceSidecar,
 		},
 	})
 }
