@@ -9,7 +9,8 @@
     "bump": "bash scripts/bump.sh",
     "build:sdk": "pnpm --filter anfra-sdk build",
     "dev:sdk": "pnpm --filter anfra-sdk dev",
-    "test:sdk": "pnpm --filter anfra-sdk test"
+    "test:sdk": "pnpm --filter anfra-sdk test",
+    "build:apps": "pnpm build:sdk"
   },
   "config": {
     "commitizen": {
