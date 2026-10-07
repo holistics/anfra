@@ -45,44 +45,39 @@ describe('toDescriptor', () => {
 });
 
 describe('loadDatasets', () => {
-  /** A core API whose show answers the repo, then each dataset as `datasets` says. */
-  function api (datasets: Record<string, { status: number, body: unknown }>) {
+  function api (status: number, body: unknown) {
     const sent: unknown[] = [];
     const fetchImpl = vi.fn(async (input: Request) => {
-      const body = await input.clone().json() as { fqn?: string };
-      sent.push(body);
-      const answer = body.fqn ? datasets[body.fqn] : {
-        status: 200,
-        body: {
-          object: { kind: 'repo', datasets: Object.keys(datasets).map((fqn) => ({ kind: 'dataset', fqn, name: fqn })) },
-          diagnostics: [{ filePath: 'x.aml', message: 'broken' }],
-        },
-      };
-      return new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } });
+      sent.push(await input.clone().json());
+      return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
     });
     return { client: coreClient('http://host/api', fetchImpl as unknown as typeof fetch), sent };
   }
 
-  it('shows the repo, then each of its datasets, and keys them by fqn', async () => {
-    const { client, sent } = api({ 'shop.sales': { status: 200, body: { object: sales, diagnostics: [] } } });
+  it('shows the repo once, and keys its datasets by fqn', async () => {
+    const { client, sent } = api(200, {
+      object: { kind: 'repo', datasets: [sales] },
+      diagnostics: [{ filePath: 'x.aml', message: 'broken' }],
+    });
     const loaded = await loadDatasets(client);
-    expect(sent).toEqual([{}, { fqn: 'shop.sales' }]);
+    expect(sent).toEqual([{}]);
     expect(Object.keys(loaded.datasets)).toEqual(['shop.sales']);
-    expect(loaded.failed).toEqual([]);
     expect(loaded.diagnostics).toEqual([{ filePath: 'x.aml', message: 'broken' }]);
   });
 
-  it('leaves out a dataset it cannot show, and keeps the rest', async () => {
-    const { client } = api({
-      'shop.sales': { status: 200, body: { object: sales, diagnostics: [{ message: 'Data source "pg" is not configured.' }] } },
-      'shop.broken': { status: 500, body: { error: { code: 'internal_server_error', scope: 'server', message: 'Something went wrong.' } } },
+  it('leaves out a dataset shown only in outline, whose diagnostic says why', async () => {
+    const why = { message: 'Dataset "shop.broken" can\'t be shown in full: boom' };
+    const { client } = api(200, {
+      object: { kind: 'repo', datasets: [sales, { kind: 'dataset', fqn: 'shop.broken', name: 'broken' }] },
+      diagnostics: [why],
     });
     const loaded = await loadDatasets(client);
     expect(Object.keys(loaded.datasets)).toEqual(['shop.sales']);
-    expect(loaded.failed).toEqual([{ fqn: 'shop.broken', message: 'Something went wrong.' }]);
-    expect(loaded.diagnostics).toEqual([
-      { filePath: 'x.aml', message: 'broken' },
-      { message: 'Data source "pg" is not configured.' },
-    ]);
+    expect(loaded.diagnostics).toEqual([why]);
+  });
+
+  it('fails as the API does', async () => {
+    const { client } = api(500, { error: { code: 'internal_server_error', scope: 'server', message: 'Something went wrong.' } });
+    await expect(loadDatasets(client)).rejects.toThrow('Something went wrong.');
   });
 });

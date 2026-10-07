@@ -22,10 +22,10 @@ type ShowRequest struct {
 }
 
 // ShowResult is aml.show's answer, which the core API passes through: the
-// object shown, and the repo's files that do not compile.
+// object shown, and what is wrong in the repo for it.
 type ShowResult struct {
 	Object      ShowObject     `json:"object"`
-	Diagnostics []CompileError `json:"diagnostics" doc:"the repo's files that do not compile; empty, what is shown is complete"`
+	Diagnostics []CompileError `json:"diagnostics" doc:"what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete"`
 }
 
 // ShowObject is one object of the repo, tagged by its kind: the repo, or a
@@ -77,10 +77,11 @@ func (ShowObject) Schema(r huma.Registry) *huma.Schema {
 	}
 }
 
-// ShowRepo is the repo: the datasets it offers, in outline.
+// ShowRepo is the repo: the datasets it offers, each in full, or in outline
+// when it cannot be shown in full (a diagnostic says why).
 type ShowRepo struct {
 	Kind     string        `json:"kind" enum:"repo"`
-	Datasets []ShowDataset `json:"datasets" doc:"the repo's datasets, in outline"`
+	Datasets []ShowDataset `json:"datasets" doc:"the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why"`
 }
 
 // ShowDataset is a dataset: in outline, who it is; in full, also its models

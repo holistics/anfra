@@ -99,11 +99,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Show the repo's datasets, or a dataset in full: its models, fields and metrics
-         * @description Show an object of the repo, read from its compiled AML: with no fqn, the repo and its datasets
-         *     in outline; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not
-         *     its implementation: names, labels, types, roles and AQL definitions, never SQL or tables. The
-         *     repo's files that do not compile come with it, as diagnostics.
+         * Show the repo's datasets, or one dataset: their models, fields and metrics
+         * @description Show an object of the repo, read from its compiled AML: with no fqn, the repo and every dataset
+         *     in full; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not its
+         *     implementation: names, labels, types, roles and AQL definitions, never SQL or tables. What is
+         *     wrong in the repo for it comes with it, as diagnostics: files that do not compile, a data source
+         *     it does not configure.
          */
         post: operations["core.show"];
         delete?: never;
@@ -472,7 +473,7 @@ export interface components {
             name: string;
         };
         ShowRepo: {
-            /** @description the repo's datasets, in outline */
+            /** @description the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why */
             datasets: components["schemas"]["ShowDataset"][];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -481,7 +482,7 @@ export interface components {
             kind: "repo";
         };
         ShowResult: {
-            /** @description the repo's files that do not compile; empty, what is shown is complete */
+            /** @description what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete */
             diagnostics: components["schemas"]["CompileError"][];
             /** @description the object shown, by kind; a client must accept a kind it does not know */
             object: components["schemas"]["ShowRepo"] | components["schemas"]["ShowDataset"];

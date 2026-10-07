@@ -18,11 +18,12 @@ import (
 // Show shows the repo, or a dataset in full.
 var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 	Name:  "show",
-	Short: "Show the repo's datasets, or a dataset in full: its models, fields and metrics",
-	Long: "Show an object of the repo, read from its compiled AML: with no fqn, the repo and its datasets\n" +
-		"in outline; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not\n" +
-		"its implementation: names, labels, types, roles and AQL definitions, never SQL or tables. The\n" +
-		"repo's files that do not compile come with it, as diagnostics.",
+	Short: "Show the repo's datasets, or one dataset: their models, fields and metrics",
+	Long: "Show an object of the repo, read from its compiled AML: with no fqn, the repo and every dataset\n" +
+		"in full; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not its\n" +
+		"implementation: names, labels, types, roles and AQL definitions, never SQL or tables. What is\n" +
+		"wrong in the repo for it comes with it, as diagnostics: files that do not compile, a data source\n" +
+		"it does not configure.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Timeout:    2 * time.Minute,
