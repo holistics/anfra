@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/sidecar"
 )
 
@@ -177,6 +178,16 @@ func (c *Client) Ping(ctx context.Context) (map[string]any, error) {
 type CompileDataSource struct {
 	Name   string `json:"name"`
 	DBType string `json:"dbtype"`
+}
+
+// CompileDataSources is the repo's data sources as the sidecar takes them: a
+// name and a dialect each, without their connections.
+func CompileDataSources(m map[string]datasource.DataSource) map[string]CompileDataSource {
+	out := make(map[string]CompileDataSource, len(m))
+	for name, ds := range m {
+		out[name] = CompileDataSource{Name: ds.Name, DBType: ds.DBType}
+	}
+	return out
 }
 
 // CompileToSQLRequest / Result mirror the sidecar's aql.compile_to_sql method.

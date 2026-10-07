@@ -54,14 +54,6 @@ func ExtractLimit(aql string) (string, int, error) {
 	return cleaned, n, nil
 }
 
-func compileDataSources(m map[string]datasource.DataSource) map[string]anfranode.CompileDataSource {
-	out := make(map[string]anfranode.CompileDataSource, len(m))
-	for name, ds := range m {
-		out[name] = anfranode.CompileDataSource{Name: ds.Name, DBType: ds.DBType}
-	}
-	return out
-}
-
 // CompileRequest loads the repo's data sources and builds the sidecar compile
 // request for a (dataset, aql). Shared by SQL generation and AQL validation
 // (both feed the same {repoPath, datasetFqn, aql, dataSources} to the sidecar).
@@ -75,7 +67,7 @@ func CompileRequest(r repo.Repo, dataset, aql string) (anfranode.CompileToSQLReq
 		RepoID:      r.ID,
 		DatasetFqn:  dataset,
 		AQL:         aql,
-		DataSources: compileDataSources(sources),
+		DataSources: anfranode.CompileDataSources(sources),
 	}, nil
 }
 
