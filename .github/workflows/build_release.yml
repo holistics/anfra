@@ -15,11 +15,11 @@ on:
   push:
     tags:
       - "anfra-v*"
-    # TEMPORARY — remove before merge. Lets us test the assembler on this branch
-    # (a non-tag push isn't a release, so it just uploads artifacts). Needs
-    # ANFRA_DIST_TOKEN present to download the pinned sidecars.
+    # TEMPORARY — remove before merge. Lets us test the assembler on the branch
+    # the work lands on (a non-tag push isn't a release, so it just uploads
+    # artifacts). Needs ANFRA_DIST_TOKEN present to download the pinned sidecars.
     branches:
-      - init
+      - engine/prepare-for-cloud
   workflow_dispatch: # manual test build (uploads artifacts, no release)
   workflow_call:
     inputs:
@@ -49,6 +49,20 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      # The Data Apps frontend, which every target embeds (internal/appserve/dist): built once,
+      # it is the same files on every platform. A binary without it serves only a page saying
+      # it was not built, so a release refuses to go out without it.
+      - uses: pnpm/action-setup@v4 # the version is package.json's packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Build the Data Apps frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build:apps
+          test -f internal/appserve/dist/index.html
 
       - name: Read manifest
         id: m
