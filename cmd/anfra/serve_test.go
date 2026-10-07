@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/appserve"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/command/status"
 	"github.com/holistics/anfra/internal/dataperm"
@@ -27,7 +28,7 @@ func handler(t *testing.T) (http.Handler, repo.Repo) {
 	r := repo.Resolve(t.TempDir())
 	cc := command.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted(),
 		Server: &command.ServerInfo{URL: "http://127.0.0.1:7878", InstanceID: "i-1", Version: "dev"}}
-	return serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, true), r
+	return serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, true, nil), r
 }
 
 func do(h http.Handler, method, path, body string, headers ...string) *httptest.ResponseRecorder {
@@ -175,5 +176,35 @@ func TestStopWhenIdle(t *testing.T) {
 	case <-stopped:
 	case <-time.After(2 * time.Second):
 		t.Fatal("an idle server did not stop")
+	}
+}
+
+// With --apps, the Data Apps are served beside the core API, behind the same guards; without it,
+// their routes do not exist.
+func TestServeApps(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	r := repo.Resolve(t.TempDir())
+	cc := command.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted()}
+	apps := appserve.New(appserve.Options{RepoDir: r.Dir})
+	h := serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, false, apps)
+
+	if w := do(h, http.MethodGet, "/appserve/apps", ""); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Errorf("the Data App tree: %d %q", w.Code, w.Body)
+	}
+	if w := do(h, http.MethodGet, "/apps/sales", ""); w.Header().Get("Content-Security-Policy") != "frame-ancestors 'none'" {
+		t.Errorf("a page, from appserve: %d %v", w.Code, w.Header())
+	}
+	if w := do(h, http.MethodPost, "/api/core.version", `{}`); w.Code != http.StatusOK {
+		t.Errorf("the core API beside it: %d", w.Code)
+	}
+	if w := do(h, http.MethodGet, "/appserve/apps", "", "Host", "evil.example"); w.Code != http.StatusBadRequest {
+		t.Errorf("another host: %d, want the guard's refusal", w.Code)
+	}
+
+	without := serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, false, nil)
+	for _, path := range []string{"/apps/sales", "/appserve/apps"} {
+		if w := do(without, http.MethodGet, path, ""); w.Code != http.StatusNotFound {
+			t.Errorf("without --apps, %s: %d", path, w.Code)
+		}
 	}
 }

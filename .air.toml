@@ -1,0 +1,18 @@
+# The Go server for maintainers (make dev's `server`): rebuild anfra on a Go change, and run
+# `anfra serve --apps` in the repo $ANFRA_DEV_REPO names, so its Data Apps are what you work against.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/anfra ./cmd/anfra"
+  entrypoint = ["./scripts/dev-serve.sh"]
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "bin", "node_modules", "sdk", "appserve", "tools", "internal/appserve/dist"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 500
+  # Interrupt, then wait: anfra serve stops its sidecars on its way out.
+  send_interrupt = true
+  kill_delay = "5s"
+
+[misc]
+  clean_on_exit = true

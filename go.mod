@@ -6,6 +6,7 @@ toolchain go1.26.5
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.39.1
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/minio/selfupdate v0.6.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/spf13/cobra v1.10.2

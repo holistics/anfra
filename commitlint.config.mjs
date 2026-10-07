@@ -30,6 +30,8 @@ export default {
         'sdk.host',
         'sdk.app',
 
+        'appserve',
+
         'meta',
         'deps',
       ],

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/appserve"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/meta"
@@ -36,10 +37,18 @@ import (
 // the OS picks a port, and the runtime file says which.
 const defaultAddr = "127.0.0.1:7878"
 
+// serveOptions are anfra serve's flags.
+type serveOptions struct {
+	addr string
+	mcp  bool
+	// apps serves the repo's Data Apps, at /apps/; watch live-reloads them.
+	apps  bool
+	watch bool
+	idle  time.Duration
+}
+
 func newServeCmd() *cobra.Command {
-	var addr string
-	var withMCP bool
-	var idle time.Duration
+	var opts serveOptions
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the core API over HTTP, keeping the sidecars warm for it and for CLI calls in this repo",
@@ -48,26 +57,33 @@ func newServeCmd() *cobra.Command {
 			"same operations as MCP tools at /mcp. CLI calls in this repo use the server while it runs,\n" +
 			"found through the repo's runtime file, so they skip starting the sidecars.\n\n" +
 			"It listens on " + defaultAddr + ", or on a free port when another repo's server holds that one;\n" +
-			"`anfra status` says where. It has no authentication: keep it on a loopback address.",
+			"`anfra status` says where. It has no authentication: keep it on a loopback address.\n\n" +
+			"With --apps, also the repo's Data Apps (apps/**.html) in a browser, at /apps/<path>, live-reloading\n" +
+			"as their definitions or the AML change; --watch=false turns that off, to host them for others.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context(), addr, withMCP, idle)
+			if cmd.Flags().Changed("watch") && !opts.apps {
+				return fmt.Errorf("--watch is about the Data Apps --apps serves; pass --apps too")
+			}
+			return runServe(cmd.Context(), opts)
 		},
 	}
-	cmd.Flags().StringVar(&addr, "addr", "", "the address to listen on, host:port (default "+defaultAddr+", or a free port)")
-	cmd.Flags().BoolVar(&withMCP, "mcp", false, "also serve the operations as MCP tools, at /mcp (streamable HTTP)")
+	cmd.Flags().StringVar(&opts.addr, "addr", "", "the address to listen on, host:port (default "+defaultAddr+", or a free port)")
+	cmd.Flags().BoolVar(&opts.mcp, "mcp", false, "also serve the operations as MCP tools, at /mcp (streamable HTTP)")
+	cmd.Flags().BoolVar(&opts.apps, "apps", false, "also serve the repo's Data Apps in a browser, at /apps/<path>")
+	cmd.Flags().BoolVar(&opts.watch, "watch", true, "with --apps, live-reload the Data Apps as their files or the AML change")
 	// For a server someone else started (serve_daemon.md); a foreground one never times out.
-	cmd.Flags().DurationVar(&idle, "idle-timeout", 0, "stop after this long without a request; 0 never")
+	cmd.Flags().DurationVar(&opts.idle, "idle-timeout", 0, "stop after this long without a request; 0 never")
 	_ = cmd.Flags().MarkHidden("idle-timeout")
 	return cmd
 }
 
-func runServe(ctx context.Context, addr string, withMCP bool, idle time.Duration) error {
+func runServe(ctx context.Context, opts serveOptions) error {
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
 		if f, ok := findServer(ctx, h.repo); ok {
 			return fmt.Errorf("anfra serve is already running for this repo, at %s", f.URL)
 		}
-		ln, err := listen(h.repo, addr)
+		ln, err := listen(h.repo, opts.addr)
 		if err != nil {
 			return err
 		}
@@ -99,11 +115,27 @@ func runServe(ctx context.Context, addr string, withMCP bool, idle time.Duration
 
 		ctx, stop := context.WithCancel(ctx)
 		defer stop()
-		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr(), withMCP)
-		if idle > 0 {
-			handler = stopWhenIdle(ctx, handler, idle, stop)
+		var apps *appserve.Server
+		if opts.apps {
+			apps = appserve.New(appserve.Options{RepoDir: h.repo.Dir, Watch: opts.watch, Logger: h.cfg.Logger})
+			if !apps.FrontendBuilt() {
+				fmt.Fprintln(os.Stderr, "warning: this anfra was built without its Data App pages; /apps/ says how to build them")
+			}
+			if opts.watch {
+				if err := apps.Watch(ctx); err != nil {
+					return fmt.Errorf("watch the repo for live reload: %w", err)
+				}
+			}
+		}
+		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr(), opts.mcp, apps)
+		if opts.idle > 0 {
+			handler = stopWhenIdle(ctx, handler, opts.idle, stop)
 		}
 		srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+		if apps != nil {
+			// Open event streams would hold Shutdown for its whole deadline.
+			srv.RegisterOnShutdown(apps.Close)
+		}
 
 		if err := writeRuntime(h.repo, runtimeFile{
 			PID: os.Getpid(), URL: info.URL, RepoID: h.repo.ID, RepoDir: h.repo.Dir, InstanceID: info.InstanceID,
@@ -125,8 +157,11 @@ func runServe(ctx context.Context, addr string, withMCP bool, idle time.Duration
 
 		h.cfg.Logger.Info("serve.listening", "url", info.URL)
 		fmt.Printf("anfra serve listening on %s (Ctrl-C to stop)\n", info.URL)
-		if withMCP {
+		if opts.mcp {
 			fmt.Printf("MCP at %s/mcp\n", info.URL)
+		}
+		if opts.apps {
+			fmt.Printf("Data Apps at %s/apps/\n", info.URL)
 		}
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
@@ -168,10 +203,11 @@ func isLoopback(host string) bool {
 }
 
 // serveHandler is the whole HTTP surface: /health, the core API under /api with
-// its OpenAPI and discovery, and with withMCP the same ops as MCP tools at /mcp —
-// behind the request id, root span, log line and recovery, and the guards that
-// keep a web page from using it (guard).
-func serveHandler(logger *slog.Logger, r repo.Repo, cc command.CommandContext, addr net.Addr, withMCP bool) http.Handler {
+// its OpenAPI and discovery, with withMCP the same ops as MCP tools at /mcp, and
+// with apps the repo's Data Apps (/, /apps/, /appserve/) — behind the request id,
+// root span, log line and recovery, and the guards that keep a web page from
+// using it (guard).
+func serveHandler(logger *slog.Logger, r repo.Repo, cc command.CommandContext, addr net.Addr, withMCP bool, apps *appserve.Server) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		id := ""
@@ -187,6 +223,12 @@ func serveHandler(logger *slog.Logger, r repo.Repo, cc command.CommandContext, a
 			Name: "anfra", Version: meta.Version, Codes: codes,
 			Request: func(*http.Request) (command.CommandContext, error) { return cc, nil },
 		}.Handler(rt, reg))
+	}
+	if apps != nil {
+		mux.Handle("/{$}", apps)
+		mux.Handle("/apps", apps)
+		mux.Handle("/apps/", apps)
+		mux.Handle("/appserve/", apps)
 	}
 	return httpkit.Wrap(guard(mux, addr), httpkit.Config{Logger: logger, Codes: codes})
 }
