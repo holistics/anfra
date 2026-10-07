@@ -17,6 +17,8 @@ import (
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -93,7 +95,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		if !strings.Contains(r.AQL, "Widget") || len(r.Result.Records) != 1 {
 			t.Errorf("the input was not applied: aql %q, %d rows", r.AQL, len(r.Result.Records))
 		}
-		want := []sidecar.ExploreColumn{
+		want := []anfranode.ExploreColumn{
 			{Name: "name", FieldName: "name", ModelID: "products", Label: r.Columns[0].Label},
 			{Name: "n", FieldName: "id", ModelID: "products", Label: r.Columns[1].Label, IsMeasure: true, Aggregation: "count"},
 		}
@@ -185,12 +187,12 @@ func shaped(over map[string]any) map[string]any {
 func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) command.Clients {
 	t.Helper()
 	cfg := sidecar.Config{RepoID: r.ID, CompileCachePath: filepath.Join(r.CacheDir(), "compile-cache")}
-	node := sidecar.NewAnfraNode(cfg)
+	node := anfranode.New(cfg)
 	if err := node.Start(ctx); err != nil {
 		t.Fatalf("start anfra-node: %v", err)
 	}
 	t.Cleanup(node.Close)
-	canal := sidecar.NewCanalQuery(cfg)
+	canal := canalquery.New(cfg)
 	if err := canal.Start(ctx); err != nil {
 		t.Fatalf("start canal-query: %v", err)
 	}

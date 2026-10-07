@@ -89,10 +89,10 @@ jobs:
         run: |
           declare -A OS=([linux-x64]=linux [linux-arm64]=linux [darwin-x64]=darwin [darwin-arm64]=darwin)
           declare -A ARCH=([linux-x64]=amd64 [linux-arm64]=arm64 [darwin-x64]=amd64 [darwin-arm64]=arm64)
-          mkdir -p release internal/sidecar/assets
+          mkdir -p release internal/sidecar/anfranode/assets internal/sidecar/canalquery/assets
           for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            cp "sidecars/anfra-node-$t"  internal/sidecar/assets/anfra-node
-            cp "sidecars/canal-query-$t" internal/sidecar/assets/canal-query
+            cp "sidecars/anfra-node-$t"  internal/sidecar/anfranode/assets/anfra-node
+            cp "sidecars/canal-query-$t" internal/sidecar/canalquery/assets/canal-query
             # -s -w strips the host's symbol table + DWARF (Phase 0).
             GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
               -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION" \

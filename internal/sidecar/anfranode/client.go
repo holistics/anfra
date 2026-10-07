@@ -1,4 +1,4 @@
-package sidecar
+package anfranode
 
 import (
 	"bytes"
@@ -10,19 +10,21 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
-// AnfraNodeClient talks to an anfra-node over JSON-RPC. It is address-based and
+// Client talks to an anfra-node over JSON-RPC. It is address-based and
 // owns no process, so it works against a host-spawned sidecar (Unix socket) or
 // an external one reachable over TCP (docker-compose / k8s).
-type AnfraNodeClient struct {
+type Client struct {
 	baseURL string
 	http    *http.Client
 }
 
-// NewAnfraNodeClientUnix dials a host-spawned sidecar over its Unix socket.
-func NewAnfraNodeClientUnix(socketPath string) *AnfraNodeClient {
-	return &AnfraNodeClient{
+// NewClientUnix dials a host-spawned sidecar over its Unix socket.
+func NewClientUnix(socketPath string) *Client {
+	return &Client{
 		baseURL: "http://unix",
 		http: &http.Client{
 			Transport: &http.Transport{
@@ -35,10 +37,10 @@ func NewAnfraNodeClientUnix(socketPath string) *AnfraNodeClient {
 	}
 }
 
-// NewAnfraNodeClientHTTP connects to an anfra-node reachable over TCP, e.g. a
+// NewClientHTTP connects to an anfra-node reachable over TCP, e.g. a
 // docker-compose / k8s service. No process is owned.
-func NewAnfraNodeClientHTTP(baseURL string) *AnfraNodeClient {
-	return &AnfraNodeClient{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{}}
+func NewClientHTTP(baseURL string) *Client {
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{}}
 }
 
 // checkRepoID guards the repo-scoped RPCs. anfra-node holds no repo identity of
@@ -56,7 +58,7 @@ func checkRepoID(repoID string) error {
 }
 
 // WaitReady polls /health until the sidecar answers or the deadline passes.
-func (c *AnfraNodeClient) WaitReady(ctx context.Context) error {
+func (c *Client) WaitReady(ctx context.Context) error {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
@@ -128,7 +130,7 @@ func (e *RPCError) Path() (path string, ok bool) {
 }
 
 // Call invokes a JSON-RPC method and unmarshals the result into out (if non-nil).
-func (c *AnfraNodeClient) Call(ctx context.Context, method string, params any, out any) error {
+func (c *Client) Call(ctx context.Context, method string, params any, out any) error {
 	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
 	if err != nil {
 		return err
@@ -140,7 +142,7 @@ func (c *AnfraNodeClient) Call(ctx context.Context, method string, params any, o
 	req.Header.Set("content-type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return unreachable(ctx, "anfra-node", fmt.Errorf("rpc %s: %w", method, err))
+		return sidecar.Unreachable(ctx, Name, fmt.Errorf("rpc %s: %w", method, err))
 	}
 	defer resp.Body.Close()
 
@@ -164,7 +166,7 @@ func (c *AnfraNodeClient) Call(ctx context.Context, method string, params any, o
 }
 
 // Ping is the liveness check.
-func (c *AnfraNodeClient) Ping(ctx context.Context) (map[string]any, error) {
+func (c *Client) Ping(ctx context.Context) (map[string]any, error) {
 	var res map[string]any
 	err := c.Call(ctx, "ping", nil, &res)
 	return res, err
@@ -268,7 +270,7 @@ type ExploreColumn struct {
 }
 
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
-func (c *AnfraNodeClient) CompileToSQL(ctx context.Context, req CompileToSQLRequest) (CompileToSQLResult, error) {
+func (c *Client) CompileToSQL(ctx context.Context, req CompileToSQLRequest) (CompileToSQLResult, error) {
 	var res CompileToSQLResult
 	if err := checkRepoID(req.RepoID); err != nil {
 		return res, err
@@ -331,7 +333,7 @@ type ValidateAMLResult struct {
 
 // ValidateAML validates an AML repo (compile + validator suite) for the selected
 // paths and returns the findings.
-func (c *AnfraNodeClient) ValidateAML(ctx context.Context, req ValidateAMLRequest) (ValidateAMLResult, error) {
+func (c *Client) ValidateAML(ctx context.Context, req ValidateAMLRequest) (ValidateAMLResult, error) {
 	var res ValidateAMLResult
 	if err := checkRepoID(req.RepoID); err != nil {
 		return res, err
@@ -355,7 +357,7 @@ type ValidateAQLResult struct {
 
 // ValidateAQL type-checks a single AQL query against a dataset (same inputs as
 // CompileToSQL) and returns its diagnostics instead of throwing on the first error.
-func (c *AnfraNodeClient) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (ValidateAQLResult, error) {
+func (c *Client) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (ValidateAQLResult, error) {
 	var res ValidateAQLResult
 	if err := checkRepoID(req.RepoID); err != nil {
 		return res, err
@@ -378,7 +380,7 @@ type CatalogIngestRequest struct {
 // IngestCatalog builds the local search catalog through anfra-node. The
 // anfra-node method is a void RPC: success means the catalog was written, while
 // failures are returned through the JSON-RPC error channel.
-func (c *AnfraNodeClient) IngestCatalog(ctx context.Context, req CatalogIngestRequest) error {
+func (c *Client) IngestCatalog(ctx context.Context, req CatalogIngestRequest) error {
 	return c.Call(ctx, "catalog.ingest", req, nil)
 }
 
@@ -394,7 +396,7 @@ type CatalogSearchRequest struct {
 type CatalogSearchResult map[string]any
 
 // SearchCatalog searches the active local catalog through anfra-node.
-func (c *AnfraNodeClient) SearchCatalog(ctx context.Context, req CatalogSearchRequest) (CatalogSearchResult, error) {
+func (c *Client) SearchCatalog(ctx context.Context, req CatalogSearchRequest) (CatalogSearchResult, error) {
 	var res CatalogSearchResult
 	err := c.Call(ctx, "catalog.search", req, &res)
 	return res, err

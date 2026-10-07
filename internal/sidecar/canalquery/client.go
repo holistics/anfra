@@ -1,4 +1,4 @@
-package sidecar
+package canalquery
 
 import (
 	"bufio"
@@ -9,27 +9,29 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
-// CanalQueryClient talks to a canal-query server over HTTP. Address-based and
+// Client talks to a canal-query server over HTTP. Address-based and
 // owns no process, so it works against a host-spawned canal sidecar or an
 // external one (docker-compose / k8s).
-type CanalQueryClient struct {
+type Client struct {
 	baseURL string
 	http    *http.Client
 	pool    map[string]any // pool_options sent with each query
 }
 
-// NewCanalQueryClient builds a client for the canal-query at baseURL. With
+// NewClient builds a client for the canal-query at baseURL. With
 // enablePooling, canal-query reuses DB connections across requests from its
 // process-global pool — which only pays off when canal-query is long-lived
 // (under `anfra serve`); one-shot callers pass false. Sizes mirror the monolith.
-func NewCanalQueryClient(baseURL string, enablePooling bool) *CanalQueryClient {
+func NewClient(baseURL string, enablePooling bool) *Client {
 	pool := map[string]any{"enabled": false}
 	if enablePooling {
 		pool = map[string]any{"enabled": true, "max_total": 10, "max_idle": 5}
 	}
-	return &CanalQueryClient{
+	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		http:    &http.Client{},
 		pool:    pool,
@@ -38,10 +40,10 @@ func NewCanalQueryClient(baseURL string, enablePooling bool) *CanalQueryClient {
 
 // BaseURL exposes the canal-query HTTP endpoint for runtimes that own their own
 // query client, such as anfra-node catalog ingestion.
-func (c *CanalQueryClient) BaseURL() string { return c.baseURL }
+func (c *Client) BaseURL() string { return c.baseURL }
 
 // Health does a single /health check (unlike WaitReady, which polls).
-func (c *CanalQueryClient) Health(ctx context.Context) error {
+func (c *Client) Health(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
 	if err != nil {
 		return err
@@ -58,7 +60,7 @@ func (c *CanalQueryClient) Health(ctx context.Context) error {
 }
 
 // WaitReady polls /health until canal-query answers or the deadline passes.
-func (c *CanalQueryClient) WaitReady(ctx context.Context) error {
+func (c *Client) WaitReady(ctx context.Context) error {
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
@@ -82,8 +84,8 @@ func (c *CanalQueryClient) WaitReady(ctx context.Context) error {
 	}
 }
 
-// QueryResult is the column header + rows of an executed query.
-type QueryResult struct {
+// Result is the column header + rows of an executed query.
+type Result struct {
 	Fields []string
 	Rows   [][]any
 }
@@ -119,23 +121,23 @@ type streamTrailer struct {
 	Error    map[string]any `json:"error"`
 }
 
-// CanalQueryError is canal-query's error object: its message, its type, and
+// Error is canal-query's error object: its message, its type, and
 // which side it says is responsible. Scope "User" covers both a data source
 // canal cannot connect to (its config is the user's) and a query the database
 // refused, so it does not say whether the query was at fault.
-type CanalQueryError struct {
+type Error struct {
 	Message string
 	Type    string
 	Scope   string
 }
 
-func (e *CanalQueryError) Error() string {
+func (e *Error) Error() string {
 	return fmt.Sprintf("canal query error (%s, %s): %s", e.Scope, e.Type, e.Message)
 }
 
-func canalError(m map[string]any) *CanalQueryError {
+func canalError(m map[string]any) *Error {
 	str := func(k string) string { s, _ := m[k].(string); return s }
-	e := &CanalQueryError{Message: str("message"), Type: str("type"), Scope: str("scope")}
+	e := &Error{Message: str("message"), Type: str("type"), Scope: str("scope")}
 	if e.Message == "" {
 		e.Message = fmt.Sprint(m)
 	}
@@ -145,7 +147,7 @@ func canalError(m map[string]any) *CanalQueryError {
 // Execute runs SQL against a data source (dbtype + dbconfig) and returns the
 // rows. dbconfig is passed straight through to canal as the connection config.
 // truncateRows caps how many rows canal returns (negative = no truncation).
-func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int) (*QueryResult, error) {
+func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int) (*Result, error) {
 	body, err := json.Marshal(queryRequest{
 		SQL:          sql,
 		Dbtype:       dbtype,
@@ -168,11 +170,11 @@ func (c *CanalQueryClient) Execute(ctx context.Context, dbtype string, dbconfig 
 	req.Header.Set("content-type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, unreachable(ctx, "canal-query", fmt.Errorf("canal query: %w", err))
+		return nil, sidecar.Unreachable(ctx, Name, fmt.Errorf("canal query: %w", err))
 	}
 	defer resp.Body.Close()
 
-	result := &QueryResult{}
+	result := &Result{}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 64*1024*1024) // rows can be large
 	for scanner.Scan() {

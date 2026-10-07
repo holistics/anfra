@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
 )
 
 // RepoValidation is the outcome of validating the repo: its verdict, files that
@@ -15,12 +15,12 @@ import (
 type RepoValidation struct {
 	// Valid: no file failed to compile, and no validator reported an
 	// "error"-severity finding.
-	Valid         bool                       `json:"valid"`
-	CompileErrors []sidecar.CompileError     `json:"compileErrors"`
-	Reports       []sidecar.ValidationReport `json:"reports"`
+	Valid         bool                         `json:"valid"`
+	CompileErrors []anfranode.CompileError     `json:"compileErrors"`
+	Reports       []anfranode.ValidationReport `json:"reports"`
 }
 
-func repoValid(compileErrors []sidecar.CompileError, reports []sidecar.ValidationReport) bool {
+func repoValid(compileErrors []anfranode.CompileError, reports []anfranode.ValidationReport) bool {
 	if len(compileErrors) > 0 {
 		return false
 	}
@@ -34,8 +34,8 @@ func repoValid(compileErrors []sidecar.CompileError, reports []sidecar.Validatio
 
 // Validate validates the AML repo via the node sidecar. paths (optional) are the
 // file/dir/glob selectors — expanded in the node; empty validates the whole repo.
-func Validate(ctx context.Context, node *sidecar.AnfraNodeClient, r repo.Repo, paths []string) (RepoValidation, error) {
-	res, err := node.ValidateAML(ctx, sidecar.ValidateAMLRequest{RepoPath: r.Dir, RepoID: r.ID, Paths: paths})
+func Validate(ctx context.Context, node *anfranode.Client, r repo.Repo, paths []string) (RepoValidation, error) {
+	res, err := node.ValidateAML(ctx, anfranode.ValidateAMLRequest{RepoPath: r.Dir, RepoID: r.ID, Paths: paths})
 	if err != nil {
 		return RepoValidation{}, fmt.Errorf("validate AML for repo %q: %w", r.Dir, err)
 	}

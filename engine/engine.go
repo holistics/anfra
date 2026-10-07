@@ -49,6 +49,8 @@ import (
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -244,11 +246,11 @@ func Connect(ctx context.Context, nodeURL, canalQueryURL string, opts ...Connect
 	}
 	cfg.WrapTransport = opt.wrap
 
-	node := sidecar.NewAnfraNode(cfg)
+	node := anfranode.New(cfg)
 	if err := node.Start(ctx); err != nil {
 		return Clients{}, nil, fmt.Errorf("engine.Connect: anfra-node at %s: %w", nodeURL, err)
 	}
-	canal := sidecar.NewCanalQuery(cfg)
+	canal := canalquery.New(cfg)
 	if err := canal.Start(ctx); err != nil {
 		node.Close()
 		return Clients{}, nil, fmt.Errorf("engine.Connect: canal-query at %s: %w", canalQueryURL, err)

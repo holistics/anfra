@@ -1,12 +1,17 @@
-package sidecar
+package anfranode
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
 // anfra-node keeps no repo identity of its own, so every repo-scoped request
@@ -21,7 +26,7 @@ func TestClientRequiresRepoID(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAnfraNodeClientHTTP(srv.URL)
+	c := NewClientHTTP(srv.URL)
 
 	t.Run("refused without a RepoID", func(t *testing.T) {
 		_, err := c.CompileToSQL(context.Background(), CompileToSQLRequest{RepoPath: "/repos/a"})
@@ -67,7 +72,7 @@ func TestClientRequiresRepoID(t *testing.T) {
 // the identity is the caller's to supply either way, so there is no second
 // behaviour to reason about. Refused before any dial is attempted.
 func TestUnixClientRequiresRepoIDToo(t *testing.T) {
-	c := NewAnfraNodeClientUnix("/nonexistent/anfra-test.sock")
+	c := NewClientUnix("/nonexistent/anfra-test.sock")
 	_, err := c.CompileToSQL(context.Background(), CompileToSQLRequest{RepoPath: "/repos/a"})
 	if err == nil {
 		t.Fatal("CompileToSQL succeeded with an empty RepoID; want refusal")
@@ -79,7 +84,7 @@ func TestUnixClientRequiresRepoIDToo(t *testing.T) {
 
 // With Config.NodeURL set the manager dials an existing sidecar: no binary is
 // resolved, and Close leaves the process alone.
-func TestAnfraNodeExternalDoesNotSpawn(t *testing.T) {
+func TestExternalDoesNotSpawn(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			w.WriteHeader(http.StatusOK)
@@ -90,7 +95,7 @@ func TestAnfraNodeExternalDoesNotSpawn(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	node := NewAnfraNode(Config{NodeURL: srv.URL})
+	node := New(sidecar.Config{NodeURL: srv.URL})
 	if err := node.Start(context.Background()); err != nil {
 		t.Fatalf("Start against an external sidecar: %v", err)
 	}
@@ -106,11 +111,11 @@ func TestAnfraNodeExternalDoesNotSpawn(t *testing.T) {
 	node.Close() // must not panic with no process of its own
 }
 
-func TestAnfraNodeExternalUnreachable(t *testing.T) {
+func TestExternalUnreachable(t *testing.T) {
 	// Start must fail rather than fall back to spawning, and must give up when the
 	// caller does: WaitReady has its own 10s deadline, so ignoring ctx blocks for
 	// the full 10s.
-	node := NewAnfraNode(Config{NodeURL: "http://127.0.0.1:1"})
+	node := New(sidecar.Config{NodeURL: "http://127.0.0.1:1"})
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
@@ -129,22 +134,24 @@ func TestAnfraNodeExternalUnreachable(t *testing.T) {
 	}
 }
 
-func TestCanalQueryExternalDoesNotSpawn(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	}))
-	defer srv.Close()
+// An anfra-node that does not answer is an outage, classified; a caller that
+// gave up first is not, and its own error comes back.
+func TestUnreachable(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "http://" + l.Addr().String()
+	l.Close() // nothing listens there now
 
-	canal := NewCanalQuery(Config{CanalQueryURL: srv.URL})
-	if err := canal.Start(context.Background()); err != nil {
-		t.Fatalf("Start against an external canal-query: %v", err)
+	node := NewClientHTTP(url)
+	if _, err := node.Ping(context.Background()); !errors.Is(err, errcode.SidecarUnavailable) {
+		t.Errorf("anfra-node down: %v, want sidecar_unavailable", err)
 	}
-	if canal.proc != nil {
-		t.Error("a process was spawned for an external canal-query")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := node.Ping(ctx); errors.Is(err, errcode.SidecarUnavailable) || !errors.Is(err, context.Canceled) {
+		t.Errorf("canceled: %v, want the cancellation, unclassified", err)
 	}
-	if canal.Client() == nil {
-		t.Fatal("Client() is nil")
-	}
-	canal.Close()
 }

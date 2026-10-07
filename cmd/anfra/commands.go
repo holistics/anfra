@@ -12,7 +12,8 @@ import (
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
@@ -301,7 +302,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 	}
 
 	if need.Node {
-		node := sidecar.NewAnfraNode(h.cfg)
+		node := anfranode.New(h.cfg)
 		if err := node.Start(ctx); err != nil {
 			closeAll()
 			return command.Clients{}, nil, fmt.Errorf("start anfra-node sidecar: %w", err)
@@ -310,7 +311,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 		clients.Node = node.Client()
 	}
 	if need.CanalQuery {
-		canal := sidecar.NewCanalQuery(h.cfg)
+		canal := canalquery.New(h.cfg)
 		if err := canal.Start(ctx); err != nil {
 			closeAll()
 			return command.Clients{}, nil, fmt.Errorf("start canal-query sidecar: %w", err)
