@@ -1,3 +1,12 @@
+## [0.1.0](https://github.com/holistics/anfra-skills/compare/anfra-development-v0.0.3...anfra-development-v0.1.0) (2026-10-07)
+
+### Features
+
+* **plugins.anfra-development:** codex plugin format ([2c75e18](https://github.com/holistics/anfra-skills/commit/2c75e18485bff3547c6e53527813df0a16430af9))
+* **plugins.anfra-development:** setup-repo and build-data-app skills ([610b248](https://github.com/holistics/anfra-skills/commit/610b24893c6725013615fdd47eab2289a327d26e))
+* **plugins.anfra-development:** sql queries for studying data sources in aml ([6677a50](https://github.com/holistics/anfra-skills/commit/6677a506fccd6f1357209f3d4b73f639321cb243))
+* **plugins.anfra-development:** update new CLI commands ([45caba2](https://github.com/holistics/anfra-skills/commit/45caba2ab64f6fd38cc4a3f1518b48daa3ed8c3b))
+
 ## 0.0.3 (2026-07-06)
 
 ### Features
