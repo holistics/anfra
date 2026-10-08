@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><b>The open source framework for vibe-coding your custom BI application.</b></p>
+<p align="center"><b>The open source framework that turns your vibe-coded dashboards into a custom BI application, backed by a governed semantic foundation.</b></p>
 
 Use your own HTML, JavaScript, and charting library. Anfra connects the app to reusable metrics, live warehouse queries, and analytics interactions such as filtering, drill-down, and period comparisons.
 
