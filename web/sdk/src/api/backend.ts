@@ -59,7 +59,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
   return {
     async submitQuery (request: BackendQueryRequest, signal: AbortSignal): Promise<BackendQueryResult> {
       const data = await runQuery(client, toQueryInput(request), signal);
-      const values = data.result.records;
+      const values = data.result.records ?? [];
       return {
         columns: data.columns,
         values,
@@ -99,7 +99,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         page: 1,
         page_size: SUGGESTION_LIMIT,
       }, signal);
-      return data.result.records
+      return (data.result.records ?? [])
         .map((row) => row[0])
         .filter((v): v is ConditionValue => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
     },
