@@ -39,10 +39,10 @@ func TestSkillsInstallIntoEachAgentOnThePath(t *testing.T) {
 	want := []string{
 		"claude plugin marketplace add holistics/anfra-skills --scope user",
 		"claude plugin marketplace update anfra-skills",
-		"claude plugin install anfra-development@anfra-skills --scope user",
+		"claude plugin install anfra@anfra-skills --scope user",
 		"codex plugin marketplace add holistics/anfra-skills",
 		"codex plugin marketplace upgrade anfra-skills",
-		"codex plugin add anfra-development@anfra-skills",
+		"codex plugin add anfra@anfra-skills",
 	}
 	if !slices.Equal(*ran, want) {
 		t.Errorf("ran:\n%s\nwant:\n%s", strings.Join(*ran, "\n"), strings.Join(want, "\n"))
@@ -102,7 +102,7 @@ func TestSkillsInstallIntoTheProject(t *testing.T) {
 	want := []string{
 		"claude plugin marketplace add holistics/anfra-skills --scope project",
 		"claude plugin marketplace update anfra-skills",
-		"claude plugin install anfra-development@anfra-skills --scope project",
+		"claude plugin install anfra@anfra-skills --scope project",
 	}
 	if !slices.Equal(*ran, want) {
 		t.Errorf("ran:\n%s\nwant:\n%s", strings.Join(*ran, "\n"), strings.Join(want, "\n"))

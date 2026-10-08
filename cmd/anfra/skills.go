@@ -17,7 +17,7 @@ import (
 const (
 	skillsRepo        = "holistics/anfra-skills"
 	skillsMarketplace = "anfra-skills"
-	skillsPlugin      = "anfra-development"
+	skillsPlugin      = "anfra"
 )
 
 // skillsAgent is a coding agent the skills can be installed into: through its
