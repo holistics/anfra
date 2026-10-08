@@ -3,7 +3,7 @@
  * cross-filters) given a Backend, and the frame bootstrap that provisions it from its host. It
  * imports only `common`: a Data App's frame carries no API client.
  *
- * See CONTEXT.md for the vocabulary and DESIGN.md for the shape.
+ * See docs/designs/data-apps.md, at the repository root, for the design.
  */
 export { createSdk, Sdk, VERSION } from './sdk';
 export { installSandbox, SANDBOX_GLOBAL } from './sandbox';

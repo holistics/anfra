@@ -66,7 +66,7 @@ call to the host over postMessage; the host answers it with the Backend it was g
 
 ## The boundary
 
-A Data App definition is author code, often written by an agent, so it is never trusted:
+A Data App definition can come from any author, often an agent, which may not think of security while building an analysis. So the SDK guards it for its author, and makes the safe way the easy one:
 
 - Its frame has an opaque origin. Its own requests to the API are cross-origin, which `anfra serve`
   refuses, and carry no credentials on a host that has them.
