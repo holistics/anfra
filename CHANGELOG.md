@@ -1,3 +1,8 @@
+## [0.4.2](https://github.com/holistics/anfra/compare/anfra-v0.4.1...anfra-v0.4.2) (2026-10-08)
+
+### Bug Fixes
+
+* use tini as the init process to work around sidecar watchdog check ([ec7055a](https://github.com/holistics/anfra/commit/ec7055ad169181078a9d464f19e3a742e2bb8a49))
 ## [0.4.1](https://github.com/holistics/anfra/compare/anfra-v0.4.0...anfra-v0.4.1) (2026-10-08)
 
 ### Build
