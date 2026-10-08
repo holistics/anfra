@@ -7,28 +7,21 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"path/filepath"
+
+	"github.com/holistics/anfra/internal/home"
 )
 
-// DefaultDirName is the anfra namespace directory name, used for both the global
-// state dir (~/<name>) and the per-repo config dir (<repo>/<name>).
-// Override with ANFRA_DIR_NAME (a bare name, e.g. ".anfra").
-const DefaultDirName = ".anfra"
-
-func dirName() string {
-	if n := os.Getenv("ANFRA_DIR_NAME"); n != "" {
-		return n
-	}
-	return DefaultDirName
-}
+// ConfigDirName is a repo's config folder, committed with it: part of a repo's
+// format, as .git is, so the same for everyone who clones it.
+const ConfigDirName = ".anfra"
 
 // Repo is the resolved identity and on-disk layout for one AMQL repo.
 type Repo struct {
 	Dir       string // the AML repo directory, as given
 	ID        string // stable: <basename>-<sha8(realpath(dir))>
-	DataDir   string // global state: ~/<dirName>/repos/<id>
-	ConfigDir string // repo config (data_sources.yml, ...): <repo>/<dirName>
+	DataDir   string // its state on this machine: <anfra home>/repos/<id> (internal/home)
+	ConfigDir string // its config (data_sources.yml, ...): <repo>/.anfra
 }
 
 func (p Repo) LogsDir() string    { return filepath.Join(p.DataDir, "logs") }
@@ -56,16 +49,11 @@ func ID(repoDir string) string {
 // Resolve computes a repo's identity and data-dir layout. It creates no
 // directories; callers create the subdirs they use.
 func Resolve(repoDir string) Repo {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = os.TempDir()
-	}
 	id := ID(repoDir)
-	dir := dirName()
 	return Repo{
 		Dir:       repoDir,
 		ID:        id,
-		DataDir:   filepath.Join(home, dir, "repos", id),
-		ConfigDir: filepath.Join(repoDir, dir),
+		DataDir:   filepath.Join(home.Dir(), "repos", id),
+		ConfigDir: filepath.Join(repoDir, ConfigDirName),
 	}
 }
