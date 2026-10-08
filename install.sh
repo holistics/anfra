@@ -25,7 +25,18 @@ REPO="holistics/anfra"
 BIN_NAME="anfra"
 INSTALL_DIR="${ANFRA_INSTALL_DIR:-${ANFRA_HOME:-${HOME}/.anfra}/bin}"
 
-err() { echo "anfra-install: $*" >&2; exit 1; }
+# --- output helpers (color only on a terminal, and never with NO_COLOR) ---
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    bold=$'\033[1m'; dim=$'\033[2m'; green=$'\033[32m'; yellow=$'\033[33m'; red=$'\033[31m'; reset=$'\033[0m'
+else
+    bold=""; dim=""; green=""; yellow=""; red=""; reset=""
+fi
+
+err()  { echo "${red}error${reset}: $*" >&2; exit 1; }
+warn() { echo "${yellow}warning${reset}: $*" >&2; }
+ok()   { echo "${green}✓${reset} $*"; }
+# Show paths under $HOME as ~/..., which is shorter and easier to read.
+tilde() { case "$1" in "$HOME"/*) echo "~${1#"$HOME"}" ;; *) echo "$1" ;; esac; }
 
 # --- required tools (fail early with a clear message, not mid-run) ---
 command -v curl >/dev/null 2>&1 || err "curl is required but not found"
@@ -40,8 +51,8 @@ fi
 # --- detect platform, mapped to the release asset names (anfra-<os>-<arch>) ---
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$os" in
-    linux)  os="linux"  ;;
-    darwin) os="darwin" ;;
+    linux)  os="linux";  os_label="Linux" ;;
+    darwin) os="darwin"; os_label="macOS" ;;
     *)      err "unsupported OS: $os (anfra supports linux and macOS)" ;;
 esac
 
@@ -62,26 +73,32 @@ asset="${BIN_NAME}-${os}-${arch}.gz"
 if [ -n "${ANFRA_VERSION:-}" ]; then
     tag="${ANFRA_VERSION#anfra-v}"; tag="anfra-v${tag#v}"
     url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
+    wanted="anfra ${tag#anfra-v}"
 else
     url="https://github.com/${REPO}/releases/latest/download/${asset}"
+    wanted="the latest anfra"
 fi
 
 # --- download + decompress ---
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-echo "Downloading ${asset} for ${os}/${arch}..."
-if ! curl -fL -o "${tmp}/${BIN_NAME}.gz" "$url"; then
+echo
+echo "Installing ${bold}${wanted}${reset} for ${os_label} ${arch}"
+# A single progress bar on a terminal; quiet (errors only) when piped or in CI.
+if [ -t 2 ]; then curl_progress="--progress-bar"; else curl_progress="-sS"; fi
+if ! curl -fL $curl_progress -o "${tmp}/${BIN_NAME}.gz" "$url"; then
     err "download failed from ${url} (is the release published for this platform?)"
 fi
 if ! $gunzip_cmd "${tmp}/${BIN_NAME}.gz" > "${tmp}/${BIN_NAME}"; then
     err "failed to decompress ${asset}"
 fi
 
-# Log the checksum for the record (TOFU; no verification yet).
+# Keep the checksum for the record (TOFU; no verification yet); printed dimmed below.
+sha=""
 if command -v sha256sum >/dev/null 2>&1; then
-    echo "SHA256: $(sha256sum "${tmp}/${BIN_NAME}" | awk '{print $1}')"
+    sha="$(sha256sum "${tmp}/${BIN_NAME}" | awk '{print $1}')"
 elif command -v shasum >/dev/null 2>&1; then
-    echo "SHA256: $(shasum -a 256 "${tmp}/${BIN_NAME}" | awk '{print $1}')"
+    sha="$(shasum -a 256 "${tmp}/${BIN_NAME}" | awk '{print $1}')"
 fi
 
 chmod +x "${tmp}/${BIN_NAME}"
@@ -96,27 +113,47 @@ mv -f "${tmp}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
 target="${INSTALL_DIR}/${BIN_NAME}"
 [ -x "$target" ] || err "installation failed: $target is not executable"
 
-version="$("$target" --version 2>/dev/null || echo "installed")"
-echo "Installed ${version} to ${target}"
+# `anfra --version` prints "anfra version X"; keep just the version.
+version="$("$target" --version 2>/dev/null || true)"
+version="${version#anfra version }"
+echo
+ok "Installed ${bold}anfra ${version:-}${reset} to $(tilde "$target")"
+[ -n "$sha" ] && echo "  ${dim}sha256 ${sha}${reset}"
 
 # --- ensure INSTALL_DIR is on PATH ---
-path_hint() {
+# current_rc is the current shell's rc file with the PATH line, which the user
+# can source to use anfra without restarting; empty when there's none.
+current_rc=""
+
+# For a line the user pastes: "$HOME" expands inside double quotes, "~" doesn't.
+manual_path_hint() {
+    case "$INSTALL_DIR" in
+        "$HOME"/*) dir="\$HOME${INSTALL_DIR#"$HOME"}" ;;
+        *)         dir="$INSTALL_DIR" ;;
+    esac
     echo
-    echo "Add ${INSTALL_DIR} to your PATH:"
-    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+    echo "$1 Run this now, and add it to your shell's startup file:"
+    echo "  ${bold}export PATH=\"${dir}:\$PATH\"${reset}"
 }
 
 ensure_on_path() {
-    # Already reachable — nothing to do.
-    case ":${PATH}:" in *":${INSTALL_DIR}:"*) return 0 ;; esac
+    # Already reachable. Warn if another anfra earlier on PATH would win.
+    case ":${PATH}:" in *":${INSTALL_DIR}:"*)
+        found="$(command -v "$BIN_NAME" 2>/dev/null || true)"
+        if [ -n "$found" ] && [ "$found" != "$target" ]; then
+            warn "another anfra at $(tilde "$found") comes before $(tilde "$target") on your PATH"
+        fi
+        return 0 ;;
+    esac
 
     if [ -n "${ANFRA_NO_MODIFY_PATH:-}" ]; then
-        path_hint
+        manual_path_hint "$(tilde "$INSTALL_DIR") is not on your PATH."
         return 0
     fi
 
     current="$(basename "${SHELL:-}")"
     updated=""
+    edited=""
     # "<shell>:<rc file>:<line to add>" — edit an rc file when it already exists,
     # or when it belongs to the user's current shell (created if missing). The
     # "bash-login" rows cover macOS, where login shells read .bash_profile/.profile
@@ -134,17 +171,57 @@ ensure_on_path() {
             mkdir -p "$(dirname "$rc")"
             if ! { [ -f "$rc" ] && grep -qF "$line" "$rc"; }; then
                 printf '\n# Added by anfra installer\n%s\n' "$line" >> "$rc"
-                echo "Added ${INSTALL_DIR} to PATH in ${rc}"
+                edited="${edited:+${edited}, }$(tilde "$rc")"
             fi
             updated="yes"
+            [ "$shell" = "$current" ] && current_rc="$rc"
         fi
     done
 
-    if [ -n "$updated" ]; then
-        echo "Restart your shell (or 'source' the file above) to use \`anfra\`."
-    else
-        path_hint
+    if [ -n "$edited" ]; then
+        ok "Added $(tilde "$INSTALL_DIR") to PATH in ${edited}"
+    fi
+    if [ -z "$updated" ]; then
+        manual_path_hint "Couldn't find a startup file for your shell (${current:-unknown}) to add $(tilde "$INSTALL_DIR") to PATH."
     fi
 }
 
 ensure_on_path
+
+# --- what to do next ---
+echo
+if [ -n "$current_rc" ]; then
+    echo "To start using anfra, restart your shell or run: ${bold}source $(tilde "$current_rc")${reset}"
+    echo
+elif [ -n "$updated" ]; then
+    echo "To start using anfra, restart your shell."
+    echo
+fi
+echo "${bold}Next steps${reset}"
+echo
+echo "  1. Install the Anfra skills. Claude Code, Codex, and Cursor need them"
+echo "     to set up projects, model data, and build apps with Anfra:"
+echo
+echo "       ${bold}anfra skills install${reset}"
+echo
+echo "  2. Create a project:"
+echo
+echo "       ${bold}anfra init my-project${reset}"
+echo "       ${bold}cd my-project${reset}"
+echo
+echo "  3. Connect your warehouse. Fill in your credentials in this file:"
+echo
+echo "       ${bold}.anfra/data_sources.yml${reset}"
+echo
+echo "     Supported warehouses and their connection fields are listed at"
+echo "     https://docs.anfra.ai/docs/self-hosted/data-sources"
+echo
+echo "  4. Open the project in your coding agent and ask for an app, for example:"
+echo
+echo "       ${bold}Use the build-data-app skill. Look at my orders data and build a revenue${reset}"
+echo "       ${bold}overview: monthly trend and revenue by region. Clicking a region should${reset}"
+echo "       ${bold}filter the trend.${reset}"
+echo
+echo "     Then run ${bold}anfra serve${reset} and open http://127.0.0.1:7878/ to see it."
+echo
+echo "Docs: https://docs.anfra.ai"
