@@ -33,8 +33,12 @@ const notBuilt = `<!doctype html>
 `
 
 // page answers every page URL with the frontend's index.html: the frontend decides what the path
-// names. No other site may frame it.
+// names. No other site may frame it. Under a dev frontend, it redirects to the same page there.
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
+	if dev := s.opts.DevFrontendURL; dev != "" {
+		http.Redirect(w, r, strings.TrimSuffix(dev, "/")+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+		return
+	}
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 	w.Header().Set("Cache-Control", "no-store")
 	if s.frontend == nil {

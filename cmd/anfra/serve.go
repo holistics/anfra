@@ -118,7 +118,11 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		defer stop()
 		var apps *appserve.Server
 		if !opts.noApps {
-			apps = appserve.New(appserve.Options{RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger})
+			apps = appserve.New(appserve.Options{
+				RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger,
+				// make dev's Vite dev server, which serves the frontend from source.
+				DevFrontendURL: os.Getenv("ANFRA_APPSERVE_DEV_URL"),
+			})
 			if !apps.FrontendBuilt() {
 				fmt.Fprintln(os.Stderr, "warning: this anfra was built without its Data App pages; /apps/ says how to build them")
 			}

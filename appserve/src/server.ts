@@ -56,6 +56,20 @@ export async function health (): Promise<Health> {
   }
 }
 
+/** The anfra serving, and a newer release when the server knows of one (core.version, from its check). */
+export interface Version { current: string, latest?: string }
+
+/** The version serving, with latest only when it is newer; none when the server can't be asked. */
+export async function version (): Promise<Version | undefined> {
+  try {
+    const { data } = await api.POST('/core.version', { body: {} });
+    if (!data) return undefined;
+    return data.update?.available ? { current: data.version, latest: data.update.latest } : { current: data.version };
+  } catch {
+    return undefined;
+  }
+}
+
 /** One AML problem, as the problems banner shows it. */
 export interface AmlProblem { file?: string, line?: number, column?: number, message: string }
 

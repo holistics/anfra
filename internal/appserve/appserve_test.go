@@ -135,6 +135,25 @@ func TestPages(t *testing.T) {
 	}
 }
 
+// Under a dev frontend, a page is the same page on the dev server; the backend's routes stay here.
+func TestDevFrontend(t *testing.T) {
+	s := newServer(Options{RepoDir: repo(t), DevFrontendURL: "http://127.0.0.1:5173/"}, nil)
+	if !s.FrontendBuilt() {
+		t.Error("a dev frontend: not built")
+	}
+	for path, want := range map[string]string{
+		"/":                    "http://127.0.0.1:5173/",
+		"/apps/team/sales?x=1": "http://127.0.0.1:5173/apps/team/sales?x=1",
+	} {
+		if w := get(s, path); w.Code != http.StatusTemporaryRedirect || w.Header().Get("Location") != want {
+			t.Errorf("%s: %d %q", path, w.Code, w.Header().Get("Location"))
+		}
+	}
+	if w := get(s, "/appserve/apps"); w.Code != http.StatusOK {
+		t.Errorf("the backend: %d", w.Code)
+	}
+}
+
 func TestContext(t *testing.T) {
 	t.Setenv("TZ", "Asia/Ho_Chi_Minh")
 	dir := repo(t)
