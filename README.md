@@ -199,6 +199,18 @@ With no models yet, the agent proposes datasets and metrics as code in the `mode
 
 Run `anfra serve`, and open `http://127.0.0.1:7878/` to see your apps. An app saved as `apps/revenue.html` opens at `/apps/revenue`, and reloads as you or the agent edit it. The same server answers the SDK's queries and serves MCP at `/mcp`.
 
+### Run with Docker
+
+To run a project on a server, or without installing anything, use the image. Mount the project at `/repo`:
+
+```sh
+docker run -p 7878:7878 -v "$PWD:/repo" ghcr.io/holistics/anfra
+```
+
+The same apps, API and MCP are then at `http://localhost:7878/`. Other commands run the same way, for example `docker run --rm -v "$PWD:/repo" ghcr.io/holistics/anfra validate`.
+
+There is one image for every machine: Docker pulls the build for yours (x64 or ARM, Apple silicon included). Tags follow the releases: `0.4.0`, `0.4`, or `latest`. The server has no login, so publish its port only to people who may query the project's data.
+
 ## Also works for AI artifacts
 
 Business users already make reports in Claude or ChatGPT. Connect their agents to one Anfra server instead of straight to the warehouse, and the artifacts they create:
