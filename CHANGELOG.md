@@ -1,3 +1,8 @@
+## [0.4.1](https://github.com/holistics/anfra/compare/anfra-v0.4.0...anfra-v0.4.1) (2026-10-08)
+
+### Build
+
+* release Docker image ([23b819e](https://github.com/holistics/anfra/commit/23b819e61ce9fc7c5950a75e627f87b6612f5aa3))
 ## [0.4.0](https://github.com/holistics/anfra/compare/anfra-v0.3.0...anfra-v0.4.0) (2026-10-07)
 
 ### ⚠ BREAKING CHANGES

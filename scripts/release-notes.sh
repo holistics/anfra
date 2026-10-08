@@ -4,7 +4,8 @@
 # requests and new contributors, and their compare link as the footer.
 #
 # Fails when the version has no section, so a release never goes out with notes that differ
-# from the changelog.
+# from the changelog. A section with nothing in it (only commit types the changelog hides, such
+# as ci or chore) says so, and the pull requests still list the release's changes.
 #
 # Usage: scripts/release-notes.sh <version> [generated-notes]   e.g. scripts/release-notes.sh 0.4.0
 set -euo pipefail
@@ -20,9 +21,12 @@ section="$(awk -v heading="## [$version]" '
   found
 ' "$changelog" | sed -e '/./,$!d' | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}')"
 
-if [ -z "$section" ]; then
+if ! grep -qF "## [$version]" "$changelog"; then
   echo "CHANGELOG.md has no section for $version: run pnpm bump $version" >&2
   exit 1
+fi
+if [ -z "$section" ]; then
+  section="No changes to list: this release has only changes the changelog leaves out (CI, chores, docs)."
 fi
 
 printf '## Changelog\n\n%s\n' "$section"
