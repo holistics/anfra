@@ -60,6 +60,7 @@ Develop analytics with Anfra.
 
 | Hook | What it does |
 |---|---|
+| Update notice | At session start in an Anfra repo, tells the agent when a newer `anfra` release is out, so it can mention it to you (it won't update anfra unless asked). Reads anfra's own cached daily check; set `ANFRA_NO_UPDATE_NOTIFIER=1` to turn it off. |
 | Validate AML | After each `Write`/`Edit` (or Codex `apply_patch`) of an AML file, runs `anfra validate` on it and reports diagnostics. |
 
 More plugins (e.g. for consumers/explorers) may be added to this marketplace over time.
