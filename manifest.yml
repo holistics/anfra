@@ -4,7 +4,7 @@
 # which triggers build_release.yml to download the pinned sidecars, cross-build,
 # and publish. Always bump `version` when changing a pin — otherwise the tag
 # already exists and no new release is cut.
-version: 0.4.3
+version: 0.5.0
 sidecars:
   anfra_node: anfra-node-v0.3.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
   canal_query: query-v2.15.0 # holistics/canal release tag (build_and_release_binaries.yml)
