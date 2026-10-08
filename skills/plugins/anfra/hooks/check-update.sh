@@ -13,7 +13,7 @@ input=$(cat)
 cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 [ -n "$cwd" ] && cd "$cwd" 2>/dev/null
 
-[ -d "${ANFRA_DIR_NAME:-.anfra}" ] || exit 0
+[ -d .anfra ] || exit 0
 [ -z "${ANFRA_NO_UPDATE_NOTIFIER:-}" ] || exit 0
 command -v anfra >/dev/null 2>&1 || exit 0
 
