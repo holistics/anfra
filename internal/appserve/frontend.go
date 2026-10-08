@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// The appserve frontend, built by Vite (`pnpm build:apps`) into dist/ before `go build`. A build
+// The appserve frontend, built by Vite (`pnpm build:web`) into dist/ before `go build`. A build
 // output, not committed: the placeholder keeps the pattern valid without it.
 //
 //go:embed all:dist
@@ -29,7 +29,7 @@ const notBuilt = `<!doctype html>
 <meta charset="utf-8">
 <title>Data Apps</title>
 <p>This anfra was built without its Data App pages. From the anfra repository, run
-<code>pnpm build:apps</code>, then build anfra again.</p>
+<code>pnpm build:web</code>, then build anfra again.</p>
 `
 
 // page answers every page URL with the frontend's index.html: the frontend decides what the path

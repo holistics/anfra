@@ -34,7 +34,7 @@ importers:
         specifier: ^9.1.7
         version: 9.1.7
 
-  appserve:
+  web/appserve:
     dependencies:
       vue:
         specifier: ^3.5.43
@@ -65,7 +65,7 @@ importers:
         specifier: ^3.3.12
         version: 3.3.12(typescript@5.9.3)
 
-  sdk:
+  web/sdk:
     dependencies:
       openapi-fetch:
         specifier: ^0.17.0

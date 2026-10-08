@@ -1,5 +1,5 @@
 # PR CI: conventional-commit lint, golangci-lint, build/vet/test, the core API's
-# contract, and the SDK and frontend (apps). Mirrors canal's
+# contract, and the SDK and frontend (web). Mirrors canal's
 # continuous_integration.yml + test.yml, flattened (anfra is a single Go module). `ci_passed` is the one required status check (via alls-green).
 name: Continuous Integration
 
@@ -83,7 +83,7 @@ jobs:
 
   # The Anfra SDK and the appserve frontend (the pnpm workspace): typecheck, tests, the build a
   # release embeds, and the SDK's API types fresh from api/openapi.yaml.
-  apps:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,20 +94,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter anfra-sdk typecheck
-      - run: pnpm test:sdk
       - name: build, as a release does
-        run: pnpm build:apps # the SDK, then the frontend, type-checked (vue-tsc)
-      - run: pnpm test:appserve
+        run: pnpm build:web # the SDK, then the frontend, type-checked (vue-tsc)
+      - run: pnpm test:web # after the build: the frontend's tests import the built SDK
       - name: the SDK's API types are fresh
         run: |
           pnpm --filter anfra-sdk generate
-          git diff --exit-code -- sdk/src/api/schema.d.ts \
-            || { echo "sdk/src/api/schema.d.ts is stale: run pnpm --filter anfra-sdk generate" >&2; exit 1; }
+          git diff --exit-code -- web/sdk/src/api/schema.d.ts \
+            || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter anfra-sdk generate" >&2; exit 1; }
 
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [commitlint, lint, test, api, apps]
+    needs: [commitlint, lint, test, api, web]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:

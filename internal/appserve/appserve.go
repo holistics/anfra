@@ -27,7 +27,7 @@ type Options struct {
 	Logger *slog.Logger
 	// DevFrontendURL, when set, is a Vite dev server serving the frontend from source (make dev):
 	// the pages redirect there, and it proxies the rest back. The built-in frontend, rebuilt only
-	// by `pnpm build:apps`, would be stale.
+	// by `pnpm build:web`, would be stale.
 	DevFrontendURL string
 }
 

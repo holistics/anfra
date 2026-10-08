@@ -5,7 +5,7 @@
 # Node tooling (commitlint / conventional-changelog)
 node_modules/
 
-# The appserve frontend, built into the binary (pnpm build:apps); the placeholder stays.
+# The appserve frontend, built into the binary (pnpm build:web); the placeholder stays.
 /internal/appserve/dist/*
 !/internal/appserve/dist/.gitkeep
 

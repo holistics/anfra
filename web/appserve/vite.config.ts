@@ -13,7 +13,7 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/appserve/' : '/',
   plugins: [vue()],
   build: {
-    outDir: '../internal/appserve/dist',
+    outDir: '../../internal/appserve/dist',
     emptyOutDir: true,
   },
   server: {
