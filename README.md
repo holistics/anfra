@@ -5,9 +5,10 @@
   </picture>
 </p>
 
-<p align="center"><b>The open source framework that turns your vibe-coded dashboards into a custom BI application, backed by a governed semantic foundation.</b></p>
+<p align="center"><b>The open-source framework for turning vibe-coded dashboards into custom BI applications, without sacrificing trust in your data.</b></p>
+<!-- alternative: Vibe-code custom BI applications with the freedom of code and the trust of a semantic layer. -->
 
-Use your own HTML, JavaScript, and charting library. Anfra connects the app to reusable metrics, live warehouse queries, and analytics interactions such as filtering, drill-down, and period comparisons.
+Build with AI coding agents using your own HTML, JavaScript, and charting libraries. Anfra SDK connects your app to a governed semantic foundation with consistent, reusable metrics and trusted business context. It also provides powerful analytics interactions: filtering, drill-downs, and period comparisons for your app, out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
 
 <p align="center">
   <a href="https://anfra.ai">Website</a> · <a href="https://docs.anfra.ai">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
