@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -36,6 +37,7 @@ type Server struct {
 	opts     Options
 	frontend http.Handler // nil: this binary was built without the appserve frontend
 	events   *broadcaster
+	dev      *url.URL // opts.DevFrontendURL, parsed; nil without a dev frontend
 	// live is live reload's state: the repo is watched while event streams are open.
 	live struct {
 		mu      sync.Mutex
@@ -52,6 +54,13 @@ func New(opts Options) *Server {
 
 func newServer(opts Options, built fs.FS) *Server {
 	s := &Server{opts: opts, events: newBroadcaster()}
+	if opts.DevFrontendURL != "" {
+		if u, err := url.Parse(opts.DevFrontendURL); err == nil && u.Scheme != "" && u.Host != "" {
+			s.dev = u
+		} else if opts.Logger != nil {
+			opts.Logger.Warn("appserve.dev_frontend", "error", "not an absolute URL: "+opts.DevFrontendURL)
+		}
+	}
 	if built != nil {
 		s.frontend = http.FileServerFS(built)
 	}
@@ -60,7 +69,7 @@ func newServer(opts Options, built fs.FS) *Server {
 
 // FrontendBuilt reports whether the pages have a frontend, built into this binary or a dev server:
 // without one, the pages say how to build it, and the backend's routes still work.
-func (s *Server) FrontendBuilt() bool { return s.frontend != nil || s.opts.DevFrontendURL != "" }
+func (s *Server) FrontendBuilt() bool { return s.frontend != nil || s.dev != nil }
 
 // Close ends every event stream, so a server can shut down without waiting on them.
 func (s *Server) Close() { s.events.closeAll() }

@@ -152,6 +152,14 @@ func TestDevFrontend(t *testing.T) {
 	if w := get(s, "/appserve/apps"); w.Code != http.StatusOK {
 		t.Errorf("the backend: %d", w.Code)
 	}
+
+	// Only the path and query are the request's: its host never reaches the destination.
+	r := httptest.NewRequest(http.MethodGet, "http://evil.example/apps/sales", nil)
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	if loc := w.Header().Get("Location"); loc != "http://127.0.0.1:5173/apps/sales" {
+		t.Errorf("another host's request: %q", loc)
+	}
 }
 
 func TestContext(t *testing.T) {
