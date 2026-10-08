@@ -104,10 +104,75 @@ jobs:
           git diff --exit-code -- sdk/src/api/schema.d.ts \
             || { echo "sdk/src/api/schema.d.ts is stale: run pnpm --filter anfra-sdk generate" >&2; exit 1; }
 
+  # Dependencies this PR adds or changes (Go + pnpm), via GitHub's dependency graph;
+  # config in .github/dependency-review-config.yml. The action runs twice so the
+  # license check can exempt dev tooling under tools/ by manifest path (the action
+  # can only exempt a package everywhere) without also swallowing vulnerabilities.
+  dependency-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # comment the license failures
+    steps:
+      - uses: actions/checkout@v4 # the config file
+      - name: vulnerabilities
+        uses: actions/dependency-review-action@v5
+        with:
+          config-file: ./.github/dependency-review-config.yml
+          license-check: false
+      - name: licenses
+        id: licenses
+        if: ${{ !cancelled() }}
+        continue-on-error: true # judged by the next step, minus tools/
+        uses: actions/dependency-review-action@v5
+        with:
+          config-file: ./.github/dependency-review-config.yml
+          vulnerability-check: false
+      - name: license verdict
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOME: ${{ steps.licenses.outcome }}
+          INVALID: ${{ steps.licenses.outputs.invalid-license-changes }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$OUTCOME" = success ]; then exit 0; fi
+          if [ -z "$INVALID" ]; then
+            echo "the license check failed without a result: see the licenses step" >&2; exit 1
+          fi
+          entry='"- `\(.manifest)`: \(.name)@\(.version) (\(.license // "unknown license"))"'
+          jq -r "[.forbidden[], .unresolved[]] | map(select(.manifest | startswith(\"tools/\"))) | .[] | $entry" <<<"$INVALID" \
+            | sed 's/^- /allowed (dev tooling): /'
+          FAILURES=$(jq -r "[.forbidden[], .unresolved[]] | map(select(.manifest | startswith(\"tools/\") | not)) | .[] | $entry" <<<"$INVALID")
+          if [ -z "$FAILURES" ]; then exit 0; fi
+          echo "$FAILURES"
+          {
+            echo "## ⚠️ License Check Failed"
+            echo
+            echo "$FAILURES"
+            echo
+            cat <<'EOF'
+          ### How to resolve (edit `.github/dependency-review-config.yml`)
+
+          | Error in the report | What it means | What to do |
+          | --- | --- | --- |
+          | `GPL-*` / `AGPL-*` / `CC-BY-SA-*` / `SSPL-*` / … | ⛔ Strong copyleft — incompatible with our proprietary SaaS | **Do NOT allowlist.** Migrate to a permissively-licensed alternative and remove the dependency |
+          | Another license, or `LicenseRef-clearlydefined-OTHER` | A license not on the `allow-licenses` list, or one GitHub could not classify | Confirm it is permissive, then add the SPDX id to `allow-licenses`, or the package (e.g. `pkg:golang/<module>`, `pkg:npm/<name>`) to `allow-dependencies-licenses` |
+          | `unknown license` | GitHub could not resolve the license to a valid SPDX expression | Confirm the license, then add the package to `allow-dependencies-licenses` |
+
+          Dev tooling under `tools/` is exempt. The workflow run's summary has the full report.
+
+          > [!WARNING]
+          > Never allowlist strong copyleft (GPL / AGPL / CC-BY-SA / SSPL). Those dependencies must be removed, not added to `allow-licenses`/`allow-dependencies-licenses`.
+          EOF
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/comment.md"
+          exit 1
+
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [commitlint, lint, test, api, apps]
+    needs: [commitlint, lint, test, api, apps, dependency-review]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:

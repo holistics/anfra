@@ -1,0 +1,30 @@
+# actions/dependency-review-action config, used by the dependency-review job in
+# continuous_integration.yml. Only dependencies a PR adds or changes are checked,
+# and only runtime ones (fail-on-scopes defaults to runtime, so npm
+# devDependencies are skipped). Dev tooling under tools/ is exempt from the
+# license check by that job, keyed on the manifest path.
+
+# There shouldn't be any strong copyleft license such as GPL/AGPL/CC-BY-SA/SSPL.
+allow-licenses:
+  # Permissive licenses
+  - 0BSD
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - CC0-1.0
+  - ISC
+  - MIT
+  - MIT-0
+  - Unlicense
+  - BlueOak-1.0.0
+  - WTFPL
+  - Python-2.0
+  - Zlib
+  # The Go project's patent grant, which golang.org/x/* and protobuf carry
+  # alongside BSD-3-Clause.
+  - LicenseRef-scancode-google-patent-license-golang
+
+# Packages reviewed by hand whose license isn't on the list above (e.g. reported as
+# LicenseRef-clearlydefined-OTHER), as purls without versions: pkg:golang/<module>,
+# pkg:npm/<name>. Never add a strong copyleft package here.
+allow-dependencies-licenses: []
