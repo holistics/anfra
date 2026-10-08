@@ -28,10 +28,14 @@
 #
 # Debian trixie: the sidecars anfra unpacks at startup link glibc 2.38 or newer.
 
-# What the final stage needs from a shell, prepared on the builder's own platform.
+# What the final stage needs from a shell, prepared on the builder's own platform. tini is
+# the target's: Debian's static build, downloaded for TARGETARCH and unpacked, not installed.
 FROM --platform=$BUILDPLATFORM debian:trixie-slim AS prepare
-RUN apt-get update \
+ARG TARGETARCH
+RUN dpkg --add-architecture "$TARGETARCH" \
+ && apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
+ && cd /tmp && apt-get download "tini:$TARGETARCH" && dpkg-deb -x tini_*.deb /tmp/tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --user-group --home-dir /home/anfra --no-create-home anfra \
  && mkdir -p /out/home/anfra /out/repo
@@ -46,6 +50,7 @@ COPY --from=prepare /etc/passwd /etc/group /etc/
 # anfra's state (~/.anfra: logs, caches, the unpacked sidecars) and the repo, the user's own.
 COPY --from=prepare --chown=1000:1000 /out/ /
 COPY --chmod=755 ${TARGETPLATFORM}/anfra /usr/local/bin/anfra
+COPY --from=prepare /tmp/tini/usr/bin/tini-static /usr/bin/tini
 
 USER anfra
 ENV HOME=/home/anfra \
@@ -53,9 +58,12 @@ ENV HOME=/home/anfra \
 WORKDIR /repo
 EXPOSE 7878
 
+# tini is PID 1, as `docker run --init` would make it: it reaps orphans and forwards signals,
+# and anfra is not PID 1, which a process it spawns could read as its host having died.
+#
 # Every interface, so a published port reaches it. anfra serve has no
 # authentication: publish it only where its users may query the repo's data.
-ENTRYPOINT ["anfra"]
+ENTRYPOINT ["/usr/bin/tini", "--", "anfra"]
 CMD ["serve", "--addr", "0.0.0.0:7878"]
 
 LABEL org.opencontainers.image.source=https://github.com/holistics/anfra \
