@@ -192,7 +192,7 @@ Clicking a region should filter everything else.
 <details>
 <summary>Invoke the skill explicitly</summary>
 
-Agents usually pick the skill from the request alone. To invoke it explicitly, start the prompt with `/anfra-development:build-data-app` in Claude Code, `$build-data-app` in Codex, or `/build-data-app` in Cursor.
+Agents usually pick the skill from the request alone. To invoke it explicitly, start the prompt with `/anfra:build-data-app` in Claude Code, `$build-data-app` in Codex, or `/build-data-app` in Cursor.
 </details>
 
 With no models yet, the agent proposes datasets and metrics as code in the `models/` and `datasets/` folders.
