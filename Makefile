@@ -7,10 +7,10 @@
 export
 
 .DEFAULT_GOAL := help
-.PHONY: help dev dev-tmux build test
+.PHONY: help setup dev dev-tmux build test check
 
 help: ## List the targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
 
 TOOL := go tool -modfile=tools/go.mod
 
@@ -33,6 +33,16 @@ SDK_ONCE := @test -f web/sdk/dist/api.js || pnpm build:sdk
 # its pages there. Override it in .env.local.
 ANFRA_APPSERVE_DEV_URL ?= http://127.0.0.1:5173
 
+setup: ## Set up a clone: the web workspace and git hooks, and .env.local from its example
+	pnpm install
+	@if [ -e .env.local ]; then \
+		echo ".env.local already exists: left as it is."; \
+	else \
+		cp .env.local.example .env.local; \
+		echo "Wrote .env.local from .env.local.example. Set ANFRA_DEV_REPO, and the sidecars (ANFRA_NODE_BIN"; \
+		echo "and ANFRA_CANAL_QUERY_BIN, or their _URL): see DEVELOPMENT.md."; \
+	fi
+
 dev: ## Run the Go server and the SDK, each rebuilt on change, in this terminal (hivemind)
 	@test -n "$$ANFRA_DEV_REPO" || { echo "set ANFRA_DEV_REPO, in .env.local, to a repo with Data Apps for anfra serve to run in"; exit 1; }
 	$(JS_DEPS)
@@ -53,3 +63,16 @@ build: ## Build the Data App frontend, then anfra with it, into bin/, as a relea
 test: ## Run the Go, SDK and frontend tests
 	go test ./...
 	pnpm test:web
+
+# The SDK's type declarations, which the frontend's typecheck reads (web/sdk/dist), are the one
+# thing make check builds.
+check: ## Lint and type-check everything, and check the API contract is fresh, as CI does
+	go mod tidy --diff
+	$(TOOL) golangci-lint run ./...
+	scripts/openapi.sh diff
+	pnpm --filter anfra-sdk generate >/dev/null
+	@git diff --exit-code --quiet -- web/sdk/src/api/schema.d.ts \
+		|| { echo "web/sdk/src/api/schema.d.ts was stale: it is regenerated now, commit it"; exit 1; }
+	pnpm --filter anfra-sdk typecheck
+	pnpm build:sdk >/dev/null
+	pnpm --filter anfra-appserve typecheck
