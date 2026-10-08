@@ -14,6 +14,12 @@ help: ## List the targets
 
 TOOL := go tool -modfile=tools/go.mod
 
+# The release a build from source comes after, from manifest.yml: anfra reports itself as
+# <this>+<commit>[.dirty] (internal/meta). Exported, like every variable here, so air's build
+# (make dev) injects it too.
+ANFRA_BASE_VERSION := $(shell sed -n 's/^version: *//p' manifest.yml)
+BUILD_FLAGS := -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION)"
+
 # The JavaScript dependencies, brought up to date before make dev starts its processes: after a
 # branch switch or a lockfile change, they are what goes stale. Not --frozen-lockfile, as CI's is:
 # a package.json you just edited would refuse it. The Go side fetches its modules on demand.
@@ -42,7 +48,7 @@ dev-tmux: ## The same, under overmind in tmux: restart or attach to each process
 
 build: ## Build the Data App frontend, then anfra with it, into bin/, as a release is
 	pnpm build:web
-	go build -o bin/ ./cmd/anfra
+	go build $(BUILD_FLAGS) -o bin/ ./cmd/anfra
 
 test: ## Run the Go, SDK and frontend tests
 	go test ./...

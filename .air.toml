@@ -4,7 +4,9 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/anfra ./cmd/anfra"
+  # The release this build comes after, from make dev (ANFRA_BASE_VERSION, read from manifest.yml):
+  # anfra reports itself as <that>+<commit>[.dirty]. Without it, 0.0.0+<commit>.
+  cmd = "go build -ldflags=-X=github.com/holistics/anfra/internal/meta.base=${ANFRA_BASE_VERSION} -o ./tmp/anfra ./cmd/anfra"
   entrypoint = ["./scripts/dev-serve.sh"]
   include_ext = ["go"]
   exclude_dir = ["tmp", "bin", "node_modules", "web", "tools", "internal/appserve/dist"]
