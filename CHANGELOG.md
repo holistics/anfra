@@ -1,3 +1,12 @@
+## [0.5.0](https://github.com/holistics/anfra/compare/anfra-v0.4.3...anfra-v0.5.0) (2026-10-08)
+
+### ⚠ BREAKING CHANGES
+
+* env flags only allow 0 or 1 for affordance. add flag for HIDE_ERROR_CAUSES
+
+### Features
+
+* env flags only allow 0 or 1 for affordance. add flag for HIDE_ERROR_CAUSES ([91933d5](https://github.com/holistics/anfra/commit/91933d55f2954ca50f266d6cc5be8fe27dc4ecf2))
 ## [0.4.3](https://github.com/holistics/anfra/compare/anfra-v0.4.2...anfra-v0.4.3) (2026-10-08)
 
 ### Features
