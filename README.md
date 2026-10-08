@@ -123,7 +123,7 @@ See the [Semantic UI guide](https://docs.anfra.ai/docs/sdk) for queries, control
 ### 1. Install Anfra
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/holistics/anfra/main/install.sh | bash
+curl -fsSL https://anfra.ai/install.sh | bash
 ```
 
 The installer downloads the latest release for your platform, places the `anfra` binary in `~/.anfra/bin`, and prints the line to add it to your `PATH`.
