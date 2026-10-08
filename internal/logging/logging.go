@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/holistics/anfra/internal/envflag"
 )
 
 // Logging is the host's logging setup:
@@ -68,13 +70,13 @@ func Setup(logsDir, repo string) (*Logging, error) {
 	// Log stream (host records + sidecar stderr) → file only by default; also to
 	// the host's stderr when ANFRA_LOG_STDERR is set.
 	var stderrWriter io.Writer = f
-	if os.Getenv("ANFRA_LOG_STDERR") != "" {
+	if envflag.On(envflag.LogStderr) {
 		stderrWriter = io.MultiWriter(f, os.Stderr)
 	}
 	// Sidecar stdout (banners / incidental output) → discarded by default; to the
 	// host's stdout when ANFRA_SIDECAR_STDOUT is set.
 	stdoutWriter := io.Discard
-	if os.Getenv("ANFRA_SIDECAR_STDOUT") != "" {
+	if envflag.On(envflag.SidecarStdout) {
 		stdoutWriter = os.Stdout
 	}
 	handler := slog.NewJSONHandler(stderrWriter, &slog.HandlerOptions{
