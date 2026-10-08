@@ -38,7 +38,7 @@ RUN dpkg --add-architecture "$TARGETARCH" \
  && cd /tmp && apt-get download "tini:$TARGETARCH" && dpkg-deb -x tini_*.deb /tmp/tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --user-group --home-dir /home/anfra --no-create-home anfra \
- && mkdir -p /out/home/anfra /out/repo
+ && mkdir -p /out/home/anfra/.anfra /out/home/anfra/.cache /out/repo
 
 FROM debian:trixie-slim
 ARG TARGETPLATFORM
@@ -47,8 +47,12 @@ COPY --from=prepare /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 # A named user, not a bare uid: the sidecars look their user up, and fail without one. The
 # account files are text, the same on every architecture.
 COPY --from=prepare /etc/passwd /etc/group /etc/
-# anfra's state (~/.anfra: logs, caches, the unpacked sidecars) and the repo, the user's own.
-COPY --from=prepare --chown=1000:1000 /out/ /
+# anfra's home and the repo, the user's own. ~/.anfra (anfra's state: logs, caches, the unpacked
+# sidecars) and ~/.cache (the sidecars' own caches) exist already, so a root RUN step in an image
+# built on this one, which tools may make write to $HOME/.cache (Rosetta, emulating amd64 on
+# Apple silicon, does), only adds its own folder inside them: it cannot leave them root's.
+COPY --from=prepare --chown=1000:1000 /out/home/anfra /home/anfra
+COPY --from=prepare --chown=1000:1000 /out/repo /repo
 COPY --chmod=755 ${TARGETPLATFORM}/anfra /usr/local/bin/anfra
 COPY --from=prepare /tmp/tini/usr/bin/tini-static /usr/bin/tini
 

@@ -5,11 +5,12 @@
 #   curl -fsSL https://anfra.ai/install.sh | bash
 #
 # Downloads the anfra release binary for this platform from GitHub Releases and
-# installs it to ~/.anfra/bin (override with ANFRA_INSTALL_DIR). The release
+# installs it to ~/.anfra/bin (override with ANFRA_HOME or ANFRA_INSTALL_DIR). The release
 # binary embeds both sidecars, so it's large (~250 MB).
 #
 # Environment:
-#   ANFRA_INSTALL_DIR    install location (default: $HOME/.anfra/bin)
+#   ANFRA_HOME           anfra's folder, where it keeps everything (default: $HOME/.anfra)
+#   ANFRA_INSTALL_DIR    install location (default: $ANFRA_HOME/bin)
 #   ANFRA_VERSION        pin a version, e.g. 0.1.0 (default: latest)
 #   ANFRA_NO_MODIFY_PATH if set, don't touch shell rc files; just print the hint
 #
@@ -22,7 +23,7 @@ set -euo pipefail
 
 REPO="holistics/anfra"
 BIN_NAME="anfra"
-INSTALL_DIR="${ANFRA_INSTALL_DIR:-${HOME}/.anfra/bin}"
+INSTALL_DIR="${ANFRA_INSTALL_DIR:-${ANFRA_HOME:-${HOME}/.anfra}/bin}"
 
 err() { echo "anfra-install: $*" >&2; exit 1; }
 

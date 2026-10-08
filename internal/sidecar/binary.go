@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/holistics/anfra/internal/home"
 )
 
 // Binary returns a path to the sidecar name's executable. Release builds embed
@@ -22,17 +24,14 @@ func Binary(name, env string, embedded []byte) (string, error) {
 	return "", fmt.Errorf("no embedded %s; set %s", name, env)
 }
 
-// extractRuntime writes an embedded sidecar binary to the per-user cache dir
-// keyed by content hash (<name>-<hash>), writing only when missing so concurrent
-// runs converge on the same file.
+// extractRuntime writes an embedded sidecar binary to anfra's folder, keyed by
+// content hash (<home>/sidecars/<name>-<hash>), writing only when missing so
+// concurrent runs converge on the same file.
 func extractRuntime(name string, data []byte) (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		base = os.TempDir()
-	}
-	dir := filepath.Join(base, "anfra", "runtime")
+	home.RemoveLegacy()
+	dir := filepath.Join(home.Dir(), "sidecars")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", fmt.Errorf("make %s, where anfra unpacks its sidecars (set ANFRA_HOME to move it): %w", dir, err)
 	}
 
 	sum := sha256.Sum256(data)

@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/home"
+
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/minio/selfupdate"
 	"golang.org/x/mod/semver"
@@ -276,11 +278,7 @@ type cache struct {
 }
 
 func cachePath() (string, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "anfra", "update-check.json"), nil
+	return filepath.Join(home.Dir(), "update-check.json"), nil
 }
 
 func readCache() (*cache, bool) {
