@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/holistics/anfra/internal/envflag"
+
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/spf13/cobra"
@@ -20,10 +22,20 @@ type exitCodeError struct{ code int }
 func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 func main() {
-	// The CLI and `anfra serve` are local: their user is the operator, who needs
-	// an error's cause where the error shows, not only in a log. A host serving
-	// other people embeds the engine package and keeps the default.
-	apperr.DisableErrorEncapsulation()
+	// anfra's switches are 1 or 0. Refuse any other value before anything reads
+	// one, so a typo stops the command instead of silently meaning the opposite.
+	if err := envflag.Validate(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err) // the user's setting, said as it is: not anfra's failure
+		os.Exit(1)
+	}
+
+	// The CLI and `anfra serve` are usually local: their user is the operator, who
+	// needs an error's cause where the error shows, not only in a log. An anfra
+	// serving other people hides causes with ANFRA_HIDE_ERROR_CAUSES, as a
+	// platform embedding the engine does by default.
+	if !envflag.On(envflag.HideErrorCauses) {
+		apperr.DisableErrorEncapsulation()
+	}
 
 	// A single signal-cancelable root context, threaded down through cobra so
 	// Ctrl-C (SIGINT/SIGTERM) cancels in-flight work — an update download, a

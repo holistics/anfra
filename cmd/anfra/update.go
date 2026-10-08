@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/holistics/anfra/internal/envflag"
+
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
@@ -87,7 +89,7 @@ var noNotifyCommands = map[string]bool{"update": true, "__update-check": true, "
 
 // updateNotifyDisabled reports whether the background update notice is opted out.
 func updateNotifyDisabled() bool {
-	return os.Getenv("ANFRA_NO_UPDATE_NOTIFIER") != ""
+	return envflag.On(envflag.NoUpdateNotifier)
 }
 
 // knownUpdate is the newest release from the cached check, for the version
@@ -125,8 +127,7 @@ func watchUpdates(ctx context.Context, logger *slog.Logger) {
 // a known-newer version is applied in a detached background process (effective on
 // the next run) instead of only printing a notice.
 func autoUpdateEnabled() bool {
-	v := os.Getenv("ANFRA_AUTO_UPDATE")
-	return v != "" && v != "0" && v != "false"
+	return envflag.On(envflag.AutoUpdate)
 }
 
 // maybeNotifyUpdate prints a cached "update available" notice (to stderr, so it
