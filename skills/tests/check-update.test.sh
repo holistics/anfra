@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The SessionStart update notice (plugins/anfra-development/hooks/check-update.sh), against a fake
+# The SessionStart update notice (plugins/anfra/hooks/check-update.sh), against a fake
 # `anfra` that prints a given `anfra version` answer.
 
 set -uo pipefail
 
-hook="$(cd "$(dirname "$0")/.." && pwd)/plugins/anfra-development/hooks/check-update.sh"
+hook="$(cd "$(dirname "$0")/.." && pwd)/plugins/anfra/hooks/check-update.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin" "$tmp/repo/.anfra" "$tmp/elsewhere"

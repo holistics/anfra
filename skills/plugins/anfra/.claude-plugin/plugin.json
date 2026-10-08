@@ -1,5 +1,5 @@
 {
-  "name": "anfra-development",
+  "name": "anfra",
   "description": "Skills for developing analytics with Anfra: setting up a repo and its data source, modeling data in AML, querying it with AQL, and building Data Apps.",
   "version": "0.1.1",
   "author": {

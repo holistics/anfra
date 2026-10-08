@@ -7,7 +7,7 @@ const Configuration: UserConfig = {
       2,
       'always',
       [
-        'plugins.anfra-development',
+        'plugins.anfra',
       ]
     ],
     'type-enum': [
