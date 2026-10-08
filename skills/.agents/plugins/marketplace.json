@@ -9,10 +9,10 @@
   },
   "plugins": [
     {
-      "name": "anfra-development",
+      "name": "anfra",
       "source": {
         "source": "local",
-        "path": "./plugins/anfra-development"
+        "path": "./plugins/anfra"
       },
       "policy": {
         "installation": "AVAILABLE",

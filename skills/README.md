@@ -40,7 +40,7 @@ The Codex plugin includes the skills and the AML validation hook. The `aql-write
 
 ## Plugins
 
-### `anfra-development`
+### `anfra`
 Develop analytics with Anfra.
 
 | Skill | What it does |
@@ -75,7 +75,7 @@ pnpm commit       # guided Conventional Commit
 ```
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) with the
-plugin as scope, e.g. `feat(plugins.anfra-development): ...`.
+plugin as scope, e.g. `feat(plugins.anfra): ...`.
 
 ## Releasing
 

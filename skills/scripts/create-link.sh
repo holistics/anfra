@@ -25,7 +25,7 @@ elif [ $# -eq 2 ]; then
   DEST_PLUGIN="$2"
 else
   echo "Usage: $0 [<source-path> <dest-plugin>]"
-  echo "  e.g. $0 plugins/anfra-common/skills/use-existing-viz plugins/anfra-development"
+  echo "  e.g. $0 plugins/anfra-common/skills/use-existing-viz plugins/anfra"
   exit 1
 fi
 

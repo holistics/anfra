@@ -11,7 +11,7 @@ const [, , path, version] = process.argv
 
 if (!path || !version) {
   console.error('Usage: bump.js <plugin-path> <version>')
-  console.error('  e.g. bump.js plugins/anfra-development 1.0.0')
+  console.error('  e.g. bump.js plugins/anfra 1.0.0')
   process.exit(1)
 }
 

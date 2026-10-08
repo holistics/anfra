@@ -9,8 +9,8 @@
   },
   "plugins": [
     {
-      "name": "anfra-development",
-      "source": "plugins/anfra-development",
+      "name": "anfra",
+      "source": "plugins/anfra",
       "description": "Skills for developing analytics with Anfra: setting up a repo and its data source, modeling data in AML, querying it with AQL, and building Data Apps."
     }
   ]
