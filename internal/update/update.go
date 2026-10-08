@@ -334,16 +334,46 @@ func RecordCheck(r *Release) {
 	writeCache(&cache{CheckedAt: time.Now(), LatestVersion: r.Version, LatestTag: r.Tag})
 }
 
+// Cached returns the latest release from the cached check (no network), or nil
+// when there is none. Its AssetURL is empty: it can be reported, not applied.
+func Cached() *Release {
+	c, ok := readCache()
+	if !ok || c.LatestVersion == "" {
+		return nil
+	}
+	return &Release{Version: c.LatestVersion, Tag: c.LatestTag}
+}
+
+// Check returns the latest release: the cached one while it is fresh, else a
+// live lookup, which it caches. For a long-running process (serve), which can
+// afford the request off its hot path; a short command uses Cached and Refresh.
+func Check(ctx context.Context) (*Release, error) {
+	if r := Cached(); r != nil && !Stale() {
+		return r, nil
+	}
+	r, err := Latest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	RecordCheck(r)
+	return r, nil
+}
+
+// CheckEvery is how often a long-running process should call Check: once the
+// cache it reads has gone stale.
+const CheckEvery = checkTTL
+
+// Notice is the one-line "update available" message for r, or "" when r is not
+// newer than the running version.
+func Notice(r *Release) string {
+	if r == nil || !r.IsNewer() {
+		return ""
+	}
+	return fmt.Sprintf("anfra %s is available (you have %s). Run `anfra update`.", r.Version, meta.Version)
+}
+
 // CachedNotice returns a one-line "update available" message from the cached
 // check, or "" if none is available / the cache says we're current.
 func CachedNotice() string {
-	c, ok := readCache()
-	if !ok || c.LatestVersion == "" {
-		return ""
-	}
-	r := &Release{Version: c.LatestVersion, Tag: c.LatestTag}
-	if !r.IsNewer() {
-		return ""
-	}
-	return fmt.Sprintf("anfra %s is available (you have %s). Run `anfra update`.", c.LatestTag, meta.Version)
+	return Notice(Cached())
 }

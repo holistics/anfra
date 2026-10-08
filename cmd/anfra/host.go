@@ -22,11 +22,15 @@ import (
 //
 // No Attribution: there is one user and they are reading their own logs.
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
-	return command.CommandContext{
+	cc := command.CommandContext{
 		Clients:   clients,
 		Repo:      h.repo,
 		DataPerms: dataperm.Unrestricted(),
 	}
+	if !updateNotifyDisabled() {
+		cc.Update = knownUpdate
+	}
+	return cc
 }
 
 // hostContext carries the per-invocation repo + the sidecar Config (with the

@@ -15,8 +15,12 @@ var Version = command.Define(command.Def[command.NoInput, VersionResult]{
 	Short:    "Print the anfra version",
 	ReadOnly: true,
 	// No Needs: pure metadata, spawns nothing.
-	Run: func(context.Context, command.CommandContext, command.NoInput) (VersionResult, error) {
-		return VersionResult{Version: meta.Version}, nil
+	Run: func(_ context.Context, cc command.CommandContext, _ command.NoInput) (VersionResult, error) {
+		r := VersionResult{Version: meta.Version}
+		if cc.Update != nil {
+			r.Update = cc.Update()
+		}
+		return r, nil
 	},
 })
 
@@ -39,6 +43,9 @@ var Status = command.Define(command.Def[command.NoInput, StatusResult]{
 // VersionResult is the `version` result.
 type VersionResult struct {
 	Version string `json:"version"`
+	// Update is the newest release the host knows of; absent when it does not
+	// check for updates or has not checked yet.
+	Update *command.UpdateInfo `json:"update,omitempty"`
 }
 
 // StatusResult is the `status` result: the warm server's state and, when it is

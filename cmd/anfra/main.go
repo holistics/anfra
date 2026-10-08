@@ -39,7 +39,9 @@ func main() {
 	executed, err := newRootCmd().ExecuteContextC(ctx)
 	// After the command runs, surface a cached "update available" notice (and, if
 	// opted in, kick a background update). Best-effort; never affects exit status.
-	if executed != nil {
+	// Not after a failure: the error, or the invalid answer, is what to read, and
+	// the notice keeps until a command succeeds.
+	if executed != nil && err == nil {
 		maybeNotifyUpdate(executed.Name())
 	}
 
