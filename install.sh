@@ -233,4 +233,9 @@ echo "       ${bold}filter the trend.${reset}"
 echo
 echo "     Then run ${bold}anfra serve${reset} and open http://127.0.0.1:7878/ to see it."
 echo
+echo "Tip: your coding agent can do steps 2 and 3 for you. Open an empty folder"
+echo "in it and ask:"
+echo
+echo "       ${bold}Use the setup-repo skill to set up Anfra and connect my warehouse.${reset}"
+echo
 echo "Docs: https://docs.anfra.ai"
