@@ -73,11 +73,13 @@ jobs:
             echo "canal_tag=$(yq '.sidecars.canal_query' manifest.yml)"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Verify tag matches manifest
+      - name: Verify tag matches manifest, and the changelog has its notes
         if: ${{ env.IS_RELEASE == 'true' }}
         env:
           VERSION: ${{ steps.m.outputs.version }}
-        run: test "anfra-v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
+        run: |
+          test "anfra-v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
+          scripts/release-notes.sh "$VERSION" > /dev/null
 
       - name: Collect sidecar binaries
         env:
@@ -118,12 +120,22 @@ jobs:
           done
           ls -la release
 
+      # The release's notes are its section of CHANGELOG.md, as `pnpm bump` wrote it in the release
+      # commit, then GitHub's: the pull requests, new contributors and compare link
+      # (scripts/release-notes.sh). A re-run brings an existing release's notes back in line.
       - name: Publish release
         if: ${{ env.IS_RELEASE == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # native contents:write on this repo
+          VERSION: ${{ steps.m.outputs.version }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body > "$RUNNER_TEMP/generated.md"
+          scripts/release-notes.sh "$VERSION" "$RUNNER_TEMP/generated.md" > "$RUNNER_TEMP/notes.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
           gh release upload "$TAG" release/anfra-* --clobber
 
       - name: Upload artifacts
