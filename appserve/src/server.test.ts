@@ -76,3 +76,22 @@ describe('health', () => {
     expect(await server.health()).toBe('unreachable');
   });
 });
+
+describe('version', () => {
+  it('is the version serving, with the newer release the server knows of', async () => {
+    answer('core.version', { version: '0.4.2', update: { latest: '0.5.0', available: true } });
+    expect(await server.version()).toEqual({ current: '0.4.2', latest: '0.5.0' });
+  });
+
+  it("has no latest when the server is current or doesn't check", async () => {
+    answer('core.version', { version: '0.5.0', update: { latest: '0.5.0', available: false } });
+    expect(await server.version()).toEqual({ current: '0.5.0' });
+    answer('core.version', { version: '0.5.0' });
+    expect(await server.version()).toEqual({ current: '0.5.0' });
+  });
+
+  it("is none when the server can't be asked", async () => {
+    answer('core.version', {}, 500);
+    expect(await server.version()).toBeUndefined();
+  });
+});

@@ -13,6 +13,7 @@ const PATHS = {
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',
   inspect: 'M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 6l-3 12',
   brand: 'M4 18l5-12 3 7 2-4 6 9',
+  update: 'M12 19V5 M6 11l6-6 6 6',
 } as const;
 
 defineProps<{ name: keyof typeof PATHS }>();

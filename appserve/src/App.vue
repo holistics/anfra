@@ -31,10 +31,19 @@ const watching = ref(false);
 // What each Data App is provisioned with; reloaded when the AML changes.
 const datasets = ref<Record<string, DatasetDescriptor>>();
 const frameError = ref<string>();
+// The anfra serving, and a newer release when the server knows of one.
+const version = ref<server.Version>();
+
+// A release version reads as v0.4.2; a local build's ("dev") as itself.
+const versionLabel = computed(() => {
+  const current = version.value?.current;
+  if (!current) return undefined;
+  return /^\d/.test(current) ? `v${current}` : current;
+});
 
 const statusLabel = computed(() => {
   if (health.value === 'unreachable') return 'anfra server unreachable';
-  if (health.value === 'up') return 'anfra is running';
+  if (health.value === 'up') return versionLabel.value ? `anfra ${versionLabel.value}` : 'anfra is running';
   if (health.value === 'down') return 'anfra is down';
   return 'Checking anfra…';
 });
@@ -42,8 +51,19 @@ const statusLabel = computed(() => {
 async function checkHealth (): Promise<void> {
   const was = health.value;
   health.value = await server.health();
-  // Back after an outage: catch up on anything missed.
-  if (was === 'unreachable' && health.value !== 'unreachable') void refreshAll();
+  // Back after an outage: catch up on anything missed. A restart may also be onto a new version.
+  if (was === 'unreachable' && health.value !== 'unreachable') {
+    void refreshAll();
+    void loadVersion();
+  }
+}
+
+const updateHint = computed(() => (version.value?.latest
+  ? `anfra ${version.value.latest} is available (you have ${version.value.current}). Run \`anfra update\`, then restart anfra serve.`
+  : ''));
+
+async function loadVersion (): Promise<void> {
+  version.value = await server.version();
 }
 
 async function loadProblems (): Promise<void> {
@@ -285,6 +305,7 @@ onMounted(async () => {
   void loadProblems();
   void loadDatasets();
   void checkHealth();
+  void loadVersion();
   healthTimer = setInterval(() => { void checkHealth(); }, 10_000);
   await loadContext();
   if (watching.value) {
@@ -341,14 +362,27 @@ onBeforeUnmount(() => {
         />
       </div>
       <div class="sidebar-footer">
-        <p
-          class="status"
-          data-testid="anfra-status"
-          :data-status="health"
-          role="status"
-        >
-          <span class="dot" aria-hidden="true" />{{ statusLabel }}
-        </p>
+        <div class="footer-status">
+          <p
+            class="status"
+            data-testid="anfra-status"
+            :data-status="health"
+            :title="health === 'up' && version ? `anfra is running on version ${version.current}` : undefined"
+            role="status"
+          >
+            <span class="dot" aria-hidden="true" />{{ statusLabel }}
+          </p>
+          <span
+            v-if="version?.latest && health !== 'unreachable'"
+            class="update-badge"
+            data-testid="update-badge"
+            role="note"
+            :aria-label="updateHint"
+            :title="updateHint"
+          >
+            <Icon name="update" />Update
+          </span>
+        </div>
         <button
           type="button"
           class="icon-button"

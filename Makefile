@@ -14,6 +14,10 @@ help: ## List the targets
 
 TOOL := go tool -modfile=tools/go.mod
 
+# Where make dev's Vite dev server serves the Data App frontend from source; anfra serve redirects
+# its pages there. Override it in .env.local.
+ANFRA_APPSERVE_DEV_URL ?= http://127.0.0.1:5173
+
 dev: ## Run the Go server and the SDK, each rebuilt on change, in this terminal (hivemind)
 	@test -n "$$ANFRA_DEV_REPO" || { echo "set ANFRA_DEV_REPO, in .env.local, to a repo with Data Apps for anfra serve to run in"; exit 1; }
 	$(TOOL) hivemind Procfile.dev

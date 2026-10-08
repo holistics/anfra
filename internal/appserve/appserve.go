@@ -25,6 +25,10 @@ type Options struct {
 	// Watch turns live reload on: while a Data App is open, a change in the repo is an event.
 	Watch  bool
 	Logger *slog.Logger
+	// DevFrontendURL, when set, is a Vite dev server serving the frontend from source (make dev):
+	// the pages redirect there, and it proxies the rest back. The built-in frontend, rebuilt only
+	// by `pnpm build:apps`, would be stale.
+	DevFrontendURL string
 }
 
 // Server serves a repo's Data Apps. Mount it for /, /apps/ and /appserve/.
@@ -54,9 +58,9 @@ func newServer(opts Options, built fs.FS) *Server {
 	return s
 }
 
-// FrontendBuilt reports whether this binary carries the appserve frontend: without it, the pages
-// say how to build it, and the backend's routes still work.
-func (s *Server) FrontendBuilt() bool { return s.frontend != nil }
+// FrontendBuilt reports whether the pages have a frontend, built into this binary or a dev server:
+// without one, the pages say how to build it, and the backend's routes still work.
+func (s *Server) FrontendBuilt() bool { return s.frontend != nil || s.opts.DevFrontendURL != "" }
 
 // Close ends every event stream, so a server can shut down without waiting on them.
 func (s *Server) Close() { s.events.closeAll() }
