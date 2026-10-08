@@ -1,3 +1,13 @@
+## 0.2.0 (2026-10-08)
+
+### ⚠ BREAKING CHANGES
+
+* rename plugin to anfra
+
+### Miscellaneous Chores
+
+* rename plugin to anfra ([187ed7e](https://github.com/holistics/anfra-skills/commit/187ed7e041d84d720bd52fc5e9091c6f31c536ce))
+
 ## [0.1.1](https://github.com/holistics/anfra-skills/compare/anfra-development-v0.1.0...anfra-development-v0.1.1) (2026-10-07)
 
 ### Features
