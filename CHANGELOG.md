@@ -1,3 +1,17 @@
+## [0.4.3](https://github.com/holistics/anfra/compare/anfra-v0.4.2...anfra-v0.4.3) (2026-10-08)
+
+### Features
+
+* show update notice for serve, hide for errors ([2ef54ea](https://github.com/holistics/anfra/commit/2ef54eadd64b0916456e25561c14fc934c6bc283))
+* show update notice in appserve frontend ([9977f58](https://github.com/holistics/anfra/commit/9977f580f348efcd0d68f0c6cbf64a0ed3a12e56))
+
+### Bug Fixes
+
+* **cli:** update skill plugin name ([610c71e](https://github.com/holistics/anfra/commit/610c71e21b775d4a940c39759c731f3a902e040f))
+
+### Build
+
+* pre-create home folder to prevent others claiming the ownership and permission ([8cd7daa](https://github.com/holistics/anfra/commit/8cd7daa6ad73107c790b274a7142ecffcd76250e))
 ## [0.4.2](https://github.com/holistics/anfra/compare/anfra-v0.4.1...anfra-v0.4.2) (2026-10-08)
 
 ### Bug Fixes
