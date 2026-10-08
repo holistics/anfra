@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write # create + push the tag; the called assembler publishes the Release
+  packages: write # the called assembler pushes the release's image to ghcr.io
 
 jobs:
   tag:
