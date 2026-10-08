@@ -2,7 +2,7 @@
 #
 # anfra installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/holistics/anfra/main/install.sh | bash
+#   curl -fsSL https://anfra.ai/install.sh | bash
 #
 # Downloads the anfra release binary for this platform from GitHub Releases and
 # installs it to ~/.anfra/bin (override with ANFRA_INSTALL_DIR). The release
