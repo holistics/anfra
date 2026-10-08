@@ -16,7 +16,7 @@ import (
 // Logging is the host's logging setup:
 //   - Logger:       the host's own structured logger (writes to anfra.log).
 //   - StderrWriter: sink for forwarding sidecar stderr — the log stream, same
-//     destination as Logger (anfra.log; also host stderr if ANFRA_SIDECAR_STDERR).
+//     destination as Logger (anfra.log; also host stderr if ANFRA_LOG_STDERR).
 //   - StdoutWriter: sink for forwarding sidecar stdout — discarded by default
 //     (banners / incidental noise), or host stdout if ANFRA_SIDECAR_STDOUT.
 type Logging struct {
@@ -66,9 +66,9 @@ func Setup(logsDir, repo string) (*Logging, error) {
 	}
 
 	// Log stream (host records + sidecar stderr) → file only by default; also to
-	// the host's stderr when ANFRA_SIDECAR_STDERR is set.
+	// the host's stderr when ANFRA_LOG_STDERR is set.
 	var stderrWriter io.Writer = f
-	if os.Getenv("ANFRA_SIDECAR_STDERR") != "" {
+	if os.Getenv("ANFRA_LOG_STDERR") != "" {
 		stderrWriter = io.MultiWriter(f, os.Stderr)
 	}
 	// Sidecar stdout (banners / incidental output) → discarded by default; to the
