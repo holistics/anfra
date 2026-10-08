@@ -34,7 +34,7 @@
     "test": "TZ=\"Asia/Kuala_Lumpur\" vitest run",
     "test:watch": "TZ=\"Asia/Kuala_Lumpur\" vitest watch",
     "typecheck": "tsc --noEmit",
-    "generate": "openapi-typescript ../api/openapi.yaml --default-non-nullable false -o src/api/schema.d.ts",
+    "generate": "openapi-typescript ../../api/openapi.yaml --default-non-nullable false -o src/api/schema.d.ts",
     "dev": "tsup --watch"
   },
   "devDependencies": {

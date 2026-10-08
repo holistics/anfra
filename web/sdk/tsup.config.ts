@@ -29,7 +29,7 @@ const frameScript: Plugin = {
   },
 };
 
-export default defineConfig({
+export default defineConfig((options) => ({
   entry: {
     common: 'src/common/index.ts',
     app: 'src/app/index.ts',
@@ -38,7 +38,9 @@ export default defineConfig({
   },
   format: ['esm'],
   dts: true,
-  clean: true,
+  // Not in watch mode (make dev): a clean would leave dist/ empty while it rebuilds, and the
+  // appserve dev server, reading the SDK from dist/, would fail to resolve it meanwhile.
+  clean: !options.watch,
   target: 'es2020',
   esbuildPlugins: [frameScript],
-});
+}));

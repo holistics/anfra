@@ -85,5 +85,5 @@ pnpm dev:sdk       # the same, rebuilt on change
 pnpm test:sdk      # vitest
 ```
 
-In `sdk/`, `pnpm typecheck`, and `pnpm generate` to regenerate `src/api/schema.d.ts` after the
+In `web/sdk/`, `pnpm typecheck`, and `pnpm generate` to regenerate `src/api/schema.d.ts` after the
 core API's spec (`api/openapi.yaml`) changes.

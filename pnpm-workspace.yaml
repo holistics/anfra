@@ -1,6 +1,5 @@
 packages:
-  - sdk
-  - appserve
+  - web/*
 
 onlyBuiltDependencies:
   - esbuild

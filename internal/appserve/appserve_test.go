@@ -127,7 +127,7 @@ func TestPages(t *testing.T) {
 	}
 
 	none := newServer(Options{RepoDir: repo(t)}, nil)
-	if w := get(none, "/apps/sales"); w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "pnpm build:apps") {
+	if w := get(none, "/apps/sales"); w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "pnpm build:web") {
 		t.Errorf("no frontend: %d %q", w.Code, w.Body)
 	}
 	if w := get(none, "/appserve/apps"); w.Code != http.StatusOK {

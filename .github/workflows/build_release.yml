@@ -62,7 +62,7 @@ jobs:
       - name: Build the Data Apps frontend
         run: |
           pnpm install --frozen-lockfile
-          pnpm build:apps
+          pnpm build:web
           test -f internal/appserve/dist/index.html
 
       - name: Read manifest
