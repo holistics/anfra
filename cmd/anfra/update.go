@@ -144,16 +144,14 @@ func maybeNotifyUpdate(invoked string) {
 		return
 	}
 
-	// The passive notice and its background refresh are for interactive humans
-	// only. When output is piped/captured — an agent calling anfra, CI, a script —
-	// stay completely silent and spawn nothing, so we add no noise or overhead.
-	if !stderrIsInteractive() {
-		return
-	}
-	if notice != "" {
+	// The notice is for interactive humans only: when output is piped/captured —
+	// an agent calling anfra, a script — stay silent. The background refresh still
+	// runs there (at most daily), so what an agent reads through `anfra version` and
+	// the skills' session hook stays current. CI spawns nothing.
+	if stderrIsInteractive() && notice != "" {
 		fmt.Fprintln(os.Stderr, "\n"+notice)
 	}
-	if update.Stale() {
+	if update.Stale() && os.Getenv("CI") == "" {
 		spawnDetached("__update-check")
 	}
 }
