@@ -1,7 +1,6 @@
 # web
 
-anfra's browser code: a pnpm workspace (`pnpm-workspace.yaml` at the repository root) of two
-packages, both for Data Apps. The Go side never imports them; it serves what they build.
+anfra's browser code: a pnpm workspace (`pnpm-workspace.yaml` at the repository root) of two packages, both for Data Apps. The Go side never imports them; it serves what they build.
 
 | Package | What it is | Where it ends up |
 |---|---|---|
@@ -10,14 +9,9 @@ packages, both for Data Apps. The Go side never imports them; it serves what the
 
 ## How it fits with the Go side
 
-- **The core API's types come from its spec.** `sdk/src/api/schema.d.ts` is generated from
-  `api/openapi.yaml`. After an op's input or answer changes, regenerate it
-  (`pnpm --filter anfra-sdk generate`); CI fails while it is stale.
-- **The frontend is embedded, not served from disk.** `pnpm build:web` builds the SDK, then the
-  frontend into `internal/appserve/dist`, and `go build` embeds that folder. A binary built
-  without it serves a page saying how to build it. Releases always build it first.
-- **A Data App never reaches the API itself.** It runs in a sandboxed frame; `anfra-sdk/host`
-  answers its calls over postMessage, with the core API client from `anfra-sdk/api`.
+- **The core API's types come from its spec.** `sdk/src/api/schema.d.ts` is generated from `api/openapi.yaml`. After an op's input or answer changes, regenerate it (`pnpm --filter anfra-sdk generate`); CI fails while it is stale.
+- **The frontend is embedded, not served from disk.** `pnpm build:web` builds the SDK, then the frontend into `internal/appserve/dist`, and `go build` embeds that folder. A binary built without it serves a page saying how to build it. Releases always build it first.
+- **A Data App never reaches the API itself.** It runs in a sandboxed frame; `anfra-sdk/host` answers its calls over postMessage, with the core API client from `anfra-sdk/api`.
 
 ## Developing
 
@@ -31,9 +25,6 @@ pnpm test:web         # both packages' tests (test:sdk, test:appserve); the fron
 make test             # the Go tests too
 ```
 
-Under `make dev`, open the frontend from Vite at `http://localhost:5173/`: it reloads on every
-edit, and proxies `/api` and `/appserve` to the Go server (`ANFRA_SERVE_URL`, else
-`http://127.0.0.1:7878`). The server's own pages, at `:7878`, show the last `pnpm build:web`.
+Under `make dev`, open the frontend from Vite at `http://localhost:5173/`: it reloads on every edit, and proxies `/api` and `/appserve` to the Go server (`ANFRA_SERVE_URL`, else `http://127.0.0.1:7878`). The server's own pages, at `:7878`, show the last `pnpm build:web`.
 
-Each package also runs on its own from its folder: `pnpm dev`, `pnpm build`, `pnpm test` and
-`pnpm typecheck`.
+Each package also runs on its own from its folder: `pnpm dev`, `pnpm build`, `pnpm test` and `pnpm typecheck`.
