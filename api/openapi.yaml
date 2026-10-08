@@ -714,6 +714,17 @@ components:
       required:
         - state
       type: object
+    UpdateInfo:
+      additionalProperties: false
+      properties:
+        available:
+          type: boolean
+        latest:
+          type: string
+      required:
+        - latest
+        - available
+      type: object
     ValidateInput:
       additionalProperties: false
       properties:
@@ -754,6 +765,8 @@ components:
     VersionResult:
       additionalProperties: false
       properties:
+        update:
+          $ref: "#/components/schemas/UpdateInfo"
         version:
           type: string
       required:

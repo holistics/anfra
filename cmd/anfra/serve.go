@@ -159,6 +159,9 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		if !opts.noMCP {
 			fmt.Printf("  MCP        %s/mcp\n", info.URL)
 		}
+		if !updateNotifyDisabled() {
+			go watchUpdates(ctx, h.cfg.Logger)
+		}
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}

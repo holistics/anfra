@@ -497,6 +497,10 @@ export interface components {
             /** @enum {string} */
             state: "healthy" | "degraded" | "not_running";
         };
+        UpdateInfo: {
+            available: boolean;
+            latest: string;
+        };
         ValidateInput: {
             /** @description optional file globs; report only diagnostics for matching files */
             globs?: string[];
@@ -512,6 +516,7 @@ export interface components {
             validator: string;
         };
         VersionResult: {
+            update?: components["schemas"]["UpdateInfo"];
             version: string;
         };
         Violation: {

@@ -37,6 +37,10 @@ type CommandContext struct {
 	// Server is the warm server the command runs in, for status to report: nil
 	// one-shot, and in a host that embeds the engine.
 	Server *ServerInfo
+	// Update reports the newest anfra release the host knows of, for version to
+	// report: nil when the host does not check for updates (one that embeds the
+	// engine, or a user who opted out), and a nil result when it knows none yet.
+	Update func() *UpdateInfo
 }
 
 // ServerInfo is a running `anfra serve`, as status reports it.
@@ -44,6 +48,12 @@ type ServerInfo struct {
 	URL        string `json:"url"`
 	InstanceID string `json:"instance_id"`
 	Version    string `json:"version"`
+}
+
+// UpdateInfo is the newest anfra release the host knows of, as version reports it.
+type UpdateInfo struct {
+	Latest    string `json:"latest"`
+	Available bool   `json:"available"`
 }
 
 // Sidecars declares which sidecars a command needs (so the one-shot CLI knows

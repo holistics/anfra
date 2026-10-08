@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
+	"time"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
 	"github.com/spf13/cobra"
@@ -43,11 +46,11 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 		return nil
 	}
 	if checkOnly {
-		fmt.Printf("Update available: %s (you have %s). Run `anfra update` to install.\n", rel.Tag, meta.Version)
+		fmt.Printf("Update available: anfra %s (you have %s). Run `anfra update` to install.\n", rel.Version, meta.Version)
 		return nil
 	}
 
-	fmt.Printf("Downloading %s...\n", rel.Tag)
+	fmt.Printf("Downloading anfra %s...\n", rel.Version)
 	// Show a progress line only on an interactive terminal; stay silent when
 	// output is piped/captured (agent, CI).
 	var progress io.Writer
@@ -57,7 +60,7 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	if err := update.Apply(ctx, rel, progress); err != nil {
 		return err
 	}
-	fmt.Printf("Updated anfra %s -> %s.\n", meta.Version, rel.Tag)
+	fmt.Printf("Updated anfra %s -> %s.\n", meta.Version, rel.Version)
 	return nil
 }
 
@@ -73,13 +76,45 @@ func newUpdateCheckCmd() *cobra.Command {
 	}
 }
 
-// commands for which the background update notice is suppressed (they either
-// do their own checking or are long-running/internal).
+// commands for which the after-the-command notice is suppressed: they do their
+// own checking (serve announces updates while it runs, see watchUpdates) or are
+// internal.
 var noNotifyCommands = map[string]bool{"update": true, "__update-check": true, "serve": true}
 
 // updateNotifyDisabled reports whether the background update notice is opted out.
 func updateNotifyDisabled() bool {
 	return os.Getenv("ANFRA_NO_UPDATE_NOTIFIER") != ""
+}
+
+// knownUpdate is the newest release from the cached check, for the version
+// command to report; nil when nothing has been checked yet. No network.
+func knownUpdate() *command.UpdateInfo {
+	r := update.Cached()
+	if r == nil {
+		return nil
+	}
+	return &command.UpdateInfo{Latest: r.Version, Available: r.IsNewer()}
+}
+
+// watchUpdates announces a newer release while serve runs: at startup and then
+// daily, so a server left up for days still hears of one. It runs off the
+// request path and announces each version once. Never auto-updates: the running
+// server would keep the old version anyway. Silent on any error (offline, rate
+// limited).
+func watchUpdates(ctx context.Context, logger *slog.Logger) {
+	announced := ""
+	for {
+		if r, err := update.Check(ctx); err == nil && r.IsNewer() && r.Version != announced {
+			announced = r.Version
+			logger.Info("serve.update_available", "latest", r.Version, "current", meta.Version)
+			fmt.Fprintln(os.Stderr, update.Notice(r))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(update.CheckEvery):
+		}
+	}
 }
 
 // autoUpdateEnabled reports whether opt-in fully-automatic update is on. When set,
