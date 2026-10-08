@@ -35,8 +35,14 @@ fi
 err()  { echo "${red}error${reset}: $*" >&2; exit 1; }
 warn() { echo "${yellow}warning${reset}: $*" >&2; }
 ok()   { echo "${green}✓${reset} $*"; }
-# Show paths under $HOME as ~/..., which is shorter and easier to read.
-tilde() { case "$1" in "$HOME"/*) echo "~${1#"$HOME"}" ;; *) echo "$1" ;; esac; }
+# Show paths under $HOME as ~/..., which is shorter and easier to read. With an
+# empty HOME every path would match "$HOME"/*, so leave paths as they are.
+tilde() {
+    if [ -n "$HOME" ]; then
+        case "$1" in "$HOME"/*) echo "~${1#"$HOME"}"; return ;; esac
+    fi
+    echo "$1"
+}
 
 # --- required tools (fail early with a clear message, not mid-run) ---
 command -v curl >/dev/null 2>&1 || err "curl is required but not found"
@@ -121,22 +127,26 @@ ok "Installed ${bold}anfra ${version:-}${reset} to $(tilde "$target")"
 [ -n "$sha" ] && echo "  ${dim}sha256 ${sha}${reset}"
 
 # --- ensure INSTALL_DIR is on PATH ---
-# current_rc is the current shell's rc file with the PATH line, which the user
-# can source to use anfra without restarting; empty when there's none.
+# Set by ensure_on_path and read by the next steps below. updated is "yes" when
+# an rc file has the PATH line; current_rc is the current shell's rc file with
+# it, which the user can source to use anfra without restarting.
+updated=""
 current_rc=""
 
 # For a line the user pastes: "$HOME" expands inside double quotes, "~" doesn't.
 manual_path_hint() {
-    case "$INSTALL_DIR" in
-        "$HOME"/*) dir="\$HOME${INSTALL_DIR#"$HOME"}" ;;
-        *)         dir="$INSTALL_DIR" ;;
-    esac
+    local dir="$INSTALL_DIR"
+    if [ -n "$HOME" ]; then
+        case "$INSTALL_DIR" in "$HOME"/*) dir="\$HOME${INSTALL_DIR#"$HOME"}" ;; esac
+    fi
     echo
     echo "$1 Run this now, and add it to your shell's startup file:"
     echo "  ${bold}export PATH=\"${dir}:\$PATH\"${reset}"
 }
 
 ensure_on_path() {
+    local found current edited shell rest rc line
+
     # Already reachable. Warn if another anfra earlier on PATH would win.
     case ":${PATH}:" in *":${INSTALL_DIR}:"*)
         found="$(command -v "$BIN_NAME" 2>/dev/null || true)"
@@ -152,7 +162,6 @@ ensure_on_path() {
     fi
 
     current="$(basename "${SHELL:-}")"
-    updated=""
     edited=""
     # "<shell>:<rc file>:<line to add>" — edit an rc file when it already exists,
     # or when it belongs to the user's current shell (created if missing). The
