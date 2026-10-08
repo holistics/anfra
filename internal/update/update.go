@@ -151,12 +151,13 @@ func Latest(ctx context.Context) (*Release, error) {
 	return out, nil
 }
 
-// IsNewer reports whether the latest version is newer than the running one. A
-// local "dev" build is always considered outdated so the notice/update fires.
+// IsNewer reports whether the latest version is newer than the running one, so
+// worth announcing and installing. Never for a build from source: it was built
+// on purpose, and a release would replace it with something else.
 func (r *Release) IsNewer() bool {
 	cur := meta.Version
-	if cur == "dev" || cur == "" {
-		return true
+	if meta.FromSource() {
+		return false
 	}
 	// Normalize to canonical vX.Y.Z so a stray "v"/"anfra-v" prefix on either side
 	// can't produce an invalid string (e.g. "vv0.2.0"), which Compare treats as 0.

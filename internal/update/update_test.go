@@ -22,8 +22,9 @@ func TestIsNewer(t *testing.T) {
 		{"0.1.0", "0.1.1", true},
 		{"0.2.0", "0.1.0", false},
 		{"0.1.0", "0.1.0", false},
-		{"dev", "0.1.0", true}, // local build is always outdated
-		{"", "0.1.0", true},    // unset behaves like dev
+		// A build from source is never offered a release in its place, older or newer.
+		{"0.1.0+f4fb358", "0.2.0", false},
+		{"0.0.0+source", "0.1.0", false},
 		{"1.0.0", "0.9.9", false},
 		// Mixed prefixes must normalize, not degrade to a 0/invalid compare.
 		{"v0.1.0", "0.2.0", true},

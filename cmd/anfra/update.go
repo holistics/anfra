@@ -31,6 +31,10 @@ func newUpdateCmd() *cobra.Command {
 }
 
 func runUpdate(ctx context.Context, checkOnly bool) error {
+	if meta.FromSource() {
+		return fmt.Errorf("this anfra (%s) was built from source, which `anfra update` would replace with a release: "+
+			"rebuild it to update it, or install a release with the installer", meta.Version)
+	}
 	// ctx is the signal-cancelable root from main, so Ctrl-C aborts the download
 	// (its request is context-aware). Per-request timeouts are bounded inside the
 	// update package (a quick lookup, then a large download).
