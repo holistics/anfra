@@ -1,3 +1,6 @@
 node_modules/
 dist/
 coverage/
+# The repository's, copied in when the package is packed (prepack).
+/LICENSE
+/NOTICE

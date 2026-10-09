@@ -9,17 +9,15 @@
 # event. The manifest.yml at that commit pins the sidecar releases to embed and the
 # version baked into the binary. Also runs on a manual/human `anfra-v*` tag push, or
 # workflow_dispatch for a test build (artifacts only, no release).
+#
+# A release also publishes the SDK to npm, as @holistics/anfra-sdk at the same version
+# (the sdk job).
 name: Build anfra release
 
 on:
   push:
     tags:
       - "anfra-v*"
-    # TEMPORARY — remove before merge. Lets us test the assembler on the branch
-    # the work lands on (a non-tag push isn't a release, so it just uploads
-    # artifacts). Needs ANFRA_DIST_TOKEN present to download the pinned sidecars.
-    branches:
-      - engine/prepare-for-cloud
   workflow_dispatch: # manual test build (uploads artifacts, no release)
   workflow_call:
     inputs:
@@ -74,12 +72,14 @@ jobs:
             echo "canal_tag=$(yq '.sidecars.canal_query' manifest.yml)"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Verify tag matches manifest, and the changelog has its notes
+      - name: Verify tag matches manifest, so does the SDK, and the changelog has its notes
         if: ${{ env.IS_RELEASE == 'true' }}
         env:
           VERSION: ${{ steps.m.outputs.version }}
         run: |
           test "anfra-v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
+          sdk="$(jq -r .version web/sdk/package.json)"
+          test "$sdk" = "$VERSION" || { echo "web/sdk/package.json version $sdk != manifest version $VERSION (pnpm bump sets both)"; exit 1; }
           scripts/release-notes.sh "$VERSION" > /dev/null
 
       - name: Collect sidecar binaries
@@ -188,3 +188,45 @@ jobs:
           name: anfra-binaries
           path: release/anfra-*
           if-no-files-found: error
+
+  # The SDK, published to npm as @holistics/anfra-sdk at the release's version, once the release
+  # is out. Any other build only packs it, so a broken package shows before a release does.
+  #
+  # npm takes the publish from this workflow over OIDC, with no token (trusted publishing), and
+  # records the package's provenance. npm checks the workflow that started the run, so the
+  # package's settings on npmjs.com trust both: tag_and_release.yml, which calls this one for a
+  # release, and this one, for a tag pushed by hand. A re-run skips a version npm already has:
+  # a version is published once.
+  sdk:
+    needs: assemble
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm's trusted publishing, and the package's provenance
+    env:
+      IS_RELEASE: ${{ inputs.tag != '' || startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # the version is package.json's packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later; Node's own may be older.
+      - run: npm install -g npm@11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sdk
+      - name: Publish the SDK, or pack it
+        working-directory: web/sdk
+        run: |
+          if [ "$IS_RELEASE" != true ]; then npm pack --dry-run; exit 0; fi
+          name="$(jq -r .name package.json)"
+          version="$(jq -r .version package.json)"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on npm"; exit 0
+          fi
+          # A prerelease (1.2.0-rc.1) must not become what `npm install` picks.
+          tag=latest
+          case "$version" in *-*) tag=next ;; esac
+          npm publish --tag "$tag"

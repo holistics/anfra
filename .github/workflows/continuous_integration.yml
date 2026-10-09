@@ -92,16 +92,21 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - name: the SDK's version is the release's
+        run: |
+          sdk="$(jq -r .version web/sdk/package.json)" release="$(yq .version manifest.yml)"
+          test "$sdk" = "$release" \
+            || { echo "web/sdk/package.json version $sdk != manifest.yml version $release: pnpm bump sets both" >&2; exit 1; }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter anfra-sdk typecheck
+      - run: pnpm --filter @holistics/anfra-sdk typecheck
       - name: build, as a release does
         run: pnpm build:web # the SDK, then the frontend, type-checked (vue-tsc)
       - run: pnpm test:web # after the build: the frontend's tests import the built SDK
       - name: the SDK's API types are fresh
         run: |
-          pnpm --filter anfra-sdk generate
+          pnpm --filter @holistics/anfra-sdk generate
           git diff --exit-code -- web/sdk/src/api/schema.d.ts \
-            || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter anfra-sdk generate" >&2; exit 1; }
+            || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter @holistics/anfra-sdk generate" >&2; exit 1; }
 
   # Dependencies this PR adds or changes (Go + pnpm), via GitHub's dependency graph;
   # config in .github/dependency-review-config.yml. The action runs twice so the

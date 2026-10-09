@@ -1,6 +1,6 @@
 # Releases
 
-A release is one `anfra` binary per platform, with both sidecars embedded ([sidecars.md](sidecars.md)) and the Data App frontend built in, plus a Docker image of the Linux ones. Everything about a release follows from one file.
+A release is one `anfra` binary per platform, with both sidecars embedded ([sidecars.md](sidecars.md)) and the Data App frontend built in, plus a Docker image of the Linux ones and the SDK on npm. Everything about a release follows from one file.
 
 ## `manifest.yml`, the single source
 
@@ -8,7 +8,7 @@ A release is one `anfra` binary per platform, with both sidecars embedded ([side
 
 To cut a release, on a branch:
 
-1. `pnpm bump <version>` (`scripts/bump.sh`) sets `version` and prepends the changes since the last `anfra-v*` tag to `CHANGELOG.md`, from conventional commits (`conventional-changelog.config.mjs` says which commit types appear).
+1. `pnpm bump <version>` (`scripts/bump.sh`) sets `version`, and the SDK's (`web/sdk/package.json`), and prepends the changes since the last `anfra-v*` tag to `CHANGELOG.md`, from conventional commits (`conventional-changelog.config.mjs` says which commit types appear).
 2. Update the sidecar pins too, if this release takes new ones. A pin change needs a version bump, or no new tag is cut.
 3. Merge to `main`.
 
@@ -19,11 +19,12 @@ To cut a release, on a branch:
 `build_release.yml`, in order:
 
 1. **The frontend,** once: `pnpm build:web`, into `internal/appserve/dist`, which every target embeds. It fails without `dist/index.html`: a binary without its pages is a broken release.
-2. **Checks:** the tag matches the manifest's version, and `CHANGELOG.md` has a section for it. Both fail before anything is built.
+2. **Checks:** the tag matches the manifest's version, so does the SDK's, and `CHANGELOG.md` has a section for it. Both fail before anything is built.
 3. **The sidecars:** the pinned releases' binaries, downloaded from their repositories (a cross-repository read token, `ANFRA_DIST_TOKEN`).
 4. **Every target,** cross-built on one runner (anfra is pure Go): each target's sidecars copied into the embed assets, `go build -tags embed_sidecar` with the version injected, then gzipped. Only the `.gz` is published, as a transport compression: the sidecars embedded in the binary stay uncompressed, so the binary itself stays delta-friendly.
 5. **The image,** below.
 6. **The GitHub Release,** created (or, on a re-run, edited) with the binaries.
+7. **The SDK,** once the release is out: below.
 
 **Release notes** are the version's section of `CHANGELOG.md`, under "Changelog", followed by GitHub's own generated notes: the pull requests, new contributors and compare link (`scripts/release-notes.sh`, which also previews them locally). So a release says what the changelog says, and a re-run brings its notes back in line.
 
@@ -39,6 +40,15 @@ To cut a release, on a branch:
 - **A named user,** `anfra`, UID 1000. The sidecars look their user up, and fail without a passwd entry, so a bare UID will not do.
 - **Its home already holds `~/.anfra` and `~/.cache`,** owned by `anfra`. An image built on this one may run root steps whose tools write to `$HOME/.cache` (Rosetta does, when building amd64 on Apple silicon); with those folders already anfra's, such a step only adds its own folder inside them, rather than leaving them root's and anfra unable to start.
 - **`/repo`,** the working directory, owned by `anfra`: where a repo is mounted or copied.
+
+## The SDK on npm
+
+`@holistics/anfra-sdk` (`web/sdk`), published by `build_release.yml`'s `sdk` job; what it holds is in [data-apps.md](data-apps.md).
+
+- **The release's version.** The SDK's API client is generated from this release's `api/openapi.yaml`, so the two go out together, at one version, even when the SDK did not change. `pnpm bump` sets both; CI fails a pull request in which they differ, and a release refuses to go out.
+- **Published once.** A re-run skips a version npm already has. A prerelease version (`1.2.0-rc.1`) is published under the `next` dist-tag, so `npm install` never picks it.
+- **Trusted publishing.** npm takes the publish from the workflow over OIDC, with no token, and records the package's provenance. It is configured on the package's settings on npmjs.com, naming this repository and a workflow. npm checks the workflow that started the run, not the one that publishes, so both are trusted: `tag_and_release.yml`, which calls `build_release.yml` for a release, and `build_release.yml`, which runs on its own for a tag pushed by hand. There is no npm token, and the package's settings disallow tokens, so only these workflows, or a maintainer with two-factor authentication, can publish.
+- **Any other build** packs it without publishing, so a broken package shows before a release does.
 
 ## Versions
 

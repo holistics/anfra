@@ -70,9 +70,9 @@ check: ## Lint and type-check everything, and check the API contract is fresh, a
 	go mod tidy --diff
 	$(TOOL) golangci-lint run ./...
 	scripts/openapi.sh diff
-	pnpm --filter anfra-sdk generate >/dev/null
+	pnpm --filter @holistics/anfra-sdk generate >/dev/null
 	@git diff --exit-code --quiet -- web/sdk/src/api/schema.d.ts \
 		|| { echo "web/sdk/src/api/schema.d.ts was stale: it is regenerated now, commit it"; exit 1; }
-	pnpm --filter anfra-sdk typecheck
+	pnpm --filter @holistics/anfra-sdk typecheck
 	pnpm build:sdk >/dev/null
 	pnpm --filter anfra-appserve typecheck

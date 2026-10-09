@@ -1,5 +1,5 @@
 /**
- * anfra-sdk/app: what a Data App runs on. The app runtime (an app, its queries, controls and
+ * @holistics/anfra-sdk/app: what a Data App runs on. The app runtime (an app, its queries, controls and
  * cross-filters) given a Backend, and the frame bootstrap that provisions it from its host. It
  * imports only `common`: a Data App's frame carries no API client.
  *

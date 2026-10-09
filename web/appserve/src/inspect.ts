@@ -1,10 +1,10 @@
 // Formatting for the inspect panel. What it shows is what the Anfra SDK's `App.toInspectJSON()`
 // posts out of the frame: its types are the SDK's. Rows are never part of it.
-import type { Condition } from 'anfra-sdk/common';
+import type { Condition } from '@holistics/anfra-sdk/common';
 
 export type {
   InspectedApp, InspectedControl, InspectedError, InspectedQuery, InspectedSelection,
-} from 'anfra-sdk/common';
+} from '@holistics/anfra-sdk/common';
 
 export function formatCondition (condition: Condition | undefined): string {
   if (!condition) return 'not applied yet';

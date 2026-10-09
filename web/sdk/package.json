@@ -1,8 +1,13 @@
 {
-  "name": "anfra-sdk",
-  "version": "0.1.0",
+  "name": "@holistics/anfra-sdk",
+  "version": "0.5.0",
   "description": "Data Apps on anfra: the authoring layer (app), what hosts one (host), the core API client (api), and their shared contract (common)",
-  "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holistics/anfra.git",
+    "directory": "web/sdk"
+  },
   "type": "module",
   "exports": {
     "./common": {
@@ -22,20 +27,26 @@
       "import": "./dist/api.js"
     },
     "./ambient": {
-      "types": "./ambient.d.ts"
+      "types": "./dist/ambient.d.ts"
     }
   },
   "files": [
     "dist",
-    "ambient.d.ts"
+    "NOTICE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "@holistics:registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/ambient.mjs",
     "test": "TZ=\"Asia/Kuala_Lumpur\" vitest run",
     "test:watch": "TZ=\"Asia/Kuala_Lumpur\" vitest watch",
     "typecheck": "tsc --noEmit",
     "generate": "openapi-typescript ../../api/openapi.yaml --default-non-nullable false -o src/api/schema.d.ts",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "prepack": "cp ../../LICENSE ../../NOTICE ."
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

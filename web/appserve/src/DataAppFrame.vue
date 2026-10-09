@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { coreApiBackend } from 'anfra-sdk/api';
-import type { DatasetDescriptor, InspectedApp, User } from 'anfra-sdk/common';
-import { mountDataApp, type MountedDataApp } from 'anfra-sdk/host';
+import { coreApiBackend } from '@holistics/anfra-sdk/api';
+import type { DatasetDescriptor, InspectedApp, User } from '@holistics/anfra-sdk/common';
+import { mountDataApp, type MountedDataApp } from '@holistics/anfra-sdk/host';
 import { api, definition } from './server';
 
 const props = defineProps<{

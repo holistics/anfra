@@ -15,7 +15,7 @@ export interface MountOptions {
   baseHref: string;
   datasets: Record<string, DatasetDescriptor>;
   user: User;
-  /** What answers the frame's queries: `coreApiBackend` from `anfra-sdk/api`, on any host. */
+  /** What answers the frame's queries: `coreApiBackend` from `@holistics/anfra-sdk/api`, on any host. */
   backend: Backend;
   onInspect?: (apps: InspectedApp[]) => void;
   /** The frame script; the one built into this package unless given (tests). */
@@ -36,7 +36,7 @@ export interface MountedDataApp extends Pick<BridgeHandle, 'setInspecting'> {
  */
 export function mountDataApp (options: MountOptions): MountedDataApp {
   const frameScript = options.frameScript ?? builtFrameScript();
-  if (!frameScript) throw new Error('anfra-sdk/host: built without its frame script; build the package (pnpm build).');
+  if (!frameScript) throw new Error('@holistics/anfra-sdk/host: built without its frame script; build the package (pnpm build).');
 
   const doc = options.container.ownerDocument;
   const frame = doc.createElement('iframe');

@@ -2,7 +2,7 @@ import { build, type Plugin } from 'esbuild';
 import { defineConfig } from 'tsup';
 
 /**
- * `anfra-sdk:frame-script`: the frame script (`anfra-sdk/app`'s bootstrap and app runtime as one
+ * `anfra-sdk:frame-script`: the frame script (`@holistics/anfra-sdk/app`'s bootstrap and app runtime as one
  * classic script, which a host injects into a Data App's frame), built afresh each time `host` is,
  * so a host always carries the app it was built with, in watch mode too.
  */

@@ -18,7 +18,7 @@ If you changed a command's input or answer, regenerate the API contract and the 
 
 ```sh
 scripts/openapi.sh generate
-pnpm --filter anfra-sdk generate
+pnpm --filter @holistics/anfra-sdk generate
 ```
 
 ## Commit messages

@@ -4,8 +4,10 @@ import { ValidationError } from '../common/errors';
 import type {
   AppDeclaration, Backend, DatasetDescriptor, SdkEnvironment, SdkFeatures, User,
 } from '../common/types';
+import { version } from '../../package.json';
 
-export const VERSION = '0.1.0';
+/** The package's version: anfra's own, as each release publishes the SDK with it. */
+export const VERSION: string = version;
 
 /**
  * A provisioned SDK instance: the environment, plus the one factory an author needs.

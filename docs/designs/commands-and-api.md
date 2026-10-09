@@ -46,7 +46,7 @@ The document's version is the contract's, not the binary's: it does not change w
 
 ## Clients from the contract
 
-The SDK's client for the core API, `anfra-sdk/api`, is typed by `web/sdk/src/api/schema.d.ts`, generated from `api/openapi.yaml` (`pnpm --filter anfra-sdk generate`). CI fails when it is stale. A change to a command's input or output therefore reaches TypeScript callers as a type error, not at runtime. Any other client can be generated from the same document.
+The SDK's client for the core API, `@holistics/anfra-sdk/api`, is typed by `web/sdk/src/api/schema.d.ts`, generated from `api/openapi.yaml` (`pnpm --filter @holistics/anfra-sdk generate`). CI fails when it is stale. A change to a command's input or output therefore reaches TypeScript callers as a type error, not at runtime. Any other client can be generated from the same document.
 
 ## Why it is shaped this way
 

@@ -62,7 +62,7 @@ An op's input or answer is part of the core API's contract:
 
 ```sh
 scripts/openapi.sh generate            # api/openapi.yaml, from the commands
-pnpm --filter anfra-sdk generate       # the SDK's types (web/sdk/src/api/schema.d.ts), from it
+pnpm --filter @holistics/anfra-sdk generate       # the SDK's types (web/sdk/src/api/schema.d.ts), from it
 ```
 
 Commit both. CI refuses a stale one, and a breaking change that no commit declares (`feat!:`, or a `BREAKING CHANGE:` footer). See [commands and API](docs/designs/commands-and-api.md).
@@ -71,7 +71,7 @@ Commit both. CI refuses a stale one, and a breaking change that no commit declar
 
 Commit messages are checked by commitlint, in a git hook and in CI: the rules, types and scopes are in `commitlint.config.mjs`. `pnpm commit` writes one interactively.
 
-A release is a version bump merged to main: `pnpm bump <version>` updates `manifest.yml` and `CHANGELOG.md`, and the release workflows tag, build and publish. See [release](docs/designs/release.md).
+A release is a version bump merged to main: `pnpm bump <version>` updates `manifest.yml`, the SDK's version and `CHANGELOG.md`, and the release workflows tag, build and publish: the binaries, the image, and the SDK on npm. See [release](docs/designs/release.md).
 
 The Docker image is built from release binaries; the `Dockerfile`'s header says how to build it locally.
 

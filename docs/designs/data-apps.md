@@ -17,12 +17,12 @@ A definition can come from many authors, people and agents, and an agent busy bu
 | Piece | Where | What it is |
 |---|---|---|
 | Data App definition | the repo's `apps/**/*.html` | The author's part: one HTML file that declares its queries, controls and cross-filters through the `Anfra` global, and renders the results with its own HTML, CSS and JavaScript. It runs in the frame. |
-| `anfra-sdk/common` | `web/sdk/src/common` | The contract the others share: types (`Backend`, its requests and results, `DatasetDescriptor`, `User`), the error classes, the bridge's messages. No DOM, no network: all of it can end up in a frame. |
-| `anfra-sdk/app` | `web/sdk/src/app` | What runs in the frame: the **app runtime** (`createApp`, queries, controls, cross-filters, results, state), given a `Backend` and implementing none, and the **frame bootstrap**, which provisions it from the host and installs `Anfra`. |
-| `anfra-sdk/host` | `web/sdk/src/host` | What hosts a Data App, in the page around it: provisions the frame's document, mounts it sandboxed, and answers its calls over the bridge. |
-| `anfra-sdk/api` | `web/sdk/src/api` | The core API for the code around a Data App (the page hosting it, scripts, tests): a client generated from `api/openapi.yaml`, `coreApiBackend` (a `Backend` as core ops), `loadDatasets` (what a Data App is provisioned with). |
+| `@holistics/anfra-sdk/common` | `web/sdk/src/common` | The contract the others share: types (`Backend`, its requests and results, `DatasetDescriptor`, `User`), the error classes, the bridge's messages. No DOM, no network: all of it can end up in a frame. |
+| `@holistics/anfra-sdk/app` | `web/sdk/src/app` | What runs in the frame: the **app runtime** (`createApp`, queries, controls, cross-filters, results, state), given a `Backend` and implementing none, and the **frame bootstrap**, which provisions it from the host and installs `Anfra`. |
+| `@holistics/anfra-sdk/host` | `web/sdk/src/host` | What hosts a Data App, in the page around it: provisions the frame's document, mounts it sandboxed, and answers its calls over the bridge. |
+| `@holistics/anfra-sdk/api` | `web/sdk/src/api` | The core API for the code around a Data App (the page hosting it, scripts, tests): a client generated from `api/openapi.yaml`, `coreApiBackend` (a `Backend` as core ops), `loadDatasets` (what a Data App is provisioned with). |
 | appserve backend | `internal/appserve` | `anfra serve`'s Data App routes: the pages, the Data App tree, the files under `apps/`, the reader, live reload. Reaches no data. |
-| appserve frontend | `web/appserve` | The page `anfra serve` shows: the tree of Data Apps, the running one in its frame, the repo's problems, the server's health, the inspect panel. Built on `anfra-sdk/host` and `anfra-sdk/api`. |
+| appserve frontend | `web/appserve` | The page `anfra serve` shows: the tree of Data Apps, the running one in its frame, the repo's problems, the server's health, the inspect panel. Built on `@holistics/anfra-sdk/host` and `@holistics/anfra-sdk/api`. |
 
 The SDK is one package with four entrypoints because they are four sides of one contract, released together; its root exports nothing. Its own guide is [`web/sdk/README.md`](../../web/sdk/README.md); the workspace is [`web/README.md`](../../web/README.md).
 
@@ -32,10 +32,10 @@ The SDK is one package with four entrypoints because they are four sides of one 
 flowchart LR
   subgraph page["App page, at the API's origin"]
     fe["appserve frontend<br/>tree · problems · health · inspect"]
-    host["anfra-sdk/host"]
-    api["anfra-sdk/api<br/>coreApiBackend · loadDatasets"]
+    host["@holistics/anfra-sdk/host"]
+    api["@holistics/anfra-sdk/api<br/>coreApiBackend · loadDatasets"]
     subgraph frame["iframe sandbox=allow-scripts, srcdoc: opaque origin (sandboxed)"]
-      app["anfra-sdk/app<br/>bootstrap + app runtime: Anfra"]
+      app["@holistics/anfra-sdk/app<br/>bootstrap + app runtime: Anfra"]
       def["Data App definition"]
     end
   end
@@ -91,7 +91,7 @@ The bridge (`common/bridge.ts`, served by `host/bridge.ts`) is a small postMessa
 - **Only two methods are served: `submitQuery` and `fieldSuggestions`**, the `Backend`'s own. Nothing else of the API is reachable from a frame, whatever the host's credentials.
 - Messages are accepted only from that frame's window (an opaque origin can't be checked by name), and the frame posts only to the host's origin, from the provision data.
 
-**`anfra-sdk/app` imports only `common`.** The frame script carries no API client, so a definition can't find one to misuse. `app/bundle.test.ts` builds the frame script as released and checks it. The frame script is built into `host` (a virtual module, `anfra-sdk:frame-script`, answered by a plugin in `web/sdk/tsup.config.ts`), so a host always carries the app runtime it was built with.
+**`@holistics/anfra-sdk/app` imports only `common`.** The frame script carries no API client, so a definition can't find one to misuse. `app/bundle.test.ts` builds the frame script as released and checks it. The frame script is built into `host` (a virtual module, `anfra-sdk:frame-script`, answered by a plugin in `web/sdk/tsup.config.ts`), so a host always carries the app runtime it was built with.
 
 ## What each query carries: the query and the reader's state
 
@@ -117,7 +117,7 @@ So reader input is never spliced into AQL text, and the executed AQL comes back 
 
 appserve is how `anfra serve` presents Data Apps, in two halves: a backend (`internal/appserve`) that serves the page and what it reads (the tree, the context, the files; steps 1 and 2), and a frontend (`web/appserve`), the page itself, which lists the Data Apps and runs the one a reader opens (steps 1 to 3).
 
-appserve is also the layer to replace. A team building its own platform, or bringing Data Apps into its own app, keeps the SDK and the core API, and swaps appserve for its own pages: its own navigation, its own place to keep Data Apps, its own idea of who the reader is, around `anfra-sdk/host` and `anfra-sdk/api`. anfra-cloud does this: its web app serves Data Apps beside sign-in, organisations and user management, in one richer layer ([what is core's and what is a platform's](#what-is-cores-and-what-is-a-platforms)).
+appserve is also the layer to replace. A team building its own platform, or bringing Data Apps into its own app, keeps the SDK and the core API, and swaps appserve for its own pages: its own navigation, its own place to keep Data Apps, its own idea of who the reader is, around `@holistics/anfra-sdk/host` and `@holistics/anfra-sdk/api`. anfra-cloud does this: its web app serves Data Apps beside sign-in, organisations and user management, in one richer layer ([what is core's and what is a platform's](#what-is-cores-and-what-is-a-platforms)).
 
 `anfra serve` serves the Data Apps by default (`--no-apps` turns them off), beside the core API on the same listener and origin, so the page needs no CORS (`cmd/anfra/serve.go`). appserve's routes are not ops: they are not in the spec or in discovery, since they are `anfra serve`'s alone.
 
@@ -142,8 +142,8 @@ The watcher runs only while an event stream is open: the first starts it, the la
 
 ## What is core's and what is a platform's
 
-Core (the engine and its ops) knows nothing of Data Apps, pages or readers. It gained only what is right for every client: `core.query`'s Query Input and `core.show`. Everything that maps between the SDK and the core API is `anfra-sdk/api`'s; provisioning and answering the frame is `anfra-sdk/host`'s; where Data Apps live and who reads them is the server's (appserve, on `anfra serve`).
+Core (the engine and its ops) knows nothing of Data Apps, pages or readers. It gained only what is right for every client: `core.query`'s Query Input and `core.show`. Everything that maps between the SDK and the core API is `@holistics/anfra-sdk/api`'s; provisioning and answering the frame is `@holistics/anfra-sdk/host`'s; where Data Apps live and who reads them is the server's (appserve, on `anfra serve`).
 
-That keeps the browser half portable. Another platform, anfra-cloud included, serves Data Apps with its own page around `anfra-sdk/host` and `anfra-sdk/api`, pointed at its own core API (for example `coreApiBackend('/api/o/{org}')`), and its own server in appserve's place: where the definitions come from, who the reader is, and whether that reader may run each query, see each dataset's schema, or get suggestions. Those are the platform's decisions, made before a core op runs ([engine.md](engine.md)).
+That keeps the browser half portable. Another platform, anfra-cloud included, serves Data Apps with its own page around `@holistics/anfra-sdk/host` and `@holistics/anfra-sdk/api`, pointed at its own core API (for example `coreApiBackend('/api/o/{org}')`), and its own server in appserve's place: where the definitions come from, who the reader is, and whether that reader may run each query, see each dataset's schema, or get suggestions. Those are the platform's decisions, made before a core op runs ([engine.md](engine.md)).
 
 Anything a Data App needs that core doesn't formally offer starts in the platform, not in core: a stopgap there is visibly a stopgap, while one in core becomes an implicit contract. A core op is added when no existing op expresses the need completely, with the right permission, as a typed answer. The bar is high because an op, once added, is part of the core API's contract, which every platform serves and a breaking change must declare ([the contract](commands-and-api.md#the-contract-apiopenapiyaml)).
