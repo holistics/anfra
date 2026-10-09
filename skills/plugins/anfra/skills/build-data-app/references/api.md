@@ -15,7 +15,7 @@ import, no setup, no await.
 
 ## Field references
 
-How you name a field **to the SDK** (in `createFilter`, `mapControl`, `select({ fields })`):
+How you name a field **to the SDK** (in `createFilter` and `mapControl`):
 `model.field` for a model field, a bare `name` for a dataset-level metric. Names come from
 `Anfra.datasets`, never from labels. A filter's `field` is checked at once (a `ValidationError`
 with a "did you mean"); a `mapControl` field is not checked until the query runs, so a typo there
@@ -33,7 +33,7 @@ is almost always right.
 
 | Member | Does |
 | --- | --- |
-| `app.createQuery(name, { dataset, aql, pageSize? })` | Declares a query. `pageSize` is 1 to 1000 and defaults to 1000; anything else throws. Page further with `fetchMore()`. |
+| `app.createQuery(name, { dataset, aql, pageSize? })` | Declares a query. Without `pageSize` it is not paged and returns every row. With one (a whole number of at least 1; anything else throws) it returns a page at a time: page further with `fetchMore()`. A pivot query (`rows { }` / `columns { }`) can't be paged, so must not declare one. |
 | `app.createFilter(name, decl)` | Declares a filter. See [Filter](#filter). |
 | `app.createDateDrill(name, { default?, label? })` | Declares a date grain switch. See [Date drill](#date-drill). |
 | `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. |
@@ -76,12 +76,13 @@ a bare dataset metric is an aggregate condition too.
 | Member | Does |
 | --- | --- |
 | `query.state` | `'idle' \| 'executing' \| 'success' \| 'error'` |
-| `query.result` | `{ columns, rows, meta: { page, pageSize, numRows }, debug? }`, or `undefined` before success. Kept while re-executing, so you can render stale data under a spinner. |
+| `query.result` | `{ columns, rows, meta: { numRows, page?, pageSize? }, debug? }` (`page` and `pageSize` only for a paged query), or `undefined` before success. Kept while re-executing, so you can render stale data under a spinner. |
 | `query.error` | The error when `state === 'error'`. |
 | `query.setSort([{ field, direction }])` | Sorts by a result column `name`. `[]` restores the AQL's own sort. Re-run with `execute()`. |
-| `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. |
-| `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. See [Cross-filtering](#cross-filtering). |
+| `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. |
+| `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
+| `query.abort()` | Cancels this query's in-flight request. |
 | `query.subscribe(fn)` | Change listener for just this query. |
 
 ### Result shape
@@ -99,7 +100,7 @@ query.result.rows    // [{ month: '2026-01-01', total: 1234.5 }, ...]
 - Decimal values can arrive as strings (`"97537.24"`) to keep their precision, and dates as ISO
   strings (`"2025-06-01T00:00:00Z"`). Convert with `Number(...)` before charting a measure.
 - `column.label` is a display label; prefer it for axis and header text.
-- `result.debug` has `executedAt`, `executedSql`, and for an AQL query `executedAql`: your AQL
+- `result.debug` has `executedAt`, `executedSql`, `fromCache`, and for an AQL query `executedAql`: your AQL
   with the reader's filters, sorts and date drills applied — the first thing to log when a
   control seems to do nothing.
 
@@ -186,6 +187,9 @@ chart.on('click', (p) => {
   values off them.
 - Only dimension columns become conditions; measures and query-local expressions are skipped. A
   dropped expression column sets `app.selection.lossy` and logs a warning.
+- `query.select(rows, { fields: ['region'] })` narrows the conditions to those result column
+  aliases (dimensions only). Naming a measure, a query-local expression or an alias missing from
+  the last result throws a `ValidationError`.
 - One selection per app: selecting in another query replaces it. The source query is never
   filtered by its own selection. Use `query.selectedRows` to dim the unselected marks.
 - Both queries must use the same dataset. No self-edges.
