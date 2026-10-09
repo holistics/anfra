@@ -4,17 +4,17 @@ How anfra is put together: the processes, how a command flows through them, the 
 
 ## Processes
 
-anfra is a Go program (the host) and two sidecar processes it talks to. Each sidecar exists because its work is best done in another runtime, not to split anfra into services: locally, the host starts both and they live and die with it.
+anfra is a Go program and two sidecar processes it talks to. Each sidecar exists because its work is best done in another runtime, not to split anfra into services: locally, anfra starts both and they live and die with it.
 
 | Process | Role | Code |
 |---|---|---|
-| **anfra** (Go) | The host: commands, the CLI, `anfra serve` (HTTP API, MCP, Data App pages), config and credentials, orchestration, logs. | `cmd/anfra`, `internal/`, `engine/`, `shared/` |
-| **anfra-node** (Node.js) | Supplies the host with core functions that exist in Node.js. Today these are mainly the semantic layer's (compiling, validating and showing AML; compiling and validating AQL) and the local catalog's (ingest, search). | holistics-core `apps/anfra-node`; Go client in `internal/sidecar/anfranode` |
+| **anfra** (Go) | The main process: commands, the CLI, `anfra serve` (HTTP API, MCP, Data App pages), config and credentials, orchestration, logs. | `cmd/anfra`, `internal/`, `engine/`, `shared/` |
+| **anfra-node** (Node.js) | Supplies anfra with core functions that exist in Node.js. Today these are mainly the semantic layer's (compiling, validating and showing AML; compiling and validating AQL) and the local catalog's (ingest, search). | holistics-core `apps/anfra-node`; Go client in `internal/sidecar/anfranode` |
 | **canal-query** (Go) | Executes SQL against the warehouse, with connection pooling. | holistics/canal; Go client in `internal/sidecar/canalquery` |
 
-The host talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on a loopback port (`internal/sidecar`). anfra-node also reaches canal-query directly when it writes the local catalog (`internal/ingest/ingest.go` passes it canal-query's address).
+anfra talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on a loopback port (`internal/sidecar`). anfra-node also reaches canal-query directly when it writes the local catalog (`internal/ingest/ingest.go` passes it canal-query's address).
 
-Only the host reads `.anfra/data_sources.yml`. anfra-node receives each data source's name and type, which it needs for the SQL dialect; the connection, credentials included, goes to canal-query alone, with the query to run (`internal/datasource/datasource.go`).
+Only anfra reads `.anfra/data_sources.yml`. anfra-node receives each data source's name and type, which it needs for the SQL dialect; the connection, credentials included, goes to canal-query alone, with the query to run (`internal/datasource/datasource.go`).
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ flowchart LR
     agent[Agents: HTTP / MCP]
     platform[A platform embedding the engine]
   end
-  subgraph host["anfra (Go host)"]
+  subgraph anfra["anfra (Go)"]
     reg["Command registry<br/>internal/app"]
     serve["anfra serve<br/>/api · /mcp · /apps"]
     engine["engine package"]
@@ -54,9 +54,9 @@ flowchart LR
 Every command, on every surface, goes through the one registry (`internal/app`): the CLI, `anfra serve`'s HTTP ops and MCP tools, and a platform calling `engine.Dispatch`. A query, for example:
 
 1. The input is checked against the command's schema, then its `Check` (rules between arguments), before any sidecar is needed ([commands-and-api.md](commands-and-api.md)).
-2. The host asks anfra-node to compile the query for the dataset (AQL, by default). anfra-node reads the repo's semantic layer (its AML), from its compile cache where it can, and answers SQL, or diagnostics saying what is wrong.
-3. The host sends the SQL and the data source's connection to canal-query, which runs it on the warehouse.
-4. The host shapes the rows into the command's answer. A failure anywhere becomes a classified error ([errors.md](errors.md)).
+2. anfra asks anfra-node to compile the query for the dataset (AQL, by default). anfra-node reads the repo's semantic layer (its AML), from its compile cache where it can, and answers SQL, or diagnostics saying what is wrong.
+3. anfra sends the SQL and the data source's connection to canal-query, which runs it on the warehouse.
+4. anfra shapes the rows into the command's answer. A failure anywhere becomes a classified error ([errors.md](errors.md)).
 
 ## Two ways to run
 
@@ -89,7 +89,7 @@ Two places, with different owners.
 ├── sidecars/<name>-<hash>     embedded sidecars, unpacked to run (internal/sidecar/binary.go)
 ├── update-check.json          the last update check (internal/update)
 └── repos/<repo id>/           one per repo: <folder name>-<hash of its path>
-    ├── logs/anfra.log         the host's and sidecars' log
+    ├── logs/anfra.log         anfra's and the sidecars' log
     ├── cache/                 anfra-node's compile cache
     ├── runtime/serve.json     the running server, while there is one
     └── catalog/               the local search catalog
@@ -99,9 +99,9 @@ Keeping state out of the repo means a repo never fills with generated files, and
 
 ## Logs and telemetry
 
-**Logs.** The host writes structured JSON records to the repo's `anfra.log`, and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes (`internal/logging`). The terminal stays clean for command output; `ANFRA_LOG_STDERR` also copies the log to stderr. `LOG_LEVEL` sets the level.
+**Logs.** anfra writes structured JSON records to the repo's `anfra.log`, and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes (`internal/logging`). The terminal stays clean for command output; `ANFRA_LOG_STDERR` also copies the log to stderr. `LOG_LEVEL` sets the level.
 
-**Traces.** When an OTLP endpoint is configured, the host installs OpenTelemetry (`internal/telemetry`). A CLI command is the root of its trace; the op, each call to a sidecar and, under `serve`, the HTTP request are spans under it. The host passes its trace to anfra-node with each call (W3C `traceparent`), and points anfra-node's exporter at the same collector, so one trace runs from the CLI through anfra-node's compile (`cmd/anfra/telemetry.go`). A CLI call forwarded to `serve` carries its trace along, which the server continues when it listens on loopback.
+**Traces.** When an OTLP endpoint is configured, anfra installs OpenTelemetry (`internal/telemetry`). A CLI command is the root of its trace; the op, each call to a sidecar and, under `serve`, the HTTP request are spans under it. anfra passes its trace to anfra-node with each call (W3C `traceparent`), and points anfra-node's exporter at the same collector, so one trace runs from the CLI through anfra-node's compile (`cmd/anfra/telemetry.go`). A CLI call forwarded to `serve` carries its trace along, which the server continues when it listens on loopback.
 
 ## Further reading
 

@@ -47,7 +47,7 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 
 ## What a platform brings
 
-- **Identity and authorization**: who is calling, and whether they may run this command on this input. `apikit.Mount` gives each op a host-side `Admit`, `Authorize` and `Bind` around anfra's own validation and handler.
+- **Identity and authorization**: who is calling, and whether they may run this command on this input. `apikit.Mount` gives each op a platform-side `Admit`, `Authorize` and `Bind` around anfra's own validation and handler.
 - **The invocation**: the repo the call acts on, the sidecar clients, the `DataPerms` derived from the caller, and `Attribution` for its logs.
 - **The transport**: HTTP, MCP or its own, with its own middleware.
 - **The sidecars**: running, reachable, and released with the versions this anfra pins (`manifest.yml`; see [release.md](release.md)).

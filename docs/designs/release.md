@@ -36,7 +36,7 @@ To cut a release, on a branch:
 - **One name for every platform.** Built for linux/amd64 and linux/arm64 at once, each tag is a multi-platform index; Docker pulls the build matching the machine. Tags are the version, its major.minor, and `latest`. A release pushes them; any other build only builds the image, so a broken Dockerfile shows before a release does.
 - **No emulation.** Everything that needs a shell (CA certificates, the user, tini) is prepared in a stage on the builder's own platform; the final stage only copies files. So building for another architecture needs no QEMU or Rosetta.
 - **Debian trixie,** because the sidecars anfra unpacks need its glibc.
-- **tini as PID 1** (Debian's static build, for the target architecture). It reaps orphans, forwards signals, and keeps anfra from being PID 1, which a sidecar could read as its host having died ([sidecars.md](sidecars.md)).
+- **tini as PID 1** (Debian's static build, for the target architecture). It reaps orphans, forwards signals, and keeps anfra from being PID 1, which a sidecar could read as anfra having died ([sidecars.md](sidecars.md)).
 - **A named user,** `anfra`, UID 1000. The sidecars look their user up, and fail without a passwd entry, so a bare UID will not do.
 - **Its home already holds `~/.anfra` and `~/.cache`,** owned by `anfra`. An image built on this one may run root steps whose tools write to `$HOME/.cache` (Rosetta does, when building amd64 on Apple silicon); with those folders already anfra's, such a step only adds its own folder inside them, rather than leaving them root's and anfra unable to start.
 - **`/repo`,** the working directory, owned by `anfra`: where a repo is mounted or copied.

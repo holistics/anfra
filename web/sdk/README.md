@@ -53,7 +53,7 @@ global.
 import { coreApiBackend, coreClient, loadDatasets } from '@holistics/anfra-sdk/api';
 import { mountDataApp } from '@holistics/anfra-sdk/host';
 
-const client = coreClient('/api');                       // the core API, on whichever host
+const client = coreClient('/api');                       // the core API, on whichever server serves it
 const { datasets } = await loadDatasets(client);         // every dataset, through core.show
 
 const mounted = mountDataApp({
@@ -68,19 +68,15 @@ const mounted = mountDataApp({
 ```
 
 `mountDataApp` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`,
-with the frame bootstrap and the provisioned data ahead of it. The bootstrap's Backend forwards each
-call to the host over postMessage; the host answers it with the Backend it was given.
+with the frame bootstrap and the provisioned data ahead of it. The bootstrap's Backend forwards each call to the host over postMessage; the host answers it with the Backend it was given.
 
 ## The boundary
 
 A Data App definition can come from any author, often an agent, which may not think of security while building an analysis. So the SDK guards it for its author, and makes the safe way the easy one:
 
-- Its frame has an opaque origin. Its own requests to the API are cross-origin, which `anfra serve`
-  refuses, and carry no credentials on a host that has them.
-- The bridge answers only the Backend's two methods, `submitQuery` and `fieldSuggestions`. Nothing
-  else of the API is reachable from a frame.
-- `@holistics/anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.
-  A test on the built frame script holds this.
+- Its frame has an opaque origin. Its own requests to the API are cross-origin, which `anfra serve` refuses, and carry no credentials on a platform that has them.
+- The bridge answers only the Backend's two methods, `submitQuery` and `fieldSuggestions`. Nothing else of the API is reachable from a frame.
+- `@holistics/anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.  A test on the built frame script holds this.
 
 ## Development
 

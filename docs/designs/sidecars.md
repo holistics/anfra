@@ -1,13 +1,13 @@
 # Sidecars
 
-anfra is a Go host with two helper processes, its sidecars. The host owns the CLI, the server, the repo's config and credentials; the sidecars do what is best done in another runtime.
+anfra is a Go program with two helper processes, its sidecars. anfra owns the CLI, the server, the repo's config and credentials; the sidecars do what is best done in another runtime.
 
 | Sidecar | What it is | Talks over |
 |---|---|---|
 | anfra-node | anfra's core Node.js functions: today, compiling and validating AML and AQL, showing a repo's objects, and ingesting the search catalog. Built from `holistics-core/apps/anfra-node`. | A Unix socket (JSON-RPC over HTTP) |
 | canal-query | The query engine: runs SQL against the warehouse, with a connector per database type. Built from `holistics/canal` (`app/query`). | HTTP on a free loopback port |
 
-Each has its own package under `internal/sidecar/` (its supervisor, client and wire types), on the shared framework in `internal/sidecar/` itself: the `Config` a host gives them, the lifecycle of a spawned one (`process.go`), how its binary is found (`binary.go`), and how one that does not answer is classified (`unreachable.go`). See [architecture.md](architecture.md) for where they sit in a command's path.
+Each has its own package under `internal/sidecar/` (its supervisor, client and wire types), on the shared framework in `internal/sidecar/` itself: the `Config` they are given, the lifecycle of a spawned one (`process.go`), how its binary is found (`binary.go`), and how one that does not answer is classified (`unreachable.go`). See [architecture.md](architecture.md) for where they sit in a command's path.
 
 ## Where the binaries come from
 
