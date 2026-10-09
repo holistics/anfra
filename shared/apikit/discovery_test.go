@@ -2,7 +2,6 @@ package apikit_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/shared/httpkit"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/holistics/anfra/shared/apikit"
@@ -48,7 +48,7 @@ func getJSON(t *testing.T, h http.Handler, path, user string, into any) int {
 	t.Helper()
 	w := do(h, http.MethodGet, path, user, "")
 	if w.Code == http.StatusOK {
-		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
+		if err := jsonkit.Unmarshal(w.Body.Bytes(), into); err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
 	}

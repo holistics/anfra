@@ -1,8 +1,8 @@
 module github.com/holistics/anfra
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.5
+toolchain go1.27.2
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.39.1

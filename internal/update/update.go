@@ -10,7 +10,6 @@ package update
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/home"
+	"github.com/holistics/anfra/shared/jsonkit"
 
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/minio/selfupdate"
@@ -137,7 +137,7 @@ func Latest(ctx context.Context) (*Release, error) {
 			URL  string `json:"url"`
 		} `json:"assets"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	if err := jsonkit.UnmarshalRead(resp.Body, &rel); err != nil {
 		return nil, fmt.Errorf("decode release: %w", err)
 	}
 	out := &Release{Tag: rel.TagName, Version: strings.TrimPrefix(rel.TagName, tagPrefix)}
@@ -291,7 +291,7 @@ func readCache() (*cache, bool) {
 		return nil, false
 	}
 	var c cache
-	if json.Unmarshal(data, &c) != nil {
+	if jsonkit.Unmarshal(data, &c) != nil {
 		return nil, false
 	}
 	return &c, true
@@ -305,7 +305,7 @@ func writeCache(c *cache) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: cache dir
 		return
 	}
-	if data, err := json.Marshal(c); err == nil {
+	if data, err := jsonkit.Marshal(c); err == nil {
 		_ = os.WriteFile(p, data, 0o644) //nolint:gosec // G306: non-secret cache file
 	}
 }

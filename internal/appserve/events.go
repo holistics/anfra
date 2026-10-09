@@ -1,10 +1,11 @@
 package appserve
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Event is what a live-reloading frontend hears: Data App definitions (or files next to them)
@@ -69,7 +70,7 @@ func (b *broadcaster) serve(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			data, _ := json.Marshal(e)
+			data, _ := jsonkit.Marshal(e)
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil || rc.Flush() != nil {
 				return
 			}

@@ -2,7 +2,6 @@ package ingest
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func TestRunPassesSourceToRPC(t *testing.T) {
@@ -25,14 +25,14 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 			Method string                         `json:"method"`
 			Params anfranode.CatalogIngestRequest `json:"params"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := jsonkit.UnmarshalRead(r.Body, &req); err != nil {
 			t.Fatalf("decode rpc request: %v", err)
 		}
 		if req.Method != "catalog.ingest" {
 			t.Fatalf("method = %q, want catalog.ingest", req.Method)
 		}
 		captured = req.Params
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		_ = jsonkit.MarshalWrite(w, map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 		})

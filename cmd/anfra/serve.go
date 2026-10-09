@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +28,7 @@ import (
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -389,7 +389,7 @@ func callServe(ctx context.Context, url, name string, input []byte) ([]byte, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		var env apperr.Envelope
-		if json.Unmarshal(body, &env) == nil && env.Error.Code != "" {
+		if jsonkit.Unmarshal(body, &env) == nil && env.Error.Code != "" {
 			return nil, &remoteError{resp: env.Error}
 		}
 		return nil, fmt.Errorf("anfra serve answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))

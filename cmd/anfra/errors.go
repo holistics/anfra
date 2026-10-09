@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // remoteError is a running server's error, as its body carried it.
@@ -58,7 +58,7 @@ func printError(w io.Writer, err error) {
 		fmt.Fprintln(w, "Error:", strings.Join(parts, ": "))
 		if resp.Details != nil {
 			// Through JSON, so the details read as their wire form does.
-			if b, jerr := json.Marshal(resp.Details); jerr == nil {
+			if b, jerr := jsonkit.Marshal(resp.Details); jerr == nil {
 				_ = renderTo(b, "application/json", w)
 			}
 		}
@@ -88,12 +88,12 @@ func violationsOf(details any) []apperr.Violation {
 	if details == nil {
 		return nil
 	}
-	b, err := json.Marshal(details)
+	b, err := jsonkit.Marshal(details)
 	if err != nil {
 		return nil
 	}
 	var d apperr.Violations
-	if json.Unmarshal(b, &d) != nil {
+	if jsonkit.Unmarshal(b, &d) != nil {
 		return nil
 	}
 	vs := d.Violations
