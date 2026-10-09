@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -131,6 +134,72 @@ func TestFlagValues(t *testing.T) {
 		}
 		if _, err := flagValues(cmd.Flags(), c.Args(), flagArg); err == nil {
 			t.Errorf("--input %s was accepted", bad)
+		}
+	}
+}
+
+type dottedOptions struct {
+	Header string   `json:"header,omitempty" enum:"labels,names,none" doc:"the header row"`
+	Rows   int      `json:"rows,omitempty" doc:"rows to write"`
+	BOM    bool     `json:"bom,omitempty" doc:"start with a byte-order mark"`
+	Tags   []string `json:"tags,omitempty" doc:"tags"`
+}
+
+type dottedInput struct {
+	Options *dottedOptions `json:"format_options,omitempty" doc:"the format's options"`
+}
+
+func (dottedInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return command.ArgsSchema[dottedInput](s)
+}
+
+var dotted = command.Define(command.Def[dottedInput, struct{}]{
+	Name: "dotted", Short: "Take an object by its fields.",
+	Run: func(context.Context, command.CommandContext, dottedInput) (struct{}, error) { return struct{}{}, nil },
+})
+
+// dottedValues parses argv as dotted's flags, into the op's input.
+func dottedValues(t *testing.T, argv ...string) (map[string]any, error) {
+	t.Helper()
+	cmd := buildCobraCommand(dotted)
+	if err := cmd.ParseFlags(argv); err != nil {
+		t.Fatal(err)
+	}
+	flagArg := map[string]string{"format-options": "format_options"}
+	for _, f := range dotted.Args()[0].Fields {
+		flagArg["format-options."+f.Flag()] = "format_options." + f.Name
+	}
+	return flagValues(cmd.Flags(), dotted.Args(), flagArg)
+}
+
+// An object arg's fields are flags of their own, named by their path, and make
+// the object as its JSON would; the JSON still works alone, and the two forms
+// together are refused rather than merged.
+func TestDottedFlags(t *testing.T) {
+	values, err := dottedValues(t, "--format-options.header", "names", "--format-options.rows", "5",
+		"--format-options.bom", "--format-options.tags", "a,b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := jsonkit.Marshal(values)
+	if want := `{"format_options":{"bom":true,"header":"names","rows":5,"tags":["a","b"]}}`; string(got) != want {
+		t.Errorf("input = %s, want %s", got, want)
+	}
+
+	values, err = dottedValues(t, "--format-options", `{"header":"none"}`)
+	if got, _ := jsonkit.Marshal(values); err != nil || string(got) != `{"format_options":{"header":"none"}}` {
+		t.Errorf("JSON alone = %s %v", got, err)
+	}
+
+	if _, err := dottedValues(t, "--format-options", `{"header":"none"}`, "--format-options.rows", "5"); err == nil ||
+		!strings.Contains(err.Error(), "not both") {
+		t.Errorf("both forms: %v, want refused", err)
+	}
+
+	help := buildCobraCommand(dotted).Flags().FlagUsages()
+	for _, want := range []string{"--format-options.header string", "(one of: labels, names, none)", "or set its fields with --format-options.<field>"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("help does not say %q:\n%s", want, help)
 		}
 	}
 }

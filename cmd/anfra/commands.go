@@ -94,7 +94,11 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			usage += " (one of: " + strings.Join(a.Enum, ", ") + ")"
 		}
 		if a.Type == command.ArgObject {
-			usage += " (a JSON object)"
+			usage += " (a JSON object"
+			if len(a.Fields) > 0 {
+				usage += ", or set its fields with --" + a.Flag() + ".<field>"
+			}
+			usage += ")"
 		}
 		// pflag has no native aliases, so each alias is a flag of its own, setting
 		// the same arg: the op knows each arg by one name.
@@ -103,6 +107,17 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 		for _, al := range a.Aliases {
 			addFlag(cmd, a, al, "", "alias of --"+a.Flag())
 			flagArg[al] = a.Name
+		}
+		// An object's fields, each a flag of its own, named by its path:
+		// --format-options.header sets format_options.header.
+		for _, fa := range a.Fields {
+			usage := fa.Usage
+			if len(fa.Enum) > 0 {
+				usage += " (one of: " + strings.Join(fa.Enum, ", ") + ")"
+			}
+			name := a.Flag() + "." + fa.Flag()
+			addFlag(cmd, fa, name, "", usage)
+			flagArg[name] = a.Name + "." + fa.Name
 		}
 	}
 
@@ -132,37 +147,65 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 // flagValues are the args the user set by flag, as the op's input has them:
 // only those set, so an unset one is absent, and the op applies its default and
 // sees which of a group are set. An object arg's flag is JSON, refused when it is
-// not an object.
+// not an object; or its fields are set by their own flags, and make the object,
+// but not both.
 func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string) (map[string]any, error) {
 	values := map[string]any{}
+	objects := map[string]map[string]any{} // an object arg set by its fields' flags
 	var err error
 	fs.Visit(func(f *pflag.Flag) {
 		key, ok := flagArg[f.Name]
 		if !ok || err != nil {
 			return
 		}
-		if v, ok := f.Value.(pflag.SliceValue); ok {
-			values[key] = v.GetSlice()
+		if arg, field, ok := strings.Cut(key, "."); ok {
+			if objects[arg] == nil {
+				objects[arg] = map[string]any{}
+			}
+			objects[arg][field] = flagValue(f, fieldType(args, arg, field))
 			return
 		}
-		switch argType(args, key) {
-		case command.ArgBool:
-			values[key] = f.Value.String() == "true"
-		case command.ArgInt:
-			values[key] = jsontext.Value(f.Value.String())
-		case command.ArgObject:
-			raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
-			var obj map[string]any
-			if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
-				err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
-				return
-			}
-			values[key] = raw
-		default:
-			values[key] = f.Value.String()
+		if argType(args, key) != command.ArgObject {
+			values[key] = flagValue(f, argType(args, key))
+			return
 		}
+		raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
+		var obj map[string]any
+		if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
+			err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
+			return
+		}
+		values[key] = raw
 	})
-	return values, err
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range args {
+		obj, ok := objects[a.Name]
+		if !ok {
+			continue
+		}
+		if _, set := values[a.Name]; set {
+			return nil, fmt.Errorf("--%s takes a JSON object or its --%s.<field> flags, not both", a.Flag(), a.Flag())
+		}
+		values[a.Name] = obj
+	}
+	return values, nil
+}
+
+// flagValue is a flag's value as its arg's type has it in the op's input: a
+// slice, a bool, a number, or the string.
+func flagValue(f *pflag.Flag, t command.ArgType) any {
+	if v, ok := f.Value.(pflag.SliceValue); ok {
+		return v.GetSlice()
+	}
+	switch t {
+	case command.ArgBool:
+		return f.Value.String() == "true"
+	case command.ArgInt:
+		return jsontext.Value(f.Value.String())
+	}
+	return f.Value.String()
 }
 
 func addFlag(cmd *cobra.Command, a command.Arg, name, short, usage string) {
@@ -183,6 +226,16 @@ func argType(args []command.Arg, name string) command.ArgType {
 	for _, a := range args {
 		if a.Name == name {
 			return a.Type
+		}
+	}
+	return ""
+}
+
+// fieldType is the type of the field named field of the object arg named arg.
+func fieldType(args []command.Arg, arg, field string) command.ArgType {
+	for _, a := range args {
+		if a.Name == arg {
+			return argType(a.Fields, field)
 		}
 	}
 	return ""
