@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -87,7 +89,33 @@ func (c *Client) WaitReady(ctx context.Context) error {
 // Result is the column header + rows of an executed query.
 type Result struct {
 	Fields []string
-	Rows   [][]any
+	Rows   []Row
+}
+
+// Row is one row of a result as canal wrote it: a JSON array, kept as its bytes.
+// anfra reads no cell, so it never decodes one: a number keeps every digit
+// (decoded, an integer past 2^53 would round), and a row costs one copy.
+type Row jsontext.Value
+
+// MarshalJSONTo writes the row as canal wrote it.
+func (r Row) MarshalJSONTo(enc *jsontext.Encoder) error { return enc.WriteValue(jsontext.Value(r)) }
+
+// UnmarshalJSONFrom reads one row as it is.
+func (r *Row) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	v, err := dec.ReadValue()
+	if err != nil {
+		return err
+	}
+	if v.Kind() != '[' {
+		return fmt.Errorf("a row is a JSON array, not %s", v.Kind())
+	}
+	*r = Row(v.Clone())
+	return nil
+}
+
+// Schema publishes a row as what it is, an array of values of any type.
+func (Row) Schema(huma.Registry) *huma.Schema {
+	return &huma.Schema{Type: huma.TypeArray, Items: &huma.Schema{}}
 }
 
 type queryJob struct {
@@ -196,11 +224,10 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 			}
 			return nil, fmt.Errorf("canal query failed (status %d): %s", resp.StatusCode, line)
 		}
-		var row []any
-		if err := jsonkit.Unmarshal(line, &row); err != nil {
-			return nil, fmt.Errorf("parse result row: %w", err)
+		if line[0] != '[' || !jsonkit.Valid(line) {
+			return nil, fmt.Errorf("canal answered a row that is not a JSON array: %.100s", line)
 		}
-		result.Rows = append(result.Rows, row)
+		result.Rows = append(result.Rows, Row(bytes.Clone(line))) // the scanner reuses line
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read result stream: %w", err)

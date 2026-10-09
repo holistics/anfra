@@ -119,7 +119,7 @@ func Compile(ctx context.Context, node *anfranode.Client, repo repo.Repo, datase
 type RunResult struct {
 	SQL     string
 	Fields  []string
-	Records [][]any
+	Records []canalquery.Row
 }
 
 // Execute runs already-compiled SQL via canal-query against the data source the

@@ -40,5 +40,8 @@ func MarshalEncode(enc *jsontext.Encoder, v any) error { return json.MarshalEnco
 // Unmarshal reads the JSON value b into v.
 func Unmarshal(b []byte, v any) error { return json.Unmarshal(b, v, decoding) }
 
+// Valid reports whether b is one JSON value, as Unmarshal would read it.
+func Valid(b []byte) bool { return jsontext.Value(b).IsValid(decoding) }
+
 // UnmarshalRead reads the one JSON value in r, to its end, into v.
 func UnmarshalRead(r io.Reader, v any) error { return json.UnmarshalRead(r, v, decoding) }
