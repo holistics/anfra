@@ -1,13 +1,13 @@
 package query
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func TestExtractLimit(t *testing.T) {
@@ -108,12 +108,12 @@ func TestCompileRequestCarriesRepoID(t *testing.T) {
 	}
 
 	// The wire contract: anfra-node reads `repoId`.
-	raw, err := json.Marshal(req)
+	raw, err := jsonkit.Marshal(req)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	var wire map[string]any
-	if err := json.Unmarshal(raw, &wire); err != nil {
+	if err := jsonkit.Unmarshal(raw, &wire); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if got := wire["repoId"]; got != r.ID {

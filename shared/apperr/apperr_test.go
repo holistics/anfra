@@ -1,7 +1,6 @@
 package apperr_test
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Stand-ins for what lower layers produce.
@@ -402,7 +402,7 @@ func TestResponseCarriesOnlyWhatWasWrittenForTheClient(t *testing.T) {
 		apperr.EncapsulateWith(errDial, unavailable, "Try again shortly.", retryAfter{Seconds: 5}),
 		connectDatasource, "name", "warehouse", "host", "10.0.3.7")
 
-	b, jerr := json.Marshal(apperr.Envelope{Error: apperr.From(err).Response("req_1")})
+	b, jerr := jsonkit.Marshal(apperr.Envelope{Error: apperr.From(err).Response("req_1")})
 	if jerr != nil {
 		t.Fatal(jerr)
 	}
@@ -430,7 +430,7 @@ func TestViolationsOnTheWire(t *testing.T) {
 			`{"violations":[{"field":"slug","code":"taken","message":"already in use"}]}`},
 		{apperr.Violate(), `{"violations":[]}`},
 	} {
-		b, err := json.Marshal(apperr.From(apperr.NewWith(apperr.ValidationFailed, "", tc.details)).Response("").Details)
+		b, err := jsonkit.Marshal(apperr.From(apperr.NewWith(apperr.ValidationFailed, "", tc.details)).Response("").Details)
 		if err != nil || string(b) != tc.want {
 			t.Errorf("details = %s, %v; want %s", b, err, tc.want)
 		}

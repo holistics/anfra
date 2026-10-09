@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
@@ -17,6 +16,7 @@ import (
 	"github.com/holistics/anfra/internal/command/status"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 var serverAddr = &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 7878}
@@ -90,7 +90,7 @@ func TestServeRoutes(t *testing.T) {
 func TestStatusReportsTheServer(t *testing.T) {
 	h, _ := handler(t)
 	var got status.StatusResult
-	if err := json.NewDecoder(do(h, http.MethodPost, "/api/core.status", `{}`).Body).Decode(&got); err != nil {
+	if err := jsonkit.UnmarshalRead(do(h, http.MethodPost, "/api/core.status", `{}`).Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Server == nil || got.Server.URL != "http://127.0.0.1:7878" || got.Server.InstanceID != "i-1" {

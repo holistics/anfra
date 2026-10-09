@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Client talks to a canal-query server over HTTP. Address-based and
@@ -148,7 +148,7 @@ func canalError(m map[string]any) *Error {
 // rows. dbconfig is passed straight through to canal as the connection config.
 // truncateRows caps how many rows canal returns (negative = no truncation).
 func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int) (*Result, error) {
-	body, err := json.Marshal(queryRequest{
+	body, err := jsonkit.Marshal(queryRequest{
 		SQL:          sql,
 		Dbtype:       dbtype,
 		Dbconfig:     dbconfig,
@@ -185,7 +185,7 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 		if line[0] == '{' {
 			// Trailer (stream end) or, on a non-streamed error response, the error object.
 			var tr streamTrailer
-			if err := json.Unmarshal(line, &tr); err == nil && tr.HolisticsTrailer {
+			if err := jsonkit.Unmarshal(line, &tr); err == nil && tr.HolisticsTrailer {
 				if len(tr.Error) > 0 {
 					return nil, canalError(tr.Error)
 				}
@@ -197,7 +197,7 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 			return nil, fmt.Errorf("canal query failed (status %d): %s", resp.StatusCode, line)
 		}
 		var row []any
-		if err := json.Unmarshal(line, &row); err != nil {
+		if err := jsonkit.Unmarshal(line, &row); err != nil {
 			return nil, fmt.Errorf("parse result row: %w", err)
 		}
 		result.Rows = append(result.Rows, row)

@@ -6,7 +6,6 @@ package appserve
 
 import (
 	"context"
-	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Options configure a Server.
@@ -112,5 +112,5 @@ type RepoInfo struct {
 func writeJSON(w http.ResponseWriter, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(body)
+	_ = jsonkit.MarshalWrite(w, body)
 }

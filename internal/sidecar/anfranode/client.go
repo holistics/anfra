@@ -3,7 +3,7 @@ package anfranode
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Client talks to an anfra-node over JSON-RPC. It is address-based and
@@ -91,11 +92,11 @@ type rpcRequest struct {
 }
 
 type rpcResponse struct {
-	Result json.RawMessage `json:"result"`
+	Result jsontext.Value `json:"result"`
 	Error  *struct {
-		Code    int             `json:"code"`
-		Message string          `json:"message"`
-		Data    json.RawMessage `json:"data"`
+		Code    int            `json:"code"`
+		Message string         `json:"message"`
+		Data    jsontext.Value `json:"data"`
 	} `json:"error"`
 }
 
@@ -110,7 +111,7 @@ type RPCError struct {
 	Method  string
 	Code    int
 	Message string
-	Data    json.RawMessage
+	Data    jsontext.Value
 }
 
 func (e *RPCError) Error() string {
@@ -124,7 +125,7 @@ func (e *RPCError) Path() (path string, ok bool) {
 	var d struct {
 		Path *string `json:"path"`
 	}
-	if e.Code != RPCInvalidParams || json.Unmarshal(e.Data, &d) != nil || d.Path == nil {
+	if e.Code != RPCInvalidParams || jsonkit.Unmarshal(e.Data, &d) != nil || d.Path == nil {
 		return "", false
 	}
 	return *d.Path, true
@@ -132,7 +133,7 @@ func (e *RPCError) Path() (path string, ok bool) {
 
 // Call invokes a JSON-RPC method and unmarshals the result into out (if non-nil).
 func (c *Client) Call(ctx context.Context, method string, params any, out any) error {
-	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
+	body, err := jsonkit.Marshal(rpcRequest{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
 	if err != nil {
 		return err
 	}
@@ -148,7 +149,7 @@ func (c *Client) Call(ctx context.Context, method string, params any, out any) e
 	defer resp.Body.Close()
 
 	var rpcResp rpcResponse
-	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
+	if err := jsonkit.UnmarshalRead(resp.Body, &rpcResp); err != nil {
 		return fmt.Errorf("decode %s response: %w", method, err)
 	}
 	if rpcResp.Error != nil {
@@ -161,7 +162,7 @@ func (c *Client) Call(ctx context.Context, method string, params any, out any) e
 		return &RPCError{Method: method, Code: rpcResp.Error.Code, Message: rpcResp.Error.Message, Data: rpcResp.Error.Data}
 	}
 	if out != nil && rpcResp.Result != nil {
-		return json.Unmarshal(rpcResp.Result, out)
+		return jsonkit.Unmarshal(rpcResp.Result, out)
 	}
 	return nil
 }
@@ -331,7 +332,7 @@ type ValidationReport struct {
 	Fqn       string        `json:"fqn"`
 	Severity  string        `json:"severity"`
 	Message   string        `json:"message"`
-	Code      any           `json:"code,omitempty"`
+	Code      any           `json:"code,omitzero"`
 	Trace     []ReportTrace `json:"trace,omitempty"`
 }
 

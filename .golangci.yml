@@ -35,6 +35,19 @@ linters:
                 internal/attribution is for logs and audit only. If a value must
                 change which rows a query returns, it belongs in
                 internal/dataperm.Attributes, passed explicitly by the host.
+        # JSON is read and written one way, by shared/jsonkit
+        # (docs/designs/json.md). A file that must name a type of encoding/json
+        # because a third-party API declares it is added to files, negated, with
+        # why.
+        json-through-jsonkit:
+          files:
+            - $all
+            - "!**/shared/jsonkit/**"
+          deny:
+            - pkg: encoding/json$
+              desc: read and write JSON with shared/jsonkit (docs/designs/json.md)
+            - pkg: encoding/json/v2$
+              desc: read and write JSON with shared/jsonkit (docs/designs/json.md)
     spancheck:
       # apptracing.Start starts a span its caller must End: every caller is held
       # to it, as with OpenTelemetry's own Start.

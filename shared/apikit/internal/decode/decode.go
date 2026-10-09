@@ -8,13 +8,13 @@ package decode
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func init() {
@@ -62,7 +62,7 @@ func InputTo[In any](reg huma.Registry, schema *huma.Schema, raw []byte) (In, er
 		raw = []byte("{}")
 	}
 	var parsed any
-	if err := json.Unmarshal(raw, &parsed); err != nil {
+	if err := jsonkit.Unmarshal(raw, &parsed); err != nil {
 		return in, apperr.Encapsulate(err, apperr.InvalidRequest, "The body is not valid JSON.")
 	}
 	res := &huma.ValidateResult{}
@@ -70,7 +70,7 @@ func InputTo[In any](reg huma.Registry, schema *huma.Schema, raw []byte) (In, er
 	if len(res.Errors) > 0 {
 		return in, apperr.NewWith(apperr.InvalidRequest, "", apperr.Violate(violations(res.Errors, exactlyOneGroups(reg, schema), parsed)...))
 	}
-	if err := json.Unmarshal(raw, &in); err != nil {
+	if err := jsonkit.Unmarshal(raw, &in); err != nil {
 		// Unreachable once the schema accepted it. If reached, the schema and the
 		// type disagree, which is ours to fix.
 		return in, fmt.Errorf("decode after validation: %w", err)
@@ -83,12 +83,12 @@ func InputTo[In any](reg huma.Registry, schema *huma.Schema, raw []byte) (In, er
 // out-of-enum value. The op layer calls it in strict mode, so the OpenAPI built
 // from the types cannot quietly lie about what an op returns.
 func CheckOutput(reg huma.Registry, t reflect.Type, out any) error {
-	b, err := json.Marshal(out)
+	b, err := jsonkit.Marshal(out)
 	if err != nil {
 		return err
 	}
 	var parsed any
-	if err := json.Unmarshal(b, &parsed); err != nil {
+	if err := jsonkit.Unmarshal(b, &parsed); err != nil {
 		return err
 	}
 	res := &huma.ValidateResult{}

@@ -8,7 +8,6 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Def is the single definition of one anfra operation: what it takes (In),
@@ -137,7 +137,7 @@ func (c *command[In, Out]) Needs(input []byte) Sidecars {
 		return Sidecars{}
 	}
 	var in In
-	if len(input) > 0 && json.Unmarshal(input, &in) != nil {
+	if len(input) > 0 && jsonkit.Unmarshal(input, &in) != nil {
 		return Sidecars{}
 	}
 	applyDefaults(c.args, &in)
@@ -154,7 +154,7 @@ func (c *command[In, Out]) Valid(out any) (bool, error) {
 	switch v := out.(type) {
 	case []byte:
 		var o Out
-		if err := json.Unmarshal(v, &o); err != nil {
+		if err := jsonkit.Unmarshal(v, &o); err != nil {
 			return false, fmt.Errorf("decode %s's answer: %w", c.def.Name, err)
 		}
 		return c.def.Valid(o), nil

@@ -2,12 +2,12 @@ package apikit
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 
 	"github.com/holistics/anfra/shared/httpkit"
 )
@@ -187,12 +187,12 @@ func (d Discovery[R]) visible(ctx context.Context, reg *Registry[R], r R, includ
 // tool's input, an op's usage. A schema that refers to itself cannot be
 // inlined, and is an error.
 func (rt *Runtime) Inline(s *huma.Schema) (map[string]any, error) {
-	raw, err := json.Marshal(s)
+	raw, err := jsonkit.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
 	var root any
-	if err := json.Unmarshal(raw, &root); err != nil {
+	if err := jsonkit.Unmarshal(raw, &root); err != nil {
 		return nil, err
 	}
 	out, err := rt.inline(root, map[string]bool{})
@@ -214,12 +214,12 @@ func (rt *Runtime) inline(v any, seen map[string]bool) (any, error) {
 			if target == nil {
 				return nil, fmt.Errorf("schema %s is not in the registry", ref)
 			}
-			raw, err := json.Marshal(target)
+			raw, err := jsonkit.Marshal(target)
 			if err != nil {
 				return nil, err
 			}
 			var resolved any
-			if err := json.Unmarshal(raw, &resolved); err != nil {
+			if err := jsonkit.Unmarshal(raw, &resolved); err != nil {
 				return nil, err
 			}
 			seen[ref] = true

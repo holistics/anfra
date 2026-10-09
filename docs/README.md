@@ -13,6 +13,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [engine](designs/engine.md) | The `engine` package: what a platform embedding anfra gets, and what core must keep promising it. |
 | [commands and API](designs/commands-and-api.md) | One command definition, served as the CLI, the HTTP API and MCP; the OpenAPI contract. |
 | [errors](designs/errors.md) | The error framework: codes, scopes, violations, and how an error reaches each surface. |
+| [JSON](designs/json.md) | How anfra reads and writes JSON: one package, `shared/jsonkit`, and the rule that every package uses it. |
 | [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, appserve. |
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |

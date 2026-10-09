@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/shared/jsonkit"
 
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apikit"
@@ -67,5 +67,5 @@ func inputOf(args map[string]any) ([]byte, error) {
 	if len(args) == 0 {
 		return []byte("{}"), nil
 	}
-	return json.Marshal(args)
+	return jsonkit.Marshal(args)
 }
