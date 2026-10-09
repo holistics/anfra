@@ -9,7 +9,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | Doc | Covers |
 |---|---|
 | [philosophy](designs/philosophy.md) | What anfra core is and where it stops, and the guidelines that follow from that. Start here. |
-| [architecture](designs/architecture.md) | The host and its sidecars, how a command runs, the CLI and `anfra serve`, where state lives. |
+| [architecture](designs/architecture.md) | anfra and its sidecars, how a command runs, the CLI and `anfra serve`, where state lives. |
 | [engine](designs/engine.md) | The `engine` package: what a platform embedding anfra gets, and what core must keep promising it. |
 | [commands and API](designs/commands-and-api.md) | One command definition, served as the CLI, the HTTP API and MCP; the OpenAPI contract. |
 | [errors](designs/errors.md) | The error framework: codes, scopes, violations, and how an error reaches each surface. |

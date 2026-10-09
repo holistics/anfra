@@ -4,7 +4,7 @@ anfra's browser code: a pnpm workspace (`pnpm-workspace.yaml` at the repository 
 
 | Package | What it is | Where it ends up |
 |---|---|---|
-| [`sdk/`](sdk/) (`@holistics/anfra-sdk`) | The Anfra SDK: the runtime a Data App uses (`@holistics/anfra-sdk/app`), the code that hosts one in a page (`@holistics/anfra-sdk/host`), a client for the core API (`@holistics/anfra-sdk/api`), and the types they share (`@holistics/anfra-sdk/common`). See its [README](sdk/README.md). | A dependency of `appserve`, and of any other host of Data Apps. |
+| [`sdk/`](sdk/) (`@holistics/anfra-sdk`) | The Anfra SDK: the runtime a Data App uses (`@holistics/anfra-sdk/app`), the code that hosts one in a page (`@holistics/anfra-sdk/host`), a client for the core API (`@holistics/anfra-sdk/api`), and the types they share (`@holistics/anfra-sdk/common`). See its [README](sdk/README.md). | A dependency of `appserve`, and of any other page or platform that hosts Data Apps. |
 | [`appserve/`](appserve/) (`anfra-appserve`) | The appserve frontend: the Vue app `anfra serve` shows at `/` and `/apps/<path>`. It lists the repo's Data Apps, runs the selected one through `@holistics/anfra-sdk/host`, and shows the server's health and the repo's problems. | Built into `internal/appserve/dist`, which the Go binary embeds and the appserve backend (`internal/appserve`) serves. |
 
 ## How it fits with the Go side
