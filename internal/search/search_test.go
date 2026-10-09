@@ -2,7 +2,6 @@ package search
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func TestRunPassesQueryToRPC(t *testing.T) {
@@ -24,14 +24,14 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 			Method string                         `json:"method"`
 			Params anfranode.CatalogSearchRequest `json:"params"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := jsonkit.UnmarshalRead(r.Body, &req); err != nil {
 			t.Fatalf("decode rpc request: %v", err)
 		}
 		if req.Method != "catalog.search" {
 			t.Fatalf("method = %q, want catalog.search", req.Method)
 		}
 		captured = req.Params
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		_ = jsonkit.MarshalWrite(w, map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result": map[string]any{

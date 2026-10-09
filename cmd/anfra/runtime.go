@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // runtimeFile is a running `anfra serve`, as it records itself in its repo's
@@ -43,7 +43,7 @@ func writeRuntime(r repo.Repo, f runtimeFile) error {
 	if err := os.MkdirAll(r.RuntimeDir(), 0o700); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(f, "", "  ")
+	b, err := jsonkit.MarshalIndent(f)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func readRuntime(path string) (runtimeFile, bool) {
 		return runtimeFile{}, false
 	}
 	var f runtimeFile
-	if json.Unmarshal(b, &f) != nil {
+	if jsonkit.Unmarshal(b, &f) != nil {
 		return runtimeFile{}, false
 	}
 	return f, true
@@ -105,7 +105,7 @@ func findServer(ctx context.Context, r repo.Repo) (runtimeFile, bool) {
 	}
 	defer resp.Body.Close()
 	var h health
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&h) != nil ||
+	if resp.StatusCode != http.StatusOK || jsonkit.UnmarshalRead(resp.Body, &h) != nil ||
 		h.RepoID != f.RepoID || h.InstanceID != f.InstanceID {
 		return runtimeFile{}, false
 	}

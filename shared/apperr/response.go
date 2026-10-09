@@ -14,10 +14,10 @@ type Response struct {
 	// Status is the HTTP status, set by the HTTP transport, which assigns one
 	// per public code; repeated in the body so it survives a log line or a
 	// proxy. A transport with no status leaves it out.
-	Status    int            `json:"status,omitempty"`
+	Status    int            `json:"status,omitzero"`
 	Context   []ContextEntry `json:"context,omitempty"`
 	Message   string         `json:"message"`
-	Details   any            `json:"details,omitempty"`
+	Details   any            `json:"details,omitzero"`
 	RequestID string         `json:"request_id"`
 }
 

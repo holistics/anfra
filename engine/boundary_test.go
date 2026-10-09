@@ -35,6 +35,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 		"shared/apptracing": true,
 		"shared/apikit":     true,
 		"shared/httpkit":    true,
+		"shared/jsonkit":    true,
 		"shared/requestid":  true,
 	}
 
@@ -81,7 +82,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,requestid} are meant to be. Move it under internal/, "+
+				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,requestid} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}

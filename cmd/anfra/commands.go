@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +14,7 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
@@ -148,11 +149,11 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 		case command.ArgBool:
 			values[key] = f.Value.String() == "true"
 		case command.ArgInt:
-			values[key] = json.Number(f.Value.String())
+			values[key] = jsontext.Value(f.Value.String())
 		case command.ArgObject:
-			raw := json.RawMessage(strings.TrimSpace(f.Value.String()))
+			raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
 			var obj map[string]any
-			if json.Unmarshal(raw, &obj) != nil || obj == nil {
+			if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
 				err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
 				return
 			}
@@ -238,7 +239,7 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any) err
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
 	}
-	input, err := json.Marshal(args)
+	input, err := jsonkit.Marshal(args)
 	if err != nil {
 		return fmt.Errorf("encode args: %w", err)
 	}
@@ -261,7 +262,7 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any) err
 		if err != nil {
 			return err
 		}
-		body, err := json.Marshal(out)
+		body, err := jsonkit.Marshal(out)
 		if err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
@@ -336,7 +337,7 @@ func renderTo(body []byte, contentType string, out io.Writer) error {
 		return err
 	}
 	var v any
-	if err := json.Unmarshal(body, &v); err != nil {
+	if err := jsonkit.Unmarshal(body, &v); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	b, err := yaml.Marshal(v)
@@ -355,7 +356,7 @@ func renderSearchResults(body []byte, out io.Writer) error {
 			Type        string  `json:"type"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(body, &data); err != nil {
+	if err := jsonkit.Unmarshal(body, &data); err != nil {
 		return fmt.Errorf("decode search results: %w", err)
 	}
 	for _, result := range data.Results {

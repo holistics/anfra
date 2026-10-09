@@ -182,7 +182,16 @@ func TestStrict(t *testing.T) {
 	}
 	nilSlice := &apikit.Def[string, struct{}, greetOut]{Name: "strict.nil", Summary: "x",
 		Handle: func(context.Context, string, struct{}) (greetOut, error) { return greetOut{}, nil }}
-	mustPanic(t, "tags", func() { _, _ = one(t, nilSlice).Invoke(context.Background(), runtime(), ann, nil) })
+	if _, err := one(t, nilSlice).Invoke(context.Background(), runtime(), ann, nil); err != nil {
+		t.Errorf("a nil slice, which is sent as []: got %v", err)
+	}
+	outOfEnum := &apikit.Def[string, struct{}, kindOut]{Name: "strict.enum", Summary: "x",
+		Handle: func(context.Context, string, struct{}) (kindOut, error) { return kindOut{Kind: "c"}, nil }}
+	mustPanic(t, "kind", func() { _, _ = one(t, outOfEnum).Invoke(context.Background(), runtime(), ann, nil) })
+}
+
+type kindOut struct {
+	Kind string `json:"kind" enum:"a,b"`
 }
 
 // Running out of the op's own time is the host's to name; the caller going away

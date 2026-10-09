@@ -1,19 +1,19 @@
 package show
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // anfra-node refusing what to show lands on the arg at fault; anything else
 // stays as it is.
 func TestRefused(t *testing.T) {
 	refusal := func(path, msg string) error {
-		data, _ := json.Marshal(map[string]string{"path": path})
+		data, _ := jsonkit.Marshal(map[string]string{"path": path})
 		return &anfranode.RPCError{Method: "aml.show", Code: anfranode.RPCInvalidParams, Message: msg, Data: data}
 	}
 	for _, tc := range []struct {
@@ -50,16 +50,16 @@ func TestShowObjectJSON(t *testing.T) {
 		`{"kind":"dataset","fqn":"sales","name":"sales","models":[{"fqn":"orders","name":"orders","fields":[]}]}`,
 	} {
 		var o anfranode.ShowObject
-		if err := json.Unmarshal([]byte(raw), &o); err != nil {
+		if err := jsonkit.Unmarshal([]byte(raw), &o); err != nil {
 			t.Fatal(err)
 		}
-		back, err := json.Marshal(o)
+		back, err := jsonkit.Marshal(o)
 		if err != nil || string(back) != raw {
 			t.Errorf("round trip: %s, %v; want %s", back, err, raw)
 		}
 	}
 	var o anfranode.ShowObject
-	if err := json.Unmarshal([]byte(`{"kind":"model","fqn":"orders"}`), &o); err == nil {
+	if err := jsonkit.Unmarshal([]byte(`{"kind":"model","fqn":"orders"}`), &o); err == nil {
 		t.Error("an unknown kind was accepted")
 	}
 }

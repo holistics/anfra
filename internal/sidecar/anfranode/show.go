@@ -2,11 +2,13 @@ package anfranode
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // ShowRequest mirrors the sidecar's aml.show params: what to show, as the
@@ -36,30 +38,32 @@ type ShowObject struct {
 	Dataset *ShowDataset
 }
 
-func (o ShowObject) MarshalJSON() ([]byte, error) {
+// MarshalJSONTo encodes the object set, within the encoder it is in, so the
+// encoder's options reach inside it (httpkit.JSONOptions).
+func (o ShowObject) MarshalJSONTo(enc *jsontext.Encoder) error {
 	switch {
 	case o.Repo != nil:
-		return json.Marshal(o.Repo)
+		return jsonkit.MarshalEncode(enc, o.Repo)
 	case o.Dataset != nil:
-		return json.Marshal(o.Dataset)
+		return jsonkit.MarshalEncode(enc, o.Dataset)
 	}
-	return nil, fmt.Errorf("anfranode: a ShowObject with nothing set")
+	return fmt.Errorf("anfranode: a ShowObject with nothing set")
 }
 
 func (o *ShowObject) UnmarshalJSON(b []byte) error {
 	var tag struct {
 		Kind string `json:"kind"`
 	}
-	if err := json.Unmarshal(b, &tag); err != nil {
+	if err := jsonkit.Unmarshal(b, &tag); err != nil {
 		return err
 	}
 	switch tag.Kind {
 	case "repo":
 		o.Repo = &ShowRepo{}
-		return json.Unmarshal(b, o.Repo)
+		return jsonkit.Unmarshal(b, o.Repo)
 	case "dataset":
 		o.Dataset = &ShowDataset{}
-		return json.Unmarshal(b, o.Dataset)
+		return jsonkit.Unmarshal(b, o.Dataset)
 	}
 	return fmt.Errorf("anfranode: aml.show answered an object of kind %q, which this anfra does not know", tag.Kind)
 }
@@ -118,9 +122,9 @@ type ShowField struct {
 	Type             string `json:"type" doc:"the compiled data type, such as number, text, date, datetime, truefalse"`
 	Aggregation      string `json:"aggregation,omitempty" doc:"a measure's aggregation, such as sum or count distinct; custom for a custom one"`
 	Hidden           bool   `json:"hidden"`
-	Format           any    `json:"format,omitempty" doc:"how a value displays, as the AML declares it"`
+	Format           any    `json:"format,omitzero" doc:"how a value displays, as the AML declares it"`
 	Definition       string `json:"definition,omitempty" doc:"the definition of a field or metric written in AQL"`
-	DefinedInDataset bool   `json:"definedInDataset,omitempty" doc:"a dimension the dataset declares on one of its models"`
+	DefinedInDataset bool   `json:"definedInDataset,omitzero" doc:"a dimension the dataset declares on one of its models"`
 }
 
 // ShowAML shows an object of the repo, read from its compiled AML.

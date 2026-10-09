@@ -2,12 +2,12 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func registered(t *testing.T, name string) command.Command {
@@ -119,7 +119,7 @@ func TestFlagValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := json.Marshal(values)
+	got, _ := jsonkit.Marshal(values)
 	if want := `{"dataset":"sales","input":{"filters":[]},"page_size":20}`; string(got) != want {
 		t.Errorf("input = %s, want %s", got, want)
 	}

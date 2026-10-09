@@ -1,7 +1,6 @@
 package decode
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/validation"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // huma's validation errors carry no machine code, report a missing property at its
@@ -294,7 +294,7 @@ func kind(v any) string {
 		return "a string"
 	case bool:
 		return "a boolean"
-	case float64, int, int64, json.Number:
+	case float64, int, int64:
 		return "a number"
 	case []any:
 		return "a list"
@@ -309,7 +309,7 @@ func show(v any) string {
 	if s, ok := v.(string); ok {
 		return fmt.Sprintf("%q", s)
 	}
-	b, err := json.Marshal(v)
+	b, err := jsonkit.Marshal(v)
 	if err != nil {
 		return kind(v)
 	}
