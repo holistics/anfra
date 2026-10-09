@@ -10,6 +10,8 @@ version="${1:?usage: pnpm bump <version>   e.g. pnpm bump 0.2.0}"
 
 # manifest.yml is the single source of truth for the release version.
 sed -i.bak -E "s/^version: .*/version: ${version}/" manifest.yml && rm -f manifest.yml.bak
+# The SDK is published with each release, at its version (build_release.yml checks they agree).
+(cd web/sdk && npm pkg set version="$version")
 
 # Prepend the changes since the last anfra-v* tag to the changelog. The pending
 # release version is passed via a context file (mirrors canal's bump) — otherwise
@@ -26,5 +28,5 @@ pnpm exec conventional-changelog \
   -i CHANGELOG.md -s \
   -t anfra-v
 
-echo "Bumped manifest.yml -> ${version} and updated CHANGELOG.md."
+echo "Bumped manifest.yml and web/sdk/package.json -> ${version} and updated CHANGELOG.md."
 echo "Review both, commit, and merge to main to cut anfra-v${version}."

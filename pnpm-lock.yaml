@@ -40,15 +40,15 @@ importers:
         specifier: ^3.5.43
         version: 3.5.43(typescript@5.9.3)
     devDependencies:
+      '@holistics/anfra-sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
       '@vitejs/plugin-vue':
         specifier: ^6.0.9
         version: 6.0.9(vite@8.3.3(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.6.1))(vue@3.5.43(typescript@5.9.3))
-      anfra-sdk:
-        specifier: workspace:*
-        version: link:../sdk
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0

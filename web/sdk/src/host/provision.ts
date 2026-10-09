@@ -23,7 +23,7 @@ export interface ProvisionOptions {
   /** Where the definition's relative URLs resolve: the directory it was read from. */
   baseHref: string;
   provision: Provision;
-  /** The frame script (`anfra-sdk/app`'s IIFE), run before any of the definition's own. */
+  /** The frame script (`@holistics/anfra-sdk/app`'s IIFE), run before any of the definition's own. */
   frameScript: string;
 }
 

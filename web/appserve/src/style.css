@@ -394,7 +394,7 @@ code { font-size: 12px; color: var(--muted); }
 .viewer-body.dragging .data-app { pointer-events: none; }
 .viewer-body.dragging { cursor: col-resize; user-select: none; }
 
-/* The frame is mounted into this container by anfra-sdk/host, and fills it. */
+/* The frame is mounted into this container by @holistics/anfra-sdk/host, and fills it. */
 .data-app-container {
   flex: 1;
   min-width: 0;

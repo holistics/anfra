@@ -6,8 +6,8 @@ import {
 const answers = new Map<string, { status: number, body: unknown }>();
 const answer = (op: string, body: unknown, status = 200) => answers.set(op, { status, body });
 
-vi.mock('anfra-sdk/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('anfra-sdk/api')>();
+vi.mock('@holistics/anfra-sdk/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@holistics/anfra-sdk/api')>();
   const fetchImpl = async (request: Request) => {
     const op = new URL(request.url).pathname.replace('/api/', '');
     const body = await request.clone().json() as { fqn?: string };

@@ -1,4 +1,4 @@
-# anfra-sdk
+# @holistics/anfra-sdk
 
 The TypeScript SDK for **Data Apps**: interactive analyses over a repo's datasets, each defined by a
 single HTML file (a **Data App definition**) that declares queries in AQL, with controls and
@@ -7,16 +7,23 @@ state, never UI.
 
 It started as a fork of the Holistics Data App SDK, and diverges from it.
 
+```sh
+npm install @holistics/anfra-sdk
+```
+
+Each anfra release publishes it at its own version: the SDK's API client matches that release's
+core API.
+
 ## Entrypoints
 
 The package root exports nothing; each entrypoint is for a different side of a Data App.
 
 | Entrypoint | For | Holds |
 |---|---|---|
-| `anfra-sdk/app` | a Data App definition, in its frame | the **app runtime** (`createApp`, queries, controls, cross-filters, results and state), and the **frame bootstrap** that provisions it from its host |
-| `anfra-sdk/host` | the page hosting a Data App | provisioning its frame, mounting it sandboxed, and answering its calls over the **bridge** |
-| `anfra-sdk/api` | the host's page, scripts, tests | a client for the core API, generated from anfra's spec, and a **Backend** over it |
-| `anfra-sdk/common` | all of the above | the contract they share: types, error classes, the bridge's messages |
+| `@holistics/anfra-sdk/app` | a Data App definition, in its frame | the **app runtime** (`createApp`, queries, controls, cross-filters, results and state), and the **frame bootstrap** that provisions it from its host |
+| `@holistics/anfra-sdk/host` | the page hosting a Data App | provisioning its frame, mounting it sandboxed, and answering its calls over the **bridge** |
+| `@holistics/anfra-sdk/api` | the host's page, scripts, tests | a client for the core API, generated from anfra's spec, and a **Backend** over it |
+| `@holistics/anfra-sdk/common` | all of the above | the contract they share: types, error classes, the bridge's messages |
 
 ## Writing a Data App
 
@@ -37,14 +44,14 @@ app.subscribe(() => render(byRegion.result));
 await app.execute();
 ```
 
-`Anfra.datasets` describes what there is to query. For TypeScript, `anfra-sdk/ambient` declares the
+`Anfra.datasets` describes what there is to query. For TypeScript, `@holistics/anfra-sdk/ambient` declares the
 global.
 
 ## Hosting a Data App
 
 ```ts
-import { coreApiBackend, coreClient, loadDatasets } from 'anfra-sdk/api';
-import { mountDataApp } from 'anfra-sdk/host';
+import { coreApiBackend, coreClient, loadDatasets } from '@holistics/anfra-sdk/api';
+import { mountDataApp } from '@holistics/anfra-sdk/host';
 
 const client = coreClient('/api');                       // the core API, on whichever host
 const { datasets } = await loadDatasets(client);         // every dataset, through core.show
@@ -72,7 +79,7 @@ A Data App definition can come from any author, often an agent, which may not th
   refuses, and carry no credentials on a host that has them.
 - The bridge answers only the Backend's two methods, `submitQuery` and `fieldSuggestions`. Nothing
   else of the API is reachable from a frame.
-- `anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.
+- `@holistics/anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.
   A test on the built frame script holds this.
 
 ## Development

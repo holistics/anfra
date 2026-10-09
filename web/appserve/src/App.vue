@@ -6,7 +6,7 @@ import AppTree from './AppTree.vue';
 import DataAppFrame from './DataAppFrame.vue';
 import Icon from './Icon.vue';
 import InspectPanel from './InspectPanel.vue';
-import type { DatasetDescriptor, User } from 'anfra-sdk/common';
+import type { DatasetDescriptor, User } from '@holistics/anfra-sdk/common';
 import type { InspectedApp } from './inspect';
 import {
   filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,

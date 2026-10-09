@@ -1,5 +1,5 @@
 /**
- * anfra-sdk/api: the core API, for trusted code. A client generated from anfra core's spec, a
+ * @holistics/anfra-sdk/api: the core API, for trusted code. A client generated from anfra core's spec, a
  * Backend over it (`coreApiBackend`), and what provisions a Data App (`loadDatasets`). A host's
  * page uses it; a Data App's frame never does.
  */
