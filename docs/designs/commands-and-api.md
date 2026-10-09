@@ -22,7 +22,7 @@ Commands live in packages under `internal/command/` (one per group), and are reg
 
 | Surface | Built by | What it is |
 |---|---|---|
-| CLI | `cmd/anfra/commands.go` | `anfra <group> <name>`: flags from the args, output as YAML. When the repo has a running `anfra serve`, the CLI sends the call there instead of starting its own sidecars ([architecture.md](architecture.md)). |
+| CLI | `cmd/anfra/commands.go` | `anfra <group> <name>`: flags from the args (an object arg as JSON, or its fields as flags by their path, `--format-options.header`), output as YAML. When the repo has a running `anfra serve`, the CLI sends the call there instead of starting its own sidecars ([architecture.md](architecture.md)). |
 | HTTP | `shared/apikit` `HTTP` | `POST /api/core.<name>`, a JSON body in, the answer or an error envelope out. |
 | MCP | `shared/apikit` `MCP` | One tool per op, named like it, at `/mcp`. |
 | In-process | `engine.Dispatch` | For a platform embedding anfra ([engine.md](engine.md)). |

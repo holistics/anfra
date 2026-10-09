@@ -19,7 +19,7 @@ const (
 	ArgBool        ArgType = "bool"         // a bool field
 	ArgStringArray ArgType = "string_array" // a []string field
 	ArgInt         ArgType = "int"          // an int field
-	ArgObject      ArgType = "object"       // a pointer to a struct; the CLI takes it as JSON
+	ArgObject      ArgType = "object"       // a pointer to a struct; the CLI takes it as JSON, or by its fields
 )
 
 // Arg is one of a command's args, parsed from a field of its In struct:
@@ -46,6 +46,11 @@ const (
 //	          them for a []string); "stdin": the CLI reads it from piped stdin when
 //	          unset. Comma-separated.
 //
+// An object arg's string, bool, int and []string fields are its Fields: the CLI
+// sets each with a flag of its own, --<arg>.<field>, read from the field's json,
+// doc and enum tags. A field holding an object, or a list of them, is set only
+// through the arg's JSON.
+//
 // Fields without a json tag are not args, except an embedded struct, whose args
 // are In's own (as huma and encoding/json flatten it too). An In with args
 // implements huma.SchemaTransformer with ArgsSchema, so its groups and required
@@ -62,6 +67,8 @@ type Arg struct {
 	Group      string
 	Positional bool
 	Stdin      bool
+	// Fields are an object arg's fields the CLI sets one by one (see Arg).
+	Fields []Arg
 
 	field []int // the field's index path in In
 }
@@ -75,6 +82,7 @@ func cloneArgs(args []Arg) []Arg {
 		out[i].Aliases = slices.Clone(out[i].Aliases)
 		out[i].Enum = slices.Clone(out[i].Enum)
 		out[i].field = slices.Clone(out[i].field)
+		out[i].Fields = cloneArgs(out[i].Fields)
 	}
 	return out
 }
@@ -116,6 +124,11 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 			a.Type = ArgInt
 		case f.Type.Kind() == reflect.Pointer && f.Type.Elem().Kind() == reflect.Struct:
 			a.Type = ArgObject
+			fields, err := objectFields(f.Type.Elem())
+			if err != nil {
+				return nil, fmt.Errorf("arg %s: %w", name, err)
+			}
+			a.Fields = fields
 		default:
 			return nil, fmt.Errorf("arg %s: unsupported type %s", name, f.Type)
 		}
@@ -176,6 +189,41 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 		}
 	}
 	return args, nil
+}
+
+// objectFields are the fields of an object arg's struct the CLI sets one by one:
+// its string, bool, int and []string fields. Others (an object, a list of
+// objects) are left to the arg's JSON.
+func objectFields(t reflect.Type) ([]Arg, error) {
+	var fields []Arg
+	for _, f := range reflect.VisibleFields(t) {
+		tag, ok := f.Tag.Lookup("json")
+		if f.Anonymous || !ok || tag == "-" {
+			continue
+		}
+		name, _, _ := strings.Cut(tag, ",")
+		a := Arg{Name: name, Usage: f.Tag.Get("doc"), field: f.Index}
+		switch f.Type {
+		case reflect.TypeFor[string]():
+			a.Type = ArgString
+		case reflect.TypeFor[bool]():
+			a.Type = ArgBool
+		case reflect.TypeFor[[]string]():
+			a.Type = ArgStringArray
+		case reflect.TypeFor[int]():
+			a.Type = ArgInt
+		default:
+			continue
+		}
+		if v := f.Tag.Get("enum"); v != "" {
+			a.Enum = strings.Split(v, ",")
+		}
+		if name == "" || a.Usage == "" {
+			return nil, fmt.Errorf("field %s: a field the CLI sets needs a name and a usage", f.Name)
+		}
+		fields = append(fields, a)
+	}
+	return fields, nil
 }
 
 // ArgsSchema completes an In's schema with what huma cannot read from its tags:
