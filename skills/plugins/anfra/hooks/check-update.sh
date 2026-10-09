@@ -14,7 +14,7 @@ cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\
 [ -n "$cwd" ] && cd "$cwd" 2>/dev/null
 
 [ -d .anfra ] || exit 0
-[ -z "${ANFRA_NO_UPDATE_NOTIFIER:-}" ] || exit 0
+[ "${ANFRA_NO_UPDATE_NOTIFIER:-}" = 1 ] && exit 0
 command -v anfra >/dev/null 2>&1 || exit 0
 
 # YAML: version: 0.4.2, and when known, update: { available: true, latest: 0.5.0 }.
