@@ -266,4 +266,4 @@ Anfra is built by the team behind Holistics, and AMQL is the semantic layer Holi
 
 ## License
 
-Anfra is licensed under the [Apache License 2.0](LICENSE). <!-- TODO: add the LICENSE file to the repo -->
+Anfra is licensed under the [Apache License 2.0](LICENSE).
