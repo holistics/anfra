@@ -209,6 +209,9 @@ export class App extends Observable implements AppContext {
     this.assertNameFree(name, 'query');
     const query = new Query(name, this, declaration);
     this._queries.set(name, query);
+    // Declaring is a change too: a host inspecting the app sees the new entity at once, and a
+    // dynamic app's render runs once more, which it already handles for an entity with no result.
+    this.notify();
     return query;
   }
 
@@ -219,6 +222,7 @@ export class App extends Observable implements AppContext {
       : this.soleDataset(name, declaration.field);
     const filter = new Filter(name, this, declaration, dataset, this.backend);
     this._controls.set(name, filter);
+    this.notify();
     return filter;
   }
 
@@ -236,6 +240,7 @@ export class App extends Observable implements AppContext {
     this.assertNameFree(name, 'date drill control');
     const control = new DateDrillControl(name, this, declaration);
     this._controls.set(name, control);
+    this.notify();
     return control;
   }
 
@@ -284,6 +289,7 @@ export class App extends Observable implements AppContext {
     this.assertAcyclic(mapping);
 
     this._mappings.push(mapping);
+    this.notify();
     return mapping;
   }
 
@@ -336,6 +342,7 @@ export class App extends Observable implements AppContext {
     }
 
     this._crossFilters.push(edge);
+    this.notify();
     return edge;
   }
 
