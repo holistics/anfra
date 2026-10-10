@@ -174,17 +174,21 @@ function onInspect (apps: InspectedApp[], shape: InspectedStructure): void {
   inspected.value = apps;
   structure.value = shape;
 }
-// A pick chooses the node and ends pick mode; Escape in the frame only ends it.
+// A pick chooses the node and ends pick mode; Escape in the frame only ends it. Either way the
+// overlay the pick left on the page goes: it shows only while the reader hovers the tree.
 function onPick (node: string | null): void {
   picking.value = false;
-  if (node !== null) {
-    selectedNode.value = node;
-    frame.value?.highlight(node);
-  }
+  if (node !== null) selectedNode.value = node;
+  frame.value?.highlight(null);
 }
-// Leaving the tree puts the highlight back on the selected node, if any.
+// Choosing a node in the tree is the other way to end a pick: the reader has found what they
+// were pointing at.
+function onSelect (node: string | undefined): void {
+  selectedNode.value = node;
+  picking.value = false;
+}
 function onHighlight (node: string | null): void {
-  frame.value?.highlight(node ?? selectedNode.value ?? null);
+  frame.value?.highlight(node);
 }
 watch(inspectOpen, (open) => {
   if (open) return;
@@ -531,7 +535,7 @@ onBeforeUnmount(() => {
               @close="inspectOpen = false"
               @highlight="onHighlight"
               @locate="frame?.locate($event)"
-              @select="selectedNode = $event"
+              @select="onSelect"
               @pick="picking = $event"
             />
           </div>

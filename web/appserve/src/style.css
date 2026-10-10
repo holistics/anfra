@@ -533,7 +533,7 @@ code { font-size: 12px; color: var(--muted); }
 }
 .inspect-tabs button:hover { background: var(--hover); }
 .inspect-tabs button[aria-selected="true"] { color: var(--fg); background: var(--hover); }
-.toolbar { display: flex; gap: 6px; margin: 8px 0; }
+.toolbar { flex: none; display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
 .tool { border: 1px solid var(--border); border-radius: 6px; background: none; padding: 3px 10px; color: var(--fg); font-size: 12px; }
 .tool:hover:not(:disabled) { background: var(--hover); }
 .tool:disabled { color: var(--muted); }
@@ -554,6 +554,9 @@ code { font-size: 12px; color: var(--muted); }
 .kind.query { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
 .kind.control { background: color-mix(in srgb, #d97706 18%, transparent); color: #d97706; }
 .detail { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+.detail .handle { display: flex; align-items: baseline; gap: 6px; }
+.detail .handle .copy { flex: none; opacity: 0; transition: opacity 0.1s; }
+.detail .handle:hover .copy, .detail .handle .copy:focus-visible { opacity: 1; }
 .detail h5 { margin-top: 4px; }
 
 .code pre {
