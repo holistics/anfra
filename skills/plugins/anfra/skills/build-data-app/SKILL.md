@@ -116,8 +116,8 @@ Leave it running: it reloads the open app whenever its file, or the AML, changes
 the repo's problems (AML that does not compile, a data source not configured). Its Inspect panel
 has two tabs: **Structure**, the tree of marked parts, with a problem count for markup it could
 not read (an unknown query name, a block inside a block), and **Data**, each query's state,
-executed AQL and error, with how many places draw it and a Locate button. A query "not on the
-page" is one no element is marked with yet.
+executed AQL and error, in how many places it is drawn, and a Locate button. A query that says
+"Not drawn yet" has no element marked with it.
 
 If you can drive a browser, open the app, exercise every control and click, and read the console
 of the app's frame, not just the page. Otherwise ask the user to, and to report what they see
