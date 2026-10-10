@@ -49,10 +49,14 @@ type Def[C, In, Out any] struct {
 
 	// ReadOnly: the op changes nothing, so a client may retry it freely.
 	// Idempotent: repeating it with the same input has no further effect.
+	// NonDestructive: the op changes things, but only adds to them; it deletes
+	// and overwrites nothing. Meaningless for a ReadOnly op. Unset, an op that
+	// changes things may destroy something, as MCP assumes too.
 	// POST-only routing carries no method semantics, so the op states them; they
 	// feed MCP's tool hints and client retry policy.
-	ReadOnly   bool
-	Idempotent bool
+	ReadOnly       bool
+	Idempotent     bool
+	NonDestructive bool
 
 	// Timeout bounds the op; zero means DefaultTimeout.
 	Timeout time.Duration
@@ -93,6 +97,7 @@ type Meta struct {
 	Errors             []apperr.Code
 	ReadOnly           bool
 	Idempotent         bool // implied by ReadOnly
+	Destructive        bool // it changes things, and may delete or overwrite: not ReadOnly, nor NonDestructive
 	Timeout            time.Duration
 	HTTP               bool
 	MCP                bool
@@ -166,7 +171,8 @@ func (o *registered[R, C, In, Out]) Meta() Meta {
 	return Meta{
 		Name: o.decl.Name, Summary: o.decl.Summary, Doc: o.decl.Doc, Errors: codes,
 		ReadOnly: o.decl.ReadOnly, Idempotent: o.decl.Idempotent || o.decl.ReadOnly,
-		Timeout: timeout, HTTP: o.decl.HTTP, MCP: o.decl.MCP, Ext: o.decl.Ext,
+		Destructive: !o.decl.ReadOnly && !o.decl.NonDestructive,
+		Timeout:     timeout, HTTP: o.decl.HTTP, MCP: o.decl.MCP, Ext: o.decl.Ext,
 	}
 }
 

@@ -14,6 +14,8 @@ Then `http://localhost:7878/` lists the repo's Data Apps; the core API is under 
 
 The image's command is `serve --addr 0.0.0.0:7878`: every interface, so a published port reaches it. `serve` has no authentication ([designs/security.md](../designs/security.md)): publish the port only where everyone who reaches it may query the repo's data.
 
+**Behind a proxy** (TLS, another host name, a path prefix): add `-e ANFRA_SITE_URL=https://data.example.com/anfra`, so the links the server makes (an export's download) point where callers reach it. Without it, a link uses the host the caller's request named, which is right when they reach the published port directly.
+
 **Other `serve` flags** replace the whole command, so repeat the address:
 
 ```sh
