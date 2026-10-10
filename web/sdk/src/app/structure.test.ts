@@ -158,7 +158,7 @@ describe('markersFor and locate', () => {
     expect(revenue.locate()).toBe(true);
     expect(region.locate()).toBe(true);
     expect(document.getElementById('anfra-overlay')?.style.display).toBe('block');
-    expect(document.querySelector('[data-testid="anfra-overlay-label"]')?.textContent).toBe('control region');
+    expect(document.querySelector('[data-testid="anfra-overlay-label"]')?.textContent).toBe('controlregion');
   });
 
   it('describes a node for the overlay by kind, id, label and size', () => {
@@ -167,7 +167,11 @@ describe('markersFor and locate', () => {
     html('<div data-anfra-block="kpis" data-anfra-label="KPIs" data-anfra-query="revenue"></div><div data-anfra-query="revenue"></div>');
     const structure = buildStructure(document, sdk.apps);
     const tile = structure.elements.get('0')!;
-    expect(describeNode(structure.nodes[0], tile, structure)).toBe('block kpis · KPIs · 0 × 0');
-    expect(describeNode(structure.nodes[0].children[0], tile, structure)).toBe('query revenue · 1 of 2 · 0 × 0');
+    expect(describeNode(structure.nodes[0], tile, structure)).toEqual({
+      kind: 'block', name: 'kpis', label: 'KPIs', size: '0 × 0',
+    });
+    expect(describeNode(structure.nodes[0].children[0], tile, structure)).toEqual({
+      kind: 'query', name: 'revenue', note: '1 of 2', size: '0 × 0',
+    });
   });
 });

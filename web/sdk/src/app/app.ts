@@ -660,8 +660,9 @@ export class App extends Observable implements AppContext {
     const elements = markersFor(doc, kind, this.index, name);
     if (!elements.length) return false;
     scrollTo(elements[0]);
-    const which = elements.length > 1 ? ` · ${elements.length} places` : '';
-    overlayFor(doc).flash(elements, `${kind} ${name}${which}`);
+    overlayFor(doc).flash(elements, {
+      kind, name, ...(elements.length > 1 ? { note: `${elements.length} places` } : {}),
+    });
     return true;
   }
 

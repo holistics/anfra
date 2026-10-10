@@ -14,10 +14,13 @@ describe('the overlay', () => {
     expect(overlayFor(document)).toBe(overlay);
     const root = document.getElementById(OVERLAY_ID)!;
     expect(root.style.display).toBe('none');
-    overlay.show([document.getElementById('a')!, document.getElementById('b')!], 'query revenue');
+    overlay.show([document.getElementById('a')!, document.getElementById('b')!], {
+      kind: 'query', name: 'revenue', note: '1 of 2', size: '0 × 0',
+    });
     expect(root.style.display).toBe('block');
     expect(root.children).toHaveLength(3);
-    expect(root.lastElementChild?.textContent).toBe('query revenue');
+    const parts = [...root.lastElementChild!.children].map((part) => `${part.getAttribute('data-part')}=${part.textContent}`);
+    expect(parts).toEqual(['kind=query', 'name=revenue', 'note=1 of 2', 'size=0 × 0']);
     overlay.hide();
     expect(root.style.display).toBe('none');
     expect(root.children).toHaveLength(0);
@@ -26,7 +29,7 @@ describe('the overlay', () => {
   it('flashes for a moment, then hides itself', () => {
     document.body.innerHTML = '<div id="a"></div>';
     const overlay = overlayFor(document);
-    overlay.flash([document.getElementById('a')!], 'block a');
+    overlay.flash([document.getElementById('a')!], { kind: 'block', name: 'a' });
     expect(overlay.visible).toBe(true);
     vi.advanceTimersByTime(FLASH_MS);
     expect(overlay.visible).toBe(false);
@@ -34,7 +37,7 @@ describe('the overlay', () => {
 
   it('shows nothing for no elements', () => {
     const overlay = overlayFor(document);
-    overlay.show([], 'x');
+    overlay.show([], { kind: 'block', name: 'x' });
     expect(overlay.visible).toBe(false);
   });
 });
