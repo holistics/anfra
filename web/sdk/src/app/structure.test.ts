@@ -118,14 +118,14 @@ describe('buildStructure', () => {
       }(nodes)).filter(([, p]) => p.length),
     );
     expect(problems).toEqual({
-      '0.0 block inner': ['Inside block "outer", but a block holds no container or block.'],
-      '0.1 container c': ['Inside block "outer", but a block holds no container or block.'],
+      '0.0 block inner': ['A block can\'t hold a block. This one is inside the block "outer".'],
+      '0.1 container c': ['A block can\'t hold a container. This one is inside the block "outer".'],
       '1 block outer': ['Another block already has the id "outer".'],
-      '2 block ': ['An empty block id.'],
-      '3 container both': ['Marked as both a container and a block; read as a container.'],
-      '4 query nope': ['App 0 has no query named "nope".'],
-      '5 query revenue': ['There is no app 3 in this frame.'],
-      '6 control bad/ref/here': ['"bad/ref/here" is not a reference: write "name" or "app/name".'],
+      '2 block ': ['This block has no id.'],
+      '3 container both': ['This element is marked as a container and as a block. It counts as a container.'],
+      '4 query nope': ['No query is called "nope" in app 0.'],
+      '5 query revenue': ['The page has no app 3.'],
+      '6 control bad/ref/here': ['Can\'t read "bad/ref/here". Write the control\'s name, or app/name when the page has several apps.'],
     });
     expect(usage).toEqual({});
   });

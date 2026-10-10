@@ -26,7 +26,11 @@ async function copy (id: string, text: string): Promise<void> {
   } catch { /* clipboard unavailable */ }
 }
 const controlKind = (control: InspectedControl) => (control.kind === 'dateDrill' ? 'Date drill' : 'Filter');
-const drawn = () => (props.usage ? `${props.usage.markers} on the page${props.usage.blocks.length ? `, in ${props.usage.blocks.join(', ')}` : ''}` : 'not on the page');
+const drawn = () => {
+  if (!props.usage) return 'Not drawn yet';
+  const places = `${props.usage.markers} place${props.usage.markers === 1 ? '' : 's'}`;
+  return props.usage.blocks.length ? `In ${places}: ${props.usage.blocks.join(', ')}` : `In ${places}, outside any block`;
+};
 </script>
 
 <template>
@@ -45,7 +49,7 @@ const drawn = () => (props.usage ? `${props.usage.markers} on the page${props.us
         type="button"
         class="locate"
         :disabled="!usage"
-        :title="usage ? 'Scroll to it on the page' : `Nothing on the page is marked ${entityAttribute(kind(), app, name)}`"
+        :title="usage ? 'Scroll to it on the page' : `No element is marked ${entityAttribute(kind(), app, name)} yet`"
         data-testid="locate"
         @click="emit('locate', { app, kind: kind(), name })"
       >
