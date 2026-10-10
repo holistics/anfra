@@ -47,6 +47,25 @@ await app.execute();
 `Anfra.datasets` describes what there is to query. For TypeScript, `@holistics/anfra-sdk/ambient` declares the
 global.
 
+A definition can mark its parts, so a host's inspect panel can show them as a tree and find them on
+the page:
+
+```html
+<section data-anfra-container="page" data-anfra-label="Overview">
+  <div data-anfra-block="revenue" data-anfra-query="byRegion">…</div>   <!-- a block drawn by a query -->
+  <div data-anfra-block="trend">
+    <div data-anfra-query="trend"></div>                                  <!-- the query's chart -->
+    <select data-anfra-control="grain"></select>                          <!-- and its control -->
+  </div>
+</section>
+```
+
+A **container** holds anything; a **block** holds no container or block. `data-anfra-query` and
+`data-anfra-control` name what an element is drawn by (`name`, or `app/name` for a frame with
+several apps). Ids are unique per kind. The markup is optional and partial, read only while a host
+inspects, and never thrown over: a wrong name or a block inside a block is reported in the tree.
+`byRegion.locate()` scrolls to the elements marked with that query and shows them for a moment.
+
 ## Hosting a Data App
 
 ```ts
