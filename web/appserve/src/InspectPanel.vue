@@ -76,22 +76,29 @@ const selectedEntity = computed(() => {
       </button>
     </header>
 
+    <div v-if="tab === 'structure'" class="toolbar">
+      <button
+        type="button"
+        class="tool"
+        :aria-pressed="picking"
+        title="Click a part of the page to select it here. Esc stops."
+        data-testid="pick"
+        @click="emit('pick', !picking)"
+      >
+        Pick
+      </button>
+      <button
+        type="button"
+        class="tool"
+        :disabled="!selected"
+        :title="selected ? handleFor(selected) : 'Select a node first'"
+        data-testid="copy-handle-tool"
+        @click="copyHandle"
+      >
+        {{ copied ? 'Copied' : 'Copy handle' }}
+      </button>
+    </div>
     <div v-if="tab === 'structure'" class="inspect-body" @mouseleave="emit('highlight', null)">
-      <div class="toolbar">
-        <button
-          type="button"
-          class="tool"
-          :aria-pressed="picking"
-          title="Click a part of the page to select it here. Esc stops."
-          data-testid="pick"
-          @click="emit('pick', !picking)"
-        >
-          Pick
-        </button>
-        <button type="button" class="tool" :disabled="!selected" data-testid="copy-handle" @click="copyHandle">
-          {{ copied ? 'Copied' : 'Copy handle' }}
-        </button>
-      </div>
       <p v-if="!structure" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
       <p v-else-if="structure.nodes.length === 0" class="inspect-note" data-testid="structure-none">
         Nothing is marked yet. Add <code>data-anfra-container</code>, <code>data-anfra-block</code>,
@@ -111,7 +118,13 @@ const selectedEntity = computed(() => {
           <dt>{{ selected.kind === 'container' || selected.kind === 'block' ? 'Id' : 'Name' }}</dt>
           <dd>{{ selected.kind === 'container' || selected.kind === 'block' ? selected.id : selected.name }}</dd>
           <template v-if="selected.label"><dt>Label</dt><dd>{{ selected.label }}</dd></template>
-          <dt>Handle</dt><dd><code class="wrap">{{ handleFor(selected) }}</code></dd>
+          <dt>Handle</dt>
+          <dd class="handle">
+            <code class="wrap">{{ handleFor(selected) }}</code>
+            <button type="button" class="copy" title="Copy the handle" data-testid="copy-handle" @click="copyHandle">
+              {{ copied ? 'Copied' : 'Copy' }}
+            </button>
+          </dd>
           <template v-if="selected.children.length"><dt>Holds</dt><dd>{{ selected.children.length }} node{{ selected.children.length === 1 ? '' : 's' }}</dd></template>
         </dl>
         <p v-for="(problem, i) in selected.problems" :key="i" class="error-text" role="alert">{{ problem }}</p>
