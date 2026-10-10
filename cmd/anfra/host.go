@@ -10,6 +10,7 @@ import (
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
@@ -24,6 +25,7 @@ import (
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
 	cc := command.CommandContext{
 		Clients:   clients,
+		Exports:   exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
 		Repo:      h.repo,
 		DataPerms: dataperm.Unrestricted(),
 	}
@@ -40,6 +42,9 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 type hostContext struct {
 	repo repo.Repo
 	cfg  sidecar.Config
+	// exportFiles are this process's exports' files: the one-shot CLI's, or the
+	// server's, which closes them when it stops.
+	exportFiles *exports.Files
 }
 
 // withRepo resolves the repo and sets up host-aggregated logging, then runs fn
@@ -64,7 +69,8 @@ func withRepo(ctx context.Context, fn func(ctx context.Context, h hostContext) e
 	}))
 
 	return fn(ctx, hostContext{
-		repo: repo,
+		repo:        repo,
+		exportFiles: exports.New(exportLinkLife),
 		cfg: sidecar.Config{
 			RepoID:           repo.ID,
 			CompileCachePath: filepath.Join(repo.CacheDir(), "compile-cache"),

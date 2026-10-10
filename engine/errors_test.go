@@ -62,7 +62,7 @@ func TestErrorCodes(t *testing.T) {
 		}
 		names = append(names, c.String())
 	}
-	want := []string{"data_perms_missing", "data_perms_unenforceable", "query_failed", "query_invalid", "sidecar_unavailable", "unknown_command"}
+	want := []string{"data_perms_missing", "data_perms_unenforceable", "exports_unavailable", "query_failed", "query_invalid", "sidecar_unavailable", "unknown_command"}
 	if !reflect.DeepEqual(names, want) {
 		t.Errorf("ErrorCodes() = %v, want %v", names, want)
 	}

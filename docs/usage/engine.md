@@ -45,6 +45,7 @@ res, err := engine.Dispatch(ctx, inv, engine.Request{
 - `DataPerms` must be stated: `Dispatch` refuses an invocation without them. `Restricted` attributes change which rows a query returns; `Attribution` never does.
 - `res.Status` is `engine.StatusOK`, or `engine.StatusInvalid` for a command that ran and judged its input invalid (validation diagnostics). That is an outcome, not an error. `res.Data` is the answer.
 - `engine.Commands()` and `engine.Describe()` list what you can dispatch, and how each is called.
+- `Exports` is where `query.export` puts its file: an `engine.ExportStore` you provide, which writes the file and answers a link to it that expires (object storage with presigned URLs, say). Without one, an export fails with `engine.ExportsUnavailable`. Its links must work for whoever called: where they reach you, not where you listen. See [designs/export-store.md](../designs/export-store.md).
 
 ## 3. Handle errors
 

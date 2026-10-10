@@ -4,12 +4,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -200,6 +207,87 @@ func TestDottedFlags(t *testing.T) {
 	for _, want := range []string{"--format-options.header string", "(one of: labels, names, none)", "or set its fields with --format-options.<field>"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help does not say %q:\n%s", want, help)
+		}
+	}
+}
+
+// query.export's flags: the query's, the format's options by their path, and the
+// CLI's own, where the file goes or the link alone.
+func TestExportFlags(t *testing.T) {
+	cmd := buildCobraCommand(registered(t, "query.export"))
+	for _, name := range []string{"dataset", "input", "format", "format-options", "format-options.header", "format-options.bom", "output", "link"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("no --%s", name)
+		}
+	}
+	if f := cmd.Flags().Lookup("output"); f == nil || f.Shorthand != "o" {
+		t.Error("--output has no -o")
+	}
+	for _, name := range []string{"page", "page-size"} {
+		if cmd.Flags().Lookup(name) != nil {
+			t.Errorf("--%s on an export, which is the whole result", name)
+		}
+	}
+	if buildCobraCommand(registered(t, "query")).Flags().Lookup("output") != nil {
+		t.Error("--output on a command that answers no export")
+	}
+}
+
+// An export's file is downloaded from its link, the CLI's own (file://) or a
+// server's (http://), to stdout or --output; the CLI's own file, once written
+// out, is removed, since it was made for that; a download that fails leaves no
+// file behind, and a server's error is shown as any of its errors is.
+func TestDownload(t *testing.T) {
+	dir := t.TempDir()
+	local := filepath.Join(dir, "local.csv")
+	if err := os.WriteFile(local, []byte("a\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/exports/x" {
+			httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "No such export, or its link has expired."))
+			return
+		}
+		_, _ = w.Write([]byte("b\n2\n"))
+	}))
+	defer srv.Close()
+
+	for link, want := range map[string]string{
+		(&url.URL{Scheme: "file", Path: local}).String(): "a\n1\n",
+		srv.URL + "/exports/x":                           "b\n2\n",
+	} {
+		out := filepath.Join(dir, "out.csv")
+		if err := download(context.Background(), link, out); err != nil {
+			t.Fatalf("%s: %v", link, err)
+		}
+		if b, _ := os.ReadFile(out); string(b) != want {
+			t.Errorf("%s: wrote %q, want %q", link, b, want)
+		}
+	}
+	if _, err := os.Stat(local); !os.IsNotExist(err) {
+		t.Error("the CLI's own export was left after it was written out")
+	}
+
+	gone := filepath.Join(dir, "gone.csv")
+	var remote *remoteError
+	if err := download(context.Background(), srv.URL+"/exports/gone", gone); !errors.As(err, &remote) || remote.resp.Code != "not_found" {
+		t.Errorf("an expired link: %v, want the server's not_found", err)
+	}
+	if _, err := os.Stat(gone); !os.IsNotExist(err) {
+		t.Error("a failed download left a file")
+	}
+}
+
+// How the CLI shows an answer is decided by what the answer is.
+func TestPresentationOf(t *testing.T) {
+	for name, want := range map[string]presentation{
+		"query.export": presentDownload,
+		"search":       presentSearchList,
+		"query":        presentYAML,
+		"version":      presentYAML,
+	} {
+		if got := presentationOf(registered(t, name)); got != want {
+			t.Errorf("%s: %d, want %d", name, got, want)
 		}
 	}
 }

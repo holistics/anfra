@@ -176,6 +176,23 @@ func canalError(m map[string]any) *Error {
 // rows. dbconfig is passed straight through to canal as the connection config.
 // truncateRows caps how many rows canal returns (negative = no truncation).
 func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int) (*Result, error) {
+	result := &Result{}
+	fields, err := c.ExecuteEach(ctx, dbtype, dbconfig, sql, truncateRows, func(row Row) error {
+		result.Rows = append(result.Rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result.Fields = fields
+	return result, nil
+}
+
+// ExecuteEach is Execute that hands each row to each as canal streams it,
+// holding none, and answers the fields once the stream ends. An error from each
+// stops the stream and is answered as it is. A row is each's to keep: it is not
+// reused.
+func (c *Client) ExecuteEach(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int, each func(Row) error) ([]string, error) {
 	body, err := jsonkit.Marshal(queryRequest{
 		SQL:          sql,
 		Dbtype:       dbtype,
@@ -202,7 +219,7 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 	}
 	defer resp.Body.Close()
 
-	result := &Result{}
+	var fields []string
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 64*1024*1024) // rows can be large
 	for scanner.Scan() {
@@ -218,7 +235,7 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 					return nil, canalError(tr.Error)
 				}
 				if tr.Metadata != nil {
-					result.Fields = tr.Metadata.Fields
+					fields = tr.Metadata.Fields
 				}
 				continue
 			}
@@ -227,10 +244,12 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 		if line[0] != '[' || !jsonkit.Valid(line) {
 			return nil, fmt.Errorf("canal answered a row that is not a JSON array: %.100s", line)
 		}
-		result.Rows = append(result.Rows, Row(bytes.Clone(line))) // the scanner reuses line
+		if err := each(Row(bytes.Clone(line))); err != nil { // the scanner reuses line
+			return nil, err
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read result stream: %w", err)
 	}
-	return result, nil
+	return fields, nil
 }

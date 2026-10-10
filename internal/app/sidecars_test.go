@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +15,7 @@ import (
 	querycmd "github.com/holistics/anfra/internal/command/query"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
@@ -72,6 +74,9 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query, SQL the database refuses", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select nosuch from products"}}, "", errcode.QueryFailed},
 		{"query, SQL on a data source it cannot reach", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "unreachable", "query": "select 1"}}, "", errcode.QueryFailed},
 		{"query compile, SQL", valid, clients, Request{Command: "query.compile", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select 1"}}, ok, nil},
+		{"query export", valid, clients, Request{Command: "query.export", Args: q("products | select(products.id, products.name)")}, ok, nil},
+		{"query export, invalid", valid, clients, Request{Command: "query.export", Args: q("nosuch | select(x.y)")}, "", query.QueryInvalid},
+		{"query export, SQL", valid, clients, Request{Command: "query.export", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select id, name from products order by id"}}, ok, nil},
 		{"query, shaped", valid, clients, Request{Command: "query", Args: shaped(nil)}, ok, nil},
 		{"query compile, shaped", valid, clients, Request{Command: "query.compile", Args: shaped(nil)}, ok, nil},
 		{"query, a Query Input entry anfra-node refuses", valid, clients, Request{Command: "query", Args: shaped(map[string]any{
@@ -86,6 +91,35 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"validate, valid", valid, clients, Request{Command: "validate"}, ok, nil},
 		{"validate, invalid", broken, clients, Request{Command: "validate"}, invalid, nil},
 	}
+
+	t.Setenv("TMPDIR", t.TempDir())
+	files := exports.New(time.Hour)
+	defer files.Close()
+	store := exports.Store{Files: files}
+
+	// An export's file holds the whole result, under a header of the columns'
+	// labels, and its link says how many rows.
+	t.Run("query export, its file", func(t *testing.T) {
+		cc := command.CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted(), Exports: store}
+		res, err := Dispatch(ctx, cc, Request{Command: "query.export", Args: map[string]any{"dataset": "ecommerce",
+			"query": "explore { dimensions { name: products.name } }", "format_options": map[string]any{"header": "names"}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		link := res.Data.(command.ExportLink)
+		u, err := url.Parse(link.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(u.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+		if lines[0] != "name" || len(lines)-1 != link.RowCount || link.RowCount == 0 || link.Filename != "ecommerce.csv" {
+			t.Errorf("link %+v, file:\n%s", link, b)
+		}
+	})
 
 	// A shaped run answers what ran and what each column is, and only its page.
 	t.Run("query, shaped, its answer", func(t *testing.T) {
@@ -169,7 +203,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	for _, tc := range cases {
 		ran[tc.req.Command] = true
 		t.Run(tc.name, func(t *testing.T) {
-			res, err := Dispatch(ctx, command.CommandContext{Clients: tc.clients, Repo: tc.repo, DataPerms: dataperm.Unrestricted()}, tc.req)
+			res, err := Dispatch(ctx, command.CommandContext{Clients: tc.clients, Repo: tc.repo, DataPerms: dataperm.Unrestricted(), Exports: store}, tc.req)
 			if tc.fails != nil {
 				if !errors.Is(err, tc.fails) {
 					t.Fatalf("got %v, want %s", err, tc.fails.Code().Qualified())

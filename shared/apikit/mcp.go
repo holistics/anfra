@@ -82,9 +82,13 @@ func (m MCP[R]) server(ctx context.Context, rt *Runtime, reg *Registry[R], req R
 			description += "\n\n" + meta.Doc
 		}
 		readOnly, idempotent := meta.ReadOnly, meta.Idempotent
+		var destructive *bool // meaningless, so unset, for a read-only op
+		if !readOnly {
+			destructive = &meta.Destructive
+		}
 		s.AddTool(&mcp.Tool{
 			Name: meta.Name, Description: description, InputSchema: input,
-			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: idempotent},
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: idempotent, DestructiveHint: destructive},
 		}, func(ctx context.Context, call *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			out, err := o.Invoke(ctx, rt, req, call.Params.Arguments)
 			if err != nil {

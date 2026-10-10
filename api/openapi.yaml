@@ -63,6 +63,34 @@ components:
         - step
         - text
       type: object
+    ErrorBodyExportsUnavailable:
+      additionalProperties: false
+      description: This server cannot make exports.
+      properties:
+        code:
+          const: exports_unavailable
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 501
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyInternalServerError:
       additionalProperties: false
       description: Something went wrong on our side.
@@ -265,6 +293,88 @@ components:
         - label
         - adhoc
         - isMeasure
+      type: object
+    ExportFormatOptions:
+      additionalProperties: false
+      properties:
+        bom:
+          description: "csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open"
+          type: boolean
+        header:
+          description: "csv: the header row: the columns' labels (the default; what readers see), their names (their keys in a query's answer, stable for programs), or none"
+          enum:
+            - labels
+            - names
+            - none
+          type: string
+      type: object
+    ExportInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        filename:
+          description: the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name
+          type: string
+        format:
+          default: csv
+          description: the file's format
+          enum:
+            - csv
+          type: string
+        format_options:
+          $ref: "#/components/schemas/ExportFormatOptions"
+          description: the format's options
+        input:
+          $ref: "#/components/schemas/QueryTransforms"
+          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          type: string
+      required:
+        - query
+      type: object
+    ExportLink:
+      additionalProperties: false
+      properties:
+        expires_at:
+          description: when the link stops working
+          format: date-time
+          type: string
+        filename:
+          description: the file's name, as a download saves it
+          type: string
+        format:
+          description: the file's format
+          type: string
+        row_count:
+          description: the rows the file holds
+          format: int64
+          type: integer
+        url:
+          description: "where to download the file: a plain GET, with no credentials, until expires_at"
+          type: string
+      required:
+        - url
+        - filename
+        - format
+        - row_count
+        - expires_at
       type: object
     IngestInput:
       additionalProperties: false
@@ -862,6 +972,7 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Build the local search catalog from context sources
+      x-destructive: true
       x-idempotent: true
       x-read-only: false
   /core.query:
@@ -938,6 +1049,7 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: "Run a query: its rows, and the SQL that produced them"
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.query.compile:
@@ -1003,8 +1115,101 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Compile a query to SQL, without running it
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
+  /core.query.export:
+    post:
+      description: |-
+        Export a query's whole result as a file: a link to download it.
+
+        The query runs to completion before the answer, so a query that fails fails here. The CLI downloads the file, to stdout or --output; --link prints the answer instead.
+      operationId: core.query.export
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportLink"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                      - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                required:
+                  - error
+                type: object
+          description: validation_failed, query_invalid
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "501":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyExportsUnavailable"
+                required:
+                  - error
+                type: object
+          description: exports_unavailable
+        "502":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyQueryFailed"
+                required:
+                  - error
+                type: object
+          description: query_failed
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
+      summary: "Export a query's whole result as a file: a link to download it"
+      x-destructive: false
+      x-idempotent: false
+      x-read-only: false
   /core.query.validate:
     post:
       operationId: core.query.validate
@@ -1066,6 +1271,7 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: "Validate a query: its diagnostics, without running it"
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.search:
@@ -1130,6 +1336,7 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Search the local catalog
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.show:
@@ -1199,6 +1406,7 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: "Show the repo's datasets, or one dataset: their models, fields and metrics"
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.status:
@@ -1251,6 +1459,7 @@ paths:
                 type: object
           description: internal_server_error
       summary: Report whether a warm server is running and its sidecars are healthy
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.validate:
@@ -1314,6 +1523,7 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Validate the AML repo, optionally scoped to file globs
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.version:
@@ -1366,6 +1576,7 @@ paths:
                 type: object
           description: internal_server_error
       summary: Print the anfra version
+      x-destructive: false
       x-idempotent: true
       x-read-only: true
 servers:

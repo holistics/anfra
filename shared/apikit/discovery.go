@@ -47,23 +47,25 @@ type GroupListing struct {
 
 // OpEntry is an op in its group's listing.
 type OpEntry struct {
-	Name       string `json:"name"`
-	Summary    string `json:"summary"`
-	ReadOnly   bool   `json:"read_only"`
-	Idempotent bool   `json:"idempotent"`
+	Name        string `json:"name"`
+	Summary     string `json:"summary"`
+	ReadOnly    bool   `json:"read_only"`
+	Idempotent  bool   `json:"idempotent"`
+	Destructive bool   `json:"destructive"`
 }
 
 // Usage is all an agent needs to call an op: what it is for, what it takes,
 // what it answers, and how it can fail.
 type Usage struct {
-	Name       string         `json:"name"`
-	Summary    string         `json:"summary"`
-	Doc        string         `json:"doc,omitempty"`
-	ReadOnly   bool           `json:"read_only"`
-	Idempotent bool           `json:"idempotent"`
-	Input      map[string]any `json:"input"`
-	Output     map[string]any `json:"output"`
-	Errors     []ErrorEntry   `json:"errors"`
+	Name        string         `json:"name"`
+	Summary     string         `json:"summary"`
+	Doc         string         `json:"doc,omitempty"`
+	ReadOnly    bool           `json:"read_only"`
+	Idempotent  bool           `json:"idempotent"`
+	Destructive bool           `json:"destructive"`
+	Input       map[string]any `json:"input"`
+	Output      map[string]any `json:"output"`
+	Errors      []ErrorEntry   `json:"errors"`
 }
 
 // ErrorEntry is a code an op can fail with.
@@ -99,7 +101,7 @@ func (d Discovery[R]) Group(ctx context.Context, reg *Registry[R], r R, include 
 	g := GroupListing{Name: group, Summary: reg.groups[group], Ops: []OpEntry{}}
 	for _, o := range ops {
 		if m := o.Meta(); GroupOf(m.Name) == group {
-			g.Ops = append(g.Ops, OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent})
+			g.Ops = append(g.Ops, OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive})
 		}
 	}
 	if len(g.Ops) == 0 {
@@ -129,7 +131,7 @@ func (d Discovery[R]) Usage(ctx context.Context, rt *Runtime, reg *Registry[R], 
 	if err != nil {
 		return Usage{}, err
 	}
-	u := Usage{Name: m.Name, Summary: m.Summary, Doc: m.Doc, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent,
+	u := Usage{Name: m.Name, Summary: m.Summary, Doc: m.Doc, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive,
 		Input: in, Output: out, Errors: []ErrorEntry{}}
 	for _, c := range d.codes(m) {
 		u.Errors = append(u.Errors, ErrorEntry{Code: c.String(), Scope: string(c.Scope()), Message: c.Message()})

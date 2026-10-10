@@ -128,15 +128,34 @@ type RunResult struct {
 // failure (a data-source/DB problem). truncateRows caps the rows canal returns
 // (NoLimit for all rows); it's how anfra applies the AQL `limit:` directive.
 func Execute(ctx context.Context, canal *canalquery.Client, repo repo.Repo, compiled anfranode.CompileToSQLResult, truncateRows int) (*RunResult, error) {
-	sources, err := datasource.Load(repo.ConfigDir)
+	ds, err := dataSourceOf(repo, compiled)
 	if err != nil {
-		return nil, fmt.Errorf("load data sources: %w", err)
+		return nil, err
 	}
-	ds, ok := sources[compiled.DataSource.Name]
+	return run(ctx, canal, ds, statement{sql: compiled.SQL, dbType: compiled.DataSource.DBType, truncateRows: truncateRows})
+}
+
+// ExecuteEach is Execute that hands each row to each as it arrives, holding
+// none, and answers the result's fields once every row has.
+func ExecuteEach(ctx context.Context, canal *canalquery.Client, repo repo.Repo, compiled anfranode.CompileToSQLResult, truncateRows int, each func(canalquery.Row) error) ([]string, error) {
+	ds, err := dataSourceOf(repo, compiled)
+	if err != nil {
+		return nil, err
+	}
+	return runEach(ctx, canal, ds, statement{sql: compiled.SQL, dbType: compiled.DataSource.DBType, truncateRows: truncateRows}, each)
+}
+
+// dataSourceOf is the data source a compiled query runs on: the one its
+// dataset targets, which must be in data_sources.yml.
+func dataSourceOf(r repo.Repo, compiled anfranode.CompileToSQLResult) (datasource.DataSource, error) {
+	ds, ok, err := DataSource(r, compiled.DataSource.Name)
+	if err != nil {
+		return datasource.DataSource{}, err
+	}
 	if !ok {
-		return nil, fmt.Errorf("data source %q is not defined in data_sources.yml", compiled.DataSource.Name)
+		return datasource.DataSource{}, fmt.Errorf("data source %q is not defined in data_sources.yml", compiled.DataSource.Name)
 	}
-	return run(ctx, canal, ds, compiled.DataSource.DBType, compiled.SQL, truncateRows)
+	return ds, nil
 }
 
 // DataSource is the repo's data source by name, from data_sources.yml. ok is
@@ -154,16 +173,42 @@ func DataSource(r repo.Repo, name string) (ds datasource.DataSource, ok bool, er
 // dialect, with its own LIMIT. Nothing is compiled into it — no restriction
 // applies.
 func ExecuteSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string) (*RunResult, error) {
-	return run(ctx, canal, ds, ds.DBType, sql, NoLimit)
+	return run(ctx, canal, ds, statement{sql: sql, dbType: ds.DBType, truncateRows: NoLimit})
 }
 
-func run(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, dbType, sql string, truncateRows int) (*RunResult, error) {
+// ExecuteSQLEach is ExecuteSQL that hands each row to each as it arrives,
+// holding none, and answers the result's fields once every row has.
+func ExecuteSQLEach(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string, each func(canalquery.Row) error) ([]string, error) {
+	return runEach(ctx, canal, ds, statement{sql: sql, dbType: ds.DBType, truncateRows: NoLimit}, each)
+}
+
+// statement is what runs on a data source: SQL in the dialect of dbType, and
+// the most rows to answer (NoLimit for all).
+type statement struct {
+	sql          string
+	dbType       string
+	truncateRows int
+}
+
+func run(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, stmt statement) (*RunResult, error) {
+	var rows []canalquery.Row
+	fields, err := runEach(ctx, canal, ds, stmt, func(row canalquery.Row) error {
+		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &RunResult{SQL: stmt.sql, Fields: fields, Records: rows}, nil
+}
+
+func runEach(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, stmt statement, each func(canalquery.Row) error) ([]string, error) {
 	if ds.Connection == nil {
 		return nil, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
 	}
-	result, err := canal.Execute(ctx, dbType, ds.Connection, sql, truncateRows)
+	fields, err := canal.ExecuteEach(ctx, stmt.dbType, ds.Connection, stmt.sql, stmt.truncateRows, each)
 	if err != nil {
 		return nil, fmt.Errorf("execute query on data source %q: %w", ds.Name, err)
 	}
-	return &RunResult{SQL: sql, Fields: result.Fields, Records: result.Rows}, nil
+	return fields, nil
 }

@@ -55,6 +55,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/core.query.export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export a query's whole result as a file: a link to download it
+         * @description Export a query's whole result as a file: a link to download it.
+         *
+         *     The query runs to completion before the answer, so a query that fails fails here. The CLI downloads the file, to stdout or --output; --link prints the answer instead.
+         */
+        post: operations["core.query.export"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core.query.validate": {
         parameters: {
             query?: never;
@@ -198,6 +220,18 @@ export interface components {
             step: string;
             text: string;
         };
+        /** @description This server cannot make exports. */
+        ErrorBodyExportsUnavailable: {
+            /** @constant */
+            code: "exports_unavailable";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "server";
+            /** @constant */
+            status: 501;
+        };
         /** @description Something went wrong on our side. */
         ErrorBodyInternalServerError: {
             /** @constant */
@@ -286,6 +320,61 @@ export interface components {
             modelId?: string;
             /** @description the column's key, as in fields */
             name: string;
+        };
+        ExportFormatOptions: {
+            /** @description csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open */
+            bom?: boolean;
+            /**
+             * @description csv: the header row: the columns' labels (the default; what readers see), their names (their keys in a query's answer, stable for programs), or none
+             * @enum {string}
+             */
+            header?: "labels" | "names" | "none";
+        };
+        ExportInput: {
+            /** @description the data source a SQL query runs against */
+            data_source?: string;
+            /** @description the dataset an AQL query runs against */
+            dataset?: string;
+            /** @description the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name */
+            filename?: string;
+            /**
+             * @description the file's format
+             * @default csv
+             * @enum {string}
+             */
+            format?: "csv";
+            /** @description the format's options */
+            format_options?: components["schemas"]["ExportFormatOptions"];
+            /** @description the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles */
+            input?: components["schemas"]["QueryTransforms"];
+            /**
+             * @description the language the query is written in
+             * @default aql
+             * @enum {string}
+             */
+            lang?: "aql" | "sql";
+            /** @description the query */
+            query: string;
+            /** @description the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh */
+            timezone?: string;
+        };
+        ExportLink: {
+            /**
+             * Format: date-time
+             * @description when the link stops working
+             */
+            expires_at: string;
+            /** @description the file's name, as a download saves it */
+            filename: string;
+            /** @description the file's format */
+            format: string;
+            /**
+             * Format: int64
+             * @description the rows the file holds
+             */
+            row_count: number;
+            /** @description where to download the file: a plain GET, with no credentials, until expires_at */
+            url: string;
         };
         IngestInput: {
             /** @description optional context source key to ingest */
@@ -735,6 +824,96 @@ export interface operations {
                 content: {
                     "application/json": {
                         error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.query.export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportLink"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed, query_invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+            /** @description exports_unavailable */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyExportsUnavailable"];
+                    };
+                };
+            };
+            /** @description query_failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyQueryFailed"];
                     };
                 };
             };

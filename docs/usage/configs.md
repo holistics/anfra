@@ -57,6 +57,13 @@ A platform that runs **anfra-node** as a service, rather than letting anfra spaw
 | `ANFRA_PROGRAM_MEMORY_SIZE` | How many repos' compiled programs to keep in memory between requests: a whole number. Default: `0`, none. Size it to the repos one process serves and the memory it has; anfra sets `1` for the anfra-node it spawns, which serves one repo. |
 | `LOG_LEVEL` | As below. |
 
+### `anfra serve`
+
+| Variable | Effect |
+|---|---|
+| `ANFRA_SITE_URL` | The URL callers reach the server at, when it is not the one their requests name: behind a proxy that terminates TLS or serves it under a path, say `https://data.example.com/anfra`. Links the server makes (an export's) start with it. Default: unset, and a link starts with the scheme and host the caller used. |
+| `TMPDIR` | Where exports' files go until their links expire (`anfra-exports-<uid>/` in it). Default: the system's temp directory, `/tmp` on Linux. Where `/tmp` is held in memory (`tmpfs`), point it at a disk for large exports. |
+
 ### Logs
 
 | Variable | Effect |

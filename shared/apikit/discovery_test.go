@@ -173,3 +173,44 @@ func (u userHeader) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.Header.Set("User", string(u))
 	return http.DefaultTransport.RoundTrip(r)
 }
+
+// An op that changes things says to MCP whether it may destroy: one declared
+// NonDestructive only adds; one not declared so may.
+func TestMCPDestructiveHint(t *testing.T) {
+	reg := newRegistry()
+	add := func(name string, nonDestructive bool) {
+		g := greet(name)
+		g.MCP, g.NonDestructive = true, nonDestructive
+		apikit.Register(reg, admission, g)
+	}
+	add("greetings.create", true)
+	add("greetings.replace", false)
+	m := apikit.MCP[request]{Name: "test", Version: "1", Codes: codes,
+		Request: func(r *http.Request) (request, error) { return request{user: r.Header.Get("User")}, nil }}
+	srv := httptest.NewServer(m.Handler(runtime(), reg))
+	defer srv.Close()
+	ctx := context.Background()
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "client"}, nil).Connect(ctx,
+		&mcp.StreamableClientTransport{Endpoint: srv.URL, HTTPClient: &http.Client{Transport: userHeader("ann")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		d := tool.Annotations.DestructiveHint
+		switch tool.Name {
+		case "greetings.create":
+			if d == nil || *d {
+				t.Errorf("a non-destructive op: destructiveHint %v, want false", d)
+			}
+		case "greetings.replace":
+			if d == nil || !*d {
+				t.Errorf("an op that may destroy: destructiveHint %v, want true", d)
+			}
+		}
+	}
+}
