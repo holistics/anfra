@@ -521,6 +521,40 @@ code { font-size: 12px; color: var(--muted); }
 
 .copy { border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--accent); font-size: 11px; }
 .copy:hover { background: var(--hover); }
+.locate { margin-left: auto; border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--accent); font-size: 11px; }
+.locate:hover:not(:disabled) { background: var(--hover); }
+.locate:disabled { color: var(--muted); cursor: default; }
+
+/* The inspect panel's tabs and its Structure tab */
+.inspect-tabs { display: flex; gap: 2px; }
+.inspect-tabs button {
+  border: 0; border-radius: 6px; background: none; padding: 4px 10px;
+  color: var(--muted); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+}
+.inspect-tabs button:hover { background: var(--hover); }
+.inspect-tabs button[aria-selected="true"] { color: var(--fg); background: var(--hover); }
+.toolbar { display: flex; gap: 6px; margin: 8px 0; }
+.tool { border: 1px solid var(--border); border-radius: 6px; background: none; padding: 3px 10px; color: var(--fg); font-size: 12px; }
+.tool:hover:not(:disabled) { background: var(--hover); }
+.tool:disabled { color: var(--muted); }
+.tool[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.tree { list-style: none; margin: 0; padding: 0; }
+.tree .node {
+  display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px;
+  font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.tree .node:hover { background: var(--hover); }
+.tree .node.selected { background: var(--accent-bg); }
+.tree .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.tree .label, .tree .app { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.tree .node.problem .name { color: var(--danger); }
+.kind { padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.kind.container { background: color-mix(in srgb, #7c3aed 18%, transparent); color: #7c3aed; }
+.kind.block { background: color-mix(in srgb, #2563eb 18%, transparent); color: #2563eb; }
+.kind.query { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.kind.control { background: color-mix(in srgb, #d97706 18%, transparent); color: #d97706; }
+.detail { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+.detail h5 { margin-top: 4px; }
 
 .code pre {
   margin: 0;

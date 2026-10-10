@@ -7,7 +7,7 @@ import DataAppFrame from './DataAppFrame.vue';
 import Icon from './Icon.vue';
 import InspectPanel from './InspectPanel.vue';
 import type { DatasetDescriptor, User } from '@holistics/anfra-sdk/common';
-import type { InspectedApp } from './inspect';
+import type { InspectedApp, InspectedStructure } from './inspect';
 import {
   filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from './catalog';
@@ -165,6 +165,32 @@ const problemsOpen = ref(false);
 // The Inspect panel belongs to one Data App: it closes when another is picked, and survives Reload.
 const inspectOpen = ref(false);
 const inspected = ref<InspectedApp[]>();
+const structure = ref<InspectedStructure>();
+const selectedNode = ref<string>();
+const picking = ref(false);
+const frame = ref<InstanceType<typeof DataAppFrame>>();
+
+function onInspect (apps: InspectedApp[], shape: InspectedStructure): void {
+  inspected.value = apps;
+  structure.value = shape;
+}
+// A pick chooses the node and ends pick mode; Escape in the frame only ends it.
+function onPick (node: string | null): void {
+  picking.value = false;
+  if (node !== null) {
+    selectedNode.value = node;
+    frame.value?.highlight(node);
+  }
+}
+// Leaving the tree puts the highlight back on the selected node, if any.
+function onHighlight (node: string | null): void {
+  frame.value?.highlight(node ?? selectedNode.value ?? null);
+}
+watch(inspectOpen, (open) => {
+  if (open) return;
+  picking.value = false;
+  selectedNode.value = undefined;
+});
 const WIDTH_KEY = 'anfra-appserve:inspect-width';
 const MIN_WIDTH = 280;
 function loadWidth (): number {
@@ -244,6 +270,9 @@ const title = computed(() => selected.value?.label ?? selectedPath.value?.split(
 watch(() => (selected.value ? `${selected.value.path}#${revision.value}` : ''), (key) => {
   loading.value = key !== '';
   inspected.value = undefined;
+  structure.value = undefined;
+  selectedNode.value = undefined;
+  picking.value = false;
 }, { immediate: true });
 watch(selectedPath, () => {
   inspectOpen.value = false;
@@ -470,13 +499,16 @@ onBeforeUnmount(() => {
         <p v-if="selected && frameError" class="notice error" role="alert" data-testid="frame-error">{{ frameError }}</p>
         <DataAppFrame
           v-else-if="selected && datasets && reader"
+          ref="frame"
           :key="`${selected.path}#${revision}`"
           :path="selected.path"
           :inspecting="inspectOpen"
+          :picking="picking"
           :datasets="datasets"
           :reader="reader"
           @load="loading = false"
-          @inspect="inspected = $event"
+          @inspect="onInspect"
+          @pick="onPick"
           @error="frameError = $event"
         />
         <div v-else-if="selectedPath && loaded" class="empty-state" data-testid="not-found">
@@ -491,7 +523,17 @@ onBeforeUnmount(() => {
           <div v-if="narrow" class="backdrop" @click="inspectOpen = false" />
           <div class="inspect-dock" :style="{ width: `${inspectWidth}px` }">
             <div class="resize-handle" role="separator" aria-orientation="vertical" @pointerdown.prevent="startResize" />
-            <InspectPanel :apps="inspected" @close="inspectOpen = false" />
+            <InspectPanel
+              :apps="inspected"
+              :structure="structure"
+              :selected-node="selectedNode"
+              :picking="picking"
+              @close="inspectOpen = false"
+              @highlight="onHighlight"
+              @locate="frame?.locate($event)"
+              @select="selectedNode = $event"
+              @pick="picking = $event"
+            />
           </div>
         </template>
       </div>
