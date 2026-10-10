@@ -114,13 +114,16 @@ attribute each.
 
 ```html
 <main data-anfra-container="page" data-anfra-label="Overview">
+  <div data-anfra-container="controls" data-anfra-label="Controls">
+    <label data-anfra-block="region-picker" data-anfra-control="region">…</label>   <!-- a block drawn by a control -->
+  </div>
   <div data-anfra-container="kpis">
     <div data-anfra-block="revenue" data-anfra-query="totals">…</div>   <!-- a block drawn by a query -->
     <div data-anfra-block="orders"  data-anfra-query="totals">…</div>   <!-- the same query, another block -->
   </div>
   <section data-anfra-block="trend" data-anfra-label="Revenue over time">
     <div id="trend-chart" data-anfra-query="trend"></div>               <!-- the chart the query draws -->
-    <select data-anfra-control="grain"></select>                        <!-- and its control -->
+    <select data-anfra-control="grain"></select>                        <!-- and its control, in the same block -->
   </section>
 </main>
 ```
@@ -131,11 +134,14 @@ attribute each.
 | `data-anfra-block="<id>"` | any element | A block: the smallest thing a reader sees as one. Holds no container or block. |
 | `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
 | `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
-| `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. |
+| `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. A control lives in a block like a query does: its own block when it stands alone, or the block of the chart it belongs to. |
 
 - Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
   creates several apps, write `app/name` with the app's index (`1/trend`); a bare name is app 0.
 - Ids are required and unique per kind in the document.
+- Every query and control marker sits in a block, or on a block's own element. A control that
+  stands alone (a filter in a toolbar) gets a block of its own; a control that belongs to one chart
+  (a grain switch in a chart's header) goes in that chart's block.
 - The markup is optional, partial, and read only while the Inspect panel is open. A mistake (an
   unknown name, a duplicate id, a block inside a block) is shown on the node in the tree, never
   thrown. Elements added later (a table drawn on the first result) appear once they exist.

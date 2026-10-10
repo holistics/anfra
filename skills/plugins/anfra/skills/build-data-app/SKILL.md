@@ -88,8 +88,10 @@ The frame is a **sandbox** (`allow-scripts` only, opaque origin). Write for it:
 - Mark the page's structure in the HTML, as [references/api.md](references/api.md#structure)
   shows: `data-anfra-container` and `data-anfra-block` on the parts of the page, with a
   `data-anfra-label`, and `data-anfra-query` / `data-anfra-control` on the elements each query
-  and control draws into. The Inspect panel shows the tree, finds each part on the page, and
-  gives the user a handle for it to hand back to you. Mark every part; it is one attribute each.
+  and control draws into. Every query and control sits in a block: a standalone control gets a
+  block of its own, a chart's own control goes in the chart's block. The Inspect panel shows the
+  tree, finds each part on the page, and gives the user a handle for it to hand back to you.
+  Mark every part; it is one attribute each.
 
 Render a selection without rebuilding the chart. A query that drives a cross-filter is not re-run
 by its own selection, so its result is unchanged when the reader clicks: restyle the marks it
