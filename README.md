@@ -200,28 +200,28 @@ GROUP BY
 
 The page never wrote that SQL, and `revenue` means the same thing in every app that uses it. See the [Semantic UI guide](https://docs.anfra.ai/docs/sdk) for queries, controls, and interaction mappings.
 
-## anfra OSS vs anfra Cloud
+## anfra OSS vs anfra Cloud (coming soon)
 
-anfra Cloud is our hosted product, built on the same open-source engine. It adds what a team needs to share apps: users and SSO, row-level permissions, hosted apps with sharing links, audit logs and version history.
+anfra Cloud is in development and not available yet. It will be our hosted product, built on the same open-source engine, and will add what a team needs to share apps: users and SSO, row-level permissions, hosted apps with sharing links, audit logs and version history.
 
-A project you build with open-source anfra runs unchanged on anfra Cloud. Moving it takes one publish step, with no changes to your models or apps. <!-- TODO: name the command (`git push` or `anfra publish`) once it exists -->
+A project you build with open-source anfra will run unchanged on anfra Cloud. Moving it will take one publish step, with no changes to your models or apps. <!-- TODO: name the command (`git push` or `anfra publish`) once it exists -->
 
 - **Use open-source anfra** to build and run apps on your own infrastructure, for yourself or a team that doesn't need per-user permissions.
-- **Use anfra Cloud** to share apps across your company with logins, permissions and audit logs, without running the server yourself.
+- **anfra Cloud (once available)** will let you share apps across your company with logins, permissions and audit logs, without running the server yourself.
 
-|                                               | anfra (open source) | anfra Cloud |
-| --------------------------------------------- | ------------------- | ----------- |
-| Built-in semantic layer (AMQL)                | ✅                   | ✅           |
-| JS SDK, controls, interactions, inspect       | ✅                   | ✅           |
-| MCP server + agent skills                     | ✅                   | ✅           |
-| Self-host                                     | ✅                   | Managed     |
-| Users, SSO, roles                             | —                   | ✅           |
-| Row-level and viewer-level permissions        | —                   | ✅           |
-| Hosted apps: sharing, public links, discovery | —                   | ✅           |
-| Audit trail, usage monitoring                 | —                   | ✅           |
-| Snapshots, versioning                         | —                   | ✅           |
+|                                               | anfra (open source) | anfra Cloud (coming soon) |
+| --------------------------------------------- | ------------------- | ------------------------- |
+| Built-in semantic layer (AMQL)                | ✅                   | ✅                         |
+| JS SDK, controls, interactions, inspect       | ✅                   | ✅                         |
+| MCP server + agent skills                     | ✅                   | ✅                         |
+| Self-host                                     | ✅                   | Managed                   |
+| Users, SSO, roles                             | —                   | ✅                         |
+| Row-level and viewer-level permissions        | —                   | ✅                         |
+| Hosted apps: sharing, public links, discovery | —                   | ✅                         |
+| Audit trail, usage monitoring                 | —                   | ✅                         |
+| Snapshots, versioning                         | —                   | ✅                         |
 
-anfra Cloud isn't available yet. Join the waitlist to get access when it opens. A paid self-hosted edition with the same features is planned. <!-- TODO: link the waitlist -->
+A paid self-hosted edition with the same features is also planned. Watch this repo to hear when anfra Cloud opens.
 
 ## FAQ
 
@@ -240,7 +240,7 @@ Those give you a framework to write the app in. anfra gives you a semantic backe
 <details>
 <summary><b>I already have a BI tool. Why would I switch?</b></summary>
 
-anfra is built to replace dashboard BI tools, not to sit beside them. Those tools were designed for building reports by hand in a fixed grid of charts and filters. With a coding agent, your team can build the app they actually need, and anfra keeps it governed: metrics are defined once in the semantic layer, and every number can be inspected back to its query and definition. anfra Cloud adds users, permissions and sharing.
+anfra is built to replace dashboard BI tools, not to sit beside them. Those tools were designed for building reports by hand in a fixed grid of charts and filters. With a coding agent, your team can build the app they actually need, and anfra keeps it governed: metrics are defined once in the semantic layer, and every number can be inspected back to its query and definition. anfra Cloud, coming later, will add users, permissions and sharing.
 
 Compared with a traditional BI tool, anfra gives you:
 - any layout and interaction your team can describe, instead of a fixed set of chart types;
@@ -283,7 +283,7 @@ Queries run on your warehouse, and the anfra server sends results straight to th
 <details>
 <summary><b>How do I control who can see what?</b></summary>
 
-The open-source server has no login or permissions: anyone who can reach it can open its apps. To restrict access, run it behind your own SSO proxy. For per-viewer permissions (the same app showing different numbers to different users), sharing and audit, use [anfra Cloud](#anfra-oss-vs-anfra-cloud).
+The open-source server has no login or permissions: anyone who can reach it can open its apps. To restrict access, run it behind your own SSO proxy. Per-viewer permissions (the same app showing different numbers to different users), sharing and audit will come with [anfra Cloud](#anfra-oss-vs-anfra-cloud-coming-soon) when it launches.
 </details>
 
 <details>
