@@ -12,6 +12,7 @@ linters:
     - gosec
     - misspell
     - reassign
+    - revive
     - spancheck
     - unconvert
     - wastedassign
@@ -48,6 +49,13 @@ linters:
               desc: read and write JSON with shared/jsonkit (docs/designs/json.md)
             - pkg: encoding/json/v2$
               desc: read and write JSON with shared/jsonkit (docs/designs/json.md)
+    revive:
+      rules:
+        # A long positional parameter list invites passing arguments in the wrong
+        # order, unnoticed when two share a type. Past six (a context and five
+        # values), name them: a struct with named fields.
+        - name: argument-limit
+          arguments: [6]
     spancheck:
       # apptracing.Start starts a span its caller must End: every caller is held
       # to it, as with OpenTelemetry's own Start.

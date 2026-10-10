@@ -107,6 +107,16 @@ type (
 	// It is the trusted half of a call: build it server-side and never decode it
 	// from a request body, or a caller could assert their own permissions.
 	Invocation = command.CommandContext
+
+	// ExportStore is where exports go, set on an Invocation as Exports: a file
+	// written once, then a link to it that expires. A host provides its own
+	// (object storage and presigned URLs, say); without one, an export fails
+	// with ExportsUnavailable. See docs/designs/exports.md.
+	ExportStore = command.ExportStore
+	// Export is one file an ExportStore is writing.
+	Export = command.Export
+	// ExportLink is an export's answer: where to download its file, until when.
+	ExportLink = command.ExportLink
 )
 
 const (
@@ -142,6 +152,8 @@ var (
 	// credentials refused, or the database rejecting it. Not classified further
 	// yet.
 	QueryFailed = errcode.QueryFailed
+	// ExportsUnavailable: an export, on an Invocation with no Exports store.
+	ExportsUnavailable = errcode.ExportsUnavailable
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.

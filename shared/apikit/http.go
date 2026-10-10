@@ -254,7 +254,7 @@ func (h HTTP[R]) operation(rt *Runtime, o Op[R], base *Base) *huma.Operation {
 				"application/json": {Schema: rt.Schema(o.OutType())},
 			}},
 		},
-		Extensions: map[string]any{"x-read-only": m.ReadOnly, "x-idempotent": m.Idempotent},
+		Extensions: map[string]any{"x-read-only": m.ReadOnly, "x-idempotent": m.Idempotent, "x-destructive": m.Destructive},
 	}
 	if base != nil {
 		operation.Servers = []*huma.Server{{URL: root + base.Path, Variables: base.Variables}}
