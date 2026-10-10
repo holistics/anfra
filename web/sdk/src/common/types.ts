@@ -414,6 +414,49 @@ export interface InspectedError {
   stack?: string;
 }
 
+/** The two kinds of entity a marked element can be drawn by. */
+export type LocateKind = 'query' | 'control';
+
+/* ----------------------------------------------------------------
+Structure: the semantic parts a definition marks on its own elements
+---------------------------------------------------------------- */
+
+export type StructureKind = 'container' | 'block' | LocateKind;
+
+/**
+ * One node of the structure. A container or block has an `id`; a query or control node has the
+ * entity's `app` index and `name`. `key` is the node's index path in the tree (`0.2.1`), what a
+ * host uses to point at it; it is stable while the tree is unchanged.
+ */
+export interface StructureNode {
+  key: string;
+  kind: StructureKind;
+  id?: string;
+  label?: string;
+  app?: number;
+  name?: string;
+  /** What is wrong with this node's markup, in words. Reported, never thrown. */
+  problems: string[];
+  children: StructureNode[];
+}
+
+/** Where one entity is drawn: how many marked elements, and which blocks they are in. */
+export interface EntityUsage {
+  markers: number;
+  blocks: string[];
+}
+
+export interface InspectedStructure {
+  nodes: StructureNode[];
+  /** Keyed `query:<app>/<name>` or `control:<app>/<name>`; only entities that exist. */
+  usage: Record<string, EntityUsage>;
+}
+
+/** What a host asks a frame to locate: a node of the structure, or an entity wherever it is drawn. */
+export type LocateTarget =
+  | { node: string }
+  | { app: number, kind: LocateKind, name: string };
+
 export interface InspectedQuery {
   state: QueryState;
   /** True when re-running would produce something new. */

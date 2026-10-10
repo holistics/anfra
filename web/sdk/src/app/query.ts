@@ -67,6 +67,15 @@ export class Query extends Observable {
     this.dataset = app.datasetIndex(declaration.dataset, name);
   }
 
+  /**
+   * Bring the elements marked `data-anfra-query` with this query's name into view: scroll to the
+   * first and show them all for a moment. False, and nothing done, when no element on the page is
+   * marked with it yet; never throws, so an author's own button is safe.
+   */
+  locate (): boolean {
+    return this.app.locate('query', this.name);
+  }
+
   get state (): QueryState {
     return this._state;
   }

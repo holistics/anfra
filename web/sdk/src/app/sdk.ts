@@ -79,6 +79,7 @@ export class Sdk {
 
   createApp (declaration: AppDeclaration = {}): App {
     const app = new App(declaration, this.indices, this.backend, this.features);
+    app.index = this._apps.length;
     this._apps.push(app);
     return app;
   }

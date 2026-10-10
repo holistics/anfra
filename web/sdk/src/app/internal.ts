@@ -2,7 +2,7 @@ import type { Mapping } from './mapping';
 import type { Query } from './query';
 import type { DatasetIndex } from './validation';
 import type {
-  Row, SdkFeatures, Selection, SelectionCondition,
+  LocateKind, Row, SdkFeatures, Selection, SelectionCondition,
 } from '../common/types';
 
 /**
@@ -32,4 +32,6 @@ export interface AppContext {
   select (query: Query, rows: readonly Row[], fields?: readonly string[]): void;
   /** Runs one more page for a query that already has a result. */
   fetchPage (query: Query): Promise<void>;
+  /** Brings an entity's marked elements into view; false when none is on the page. */
+  locate (kind: LocateKind, name: string): boolean;
 }
