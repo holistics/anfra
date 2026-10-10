@@ -45,9 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # on a tag push this is the tag's commit (manifest pinned there)
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: the Go the release builds with (go.mod's toolchain line)
+        run: go version
 
       # The Data Apps frontend, which every target embeds (internal/appserve/dist): built once,
       # it is the same files on every platform. A binary without it serves only a page saying
