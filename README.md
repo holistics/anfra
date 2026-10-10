@@ -5,15 +5,18 @@
   </picture>
 </p>
 
-<p align="center"><b>The open-source framework for turning vibe-coded dashboards into custom BI applications, without sacrificing trust in your data.</b></p>
-<!-- alternative: Vibe-code custom BI applications with the freedom of code and the trust of a semantic layer. -->
-
-Build with AI coding agents using your own HTML, JavaScript, and charting libraries. Anfra SDK connects your app to a governed semantic foundation with consistent, reusable metrics and trusted business context.
-
-It also provides powerful analytics interactions: filtering, drill-downs, and period comparisons for your app, out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
+<p align="center"><b>Open-source framework for building trusted custom BI apps</b></p>
+<!-- alternatives:
+  The open-source framework for turning vibe-coded dashboards into custom BI applications, without sacrificing trust in your data.
+  Vibe-code custom BI applications with the freedom of code and the trust of a semantic layer.
+-->
 
 <p align="center">
   <a href="https://anfra.ai">Website</a> · <a href="https://docs.anfra.ai">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
+</p>
+
+<p align="center">
+  Built by the team behind <a href="https://www.holistics.io">Holistics</a> and <a href="https://dbdiagram.io">dbdiagram.io</a>.
 </p>
 
 <!-- TODO: replace with a GIF of the funnel demo: click a bar, the other charts filter -->
@@ -24,11 +27,31 @@ It also provides powerful analytics interactions: filtering, drill-downs, and pe
   <em>A funnel analysis app built by a coding agent with Anfra. <a href="https://demo.anfra.ai/apps/fancy-demos/funnel-analysis">Try it live →</a></em>
 </p>
 
+## What is Anfra?
+
+Build with AI coding agents using your own HTML, JavaScript, and charting libraries. Anfra SDK connects your app to a governed semantic foundation with consistent, reusable metrics and trusted business context.
+
+It also provides powerful analytics interactions: filtering, drill-downs, and period comparisons for your app, out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
+
 ## Why Anfra?
 
 Traditional BI tools make it easier to trust the numbers, but often limit teams to fixed dashboard layouts and interactions. On the other hand, coding agents can build custom dashboard apps with HTML and JavaScript easily, but wiring each view to the warehouse — and getting filters, drill-downs, and comparisons right — is easy to get wrong and hard to reuse.
 
 With Anfra, you define metrics once, the agent writes the UI, and Anfra turns every click into a query on those metrics. [See what that looks like](#what-it-looks-like).
+
+## Key features
+
+For **data teams**:
+
+- **Metrics defined once**: models, datasets, and metrics live as code in your repo, and you review changes like any other code.
+- **Every number can be inspected**: each value traces back to its query and metric definition.
+- **Your warehouse, your infrastructure**: works with PostgreSQL, Snowflake, BigQuery, ClickHouse, and more. Self-host the server, and queries run directly on your warehouse.
+
+For **people building and using apps**:
+
+- **Any layout**: the agent writes plain HTML and JavaScript, with any charting library.
+- **Interactions built in**: cross-filters, drill-downs, and period comparisons come from the SDK, not from hand-written SQL.
+- **Live data**: apps query the warehouse each time someone opens them, instead of holding pasted numbers.
 
 ## Demo gallery
 
@@ -63,6 +86,8 @@ anfra skills install
 anfra init my-project
 cd my-project
 ```
+
+This creates the `models/`, `datasets/`, and `apps/` folders and a `.anfra/data_sources.yml` config file, which is added to `.gitignore` so your credentials stay out of Git.
 
 Replace the placeholders in `.anfra/data_sources.yml` with your warehouse credentials. See [Data sources](https://docs.anfra.ai/docs/self-hosted/data-sources) for Snowflake, BigQuery, ClickHouse and the others.
 
