@@ -82,7 +82,7 @@ const selectedEntity = computed(() => {
           type="button"
           class="tool"
           :aria-pressed="picking"
-          title="Pick an element on the page to find it here (Esc to stop)"
+          title="Click a part of the page to select it here. Esc stops."
           data-testid="pick"
           @click="emit('pick', !picking)"
         >
@@ -94,8 +94,8 @@ const selectedEntity = computed(() => {
       </div>
       <p v-if="!structure" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
       <p v-else-if="structure.nodes.length === 0" class="inspect-note" data-testid="structure-none">
-        This Data App marks no structure. Mark its parts with <code>data-anfra-container</code>, <code>data-anfra-block</code>,
-        <code>data-anfra-query</code> and <code>data-anfra-control</code> to see them here.
+        Nothing is marked yet. Add <code>data-anfra-container</code>, <code>data-anfra-block</code>,
+        <code>data-anfra-query</code> and <code>data-anfra-control</code> to the page's elements and they show up here.
       </p>
       <StructureTree
         v-else

@@ -95,12 +95,12 @@ export function buildStructure (doc: Document, apps: readonly App[]): BuiltStruc
       const kind = containerId !== null ? 'container' : 'block';
       const id = (containerId ?? blockId ?? '').trim();
       const problems: string[] = [];
-      if (containerId !== null && blockId !== null) problems.push('Marked as both a container and a block; read as a container.');
-      if (!id) problems.push(`An empty ${kind} id.`);
+      if (containerId !== null && blockId !== null) problems.push('This element is marked as a container and as a block. It counts as a container.');
+      if (!id) problems.push(`This ${kind} has no id.`);
       else if (seenIds[kind].has(id)) problems.push(`Another ${kind} already has the id "${id}".`);
       else seenIds[kind].add(id);
       if (enclosingBlock) {
-        problems.push(`Inside block "${enclosingBlock.getAttribute(ATTR.block)}", but a block holds no container or block.`);
+        problems.push(`A block can't hold a ${kind}. This one is inside the block "${enclosingBlock.getAttribute(ATTR.block)}".`);
       }
       own = place(parent, {
         kind, id, ...(label !== undefined ? { label } : {}), problems,
@@ -115,11 +115,11 @@ export function buildStructure (doc: Document, apps: readonly App[]): BuiltStruc
       for (const token of tokens(element.getAttribute(kind === 'query' ? ATTR.query : ATTR.control))) {
         const ref = parseRef(token);
         const problems: string[] = [];
-        if (!ref) problems.push(`"${token}" is not a reference: write "name" or "app/name".`);
+        if (!ref) problems.push(`Can't read "${token}". Write the ${kind}'s name, or app/name when the page has several apps.`);
         else if (!hasEntity(apps, kind, ref)) {
           problems.push(apps[ref.app]
-            ? `App ${ref.app} has no ${kind} named "${ref.name}".`
-            : `There is no app ${ref.app} in this frame.`);
+            ? `No ${kind} is called "${ref.name}" in app ${ref.app}.`
+            : `The page has no app ${ref.app}.`);
         }
         place(under, {
           kind, name: ref?.name ?? token, app: ref?.app ?? 0, problems,
