@@ -1,12 +1,30 @@
 import type {
   BridgeError, FrameMessage, HostMessage,
 } from '../common/bridge';
-import type { Backend, InspectedApp } from '../common/types';
+import type {
+  Backend, InspectedApp, InspectedStructure, LocateTarget,
+} from '../common/types';
 
 export interface BridgeHandle {
   /** Ask the frame to post (or stop posting) inspection snapshots; survives the frame reloading. */
   setInspecting: (open: boolean) => void;
+  /** Show a node of the last snapshot's structure on the page, or nothing (null). */
+  highlight: (node: string | null) => void;
+  /**
+   * Scroll a node, or an entity wherever it is drawn, into view and hold the highlight on it. Fire
+   * and forget: the frame answers nothing, and does nothing for what is not on the page.
+   */
+  locate: (target: LocateTarget) => void;
+  /** Start or stop pick mode in the frame: pointing outlines marked elements, a click reports one. */
+  setPicking: (on: boolean) => void;
   stop: () => void;
+}
+
+export interface BridgeCallbacks {
+  /** The frame's inspection snapshot: its apps and its structure. */
+  onInspect?: (apps: InspectedApp[], structure: InspectedStructure) => void;
+  /** In pick mode, the reader chose a node (its key), or left the mode (null). */
+  onPick?: (node: string | null) => void;
 }
 
 function toBridgeError (err: unknown): BridgeError {
@@ -23,7 +41,7 @@ function toBridgeError (err: unknown): BridgeError {
 export function serveBridge (
   frame: HTMLIFrameElement,
   backend: Backend,
-  onInspect: (apps: InspectedApp[]) => void = () => {},
+  callbacks: BridgeCallbacks = {},
 ): BridgeHandle {
   const inFlight = new Map<number, AbortController>();
   let inspecting = false;
@@ -41,7 +59,12 @@ export function serveBridge (
         if (inspecting) sendWatch();
         return;
       case 'anfra:inspect':
-        if (inspecting && Array.isArray(message.apps)) onInspect(message.apps);
+        if (inspecting && Array.isArray(message.apps)) {
+          callbacks.onInspect?.(message.apps, message.structure ?? { nodes: [], usage: {} });
+        }
+        return;
+      case 'anfra:picked':
+        if (inspecting) callbacks.onPick?.(message.node);
         return;
       case 'anfra:cancel':
         inFlight.get(message.id)?.abort();
@@ -75,6 +98,15 @@ export function serveBridge (
     setInspecting (open) {
       inspecting = open;
       sendWatch();
+    },
+    highlight (node) {
+      reply({ type: 'anfra:highlight', node });
+    },
+    locate (target) {
+      reply({ type: 'anfra:locate', target });
+    },
+    setPicking (on) {
+      reply({ type: 'anfra:pick-watch', on });
     },
     stop () {
       win.removeEventListener('message', onMessage);

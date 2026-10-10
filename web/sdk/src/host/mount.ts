@@ -1,12 +1,12 @@
 import type { Provision } from '../common/bridge';
 import type {
-  Backend, DatasetDescriptor, InspectedApp, User,
+  Backend, DatasetDescriptor, User,
 } from '../common/types';
-import { serveBridge, type BridgeHandle } from './bridge';
+import { serveBridge, type BridgeCallbacks, type BridgeHandle } from './bridge';
 import { builtFrameScript } from './frameScript';
 import { provisionDocument } from './provision';
 
-export interface MountOptions {
+export interface MountOptions extends BridgeCallbacks {
   /** Where the frame goes: it is appended to this element. */
   container: HTMLElement;
   /** The Data App definition: its HTML, as its author wrote it. */
@@ -17,13 +17,12 @@ export interface MountOptions {
   user: User;
   /** What answers the frame's queries: `coreApiBackend` from `@holistics/anfra-sdk/api`, on any host. */
   backend: Backend;
-  onInspect?: (apps: InspectedApp[]) => void;
   /** The frame script; the one built into this package unless given (tests). */
   frameScript?: string;
   title?: string;
 }
 
-export interface MountedDataApp extends Pick<BridgeHandle, 'setInspecting'> {
+export interface MountedDataApp extends Pick<BridgeHandle, 'setInspecting' | 'highlight' | 'locate' | 'setPicking'> {
   frame: HTMLIFrameElement;
   /** Stop answering the frame, and remove it. */
   unmount: () => void;
@@ -44,7 +43,7 @@ export function mountDataApp (options: MountOptions): MountedDataApp {
   frame.title = options.title ?? 'Data App';
   options.container.appendChild(frame);
 
-  const bridge = serveBridge(frame, options.backend, options.onInspect);
+  const bridge = serveBridge(frame, options.backend, { onInspect: options.onInspect, onPick: options.onPick });
   const provision: Provision = {
     datasets: options.datasets,
     user: options.user,
@@ -55,6 +54,9 @@ export function mountDataApp (options: MountOptions): MountedDataApp {
   return {
     frame,
     setInspecting: bridge.setInspecting,
+    highlight: bridge.highlight,
+    locate: bridge.locate,
+    setPicking: bridge.setPicking,
     unmount () {
       bridge.stop();
       frame.remove();

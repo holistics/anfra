@@ -10,6 +10,8 @@ import {
 } from './validation';
 import { runQuery, type SubmitContext } from './execution/submitQuery';
 import { deriveSelection } from './selection';
+import { markersFor } from './structure';
+import { overlayFor, scrollTo } from './overlay';
 import type { AppContext } from './internal';
 import type {
   Backend,
@@ -26,6 +28,7 @@ import type {
   InspectedError,
   InspectedQuery,
   InspectedSelection,
+  LocateKind,
   QueryDeclaration,
   Row,
   SdkFeatures,
@@ -637,6 +640,29 @@ export class App extends Observable implements AppContext {
         ? { appliedSelection: inspectSelection(this._appliedSelection) }
         : {}),
     };
+  }
+
+  /**
+   * @internal This app's index among the frame's apps, which is how a marked element names it
+   * (`data-anfra-query="1/revenue"`); 0 unless set by the instance that created it.
+   */
+  index = 0;
+
+  /**
+   * Bring an entity's marked elements into view: scroll to the first, show the overlay on all for
+   * a moment. False, and nothing done, when the document has none marked with it (or there is no
+   * document at all). Used by `Query.locate()` and `Control.locate()`, and by the bootstrap for a
+   * host's locate-by-entity.
+   */
+  locate (kind: LocateKind, name: string): boolean {
+    const doc = globalThis.document;
+    if (!doc) return false;
+    const elements = markersFor(doc, kind, this.index, name);
+    if (!elements.length) return false;
+    scrollTo(elements[0]);
+    const which = elements.length > 1 ? ` · ${elements.length} places` : '';
+    overlayFor(doc).flash(elements, `${kind} ${name}${which}`);
+    return true;
   }
 
   /* ----------------------------------------------------------------
