@@ -26,11 +26,11 @@
 <body>
   <h1 id="title"></h1>
 
-  <div class="controls">
-    <label>Region
+  <div class="controls" data-anfra-container="controls" data-anfra-label="Controls">
+    <label data-anfra-control="region">Region
       <select id="region-select" multiple size="4"></select>
     </label>
-    <label>Grain
+    <label data-anfra-control="grain">Grain
       <select id="grain-select">
         <option value="week">Week</option>
         <option value="month" selected>Month</option>
@@ -40,15 +40,15 @@
     <button id="clear-selection" type="button">Clear selection</button>
   </div>
 
-  <div class="grid">
-    <section class="panel">
+  <div class="grid" data-anfra-container="charts" data-anfra-label="Charts">
+    <section class="panel" data-anfra-block="by-region" data-anfra-label="Revenue by region">
       <h2>Revenue by region</h2>
-      <div id="by-region" class="chart"></div>
+      <div id="by-region" class="chart" data-anfra-query="byRegion"></div>
       <div id="by-region-status" class="status"></div>
     </section>
-    <section class="panel">
+    <section class="panel" data-anfra-block="trend" data-anfra-label="Revenue over time">
       <h2>Revenue over time</h2>
-      <div id="trend" class="chart"></div>
+      <div id="trend" class="chart" data-anfra-query="trend"></div>
       <div id="trend-status" class="status"></div>
     </section>
   </div>
@@ -122,6 +122,8 @@
       if (byRegion.result) {
         const rows = byRegion.result.rows;
         const selected = new Set(byRegion.selectedRows.map((row) => row.region));
+        // A plain setOption merges into the series the chart has: a click only restyles the bars.
+        // Rebuilding the series (replaceMerge) would replay the entry animation on every click.
         byRegionChart.setOption({
           tooltip: { valueFormatter: (v) => money.format(v) },
           xAxis: { type: 'category', data: rows.map((row) => row.region) },

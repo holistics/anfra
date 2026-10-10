@@ -85,6 +85,17 @@ The frame is a **sandbox** (`allow-scripts` only, opaque origin). Write for it:
   scripts) load by relative path.
 - Every query is an `explore { }`: controls, cross-filters, sorting and date drills only apply to
   one.
+- Mark the page's structure in the HTML, as [references/api.md](references/api.md#structure)
+  shows: `data-anfra-container` and `data-anfra-block` on the parts of the page, with a
+  `data-anfra-label`, and `data-anfra-query` / `data-anfra-control` on the elements each query
+  and control draws into. The Inspect panel shows the tree, finds each part on the page, and
+  gives the user a handle for it to hand back to you. Mark every part; it is one attribute each.
+
+Render a selection without rebuilding the chart. A query that drives a cross-filter is not re-run
+by its own selection, so its result is unchanged when the reader clicks: restyle the marks it
+already draws (dim the unselected ones) rather than recreating the series, or the chart replays
+its entry animation on every click. With ECharts, merge with a plain `setOption(option)` for a
+selection change and keep `replaceMerge` for a new result.
 
 Render each query's four states: `executing` (loading), `success`, `error` (show
 `error.message`), and success with no rows ("No sales this week", never a bare zero). Log
@@ -100,8 +111,11 @@ anfra serve                # if not: http://127.0.0.1:7878/apps/ (or the free po
 ```
 
 Leave it running: it reloads the open app whenever its file, or the AML, changes. Its header shows
-the repo's problems (AML that does not compile, a data source not configured), and its Inspect
-panel each query's state, executed AQL and error.
+the repo's problems (AML that does not compile, a data source not configured). Its Inspect panel
+has two tabs: **Structure**, the tree of marked parts, with a problem count for markup it could
+not read (an unknown query name, a block inside a block), and **Data**, each query's state,
+executed AQL and error, with how many places draw it and a Locate button. A query "not on the
+page" is one no element is marked with yet.
 
 If you can drive a browser, open the app, exercise every control and click, and read the console
 of the app's frame, not just the page. Otherwise ask the user to, and to report what they see
@@ -114,7 +128,9 @@ explains it. If you could not check the interface, say so rather than claiming i
 ## 6. Hand over
 
 Tell the user, in their terms: what the page shows and how to use each control, its URL, the
-assumptions you made, and what you checked. A `127.0.0.1` URL opens only on this machine; `anfra
+assumptions you made, and what you checked. When a later request names a part by its handle,
+`[Revenue over time](data-anfra-block="trend")` or a bare `data-anfra-block="trend"`, search the
+file for that attribute: it is the element the user means. A `127.0.0.1` URL opens only on this machine; `anfra
 serve` has no authentication, so ask before serving it beyond loopback (`--addr`). Make each
 requested change the same way: restate it if it changes what a number means, change the smallest
 thing, and check that the agreed result still holds.

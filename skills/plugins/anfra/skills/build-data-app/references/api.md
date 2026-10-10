@@ -84,6 +84,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
 | `query.abort()` | Cancels this query's in-flight request. |
 | `query.subscribe(fn)` | Change listener for just this query. |
+| `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
 
 ### Result shape
 
@@ -104,6 +105,49 @@ query.result.rows    // [{ month: '2026-01-01', total: 1234.5 }, ...]
   with the reader's filters, sorts and date drills applied — the first thing to log when a
   control seems to do nothing.
 
+## Structure
+
+A definition can mark its parts in its HTML, so the Inspect panel in `anfra serve` shows them as
+a tree (hover to see one on the page, click to scroll to it, Pick to go from the page to the tree),
+and so an author can hand an agent a handle for one. Mark every part the app renders; it costs one
+attribute each.
+
+```html
+<main data-anfra-container="page" data-anfra-label="Overview">
+  <div data-anfra-container="kpis">
+    <div data-anfra-block="revenue" data-anfra-query="totals">…</div>   <!-- a block drawn by a query -->
+    <div data-anfra-block="orders"  data-anfra-query="totals">…</div>   <!-- the same query, another block -->
+  </div>
+  <section data-anfra-block="trend" data-anfra-label="Revenue over time">
+    <div id="trend-chart" data-anfra-query="trend"></div>               <!-- the chart the query draws -->
+    <select data-anfra-control="grain"></select>                        <!-- and its control -->
+  </section>
+</main>
+```
+
+| Attribute | On | Means |
+| --- | --- | --- |
+| `data-anfra-container="<id>"` | any element | A container: holds anything. |
+| `data-anfra-block="<id>"` | any element | A block: the smallest thing a reader sees as one. Holds no container or block. |
+| `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
+| `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
+| `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. |
+
+- Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
+  creates several apps, write `app/name` with the app's index (`1/trend`); a bare name is app 0.
+- Ids are required and unique per kind in the document.
+- The markup is optional, partial, and read only while the Inspect panel is open. A mistake (an
+  unknown name, a duplicate id, a block inside a block) is shown on the node in the tree, never
+  thrown. Elements added later (a table drawn on the first result) appear once they exist.
+- `query.locate()` and `control.locate()` scroll to the elements marked with that entity and show
+  them for a moment, for a "find on page" button of the app's own. They return `false` when
+  nothing is marked yet, and never throw.
+
+**Handles.** A user who has picked a node in the panel may paste its handle into a request:
+`[Revenue over time](data-anfra-block="trend")`, or just `data-anfra-block="trend"` when the
+node has no label. The part in parentheses is the attribute as written in the file: search the
+definition for it to find the element the user means, then change that element and what draws it.
+
 ## Filter
 
 ```js
@@ -117,6 +161,8 @@ const tier = app.createFilter('tier', { type: 'string', options: ['Gold', 'Silve
 
 Always pass `dataset:` alongside `field:`. It is only optional when the reader can see exactly one
 dataset, which is rare.
+
+A filter, like a date drill, has `locate()` too: see [Structure](#structure).
 
 Set a filter's value with a **condition**, then call `execute()`:
 
@@ -191,7 +237,11 @@ chart.on('click', (p) => {
   aliases (dimensions only). Naming a measure, a query-local expression or an alias missing from
   the last result throws a `ValidationError`.
 - One selection per app: selecting in another query replaces it. The source query is never
-  filtered by its own selection. Use `query.selectedRows` to dim the unselected marks.
+  filtered by its own selection, so its `result` is the same object after a click. Use
+  `query.selectedRows` to dim the unselected marks, and restyle the chart in place: a render that
+  rebuilds the series on every change (ECharts' `replaceMerge`, or `clear()` then `setOption`)
+  replays the chart's entry animation each time the reader clicks. Rebuild only when `result`
+  changed.
 - Both queries must use the same dataset. No self-edges.
 - Clear with `app.clearSelection(); app.execute();`.
 
