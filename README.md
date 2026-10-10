@@ -29,7 +29,7 @@
 
 ## What is anfra?
 
-Build with AI coding agents using your own HTML, JavaScript, and charting libraries. anfra SDK connects your app to a governed semantic foundation with consistent, reusable metrics and trusted business context.
+anfra is an open-source framework for building trusted custom BI apps with AI coding agents. You build the app with your own HTML, JavaScript, and charting libraries, and the anfra SDK connects it to a governed semantic foundation with consistent, reusable metrics and trusted business context.
 
 It also provides powerful analytics interactions: filtering, drill-downs, and period comparisons for your app, out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
 
