@@ -10,6 +10,8 @@ export { installSandbox, SANDBOX_GLOBAL } from './sandbox';
 export { App } from './app';
 export { Query } from './query';
 export { Control, Filter, DateDrillControl } from './controls';
+export { ATTR as STRUCTURE_ATTRIBUTES, buildStructure, parseRef } from './structure';
+export { OVERLAY_ID } from './overlay';
 export { Mapping, CrossFilter, type Edge } from './mapping';
 export { bootstrap } from './bootstrap';
 export * from '../common';

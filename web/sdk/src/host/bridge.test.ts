@@ -75,6 +75,22 @@ describe('serveBridge', () => {
     expect(replies).toEqual([]);
   });
 
+  it('asks the frame to highlight, locate and pick, and expects no answer to any', () => {
+    bridge = serveBridge(frame, backend());
+    bridge.highlight('0.2');
+    bridge.highlight(null);
+    bridge.locate({ node: '0.2' });
+    bridge.locate({ app: 0, kind: 'query', name: 'revenue' });
+    bridge.setPicking(true);
+    expect(replies).toEqual([
+      { type: 'anfra:highlight', node: '0.2' },
+      { type: 'anfra:highlight', node: null },
+      { type: 'anfra:locate', target: { node: '0.2' } },
+      { type: 'anfra:locate', target: { app: 0, kind: 'query', name: 'revenue' } },
+      { type: 'anfra:pick-watch', on: true },
+    ]);
+  });
+
   it('serves its own frame only, and only the Backend', async () => {
     const b = backend();
     bridge = serveBridge(frame, b);
@@ -85,16 +101,22 @@ describe('serveBridge', () => {
     expect(replies).toEqual([{ type: 'anfra:response', id: 2, ok: false, error: { name: 'Error', message: 'No such Backend method: ingest' } }]);
   });
 
-  it('relays inspection while asked to, and tells a reloaded frame to keep posting', () => {
+  it('relays inspection and picks while asked to, and tells a reloaded frame to keep posting', () => {
     const onInspect = vi.fn();
-    bridge = serveBridge(frame, backend(), onInspect);
-    fromFrame({ type: 'anfra:inspect', apps: [] });
+    const onPick = vi.fn();
+    bridge = serveBridge(frame, backend(), { onInspect, onPick });
+    const structure = { nodes: [], usage: {} };
+    fromFrame({ type: 'anfra:inspect', apps: [], structure });
+    fromFrame({ type: 'anfra:picked', node: '0' });
     expect(onInspect).not.toHaveBeenCalled();
+    expect(onPick).not.toHaveBeenCalled();
 
     bridge.setInspecting(true);
     expect(replies).toEqual([{ type: 'anfra:inspect-watch', open: true }]);
-    fromFrame({ type: 'anfra:inspect', apps: [] });
-    expect(onInspect).toHaveBeenCalledWith([]);
+    fromFrame({ type: 'anfra:inspect', apps: [], structure });
+    expect(onInspect).toHaveBeenCalledWith([], structure);
+    fromFrame({ type: 'anfra:picked', node: '0' });
+    expect(onPick).toHaveBeenCalledWith('0');
     fromFrame({ type: 'anfra:ready' });
     expect(replies).toHaveLength(2);
   });

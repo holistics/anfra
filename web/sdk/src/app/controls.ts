@@ -73,6 +73,14 @@ export abstract class Control extends Observable {
     this.pending = initial;
   }
 
+  /**
+   * Bring the elements marked `data-anfra-control` with this control's name into view. False when
+   * none is on the page yet; never throws.
+   */
+  locate (): boolean {
+    return this.app.locate('control', this.name);
+  }
+
   /** The reader's current value, which `execute()` will commit. */
   get condition (): Condition {
     return this.pending;

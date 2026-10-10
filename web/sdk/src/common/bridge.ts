@@ -4,7 +4,7 @@
  * makes to its Backend crosses here, and the host answers it.
  */
 import type {
-  BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp, User,
+  BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp, InspectedStructure, LocateTarget, User,
 } from './types';
 
 /** The Backend methods a frame may call: the bridge serves these and nothing else. */
@@ -26,7 +26,9 @@ export type FrameMessage =
   | { type: 'anfra:request', id: number, method: 'submitQuery', request: BackendQueryRequest }
   | { type: 'anfra:request', id: number, method: 'fieldSuggestions', request: FieldSuggestionsRequest }
   | { type: 'anfra:cancel', id: number }
-  | { type: 'anfra:inspect', apps: InspectedApp[] };
+  | { type: 'anfra:inspect', apps: InspectedApp[], structure: InspectedStructure }
+  /** In pick mode, the reader chose a node, or left the mode (null, on Escape). */
+  | { type: 'anfra:picked', node: string | null };
 
 /** An error as it crosses the bridge: the SDK's error class by name, and its message. */
 export interface BridgeError {
@@ -38,4 +40,10 @@ export interface BridgeError {
 export type HostMessage =
   | { type: 'anfra:response', id: number, ok: true, result: unknown }
   | { type: 'anfra:response', id: number, ok: false, error: BridgeError }
-  | { type: 'anfra:inspect-watch', open: boolean };
+  | { type: 'anfra:inspect-watch', open: boolean }
+  /** Show a node on the page (its key in the last snapshot), or nothing. The frame answers nothing. */
+  | { type: 'anfra:highlight', node: string | null }
+  /** Scroll a node or an entity into view and hold the highlight on it. */
+  | { type: 'anfra:locate', target: LocateTarget }
+  /** Start or stop pick mode. */
+  | { type: 'anfra:pick-watch', on: boolean };

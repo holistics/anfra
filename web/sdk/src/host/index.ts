@@ -5,4 +5,4 @@
  */
 export { mountDataApp, type MountOptions, type MountedDataApp } from './mount';
 export { provisionDocument, type ProvisionOptions } from './provision';
-export { serveBridge, type BridgeHandle } from './bridge';
+export { serveBridge, type BridgeCallbacks, type BridgeHandle } from './bridge';

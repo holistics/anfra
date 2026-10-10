@@ -10,6 +10,8 @@ import {
 } from './validation';
 import { runQuery, type SubmitContext } from './execution/submitQuery';
 import { deriveSelection } from './selection';
+import { markersFor } from './structure';
+import { overlayFor, scrollTo } from './overlay';
 import type { AppContext } from './internal';
 import type {
   Backend,
@@ -26,6 +28,7 @@ import type {
   InspectedError,
   InspectedQuery,
   InspectedSelection,
+  LocateKind,
   QueryDeclaration,
   Row,
   SdkFeatures,
@@ -206,6 +209,9 @@ export class App extends Observable implements AppContext {
     this.assertNameFree(name, 'query');
     const query = new Query(name, this, declaration);
     this._queries.set(name, query);
+    // Declaring is a change too: a host inspecting the app sees the new entity at once, and a
+    // dynamic app's render runs once more, which it already handles for an entity with no result.
+    this.notify();
     return query;
   }
 
@@ -216,6 +222,7 @@ export class App extends Observable implements AppContext {
       : this.soleDataset(name, declaration.field);
     const filter = new Filter(name, this, declaration, dataset, this.backend);
     this._controls.set(name, filter);
+    this.notify();
     return filter;
   }
 
@@ -233,6 +240,7 @@ export class App extends Observable implements AppContext {
     this.assertNameFree(name, 'date drill control');
     const control = new DateDrillControl(name, this, declaration);
     this._controls.set(name, control);
+    this.notify();
     return control;
   }
 
@@ -281,6 +289,7 @@ export class App extends Observable implements AppContext {
     this.assertAcyclic(mapping);
 
     this._mappings.push(mapping);
+    this.notify();
     return mapping;
   }
 
@@ -333,6 +342,7 @@ export class App extends Observable implements AppContext {
     }
 
     this._crossFilters.push(edge);
+    this.notify();
     return edge;
   }
 
@@ -637,6 +647,30 @@ export class App extends Observable implements AppContext {
         ? { appliedSelection: inspectSelection(this._appliedSelection) }
         : {}),
     };
+  }
+
+  /**
+   * @internal This app's index among the frame's apps, which is how a marked element names it
+   * (`data-anfra-query="1/revenue"`); 0 unless set by the instance that created it.
+   */
+  index = 0;
+
+  /**
+   * Bring an entity's marked elements into view: scroll to the first, show the overlay on all for
+   * a moment. False, and nothing done, when the document has none marked with it (or there is no
+   * document at all). Used by `Query.locate()` and `Control.locate()`, and by the bootstrap for a
+   * host's locate-by-entity.
+   */
+  locate (kind: LocateKind, name: string): boolean {
+    const doc = globalThis.document;
+    if (!doc) return false;
+    const elements = markersFor(doc, kind, this.index, name);
+    if (!elements.length) return false;
+    scrollTo(elements[0]);
+    overlayFor(doc).flash(elements, {
+      kind, name, ...(elements.length > 1 ? { note: `in ${elements.length} places` } : {}),
+    });
+    return true;
   }
 
   /* ----------------------------------------------------------------

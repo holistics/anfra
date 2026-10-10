@@ -1,35 +1,138 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+// The inspect panel: a devtool over the running Data App. Structure shows the page's semantic
+// parts as a tree, with hover-highlight, click-to-locate, a pick mode and a detail pane; Data
+// shows every app's queries, controls and selection.
+import { computed, ref } from 'vue';
 import Icon from './Icon.vue';
+import StructureTree from './StructureTree.vue';
+import EntityCard from './EntityCard.vue';
 import {
-  formatCondition, formatTime, type InspectedApp, type InspectedControl,
+  countProblems, findNode, formatCondition, handleFor, usageOf,
+  type InspectedApp, type InspectedStructure, type LocateTarget,
 } from './inspect';
 
-// `apps` is undefined until the frame has reported.
-defineProps<{ apps?: InspectedApp[] }>();
-const emit = defineEmits<{ close: [] }>();
+// `apps` and `structure` are undefined until the frame has reported.
+const props = defineProps<{
+  apps?: InspectedApp[],
+  structure?: InspectedStructure,
+  selectedNode?: string,
+  picking: boolean,
+}>();
+const emit = defineEmits<{
+  close: [],
+  highlight: [node: string | null],
+  locate: [target: LocateTarget],
+  select: [node: string | undefined],
+  pick: [on: boolean],
+}>();
 
-const copied = ref<string>();
-async function copy (id: string, text: string): Promise<void> {
+const tab = ref<'structure' | 'data'>('structure');
+const selected = computed(() => (props.structure && props.selectedNode ? findNode(props.structure.nodes, props.selectedNode) : undefined));
+const problems = computed(() => (props.structure ? countProblems(props.structure.nodes) : 0));
+
+const copied = ref(false);
+async function copyHandle (): Promise<void> {
+  if (!selected.value) return;
   try {
-    await navigator.clipboard.writeText(text);
-    copied.value = id;
-    setTimeout(() => { if (copied.value === id) copied.value = undefined; }, 1500);
+    await navigator.clipboard.writeText(handleFor(selected.value));
+    copied.value = true;
+    setTimeout(() => { copied.value = false; }, 1500);
   } catch { /* clipboard unavailable */ }
 }
 
-const controlKind = (control: InspectedControl) => (control.kind === 'dateDrill' ? 'Date drill' : 'Filter');
+function select (key: string): void {
+  emit('select', key);
+  emit('locate', { node: key });
+}
+
+// A query or control node's entity, for its card in the detail pane.
+const selectedEntity = computed(() => {
+  const node = selected.value;
+  if (!node || (node.kind !== 'query' && node.kind !== 'control') || node.problems.length) return undefined;
+  const app = props.apps?.[node.app ?? 0];
+  if (!app) return undefined;
+  const name = node.name ?? '';
+  return {
+    app: node.app ?? 0,
+    name,
+    query: node.kind === 'query' ? app.queries[name] : undefined,
+    control: node.kind === 'control' ? app.controls[name] : undefined,
+    usage: usageOf(props.structure, node.kind, node.app ?? 0, name),
+  };
+});
 </script>
 
 <template>
   <aside class="inspect" aria-label="Inspect" data-testid="inspect-panel">
     <header class="inspect-header">
-      <h3>Inspect</h3>
+      <div class="inspect-tabs" role="tablist">
+        <button type="button" role="tab" :aria-selected="tab === 'structure'" data-testid="tab-structure" @click="tab = 'structure'">
+          Structure<span v-if="problems" class="pill error">{{ problems }}</span>
+        </button>
+        <button type="button" role="tab" :aria-selected="tab === 'data'" data-testid="tab-data" @click="tab = 'data'">Data</button>
+      </div>
       <button type="button" class="icon-button" aria-label="Close inspect panel" @click="emit('close')">
         <Icon name="close" />
       </button>
     </header>
-    <div class="inspect-body">
+
+    <div v-if="tab === 'structure'" class="toolbar">
+      <button
+        type="button"
+        class="tool"
+        :aria-pressed="picking"
+        title="Click a part of the page to select it here. Esc stops."
+        data-testid="pick"
+        @click="emit('pick', !picking)"
+      >
+        Pick
+      </button>
+      <button
+        type="button"
+        class="tool"
+        :disabled="!selected"
+        :title="selected ? handleFor(selected) : 'Select a node first'"
+        data-testid="copy-handle-tool"
+        @click="copyHandle"
+      >
+        {{ copied ? 'Copied' : 'Copy handle' }}
+      </button>
+    </div>
+    <div v-if="tab === 'structure'" class="inspect-body" @mouseleave="emit('highlight', null)">
+      <p v-if="!structure" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
+      <p v-else-if="structure.nodes.length === 0" class="inspect-note" data-testid="structure-none">
+        Nothing is marked yet. Add <code>data-anfra-container</code>, <code>data-anfra-block</code>,
+        <code>data-anfra-query</code> and <code>data-anfra-control</code> to the page's elements and they show up here.
+      </p>
+      <StructureTree
+        v-else
+        :nodes="structure.nodes"
+        :selected="selectedNode"
+        @hover="emit('highlight', $event)"
+        @select="select"
+      />
+
+      <section v-if="selected" class="detail" data-testid="node-detail">
+        <h5>{{ selected.kind }}</h5>
+        <dl>
+          <dt>{{ selected.kind === 'container' || selected.kind === 'block' ? 'Id' : 'Name' }}</dt>
+          <dd>{{ selected.kind === 'container' || selected.kind === 'block' ? selected.id : selected.name }}</dd>
+          <template v-if="selected.label"><dt>Label</dt><dd>{{ selected.label }}</dd></template>
+          <dt>Handle</dt>
+          <dd class="handle">
+            <code class="wrap">{{ handleFor(selected) }}</code>
+            <button type="button" class="copy" title="Copy the handle" data-testid="copy-handle" @click="copyHandle">
+              {{ copied ? 'Copied' : 'Copy' }}
+            </button>
+          </dd>
+          <template v-if="selected.children.length"><dt>Holds</dt><dd>{{ selected.children.length }} node{{ selected.children.length === 1 ? '' : 's' }}</dd></template>
+        </dl>
+        <p v-for="(problem, i) in selected.problems" :key="i" class="error-text" role="alert">{{ problem }}</p>
+        <EntityCard v-if="selectedEntity" v-bind="selectedEntity" @locate="emit('locate', $event)" />
+      </section>
+    </div>
+
+    <div v-else class="inspect-body">
       <p v-if="!apps" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
       <p v-else-if="apps.length === 0" class="inspect-note" data-testid="inspect-none">
         This Data App hasn't created an SDK app.
@@ -47,55 +150,27 @@ const controlKind = (control: InspectedControl) => (control.kind === 'dateDrill'
 
         <h5>Queries</h5>
         <p v-if="!Object.keys(app.queries).length" class="inspect-note">None.</p>
-        <article v-for="(query, name) in app.queries" :key="name" class="card" :data-testid="`inspect-query-${name}`">
-          <header>
-            <strong>{{ name }}</strong>
-            <span class="pill" :class="query.state" data-testid="query-state">{{ query.state }}</span>
-            <span v-if="query.isDirty" class="pill warn">dirty</span>
-          </header>
-          <dl>
-            <dt>Rows</dt><dd>{{ query.rowCount }}<template v-if="query.selectedRowCount"> ({{ query.selectedRowCount }} selected)</template></dd>
-            <template v-if="query.debug">
-              <dt>Source</dt><dd>{{ query.debug.fromCache ? 'cache' : 'fresh run' }}<template v-if="query.debug.executedAt"> at {{ formatTime(query.debug.executedAt) }}</template></dd>
-            </template>
-          </dl>
-          <details class="signature">
-            <summary>Signature</summary>
-            <code class="wrap">{{ query.signature }}</code>
-          </details>
-          <p v-if="query.error" class="error-text" role="alert">{{ query.error.name }}: {{ query.error.message }}</p>
-          <template v-for="kind in (['executedAql', 'executedSql'] as const)" :key="kind">
-            <div v-if="query.debug?.[kind]" class="code">
-              <div class="code-head">
-                <span>{{ kind === 'executedAql' ? 'Executed AQL' : 'Executed SQL' }}</span>
-                <button
-                  type="button"
-                  class="copy"
-                  :data-testid="`copy-${kind}`"
-                  @click="copy(`${index}-${name}-${kind}`, query.debug[kind]!)"
-                >
-                  {{ copied === `${index}-${name}-${kind}` ? 'Copied' : 'Copy' }}
-                </button>
-              </div>
-              <pre>{{ query.debug[kind] }}</pre>
-            </div>
-          </template>
-        </article>
+        <EntityCard
+          v-for="(query, name) in app.queries"
+          :key="name"
+          :app="index"
+          :name="String(name)"
+          :query="query"
+          :usage="usageOf(structure, 'query', index, String(name))"
+          @locate="emit('locate', $event)"
+        />
 
         <h5>Controls</h5>
         <p v-if="!Object.keys(app.controls).length" class="inspect-note">None.</p>
-        <article v-for="(control, name) in app.controls" :key="name" class="card" :data-testid="`inspect-control-${name}`">
-          <header>
-            <strong>{{ name }}</strong>
-            <span class="pill">{{ controlKind(control) }}</span>
-            <span v-if="control.isDirty" class="pill warn">unapplied</span>
-          </header>
-          <dl>
-            <dt>Set to</dt><dd data-testid="control-condition">{{ formatCondition(control.condition) }}</dd>
-            <dt>Applied</dt><dd data-testid="control-applied">{{ formatCondition(control.appliedCondition) }}</dd>
-            <template v-if="control.options"><dt>Options</dt><dd>{{ control.options.join(', ') }}</dd></template>
-          </dl>
-        </article>
+        <EntityCard
+          v-for="(control, name) in app.controls"
+          :key="name"
+          :app="index"
+          :name="String(name)"
+          :control="control"
+          :usage="usageOf(structure, 'control', index, String(name))"
+          @locate="emit('locate', $event)"
+        />
 
         <template v-if="app.selection || app.appliedSelection">
           <h5>Selection</h5>
