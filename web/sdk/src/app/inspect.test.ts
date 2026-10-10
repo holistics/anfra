@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import {
+  describe, expect, it, vi,
+} from 'vitest';
 import { createSdk } from './sdk';
 import { PermissionError } from '../common/errors';
 import {
@@ -58,6 +60,23 @@ describe('the app registry', () => {
   it('is empty for a document that never builds one', () => {
     // A data app may render static HTML and call `createApp` never. That is not an error state.
     expect(build().apps).toEqual([]);
+  });
+});
+
+describe('declaring', () => {
+  it('notifies subscribers, so a host inspecting sees a dynamic app grow at once', () => {
+    const app = build().createApp();
+    const seen = vi.fn();
+    app.subscribe(seen);
+    const revenue = app.createQuery('revenue', {
+      dataset: 'sales',
+      aql: 'explore { dimensions { region: users.region } measures { total: orders | sum(orders.amount) } }',
+    });
+    const region = app.createFilter('region', { field: 'users.region', dataset: 'sales' });
+    app.createDateDrill('grain');
+    app.mapControl(region, revenue, { field: 'users.region' });
+    expect(seen).toHaveBeenCalledTimes(4);
+    expect(Object.keys(app.toInspectJSON().queries)).toEqual(['revenue']);
   });
 });
 
