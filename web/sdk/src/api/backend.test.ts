@@ -63,6 +63,19 @@ describe('coreApiBackend', () => {
   });
 
   it.each([
+    ['null', { fields: ['status'], records: null }],
+    ['omitted', { fields: ['status'] }],
+  ])('answers a result whose records are %s as no rows', async (_name, rows) => {
+    const { client } = api(ok({ ...answered, result: rows }));
+    const result = await coreApiBackend(client).submitQuery(request, signal);
+    expect(result).toMatchObject({
+      columns: answered.columns,
+      values: [],
+      meta: { page: 2, pageSize: 10, numRows: 0 },
+    });
+  });
+
+  it.each([
     ['an invalid query, as its diagnostics', fail(422, { code: 'query_invalid', scope: 'user', message: 'The query is invalid.', details: { valid: false, diagnostics: [{ message: 'No field x.', line: 1, column: 9 }] } }), QueryError, 'line 1:9: No field x.'],
     ['an input entry refused, as its violation', fail(422, { code: 'validation_failed', scope: 'user', message: 'Some of the input is not valid.', details: { violations: [{ field: 'input.filters[0].field', message: 'Unknown field.' }] } }), QueryError, 'input.filters[0].field: Unknown field.'],
     ['a data source failing', fail(502, { code: 'query_failed', scope: 'server', message: 'connection refused' }), QueryError, 'connection refused'],
@@ -110,6 +123,12 @@ describe('coreApiBackend', () => {
         page_size: SUGGESTION_LIMIT,
       });
       expect(values).toEqual(['paid', 3, true]);
+    });
+
+    it('are none when the result has null records', async () => {
+      const { client } = api(ok({ ...answered, result: { fields: ['value'], records: null } }));
+      const values = await coreApiBackend(client, { datasets }).fieldSuggestions({ dataset: 'sales', model: 'orders', field: 'status', q: '' }, signal);
+      expect(values).toEqual([]);
     });
 
     it('do not narrow a field that is not text', async () => {
