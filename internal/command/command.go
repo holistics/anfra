@@ -8,7 +8,6 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Def is the single definition of one anfra operation: what it takes (In),
@@ -53,9 +53,11 @@ type Def[In, Out any] struct {
 	// Needs.
 	Errors []apperr.AnyCode
 	// ReadOnly: the command changes nothing. Idempotent: running it again with
-	// the same input has no further effect. Published on the op.
-	ReadOnly   bool
-	Idempotent bool
+	// the same input has no further effect. NonDestructive: it changes things,
+	// but only adds to them. Published on the op (see apikit.Def).
+	ReadOnly       bool
+	Idempotent     bool
+	NonDestructive bool
 	// Timeout bounds the command as an op; zero means apikit's default.
 	Timeout time.Duration
 }
@@ -137,7 +139,7 @@ func (c *command[In, Out]) Needs(input []byte) Sidecars {
 		return Sidecars{}
 	}
 	var in In
-	if len(input) > 0 && json.Unmarshal(input, &in) != nil {
+	if len(input) > 0 && jsonkit.Unmarshal(input, &in) != nil {
 		return Sidecars{}
 	}
 	applyDefaults(c.args, &in)
@@ -154,7 +156,7 @@ func (c *command[In, Out]) Valid(out any) (bool, error) {
 	switch v := out.(type) {
 	case []byte:
 		var o Out
-		if err := json.Unmarshal(v, &o); err != nil {
+		if err := jsonkit.Unmarshal(v, &o); err != nil {
 			return false, fmt.Errorf("decode %s's answer: %w", c.def.Name, err)
 		}
 		return c.def.Valid(o), nil
@@ -179,7 +181,7 @@ func (c *command[In, Out]) Register(reg *apikit.Registry[CommandContext]) {
 	}
 	apikit.Register(reg, admission, &apikit.Def[CommandContext, In, Out]{
 		Name: OpName(c.def.Name), Summary: c.def.Short, Doc: c.def.Long, Errors: errs,
-		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, Timeout: c.def.Timeout, HTTP: true, MCP: true,
+		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, NonDestructive: c.def.NonDestructive, Timeout: c.def.Timeout, HTTP: true, MCP: true,
 		Handle: func(ctx context.Context, cc CommandContext, in In) (Out, error) {
 			applyDefaults(c.args, &in)
 			if c.def.Check != nil {

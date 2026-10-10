@@ -2,7 +2,6 @@ package apikit_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/shared/httpkit"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/holistics/anfra/shared/apikit"
@@ -48,7 +48,7 @@ func getJSON(t *testing.T, h http.Handler, path, user string, into any) int {
 	t.Helper()
 	w := do(h, http.MethodGet, path, user, "")
 	if w.Code == http.StatusOK {
-		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
+		if err := jsonkit.Unmarshal(w.Body.Bytes(), into); err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
 	}
@@ -172,4 +172,45 @@ func (u userHeader) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
 	r.Header.Set("User", string(u))
 	return http.DefaultTransport.RoundTrip(r)
+}
+
+// An op that changes things says to MCP whether it may destroy: one declared
+// NonDestructive only adds; one not declared so may.
+func TestMCPDestructiveHint(t *testing.T) {
+	reg := newRegistry()
+	add := func(name string, nonDestructive bool) {
+		g := greet(name)
+		g.MCP, g.NonDestructive = true, nonDestructive
+		apikit.Register(reg, admission, g)
+	}
+	add("greetings.create", true)
+	add("greetings.replace", false)
+	m := apikit.MCP[request]{Name: "test", Version: "1", Codes: codes,
+		Request: func(r *http.Request) (request, error) { return request{user: r.Header.Get("User")}, nil }}
+	srv := httptest.NewServer(m.Handler(runtime(), reg))
+	defer srv.Close()
+	ctx := context.Background()
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "client"}, nil).Connect(ctx,
+		&mcp.StreamableClientTransport{Endpoint: srv.URL, HTTPClient: &http.Client{Transport: userHeader("ann")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		d := tool.Annotations.DestructiveHint
+		switch tool.Name {
+		case "greetings.create":
+			if d == nil || *d {
+				t.Errorf("a non-destructive op: destructiveHint %v, want false", d)
+			}
+		case "greetings.replace":
+			if d == nil || !*d {
+				t.Errorf("an op that may destroy: destructiveHint %v, want true", d)
+			}
+		}
+	}
 }

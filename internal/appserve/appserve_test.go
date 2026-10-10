@@ -3,7 +3,6 @@ package appserve
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // repo is a repo with Data Apps: two at the top, one in a folder, plus what the tree leaves out.
@@ -50,9 +51,9 @@ func get(h http.Handler, path string) *httptest.ResponseRecorder {
 // The tree: folders first, then Data Apps, each alphabetical; a Data App labelled by its <title>,
 // else its file name; folders without Data Apps, and dot-entries, left out.
 func TestCatalog(t *testing.T) {
-	got, _ := json.Marshal(Catalog(repo(t)))
+	got, _ := jsonkit.Marshal(Catalog(repo(t)))
 	want := `[{"kind":"folder","path":"team","name":"team","children":[{"kind":"app","path":"team/overview.html","label":"Team"}]},` +
-		`{"kind":"app","path":"sales.html","label":"Sales \u0026 Returns"},{"kind":"app","path":"untitled.html","label":"untitled.html"}]`
+		`{"kind":"app","path":"sales.html","label":"Sales & Returns"},{"kind":"app","path":"untitled.html","label":"untitled.html"}]`
 	if string(got) != want {
 		t.Errorf("catalog =\n  %s\nwant\n  %s", got, want)
 	}
@@ -166,7 +167,7 @@ func TestContext(t *testing.T) {
 	t.Setenv("TZ", "Asia/Ho_Chi_Minh")
 	dir := repo(t)
 	var got Context
-	if err := json.NewDecoder(get(New(Options{RepoDir: dir, Watch: true}), "/appserve/context").Body).Decode(&got); err != nil {
+	if err := jsonkit.UnmarshalRead(get(New(Options{RepoDir: dir, Watch: true}), "/appserve/context").Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Repo.Name != filepath.Base(dir) || !got.Watch || got.Reader.Timezone != "Asia/Ho_Chi_Minh" || !got.Reader.Permissions.CanViewGeneratedSQL {

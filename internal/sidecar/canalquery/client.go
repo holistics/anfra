@@ -4,13 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Client talks to a canal-query server over HTTP. Address-based and
@@ -87,7 +89,33 @@ func (c *Client) WaitReady(ctx context.Context) error {
 // Result is the column header + rows of an executed query.
 type Result struct {
 	Fields []string
-	Rows   [][]any
+	Rows   []Row
+}
+
+// Row is one row of a result as canal wrote it: a JSON array, kept as its bytes.
+// anfra reads no cell, so it never decodes one: a number keeps every digit
+// (decoded, an integer past 2^53 would round), and a row costs one copy.
+type Row jsontext.Value
+
+// MarshalJSONTo writes the row as canal wrote it.
+func (r Row) MarshalJSONTo(enc *jsontext.Encoder) error { return enc.WriteValue(jsontext.Value(r)) }
+
+// UnmarshalJSONFrom reads one row as it is.
+func (r *Row) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	v, err := dec.ReadValue()
+	if err != nil {
+		return err
+	}
+	if v.Kind() != '[' {
+		return fmt.Errorf("a row is a JSON array, not %s", v.Kind())
+	}
+	*r = Row(v.Clone())
+	return nil
+}
+
+// Schema publishes a row as what it is, an array of values of any type.
+func (Row) Schema(huma.Registry) *huma.Schema {
+	return &huma.Schema{Type: huma.TypeArray, Items: &huma.Schema{}}
 }
 
 type queryJob struct {
@@ -148,7 +176,24 @@ func canalError(m map[string]any) *Error {
 // rows. dbconfig is passed straight through to canal as the connection config.
 // truncateRows caps how many rows canal returns (negative = no truncation).
 func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int) (*Result, error) {
-	body, err := json.Marshal(queryRequest{
+	result := &Result{}
+	fields, err := c.ExecuteEach(ctx, dbtype, dbconfig, sql, truncateRows, func(row Row) error {
+		result.Rows = append(result.Rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result.Fields = fields
+	return result, nil
+}
+
+// ExecuteEach is Execute that hands each row to each as canal streams it,
+// holding none, and answers the fields once the stream ends. An error from each
+// stops the stream and is answered as it is. A row is each's to keep: it is not
+// reused.
+func (c *Client) ExecuteEach(ctx context.Context, dbtype string, dbconfig map[string]any, sql string, truncateRows int, each func(Row) error) ([]string, error) {
+	body, err := jsonkit.Marshal(queryRequest{
 		SQL:          sql,
 		Dbtype:       dbtype,
 		Dbconfig:     dbconfig,
@@ -174,7 +219,7 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 	}
 	defer resp.Body.Close()
 
-	result := &Result{}
+	var fields []string
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 64*1024*1024) // rows can be large
 	for scanner.Scan() {
@@ -185,25 +230,26 @@ func (c *Client) Execute(ctx context.Context, dbtype string, dbconfig map[string
 		if line[0] == '{' {
 			// Trailer (stream end) or, on a non-streamed error response, the error object.
 			var tr streamTrailer
-			if err := json.Unmarshal(line, &tr); err == nil && tr.HolisticsTrailer {
+			if err := jsonkit.Unmarshal(line, &tr); err == nil && tr.HolisticsTrailer {
 				if len(tr.Error) > 0 {
 					return nil, canalError(tr.Error)
 				}
 				if tr.Metadata != nil {
-					result.Fields = tr.Metadata.Fields
+					fields = tr.Metadata.Fields
 				}
 				continue
 			}
 			return nil, fmt.Errorf("canal query failed (status %d): %s", resp.StatusCode, line)
 		}
-		var row []any
-		if err := json.Unmarshal(line, &row); err != nil {
-			return nil, fmt.Errorf("parse result row: %w", err)
+		if line[0] != '[' || !jsonkit.Valid(line) {
+			return nil, fmt.Errorf("canal answered a row that is not a JSON array: %.100s", line)
 		}
-		result.Rows = append(result.Rows, row)
+		if err := each(Row(bytes.Clone(line))); err != nil { // the scanner reuses line
+			return nil, err
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read result stream: %w", err)
 	}
-	return result, nil
+	return fields, nil
 }

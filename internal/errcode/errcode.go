@@ -37,4 +37,7 @@ var (
 	// Unrestricted.
 	DataPermsUnenforceable = apperr.DefinePublicCode(NS, "data_perms_unenforceable", apperr.Client,
 		"These data permissions cannot be applied to this query.")
+	// ExportsUnavailable: the server stores no exports (it provides no
+	// command.ExportStore), so an export cannot be made here.
+	ExportsUnavailable = apperr.DefinePublicCode(NS, "exports_unavailable", apperr.Server, "This server cannot make exports.")
 )

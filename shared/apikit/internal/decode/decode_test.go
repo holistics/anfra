@@ -46,15 +46,20 @@ func TestSchemasAllowNullOnlyWhereDeclared(t *testing.T) {
 	}
 }
 
-// CheckOutput catches a nil slice, which Go encodes as null whatever the schema says.
-func TestCheckOutputCatchesANilSlice(t *testing.T) {
+type withEnum struct {
+	Kind string `json:"kind" enum:"a,b"`
+}
+
+// CheckOutput checks the bytes an answer is sent as: a nil slice is [] there,
+// as the schema says; a value the schema does not allow is caught.
+func TestCheckOutput(t *testing.T) {
 	reg := newRegistry()
-	if err := CheckOutput(reg, reflect.TypeFor[withList](), withList{Items: []string{}}); err != nil {
-		t.Errorf("an empty list was refused: %v", err)
+	if err := CheckOutput(reg, reflect.TypeFor[withList](), withList{}); err != nil {
+		t.Errorf("a nil slice was refused: %v", err)
 	}
-	err := CheckOutput(reg, reflect.TypeFor[withList](), withList{})
-	if err == nil || !strings.Contains(err.Error(), "items") {
-		t.Errorf("a nil slice was accepted, or the error does not name the field: %v", err)
+	err := CheckOutput(reg, reflect.TypeFor[withEnum](), withEnum{Kind: "c"})
+	if err == nil || !strings.Contains(err.Error(), "kind") {
+		t.Errorf("a value out of its enum was accepted, or the error does not name the field: %v", err)
 	}
 }
 

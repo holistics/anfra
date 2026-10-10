@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
@@ -12,11 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/appserve"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/command/status"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 var serverAddr = &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 7878}
@@ -28,7 +30,7 @@ func handler(t *testing.T) (http.Handler, repo.Repo) {
 	r := repo.Resolve(t.TempDir())
 	cc := command.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted(),
 		Server: &command.ServerInfo{URL: "http://127.0.0.1:7878", InstanceID: "i-1", Version: "dev"}}
-	return serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, true, nil), r
+	return serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr, serveMCP: true}), r
 }
 
 func do(h http.Handler, method, path, body string, headers ...string) *httptest.ResponseRecorder {
@@ -90,7 +92,7 @@ func TestServeRoutes(t *testing.T) {
 func TestStatusReportsTheServer(t *testing.T) {
 	h, _ := handler(t)
 	var got status.StatusResult
-	if err := json.NewDecoder(do(h, http.MethodPost, "/api/core.status", `{}`).Body).Decode(&got); err != nil {
+	if err := jsonkit.UnmarshalRead(do(h, http.MethodPost, "/api/core.status", `{}`).Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Server == nil || got.Server.URL != "http://127.0.0.1:7878" || got.Server.InstanceID != "i-1" {
@@ -186,7 +188,7 @@ func TestServeApps(t *testing.T) {
 	r := repo.Resolve(t.TempDir())
 	cc := command.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted()}
 	apps := appserve.New(appserve.Options{RepoDir: r.Dir})
-	h := serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, false, apps)
+	h := serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr, apps: apps})
 
 	if w := do(h, http.MethodGet, "/appserve/apps", ""); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != "[]" {
 		t.Errorf("the Data App tree: %d %q", w.Code, w.Body)
@@ -201,7 +203,7 @@ func TestServeApps(t *testing.T) {
 		t.Errorf("another host: %d, want the guard's refusal", w.Code)
 	}
 
-	without := serveHandler(slog.New(slog.DiscardHandler), r, cc, serverAddr, false, nil)
+	without := serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr})
 	for _, path := range []string{"/apps/sales", "/appserve/apps"} {
 		if w := do(without, http.MethodGet, path, ""); w.Code != http.StatusNotFound {
 			t.Errorf("with --no-apps, %s: %d", path, w.Code)
@@ -230,5 +232,114 @@ func TestServeFlags(t *testing.T) {
 		if got != c.want {
 			t.Errorf("%v: %+v, want %+v", c.args, got, c.want)
 		}
+	}
+}
+
+// A request's base URL is the server's root as its caller reached it: the Host
+// it sent, or ANFRA_SITE_URL behind a proxy.
+func TestBaseURLOf(t *testing.T) {
+	for _, tc := range []struct{ name, site, host, want string }{
+		{"the Host the caller sent", "", "anfra.lan:7878", "http://anfra.lan:7878"},
+		{"behind a proxy", "https://data.example.com/anfra", "10.0.0.5:7878", "https://data.example.com/anfra"},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/core.query.export", nil)
+		req.Host = tc.host
+		if got := baseURLOf(req, tc.site); got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// An export's link, as a request's CommandContext makes it, is a plain GET on
+// the server, past its guard, while it lives: a download saved under its name,
+// in any script; resumable; never cached. One unknown here is not_found, as
+// this server answers any error.
+func TestExportLinks(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("TMPDIR", t.TempDir())
+	files := exports.New(time.Hour)
+	defer files.Close()
+	r := repo.Resolve(t.TempDir())
+	cc := command.CommandContext{Repo: r, DataPerms: dataperm.Unrestricted()}
+	h := serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr, exportFiles: files})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/core.query.export", nil)
+	req.Host = "127.0.0.1:7878"
+	store := exports.Store{Files: files, ServedAt: baseURLOf(req, "") + exportsDownloadPath} // as serveHandler builds it
+	e, err := store.Create(context.Background(), "Báo cáo.csv", "text/csv; charset=utf-8; header=present")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(e, "a,b\n1,2\n")
+	link, _, err := e.Done(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rest, ok := strings.CutPrefix(link, "http://127.0.0.1:7878/exports/download/")
+	token, name, _ := strings.Cut(rest, "/")
+	if !ok || name != "B%C3%A1o%20c%C3%A1o.csv" {
+		t.Fatalf("link = %s, want /exports/download/<token>/<the name, escaped>", link)
+	}
+	path := "/exports/download/" + token + "/" + name
+
+	// The name after the token decides nothing: none, or another, serves the same file.
+	for _, other := range []string{"/exports/download/" + token, "/exports/download/" + token + "/whatever.csv"} {
+		if w := do(h, http.MethodGet, other, ""); w.Code != 200 || w.Body.String() != "a,b\n1,2\n" {
+			t.Errorf("GET %s: %d %q", other, w.Code, w.Body)
+		}
+	}
+
+	w := do(h, http.MethodGet, path, "")
+	hd := w.Header()
+	if w.Code != 200 || w.Body.String() != "a,b\n1,2\n" || hd.Get("Content-Type") != "text/csv; charset=utf-8; header=present" ||
+		hd.Get("Content-Disposition") != `attachment; filename*=utf-8''B%C3%A1o%20c%C3%A1o.csv` || hd.Get("Cache-Control") != "no-store" {
+		t.Errorf("GET the link: %d %q %v", w.Code, w.Body, hd)
+	}
+	if w := do(h, http.MethodGet, path, "", "Range", "bytes=4-"); w.Code != http.StatusPartialContent || w.Body.String() != "1,2\n" {
+		t.Errorf("a resumed download: %d %q", w.Code, w.Body)
+	}
+
+	w = do(h, http.MethodGet, "/exports/download/nosuch/sales.csv", "")
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := jsonkit.Unmarshal(w.Body.Bytes(), &body); w.Code != http.StatusNotFound || err != nil || body.Error.Code != "not_found" {
+		t.Errorf("an unknown link: %d %s, want 404 not_found", w.Code, w.Body)
+	}
+}
+
+// ANFRA_SITE_URL is a URL a link can start with, or anfra serve refuses to
+// start.
+func TestSiteURL(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"", ""},
+		{"https://data.example.com/", "https://data.example.com"},
+		{" http://anfra.lan:7878/anfra ", "http://anfra.lan:7878/anfra"},
+	} {
+		t.Setenv("ANFRA_SITE_URL", tc.raw)
+		if got, err := siteURL(); err != nil || got != tc.want {
+			t.Errorf("%q: %q %v, want %q", tc.raw, got, err, tc.want)
+		}
+	}
+	for _, bad := range []string{"data.example.com", "ftp://x", "https://", "https://x/?a=1"} {
+		t.Setenv("ANFRA_SITE_URL", bad)
+		if _, err := siteURL(); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}
+
+// An export is over before its file could look abandoned: the sweep removes
+// any other process's file last written more than a link's life ago, and an
+// export with a header row writes its file only at its end.
+func TestExportsEndBeforeTheirLinksCouldLapse(t *testing.T) {
+	o, ok := app.NewRegistry().Lookup("core.query.export")
+	if !ok {
+		t.Fatal("no core.query.export")
+	}
+	if timeout := o.Meta().Timeout; timeout >= exportLinkLife {
+		t.Errorf("an export may run %s, as long as a link lives (%s): the sweep could remove one still being written", timeout, exportLinkLife)
 	}
 }

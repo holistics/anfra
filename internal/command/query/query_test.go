@@ -1,7 +1,7 @@
 package query
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"reflect"
@@ -13,13 +13,14 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // A run reaches anfra-node as the caller sent it, in the names they share: a
 // page size alone is the first page.
 func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	var in QueryRunInput
-	if err := json.Unmarshal([]byte(`{
+	if err := jsonkit.Unmarshal([]byte(`{
 		"query": "q", "dataset": "d", "page_size": 20, "timezone": "Asia/Ho_Chi_Minh",
 		"input": {
 			"filters": [{"field": "orders.status", "operator": "is_null", "values": []}, {"field": "orders.amount", "operator": "greater_than", "values": [10], "aggregation": "sum"}],
@@ -46,8 +47,8 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	if got := in.run(); !reflect.DeepEqual(got, want) {
 		t.Errorf("run =\n  %+v\nwant\n  %+v", got, want)
 	}
-	wire, _ := json.Marshal(want.Input)
-	if !json.Valid(wire) || !jsonHas(wire, "dateDrills") {
+	wire, _ := jsonkit.Marshal(want.Input)
+	if !jsontext.Value(wire).IsValid() || !jsonHas(wire, "dateDrills") {
 		t.Errorf("anfra-node's Query Input is %s, want its own names", wire)
 	}
 
@@ -59,7 +60,7 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 
 func jsonHas(raw []byte, key string) bool {
 	var m map[string]any
-	_ = json.Unmarshal(raw, &m)
+	_ = jsonkit.Unmarshal(raw, &m)
 	_, ok := m[key]
 	return ok
 }
@@ -69,7 +70,7 @@ func jsonHas(raw []byte, key string) bool {
 // Anything else stays as it is.
 func TestRunViolation(t *testing.T) {
 	refusal := func(path, msg string) error {
-		data, _ := json.Marshal(map[string]string{"path": path})
+		data, _ := jsonkit.Marshal(map[string]string{"path": path})
 		return &anfranode.RPCError{Method: "aql.compile_to_sql", Code: anfranode.RPCInvalidParams, Message: msg, Data: data}
 	}
 	for _, tc := range []struct {
@@ -86,7 +87,7 @@ func TestRunViolation(t *testing.T) {
 		{"paging a pivot", refusal("pagination", "Pagination for pivot queries isn't supported yet."),
 			&apperr.Violation{Field: "page_size", Code: "unsupported", Message: "Pagination for pivot queries isn't supported yet."}},
 		{"invalid params with no path", &anfranode.RPCError{Code: anfranode.RPCInvalidParams, Message: `Dataset "x" not found`}, nil},
-		{"another RPC error", &anfranode.RPCError{Code: -32603, Message: "boom", Data: json.RawMessage(`{"path":"filters[0]"}`)}, nil},
+		{"another RPC error", &anfranode.RPCError{Code: -32603, Message: "boom", Data: jsontext.Value(`{"path":"filters[0]"}`)}, nil},
 		{"not an RPC error", errors.New("boom"), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

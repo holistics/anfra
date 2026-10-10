@@ -19,6 +19,7 @@ var Commands = []command.Command{
 	query.Query,
 	query.Compile,
 	query.Validate,
+	query.Export,
 	catalog.Ingest,
 	catalog.Search,
 	show.Show,

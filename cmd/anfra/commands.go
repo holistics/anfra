@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -14,6 +17,8 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
+	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
@@ -93,7 +98,11 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			usage += " (one of: " + strings.Join(a.Enum, ", ") + ")"
 		}
 		if a.Type == command.ArgObject {
-			usage += " (a JSON object)"
+			usage += " (a JSON object"
+			if len(a.Fields) > 0 {
+				usage += ", or set its fields with --" + a.Flag() + ".<field>"
+			}
+			usage += ")"
 		}
 		// pflag has no native aliases, so each alias is a flag of its own, setting
 		// the same arg: the op knows each arg by one name.
@@ -103,9 +112,31 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			addFlag(cmd, a, al, "", "alias of --"+a.Flag())
 			flagArg[al] = a.Name
 		}
+		// An object's fields, each a flag of its own, named by its path:
+		// --format-options.header sets format_options.header.
+		for _, fa := range a.Fields {
+			usage := fa.Usage
+			if len(fa.Enum) > 0 {
+				usage += " (one of: " + strings.Join(fa.Enum, ", ") + ")"
+			}
+			name := a.Flag() + "." + fa.Flag()
+			addFlag(cmd, fa, name, "", usage)
+			flagArg[name] = a.Name + "." + fa.Name
+		}
+	}
+
+	// An export's answer is a link; the CLI downloads it, unless asked for the link.
+	if presentationOf(c) == presentDownload {
+		cmd.Flags().StringP("output", "o", "", "write the file here instead of to stdout")
+		cmd.Flags().Bool("link", false, "print the export's link instead of downloading its file")
 	}
 
 	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
+		var d delivery
+		if presentationOf(c) == presentDownload {
+			d.output, _ = runCmd.Flags().GetString("output")
+			d.link, _ = runCmd.Flags().GetBool("link")
+		}
 		values, err := flagValues(runCmd.Flags(), args, flagArg)
 		if err != nil {
 			return err
@@ -120,7 +151,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 		if err := applyStdin(args, values); err != nil {
 			return err
 		}
-		if err := runCommand(runCmd.Context(), c, values); err != nil {
+		if err := runCommand(runCmd.Context(), c, values, d); err != nil {
 			return &commandError{path: runCmd.CommandPath(), args: args, err: err}
 		}
 		return nil
@@ -131,37 +162,65 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 // flagValues are the args the user set by flag, as the op's input has them:
 // only those set, so an unset one is absent, and the op applies its default and
 // sees which of a group are set. An object arg's flag is JSON, refused when it is
-// not an object.
+// not an object; or its fields are set by their own flags, and make the object,
+// but not both.
 func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string) (map[string]any, error) {
 	values := map[string]any{}
+	objects := map[string]map[string]any{} // an object arg set by its fields' flags
 	var err error
 	fs.Visit(func(f *pflag.Flag) {
 		key, ok := flagArg[f.Name]
 		if !ok || err != nil {
 			return
 		}
-		if v, ok := f.Value.(pflag.SliceValue); ok {
-			values[key] = v.GetSlice()
+		if arg, field, ok := strings.Cut(key, "."); ok {
+			if objects[arg] == nil {
+				objects[arg] = map[string]any{}
+			}
+			objects[arg][field] = flagValue(f, fieldType(args, arg, field))
 			return
 		}
-		switch argType(args, key) {
-		case command.ArgBool:
-			values[key] = f.Value.String() == "true"
-		case command.ArgInt:
-			values[key] = json.Number(f.Value.String())
-		case command.ArgObject:
-			raw := json.RawMessage(strings.TrimSpace(f.Value.String()))
-			var obj map[string]any
-			if json.Unmarshal(raw, &obj) != nil || obj == nil {
-				err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
-				return
-			}
-			values[key] = raw
-		default:
-			values[key] = f.Value.String()
+		if argType(args, key) != command.ArgObject {
+			values[key] = flagValue(f, argType(args, key))
+			return
 		}
+		raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
+		var obj map[string]any
+		if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
+			err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
+			return
+		}
+		values[key] = raw
 	})
-	return values, err
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range args {
+		obj, ok := objects[a.Name]
+		if !ok {
+			continue
+		}
+		if _, set := values[a.Name]; set {
+			return nil, fmt.Errorf("--%s takes a JSON object or its --%s.<field> flags, not both", a.Flag(), a.Flag())
+		}
+		values[a.Name] = obj
+	}
+	return values, nil
+}
+
+// flagValue is a flag's value as its arg's type has it in the op's input: a
+// slice, a bool, a number, or the string.
+func flagValue(f *pflag.Flag, t command.ArgType) any {
+	if v, ok := f.Value.(pflag.SliceValue); ok {
+		return v.GetSlice()
+	}
+	switch t {
+	case command.ArgBool:
+		return f.Value.String() == "true"
+	case command.ArgInt:
+		return jsontext.Value(f.Value.String())
+	}
+	return f.Value.String()
 }
 
 func addFlag(cmd *cobra.Command, a command.Arg, name, short, usage string) {
@@ -182,6 +241,16 @@ func argType(args []command.Arg, name string) command.ArgType {
 	for _, a := range args {
 		if a.Name == name {
 			return a.Type
+		}
+	}
+	return ""
+}
+
+// fieldType is the type of the field named field of the object arg named arg.
+func fieldType(args []command.Arg, arg, field string) command.ArgType {
+	for _, a := range args {
+		if a.Name == arg {
+			return argType(a.Fields, field)
 		}
 	}
 	return ""
@@ -230,7 +299,7 @@ func applyStdin(args []command.Arg, values map[string]any) error {
 //
 // The command is the root of its trace: the op's span is under it, here or on
 // the server, which continues the trace it is sent.
-func runCommand(ctx context.Context, c command.Command, args map[string]any) error {
+func runCommand(ctx context.Context, c command.Command, args map[string]any, d delivery) error {
 	ctx, span := tracer.Start(ctx, "anfra "+c.Name())
 	defer span.End()
 
@@ -238,7 +307,7 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any) err
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
 	}
-	input, err := json.Marshal(args)
+	input, err := jsonkit.Marshal(args)
 	if err != nil {
 		return fmt.Errorf("encode args: %w", err)
 	}
@@ -247,7 +316,7 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any) err
 		if err != nil {
 			return err
 		}
-		return present(c, body)
+		return deliver(ctx, c, body, d)
 	}
 
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
@@ -261,23 +330,132 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any) err
 		if err != nil {
 			return err
 		}
-		body, err := json.Marshal(out)
+		body, err := jsonkit.Marshal(out)
 		if err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
-		return present(c, body)
+		return deliver(ctx, c, body, d)
 	})
 }
 
-// present shows an answer — its JSON, as YAML; search's as a compact list — and
-// turns an invalid verdict into a silent exit code 1: the answer says why.
+// delivery is how the CLI delivers an export: its file to stdout, or to output,
+// or its link alone.
+type delivery struct {
+	output string
+	link   bool
+}
+
+// presentation is how the CLI shows a command's answer.
+type presentation int
+
+const (
+	presentYAML       presentation = iota // its JSON, as YAML
+	presentSearchList                     // search's results, one per line
+	presentDownload                       // an export: its file (--output), or its link (--link)
+)
+
+// presentationOf is how the CLI shows c's answer, by what the answer is: the
+// one place that decides it, for the flags it takes and for how it is shown.
+func presentationOf(c command.Command) presentation {
+	switch c.Output() {
+	case reflect.TypeFor[command.ExportLink]():
+		return presentDownload
+	case reflect.TypeFor[anfranode.CatalogSearchResult]():
+		return presentSearchList
+	}
+	return presentYAML
+}
+
+// deliver shows an answer as presentationOf says: an export's file downloaded,
+// or its link shown when asked for (--link), and any other answer shown.
+func deliver(ctx context.Context, c command.Command, body []byte, d delivery) error {
+	if presentationOf(c) != presentDownload || d.link {
+		return present(c, body)
+	}
+	var link command.ExportLink
+	if err := jsonkit.Unmarshal(body, &link); err != nil {
+		return fmt.Errorf("decode the export's link: %w", err)
+	}
+	return download(ctx, link.URL, d.output)
+}
+
+// download copies the file at link (file:// from the CLI's own exports,
+// http(s):// from a server's) to output, or to stdout. A partly written output
+// is removed; the CLI's own file, once written out, is too: it was made for
+// this.
+func download(ctx context.Context, link, output string) error {
+	src, err := openLink(ctx, link)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	if err := copyTo(output, src); err != nil {
+		return err
+	}
+	if f, ok := src.(*os.File); ok {
+		_ = os.Remove(f.Name())
+	}
+	return nil
+}
+
+func copyTo(output string, src io.Reader) error {
+	if output == "" {
+		_, err := io.Copy(os.Stdout, src)
+		return err
+	}
+	dst, err := os.Create(output)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		_ = os.Remove(output)
+		return fmt.Errorf("download the export: %w", err)
+	}
+	return dst.Close()
+}
+
+func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, fmt.Errorf("read the export's link %q: %w", link, err)
+	}
+	switch u.Scheme {
+	case "file":
+		return os.Open(u.Path)
+	case "http", "https":
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("download the export: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			defer resp.Body.Close()
+			// anfra serve's error, shown as any of its errors is (an expired link,
+			// say); a server of another kind's status.
+			var env apperr.Envelope
+			if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err == nil && jsonkit.Unmarshal(body, &env) == nil && env.Error.Code != "" {
+				return nil, &remoteError{resp: env.Error}
+			}
+			return nil, fmt.Errorf("download the export: %s", resp.Status)
+		}
+		return resp.Body, nil
+	}
+	return nil, fmt.Errorf("the export's link %q is not one the CLI can download", link)
+}
+
+// present shows an answer as presentationOf says, and turns an invalid verdict
+// into a silent exit code 1: the answer says why.
 func present(c command.Command, body []byte) error {
 	return presentTo(c, body, os.Stdout)
 }
 
 func presentTo(c command.Command, body []byte, out io.Writer) error {
 	var err error
-	if c.Name() == "search" {
+	if presentationOf(c) == presentSearchList {
 		err = renderSearchResults(body, out)
 	} else {
 		err = renderTo(body, "application/json", out)
@@ -336,7 +514,7 @@ func renderTo(body []byte, contentType string, out io.Writer) error {
 		return err
 	}
 	var v any
-	if err := json.Unmarshal(body, &v); err != nil {
+	if err := jsonkit.Unmarshal(body, &v); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	b, err := yaml.Marshal(v)
@@ -355,7 +533,7 @@ func renderSearchResults(body []byte, out io.Writer) error {
 			Type        string  `json:"type"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(body, &data); err != nil {
+	if err := jsonkit.Unmarshal(body, &data); err != nil {
 		return fmt.Errorf("decode search results: %w", err)
 	}
 	for _, result := range data.Results {

@@ -2,7 +2,6 @@ package apikit
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Args is an op's input as the client sent it: a JSON object, by field name,
@@ -125,7 +125,7 @@ func argsOf(raw []byte) (Args, error) {
 		return Args{}, nil
 	}
 	var parsed any
-	if err := json.Unmarshal(raw, &parsed); err != nil {
+	if err := jsonkit.Unmarshal(raw, &parsed); err != nil {
 		return nil, apperr.Encapsulate(err, apperr.InvalidRequest, "The body is not valid JSON.")
 	}
 	args, _ := parsed.(map[string]any)

@@ -1,11 +1,12 @@
 package httpkit
 
 import (
-	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 
 	"github.com/holistics/anfra/shared/requestid"
 )
@@ -32,5 +33,6 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store") // API responses are per caller, never cached
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = jsonkit.MarshalWrite(w, v)
+	_, _ = io.WriteString(w, "\n")
 }

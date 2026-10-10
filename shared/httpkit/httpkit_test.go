@@ -2,13 +2,13 @@ package httpkit_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -48,7 +48,7 @@ func serve(t *testing.T, h http.HandlerFunc) (*httptest.ResponseRecorder, map[st
 	httpkit.Wrap(h, httpkit.Config{Logger: slog.New(slog.NewJSONHandler(&logs, nil)), Codes: testCodes}).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/rpc/things.get", nil))
 	var line map[string]any
-	if err := json.Unmarshal(logs.Bytes(), &line); err != nil {
+	if err := jsonkit.Unmarshal(logs.Bytes(), &line); err != nil {
 		t.Fatalf("log line: %v: %s", err, logs.String())
 	}
 	return rec, line
@@ -56,8 +56,8 @@ func serve(t *testing.T, h http.HandlerFunc) (*httptest.ResponseRecorder, map[st
 
 func errorBody(t *testing.T, rec *httptest.ResponseRecorder) apperr.Response {
 	t.Helper()
-	var env struct{ Error apperr.Response }
-	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+	var env apperr.Envelope
+	if err := jsonkit.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("body: %v: %s", err, rec.Body.String())
 	}
 	return env.Error

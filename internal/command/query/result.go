@@ -1,6 +1,9 @@
 package query
 
-import "github.com/holistics/anfra/internal/sidecar/anfranode"
+import (
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
+)
 
 // QueryResult is the `query` result: the SQL that ran, the AQL it was compiled
 // from, what each column is, and the rows.
@@ -12,8 +15,8 @@ type QueryResult struct {
 }
 
 type QueryRows struct {
-	Fields  []string `json:"fields"`
-	Records [][]any  `json:"records"`
+	Fields  []string         `json:"fields"`
+	Records []canalquery.Row `json:"records"`
 }
 
 // CompiledQuery is the `query compile` result: the SQL the query compiles to.

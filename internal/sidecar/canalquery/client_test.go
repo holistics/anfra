@@ -6,10 +6,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // canal-query's error object is read into a typed error, whatever it says.
@@ -20,6 +22,52 @@ func TestCanalError(t *testing.T) {
 	}
 	if e := canalError(map[string]any{"code": 7}); e.Message == "" {
 		t.Error("an error object with no message reads as an empty message")
+	}
+}
+
+// streaming answers each query with lines, as canal-query streams a result.
+func streaming(t *testing.T, lines ...string) *Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Join(lines, "\n") + "\n"))
+	}))
+	t.Cleanup(srv.Close)
+	return NewClient(srv.URL, false)
+}
+
+// Rows reach the answer as canal wrote them: an integer past 2^53 keeps every
+// digit, where a float64 would round it; a cell's object is untouched; invalid
+// UTF-8 becomes U+FFFD, as anywhere else.
+func TestRowsAreKeptAsCanalWroteThem(t *testing.T) {
+	canal := streaming(t,
+		`[9007199254740993,"12345.67",{"b":1,"a":2},null]`,
+		"[1,\"bad \xff byte\",{},true]",
+		`{"__holistics_trailer__":true,"metadata":{"fields":["id","amount","attrs","flag"],"record_count":2},"http_code":200}`,
+	)
+	res, err := canal.Execute(context.Background(), "postgres", nil, "select 1", -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(res.Fields, ",") != "id,amount,attrs,flag" {
+		t.Errorf("fields = %v", res.Fields)
+	}
+	b, err := jsonkit.Marshal(res.Rows)
+	want := `[[9007199254740993,"12345.67",{"b":1,"a":2},null],[1,"bad ` + "\ufffd" + ` byte",{},true]]`
+	if err != nil || string(b) != want {
+		t.Errorf("rows = %s %v, want %s", b, err, want)
+	}
+	var back []Row
+	if err := jsonkit.Unmarshal(b, &back); err != nil || len(back) != 2 {
+		t.Errorf("rows do not read back: %v %v", back, err)
+	}
+}
+
+// A row that is not a JSON array is canal's fault, refused rather than passed on.
+func TestMalformedRowIsRefused(t *testing.T) {
+	for _, line := range []string{`[1,2`, `"x"`, `7`} {
+		if _, err := streaming(t, line).Execute(context.Background(), "postgres", nil, "select 1", -1); err == nil {
+			t.Errorf("row %s was accepted", line)
+		}
 	}
 }
 

@@ -2,12 +2,12 @@ package apikit
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 
 	"github.com/holistics/anfra/shared/httpkit"
 )
@@ -47,23 +47,25 @@ type GroupListing struct {
 
 // OpEntry is an op in its group's listing.
 type OpEntry struct {
-	Name       string `json:"name"`
-	Summary    string `json:"summary"`
-	ReadOnly   bool   `json:"read_only"`
-	Idempotent bool   `json:"idempotent"`
+	Name        string `json:"name"`
+	Summary     string `json:"summary"`
+	ReadOnly    bool   `json:"read_only"`
+	Idempotent  bool   `json:"idempotent"`
+	Destructive bool   `json:"destructive"`
 }
 
 // Usage is all an agent needs to call an op: what it is for, what it takes,
 // what it answers, and how it can fail.
 type Usage struct {
-	Name       string         `json:"name"`
-	Summary    string         `json:"summary"`
-	Doc        string         `json:"doc,omitempty"`
-	ReadOnly   bool           `json:"read_only"`
-	Idempotent bool           `json:"idempotent"`
-	Input      map[string]any `json:"input"`
-	Output     map[string]any `json:"output"`
-	Errors     []ErrorEntry   `json:"errors"`
+	Name        string         `json:"name"`
+	Summary     string         `json:"summary"`
+	Doc         string         `json:"doc,omitempty"`
+	ReadOnly    bool           `json:"read_only"`
+	Idempotent  bool           `json:"idempotent"`
+	Destructive bool           `json:"destructive"`
+	Input       map[string]any `json:"input"`
+	Output      map[string]any `json:"output"`
+	Errors      []ErrorEntry   `json:"errors"`
 }
 
 // ErrorEntry is a code an op can fail with.
@@ -99,7 +101,7 @@ func (d Discovery[R]) Group(ctx context.Context, reg *Registry[R], r R, include 
 	g := GroupListing{Name: group, Summary: reg.groups[group], Ops: []OpEntry{}}
 	for _, o := range ops {
 		if m := o.Meta(); GroupOf(m.Name) == group {
-			g.Ops = append(g.Ops, OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent})
+			g.Ops = append(g.Ops, OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive})
 		}
 	}
 	if len(g.Ops) == 0 {
@@ -129,7 +131,7 @@ func (d Discovery[R]) Usage(ctx context.Context, rt *Runtime, reg *Registry[R], 
 	if err != nil {
 		return Usage{}, err
 	}
-	u := Usage{Name: m.Name, Summary: m.Summary, Doc: m.Doc, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent,
+	u := Usage{Name: m.Name, Summary: m.Summary, Doc: m.Doc, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive,
 		Input: in, Output: out, Errors: []ErrorEntry{}}
 	for _, c := range d.codes(m) {
 		u.Errors = append(u.Errors, ErrorEntry{Code: c.String(), Scope: string(c.Scope()), Message: c.Message()})
@@ -187,12 +189,12 @@ func (d Discovery[R]) visible(ctx context.Context, reg *Registry[R], r R, includ
 // tool's input, an op's usage. A schema that refers to itself cannot be
 // inlined, and is an error.
 func (rt *Runtime) Inline(s *huma.Schema) (map[string]any, error) {
-	raw, err := json.Marshal(s)
+	raw, err := jsonkit.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
 	var root any
-	if err := json.Unmarshal(raw, &root); err != nil {
+	if err := jsonkit.Unmarshal(raw, &root); err != nil {
 		return nil, err
 	}
 	out, err := rt.inline(root, map[string]bool{})
@@ -214,12 +216,12 @@ func (rt *Runtime) inline(v any, seen map[string]bool) (any, error) {
 			if target == nil {
 				return nil, fmt.Errorf("schema %s is not in the registry", ref)
 			}
-			raw, err := json.Marshal(target)
+			raw, err := jsonkit.Marshal(target)
 			if err != nil {
 				return nil, err
 			}
 			var resolved any
-			if err := json.Unmarshal(raw, &resolved); err != nil {
+			if err := jsonkit.Unmarshal(raw, &resolved); err != nil {
 				return nil, err
 			}
 			seen[ref] = true

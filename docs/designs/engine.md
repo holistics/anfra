@@ -6,7 +6,7 @@ This doc is the contract between anfra core and its platforms: what the engine p
 
 ## The surface
 
-The public packages are `engine` and `shared/*` (`apperr`, `appstep`, `apptracing`, `apikit`, `httpkit`, `requestid`): the error and API frameworks the engine's operations are built on, which a platform builds its own on too. Everything under `internal/` is not part of the contract and may change in any release.
+The public packages are `engine` and `shared/*` (`apperr`, `appstep`, `apptracing`, `apikit`, `httpkit`, `jsonkit`, `requestid`): the error, API and JSON frameworks the engine's operations are built on, which a platform builds its own on too. Everything under `internal/` is not part of the contract and may change in any release.
 
 `engine` is small on purpose (its package comment, `engine/engine.go`, says why). Everything the engine can do is reachable through one call, and the rest of the package exists to build that call:
 

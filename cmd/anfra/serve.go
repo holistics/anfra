@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -21,6 +21,7 @@ import (
 	"github.com/holistics/anfra/internal/appserve"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
@@ -29,6 +30,7 @@ import (
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -46,6 +48,9 @@ type serveOptions struct {
 	noApps  bool
 	noWatch bool
 	idle    time.Duration
+	// siteURL is ANFRA_SITE_URL: where callers reach the server, when not at
+	// the URL their requests name (behind a proxy). "" when unset.
+	siteURL string
 }
 
 func newServeCmd() *cobra.Command {
@@ -80,6 +85,11 @@ func newServeCmd() *cobra.Command {
 }
 
 func runServe(ctx context.Context, opts serveOptions) error {
+	site, err := siteURL()
+	if err != nil {
+		return err
+	}
+	opts.siteURL = site
 	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
 		if f, ok := findServer(ctx, h.repo); ok {
 			return fmt.Errorf("anfra serve is already running for this repo, at %s", f.URL)
@@ -113,9 +123,11 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		info := command.ServerInfo{URL: "http://" + ln.Addr().String(), InstanceID: newInstanceID(), Version: meta.Version}
 		cc := h.commandContext(command.Clients{Node: node.Client(), CanalQuery: canal.Client()})
 		cc.Server = &info
+		defer h.exportFiles.Close() // the server's exports go with it
 
 		ctx, stop := context.WithCancel(ctx)
 		defer stop()
+		go h.exportFiles.SweepEvery(ctx, exportLinkLife/6) // a server outlives many links
 		var apps *appserve.Server
 		if !opts.noApps {
 			apps = appserve.New(appserve.Options{
@@ -127,7 +139,10 @@ func runServe(ctx context.Context, opts serveOptions) error {
 				fmt.Fprintln(os.Stderr, "warning: this anfra was built without its Data App pages; /apps/ says how to build them")
 			}
 		}
-		handler := serveHandler(h.cfg.Logger, h.repo, cc, ln.Addr(), !opts.noMCP, apps)
+		handler := serveHandler(serveConfig{
+			logger: h.cfg.Logger, repo: h.repo, context: cc, addr: ln.Addr(),
+			exportFiles: h.exportFiles, siteURL: opts.siteURL, serveMCP: !opts.noMCP, apps: apps,
+		})
 		if opts.idle > 0 {
 			handler = stopWhenIdle(ctx, handler, opts.idle, stop)
 		}
@@ -173,6 +188,67 @@ func runServe(ctx context.Context, opts serveOptions) error {
 	})
 }
 
+// baseURLOf is the server's root as r's caller reached it: site
+// (ANFRA_SITE_URL) when set, behind a proxy; otherwise r's scheme and Host.
+// Not the API's base (/api): links the server hands back start with it, and
+// only to r's caller, so a Host it made up misleads only itself.
+func baseURLOf(r *http.Request, site string) string {
+	if site != "" {
+		return site
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+// exportsDownloadPath is where the server serves exports' files: a link per
+// export below it, its token then its name (serveExport).
+const exportsDownloadPath = "/exports/download"
+
+// serveExport serves an export's link: its file, as a download saved under its
+// name (whatever name the link ends with), resumable. A link unknown here and one that has expired are the same
+// not_found, since a token is all it takes to have the file.
+func serveExport(exportFiles *exports.Files) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		f, ok := exportFiles.Open(r.PathValue("token"))
+		if !ok {
+			httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "No such export, or its link has expired."))
+			return
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			httpkit.WriteError(w, r, fmt.Errorf("read the export's file: %w", err))
+			return
+		}
+		w.Header().Set("Content-Type", f.ContentType)
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.Name}))
+		w.Header().Set("Cache-Control", "no-store") // per caller, as every answer of this server
+		http.ServeContent(w, r, "", info.ModTime(), f)
+	}
+}
+
+// siteURL is ANFRA_SITE_URL: the URL callers reach the server at when it
+// is not the one their requests name, as behind a proxy, for the links it
+// makes. "" when unset.
+func siteURL() (string, error) {
+	raw := strings.TrimSpace(os.Getenv("ANFRA_SITE_URL"))
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("ANFRA_SITE_URL %q is not a URL such as https://anfra.example.com", raw)
+	}
+	return strings.TrimSuffix(u.String(), "/"), nil
+}
+
+// exportLinkLife is how long an export's link works: long enough to download
+// it, or retry, short enough that a link passed on soon stops working.
+const exportLinkLife = time.Hour
+
 // listen opens the server's listener: addr when given — refusing a taken one,
 // and naming the repo whose server holds it — and otherwise defaultAddr, or a
 // free loopback port when that one is taken.
@@ -205,50 +281,89 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// serveConfig is what serveHandler serves, and how.
+type serveConfig struct {
+	logger *slog.Logger
+	repo   repo.Repo
+	// context is the CommandContext every request runs with, except that each
+	// request's exports are linked where its caller reached the server.
+	context command.CommandContext
+	// addr is the address the server listens on.
+	addr net.Addr
+	// exportFiles holds the files of the exports the server makes. When nil,
+	// the server makes no exports and serves no downloads.
+	exportFiles *exports.Files
+	// siteURL is where callers reach the server (ANFRA_SITE_URL). When empty,
+	// each request's own base URL is used instead (baseURLOf).
+	siteURL string
+	// serveMCP, when true, also serves every op as an MCP tool, at /mcp.
+	serveMCP bool
+	// apps serves the repo's Data Apps. When nil, the server serves none.
+	apps *appserve.Server
+}
+
 // serveHandler is the whole HTTP surface: /health, the core API under /api with
-// its OpenAPI and discovery, with withMCP the same ops as MCP tools at /mcp, and
-// with apps the repo's Data Apps (/, /apps/, /appserve/) — behind the request id,
-// root span, log line and recovery, and the guards that keep a web page from
-// using it (guard).
-func serveHandler(logger *slog.Logger, r repo.Repo, cc command.CommandContext, addr net.Addr, withMCP bool, apps *appserve.Server) http.Handler {
+// its OpenAPI and discovery, exports' downloads, MCP and the repo's Data Apps
+// (/, /apps/, /appserve/) as c says — behind the request id, root span, log line
+// and recovery, and the guards that keep a web page from using it (guard).
+func serveHandler(c serveConfig) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		id := ""
-		if cc.Server != nil {
-			id = cc.Server.InstanceID
+		if c.context.Server != nil {
+			id = c.context.Server.InstanceID
 		}
-		httpkit.WriteJSON(w, http.StatusOK, health{Status: "ok", RepoID: r.ID, InstanceID: id, Version: meta.Version})
+		httpkit.WriteJSON(w, http.StatusOK, health{Status: "ok", RepoID: c.repo.ID, InstanceID: id, Version: meta.Version})
 	})
 	rt, reg := app.NewRuntime(), app.NewRegistry()
-	mux.Handle("/api/", coreAPI(cc).Handler(rt, reg))
-	if withMCP {
+	// The CommandContext a request runs with: the server's, its exports linked
+	// where the request's caller reaches the server.
+	contextFor := func(r *http.Request) command.CommandContext {
+		cc := c.context
+		if c.exportFiles != nil {
+			cc.Exports = exports.Store{Files: c.exportFiles, ServedAt: baseURLOf(r, c.siteURL) + exportsDownloadPath}
+		}
+		return cc
+	}
+	mux.Handle("/api/", coreAPI(contextFor).Handler(rt, reg))
+	// An export's link: a plain GET, outside the API, since a browser downloads a
+	// file only by following one.
+	if c.exportFiles != nil {
+		// The name after the token decides nothing: a link works with any, or none.
+		mux.HandleFunc("GET "+exportsDownloadPath+"/{token}", serveExport(c.exportFiles))
+		mux.HandleFunc("GET "+exportsDownloadPath+"/{token}/{name}", serveExport(c.exportFiles))
+	}
+	if c.serveMCP {
 		mux.Handle("/mcp", apikit.MCP[command.CommandContext]{
 			Name: "anfra", Version: meta.Version, Codes: codes,
-			Request: func(*http.Request) (command.CommandContext, error) { return cc, nil },
+			Request: func(r *http.Request) (command.CommandContext, error) { return contextFor(r), nil },
 		}.Handler(rt, reg))
 	}
-	if apps != nil {
-		mux.Handle("/{$}", apps)
-		mux.Handle("/apps", apps)
-		mux.Handle("/apps/", apps)
-		mux.Handle("/appserve/", apps)
+	if c.apps != nil {
+		mux.Handle("/{$}", c.apps)
+		mux.Handle("/apps", c.apps)
+		mux.Handle("/apps/", c.apps)
+		mux.Handle("/appserve/", c.apps)
 	}
 	// On loopback, a caller is this machine's user, whose CLI sends its trace along:
 	// continue it. Exposed, a caller's trace is only linked.
-	host, _, _ := net.SplitHostPort(addr.String())
-	return httpkit.Wrap(guard(mux, addr), httpkit.Config{Logger: logger, Codes: codes, TrustTraceparent: isLoopback(host)})
+	host, _, _ := net.SplitHostPort(c.addr.String())
+	return httpkit.Wrap(guard(mux, c.addr), httpkit.Config{Logger: c.logger, Codes: codes, TrustTraceparent: isLoopback(host)})
 }
 
-// coreAPI is the core API over HTTP, every op run with cc: the host's one
-// CommandContext — this repo, the warm sidecars, no data restrictions.
-func coreAPI(cc command.CommandContext) apikit.HTTP[command.CommandContext] {
+// coreAPI is the core API over HTTP, every op run with the server's one
+// CommandContext (this repo, the warm sidecars, no data restrictions), as
+// contextFor gives it for the request.
+func coreAPI(contextFor func(*http.Request) command.CommandContext) apikit.HTTP[command.CommandContext] {
 	return apikit.HTTP[command.CommandContext]{
 		Codes: codes,
 		Title: "anfra",
 		// The contract's version, not the binary's: the committed document must
 		// not change with every release.
 		Version: "0",
-		Request: func(http.ResponseWriter, *http.Request) (command.CommandContext, error) { return cc, nil },
+		Request: func(_ http.ResponseWriter, r *http.Request) (command.CommandContext, error) {
+			return contextFor(r), nil
+		},
 	}
 }
 
@@ -266,6 +381,8 @@ var codes = httpkit.Codes{
 		errcode.UnknownCommand:         http.StatusNotFound,
 		errcode.DataPermsMissing:       http.StatusInternalServerError,
 		errcode.DataPermsUnenforceable: http.StatusInternalServerError,
+		// Unreachable here too: this server stores exports.
+		errcode.ExportsUnavailable: http.StatusNotImplemented,
 	},
 }
 
@@ -352,7 +469,8 @@ func newOpenAPICmd() *cobra.Command {
 			"give an agent the API.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			spec, err := coreAPI(command.CommandContext{}).Spec(app.NewRuntime(), app.NewRegistry())
+			none := func(*http.Request) command.CommandContext { return command.CommandContext{} }
+			spec, err := coreAPI(none).Spec(app.NewRuntime(), app.NewRegistry())
 			if err != nil {
 				return err
 			}
@@ -389,7 +507,7 @@ func callServe(ctx context.Context, url, name string, input []byte) ([]byte, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		var env apperr.Envelope
-		if json.Unmarshal(body, &env) == nil && env.Error.Code != "" {
+		if jsonkit.Unmarshal(body, &env) == nil && env.Error.Code != "" {
 			return nil, &remoteError{resp: env.Error}
 		}
 		return nil, fmt.Errorf("anfra serve answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))

@@ -27,6 +27,9 @@ type Clients struct {
 // decision, not its inputs.
 type CommandContext struct {
 	Clients Clients
+	// Exports is where an export's file goes, and how it is reached (see
+	// ExportStore). Nil: this server stores no exports, and an export refuses.
+	Exports ExportStore
 	Repo    repo.Repo
 	// DataPerms are the restrictions to compile into queries. Required for
 	// EVERY invocation, not only the ones that read data — see app.Dispatch.
@@ -45,6 +48,9 @@ type CommandContext struct {
 
 // ServerInfo is a running `anfra serve`, as status reports it.
 type ServerInfo struct {
+	// URL is where the server listens, for a CLI on this machine to reach it:
+	// http://0.0.0.0:7878 in a container. Not where a caller elsewhere reaches
+	// it, nor a base for links (see baseURLOf in cmd/anfra).
 	URL        string `json:"url"`
 	InstanceID string `json:"instance_id"`
 	Version    string `json:"version"`

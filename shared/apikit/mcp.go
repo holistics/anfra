@@ -2,11 +2,12 @@ package apikit
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/holistics/anfra/shared/httpkit"
@@ -81,9 +82,13 @@ func (m MCP[R]) server(ctx context.Context, rt *Runtime, reg *Registry[R], req R
 			description += "\n\n" + meta.Doc
 		}
 		readOnly, idempotent := meta.ReadOnly, meta.Idempotent
+		var destructive *bool // meaningless, so unset, for a read-only op
+		if !readOnly {
+			destructive = &meta.Destructive
+		}
 		s.AddTool(&mcp.Tool{
 			Name: meta.Name, Description: description, InputSchema: input,
-			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: idempotent},
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: idempotent, DestructiveHint: destructive},
 		}, func(ctx context.Context, call *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			out, err := o.Invoke(ctx, rt, req, call.Params.Arguments)
 			if err != nil {
@@ -157,7 +162,7 @@ func args(call *mcp.CallToolRequest, into any) error {
 	if len(call.Params.Arguments) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(call.Params.Arguments, into); err != nil {
+	if err := jsonkit.Unmarshal(call.Params.Arguments, into); err != nil {
 		return apperr.Encapsulate(err, apperr.InvalidRequest, "The arguments are not valid.")
 	}
 	return nil
@@ -170,13 +175,13 @@ func (m MCP[R]) failed(ctx context.Context, err error) (*mcp.CallToolResult, err
 // result is v as a tool's result: its JSON as text, for any client, and as
 // structured content, for one that reads it.
 func (m MCP[R]) result(v any, isError bool) (*mcp.CallToolResult, error) {
-	b, err := json.Marshal(v)
+	b, err := jsonkit.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
 	return &mcp.CallToolResult{
 		Content:           []mcp.Content{&mcp.TextContent{Text: string(b)}},
-		StructuredContent: json.RawMessage(b),
+		StructuredContent: jsontext.Value(b),
 		IsError:           isError,
 	}, nil
 }
