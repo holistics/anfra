@@ -10,15 +10,34 @@ export const OVERLAY_ID = 'anfra-overlay';
 export const FLASH_MS = 1500;
 
 const BOX_STYLE = 'position:fixed;box-sizing:border-box;background:rgba(37,99,235,0.22);outline:1px solid #2563eb;outline-offset:-1px;';
-const LABEL_STYLE = 'position:fixed;max-width:60vw;padding:3px 8px;border-radius:4px;background:#0f172a;color:#f8fafc;'
-  + 'font:12px/1.4 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 8px rgba(0,0,0,0.35);';
+const LABEL_STYLE = 'position:fixed;max-width:60vw;display:flex;gap:6px;align-items:baseline;padding:3px 8px;border-radius:4px;'
+  + 'background:#0f172a;color:#f8fafc;font:12px/1.4 system-ui,sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.35);';
+const PART_STYLE: Record<keyof OverlayLabel, string> = {
+  kind: 'color:#94a3b8;',
+  name: 'color:#93c5fd;font-weight:700;',
+  label: 'color:#f8fafc;',
+  note: 'color:#94a3b8;',
+  size: 'color:#94a3b8;margin-left:10px;',
+};
+
+/**
+ * What the label says, in parts the overlay sets apart: the kind, the id or name, the author's
+ * label, a note such as "1 of 3", and the element's size.
+ */
+export interface OverlayLabel {
+  kind: string;
+  name: string;
+  label?: string;
+  note?: string;
+  size?: string;
+}
 
 export class Overlay {
   private readonly root: HTMLElement;
 
   private shown: Element[] = [];
 
-  private text = '';
+  private text: OverlayLabel = { kind: '', name: '' };
 
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -38,7 +57,7 @@ export class Overlay {
   }
 
   /** Show the overlay on these elements, labelled, until `hide()` or the next `show()`. */
-  show (elements: readonly Element[], text: string): void {
+  show (elements: readonly Element[], text: OverlayLabel): void {
     this.clearTimer();
     this.shown = [...elements];
     this.text = text;
@@ -50,7 +69,7 @@ export class Overlay {
   }
 
   /** Show for a moment, then hide. */
-  flash (elements: readonly Element[], text: string, ms = FLASH_MS): void {
+  flash (elements: readonly Element[], text: OverlayLabel, ms = FLASH_MS): void {
     this.show(elements, text);
     this.timer = setTimeout(() => this.hide(), ms);
   }
@@ -88,7 +107,15 @@ export class Overlay {
     const top = first.top >= 26 ? first.top - 24 : Math.max(4, first.top + 4);
     const left = Math.max(4, Math.min(first.left, (this.doc.defaultView?.innerWidth ?? 0) - 24));
     label.setAttribute('style', `${LABEL_STYLE}left:${left}px;top:${Math.min(top, viewportHeight - 24)}px;`);
-    label.textContent = this.text;
+    for (const part of ['kind', 'name', 'label', 'note', 'size'] as const) {
+      const value = this.text[part];
+      if (!value) continue;
+      const span = this.doc.createElement('span');
+      span.setAttribute('style', PART_STYLE[part]);
+      span.setAttribute('data-part', part);
+      span.textContent = value;
+      label.appendChild(span);
+    }
     this.root.replaceChildren(...boxes, label);
   }
 }

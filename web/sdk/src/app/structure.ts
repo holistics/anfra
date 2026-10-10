@@ -5,6 +5,7 @@
  * in the markup is reported on the node it concerns.
  */
 import type { App } from './app';
+import type { OverlayLabel } from './overlay';
 import type {
   EntityUsage, InspectedStructure, LocateKind, StructureNode,
 } from '../common/types';
@@ -145,14 +146,25 @@ export function buildStructure (doc: Document, apps: readonly App[]): BuiltStruc
 /** The usage key the snapshot uses for one entity. */
 export const usageKey = (kind: LocateKind, app: number, name: string): string => `${kind}:${app}/${name}`;
 
-/** What the overlay's label says for a node. */
-export function describeNode (node: StructureNode, element: Element, structure: InspectedStructure): string {
+/** The element's size as the overlay shows it. */
+export function sizeOf (element: Element): string {
   const rect = element.getBoundingClientRect();
-  const size = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+  return `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+}
+
+/** What the overlay's label says for a node. */
+export function describeNode (node: StructureNode, element: Element, structure: InspectedStructure): OverlayLabel {
+  const size = sizeOf(element);
   if (node.kind === 'container' || node.kind === 'block') {
-    return `${node.kind} ${node.id}${node.label ? ` · ${node.label}` : ''} · ${size}`;
+    return {
+      kind: node.kind, name: node.id ?? '', ...(node.label ? { label: node.label } : {}), size,
+    };
   }
   const use = structure.usage[usageKey(node.kind, node.app ?? 0, node.name ?? '')];
-  const which = use && use.markers > 1 ? ` · 1 of ${use.markers}` : '';
-  return `${node.kind} ${node.name}${which} · ${size}`;
+  return {
+    kind: node.kind,
+    name: node.name ?? '',
+    ...(use && use.markers > 1 ? { note: `1 of ${use.markers}` } : {}),
+    size,
+  };
 }
