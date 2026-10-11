@@ -6,20 +6,15 @@
 </p>
 
 <p align="center"><b>Open-source framework for building trusted custom BI apps</b></p>
-<!-- alternatives:
-  The open-source framework for turning vibe-coded dashboards into custom BI applications, without sacrificing trust in your data.
-  Vibe-code custom BI applications with the freedom of code and the trust of a semantic layer.
--->
 
 <p align="center">
   <a href="https://anfra.ai">Website</a> · <a href="https://docs.anfra.ai">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
 </p>
 
 <p align="center">
-  Built by the team behind <a href="https://www.holistics.io">Holistics</a> and <a href="https://dbdiagram.io">dbdiagram.io</a>.
+  <em>Built by the team behind <a href="https://www.holistics.io">Holistics</a> and <a href="https://dbdiagram.io">dbdiagram.io</a>.</em>
 </p>
 
-<!-- TODO: replace with a GIF of the funnel demo: click a bar, the other charts filter -->
 <p align="center">
   <a href="https://demo.anfra.ai/apps/fancy-demos/funnel-analysis"><img src="docs/images/gallery/funnel-analysis.webp" alt="Funnel analysis app built with anfra" width="720"></a>
 </p>
@@ -29,7 +24,7 @@
 
 ## What is anfra?
 
-anfra is an open-source framework for building trusted custom BI apps with AI coding agents. You build the app with your own HTML, JavaScript, and charting libraries, and the anfra SDK connects it to a governed semantic foundation with consistent, reusable metrics and trusted business context.
+anfra is an **open-source framework for building trusted custom BI apps with AI coding agents**. You build the app with your own HTML, JavaScript, and charting libraries, and the anfra SDK connects it to a governed semantic foundation with consistent, reusable metrics and trusted business context.
 
 It also provides powerful analytics interactions: filtering, drill-downs, and period comparisons for your app, out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
 
