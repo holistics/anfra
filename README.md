@@ -12,10 +12,6 @@
 </p>
 
 <p align="center">
-  <em>Built by the team behind <a href="https://www.holistics.io">Holistics</a> and <a href="https://dbdiagram.io">dbdiagram.io</a>.</em>
-</p>
-
-<p align="center">
   <a href="https://demo.anfra.ai/apps/fancy-demos/funnel-analysis"><img src="docs/images/gallery/funnel-analysis.webp" alt="Funnel analysis app built with anfra" width="720"></a>
 </p>
 <p align="center">
@@ -300,6 +296,14 @@ anfra is built by the team behind Holistics, and AMQL is the semantic layer Holi
 - [CLI reference](https://docs.anfra.ai/docs/self-hosted/cli)
 - [Installation](https://docs.anfra.ai/docs/self-hosted/installation)
 - [anfra.ai](https://anfra.ai): product overview
+
+## About the team
+
+anfra is built by Holistics, the team behind the [Holistics](https://www.holistics.io) BI platform, [dbdiagram.io](https://dbdiagram.io), and the open-source [DBML](https://dbml.dbdiagram.io) language.
+
+- **Holistics** has been building BI software since 2015. Data teams in 40 countries use it, from early-stage startups to large listed companies. AMQL, the semantic layer built into anfra, is the same one Holistics runs on. The company is self-funded, with 65 people in Singapore and Vietnam.
+- **dbdiagram.io** and **dbdocs.io** are database design and documentation tools for developers and data engineers. As of February 2025, 1.4 million users had created 2.5 million DBML documents with them.
+- **DBML** is our open-source language for defining database schemas, with [3,700+ stars on GitHub](https://github.com/holistics/dbml) and community tools in C#, Go, Java, Python, Ruby and more.
 
 ## License
 
