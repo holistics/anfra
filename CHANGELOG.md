@@ -1,3 +1,20 @@
+## [0.6.0](https://github.com/holistics/anfra/compare/anfra-v0.5.0...anfra-v0.6.0) (2026-10-12)
+
+### Features
+
+* **appserve:** structure tab in the inspect panel ([e580f6e](https://github.com/holistics/anfra/commit/e580f6e83ab8912ffd19e0625ff6abc6f0fe799c))
+* **sdk:** read a Data App's structure from its markup, show and locate it ([c2fd61c](https://github.com/holistics/anfra/commit/c2fd61cb08e898e42da21a6478f5cda9c1324ca2))
+
+### Bug Fixes
+
+* **appserve:** pick mode, the toolbar and copying a handle ([8745c5f](https://github.com/holistics/anfra/commit/8745c5fd3e25211d885d375ae4896b2835c06a36))
+* **sdk,appserve:** plainer words in the structure's messages ([b056afd](https://github.com/holistics/anfra/commit/b056afde258dfe7b4a7058d4db263be249dd6acb))
+* **sdk.app:** declaring an entity or a mapping notifies subscribers ([9e8ccd0](https://github.com/holistics/anfra/commit/9e8ccd074d4245ff65c4623c41e63c7fc1eda1b0))
+* **sdk.app:** set the overlay label's parts apart ([333dbff](https://github.com/holistics/anfra/commit/333dbffc2247a75a5bb0b9a99ae8d32ed3baae4c))
+
+### Build
+
+* publish @holistics/anfra-sdk ([df8071d](https://github.com/holistics/anfra/commit/df8071de74815aeed41d32b5966fbd2b5b6b5198))
 ## [0.5.0](https://github.com/holistics/anfra/compare/anfra-v0.4.3...anfra-v0.5.0) (2026-10-08)
 
 ### ⚠ BREAKING CHANGES
