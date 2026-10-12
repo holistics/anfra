@@ -60,7 +60,7 @@ func TestQueryInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cc := command.CommandContext{Repo: repo.Resolve(fixture), DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{Repo: repo.Resolve(fixture).Repo(), AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
 	for _, tc := range []struct {
 		name  string
 		cmd   string

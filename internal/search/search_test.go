@@ -45,7 +45,7 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 	defer node.Close()
 
 	repoDir := t.TempDir()
-	r := repo.Repo{
+	r := repo.Local{
 		Dir:       repoDir,
 		DataDir:   filepath.Join(t.TempDir(), "repos", "repo-123"),
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
@@ -79,7 +79,7 @@ func TestRunRequiresQuery(t *testing.T) {
 	_, err := Run(context.Background(),
 		anfranode.NewClientHTTP("http://127.0.0.1:9001"),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
-		repo.Repo{},
+		repo.Local{},
 		" ",
 	)
 	if err == nil || !strings.Contains(err.Error(), "search query is required") {

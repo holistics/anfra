@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/holistics/anfra/internal/errcode"
-	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -35,8 +34,8 @@ func queryValid(diags []anfranode.AQLDiagnostic) bool {
 // Check type-checks a single AQL query against a dataset and returns its
 // diagnostics (which field/why), rather than failing on the first error.
 // dataset is required.
-func Check(ctx context.Context, node *anfranode.Client, r repo.Repo, dataset, aql string) (QueryValidation, error) {
-	req, err := CompileRequest(r, dataset, aql)
+func Check(ctx context.Context, node *anfranode.Client, src Source, dataset, aql string) (QueryValidation, error) {
+	req, err := CompileRequest(ctx, src, dataset, aql)
 	if err != nil {
 		return QueryValidation{}, err
 	}

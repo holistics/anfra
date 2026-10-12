@@ -37,9 +37,9 @@ type runtimeConfig struct {
 	CanalQueryURL string `json:"canal_query_url,omitempty"`
 }
 
-func runtimePath(r repo.Repo) string { return filepath.Join(r.RuntimeDir(), "serve.json") }
+func runtimePath(r repo.Local) string { return filepath.Join(r.RuntimeDir(), "serve.json") }
 
-func writeRuntime(r repo.Repo, f runtimeFile) error {
+func writeRuntime(r repo.Local, f runtimeFile) error {
 	if err := os.MkdirAll(r.RuntimeDir(), 0o700); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func readRuntime(path string) (runtimeFile, bool) {
 
 // removeRuntime removes the repo's runtime file if it is still this server's: a
 // newer server's is left alone.
-func removeRuntime(r repo.Repo, instanceID string) {
+func removeRuntime(r repo.Local, instanceID string) {
 	if f, ok := readRuntime(runtimePath(r)); ok && f.InstanceID == instanceID {
 		_ = os.Remove(runtimePath(r))
 	}
@@ -88,7 +88,7 @@ type health struct {
 // it answers as that server — this repo, this instance. Anything else (no file,
 // no answer, another server on the port) is no server, and the CLI runs the
 // command itself.
-func findServer(ctx context.Context, r repo.Repo) (runtimeFile, bool) {
+func findServer(ctx context.Context, r repo.Local) (runtimeFile, bool) {
 	f, ok := readRuntime(runtimePath(r))
 	if !ok || f.RepoID != r.ID {
 		return runtimeFile{}, false
@@ -114,7 +114,7 @@ func findServer(ctx context.Context, r repo.Repo) (runtimeFile, bool) {
 
 // holderOf is the repo whose server records addr (host:port) in its runtime
 // file, for an error that says who holds a port. "" when none does.
-func holderOf(r repo.Repo, addr string) string {
+func holderOf(r repo.Local, addr string) string {
 	paths, _ := filepath.Glob(filepath.Join(filepath.Dir(r.DataDir), "*", "runtime", "serve.json"))
 	for _, p := range paths {
 		if f, ok := readRuntime(p); ok && f.URL == "http://"+addr {

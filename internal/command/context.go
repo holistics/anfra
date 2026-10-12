@@ -1,8 +1,11 @@
 package command
 
 import (
+	"fmt"
+
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -31,6 +34,20 @@ type CommandContext struct {
 	// ExportStore). Nil: this server stores no exports, and an export refuses.
 	Exports ExportStore
 	Repo    repo.Repo
+	// AllowLocalRepo lets a command run on a local repo (a directory). Off by
+	// default, so a platform serving managed repos cannot run one on a directory
+	// by mistake, reading one directory, and its data_sources.yml, for every
+	// caller: a command on a local repo is refused (LocalRepoNotAllowed). anfra's
+	// CLI and serve set it; a platform that serves a directory on purpose (a
+	// self-hosted install) sets it from its own configuration.
+	AllowLocalRepo bool
+	// DataSources are how commands reach the repo's data sources, supplied by the
+	// host: every one's dialect, to compile, and one connection, to run a query
+	// (datasource.DataSources). A managed repo has no data_sources.yml to read, so
+	// a host that runs one supplies them (a server keeps them in its own store,
+	// never in the repo); for a local repo they override its file. Nil: a local
+	// repo's file, and a managed repo has none (see ResolveDataSources).
+	DataSources datasource.DataSources
 	// DataPerms are the restrictions to compile into queries. Required for
 	// EVERY invocation, not only the ones that read data — see app.Dispatch.
 	DataPerms dataperm.Set
@@ -44,6 +61,25 @@ type CommandContext struct {
 	// report: nil when the host does not check for updates (one that embeds the
 	// engine, or a user who opted out), and a nil result when it knows none yet.
 	Update func() *UpdateInfo
+}
+
+// ResolveDataSources is how the invocation reaches the repo's data sources: the
+// host's (DataSources) when it supplies them, a local repo's data_sources.yml
+// otherwise. A managed repo without the host's has none, which is refused here
+// rather than read as an empty directory.
+func (cc CommandContext) ResolveDataSources() (datasource.DataSources, error) {
+	if cc.DataSources != nil {
+		return cc.DataSources, nil
+	}
+	local, ok := cc.Repo.Local()
+	if !ok {
+		return nil, fmt.Errorf("repo %s keeps no data_sources.yml: its host supplies its data sources (Invocation.DataSources)", cc.Repo)
+	}
+	sources, err := datasource.Load(local.ConfigDir)
+	if err != nil {
+		return nil, fmt.Errorf("load data sources: %w", err)
+	}
+	return sources, nil
 }
 
 // ServerInfo is a running `anfra serve`, as status reports it.

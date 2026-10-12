@@ -16,7 +16,7 @@ import (
 // Run asks anfra-node to build the local catalog. Go owns orchestration
 // (sidecars, repo paths, canal endpoint); the Node sidecar owns source parsing
 // and catalog writes.
-func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Repo, source string) (string, error) {
+func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Local, source string) (string, error) {
 	if node == nil {
 		return "", fmt.Errorf("ingest requires the anfra-node sidecar")
 	}

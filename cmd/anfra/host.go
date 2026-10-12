@@ -26,8 +26,11 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 	cc := command.CommandContext{
 		Clients:   clients,
 		Exports:   exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
-		Repo:      h.repo,
+		Repo:      h.repo.Repo(),
 		DataPerms: dataperm.Unrestricted(),
+		// anfra core serves the directory it was pointed at: the local repo is the
+		// point, not a mistake.
+		AllowLocalRepo: true,
 	}
 	if !updateNotifyDisabled() {
 		cc.Update = knownUpdate
@@ -40,7 +43,7 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 // The context is passed to fn as a parameter (not stored here) so it stays a
 // properly-inherited, cancelable value.
 type hostContext struct {
-	repo repo.Repo
+	repo repo.Local
 	cfg  sidecar.Config
 	// exportFiles are this process's exports' files: the one-shot CLI's, or the
 	// server's, which closes them when it stops.

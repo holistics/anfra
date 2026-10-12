@@ -108,11 +108,11 @@ func TestConnectRequiresBothURLs(t *testing.T) {
 
 func TestOpenRepoResolvesIdentity(t *testing.T) {
 	r := engine.OpenRepo(t.TempDir())
-	if r.ID == "" {
+	if r.ID() == "" {
 		t.Error("OpenRepo returned a repo with no ID")
 	}
-	if r.Dir == "" {
-		t.Error("OpenRepo returned a repo with no Dir")
+	if local, ok := r.Local(); !ok || local.Dir == "" {
+		t.Error("OpenRepo returned a repo with no directory")
 	}
 }
 

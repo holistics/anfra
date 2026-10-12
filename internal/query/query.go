@@ -54,20 +54,28 @@ func ExtractLimit(aql string) (string, int, error) {
 	return cleaned, n, nil
 }
 
-// CompileRequest loads the repo's data sources and builds the sidecar compile
-// request for a (dataset, aql). Shared by SQL generation and AQL validation
-// (both feed the same {repoPath, datasetFqn, aql, dataSources} to the sidecar).
-func CompileRequest(r repo.Repo, dataset, aql string) (anfranode.CompileToSQLRequest, error) {
-	sources, err := datasource.Load(r.ConfigDir)
+// Source is what a query compiles against and runs on: the repo's AML, and its
+// data sources, whose dialects compiling asks for and one of whose connections a
+// run asks for.
+type Source struct {
+	Repo        repo.Repo
+	DataSources datasource.DataSources
+}
+
+// CompileRequest builds the sidecar compile request for a (dataset, aql) against
+// src, with its data sources' dialects and no connection. Shared by SQL
+// generation and AQL validation (both feed the same {repo, datasetFqn, aql,
+// dataSources} to the sidecar).
+func CompileRequest(ctx context.Context, src Source, dataset, aql string) (anfranode.CompileToSQLRequest, error) {
+	dialects, err := src.DataSources.Dialects(ctx)
 	if err != nil {
-		return anfranode.CompileToSQLRequest{}, fmt.Errorf("load data sources: %w", err)
+		return anfranode.CompileToSQLRequest{}, fmt.Errorf("data source dialects: %w", err)
 	}
 	return anfranode.CompileToSQLRequest{
-		RepoPath:    r.Dir,
-		RepoID:      r.ID,
+		RepoRef:     anfranode.RefTo(src.Repo),
 		DatasetFqn:  dataset,
 		AQL:         aql,
-		DataSources: anfranode.CompileDataSources(sources),
+		DataSources: anfranode.CompileDataSources(dialects),
 	}, nil
 }
 
@@ -88,8 +96,8 @@ type Run struct {
 // that is not the query's (an unknown dataset, a missing data source, the run's
 // shaping refused) is not diagnostic-shaped, and is returned as it is. The
 // result's AQL is the query with run's Query Input applied.
-func Compile(ctx context.Context, node *anfranode.Client, repo repo.Repo, dataset, aql string, run Run) (anfranode.CompileToSQLResult, error) {
-	req, err := CompileRequest(repo, dataset, aql)
+func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, aql string, run Run) (anfranode.CompileToSQLResult, error) {
+	req, err := CompileRequest(ctx, src, dataset, aql)
 	if err != nil {
 		return anfranode.CompileToSQLResult{}, err
 	}
@@ -109,7 +117,7 @@ func Compile(ctx context.Context, node *anfranode.Client, repo repo.Repo, datase
 			return anfranode.CompileToSQLResult{}, err
 		}
 	}
-	if diags, verr := Check(ctx, node, repo, dataset, aql); verr == nil && !diags.Valid {
+	if diags, verr := Check(ctx, node, src, dataset, aql); verr == nil && !diags.Valid {
 		return anfranode.CompileToSQLResult{}, apperr.EncapsulateWith(err, QueryInvalid, "", diags)
 	}
 	return anfranode.CompileToSQLResult{}, err
@@ -128,8 +136,8 @@ type RunResult struct {
 // callers can distinguish a compile failure (a query problem) from an execution
 // failure (a data-source/DB problem). truncateRows caps the rows canal returns
 // (NoLimit for all rows); it's how anfra applies the AQL `limit:` directive.
-func Execute(ctx context.Context, canal *canalquery.Client, repo repo.Repo, compiled anfranode.CompileToSQLResult, truncateRows int) (*RunResult, error) {
-	ds, err := dataSourceOf(repo, compiled)
+func Execute(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, truncateRows int) (*RunResult, error) {
+	ds, err := dataSourceOf(ctx, sources, compiled)
 	if err != nil {
 		return nil, err
 	}
@@ -138,36 +146,22 @@ func Execute(ctx context.Context, canal *canalquery.Client, repo repo.Repo, comp
 
 // Stream is Execute that hands the result to h as it arrives, its header
 // first, holding none of it.
-func Stream(ctx context.Context, canal *canalquery.Client, repo repo.Repo, compiled anfranode.CompileToSQLResult, truncateRows int, h canalquery.Handler) error {
-	ds, err := dataSourceOf(repo, compiled)
+func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, truncateRows int, h canalquery.Handler) error {
+	ds, err := dataSourceOf(ctx, sources, compiled)
 	if err != nil {
 		return err
 	}
 	return stream(ctx, canal, ds, canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType, TruncateRows: truncateRows}, h)
 }
 
-// dataSourceOf is the data source a compiled query runs on: the one its
-// dataset targets, which must be in data_sources.yml.
-func dataSourceOf(r repo.Repo, compiled anfranode.CompileToSQLResult) (datasource.DataSource, error) {
-	ds, ok, err := DataSource(r, compiled.DataSource.Name)
-	if err != nil {
-		return datasource.DataSource{}, err
+// dataSourceOf is the data source a compiled query runs on, connection included:
+// the one its dataset targets, and only that one is asked for.
+func dataSourceOf(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (datasource.DataSource, error) {
+	ds, err := sources.Connection(ctx, compiled.DataSource.Name)
+	if errors.Is(err, datasource.ErrUnknown) {
+		return datasource.DataSource{}, fmt.Errorf("data source %q is not defined among the repo's data sources", compiled.DataSource.Name)
 	}
-	if !ok {
-		return datasource.DataSource{}, fmt.Errorf("data source %q is not defined in data_sources.yml", compiled.DataSource.Name)
-	}
-	return ds, nil
-}
-
-// DataSource is the repo's data source by name, from data_sources.yml. ok is
-// false when there is none by that name.
-func DataSource(r repo.Repo, name string) (ds datasource.DataSource, ok bool, err error) {
-	sources, err := datasource.Load(r.ConfigDir)
-	if err != nil {
-		return datasource.DataSource{}, false, fmt.Errorf("load data sources: %w", err)
-	}
-	ds, ok = sources[name]
-	return ds, ok, nil
+	return ds, err
 }
 
 // ExecuteSQL runs sql on ds as it is: the caller wrote it in the data source's

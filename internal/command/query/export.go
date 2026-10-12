@@ -118,7 +118,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		run       streamFunc
 	)
 	if in.Lang == "sql" {
-		ds, err := in.dataSource(cc)
+		ds, err := in.dataSource(ctx, cc)
 		if err != nil {
 			return command.ExportLink{}, err
 		}
@@ -143,13 +143,17 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		if err := command.RequireExports(cc); err != nil {
 			return command.ExportLink{}, err
 		}
-		compiled, err := compileAQL(ctx, cc, in.Dataset, aql, in.runInput().run())
+		src, err := sourceOf(cc)
+		if err != nil {
+			return command.ExportLink{}, err
+		}
+		compiled, err := compileAQL(ctx, cc, src, in.Dataset, aql, in.runInput().run())
 		if err != nil {
 			return command.ExportLink{}, err
 		}
 		name, described = in.Dataset, compiled.Columns
 		run = func(h canalquery.Handler) error {
-			return query.Stream(ctx, cc.Clients.CanalQuery, cc.Repo, compiled, limit, h)
+			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, limit, h)
 		}
 	}
 	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, run)

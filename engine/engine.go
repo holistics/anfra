@@ -45,6 +45,7 @@ import (
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
@@ -78,9 +79,29 @@ type (
 	// Connect.
 	Clients = command.Clients
 
-	// Repo is a resolved AML repo: its directory, its identity, and where its
-	// state lives. Build one with OpenRepo.
+	// Repo is the AML repo an invocation acts on: a directory (OpenRepo), or a
+	// managed repo, which the platform keeps and the engine reads at a revision
+	// (ManagedRepo). It exposes no directory: a command that needs one (the search
+	// catalog) refuses a managed repo, rather than reading an empty path.
 	Repo = repo.Repo
+
+	// DataSource is one data source: its name, its type (the SQL dialect), and
+	// its connection, which never leaves the host.
+	DataSource = datasource.DataSource
+	// Dialect is a data source as compiling needs it: its name and type, no
+	// connection.
+	Dialect = datasource.Dialect
+	// DataSources is how the engine reaches a repo's data sources, as a host
+	// supplies them on an Invocation (Invocation.DataSources): every one's
+	// dialect, to compile; one connection, only to run a query on the data source
+	// it targets; neither, to validate. A host implements it over its own store,
+	// where Connection is the one place a data source's connection is retrieved
+	// and its use authorized. Required for a managed repo, which has no
+	// data_sources.yml, for the commands that compile or run a query.
+	DataSources = datasource.DataSources
+	// DataSourceSet is DataSources held in memory, by name: for a host that
+	// already holds them all.
+	DataSourceSet = datasource.Set
 
 	// Attributes are caller attributes that data restrictions are evaluated
 	// against — a region, a department, an email. They are decision-bearing: the
@@ -154,6 +175,16 @@ var (
 	QueryFailed = errcode.QueryFailed
 	// ExportsUnavailable: an export, on an Invocation with no Exports store.
 	ExportsUnavailable = errcode.ExportsUnavailable
+	// ErrUnknownDataSource is what DataSources.Connection answers for a name the
+	// repo has no data source by.
+	ErrUnknownDataSource = datasource.ErrUnknown
+
+	// LocalRepoNotAllowed: an Invocation on a local repo (OpenRepo) without
+	// AllowLocalRepo. A host mistake, never declared by an op.
+	LocalRepoNotAllowed = errcode.LocalRepoNotAllowed
+	// CatalogUnavailable: ingest or search on a managed repo (see ManagedRepo),
+	// not supported yet.
+	CatalogUnavailable = errcode.CatalogUnavailable
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.
@@ -175,11 +206,22 @@ func Unrestricted() DataPerms { return dataperm.Unrestricted() }
 func Restricted(attrs Attributes) DataPerms { return dataperm.Restricted(attrs) }
 
 // OpenRepo resolves an AML repo directory to its identity and state layout. It
-// creates no directories and does not validate the contents.
+// creates no directories and does not validate the contents. A command on it is
+// refused unless the Invocation sets AllowLocalRepo: a platform serving managed
+// repos (ManagedRepo) leaves it unset, so a directory cannot be served by mistake.
 //
 // Unlike the CLI, which derives a repo from the working directory, a server has
 // no meaningful working directory and must be told.
-func OpenRepo(dir string) Repo { return repo.Resolve(dir) }
+func OpenRepo(dir string) Repo { return repo.Resolve(dir).Repo() }
+
+// ManagedRepo is a repo the platform manages, read at one revision: id is
+// its stable identity, which anfra-node keys its incremental compile cache by and
+// which must not change from one revision to the next; revision is
+// "<repo>@<sha>", the commit's full sha. anfra-node must be configured to read
+// revisions (its git service). It has no directory, so no data_sources.yml: the
+// host supplies its data sources on the Invocation. Ingest and search are not
+// supported for managed repos yet (CatalogUnavailable).
+func ManagedRepo(id, revision string) (Repo, error) { return repo.Managed(id, revision) }
 
 // The command metadata Describe returns: aliases, not wrappers, like the types
 // above.

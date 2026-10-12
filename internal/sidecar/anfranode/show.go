@@ -15,9 +15,7 @@ import (
 // semantic catalog identifies it, an entity type and its fqn; both empty for
 // the repo. DataSources are what compiling a dataset resolves its dialect from.
 type ShowRequest struct {
-	RepoPath string `json:"repoPath"`
-	// RepoID is the compile-cache identity; see CompileToSQLRequest.RepoID.
-	RepoID      string                       `json:"repoId,omitempty"`
+	RepoRef
 	DataSources map[string]CompileDataSource `json:"dataSources"`
 	Type        string                       `json:"type,omitempty"`
 	Fqn         string                       `json:"fqn,omitempty"`
@@ -130,7 +128,7 @@ type ShowField struct {
 // ShowAML shows an object of the repo, read from its compiled AML.
 func (c *Client) ShowAML(ctx context.Context, req ShowRequest) (ShowResult, error) {
 	var res ShowResult
-	if err := checkRepoID(req.RepoID); err != nil {
+	if err := req.RepoRef.check(); err != nil {
 		return res, err
 	}
 	err := c.Call(ctx, "aml.show", req, &res)

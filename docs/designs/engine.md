@@ -13,7 +13,7 @@ The public packages are `engine` and `shared/*` (`apperr`, `appstep`, `apptracin
 | | |
 |---|---|
 | `Connect(ctx, nodeURL, canalQueryURL, …)` | dial the sidecars, which run on their own ([sidecars.md](sidecars.md)) |
-| `OpenRepo(dir)` | resolve a repo: its identity and where its state lives |
+| `OpenRepo(dir)`, `ManagedRepo(id, revision)` | the repo to act on: a directory, or a managed repo, which the platform keeps (its git service) and the engine reads at a revision. `ingest` and `search` are not supported for managed repos yet (`catalog_unavailable`) |
 | `Unrestricted()`, `Restricted(attrs)` | state what the caller may see |
 | `Dispatch(ctx, inv, req)` | run one command |
 | `Ops()` | every command as an `apikit` op (`core.<command>`), to serve as it is |

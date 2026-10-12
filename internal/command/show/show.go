@@ -37,7 +37,11 @@ var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 		if fqn != "" {
 			typ = in.Type
 		}
-		res, err := aml.Show(ctx, cc.Clients.Node, cc.Repo, typ, fqn)
+		sources, err := cc.ResolveDataSources()
+		if err != nil {
+			return anfranode.ShowResult{}, err
+		}
+		res, err := aml.Show(ctx, cc.Clients.Node, cc.Repo, sources, typ, fqn)
 		if v, ok := refused(err); ok {
 			return anfranode.ShowResult{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}
