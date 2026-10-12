@@ -45,3 +45,11 @@ func Valid(b []byte) bool { return jsontext.Value(b).IsValid(decoding) }
 
 // UnmarshalRead reads the one JSON value in r, to its end, into v.
 func UnmarshalRead(r io.Reader, v any) error { return json.UnmarshalRead(r, v, decoding) }
+
+// UnmarshalReadStrict is UnmarshalRead that also refuses a member v has no field
+// for: for a request a server reads as its whole contract, where an unknown
+// member is the caller's mistake, not something to ignore. A server that
+// validates against a schema (apikit) refuses them there already.
+func UnmarshalReadStrict(r io.Reader, v any) error {
+	return json.UnmarshalRead(r, v, decoding, json.RejectUnknownMembers(true))
+}

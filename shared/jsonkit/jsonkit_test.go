@@ -54,3 +54,21 @@ func TestUnmarshal(t *testing.T) {
 		t.Error("data after the value was accepted")
 	}
 }
+
+// Strict reading refuses a member the value has no field for; plain reading
+// ignores it.
+func TestUnmarshalReadStrict(t *testing.T) {
+	type in struct {
+		Repo string `json:"repo"`
+	}
+	var v in
+	if err := jsonkit.UnmarshalReadStrict(strings.NewReader(`{"repo":"r"}`), &v); err != nil || v.Repo != "r" {
+		t.Errorf("known members: %v, %+v", err, v)
+	}
+	if err := jsonkit.UnmarshalReadStrict(strings.NewReader(`{"repo":"r","extra":1}`), &v); err == nil {
+		t.Error("an unknown member was accepted")
+	}
+	if err := jsonkit.UnmarshalRead(strings.NewReader(`{"repo":"r","extra":1}`), &v); err != nil {
+		t.Errorf("plain reading refused an unknown member: %v", err)
+	}
+}
