@@ -12,7 +12,7 @@ To cut a release, on a branch:
 2. Update the sidecar pins too, if this release takes new ones. A pin change needs a version bump, or no new tag is cut.
 3. Merge to `main`.
 
-`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`. If the version has no tag yet, it creates `anfra-v<version>` and calls `build_release.yml` in the same run. A tag pushed with the workflow's own token would not trigger another workflow, so it calls it directly. `build_release.yml` also runs on a tag pushed by hand, and on `workflow_dispatch` for a test build, which uploads artifacts and publishes nothing.
+`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`. If the version has no tag yet, it creates `anfra-v<version>` and pushes it with a deploy key (`ANFRA_DEPLOY_KEY`), and the push triggers `build_release.yml`. The deploy key is needed twice over: the repository's tag ruleset blocks creating release tags, and the workflow's own token cannot bypass it, while a deploy key can; and a tag pushed with the workflow's own token would not trigger another workflow. `build_release.yml` also runs on a tag pushed by hand, and on `workflow_dispatch`: dispatched on a tag (`gh workflow run build_release.yml --ref anfra-v<version>`), it releases that tag again; dispatched on a branch, it is a test build, which uploads artifacts and publishes nothing.
 
 ## The build
 
@@ -47,7 +47,7 @@ To cut a release, on a branch:
 
 - **The release's version.** The SDK's API client is generated from this release's `api/openapi.yaml`, so the two go out together, at one version, even when the SDK did not change. `pnpm bump` sets both; CI fails a pull request in which they differ, and a release refuses to go out.
 - **Published once.** A re-run skips a version npm already has. A prerelease version (`1.2.0-rc.1`) is published under the `next` dist-tag, so `npm install` never picks it.
-- **Trusted publishing.** npm takes the publish from the workflow over OIDC, with no token, and records the package's provenance. It is configured on the package's settings on npmjs.com, naming this repository and a workflow. npm checks the workflow that started the run, not the one that publishes, so both are trusted: `tag_and_release.yml`, which calls `build_release.yml` for a release, and `build_release.yml`, which runs on its own for a tag pushed by hand. There is no npm token, and the package's settings disallow tokens, so only these workflows, or a maintainer with two-factor authentication, can publish.
+- **Trusted publishing.** npm takes the publish from the workflow over OIDC, with no token, and records the package's provenance. It is configured on the package's settings on npmjs.com, naming this repository and a workflow. npm checks the workflow that started the run: `build_release.yml`, which a tag push starts. There is no npm token, and the package's settings disallow tokens, so only this workflow, or a maintainer with two-factor authentication, can publish.
 - **Any other build** packs it without publishing, so a broken package shows before a release does.
 
 ## Versions
