@@ -1,3 +1,5 @@
+## [0.6.1](https://github.com/holistics/anfra/compare/anfra-v0.6.0...anfra-v0.6.1) (2026-10-12)
+
 ## [0.6.0](https://github.com/holistics/anfra/compare/anfra-v0.5.0...anfra-v0.6.0) (2026-10-12)
 
 ### Features
