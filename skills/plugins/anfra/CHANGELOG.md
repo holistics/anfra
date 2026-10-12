@@ -1,3 +1,13 @@
+## [0.3.0](https://github.com/holistics/anfra-skills/compare/anfra-v0.2.1...anfra-v0.3.0) (2026-10-12)
+
+### ⚠ BREAKING CHANGES
+
+* **plugins.anfra:** new semantic types and data handling
+
+### Features
+
+* **plugins.anfra:** new semantic types and data handling ([32c1d03](https://github.com/holistics/anfra-skills/commit/32c1d03f560129bc5f3274d609a432ed36af7103))
+
 ## [0.2.1](https://github.com/holistics/anfra-skills/compare/anfra-v0.2.0...anfra-v0.2.1) (2026-10-12)
 
 ## 0.2.0 (2026-10-08)
