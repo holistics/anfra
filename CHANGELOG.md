@@ -1,3 +1,12 @@
+## [0.7.1](https://github.com/holistics/anfra/compare/anfra-v0.7.0...anfra-v0.7.1) (2026-10-12)
+
+### Features
+
+* **appserve:** row actions and a pinned detail pane in the Structure tab ([a6f0cd7](https://github.com/holistics/anfra/commit/a6f0cd703f57b6cd317e4c62be3ab5dbe594ae51))
+
+### Bug Fixes
+
+* **appserve:** scope the Structure tab's styles to its own tree ([5a0e298](https://github.com/holistics/anfra/commit/5a0e298819803cbafdcd1cd716633622f6c8f741))
 ## [0.7.0](https://github.com/holistics/anfra/compare/anfra-v0.6.1...anfra-v0.7.0) (2026-10-12)
 
 ### ⚠ BREAKING CHANGES
