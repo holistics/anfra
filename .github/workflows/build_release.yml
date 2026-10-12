@@ -4,11 +4,11 @@
 # on one runner; both sidecars are prebuilt per target by their own repos'
 # workflows — so this job only *collects* and cross-builds.
 #
-# Normally called by tag_and_release.yml in the same run after it creates the `anfra-v*`
-# tag (workflow_call with that tag) — so publishing doesn't depend on a tag-push
-# event. The manifest.yml at that commit pins the sidecar releases to embed and the
-# version baked into the binary. Also runs on a manual/human `anfra-v*` tag push, or
-# workflow_dispatch for a test build (artifacts only, no release).
+# Runs on an `anfra-v*` tag push: normally the one tag_and_release.yml pushes with its
+# deploy key, or a tag pushed by hand. The manifest.yml at that commit pins the sidecar
+# releases to embed and the version baked into the binary. Also runs on
+# workflow_dispatch: on a tag it releases that tag, on a branch it's a test build
+# (artifacts only, no release).
 #
 # A release also publishes the SDK to npm, as @holistics/anfra-sdk at the same version
 # (the sdk job).
@@ -18,17 +18,9 @@ on:
   push:
     tags:
       - "anfra-v*"
-  workflow_dispatch: # manual test build (uploads artifacts, no release)
-  workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
-    secrets:
-      # Only the cross-repo download token is passed in (least privilege);
-      # GITHUB_TOKEN is provided to the called workflow automatically.
-      ANFRA_DIST_TOKEN:
-        required: true
+  # On a branch: a test build (uploads artifacts, no release). On a tag (`--ref anfra-v…`):
+  # (re)releases that tag.
+  workflow_dispatch:
 
 permissions:
   contents: write # publish the anfra release
@@ -37,11 +29,11 @@ permissions:
 jobs:
   assemble:
     runs-on: ubuntu-latest
-    # Release when called with a tag or on a tag push; TAG is the input (call) or
-    # the pushed ref. On workflow_dispatch neither is set → artifacts only.
+    # Release when the ref is a tag (a tag push, or dispatched on a tag); TAG is that ref.
+    # Dispatched on a branch → artifacts only.
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
-      IS_RELEASE: ${{ inputs.tag != '' || startsWith(github.ref, 'refs/tags/') }}
+      TAG: ${{ github.ref_name }}
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v4 # on a tag push this is the tag's commit (manifest pinned there)
 
@@ -194,9 +186,8 @@ jobs:
   #
   # npm takes the publish from this workflow over OIDC, with no token (trusted publishing), and
   # records the package's provenance. npm checks the workflow that started the run, so the
-  # package's settings on npmjs.com trust both: tag_and_release.yml, which calls this one for a
-  # release, and this one, for a tag pushed by hand. A re-run skips a version npm already has:
-  # a version is published once.
+  # package's settings on npmjs.com trust this one, which a tag push starts. A re-run skips a
+  # version npm already has: a version is published once.
   sdk:
     needs: assemble
     runs-on: ubuntu-latest
@@ -204,7 +195,7 @@ jobs:
       contents: read
       id-token: write # npm's trusted publishing, and the package's provenance
     env:
-      IS_RELEASE: ${{ inputs.tag != '' || startsWith(github.ref, 'refs/tags/') }}
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4 # the version is package.json's packageManager
