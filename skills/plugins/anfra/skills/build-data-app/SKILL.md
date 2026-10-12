@@ -1,6 +1,6 @@
 ---
 name: build-data-app
-description: Build or change an Anfra Data App — one HTML file in the repo's `apps/` that queries datasets through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
+description: Build or change an Anfra Data App — one HTML file in the repo's `apps/` that queries datasets, and can trace fields' lineage, through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
 ---
 
 # Building a Data App
@@ -11,7 +11,7 @@ supplies data and state; every pixel is yours.
 
 References, read when a step needs them:
 
-- [references/api.md](references/api.md): every SDK call, the result shape, errors. **Read it
+- [references/api.md](references/api.md): every SDK call, the result shape, lineage, errors. **Read it
   before writing any code; do not invent APIs.**
 - [references/downloads.md](references/downloads.md): exporting a query's data and pictures of
   the app, with their button. Read it only when the agreed design lists a download.
@@ -40,14 +40,18 @@ the week before, with a country picker"). Ask only what changes the numbers: wha
 means, which date counts, what to exclude, each with your recommended answer.
 
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
-`createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
-each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
-blocks, if any, the reader can download from, one line each with its formats (`trend: CSV`). List
-a download only when the user asked for one, or propose one where it plainly helps (a detail
-table's data) and let them decide; none is the default. Leave pictures (PNG, PDF) to the host,
-which offers them for every block and the whole page, unless the user asks for them in the app.
-Show it to the user and get a yes before writing the file. When the data cannot answer the
-request, say so and offer the nearest thing it can.
+`createFilter`, `createDateDrill`, `mapControl`, `mapCrossFilter` and `Anfra.lineage` call, with
+real field names, how each query renders (chart or table; default ECharts 6 from jsDelivr, as in
+the example), and which blocks, if any, the reader can download from, one line each with its
+formats (`trend: CSV`). List a download only when the user asked for one, or propose one where it
+plainly helps (a detail table's data) and let them decide; none is the default. Leave pictures
+(PNG, PDF) to the host, which offers them for every block and the whole page, unless the user asks
+for them in the app. For an app that shows where numbers come from (a "how is this metric built"
+panel, a field catalog), say which fields it traces, when (on load, or when the reader picks a
+field or clicks a chart), and how the diagram is drawn (see
+[references/api.md](references/api.md#lineage)); skip lineage for an app that only shows data. Show
+it to the user and get a yes before writing the file. When the data cannot answer the request, say
+so and offer the nearest thing it can.
 
 ## 3. Write and check the queries
 
@@ -117,7 +121,12 @@ Fonts), and `preserveDrawingBuffer: true` on a WebGL chart.
 Render each query's four states: `executing` (loading), `success`, `error` (show
 `error.message`), and success with no rows ("No sales this week", never a bare zero). Log
 `result.columns`, `result.rows[0]` and `result.debug?.executedAql` on each query's first success:
-the real row keys, value types and the AQL that ran. Put on the page the definitions, dates and
+the real row keys, value types and the AQL that ran.
+
+`Anfra.lineage` is a plain promise outside the app: `execute()` does not re-run it and
+`subscribe` does not hear it. Track its loading state yourself, render a target's `error`, a
+rejected call and an empty diagram (`total` of 0) as well as the diagram, and log the first
+diagram as JSON. Put on the page the definitions, dates and
 any rounding a reader needs to trust a number.
 
 ## 5. Run and check it
@@ -137,7 +146,8 @@ executed AQL and error, in how many places it is drawn, and a Locate button. A q
 If you can drive a browser, open the app, exercise every control and click, and read the console
 of the app's frame, not just the page. Otherwise ask the user to, and to report what they see
 against what they expected, with that console. Read errors against
-[references/api.md](references/api.md#errors): a `ValidationError` names a declaring line; a
+[references/api.md](references/api.md#errors): a `ValidationError` names a declaring line (or an
+`Anfra.lineage` call with an unknown field); a
 `QueryError` carries anfra's message about the AQL, or names the bad entry (`filters[0].field`).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
 explains it. If you could not check the interface, say so rather than claiming it works.
