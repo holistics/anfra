@@ -10,7 +10,7 @@ const title = (node: StructureNode) => (node.problems.length ? node.problems.joi
 </script>
 
 <template>
-  <ul class="tree" role="tree">
+  <ul class="structure-tree" role="tree">
     <li v-for="node in nodes" :key="node.key" role="treeitem" :aria-selected="node.key === selected">
       <div
         class="node"
