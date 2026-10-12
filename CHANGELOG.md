@@ -1,3 +1,19 @@
+## [0.7.0](https://github.com/holistics/anfra/compare/anfra-v0.6.1...anfra-v0.7.0) (2026-10-12)
+
+### ⚠ BREAKING CHANGES
+
+* revamp query result data handling
+* use json v2 to fix null arrays and avoid similar mistakes
+
+### Features
+
+* add query.export function ([050878d](https://github.com/holistics/anfra/commit/050878de72a168c002056d7879a0683c41530860))
+* **cli:** dotted form for CLI object args ([023977f](https://github.com/holistics/anfra/commit/023977fcc571e30f0bf114cf6de7512da767c51d))
+* revamp query result data handling ([57a4629](https://github.com/holistics/anfra/commit/57a46294dcb8396c9306a6218f410baa3d9c0e70))
+
+### Bug Fixes
+
+* use json v2 to fix null arrays and avoid similar mistakes ([49d55a8](https://github.com/holistics/anfra/commit/49d55a811db0684f1832f2c762df0c93ef15df3d))
 ## [0.6.1](https://github.com/holistics/anfra/compare/anfra-v0.6.0...anfra-v0.6.1) (2026-10-12)
 
 ## [0.6.0](https://github.com/holistics/anfra/compare/anfra-v0.5.0...anfra-v0.6.0) (2026-10-12)
