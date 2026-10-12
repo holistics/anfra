@@ -2,13 +2,13 @@
 // The inspect panel: a devtool over the running Data App. Structure shows the page's semantic
 // parts as a tree, with hover-highlight, click-to-locate, a pick mode and a detail pane; Data
 // shows every app's queries, controls and selection.
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import Icon from './Icon.vue';
 import StructureTree from './StructureTree.vue';
 import EntityCard from './EntityCard.vue';
 import {
   countProblems, findNode, formatCondition, handleFor, usageOf,
-  type InspectedApp, type InspectedStructure, type LocateTarget,
+  type InspectedApp, type InspectedStructure, type LocateTarget, type StructureNode,
 } from './inspect';
 
 // `apps` and `structure` are undefined until the frame has reported.
@@ -30,14 +30,33 @@ const tab = ref<'structure' | 'data'>('structure');
 const selected = computed(() => (props.structure && props.selectedNode ? findNode(props.structure.nodes, props.selectedNode) : undefined));
 const problems = computed(() => (props.structure ? countProblems(props.structure.nodes) : 0));
 
-const copied = ref(false);
-async function copyHandle (): Promise<void> {
-  if (!selected.value) return;
+// The key of the node whose handle was just copied, for a moment's feedback.
+const copied = ref<string>();
+async function copyHandle (node: StructureNode): Promise<void> {
   try {
-    await navigator.clipboard.writeText(handleFor(selected.value));
-    copied.value = true;
-    setTimeout(() => { copied.value = false; }, 1500);
+    await navigator.clipboard.writeText(handleFor(node));
+    copied.value = node.key;
+    setTimeout(() => { if (copied.value === node.key) copied.value = undefined; }, 1500);
   } catch { /* clipboard unavailable */ }
+}
+
+// A query or control node can jump to its card in the Data tab when the app has that entity.
+function canView (node: StructureNode): boolean {
+  if ((node.kind !== 'query' && node.kind !== 'control') || node.problems.length) return false;
+  const app = props.apps?.[node.app ?? 0];
+  const name = node.name ?? '';
+  return !!app && (node.kind === 'query' ? name in app.queries : name in app.controls);
+}
+const dataBody = ref<HTMLElement>();
+async function viewData (node: StructureNode): Promise<void> {
+  tab.value = 'data';
+  await nextTick();
+  const card = dataBody.value?.querySelector<HTMLElement>(`[data-entity="${CSS.escape(`${node.kind}:${node.app ?? 0}/${node.name ?? ''}`)}"]`);
+  if (!card) return;
+  card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  card.classList.remove('flash');
+  void card.offsetWidth; // restart the animation on a repeat view
+  card.classList.add('flash');
 }
 
 function select (key: string): void {
@@ -76,41 +95,37 @@ const selectedEntity = computed(() => {
       </button>
     </header>
 
-    <div v-if="tab === 'structure'" class="toolbar">
-      <button
-        type="button"
-        class="tool"
-        :aria-pressed="picking"
-        title="Click a part of the page to select it here. Esc stops."
-        data-testid="pick"
-        @click="emit('pick', !picking)"
-      >
-        Pick
-      </button>
-      <button
-        type="button"
-        class="tool"
-        :disabled="!selected"
-        :title="selected ? handleFor(selected) : 'Select a node first'"
-        data-testid="copy-handle-tool"
-        @click="copyHandle"
-      >
-        {{ copied ? 'Copied' : 'Copy handle' }}
-      </button>
-    </div>
-    <div v-if="tab === 'structure'" class="inspect-body" @mouseleave="emit('highlight', null)">
-      <p v-if="!structure" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
-      <p v-else-if="structure.nodes.length === 0" class="inspect-note" data-testid="structure-none">
-        Nothing is marked yet. Add <code>data-anfra-container</code>, <code>data-anfra-block</code>,
-        <code>data-anfra-query</code> and <code>data-anfra-control</code> to the page's elements and they show up here.
-      </p>
-      <StructureTree
-        v-else
-        :nodes="structure.nodes"
-        :selected="selectedNode"
-        @hover="emit('highlight', $event)"
-        @select="select"
-      />
+    <div v-if="tab === 'structure'" class="structure-pane">
+      <div class="toolbar">
+        <button
+          type="button"
+          class="tool"
+          :aria-pressed="picking"
+          title="Click a part of the page to select it here. Esc stops."
+          data-testid="pick"
+          @click="emit('pick', !picking)"
+        >
+          Pick
+        </button>
+      </div>
+      <div class="inspect-body" @mouseleave="emit('highlight', null)">
+        <p v-if="!structure" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
+        <p v-else-if="structure.nodes.length === 0" class="inspect-note" data-testid="structure-none">
+          Nothing is marked yet. Add <code>data-anfra-container</code>, <code>data-anfra-block</code>,
+          <code>data-anfra-query</code> and <code>data-anfra-control</code> to the page's elements and they show up here.
+        </p>
+        <StructureTree
+          v-else
+          :nodes="structure.nodes"
+          :selected="selectedNode"
+          :copied="copied"
+          :can-view="canView"
+          @hover="emit('highlight', $event)"
+          @select="select"
+          @view="viewData"
+          @copy="copyHandle"
+        />
+      </div>
 
       <section v-if="selected" class="detail" data-testid="node-detail">
         <h5>{{ selected.kind }}</h5>
@@ -119,12 +134,7 @@ const selectedEntity = computed(() => {
           <dd>{{ selected.kind === 'container' || selected.kind === 'block' ? selected.id : selected.name }}</dd>
           <template v-if="selected.label"><dt>Label</dt><dd>{{ selected.label }}</dd></template>
           <dt>Handle</dt>
-          <dd class="handle">
-            <code class="wrap">{{ handleFor(selected) }}</code>
-            <button type="button" class="copy" title="Copy the handle" data-testid="copy-handle" @click="copyHandle">
-              {{ copied ? 'Copied' : 'Copy' }}
-            </button>
-          </dd>
+          <dd><code class="wrap">{{ handleFor(selected) }}</code></dd>
           <template v-if="selected.children.length"><dt>Holds</dt><dd>{{ selected.children.length }} node{{ selected.children.length === 1 ? '' : 's' }}</dd></template>
         </dl>
         <p v-for="(problem, i) in selected.problems" :key="i" class="error-text" role="alert">{{ problem }}</p>
@@ -132,7 +142,7 @@ const selectedEntity = computed(() => {
       </section>
     </div>
 
-    <div v-else class="inspect-body">
+    <div v-else ref="dataBody" class="inspect-body">
       <p v-if="!apps" class="inspect-note" data-testid="inspect-waiting">Waiting for the Data App…</p>
       <p v-else-if="apps.length === 0" class="inspect-note" data-testid="inspect-none">
         This Data App hasn't created an SDK app.
