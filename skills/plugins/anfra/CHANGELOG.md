@@ -1,3 +1,5 @@
+## [0.2.1](https://github.com/holistics/anfra-skills/compare/anfra-v0.2.0...anfra-v0.2.1) (2026-10-12)
+
 ## 0.2.0 (2026-10-08)
 
 ### ⚠ BREAKING CHANGES
