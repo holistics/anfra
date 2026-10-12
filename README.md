@@ -25,11 +25,11 @@ anfra is an **open-source framework for building trusted custom BI apps with AI 
 - Traditional BI tools make the numbers easy to trust, but often limit teams to fixed dashboard layouts and interactions.
 - Coding agents can build custom dashboard apps in HTML and JavaScript, but wiring each view to the warehouse and handling interactions is easy to get wrong and hard to reuse.
 
-With anfra, your coding agent builds the app with HTML, JavaScript and any charting library, and the anfra SDK connects it to a governed semantic foundation with consistent, reusable metrics and business context.
+With anfra, your coding agent builds the app with HTML, JavaScript and any charting library. The **anfra SDK connects that app to a governed semantic foundation** with consistent, reusable metrics and business context.
 
 anfra also provides analytics interactions (filtering, drill-downs, and period comparisons) out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
 
-You get the custom layouts of a coding agent and the trusted numbers of a BI tool.
+You get the **custom layouts of a coding agent** and the **trusted numbers of a BI tool**.
 
 ## Key features
 
