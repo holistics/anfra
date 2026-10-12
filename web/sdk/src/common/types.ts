@@ -234,6 +234,34 @@ export interface ColumnMeta {
   adhoc: boolean;
   isMeasure: boolean;
   aggregation?: string;
+  /**
+   * What the column's values mean: decide by it, never by `typeof`. A `number` column's values are
+   * strings with every digit (`"9007199254740993"`, `"12345.67"`, `"NaN"`). `unknown` when the
+   * query's type has no meaning in AML yet. See docs/designs/result-values.md.
+   */
+  semantic_type: SemanticType;
+  /** The Arrow type the values were read as: whether a JS number would keep every digit, say. */
+  arrow_type: ArrowType;
+  /** The database's own name of the type: for debugging, never to decide on. */
+  db_type: string;
+}
+
+/**
+ * What a column's values mean, in AML's types, plus `bit`: a true or false stored as a bit, written
+ * as `true` and `false` or as `"1"` and `"0"` by how the database produced it. `unknown` for a type
+ * AML gives no meaning yet.
+ */
+export type SemanticType = 'text' | 'number' | 'date' | 'datetime' | 'truefalse' | 'json' | 'bit' | 'unknown';
+
+/**
+ * An Arrow type: Arrow's `Type` of format/Schema.fbs as JSON. `type` is its name (`int`,
+ * `floating_point`, `decimal`, `utf8`, `timestamp`, …), its other keys that type's fields in
+ * snake_case (`bit_width`, `scale`, `unit`, …), and `label` how arrow-go spells it, for people.
+ */
+export interface ArrowType {
+  type: string;
+  label: string;
+  [field: string]: unknown;
 }
 
 export type Row = Record<string, unknown>;

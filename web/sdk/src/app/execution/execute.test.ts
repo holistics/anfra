@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createSdk } from '../sdk';
 import { PermissionError, QueryError, ValidationError } from '../../common/errors';
 import {
-  salesDataset, stubBackend, testUser, type StubOptions,
+  salesDataset, stubBackend, testUser, type StubOptions, textTypes, numberTypes,
 } from '../testSupport';
 import type { App } from '../app';
 import type { BackendQueryResult } from '../../common/types';
@@ -33,9 +33,11 @@ const twoRows: BackendQueryResult = {
   columns: [
     {
       name: 'region', fieldName: 'region', modelId: 'users', label: 'Region', adhoc: false, isMeasure: false,
+      ...textTypes,
     },
     {
       name: 'total', fieldName: 'amount', label: 'Sum of Amount', adhoc: false, isMeasure: true, aggregation: 'sum',
+      ...numberTypes,
     },
   ],
   meta: { numRows: 2 },
@@ -75,13 +77,13 @@ describe('request', () => {
     const query = revenueBy(app);
     const big = app.createFilter('big', { type: 'number' });
     app.mapControl(big, query, { field: 'orders.id', aggregation: 'count' });
-    big.setCondition({ operator: 'greater_than', values: [5] });
+    big.setCondition({ operator: 'greater_than', values: ['5'] });
 
     await app.execute();
 
     expect(stub.queries[0].input.filters).toEqual([
       {
-        field: 'orders.id', operator: 'greater_than', values: [5], aggregation: 'count',
+        field: 'orders.id', operator: 'greater_than', values: ['5'], aggregation: 'count',
       },
     ]);
   });

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -38,15 +36,18 @@ func (e memExport) Done(context.Context) (string, time.Time, error) {
 }
 func (e memExport) Abort(context.Context) error { e.s.aborted = true; return nil }
 
-// canalRows is a run that answers rows, then fields, as canal streams them.
-func canalRows(fields []string, rows ...string) rowsFunc {
-	return func(each func(canalquery.Row) error) ([]string, error) {
+// canalRows is a run that streams as canal does: the header, then the rows.
+func canalRows(fields []string, rows ...string) streamFunc {
+	return func(h canalquery.Handler) error {
+		if err := h.Header(canalquery.Header{Fields: fields}); err != nil {
+			return err
+		}
 		for _, r := range rows {
-			if err := each(canalquery.Row(r)); err != nil {
-				return nil, err
+			if err := h.Row(canalquery.Row(r)); err != nil {
+				return err
 			}
 		}
-		return fields, nil
+		return nil
 	}
 }
 
@@ -102,9 +103,10 @@ func TestExportCSV(t *testing.T) {
 // query, and its file is discarded, never finished.
 func TestExportFailingQueryAbortsTheFile(t *testing.T) {
 	store := &memStore{}
-	failing := func(each func(canalquery.Row) error) ([]string, error) {
-		_ = each(canalquery.Row(`[1]`))
-		return nil, &canalquery.Error{Message: "relation does not exist", Scope: "User"}
+	failing := func(h canalquery.Handler) error {
+		_ = h.Header(canalquery.Header{Fields: []string{"id"}})
+		_ = h.Row(canalquery.Row(`[1]`))
+		return &canalquery.Error{Message: "relation does not exist", Scope: "User"}
 	}
 	_, err := writeCSV(context.Background(), store, "sales.csv", ExportFormatOptions{}, nil, failing)
 	if !errors.Is(err, errcode.QueryFailed) {
@@ -174,28 +176,14 @@ func TestExportFilename(t *testing.T) {
 	}
 }
 
-// The spool a header row needs is no file on disk, even while the export runs:
-// nothing is left of it, even by a crash.
-func TestExportSpoolLeavesNothing(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("an open file cannot be removed on Windows")
-	}
-	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
-	empty := func(when string) {
-		if es, _ := os.ReadDir(tmp); len(es) != 0 {
-			t.Errorf("%s: %d files in the temp directory, want none", when, len(es))
-		}
-	}
-	rows := func(each func(canalquery.Row) error) ([]string, error) {
-		if err := each(canalquery.Row(`[1]`)); err != nil {
-			return nil, err
-		}
-		empty("while rows arrive")
-		return []string{"id"}, nil
-	}
-	if _, err := writeCSV(context.Background(), &memStore{}, "sales.csv", ExportFormatOptions{}, nil, rows); err != nil {
+// A result with no rows is still a file with its header row.
+func TestExportEmptyResult(t *testing.T) {
+	store := &memStore{}
+	link, err := writeCSV(context.Background(), store, "sales.csv", ExportFormatOptions{}, exportColumns, canalRows([]string{"id", "note"}))
+	if err != nil {
 		t.Fatal(err)
 	}
-	empty("after the export")
+	if store.buf.String() != "Order ID,Note\n" || link.RowCount != 0 {
+		t.Errorf("file = %q, %d rows; want the header alone", store.buf.String(), link.RowCount)
+	}
 }

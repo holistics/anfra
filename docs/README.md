@@ -16,6 +16,8 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [JSON](designs/json.md) | How anfra reads and writes JSON: one package, `shared/jsonkit`, and the rule that every package uses it. |
 | [exports](designs/exports.md) | A query's whole result as a file, through one op that answers a link, on every door and server. |
 | [export stores](designs/export-store.md) | Where an export's file goes and how its link is served: anfra's own store, its cleanup, and how a platform's differs. |
+| [result values](designs/result-values.md) | What a query's answer holds: values encoded (every number a string), and each column's semantic, Arrow and database types. |
+| [numbers in the SDK](designs/sdk-numbers.md) | What a Data App gets for a number: the API's string and its column's type, which say what it is; helpers come later. |
 | [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, appserve. |
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |

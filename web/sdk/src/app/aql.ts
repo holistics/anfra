@@ -25,14 +25,17 @@ const PARAGRAPH_SEPARATOR = String.fromCharCode(0x2029);
 export type AqlValue = string | number | boolean | null;
 
 /**
- * One value as AQL source text.
+ * One value as AQL source text, as its column's semantic type says.
  *
- * Numbers are refused rather than coerced when they are not finite: `NaN` and `Infinity` have no
- * AQL spelling, and emitting them would produce a condition that silently matches nothing.
+ * A `number` column's value is a string with every digit, and is written as an AQL number literal
+ * from those digits, never quoted: AQL refuses `id is "17"`. Numbers are refused rather than
+ * coerced when they are not finite: `NaN` and `Infinity` have no AQL spelling, and emitting them
+ * would produce a condition that silently matches nothing.
  */
-export function literal (value: AqlValue): string {
+export function literal (value: AqlValue, semanticType?: string): string {
   if (value === null) return 'null';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (semanticType === 'number' && typeof value === 'string') return numberLiteral(value);
 
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
@@ -51,8 +54,38 @@ export function literal (value: AqlValue): string {
 }
 
 /** `<field> is <value>`, or the null form, which `is` does not accept as an infix operand. */
-export function equals (field: string, value: AqlValue): string {
-  return value === null ? `is(${field}, null)` : `${field} is ${literal(value)}`;
+export function equals (field: string, value: AqlValue, semanticType?: string): string {
+  return value === null ? `is(${field}, null)` : `${field} is ${literal(value, semanticType)}`;
+}
+
+/** How the API spells the float values that have no JSON number. */
+const NON_FINITE = new Set(['NaN', 'Infinity', '-Infinity']);
+
+const JSON_NUMBER = /^(-?)(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
+/**
+ * A number as the API answers it, a string in JSON's number syntax, as an AQL number literal: its
+ * digits as they are, never through a JS number, which would round them. An exponent is written
+ * out in full, since AQL's number literal has none (`"1e-7"` is `0.0000001`).
+ */
+export function numberLiteral (value: string): string {
+  const match = JSON_NUMBER.exec(value);
+  if (!match) {
+    // NaN and the infinities are numbers a column can hold, which AQL has no literal for; anything
+    // else is not a number at all.
+    if (NON_FINITE.has(value)) throw new RangeError(`Cannot express ${value} in AQL.`);
+    throw new TypeError(`${JSON.stringify(value)} is not a number: a number is a string in JSON's number syntax.`);
+  }
+  const [, sign, whole, fraction = '', exponent] = match;
+  if (exponent === undefined) return value;
+
+  const digits = whole + fraction;
+  const point = whole.length + Number(exponent); // where the decimal point falls in digits
+  let out: string;
+  if (point <= 0) out = `0.${'0'.repeat(-point)}${digits}`;
+  else if (point >= digits.length) out = digits + '0'.repeat(point - digits.length);
+  else out = `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return sign + out.replace(/^0+(?=\d)/, '');
 }
 
 /**

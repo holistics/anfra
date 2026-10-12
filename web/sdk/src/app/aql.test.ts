@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  and, dateRange, equals, literal, or,
+  and, dateRange, equals, literal, numberLiteral, or,
 } from './aql';
 
 // Written from char codes: raw, these terminate a line in most tooling.
@@ -51,10 +51,46 @@ describe('literal', () => {
     expect(() => literal(Infinity)).toThrowError(RangeError);
   });
 
+  it("writes a number column's value from its digits, unquoted", () => {
+    // Through a JS number, the first would round to ...992.
+    expect(literal('9007199254740993', 'number')).toBe('9007199254740993');
+    expect(literal('12345.67', 'number')).toBe('12345.67');
+    expect(literal('0.10', 'number')).toBe('0.10');
+    expect(literal('-0.5', 'number')).toBe('-0.5');
+    // Other columns' strings stay strings.
+    expect(literal('17', 'text')).toBe('"17"');
+    expect(literal('17')).toBe('"17"');
+  });
+
+  it("refuses a number column's value with no AQL spelling, as it refuses a JS one", () => {
+    for (const value of ['NaN', 'Infinity', '-Infinity']) {
+      expect(() => literal(value, 'number'), value).toThrowError(RangeError);
+    }
+  });
+
+  it("refuses a number column's value that is not a number", () => {
+    for (const value of ['abc', '', '1.', '.5', '01', '+1', '1e']) {
+      expect(() => literal(value, 'number'), value).toThrowError(TypeError);
+    }
+  });
+
   it('writes booleans and null bare', () => {
     expect(literal(true)).toBe('true');
     expect(literal(false)).toBe('false');
     expect(literal(null)).toBe('null');
+  });
+});
+
+describe('numberLiteral', () => {
+  it('writes an exponent out in full, which AQL has no form for', () => {
+    expect(numberLiteral('1e-7')).toBe('0.0000001');
+    expect(numberLiteral('1e+21')).toBe('1000000000000000000000');
+    expect(numberLiteral('1.5e21')).toBe('1500000000000000000000');
+    expect(numberLiteral('-1.25E2')).toBe('-125');
+    expect(numberLiteral('12.5e-1')).toBe('1.25');
+    expect(numberLiteral('0.5e1')).toBe('5');
+    expect(numberLiteral('-2.5e-3')).toBe('-0.0025');
+    expect(numberLiteral('7e0')).toBe('7');
   });
 });
 
@@ -65,6 +101,10 @@ describe('equals', () => {
 
   it('uses the function form for null, which `is` will not take as an operand', () => {
     expect(equals('orders.status', null)).toBe('is(orders.status, null)');
+  });
+
+  it("writes a number column's value as a number", () => {
+    expect(equals('orders.id', '17', 'number')).toBe('orders.id is 17');
   });
 
   it('escapes the value, not the field', () => {

@@ -17,6 +17,64 @@ components:
         - message
         - severity
       type: object
+    Column:
+      additionalProperties: false
+      properties:
+        adhoc:
+          description: a query-local expression, not a field the dataset defines
+          type: boolean
+        aggregation:
+          description: an aggregated field's aggregation, such as sum or count distinct
+          type: string
+        arrow_type:
+          additionalProperties: true
+          description: the Arrow type canal-query read the values as, by which they are written; absent before the query runs
+          properties:
+            label:
+              description: "the type as arrow-go spells it, such as decimal(38, 2): for people, not to decide on"
+              type: string
+            type:
+              description: "the type's name, as Schema.fbs's Type union names it, in snake_case: int, floating_point, decimal, utf8, bool, date, timestamp, list, struct, ..."
+              type: string
+          required:
+            - type
+            - label
+          type: object
+        db_type:
+          description: "the database's own name of the column's type: for debugging, never to decide on, since it varies by database and driver; absent before the query runs"
+          type: string
+        fieldName:
+          description: the field it draws; for an adhoc column, its name
+          type: string
+        isMeasure:
+          type: boolean
+        label:
+          type: string
+        modelId:
+          description: the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column
+          type: string
+        name:
+          description: the column's key, as in fields
+          type: string
+        semantic_type:
+          description: "what the column's values mean, in AML's types, plus bit: a true or false stored as a bit, written as true and false or as \"1\" and \"0\" by how the database produced it. Decide by it. Absent when no AQL types the column (a SQL query, or AQL that is not an explore): see arrow_type. Unknown when its AQL type has no meaning in AML (time, duration, ...)"
+          enum:
+            - bit
+            - date
+            - datetime
+            - json
+            - number
+            - text
+            - truefalse
+            - unknown
+          type: string
+      required:
+        - name
+        - fieldName
+        - label
+        - adhoc
+        - isMeasure
+      type: object
     CompileError:
       additionalProperties: false
       properties:
@@ -40,9 +98,9 @@ components:
           description: "the AQL compiled: the query with its Query Input applied; absent for a SQL query"
           type: string
         columns:
-          description: what each column of an explore query's answer will be; absent for other queries
+          description: what each column of an explore query's answer will be, and its semantic type; absent for other queries
           items:
-            $ref: "#/components/schemas/ExploreColumn"
+            $ref: "#/components/schemas/Column"
           type: array
         sql:
           type: string
@@ -265,35 +323,6 @@ components:
         - message
         - request_id
       type: object
-    ExploreColumn:
-      additionalProperties: false
-      properties:
-        adhoc:
-          description: a query-local expression, not a field the dataset defines
-          type: boolean
-        aggregation:
-          description: an aggregated field's aggregation, such as sum or count distinct
-          type: string
-        fieldName:
-          description: the field it draws; for an adhoc column, its name
-          type: string
-        isMeasure:
-          type: boolean
-        label:
-          type: string
-        modelId:
-          description: the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column
-          type: string
-        name:
-          description: the column's key, as in fields
-          type: string
-      required:
-        - name
-        - fieldName
-        - label
-        - adhoc
-        - isMeasure
-      type: object
     ExportFormatOptions:
       additionalProperties: false
       properties:
@@ -424,7 +453,7 @@ components:
           description: the operator, such as is, contains, between, last
           type: string
         values:
-          description: "the operator's values: strings, numbers or booleans; empty for an operator that takes none"
+          description: "the operator's values, by the field's type: a number as a string in JSON's number syntax, such as \"9007199254740993\" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none"
           items: {}
           type: array
       required:
@@ -464,7 +493,7 @@ components:
         columns:
           description: one per field of result, in order
           items:
-            $ref: "#/components/schemas/ExploreColumn"
+            $ref: "#/components/schemas/Column"
           type: array
         result:
           $ref: "#/components/schemas/QueryRows"
@@ -483,6 +512,7 @@ components:
             type: string
           type: array
         records:
+          description: "one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as \"NaN\", \"Infinity\" and \"-Infinity\", and so at any depth of a list, map or struct; null as null"
           items:
             items: {}
             type: array

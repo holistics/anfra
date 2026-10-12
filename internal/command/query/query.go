@@ -37,7 +37,7 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 			if err != nil {
 				return QueryResult{}, failed(err)
 			}
-			return QueryResult{SQL: r.SQL, Columns: describeFields(r.Fields, nil),
+			return QueryResult{SQL: r.SQL, Columns: describeColumns(r.Header, nil),
 				Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 		}
 		aql, limit, err := in.aql()
@@ -55,7 +55,7 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 		if err != nil {
 			return QueryResult{}, failed(err)
 		}
-		return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Columns: describeFields(r.Fields, compiled.Columns),
+		return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Columns: describeColumns(r.Header, compiled.Columns),
 			Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
 	},
 })
@@ -88,7 +88,7 @@ var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
 		if err != nil {
 			return CompiledQuery{}, err
 		}
-		return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Columns: compiled.Columns}, nil
+		return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Columns: compiledColumns(compiled.Columns)}, nil
 	},
 })
 

@@ -198,6 +198,36 @@ export interface components {
             message: string;
             severity: string;
         };
+        Column: {
+            /** @description a query-local expression, not a field the dataset defines */
+            adhoc: boolean;
+            /** @description an aggregated field's aggregation, such as sum or count distinct */
+            aggregation?: string;
+            /** @description the Arrow type canal-query read the values as, by which they are written; absent before the query runs */
+            arrow_type?: {
+                /** @description the type as arrow-go spells it, such as decimal(38, 2): for people, not to decide on */
+                label: string;
+                /** @description the type's name, as Schema.fbs's Type union names it, in snake_case: int, floating_point, decimal, utf8, bool, date, timestamp, list, struct, ... */
+                type: string;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description the database's own name of the column's type: for debugging, never to decide on, since it varies by database and driver; absent before the query runs */
+            db_type?: string;
+            /** @description the field it draws; for an adhoc column, its name */
+            fieldName: string;
+            isMeasure: boolean;
+            label: string;
+            /** @description the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column */
+            modelId?: string;
+            /** @description the column's key, as in fields */
+            name: string;
+            /**
+             * @description what the column's values mean, in AML's types, plus bit: a true or false stored as a bit, written as true and false or as "1" and "0" by how the database produced it. Decide by it. Absent when no AQL types the column (a SQL query, or AQL that is not an explore): see arrow_type. Unknown when its AQL type has no meaning in AML (time, duration, ...)
+             * @enum {string}
+             */
+            semantic_type?: "bit" | "date" | "datetime" | "json" | "number" | "text" | "truefalse" | "unknown";
+        };
         CompileError: {
             /** Format: int64 */
             col?: number;
@@ -209,8 +239,8 @@ export interface components {
         CompiledQuery: {
             /** @description the AQL compiled: the query with its Query Input applied; absent for a SQL query */
             aql?: string;
-            /** @description what each column of an explore query's answer will be; absent for other queries */
-            columns?: components["schemas"]["ExploreColumn"][];
+            /** @description what each column of an explore query's answer will be, and its semantic type; absent for other queries */
+            columns?: components["schemas"]["Column"][];
             sql: string;
         };
         ContextEntry: {
@@ -307,20 +337,6 @@ export interface components {
             /** @constant */
             status: 422;
         };
-        ExploreColumn: {
-            /** @description a query-local expression, not a field the dataset defines */
-            adhoc: boolean;
-            /** @description an aggregated field's aggregation, such as sum or count distinct */
-            aggregation?: string;
-            /** @description the field it draws; for an adhoc column, its name */
-            fieldName: string;
-            isMeasure: boolean;
-            label: string;
-            /** @description the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column */
-            modelId?: string;
-            /** @description the column's key, as in fields */
-            name: string;
-        };
         ExportFormatOptions: {
             /** @description csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open */
             bom?: boolean;
@@ -400,7 +416,7 @@ export interface components {
             modifier?: string;
             /** @description the operator, such as is, contains, between, last */
             operator: string;
-            /** @description the operator's values: strings, numbers or booleans; empty for an operator that takes none */
+            /** @description the operator's values, by the field's type: a number as a string in JSON's number syntax, such as "9007199254740993" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none */
             values: unknown[];
         };
         QueryInput: {
@@ -421,12 +437,13 @@ export interface components {
             /** @description the AQL that ran: the query with its Query Input applied; absent for a SQL query */
             aql?: string;
             /** @description one per field of result, in order */
-            columns: components["schemas"]["ExploreColumn"][];
+            columns: components["schemas"]["Column"][];
             result: components["schemas"]["QueryRows"];
             sql: string;
         };
         QueryRows: {
             fields: string[];
+            /** @description one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as "NaN", "Infinity" and "-Infinity", and so at any depth of a list, map or struct; null as null */
             records: unknown[][];
         };
         QueryRunInput: {

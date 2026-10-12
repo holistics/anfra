@@ -22,6 +22,7 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Every command, in every mode, against real sidecars: what it answers, and
@@ -132,12 +133,17 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		if !strings.Contains(r.AQL, "Widget") || len(r.Result.Records) != 1 {
 			t.Errorf("the input was not applied: aql %q, %d rows", r.AQL, len(r.Result.Records))
 		}
-		want := []anfranode.ExploreColumn{
-			{Name: "name", FieldName: "name", ModelID: "products", Label: r.Columns[0].Label},
-			{Name: "n", FieldName: "id", ModelID: "products", Label: r.Columns[1].Label, IsMeasure: true, Aggregation: "count"},
+		want := []querycmd.Column{
+			{Name: "name", FieldName: "name", ModelID: "products", Label: r.Columns[0].Label, SemanticType: "text",
+				ArrowType: r.Columns[0].ArrowType, DBType: r.Columns[0].DBType},
+			{Name: "n", FieldName: "id", ModelID: "products", Label: r.Columns[1].Label, IsMeasure: true, Aggregation: "count",
+				SemanticType: "number", ArrowType: r.Columns[1].ArrowType, DBType: r.Columns[1].DBType},
 		}
 		if !reflect.DeepEqual(r.Columns, want) {
 			t.Errorf("columns =\n  %+v\nwant\n  %+v", r.Columns, want)
+		}
+		if r.Columns[0].ArrowType.Name() != "utf8" || r.Columns[1].ArrowType.Name() != "int" || r.Columns[1].DBType != "INT8" && r.Columns[1].DBType != "int8" {
+			t.Errorf("types: %s %s %q", r.Columns[0].ArrowType, r.Columns[1].ArrowType, r.Columns[1].DBType)
 		}
 
 		// anfra-node's refusals land on the arg at fault.
@@ -160,6 +166,45 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		}
 		if n := len(res.Data.(querycmd.QueryResult).Result.Records); n != 1 {
 			t.Errorf("page 2 of 3 rows by 2: %d rows, want 1", n)
+		}
+	})
+
+	// Every number is a string, with every digit, under columns that say what
+	// it is; and a number filter value is a string, kept as it is.
+	t.Run("query, numbers", func(t *testing.T) {
+		cc := command.CommandContext{Clients: clients, Repo: valid, DataPerms: dataperm.Unrestricted()}
+		res, err := Dispatch(ctx, cc, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo",
+			"query": "select 9007199254740993::int8 as big, 12345678901234567890.123456789::numeric(38, 9) as amt, " +
+				"1234567.5::float8 as f, 'Infinity'::float8 as inf, 1e-7::float8 as tiny"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := res.Data.(querycmd.QueryResult)
+		b, _ := jsonkit.Marshal(r.Result.Records)
+		if want := `[["9007199254740993","12345678901234567890.123456789","1234567.5","Infinity","1e-7"]]`; string(b) != want {
+			t.Errorf("records = %s, want %s", b, want)
+		}
+		// A SQL query's columns have no semantic type: nothing but AQL says what a
+		// column means.
+		var types []string
+		for _, c := range r.Columns {
+			types = append(types, string(c.SemanticType)+"|"+c.ArrowType.Name()+"|"+strings.ToLower(c.DBType))
+		}
+		if got, want := strings.Join(types, ", "), "|int|int8, |decimal|numeric, |floating_point|float8, "+
+			"|floating_point|float8, |floating_point|float8"; got != want {
+			t.Errorf("types = %s, want %s", got, want)
+		}
+
+		filter := func(value any) map[string]any {
+			return map[string]any{"dataset": "ecommerce", "query": "explore { dimensions { id: products.id } }",
+				"input": map[string]any{"filters": []any{map[string]any{"field": "products.id", "operator": "is", "values": []any{value}}}}}
+		}
+		if res, err := Dispatch(ctx, cc, Request{Command: "query", Args: filter("1")}); err != nil || len(res.Data.(querycmd.QueryResult).Result.Records) != 1 {
+			t.Errorf("a number as a string: %v", err)
+		}
+		_, err = Dispatch(ctx, cc, Request{Command: "query", Args: filter(1)})
+		if d, _ := apperr.DetailsOf(err, apperr.ValidationFailed); len(d.Violations) != 1 || d.Violations[0].Field != "input.filters[0].values[0]" {
+			t.Errorf("a JSON number: %v, %+v; want a violation on the value", err, d.Violations)
 		}
 	})
 

@@ -2,11 +2,24 @@ import type {
   Backend,
   BackendQueryRequest,
   BackendQueryResult,
+  ColumnMeta,
   ConditionValue,
   DatasetDescriptor,
   FieldSuggestionsRequest,
   User,
 } from '../common/types';
+
+/** A text column's types, as the core API answers them, for a result column fixture. */
+export const textTypes = {
+  semantic_type: 'text', arrow_type: { type: 'utf8', label: 'utf8' }, db_type: 'text',
+} as const satisfies Pick<ColumnMeta, 'semantic_type' | 'arrow_type' | 'db_type'>;
+
+/** A number column's types, as the core API answers them, for a result column fixture. */
+export const numberTypes = {
+  semantic_type: 'number',
+  arrow_type: { type: 'decimal', precision: 38, scale: 2, bit_width: 128, label: 'decimal(38, 2)' },
+  db_type: 'numeric',
+} as const satisfies Pick<ColumnMeta, 'semantic_type' | 'arrow_type' | 'db_type'>;
 
 export const testUser: User = {
   id: 7,

@@ -214,7 +214,8 @@ function selectionExpression (
 ): string | undefined {
   try {
     const perRow = rows.map((row) => aqlAnd(aliases.map((alias) => {
-      const field = fieldReferenceOf(columnsByAlias.get(alias)!);
+      const column = columnsByAlias.get(alias)!;
+      const field = fieldReferenceOf(column);
       const raw = row[alias] ?? null;
 
       // A drilled bucket is a range, not an instant — the same end-exclusive span the structured
@@ -229,12 +230,12 @@ function selectionExpression (
       if (raw !== null && typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
         throw new TypeError('no AQL spelling');
       }
-      return aqlEquals(field, raw as AqlValue);
+      return aqlEquals(field, raw as AqlValue, column.semantic_type);
     })));
 
     return aqlOr(perRow);
   } catch {
-    // Includes `literal` refusing NaN or Infinity. Falling back is the safe direction: a lossy
+    // Includes `literal` refusing NaN or Infinity, or a number column's value that is not a number. Falling back is the safe direction: a lossy
     // condition shows too much, a wrong one shows the wrong thing.
     return undefined;
   }

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PermissionError, QueryError, TransportError } from '../common/errors';
-import type { BackendQueryRequest, DatasetDescriptor } from '../common/types';
+import type { BackendQueryRequest, DatasetDescriptor, SemanticType } from '../common/types';
 import { coreApiBackend, SUGGESTION_LIMIT } from './backend';
 import { coreClient } from './client';
+import type { components } from './schema';
 
 type Answer = { status: number, body: unknown } | Error;
 
@@ -34,9 +35,23 @@ const signal = new AbortController().signal;
 const answered = {
   sql: 'select 1',
   aql: 'explore { … }',
-  columns: [{ name: 'status', fieldName: 'status', modelId: 'orders', label: 'Status', adhoc: false, isMeasure: false }],
+  columns: [{
+    name: 'status', fieldName: 'status', modelId: 'orders', label: 'Status', adhoc: false, isMeasure: false,
+    semantic_type: 'text', arrow_type: { type: 'utf8', label: 'utf8' }, db_type: 'text',
+  }],
   result: { fields: ['status'], records: [['paid'], ['open']] },
 };
+
+/** True when A and B are the same set of types; false when either has one the other lacks. */
+type Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+// Compiles only while the SDK's semantic types are exactly the ones the API answers: one the API
+// adds, or one it no longer answers, fails the typecheck here.
+const semanticTypesAreTheApis: Exactly<SemanticType, NonNullable<components['schemas']['Column']['semantic_type']>> = true;
+
+it("names exactly the semantic types the API answers", () => {
+  expect(semanticTypesAreTheApis).toBe(true);
+});
 
 describe('coreApiBackend', () => {
   it('runs a query as core.query, the Query Input passed through, and answers it the way the SDK takes it', async () => {
@@ -52,6 +67,15 @@ describe('coreApiBackend', () => {
       meta: { page: 2, pageSize: 10, numRows: 2 },
       debug: { executedAql: 'explore { … }', executedSql: 'select 1', fromCache: false },
     });
+  });
+
+  it("fails a query whose columns come without their types, which a Data App decides by", async () => {
+    const { semantic_type: _, ...untyped } = answered.columns[0];
+    const { client } = api(ok({ ...answered, columns: [untyped] }));
+    await expect(coreApiBackend(client).submitQuery(request, signal)).rejects.toThrowError(
+      new QueryError("The server answered column 'status' without its types (semantic_type, arrow_type, db_type), "
+        + 'which a Data App decides by: the server is older than this SDK.'),
+    );
   });
 
   it('leaves an unpaged query unpaged', async () => {
