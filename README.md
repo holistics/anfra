@@ -20,15 +20,16 @@
 
 ## What is anfra?
 
-anfra is an **open-source framework for building trusted custom BI apps with AI coding agents**. You build the app with your own HTML, JavaScript, and charting libraries, and the anfra SDK connects it to a governed semantic foundation with consistent, reusable metrics and trusted business context.
+anfra is an **open-source framework for building trusted custom BI apps with AI coding agents**.
 
-It also provides powerful analytics interactions: filtering, drill-downs, and period comparisons for your app, out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
+- Traditional BI tools make the numbers easy to trust, but often limit teams to fixed dashboard layouts and interactions.
+- Coding agents can build custom dashboard apps in HTML and JavaScript, but wiring each view to the warehouse and handling interactions is easy to get wrong and hard to reuse.
 
-## Why anfra?
+With anfra, your coding agent builds the app with HTML, JavaScript and any charting library, and the anfra SDK connects it to a governed semantic foundation with consistent, reusable metrics and business context.
 
-Traditional BI tools make it easier to trust the numbers, but often limit teams to fixed dashboard layouts and interactions. On the other hand, coding agents can build custom dashboard apps with HTML and JavaScript easily, but wiring each view to the warehouse — and getting filters, drill-downs, and comparisons right — is easy to get wrong and hard to reuse.
+anfra also provides analytics interactions (filtering, drill-downs, and period comparisons) out of the box, along with built-in provenance and lineage to help users understand where their data comes from and how metrics are calculated.
 
-With anfra, you define metrics once, the agent writes the UI, and anfra turns every click into a query on those metrics. [See what that looks like](#what-it-looks-like).
+You get the custom layouts of a coding agent and the trusted numbers of a BI tool.
 
 ## Key features
 
