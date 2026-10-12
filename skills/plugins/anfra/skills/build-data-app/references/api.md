@@ -89,8 +89,8 @@ a bare dataset metric is an aggregate condition too.
 ### Result shape
 
 ```js
-query.result.columns // [{ name, fieldName, modelId?, label, adhoc, isMeasure, aggregation? }]
-query.result.rows    // [{ month: '2026-01-01', total: 1234.5 }, ...]
+query.result.columns // [{ name, fieldName, modelId?, label, adhoc, isMeasure, aggregation?, semantic_type, arrow_type, db_type }]
+query.result.rows    // [{ month: '2026-01-01', total: '1234.5' }, ...]
 ```
 
 - Row keys are the **aliases your AQL declared** (`month`, `total`), matching `column.name`.
@@ -98,8 +98,24 @@ query.result.rows    // [{ month: '2026-01-01', total: 1234.5 }, ...]
 - Values are raw, never formatted. Format numbers and dates yourself (`Intl.NumberFormat`,
   `toLocaleDateString`). Log `rows[0]` on first success to confirm the value types rather than
   guessing.
-- Decimal values can arrive as strings (`"97537.24"`) to keep their precision, and dates as ISO
-  strings (`"2025-06-01T00:00:00Z"`). Convert with `Number(...)` before charting a measure.
+- **Every number arrives as a string**, with every digit: `"9007199254740993"`, `"97537.24"`, and
+  a float's `"NaN"`, `"Infinity"` or `"-Infinity"`. Dates arrive as ISO strings
+  (`"2025-06-01T00:00:00Z"`), `null` as `null`.
+- **Decide by `column.semantic_type`, never by `typeof`**: `number`, `text`, `date`, `datetime`,
+  `truefalse`, `json`, `bit` (a true or false stored as a bit: `true`/`false`, or `"1"`/`"0"`), or
+  `unknown` (a type AML gives no meaning yet).
+- **Display** a number with `Intl.NumberFormat`, which formats the string as it is:
+  `money.format(row.revenue)`.
+- **Compute, chart or sort** with `Number(v)`. Never do arithmetic or `<` on the strings: `"1" + 2`
+  is `"12"`, and `"10" < "9"` is true. Check for `null` first, since `Number(null)` is `0`.
+  `Number(v)` keeps every digit of a `floating_point` column (`column.arrow_type.type`). An `int`
+  with `bit_width` 64, or a `decimal`, can lose digits past about 15 significant digits: keep an
+  ID as its string, and compare IDs with `===` on the strings.
+- **Exact arithmetic**: prefer computing it in the query, as an aggregate or a metric (`sum`, `avg`,
+  a ratio), which the database computes with every digit. Only when it must happen in the
+  browser, give the string to a decimal library instead of `Number(v)` (`new Decimal(row.revenue)`
+  with decimal.js or big.js), or to `BigInt` for whole numbers (`BigInt(row.id)`; its division
+  drops the remainder).
 - `column.label` is a display label; prefer it for axis and header text.
 - `result.debug` has `executedAt`, `executedSql`, `fromCache`, and for an AQL query `executedAql`: your AQL
   with the reader's filters, sorts and date drills applied — the first thing to log when a
@@ -182,7 +198,7 @@ Useful operators by type (the full list is in the SDK's `Operator` type):
 
 - any: `is`, `is_not`, `is_null`, `not_null`
 - string: `contains`, `does_not_contain`, `starts_with`, `ends_with` (all case-insensitive)
-- number: `greater_than`, `less_than`, `between` (`values: [lo, hi]`)
+- number: `greater_than`, `less_than`, `between` (`values: [lo, hi]`). A number filter's values are strings, as results give them: `values: ['100']`. A JS number throws, since it may already have lost digits.
 - date: `between` (`['2026-01-01', '2026-03-31']`), `before`, `after`, `last`/`next`
   (`values: [7], modifier: 'day'`), `matches` (`['last 3 months']`, an AQL date phrase)
 - boolean: `is_true`, `is_false`

@@ -131,7 +131,7 @@
           series: [{
             type: 'bar',
             data: rows.map((row) => ({
-              value: row.revenue,
+              value: Number(row.revenue), // numbers arrive as strings; a chart needs numbers
               itemStyle: { opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
             })),
           }],
@@ -144,7 +144,7 @@
           tooltip: { trigger: 'axis', valueFormatter: (v) => money.format(v) },
           xAxis: { type: 'category', data: rows.map((row) => String(row.period).slice(0, 10)) },
           yAxis: { type: 'value', axisLabel: { formatter: (v) => money.format(v) } },
-          series: [{ type: 'line', smooth: true, data: rows.map((row) => row.revenue) }],
+          series: [{ type: 'line', smooth: true, data: rows.map((row) => Number(row.revenue)) }],
         });
       }
     }
