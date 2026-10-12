@@ -34,12 +34,10 @@ You get the **custom layouts of a coding agent** and the **trusted numbers of a 
 ## Key features
 
 - **Custom layouts**: your coding agent writes plain HTML and JavaScript with any charting library, so apps aren't limited to the chart types, filters and layouts a BI tool offers.
-- **Built for coding agents**: agent skills teach Claude Code, Codex and Cursor to write anfra models and apps, and an MCP server lets the agent read your models and metrics.
-- **Interactions built in**: the SDK handles cross-filters, drill-downs and period comparisons, so the agent doesn't write that SQL by hand.
 - **Governed semantic foundation**: models, datasets and metrics live as code in your repo, and your data team reviews changes like any other code. Every app uses the same definitions.
+- **Interactions built in**: the SDK handles cross-filters, drill-downs and period comparisons, so the agent doesn't write that SQL by hand.
 - **Built-in provenance and lineage**: open Inspect on any number to see the query that produced it and the metric definitions behind it.
-- **Live data**: apps query your warehouse each time someone opens them, instead of holding pasted numbers.
-- **Your warehouse, your infrastructure**: works with PostgreSQL, Snowflake, BigQuery, ClickHouse and more. Self-host the server, and queries run directly on your warehouse.
+- **Built for coding agents**: agent skills teach Claude Code, Codex and Cursor to write anfra models and apps, and an MCP server lets the agent read your models and metrics.
 
 ## Demo gallery
 
