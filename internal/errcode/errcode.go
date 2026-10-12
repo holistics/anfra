@@ -40,4 +40,11 @@ var (
 	// ExportsUnavailable: the server stores no exports (it provides no
 	// command.ExportStore), so an export cannot be made here.
 	ExportsUnavailable = apperr.DefinePublicCode(NS, "exports_unavailable", apperr.Server, "This server cannot make exports.")
+	// LocalRepoNotAllowed: an invocation on a local repo from a host that did not
+	// allow local repos (CommandContext.AllowLocalRepo). A host mistake, as
+	// DataPermsMissing is: a platform serving managed repos never builds a local
+	// one, and one that serves a directory says so.
+	LocalRepoNotAllowed = apperr.DefinePublicCode(NS, "local_repo_not_allowed", apperr.Client, "This host does not allow local repos.")
+	// CatalogUnavailable: ingest or search on a managed repo, not supported yet.
+	CatalogUnavailable = apperr.DefinePublicCode(NS, "catalog_unavailable", apperr.Server, "Not supported for managed repos yet.")
 )

@@ -37,9 +37,9 @@ func repoValid(diagnostics []anfranode.CompileError, reports []anfranode.Validat
 // Validate validates the AML repo via the node sidecar. paths (optional) are the
 // file/dir/glob selectors — expanded in the node; empty validates the whole repo.
 func Validate(ctx context.Context, node *anfranode.Client, r repo.Repo, paths []string) (RepoValidation, error) {
-	res, err := node.ValidateAML(ctx, anfranode.ValidateAMLRequest{RepoPath: r.Dir, RepoID: r.ID, Paths: paths})
+	res, err := node.ValidateAML(ctx, anfranode.ValidateAMLRequest{RepoRef: anfranode.RefTo(r), Paths: paths})
 	if err != nil {
-		return RepoValidation{}, fmt.Errorf("validate AML for repo %q: %w", r.Dir, err)
+		return RepoValidation{}, fmt.Errorf("validate AML for repo %s: %w", r, err)
 	}
 	return RepoValidation{
 		Valid:       repoValid(res.CompileErrors, res.Reports),

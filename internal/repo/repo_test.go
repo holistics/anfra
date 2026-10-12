@@ -2,6 +2,7 @@ package repo
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,5 +34,60 @@ func TestAnfraHome(t *testing.T) {
 	}
 	if r.ConfigDir != filepath.Join(repoDir, ".anfra") {
 		t.Errorf("ConfigDir = %q", r.ConfigDir)
+	}
+}
+
+const (
+	testRepoID   = "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b"
+	testRevision = testRepoID + "@0123456789abcdef0123456789abcdef01234567"
+)
+
+// A Repo is exactly one kind: a local repo has a directory and no revision, a
+// managed repo the reverse, and the zero Repo neither.
+func TestRepoKinds(t *testing.T) {
+	local := Resolve(t.TempDir())
+	l := local.Repo()
+	if got, ok := l.Local(); !ok || got.Dir != local.Dir || l.ID() != local.ID {
+		t.Errorf("local: Local() = %+v, %v; ID = %q", got, ok, l.ID())
+	}
+	if _, ok := l.Revision(); ok {
+		t.Error("a local repo has a revision")
+	}
+
+	r, err := Managed(testRepoID, testRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.Local(); ok {
+		t.Error("a managed repo has a directory")
+	}
+	if rev, ok := r.Revision(); !ok || rev != testRevision || r.ID() != testRepoID {
+		t.Errorf("revision: Revision() = %q, %v; ID = %q", rev, ok, r.ID())
+	}
+
+	var zero Repo
+	if !zero.IsZero() || l.IsZero() || r.IsZero() {
+		t.Error("IsZero is not exactly the zero Repo")
+	}
+}
+
+// A revision names a commit by its full sha, never an abbreviation or a ref, and
+// the id that keys the compile cache is required.
+func TestManagedRefuses(t *testing.T) {
+	for name, tc := range map[string]struct{ id, revision string }{
+		"no id":       {"", testRevision},
+		"no repo":     {testRepoID, "@0123456789abcdef0123456789abcdef01234567"},
+		"no sha":      {testRepoID, testRepoID},
+		"abbreviated": {testRepoID, testRepoID + "@0123456"},
+		"a ref":       {testRepoID, testRepoID + "@main"},
+		"upper hex":   {testRepoID, testRepoID + "@0123456789ABCDEF0123456789ABCDEF01234567"},
+		"a path":      {testRepoID, "/repos/acme@0123456789abcdef0123456789abcdef01234567 x"},
+	} {
+		if _, err := Managed(tc.id, tc.revision); err == nil {
+			t.Errorf("%s: Managed(%q, %q) succeeded", name, tc.id, tc.revision)
+		}
+	}
+	if _, err := Managed(testRepoID, testRepoID+"@"+strings.Repeat("a", 64)); err != nil {
+		t.Errorf("a SHA-256 revision: %v", err)
 	}
 }

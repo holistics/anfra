@@ -9,18 +9,24 @@ import (
 )
 
 // HostMistakes are the codes that mean the host built an invocation wrong: no
-// data permissions stated, or restrictions on a query that cannot apply them.
-// They are not part of the core API: no op declares them, and a host that hits
-// one has a bug of its own.
-var HostMistakes = []apperr.Code{errcode.DataPermsMissing, errcode.DataPermsUnenforceable}
+// data permissions stated, restrictions on a query that cannot apply them, or a
+// local repo the host did not allow. They are not part of the core API: no op
+// declares them, and a host that hits one has a bug of its own.
+var HostMistakes = []apperr.Code{errcode.DataPermsMissing, errcode.DataPermsUnenforceable, errcode.LocalRepoNotAllowed}
 
-// admission is the one precondition every command has: nothing runs until the
-// host has stated what the caller may see (see app.Dispatch). The host's
-// CommandContext is otherwise the handler's as it is.
+// admission is the precondition every command has: nothing runs until the host
+// has stated what the caller may see (see app.Dispatch), nor on a local repo the
+// host did not allow (CommandContext.AllowLocalRepo). The host's CommandContext
+// is otherwise the handler's as it is.
 var admission = apikit.Admission[CommandContext, CommandContext]{
 	Admit: func(_ context.Context, cc CommandContext) (CommandContext, error) {
 		if !cc.DataPerms.Decided() {
 			return CommandContext{}, ErrDataPermsMissing()
+		}
+		if _, local := cc.Repo.Local(); local && !cc.AllowLocalRepo {
+			return CommandContext{}, apperr.New(errcode.LocalRepoNotAllowed,
+				"repo "+cc.Repo.String()+" is a local directory, which this host does not allow: a platform serving "+
+					"managed repos builds them with ManagedRepo, and one that serves a directory sets AllowLocalRepo")
 		}
 		return cc, nil
 	},

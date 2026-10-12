@@ -30,10 +30,11 @@ repo := engine.OpenRepo("/srv/repos/sales") // a repo's directory
 
 // After your platform has decided who the caller is and that they may run this:
 inv := engine.Invocation{
-	Clients:     clients,
-	Repo:        repo,
-	DataPerms:   engine.Restricted(engine.Attributes{"region": "APAC"}), // or engine.Unrestricted()
-	Attribution: engine.Attribution{"user": userID},                      // for logs and traces only
+	Clients:        clients,
+	Repo:           repo,
+	AllowLocalRepo: true, // a directory is served on purpose; refused otherwise
+	DataPerms:      engine.Restricted(engine.Attributes{"region": "APAC"}), // or engine.Unrestricted()
+	Attribution:    engine.Attribution{"user": userID},                      // for logs and traces only
 }
 res, err := engine.Dispatch(ctx, inv, engine.Request{
 	Command: "query",
@@ -42,7 +43,31 @@ res, err := engine.Dispatch(ctx, inv, engine.Request{
 ```
 
 - `Invocation` is the trusted half of the call: build it on the server, never decode it from a request, or a caller could state their own permissions. `Request` is the untrusted half.
+- `AllowLocalRepo` must be set for a repo from `OpenRepo`: a command on a local repo is otherwise refused (`local_repo_not_allowed`), so a platform serving managed repos cannot serve a directory by mistake.
 - `DataPerms` must be stated: `Dispatch` refuses an invocation without them. `Restricted` attributes change which rows a query returns; `Attribution` never does.
+
+### A managed repo
+
+A platform that manages its repos in a git service, rather than on a disk the engine can read, opens a managed repo instead, read at one revision:
+
+```go
+repo, err := engine.ManagedRepo(repoID, repoID+"@"+sha) // the commit's full sha
+inv := engine.Invocation{
+	Clients:     clients,
+	Repo:        repo,
+	DataSources: dataSources, // your engine.DataSources: dialects, and one connection on demand
+	DataPerms:   engine.Unrestricted(),
+}
+```
+
+- `repoID` is the repo's stable identity: anfra-node keys its incremental compile cache by it, so it must not change from one revision to the next. The revision says what to read.
+- anfra-node must read revisions from the git service (`ANFRA_GIT_URL`); it refuses a path then.
+- A managed repo has no `data_sources.yml`, so the platform supplies its data sources on the invocation, as an `engine.DataSources`. The engine asks for no more than a command needs:
+  - `Dialects`: every data source's name and type, to compile (`query compile`, `query validate`, `show`, and `query` before it runs). Metadata, no connection; return the data sources the caller may compile against.
+  - `Connection(name)`: one data source, connection included, only to run a query, for the data source it targets. The one place to retrieve a connection and authorize its use; answer `engine.ErrUnknownDataSource` for a name you have no data source by.
+  - `validate` asks for neither. Without them, the commands that compile refuse.
+  - A platform that already holds them all can pass an `engine.DataSourceSet`.
+- `ingest` and `search` are not supported for managed repos yet: they answer `catalog_unavailable`.
 - `res.Status` is `engine.StatusOK`, or `engine.StatusInvalid` for a command that ran and judged its input invalid (validation diagnostics). That is an outcome, not an error. `res.Data` is the answer.
 - `engine.Commands()` and `engine.Describe()` list what you can dispatch, and how each is called.
 - `Exports` is where `query.export` puts its file: an `engine.ExportStore` you provide, which writes the file and answers a link to it that expires (object storage with presigned URLs, say). Without one, an export fails with `engine.ExportsUnavailable`. Its links must work for whoever called: where they reach you, not where you listen. See [designs/export-store.md](../designs/export-store.md).

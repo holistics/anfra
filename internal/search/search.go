@@ -14,7 +14,7 @@ import (
 
 // Run asks anfra-node to search the local catalog. Go owns orchestration
 // (sidecars, catalog path, canal endpoint); anfra-node owns search execution.
-func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Repo, query string) (anfranode.CatalogSearchResult, error) {
+func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Local, query string) (anfranode.CatalogSearchResult, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("search query is required")
 	}

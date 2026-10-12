@@ -40,7 +40,7 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 	defer node.Close()
 
 	repoDir := t.TempDir()
-	r := repo.Repo{
+	r := repo.Local{
 		Dir:       repoDir,
 		DataDir:   filepath.Join(t.TempDir(), "repos", "repo-123"),
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
@@ -82,7 +82,7 @@ func TestRunRequiresCanalQueryClient(t *testing.T) {
 	_, err := Run(context.Background(),
 		anfranode.NewClientHTTP("http://127.0.0.1:9001"),
 		nil,
-		repo.Repo{},
+		repo.Local{},
 		"",
 	)
 	if err == nil || !strings.Contains(err.Error(), "canal-query sidecar") {

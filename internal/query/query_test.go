@@ -1,8 +1,7 @@
 package query
 
 import (
-	"os"
-	"path/filepath"
+	"context"
 	"testing"
 
 	"github.com/holistics/anfra/internal/datasource"
@@ -87,36 +86,43 @@ func TestExtractLimit(t *testing.T) {
 // The sidecar keys its compile cache by RepoID. One sidecar can serve several
 // repos — and, when shared, several tenants — so the ID has to travel on the
 // request; without it the sidecar falls back to a process-wide identity and
-// distinct repos collide on one cache entry.
-func TestCompileRequestCarriesRepoID(t *testing.T) {
-	configDir := t.TempDir()
-	manifest := filepath.Join(configDir, datasource.FileName)
-	if err := os.WriteFile(manifest, []byte("data_sources:\n  demo:\n    type: postgresql\n"), 0o600); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
-	r := repo.Repo{Dir: "/repos/acme/sales", ID: "sales-1a2b3c4d", ConfigDir: configDir}
-
-	req, err := CompileRequest(r, "ecommerce", "products | select(products.name)")
+// distinct repos collide on one cache entry. A local repo sends its directory;
+// a managed repo its revision; never both.
+func TestCompileRequestCarriesTheRepo(t *testing.T) {
+	sources := datasource.Set{"demo": {Name: "demo", DBType: "postgresql"}}
+	local := repo.Local{Dir: "/repos/acme/sales", ID: "sales-1a2b3c4d"}.Repo()
+	revision, err := repo.Managed("0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b",
+		"0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b@0123456789abcdef0123456789abcdef01234567")
 	if err != nil {
-		t.Fatalf("CompileRequest: %v", err)
+		t.Fatal(err)
 	}
-	if req.RepoID != r.ID {
-		t.Errorf("RepoID = %q, want %q", req.RepoID, r.ID)
-	}
-	if req.RepoPath != r.Dir {
-		t.Errorf("RepoPath = %q, want %q", req.RepoPath, r.Dir)
-	}
-
-	// The wire contract: anfra-node reads `repoId`.
-	raw, err := jsonkit.Marshal(req)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	var wire map[string]any
-	if err := jsonkit.Unmarshal(raw, &wire); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if got := wire["repoId"]; got != r.ID {
-		t.Errorf("wire repoId = %v, want %q", got, r.ID)
+	for name, tc := range map[string]struct {
+		r    repo.Repo
+		want map[string]any
+	}{
+		"local": {local, map[string]any{"repoId": "sales-1a2b3c4d", "repoPath": "/repos/acme/sales"}},
+		"revision": {revision, map[string]any{"repoId": "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b",
+			"revision": "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b@0123456789abcdef0123456789abcdef01234567"}},
+	} {
+		req, err := CompileRequest(context.Background(), Source{Repo: tc.r, DataSources: sources}, "ecommerce", "products | select(products.name)")
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		raw, err := jsonkit.Marshal(req)
+		if err != nil {
+			t.Fatalf("%s: marshal: %v", name, err)
+		}
+		var wire map[string]any
+		if err := jsonkit.Unmarshal(raw, &wire); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		for _, key := range []string{"repoId", "repoPath", "revision"} {
+			if got, want := wire[key], tc.want[key]; got != want {
+				t.Errorf("%s: wire %s = %v, want %v", name, key, got, want)
+			}
+		}
+		if ds, ok := wire["dataSources"].(map[string]any)["demo"].(map[string]any); !ok || ds["dbtype"] != "postgresql" {
+			t.Errorf("%s: wire dataSources = %v", name, wire["dataSources"])
+		}
 	}
 }

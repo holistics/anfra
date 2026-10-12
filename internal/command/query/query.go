@@ -26,7 +26,7 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable},
 	Run: func(ctx context.Context, cc command.CommandContext, in QueryRunInput) (QueryResult, error) {
 		if in.Lang == "sql" {
-			ds, err := in.dataSource(cc)
+			ds, err := in.dataSource(ctx, cc)
 			if err != nil {
 				return QueryResult{}, err
 			}
@@ -47,11 +47,15 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return QueryResult{}, err
 		}
-		compiled, err := compileAQL(ctx, cc, in.Dataset, aql, in.run())
+		src, err := sourceOf(cc)
 		if err != nil {
 			return QueryResult{}, err
 		}
-		r, err := query.Execute(ctx, cc.Clients.CanalQuery, cc.Repo, compiled, limit)
+		compiled, err := compileAQL(ctx, cc, src, in.Dataset, aql, in.run())
+		if err != nil {
+			return QueryResult{}, err
+		}
+		r, err := query.Execute(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, limit)
 		if err != nil {
 			return QueryResult{}, failed(err)
 		}
@@ -72,7 +76,7 @@ var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
 	Run: func(ctx context.Context, cc command.CommandContext, in QueryRunInput) (CompiledQuery, error) {
 		if in.Lang == "sql" {
 			// Already the SQL that would run.
-			if _, err := in.dataSource(cc); err != nil {
+			if err := in.checkDataSource(ctx, cc); err != nil {
 				return CompiledQuery{}, err
 			}
 			return CompiledQuery{SQL: in.Query}, nil
@@ -84,7 +88,11 @@ var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return CompiledQuery{}, err
 		}
-		compiled, err := compileAQL(ctx, cc, in.Dataset, aql, in.run())
+		src, err := sourceOf(cc)
+		if err != nil {
+			return CompiledQuery{}, err
+		}
+		compiled, err := compileAQL(ctx, cc, src, in.Dataset, aql, in.run())
 		if err != nil {
 			return CompiledQuery{}, err
 		}
@@ -115,7 +123,11 @@ var Validate = command.Define(command.Def[QueryInput, query.QueryValidation]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return query.QueryValidation{}, err
 		}
-		return query.Check(ctx, cc.Clients.Node, cc.Repo, in.Dataset, aql)
+		src, err := sourceOf(cc)
+		if err != nil {
+			return query.QueryValidation{}, err
+		}
+		return query.Check(ctx, cc.Clients.Node, src, in.Dataset, aql)
 	},
 	Valid: func(r query.QueryValidation) bool { return r.Valid },
 })

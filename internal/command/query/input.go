@@ -1,7 +1,10 @@
 package query
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	_ "time/tzdata" // the time zone check, on a machine without a zone database
@@ -126,20 +129,48 @@ func (in QueryInput) aql() (aql string, limit int, err error) {
 	return aql, limit, nil
 }
 
-// dataSource is a SQL query's data source. Nothing restricts SQL, so it runs
-// only when the host stated the caller is unrestricted (it authorizes the
-// caller on the data source itself).
-func (in QueryInput) dataSource(cc command.CommandContext) (datasource.DataSource, error) {
-	if cc.DataPerms.Restricted() {
-		return datasource.DataSource{}, apperr.New(errcode.DataPermsUnenforceable,
-			"a SQL query runs only for a caller with unrestricted data permissions: no restriction can be applied to it")
-	}
-	ds, ok, err := query.DataSource(cc.Repo, in.DataSource)
+// dataSource is a SQL query's data source, connection included, to run it on:
+// the one data source it names, and only that one is asked for.
+func (in QueryInput) dataSource(ctx context.Context, cc command.CommandContext) (datasource.DataSource, error) {
+	sources, err := in.sqlSources(cc)
 	if err != nil {
 		return datasource.DataSource{}, err
 	}
-	if !ok {
-		return datasource.DataSource{}, command.InvalidArg("data_source", "invalid", "no data source "+in.DataSource+" in data_sources.yml")
+	ds, err := sources.Connection(ctx, in.DataSource)
+	if errors.Is(err, datasource.ErrUnknown) {
+		return datasource.DataSource{}, in.unknownDataSource()
 	}
-	return ds, nil
+	return ds, err
+}
+
+// checkDataSource checks a SQL query names a data source of the repo, without
+// asking for its connection: compiling SQL is returning it as it is.
+func (in QueryInput) checkDataSource(ctx context.Context, cc command.CommandContext) error {
+	sources, err := in.sqlSources(cc)
+	if err != nil {
+		return err
+	}
+	dialects, err := sources.Dialects(ctx)
+	if err != nil {
+		return fmt.Errorf("data source dialects: %w", err)
+	}
+	if !slices.ContainsFunc(dialects, func(d datasource.Dialect) bool { return d.Name == in.DataSource }) {
+		return in.unknownDataSource()
+	}
+	return nil
+}
+
+// sqlSources is the repo's data sources, for a SQL query. Nothing restricts SQL,
+// so it runs only when the host stated the caller is unrestricted (it authorizes
+// the caller on the data source itself).
+func (in QueryInput) sqlSources(cc command.CommandContext) (datasource.DataSources, error) {
+	if cc.DataPerms.Restricted() {
+		return nil, apperr.New(errcode.DataPermsUnenforceable,
+			"a SQL query runs only for a caller with unrestricted data permissions: no restriction can be applied to it")
+	}
+	return cc.ResolveDataSources()
+}
+
+func (in QueryInput) unknownDataSource() error {
+	return command.InvalidArg("data_source", "invalid", "no data source "+in.DataSource+" among the repo's data sources")
 }

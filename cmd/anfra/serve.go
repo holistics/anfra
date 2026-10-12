@@ -252,7 +252,7 @@ const exportLinkLife = time.Hour
 // listen opens the server's listener: addr when given — refusing a taken one,
 // and naming the repo whose server holds it — and otherwise defaultAddr, or a
 // free loopback port when that one is taken.
-func listen(r repo.Repo, addr string) (net.Listener, error) {
+func listen(r repo.Local, addr string) (net.Listener, error) {
 	explicit := addr != ""
 	if !explicit {
 		addr = defaultAddr
@@ -284,7 +284,7 @@ func isLoopback(host string) bool {
 // serveConfig is what serveHandler serves, and how.
 type serveConfig struct {
 	logger *slog.Logger
-	repo   repo.Repo
+	repo   repo.Local
 	// context is the CommandContext every request runs with, except that each
 	// request's exports are linked where its caller reached the server.
 	context command.CommandContext

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -45,16 +46,44 @@ func NewClientHTTP(baseURL string) *Client {
 	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{}}
 }
 
-// checkRepoID guards the repo-scoped RPCs. anfra-node holds no repo identity of
-// its own — one process can serve many repos — so it requires RepoID on every
-// such request and rejects it as INVALID_PARAMS otherwise. Checking here too
-// means a caller that forgets fails in its own process, with a stack that names
-// it, rather than reading an error off the wire.
-func checkRepoID(repoID string) error {
-	if repoID == "" {
+// RepoRef names a request's repo to anfra-node: its compile-cache identity, and
+// exactly one of where its files are, a directory (RepoPath) or a revision a host
+// keeps (Revision, "<repo>@<sha>"). RefTo builds it from a repo; every
+// repo-scoped call checks it before it leaves the process, so a caller that
+// sends neither or both fails here, with a stack that names it, rather than with
+// an error off the wire.
+//
+// anfra-node holds no repo identity of its own (one process can serve many
+// repos), so RepoID is required. It is the repo's stable identity, never the
+// revision: anfra-node's compile cache is an incremental seed keyed by it, made
+// exactly the requested files on every request, so a stable key keeps commits
+// incremental and the content keeps it correct.
+type RepoRef struct {
+	RepoID   string `json:"repoId"`
+	RepoPath string `json:"repoPath,omitempty"`
+	Revision string `json:"revision,omitempty"`
+}
+
+// RefTo is r as anfra-node names it.
+func RefTo(r repo.Repo) RepoRef {
+	ref := RepoRef{RepoID: r.ID()}
+	if local, ok := r.Local(); ok {
+		ref.RepoPath = local.Dir
+	}
+	if rev, ok := r.Revision(); ok {
+		ref.Revision = rev
+	}
+	return ref
+}
+
+func (r RepoRef) check() error {
+	switch {
+	case r.RepoID == "":
 		return errors.New("anfra-node: RepoID is required on repo-scoped requests; " +
 			"anfra-node keeps no repo identity of its own, so the caller names the repo " +
 			"(tenant-qualified where the deployment is shared)")
+	case (r.RepoPath == "") == (r.Revision == ""):
+		return errors.New("anfra-node: a repo-scoped request names exactly one of RepoPath and Revision; build it with RefTo")
 	}
 	return nil
 }
@@ -183,22 +212,17 @@ type CompileDataSource struct {
 
 // CompileDataSources is the repo's data sources as the sidecar takes them: a
 // name and a dialect each, without their connections.
-func CompileDataSources(m map[string]datasource.DataSource) map[string]CompileDataSource {
-	out := make(map[string]CompileDataSource, len(m))
-	for name, ds := range m {
-		out[name] = CompileDataSource{Name: ds.Name, DBType: ds.DBType}
+func CompileDataSources(dialects []datasource.Dialect) map[string]CompileDataSource {
+	out := make(map[string]CompileDataSource, len(dialects))
+	for _, d := range dialects {
+		out[d.Name] = CompileDataSource{Name: d.Name, DBType: d.DBType}
 	}
 	return out
 }
 
 // CompileToSQLRequest / Result mirror the sidecar's aql.compile_to_sql method.
 type CompileToSQLRequest struct {
-	RepoPath string `json:"repoPath"`
-	// RepoID is the sidecar's compile-cache identity for this repo. One sidecar
-	// may serve many repos (and, when shared, many tenants), so it travels per
-	// request rather than per process. Omitted, the sidecar derives one from
-	// RepoPath.
-	RepoID      string                       `json:"repoId,omitempty"`
+	RepoRef
 	DatasetFqn  string                       `json:"datasetFqn"`
 	AQL         string                       `json:"aql"`
 	DataSources map[string]CompileDataSource `json:"dataSources"`
@@ -288,7 +312,7 @@ type ExploreColumn struct {
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.
 func (c *Client) CompileToSQL(ctx context.Context, req CompileToSQLRequest) (CompileToSQLResult, error) {
 	var res CompileToSQLResult
-	if err := checkRepoID(req.RepoID); err != nil {
+	if err := req.RepoRef.check(); err != nil {
 		return res, err
 	}
 	err := c.Call(ctx, "aql.compile_to_sql", req, &res)
@@ -299,10 +323,8 @@ func (c *Client) CompileToSQL(ctx context.Context, req CompileToSQLRequest) (Com
 // file/dir/glob selectors relative to the repo; empty validates the whole repo.
 // No data sources are involved — this type-checks AML.
 type ValidateAMLRequest struct {
-	RepoPath string `json:"repoPath"`
-	// RepoID is the compile-cache identity; see CompileToSQLRequest.RepoID.
-	RepoID string   `json:"repoId,omitempty"`
-	Paths  []string `json:"paths,omitempty"`
+	RepoRef
+	Paths []string `json:"paths,omitempty"`
 }
 
 // CompileError is an AML file that failed to compile (interpret). Row/Col are
@@ -351,7 +373,7 @@ type ValidateAMLResult struct {
 // paths and returns the findings.
 func (c *Client) ValidateAML(ctx context.Context, req ValidateAMLRequest) (ValidateAMLResult, error) {
 	var res ValidateAMLResult
-	if err := checkRepoID(req.RepoID); err != nil {
+	if err := req.RepoRef.check(); err != nil {
 		return res, err
 	}
 	err := c.Call(ctx, "aml.validate", req, &res)
@@ -375,7 +397,7 @@ type ValidateAQLResult struct {
 // CompileToSQL) and returns its diagnostics instead of throwing on the first error.
 func (c *Client) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (ValidateAQLResult, error) {
 	var res ValidateAQLResult
-	if err := checkRepoID(req.RepoID); err != nil {
+	if err := req.RepoRef.check(); err != nil {
 		return res, err
 	}
 	err := c.Call(ctx, "aql.validate", req, &res)
