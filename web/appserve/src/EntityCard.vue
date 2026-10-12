@@ -34,7 +34,7 @@ const drawn = () => {
 </script>
 
 <template>
-  <article class="card" :data-testid="`inspect-${kind()}-${name}`">
+  <article class="card" :data-entity="`${kind()}:${app}/${name}`" :data-testid="`inspect-${kind()}-${name}`">
     <header>
       <strong>{{ name }}</strong>
       <template v-if="query">

@@ -1,10 +1,23 @@
 <script setup lang="ts">
 // One level of the structure: a row per node, its children indented below. Hovering a row asks the
-// page to highlight the node; clicking selects it.
+// page to highlight the node; clicking selects it. A hovered or selected row shows its actions:
+// View data for a query or control the panel has a card for, and Copy for the node's handle.
+import Icon from './Icon.vue';
 import type { StructureNode } from './inspect';
 
-defineProps<{ nodes: StructureNode[], selected?: string, depth?: number }>();
-const emit = defineEmits<{ hover: [key: string | null], select: [key: string] }>();
+defineProps<{
+  nodes: StructureNode[],
+  selected?: string,
+  depth?: number,
+  copied?: string,
+  canView: (node: StructureNode) => boolean,
+}>();
+const emit = defineEmits<{
+  hover: [key: string | null],
+  select: [key: string],
+  view: [node: StructureNode],
+  copy: [node: StructureNode],
+}>();
 
 const title = (node: StructureNode) => (node.problems.length ? node.problems.join('\n') : undefined);
 </script>
@@ -26,14 +39,41 @@ const title = (node: StructureNode) => (node.problems.length ? node.problems.joi
         <span v-if="node.app" class="app">app {{ node.app }}</span>
         <span v-if="node.label" class="label">{{ node.label }}</span>
         <span v-if="node.problems.length" class="pill error" aria-label="Problems">!</span>
+        <span class="actions">
+          <button
+            v-if="canView(node)"
+            type="button"
+            class="row-action"
+            title="View data"
+            aria-label="View data"
+            data-testid="view-data"
+            @click.stop="emit('view', node)"
+          >
+            <Icon name="table" />
+          </button>
+          <button
+            type="button"
+            class="row-action"
+            :title="copied === node.key ? 'Copied' : 'Copy handle'"
+            aria-label="Copy handle"
+            data-testid="copy-handle"
+            @click.stop="emit('copy', node)"
+          >
+            <Icon :name="copied === node.key ? 'check' : 'copy'" />
+          </button>
+        </span>
       </div>
       <StructureTree
         v-if="node.children.length"
         :nodes="node.children"
         :selected="selected"
         :depth="(depth ?? 0) + 1"
+        :copied="copied"
+        :can-view="canView"
         @hover="emit('hover', $event)"
         @select="emit('select', $event)"
+        @view="emit('view', $event)"
+        @copy="emit('copy', $event)"
       />
     </li>
   </ul>

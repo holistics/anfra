@@ -14,6 +14,9 @@ const PATHS = {
   inspect: 'M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 6l-3 12',
   brand: 'M4 18l5-12 3 7 2-4 6 9',
   update: 'M12 19V5 M6 11l6-6 6 6',
+  copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
+  check: 'M5 12l5 5 9-10',
+  table: 'M4 5h16v14H4z M4 10h16 M4 15h16 M10 10v9',
 } as const;
 
 defineProps<{ name: keyof typeof PATHS }>();
