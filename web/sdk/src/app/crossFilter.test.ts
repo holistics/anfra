@@ -4,7 +4,7 @@ import {
 import { createSdk } from './sdk';
 import { ValidationError } from '../common/errors';
 import {
-  salesDataset, stubBackend, testUser, type StubOptions,
+  salesDataset, stubBackend, testUser, type StubOptions, textTypes, numberTypes,
 } from './testSupport';
 import type { App } from './app';
 import type { Query } from './query';
@@ -17,12 +17,12 @@ import type { BackendQueryRequest, ColumnMeta } from '../common/types';
  */
 function dim (name: string, modelId?: string): ColumnMeta {
   return {
-    name, fieldName: name, ...(modelId ? { modelId } : {}), label: name, adhoc: false, isMeasure: false,
+    name, fieldName: name, ...(modelId ? { modelId } : {}), label: name, adhoc: false, isMeasure: false, ...textTypes,
   };
 }
 function measureCol (name: string, aggregation = 'sum'): ColumnMeta {
   return {
-    name, fieldName: name, label: name, adhoc: false, isMeasure: true, aggregation,
+    name, fieldName: name, label: name, adhoc: false, isMeasure: true, aggregation, ...numberTypes,
   };
 }
 
@@ -44,6 +44,7 @@ const AQL = {
   regionStatus: markerAql('regionStatus', 'dimensions { region: users.region, status: orders.status }\nmeasures { total: orders | sum(orders.amount) }'),
   monthly: markerAql('monthly', 'dimensions { month: date_trunc(orders.created_at, "month") }\nmeasures { total: orders | sum(orders.amount) }'),
   ids: markerAql('ids', 'dimensions { id: orders.id }'),
+  idStatus: markerAql('idStatus', 'dimensions { id: orders.id, status: orders.status }'),
   elsewhere: markerAql('elsewhere', 'dimensions { region: users.region }'),
 };
 
@@ -57,6 +58,7 @@ const FIELDS: Record<string, ColumnMeta[]> = {
   // alias is the row key, but the column still points at the real field with a transformation on it.
   monthly: [{ ...dim('month', 'orders'), fieldName: 'created_at' }, measureCol('total')],
   ids: [dim('id', 'orders')],
+  idStatus: [{ ...dim('id', 'orders'), ...numberTypes }, dim('status', 'orders')],
   elsewhere: [dim('region', 'users')],
 };
 
@@ -68,6 +70,7 @@ const ROWS: Record<string, unknown[][]> = {
   regionStatus: [['APAC', 'completed', 40]],
   monthly: [['2026-01-01', 30]],
   ids: [[17]],
+  idStatus: [['9007199254740993', 'completed'], ['9007199254740994', 'pending']],
   elsewhere: [['APAC']],
 };
 
@@ -234,6 +237,21 @@ describe('deriving conditions from selected rows', () => {
       { field: 'users.region', operator: 'is', values: ['APAC', 'EMEA'] },
     ]);
     expect(app.selection?.lossy).toBe(false);
+  });
+
+  it("writes a number column's values as numbers, with every digit, when it says what was picked", async () => {
+    const { app, source } = await selecting(AQL.idStatus);
+
+    source.select([
+      { id: '9007199254740993', status: 'completed' },
+      { id: '9007199254740994', status: 'pending' },
+    ]);
+
+    // Quoted, AQL would refuse the comparison; through a JS number, both would be ...992.
+    expect(app.selection?.expression).toBe(
+      'or(and(orders.id is 9007199254740993, orders.status is "completed"), '
+      + 'and(orders.id is 9007199254740994, orders.status is "pending"))',
+    );
   });
 
   it('says exactly what was picked, as one condition, when the collapse would have widened it', async () => {
@@ -494,7 +512,7 @@ describe('what a selection reaches', () => {
     expect(target.selectedRows).toEqual([{ status: 'completed', total: 50 }]);
   });
 
-  it('sends a numeric value as a number, which the query API accepts', async () => {
+  it('passes a value on as the result gave it', async () => {
     const { stub, sdk } = build();
     const app = sdk.createApp();
     const source = app.createQuery('idsQuery', { dataset: 'sales', aql: AQL.ids });

@@ -161,6 +161,29 @@ export class Filter extends Control {
       }
       this.type = declaration.type;
     }
+    this.assertValues(this.condition.values ?? []);
+    this.assertValues(declaration.options ?? []);
+  }
+
+  setCondition (condition: Condition): void {
+    this.assertValues(condition.values ?? []);
+    super.setCondition(condition);
+  }
+
+  /**
+   * A number filter's values are strings, as query results give them, which keep every digit. A JS
+   * number may already have lost some (`Number("9007199254740993")` is ...992), and nothing after
+   * can tell, so the core API refuses one; this says so where the app hands it over.
+   */
+  private assertValues (values: readonly unknown[]): void {
+    if (this.type !== 'number') return;
+    const number = values.find((value) => typeof value === 'number');
+    if (number === undefined) return;
+    throw new ValidationError(
+      `Filter '${this.name}' filters numbers: give its values as strings, as query results give them `
+      + `(${JSON.stringify(String(number))}, not ${String(number)}), so none has lost a digit.`,
+      this.name,
+    );
   }
 
   /** True for a field-backed filter, false for a manual one. The two are separate axes from `type`. */

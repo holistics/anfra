@@ -103,23 +103,84 @@ func TestRunViolation(t *testing.T) {
 }
 
 // A query's answer has one column per field, in order: as anfra-node described
-// it, or adhoc when it did not.
-func TestDescribeFields(t *testing.T) {
+// it, or adhoc when it did not; with the header's types. Its semantic type is
+// what AMQL typed it, never one guessed from its Arrow or database type.
+func TestDescribeColumns(t *testing.T) {
 	described := []anfranode.ExploreColumn{
-		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum"},
-		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status"},
+		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum", Type: "number"},
+		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status", Type: "text"},
+		{Name: "month", FieldName: "created_at", ModelID: "orders", Label: "Month"}, // an anfra-node before 0.4.0
 	}
-	got := describeFields([]string{"status", "total", "ratio"}, described)
-	want := []anfranode.ExploreColumn{
-		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status"},
-		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum"},
-		{Name: "ratio", FieldName: "ratio", Label: "ratio", Adhoc: true},
+	decimal := canalquery.ArrowType(`{"type":"decimal","precision":38,"scale":2,"bit_width":128,"label":"decimal(38, 2)"}`)
+	utf8 := canalquery.ArrowType(`{"type":"utf8","label":"utf8"}`)
+	date := canalquery.ArrowType(`{"type":"date","unit":"DAY","label":"date32"}`)
+	float := canalquery.ArrowType(`{"type":"floating_point","precision":"DOUBLE","label":"float64"}`)
+	header := canalquery.Header{
+		Fields:     []string{"status", "total", "month", "ratio"},
+		Types:      []string{"text", "numeric", "date", "float8"},
+		ArrowTypes: []canalquery.ArrowType{utf8, decimal, date, float},
+	}
+	got := describeColumns(header, described)
+	want := []Column{
+		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status", SemanticType: "text", ArrowType: utf8, DBType: "text"},
+		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum",
+			SemanticType: "number", ArrowType: decimal, DBType: "numeric"},
+		{Name: "month", FieldName: "created_at", ModelID: "orders", Label: "Month", ArrowType: date, DBType: "date"},
+		{Name: "ratio", FieldName: "ratio", Label: "ratio", Adhoc: true, ArrowType: float, DBType: "float8"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("columns =\n  %+v\nwant\n  %+v", got, want)
 	}
-	if got := describeFields([]string{}, nil); got == nil || len(got) != 0 {
+
+	// AMQL's type stands where the Arrow type says otherwise: a number canal-query
+	// could only read as text is a number.
+	got = describeColumns(canalquery.Header{Fields: []string{"total"}, ArrowTypes: []canalquery.ArrowType{utf8}}, described)
+	if got[0].SemanticType != "number" {
+		t.Errorf("semantic type = %q, want AMQL's number", got[0].SemanticType)
+	}
+	if got := describeColumns(canalquery.Header{}, nil); got == nil || len(got) != 0 {
 		t.Errorf("no fields: %#v, want an empty list", got)
+	}
+}
+
+// Each of AMQL's types (packages/amql/src/types.ts, SqlType, as of anfra-node
+// 0.4.0) has its semantic type: AML's own types and bit as they are, the rest
+// unknown until AML says what they mean. A type AMQL adds is unknown: list it
+// here, and decide what it means.
+func TestSemanticTypes(t *testing.T) {
+	for amql, want := range map[string]SemanticType{
+		"text": "text", "number": "number", "date": "date", "datetime": "datetime", "truefalse": "truefalse",
+		"json": "json", "bit": "bit", "unknown": "unknown",
+		"time": "unknown", "duration": "unknown", "binary": "unknown", "composite": "unknown", "range": "unknown",
+		"": "",
+	} {
+		if got := semanticOf(amql); got != want {
+			t.Errorf("%q: %q, want %q", amql, got, want)
+		}
+	}
+	if got := semanticOf("some_new_type"); got != SemanticUnknown {
+		t.Errorf("a type AMQL adds: %q, want unknown", got)
+	}
+}
+
+// The schema lists the semantic types the core answers, each once.
+func TestSemanticTypeSchema(t *testing.T) {
+	got := SemanticType("").Schema(nil).Enum
+	want := []any{"bit", "date", "datetime", "json", "number", "text", "truefalse", "unknown"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("enum = %v, want %v", got, want)
+	}
+}
+
+// A compiled query's columns have AMQL's semantic type, and no type from a run.
+func TestCompiledColumns(t *testing.T) {
+	got := compiledColumns([]anfranode.ExploreColumn{{Name: "n", Type: "number"}, {Name: "r", Type: "range"}, {Name: "x"}})
+	if got[0].SemanticType != "number" || got[1].SemanticType != "unknown" || got[2].SemanticType != "" ||
+		got[0].ArrowType != nil || got[0].DBType != "" {
+		t.Errorf("columns = %+v", got)
+	}
+	if compiledColumns(nil) != nil {
+		t.Error("no columns described: want none")
 	}
 }
 

@@ -48,7 +48,7 @@ Both are plain: an enum and an object, not a union. That keeps the schema easy f
 
 **The file's name** is the caller's `filename` (blank is unset), or the dataset's or data source's name; either way with the format's extension added when it has none. It is never a path on disk: a store keeps it beside the link, and the download's header carries it encoded. So it need only be one name: any script is welcome, and one that is a path or no name at all (only dots, a `/` or `\`, a control character, over 255 bytes) is refused as a violation on `filename`, not changed. What one system forbids in a name, such as a colon on Windows, is for the browser to replace where the file lands.
 
-**No row cap.** An export is the whole result. What bounds it is the server's storage, not anfra's memory: rows are written to the file as they arrive. With a header row they go to a spool file in the system's temp directory first, since canal-query names the columns only after the last row, and the header comes first.
+**No row cap.** An export is the whole result. What bounds it is the server's storage, not anfra's memory: rows are written to the file as they arrive, after the header row: canal-query sends a result's columns before its first row.
 
 ## The layers
 

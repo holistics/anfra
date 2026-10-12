@@ -6,7 +6,6 @@ import (
 	"encoding/json/jsontext"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -105,8 +104,9 @@ func (in ExportInput) options() ExportFormatOptions {
 	return *in.FormatOptions
 }
 
-// rowsFunc runs the query, handing each row to each, and answers its fields.
-type rowsFunc func(each func(canalquery.Row) error) ([]string, error)
+// streamFunc runs the query, handing its result to h as it arrives: its header,
+// then each row.
+type streamFunc func(h canalquery.Handler) error
 
 // runExport decides what runs before any file exists, so a query that is
 // refused, or does not compile, fails as it would in query; then writes the
@@ -115,7 +115,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 	var (
 		name      string
 		described []anfranode.ExploreColumn
-		rows      rowsFunc
+		run       streamFunc
 	)
 	if in.Lang == "sql" {
 		ds, err := in.dataSource(cc)
@@ -129,8 +129,8 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 			return command.ExportLink{}, err
 		}
 		name = in.DataSource
-		rows = func(each func(canalquery.Row) error) ([]string, error) {
-			return query.ExecuteSQLEach(ctx, cc.Clients.CanalQuery, ds, in.Query, each)
+		run = func(h canalquery.Handler) error {
+			return query.StreamSQL(ctx, cc.Clients.CanalQuery, ds, in.Query, h)
 		}
 	} else {
 		aql, limit, err := in.aql()
@@ -148,21 +148,18 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 			return command.ExportLink{}, err
 		}
 		name, described = in.Dataset, compiled.Columns
-		rows = func(each func(canalquery.Row) error) ([]string, error) {
-			return query.ExecuteEach(ctx, cc.Clients.CanalQuery, cc.Repo, compiled, limit, each)
+		run = func(h canalquery.Handler) error {
+			return query.Stream(ctx, cc.Clients.CanalQuery, cc.Repo, compiled, limit, h)
 		}
 	}
-	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, rows)
+	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, run)
 }
 
-// writeCSV writes the query's rows as a CSV file in store, and answers its link.
-//
-// The header row comes first, but the columns are known only when the last row
-// has arrived (canal sends them at the end), so with a header the rows go to a
-// spool file first, and follow the header into the file. Either way no row is
-// held in memory.
+// writeCSV writes the query's result as a CSV file in store, and answers its
+// link: its header row (unless none is asked for) as soon as the result's
+// header arrives, then each row as it arrives, so no row is held.
 func writeCSV(ctx context.Context, store command.ExportStore, filename string, opts ExportFormatOptions,
-	described []anfranode.ExploreColumn, rows rowsFunc) (command.ExportLink, error) {
+	described []anfranode.ExploreColumn, run streamFunc) (command.ExportLink, error) {
 	header := opts.Header
 	if header == "" {
 		header = "labels"
@@ -182,59 +179,32 @@ func writeCSV(ctx context.Context, store command.ExportStore, filename string, o
 		}
 	}()
 
-	body := io.Writer(file)
-	if header == "none" {
-		if err := writeBOM(file, opts.BOM); err != nil {
-			return command.ExportLink{}, err
-		}
-	} else {
-		spool, err := os.CreateTemp("", "anfra-export-*.csv")
-		if err != nil {
-			return command.ExportLink{}, fmt.Errorf("create the export's spool file: %w", err)
-		}
-		defer spool.Close()
-		// Unnamed as soon as it is open: the open file stays usable, and the
-		// system frees it when it is closed, even by a crash, so nothing is
-		// left to clean up. Where an open file cannot be removed (Windows), it
-		// is removed when the export returns.
-		if os.Remove(spool.Name()) != nil {
-			defer os.Remove(spool.Name())
-		}
-		body = spool
-	}
-
-	w := csv.NewWriter(body)
+	w := csv.NewWriter(file)
 	count := 0
-	fields, err := rows(func(row canalquery.Row) error {
-		cells, err := csvCells(row)
-		if err != nil {
-			return err
-		}
-		count++
-		return w.Write(cells)
+	err = run(canalquery.Handler{
+		Header: func(h canalquery.Header) error {
+			if err := writeBOM(file, opts.BOM); err != nil { // before the writer has buffered anything
+				return err
+			}
+			if header == "none" {
+				return nil
+			}
+			return w.Write(headerRow(h, described, header))
+		},
+		Row: func(row canalquery.Row) error {
+			cells, err := csvCells(row)
+			if err != nil {
+				return err
+			}
+			count++
+			return w.Write(cells)
+		},
 	})
 	if err != nil {
 		return command.ExportLink{}, failed(err)
 	}
 	if w.Flush(); w.Error() != nil {
 		return command.ExportLink{}, fmt.Errorf("write the export's rows: %w", w.Error())
-	}
-
-	if spool, ok := body.(*os.File); ok {
-		if err := writeBOM(file, opts.BOM); err != nil {
-			return command.ExportLink{}, err
-		}
-		hw := csv.NewWriter(file)
-		_ = hw.Write(headerRow(fields, described, header)) // its error is Error's, after Flush
-		if hw.Flush(); hw.Error() != nil {
-			return command.ExportLink{}, fmt.Errorf("write the export's header: %w", hw.Error())
-		}
-		if _, err := spool.Seek(0, io.SeekStart); err != nil {
-			return command.ExportLink{}, fmt.Errorf("read the export's spool file: %w", err)
-		}
-		if _, err := io.Copy(file, spool); err != nil {
-			return command.ExportLink{}, fmt.Errorf("copy the export's rows: %w", err)
-		}
 	}
 
 	url, expiresAt, err := file.Done(ctx)
@@ -280,8 +250,8 @@ func csvCells(row canalquery.Row) ([]string, error) {
 
 // headerRow is the header for the result's fields: each column's label, or its
 // name.
-func headerRow(fields []string, described []anfranode.ExploreColumn, header string) []string {
-	cols := describeFields(fields, described)
+func headerRow(h canalquery.Header, described []anfranode.ExploreColumn, header string) []string {
+	cols := describeColumns(h, described)
 	out := make([]string, len(cols))
 	for i, c := range cols {
 		out[i] = c.Name

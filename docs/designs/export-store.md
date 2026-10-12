@@ -24,7 +24,7 @@ The sweep runs when a process makes its first export, and, in `anfra serve`, eve
 
 Until a sweep runs, an expired file is only disk: its link already refuses to open.
 
-**An export is shorter than a link's life.** An export with a header row writes its file only at its end (its rows are spooled first), so while it runs its file looks as old as the export. Its timeout (30 minutes) under a link's life (an hour) is what keeps the age rule from removing an export still being written; a test holds the two apart. The spool itself is unnamed as soon as it is open, so nothing is left of it, even by a crash (on Windows, which cannot remove an open file, it is removed when the export returns).
+**An export is shorter than a link's life.** An export's file is created when it starts, and written as its rows arrive, so while its query runs (one can take long before its first row), the file can look as old as the export. Its timeout (30 minutes) under a link's life (an hour) is what keeps the age rule from removing an export still being written; a test holds the two apart.
 
 **The folder is the user's own**, `anfra-exports-<uid>` (`anfra-exports` on Windows, whose temp directory is a user's own already). On a machine several users share, one user's folder, made `0700`, would otherwise keep every other user's exports out.
 

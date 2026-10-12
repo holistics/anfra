@@ -4,7 +4,7 @@ import {
 import { createSdk } from './sdk';
 import { PermissionError } from '../common/errors';
 import {
-  salesDataset, stubBackend, testUser, type StubOptions,
+  salesDataset, stubBackend, testUser, type StubOptions, textTypes, numberTypes,
 } from './testSupport';
 import type { App } from './app';
 import type { BackendQueryResult } from '../common/types';
@@ -14,9 +14,11 @@ const twoRows: BackendQueryResult = {
   columns: [
     {
       name: 'region', fieldName: 'region', modelId: 'users', label: 'Region', adhoc: false, isMeasure: false,
+      ...textTypes,
     },
     {
       name: 'total', fieldName: 'amount', label: 'Sum of Amount', adhoc: false, isMeasure: true, aggregation: 'sum',
+      ...numberTypes,
     },
   ],
   meta: { page: 1, pageSize: 1000, numRows: 2 },

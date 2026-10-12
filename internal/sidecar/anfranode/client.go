@@ -226,7 +226,7 @@ type QueryTransforms struct {
 type QueryFilter struct {
 	Field       string `json:"field" doc:"model.field for a dataset field, or the name of a dataset metric"`
 	Operator    string `json:"operator" doc:"the operator, such as is, contains, between, last"`
-	Values      []any  `json:"values" doc:"the operator's values: strings, numbers or booleans; empty for an operator that takes none"`
+	Values      []any  `json:"values" doc:"the operator's values, by the field's type: a number as a string in JSON's number syntax, such as \"9007199254740993\" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none"`
 	Modifier    string `json:"modifier,omitempty" doc:"the date unit of a relative operator, such as day"`
 	Aggregation string `json:"aggregation,omitempty" doc:"the condition applies to this aggregate of field, such as sum"`
 }
@@ -279,6 +279,10 @@ type ExploreColumn struct {
 	Adhoc       bool   `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
 	IsMeasure   bool   `json:"isMeasure"`
 	Aggregation string `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
+	// Type is the AMQL type the type checker gives the column's expression
+	// (number, text, date, ...), not the type its field declares: a count of a
+	// text field is a number. Absent from an anfra-node before 0.4.0.
+	Type string `json:"type,omitempty"`
 }
 
 // CompileToSQL compiles an AQL query against a dataset into dialect SQL.

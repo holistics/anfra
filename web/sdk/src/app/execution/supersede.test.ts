@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSdk } from '../sdk';
-import { salesDataset, testUser } from '../testSupport';
+import { salesDataset, testUser, textTypes, numberTypes } from '../testSupport';
 import type { Backend, BackendQueryResult } from '../../common/types';
 
 interface Deferred {
@@ -19,9 +19,11 @@ const rows = (region: string): BackendQueryResult => ({
   columns: [
     {
       name: 'region', fieldName: 'region', modelId: 'users', label: 'Region', adhoc: false, isMeasure: false,
+      ...textTypes,
     },
     {
       name: 'total', fieldName: 'amount', label: 'Sum of Amount', adhoc: false, isMeasure: true, aggregation: 'sum',
+      ...numberTypes,
     },
   ],
   meta: { page: 1, pageSize: 1000, numRows: 1 },

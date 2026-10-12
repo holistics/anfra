@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createSdk } from './sdk';
 import { ValidationError } from '../common/errors';
-import { salesDataset, stubBackend, testUser } from './testSupport';
+import { salesDataset, stubBackend, testUser, textTypes } from './testSupport';
 import type { Backend } from '../common/types';
 import type { App } from './app';
 
@@ -133,6 +133,20 @@ describe('mapping', () => {
       field: 'orders.amount',
       aggregation: 'running sum' as never,
     })).toThrowError(/Invalid filter aggregation 'running sum'/);
+  });
+
+  it("refuses a JS number for a number filter's value, which may have lost digits", () => {
+    const app = sdk().createApp();
+    const big = app.createFilter('big', { type: 'number' });
+
+    expect(() => big.setCondition({ operator: 'is', values: [9007199254740992] }))
+      .toThrowError(/give its values as strings.*"9007199254740992", not 9007199254740992/);
+    expect(() => big.setCondition({ operator: 'is', values: ['9007199254740993'] })).not.toThrow();
+    expect(() => app.createFilter('tiers', { type: 'number', options: [10, 20] })).toThrowError(/filters numbers/);
+    expect(() => app.createFilter('first', { type: 'number', default: { operator: 'is', values: [1] } })).toThrowError(/filters numbers/);
+    // Another filter's numbers are not a number field's: a relative date's count of periods.
+    const recent = app.createFilter('recent', { type: 'date' });
+    expect(() => recent.setCondition({ operator: 'last', values: [7], modifier: 'day' })).not.toThrow();
   });
 
   it('rejects a control that belongs to another app', () => {
@@ -419,7 +433,7 @@ describe('superseding a run', () => {
         return {
           values: [['2026-01-01', 30]],
           columns: [{
-            name: 'month', fieldName: 'month', label: 'month', adhoc: false, isMeasure: false,
+            name: 'month', fieldName: 'month', label: 'month', adhoc: false, isMeasure: false, ...textTypes,
           }],
           meta: { page: 1, pageSize: 1000, numRows: 1 },
         };

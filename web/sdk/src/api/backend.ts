@@ -1,12 +1,13 @@
 import { QueryError, TransportError } from '../common/errors';
 import type {
-  Backend, BackendQueryRequest, BackendQueryResult, ConditionValue, DatasetDescriptor, FieldSuggestionsRequest,
+  Backend, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue, DatasetDescriptor, FieldSuggestionsRequest,
 } from '../common/types';
 import { coreClient, type CoreClient } from './client';
 import type { components } from './schema';
 import { toSdkError, type ApiErrorBody } from './errors';
 
 type QueryRunInput = components['schemas']['QueryRunInput'];
+type Column = components['schemas']['Column'];
 
 /** How many values a filter control is offered at most. */
 export const SUGGESTION_LIMIT = 100;
@@ -35,6 +36,25 @@ export function toQueryInput (request: BackendQueryRequest): QueryRunInput {
   };
 }
 
+/**
+ * The API's columns as a Data App takes them, their types required. The API's column leaves them
+ * out where nothing can say them (a SQL query, a query not yet run), but a Data App's query is an
+ * explore that ran, whose every column has them: one without is a server older than this SDK, and
+ * a Data App deciding by `typeof` instead would be wrong in silence.
+ */
+function toColumns (columns: Column[]): ColumnMeta[] {
+  return columns.map((column) => {
+    const { semantic_type: semanticType, arrow_type: arrowType, db_type: dbType } = column;
+    if (semanticType === undefined || arrowType === undefined || dbType === undefined) {
+      throw new QueryError(
+        `The server answered column '${column.name}' without its types (semantic_type, arrow_type, db_type), `
+        + 'which a Data App decides by: the server is older than this SDK.',
+      );
+    }
+    return { ...column, semantic_type: semanticType, arrow_type: arrowType, db_type: dbType };
+  });
+}
+
 async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal) {
   let result;
   try {
@@ -61,7 +81,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
       const data = await runQuery(client, toQueryInput(request), signal);
       const values = data.result.records;
       return {
-        columns: data.columns,
+        columns: toColumns(data.columns),
         values,
         meta: {
           ...(request.pageSize !== undefined ? { page: request.page ?? 1, pageSize: request.pageSize } : {}),

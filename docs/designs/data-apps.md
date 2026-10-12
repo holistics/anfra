@@ -109,7 +109,7 @@ A query's AQL is fixed when it is declared. What the reader changes (filter valu
 | A date drill | `input.dateDrills`, on the field the drilled dimensions are built on |
 | Paging, the app's time zone | `page`, `page_size`, `timezone` |
 
-So reader input is never spliced into AQL text, and the executed AQL comes back with the result, which is what the inspect panel shows. anfra-node applies the Query Input to the query's `explore { }`, which is why a Data App's queries are explores: controls, cross-filters, sorts and date drills have nothing to apply to in another shape. The Query Input and result columns keep amql's own field names (camelCase), which the SDK speaks too, rather than being converted in core and back in the SDK.
+So reader input is never spliced into AQL text, and the executed AQL comes back with the result, which is what the inspect panel shows. anfra-node applies the Query Input to the query's `explore { }`, which is why a Data App's queries are explores: controls, cross-filters, sorts and date drills have nothing to apply to in another shape. The Query Input and result columns keep amql's own field names (camelCase), which the SDK speaks too, rather than being converted in core and back in the SDK. A column's types are the core's own, not amql's, so they are in the API's case: `semantic_type`, `arrow_type`, `db_type` ([result-values.md](result-values.md#the-shape)). A column mixes the two cases, and each key's case says whose it is.
 
 `coreApiBackend` maps the core API's errors to the SDK's classes (`api/errors.ts`): a query anfra refuses or fails is a `QueryError`, a refusal of access a `PermissionError`, an unavailable server a `TransportError`. See [errors.md](errors.md) for the codes.
 
