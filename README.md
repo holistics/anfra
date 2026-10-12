@@ -33,17 +33,13 @@ You get the **custom layouts of a coding agent** and the **trusted numbers of a 
 
 ## Key features
 
-For **data teams**:
-
-- **Metrics defined once**: models, datasets, and metrics live as code in your repo, and you review changes like any other code.
-- **Every number can be inspected**: each value traces back to its query and metric definition.
-- **Your warehouse, your infrastructure**: works with PostgreSQL, Snowflake, BigQuery, ClickHouse, and more. Self-host the server, and queries run directly on your warehouse.
-
-For **people building and using apps**:
-
-- **Any layout**: the agent writes plain HTML and JavaScript, with any charting library.
-- **Interactions built in**: cross-filters, drill-downs, and period comparisons come from the SDK, not from hand-written SQL.
-- **Live data**: apps query the warehouse each time someone opens them, instead of holding pasted numbers.
+- **Custom layouts**: your coding agent writes plain HTML and JavaScript with any charting library, so apps aren't limited to the chart types, filters and layouts a BI tool offers.
+- **Built for coding agents**: agent skills teach Claude Code, Codex and Cursor to write anfra models and apps, and an MCP server lets the agent read your models and metrics.
+- **Interactions built in**: the SDK handles cross-filters, drill-downs and period comparisons, so the agent doesn't write that SQL by hand.
+- **Governed semantic foundation**: models, datasets and metrics live as code in your repo, and your data team reviews changes like any other code. Every app uses the same definitions.
+- **Built-in provenance and lineage**: open Inspect on any number to see the query that produced it and the metric definitions behind it.
+- **Live data**: apps query your warehouse each time someone opens them, instead of holding pasted numbers.
+- **Your warehouse, your infrastructure**: works with PostgreSQL, Snowflake, BigQuery, ClickHouse and more. Self-host the server, and queries run directly on your warehouse.
 
 ## Demo gallery
 
