@@ -44,6 +44,12 @@ Run `generate` after changing anything a command publishes: a command added, rem
 
 The document's version is the contract's, not the binary's: it does not change with every release.
 
+## The publish protocol: `api/remote.yaml`
+
+A second, smaller contract: what an anfra remote server serves for `anfra publish` (`repos.status`, `repos.list_missing_blobs`, `repos.create_blobs`, `repos.publish`). It is not the core API, and `anfra serve` does not serve it: anfra core defines it (`shared/remoteapi`: types, codes, a client) and the CLI calls it; a server such as anfra-cloud implements it with the same types. `scripts/openapi.sh generate` writes it beside the core API's (`anfra openapi --remote`).
+
+Its clients are ones the server does not ship with (the CLI, scripts, agents), which it cannot reload, so it changes additively (new ops, optional inputs, outputs, codes), and a client ignores what it does not know. A breaking change is avoided; when one is unavoidable it is declared, as for the core API, and CI refuses one that is not. Before anfra is stable, the CLI and the server are meant to run matching releases; a compatibility number, which the server checks to refuse a client it cannot serve, comes with stability.
+
 ## Clients from the contract
 
 The SDK's client for the core API, `@holistics/anfra-sdk/api`, is typed by `web/sdk/src/api/schema.d.ts`, generated from `api/openapi.yaml` (`pnpm --filter @holistics/anfra-sdk generate`). CI fails when it is stale. A change to a command's input or output therefore reaches TypeScript callers as a type error, not at runtime. Any other client can be generated from the same document.

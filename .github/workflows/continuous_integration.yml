@@ -90,6 +90,23 @@ jobs:
           fi
           echo "a breaking change to the core API, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
           exit 1
+      - name: no undeclared breaking change to the publish protocol
+        # As the core API's: its clients (the CLI, scripts, agents) cannot be reloaded, so
+        # a break is avoided, and allowed only when a commit declares it. A compatibility
+        # number, which the server checks, replaces this once anfra is stable.
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          if ! git cat-file -e "$BASE:api/remote.yaml" 2>/dev/null; then
+            echo "the base branch has no api/remote.yaml yet: nothing to compare"; exit 0
+          fi
+          git show "$BASE:api/remote.yaml" > "$RUNNER_TEMP/base-remote.yaml"
+          if scripts/openapi.sh breaking-remote "$RUNNER_TEMP/base-remote.yaml"; then exit 0; fi
+          if git log --format=%B "$BASE..HEAD" | grep -Eq '^[a-z]+(\([^)]*\))?!:|^BREAKING CHANGE:'; then
+            echo "breaking, and declared by a commit: ok"; exit 0
+          fi
+          echo "a breaking change to the publish protocol, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
+          exit 1
 
   # The Anfra SDK and the appserve frontend (the pnpm workspace): typecheck, tests, the build a
   # release embeds, and the SDK's API types fresh from api/openapi.yaml.

@@ -10,6 +10,7 @@ A repo's config is its `.anfra/` folder, committed with it (`anfra init` creates
 |---|---|
 | `data_sources.yml` | The data sources the repo's models query, by name: a `type` and a `connection` passed to the database driver unchanged. It holds credentials, so it is git-ignored; `anfra init` also creates `data_sources.yml.example`, the same without them, to commit. Each type's connection keys are listed in the anfra skills' [data source reference](https://github.com/holistics/anfra-skills/blob/main/plugins/anfra/skills/setup-repo/references/data-sources.md). |
 | `context_sources.yml` | What `anfra ingest` reads into the local catalog that `anfra search` searches; by default, the repo's own semantic layer. |
+| `config.yml` | The repo's settings, written by hand. `remote.url`: where `anfra publish` publishes the repo, an org's address on an anfra remote server (`https://bi.example.com/o/acme`), committed so everyone publishes to the same org. The anfra remote server is not a git remote. `anfra publish --set-remote` sets it, changing nothing else in the file. It never holds a credential. |
 
 anfra reads them on every command, so an edit needs no restart.
 
@@ -100,6 +101,12 @@ See [designs/release.md](../designs/release.md#updates).
 | `ANFRA_AUTO_UPDATE` | `1`: install a newer release in the background, instead of only noticing it. |
 | `ANFRA_GITHUB_TOKEN` (or `GH_TOKEN`, `GITHUB_TOKEN`) | A GitHub token, used only when an anonymous request for releases is refused. The first one set is used. |
 | `CI` | When set, anfra never starts a background update check. CI systems set it. |
+
+### Publishing
+
+| Variable | Effect |
+|---|---|
+| `ANFRA_REMOTE_SESSION` | **For development, until `anfra login` exists:** the session token `anfra publish` publishes with, sent as the server's session cookie. Unset, `anfra publish` refuses, saying so. |
 
 ### Data Apps
 
