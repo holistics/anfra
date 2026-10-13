@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // One level of the structure: a row per node, its children indented below. Hovering a row asks the
 // page to highlight the node; clicking selects it. A hovered or selected row shows its actions:
-// View data for a query or control the panel has a card for, and Copy for the node's handle.
+// View data for a query or control the panel has a card for, Download PNG for a container or block,
+// and Copy for the node's handle.
 import Icon from './Icon.vue';
 import type { StructureNode } from './inspect';
 
@@ -17,7 +18,10 @@ const emit = defineEmits<{
   select: [key: string],
   view: [node: StructureNode],
   copy: [node: StructureNode],
+  download: [node: StructureNode],
 }>();
+
+const renderable = (node: StructureNode) => (node.kind === 'container' || node.kind === 'block') && !!node.id && !node.problems.length;
 
 const title = (node: StructureNode) => (node.problems.length ? node.problems.join('\n') : undefined);
 </script>
@@ -52,6 +56,17 @@ const title = (node: StructureNode) => (node.problems.length ? node.problems.joi
             <Icon name="table" />
           </button>
           <button
+            v-if="renderable(node)"
+            type="button"
+            class="row-action"
+            title="Download PNG"
+            aria-label="Download PNG"
+            data-testid="download-node"
+            @click.stop="emit('download', node)"
+          >
+            <Icon name="download" />
+          </button>
+          <button
             type="button"
             class="row-action"
             :title="copied === node.key ? 'Copied' : 'Copy handle'"
@@ -74,6 +89,7 @@ const title = (node: StructureNode) => (node.problems.length ? node.problems.joi
         @select="emit('select', $event)"
         @view="emit('view', $event)"
         @copy="emit('copy', $event)"
+        @download="emit('download', $event)"
       />
     </li>
   </ul>
