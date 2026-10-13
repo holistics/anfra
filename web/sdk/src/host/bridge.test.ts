@@ -203,8 +203,8 @@ describe('serveBridge', () => {
       await expect(failed).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('refuses all of it when rendering is off', async () => {
-      bridge = serveBridge(frame, backend(), {}, { render: false, renderer: 'code' });
+    it('refuses all of it unless rendering is turned on', async () => {
+      bridge = serveBridge(frame, backend(), {}, { renderer: 'code' });
       await expect(bridge.render({ format: 'png' })).rejects.toThrow(/does not render/);
       fromFrame({ type: 'anfra:request', id: 1, method: 'renderer', request: null });
       save(2, png(), 'x.png');

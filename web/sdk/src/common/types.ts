@@ -87,8 +87,8 @@ export interface SdkFeatures {
    */
   export?: boolean;
   /**
-   * Whether `Anfra.render()` can save a rendering here: the host serves it, and has not turned it
-   * off (`mountDataApp({ render: false })`). An author shows a render button when this and
+   * Whether `Anfra.render()` can save a rendering here: the host turned it on
+   * (`mountDataApp({ render: true })`). An author shows a render button when this and
    * `user.permissions.canExportData` are both true.
    */
   render?: boolean;
