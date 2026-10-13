@@ -5,17 +5,26 @@
  */
 import type {
   BackendExportRequest, BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp, InspectedStructure,
-  LocateTarget, SdkFeatures, User,
+  LocateTarget, Rendering, RenderRequest, SdkFeatures, User,
 } from './types';
 
-/** The Backend methods a frame may call: the bridge serves these and nothing else. */
-export type BridgeMethod = 'submitQuery' | 'fieldSuggestions' | 'exportQuery';
+/**
+ * What a frame may ask its host: the Backend's methods, and the two a rendering needs (the
+ * renderer's code, and saving a file). The bridge serves these and nothing else.
+ */
+export type BridgeMethod = 'submitQuery' | 'fieldSuggestions' | 'exportQuery' | 'renderer' | 'saveFile';
+
+/** A file the frame made, for the host to save for the reader: the frame cannot download. */
+export interface SaveFileRequest {
+  blob: Blob;
+  filename: string;
+}
 
 /** What the host provisions a frame with, as JSON in `<script type="application/json" id="anfra-provision">`. */
 export interface Provision {
   datasets: Record<string, DatasetDescriptor>;
   user: User;
-  /** What the host can do beyond queries, such as exports. Absent from a host older than this field. */
+  /** What the host can do beyond queries: exports, rendering. Absent from a host older than this field. */
   features?: SdkFeatures;
   /** The host page's origin: where the frame posts, so nothing else can read its messages. */
   hostOrigin: string;
@@ -30,6 +39,12 @@ export type FrameMessage =
   | { type: 'anfra:request', id: number, method: 'fieldSuggestions', request: FieldSuggestionsRequest }
   /** The host makes the file, starts saving it for the reader, then answers its link. */
   | { type: 'anfra:request', id: number, method: 'exportQuery', request: BackendExportRequest }
+  /** The renderer's code, asked for on the frame's first rendering; answered as a string. */
+  | { type: 'anfra:request', id: number, method: 'renderer', request: null }
+  | { type: 'anfra:request', id: number, method: 'saveFile', request: SaveFileRequest }
+  /** The answer to the host's `anfra:render`, by its id. */
+  | { type: 'anfra:rendered', id: number, ok: true, result: Rendering }
+  | { type: 'anfra:rendered', id: number, ok: false, error: BridgeError }
   | { type: 'anfra:cancel', id: number }
   | { type: 'anfra:inspect', apps: InspectedApp[], structure: InspectedStructure }
   /** In pick mode, the reader chose a node, or left the mode (null, on Escape). */
@@ -51,4 +66,6 @@ export type HostMessage =
   /** Scroll a node or an entity into view and hold the highlight on it. */
   | { type: 'anfra:locate', target: LocateTarget }
   /** Start or stop pick mode. */
-  | { type: 'anfra:pick-watch', on: boolean };
+  | { type: 'anfra:pick-watch', on: boolean }
+  /** Render the app or one node, once its queries settle, and save it; the frame answers `anfra:rendered`. */
+  | { type: 'anfra:render', id: number, request: RenderRequest };

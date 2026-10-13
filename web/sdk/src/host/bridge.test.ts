@@ -2,7 +2,7 @@ import {
   afterEach, beforeEach, describe, expect, it, vi,
 } from 'vitest';
 import type { FrameMessage, HostMessage } from '../common/bridge';
-import { PermissionError } from '../common/errors';
+import { PermissionError, ValidationError } from '../common/errors';
 import type { Backend } from '../common/types';
 import { serveBridge, type BridgeHandle } from './bridge';
 
@@ -90,6 +90,65 @@ describe('serveBridge', () => {
       expect(replies).toEqual([{
         type: 'anfra:response', id: 4, ok: false, error: { name: 'TransportError', message: 'This host cannot make exports.' },
       }]);
+    });
+  });
+
+  describe('renderings', () => {
+    const rendering = { render: true, renderer: 'window.__anfraRenderer = {};' };
+
+    it("sends the renderer's code when the frame asks, and saves the file it makes", async () => {
+      const clicked: { href: string, download: string }[] = [];
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push({ href: this.href, download: this.download });
+      });
+      URL.createObjectURL = vi.fn(() => 'blob:rendering');
+      URL.revokeObjectURL = vi.fn();
+      bridge = serveBridge(frame, backend(), {}, rendering);
+      const blob = new Blob(['png']);
+      fromFrame({ type: 'anfra:request', id: 1, method: 'renderer', request: null });
+      fromFrame({ type: 'anfra:request', id: 2, method: 'saveFile', request: { blob, filename: 'Sales.png' } });
+      await settle();
+      expect(replies).toEqual([
+        { type: 'anfra:response', id: 1, ok: true, result: rendering.renderer },
+        { type: 'anfra:response', id: 2, ok: true, result: null },
+      ]);
+      expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
+      expect(clicked).toEqual([{ href: 'blob:rendering', download: 'Sales.png' }]);
+    });
+
+    it('asks the frame to render, and answers with what it rendered or why it could not', async () => {
+      bridge = serveBridge(frame, backend(), {}, rendering);
+      const done = bridge.render({ block: 'trend', format: 'png' });
+      const failed = bridge.render({ block: 'nope', format: 'png' });
+      expect(replies).toEqual([
+        { type: 'anfra:render', id: 1, request: { block: 'trend', format: 'png' } },
+        { type: 'anfra:render', id: 2, request: { block: 'nope', format: 'png' } },
+      ]);
+      const result = { filename: 'a.png', format: 'png' as const, width: 1, height: 1, blob: new Blob(), omitted: [] };
+      fromFrame({ type: 'anfra:rendered', id: 1, ok: true, result });
+      fromFrame({ type: 'anfra:rendered', id: 2, ok: false, error: { name: 'ValidationError', message: 'No element is marked data-anfra-block="nope".' } });
+      await expect(done).resolves.toEqual(result);
+      await expect(failed).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('refuses all of it when rendering is off', async () => {
+      bridge = serveBridge(frame, backend(), {}, { render: false, renderer: 'code' });
+      await expect(bridge.render({ format: 'png' })).rejects.toThrow(/does not render/);
+      fromFrame({ type: 'anfra:request', id: 1, method: 'renderer', request: null });
+      fromFrame({ type: 'anfra:request', id: 2, method: 'saveFile', request: { blob: new Blob(), filename: 'x.png' } });
+      await settle();
+      expect(replies).toEqual([
+        { type: 'anfra:response', id: 1, ok: false, error: { name: 'ValidationError', message: 'This host does not render Data Apps.' } },
+        { type: 'anfra:response', id: 2, ok: false, error: { name: 'ValidationError', message: 'This host does not render Data Apps.' } },
+      ]);
+    });
+
+    it('rejects a rendering still running when it stops', async () => {
+      bridge = serveBridge(frame, backend(), {}, rendering);
+      const pending = bridge.render({ format: 'pdf' });
+      bridge.stop();
+      bridge = undefined;
+      await expect(pending).rejects.toThrow(/unmounted/);
     });
   });
 

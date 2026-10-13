@@ -2,7 +2,7 @@ import { App } from './app';
 import { DatasetIndex } from './validation';
 import { ValidationError } from '../common/errors';
 import type {
-  AppDeclaration, Backend, DatasetDescriptor, SdkEnvironment, SdkFeatures, User,
+  AppDeclaration, Backend, DatasetDescriptor, Rendering, RenderRequest, SdkEnvironment, SdkFeatures, User,
 } from '../common/types';
 import { version } from '../../package.json';
 
@@ -40,10 +40,13 @@ export class Sdk {
   private readonly backend: Backend;
 
   /**
-   * What the host can do beyond queries. `export` says whether `query.export()` can work here: show
-   * an export button only when it and `user.permissions.canExportData` are both true.
+   * What the host can do beyond queries. `export` says whether `query.export()` can work here, and
+   * `render` whether `render()` can: show either's button only when it and
+   * `user.permissions.canExportData` are both true.
    */
   readonly features: Readonly<SdkFeatures>;
+
+  private readonly renderHook?: (request: RenderRequest) => Promise<Rendering>;
 
   constructor (environment: SdkEnvironment) {
     if (!environment?.datasets) {
@@ -78,11 +81,13 @@ export class Sdk {
       ]),
     );
     this.backend = environment.backend;
+    this.renderHook = environment.render;
     this.features = Object.freeze({
       ...environment.features,
       // Known from the Backend itself when the host does not say. In a frame the bridge's Backend
       // has every method, so there it is the host's provision that says.
       export: environment.features?.export ?? typeof environment.backend.exportQuery === 'function',
+      render: environment.features?.render ?? typeof environment.render === 'function',
     });
   }
 
@@ -91,6 +96,19 @@ export class Sdk {
     app.index = this._apps.length;
     this._apps.push(app);
     return app;
+  }
+
+  /**
+   * Render the whole app, or one block or container of its structure by id, as a PNG or a PDF, and
+   * have the host save it for the reader. What is drawn is what the page shows now: `await
+   * app.execute()` first for fresh results. Elements marked `data-anfra-render="skip"` are left out.
+   * Rejects with a `ValidationError` naming what to fix.
+   */
+  render (request: RenderRequest): Promise<Rendering> {
+    if (!this.renderHook || this.features.render === false) {
+      return Promise.reject(new ValidationError('This host does not render Data Apps: check Anfra.features.render first.'));
+    }
+    return this.renderHook(request);
   }
 
   /**

@@ -86,6 +86,12 @@ export interface SdkFeatures {
    * `user.permissions.canExportData` are both true.
    */
   export?: boolean;
+  /**
+   * Whether `Anfra.render()` can save a rendering here: the host serves it, and has not turned it
+   * off (`mountDataApp({ render: false })`). An author shows a render button when this and
+   * `user.permissions.canExportData` are both true.
+   */
+  render?: boolean;
 }
 
 export interface SdkEnvironment {
@@ -95,6 +101,44 @@ export interface SdkEnvironment {
   backend: Backend;
   /** Absent means the host did not say, and nothing is blocked; only an explicit `false` throws. */
   features?: SdkFeatures;
+  /** Draws and saves a rendering: given by the frame bootstrap, which can reach the page and the host. */
+  render?: (request: RenderRequest) => Promise<Rendering>;
+}
+
+/* ----------------------------------------------------------------
+Renderings
+---------------------------------------------------------------- */
+
+/** A rendering's file format. A PDF is one page the size of the rendering. */
+export type RenderFormat = 'png' | 'pdf';
+
+/**
+ * What to render, and how. `block` or `container` names one node of the structure by its id;
+ * neither renders the whole app.
+ */
+export interface RenderRequest {
+  block?: string;
+  container?: string;
+  format: RenderFormat;
+  /** The file's name, with the format's extension added when it has none. */
+  filename?: string;
+  /** Device pixels per CSS pixel. Defaults to the screen's, at least 2, lowered to fit a canvas. */
+  pixelRatio?: number;
+}
+
+/** A picture of the app, or of one node, as the reader saw it: saved for them, and handed back. */
+export interface Rendering {
+  filename: string;
+  format: RenderFormat;
+  /** In CSS pixels: what was drawn, before `pixelRatio`. */
+  width: number;
+  height: number;
+  blob: Blob;
+  /**
+   * Images left blank in the picture, by URL: their servers send no CORS headers, so the browser
+   * won't let them be drawn. Their space is kept. Empty when nothing was left out.
+   */
+  omitted: string[];
 }
 
 /* ----------------------------------------------------------------
