@@ -303,23 +303,30 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 	ctx, span := tracer.Start(ctx, "anfra "+c.Name())
 	defer span.End()
 
+	body, err := invoke(ctx, c, args)
+	if err != nil {
+		return err
+	}
+	return deliver(ctx, c, body, d)
+}
+
+// invoke runs a command as runCommand does, and returns its answer's body rather
+// than showing it: for a command that runs another (publish runs validate).
+func invoke(ctx context.Context, c command.Command, args map[string]any) ([]byte, error) {
 	repoDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("resolve repo dir: %w", err)
+		return nil, fmt.Errorf("resolve repo dir: %w", err)
 	}
 	input, err := jsonkit.Marshal(args)
 	if err != nil {
-		return fmt.Errorf("encode args: %w", err)
+		return nil, fmt.Errorf("encode args: %w", err)
 	}
 	if srv, ok := findServer(ctx, repo.Resolve(repoDir)); ok {
-		body, err := callServe(ctx, srv.URL, c.Name(), input)
-		if err != nil {
-			return err
-		}
-		return deliver(ctx, c, body, d)
+		return callServe(ctx, srv.URL, c.Name(), input)
 	}
 
-	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
+	var body []byte
+	err = withRepo(ctx, func(ctx context.Context, h hostContext) error {
 		clients, closeSidecars, err := startNeededSidecars(ctx, h, c, input)
 		if err != nil {
 			return err
@@ -330,12 +337,12 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 		if err != nil {
 			return err
 		}
-		body, err := jsonkit.Marshal(out)
-		if err != nil {
+		if body, err = jsonkit.Marshal(out); err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
-		return deliver(ctx, c, body, d)
+		return nil
 	})
+	return body, err
 }
 
 // delivery is how the CLI delivers an export: its file to stdout, or to output,
