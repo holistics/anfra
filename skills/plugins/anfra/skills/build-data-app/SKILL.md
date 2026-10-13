@@ -13,6 +13,8 @@ References, read when a step needs them:
 
 - [references/api.md](references/api.md): every SDK call, the result shape, errors. **Read it
   before writing any code; do not invent APIs.**
+- [references/downloads.md](references/downloads.md): exporting a query's data and pictures of
+  the app, with their button. Read it only when the agreed design lists a download.
 - [references/example.html](references/example.html): a complete app. Start a new file from its
   skeleton, or from the closest app already in `apps/`.
 
@@ -102,21 +104,13 @@ already draws (dim the unselected ones) rather than recreating the series, or th
 its entry animation on every click. With ECharts, merge with a plain `setOption(option)` for a
 selection change and keep `replaceMerge` for a new result.
 
-Add an export button only for a query the agreed design lists as exportable, never on your own
-initiative (`query.export()`, see [references/api.md](references/api.md#exporting)): shown only when
-`Anfra.features.export && Anfra.user.permissions.canExportData`, busy while it runs, and its
-failure in a toast. Never put export text in the card next to the button: it shifts the layout,
-and the browser's download already says it worked. Don't build a CSV from `query.result.rows`: a
-paged result holds only the pages loaded, and an export is every row.
-
-Add a picture download only for a part the agreed design lists, never on your own initiative
-(`Anfra.render()`, see [references/api.md](references/api.md#renderings)): shown only when
-`Anfra.features.render && Anfra.user.permissions.canExportData`, the button marked
-`data-anfra-render="skip"` so it isn't in the picture, busy while it runs, and its failure in a
-toast, never in text next to it that shifts the layout. A picture is drawn from the page, so for
-any app that may be rendered: turn chart entry animations off (ECharts `animation: false`), load
-images and web fonts from servers that send CORS headers (jsDelivr, Google Fonts), and give a
-WebGL chart `preserveDrawingBuffer: true`.
+Add a download (a query's data, or a picture of a part) only where the agreed design lists one,
+never on your own initiative: read [references/downloads.md](references/downloads.md) for the call
+and its button, whose feedback never shifts the layout. Don't build a CSV from
+`query.result.rows`: a paged result holds only the pages loaded. Any app may be pictured from the
+host's toolbar, so keep every app render-safe: chart entry animations off (ECharts
+`animation: false`), images and web fonts from servers that send CORS headers (jsDelivr, Google
+Fonts), and `preserveDrawingBuffer: true` on a WebGL chart.
 
 Render each query's four states: `executing` (loading), `success`, `error` (show
 `error.message`), and success with no rows ("No sales this week", never a bare zero). Log

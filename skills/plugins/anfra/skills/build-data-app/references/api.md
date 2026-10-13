@@ -14,7 +14,8 @@ import, no setup, no await.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
 - `Anfra.features`: what the host can do beyond queries. `export` is whether `query.export()` can
   work here, `render` whether `Anfra.render()` can; both `true` under `anfra serve`.
-- `Anfra.render(request)`: a picture of the app or one of its parts. See [Renderings](#renderings).
+- `Anfra.render(request)`: a PNG or PDF of the app or one of its parts. See
+  [downloads.md](downloads.md#pictures-of-the-app).
 
 ## Field references
 
@@ -85,7 +86,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. |
 | `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
-| `await query.export(options?)` | Downloads the query's whole result as a file for the reader. See [Exporting](#exporting). |
+| `await query.export(options?)` | Downloads the query's whole result as a file for the reader. See [downloads.md](downloads.md#exporting-a-querys-data). |
 | `query.abort()` | Cancels this query's in-flight request. |
 | `query.subscribe(fn)` | Change listener for just this query. |
 | `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
@@ -125,66 +126,6 @@ query.result.rows    // [{ month: '2026-01-01', total: '1234.5' }, ...]
   with the reader's filters, sorts and date drills applied — the first thing to log when a
   control seems to do nothing.
 
-## Exporting
-
-`query.export()` has the host make a file of the query's **whole result** and save it for the
-reader: every row, not only the pages loaded, with what the result on screen was last run with
-(the mapped controls, the selection, the sort, the timezone). A control the reader changed but has
-not applied is not in it; `execute()` first if it should be.
-
-Offer it only where it can work, and show its progress and failure yourself: an export changes
-nothing on the query (`state`, `result` and `error` stay as they are).
-
-**Feedback takes no layout space.** An export button usually sits in a card or a chart's header:
-text appended next to it or below it ("Exported 198 rows.") pushes the card's content around. So:
-
-- **Progress is on the button itself**: disabled, with `aria-busy`, and a label that keeps its
-  width (swap the icon, not the text, or give the button a fixed `min-width`).
-- **Success needs no message**: the browser's own download is the confirmation.
-- **Failure goes in a toast** (`position: fixed`, outside the flow), dismissed after a few
-  seconds, never in the card.
-
-```html
-<button id="export-revenue" class="export" hidden>↓ CSV</button>
-<div id="toast" role="status" hidden></div>
-<style>
-  .export[aria-busy="true"] { cursor: progress; opacity: .6; }
-  #toast { position: fixed; bottom: 16px; right: 16px; padding: 8px 12px; border-radius: 6px;
-           background: #b42318; color: #fff; }
-</style>
-```
-
-```js
-const button = document.querySelector('#export-revenue');
-const toast = document.querySelector('#toast');
-button.hidden = !(Anfra.features.export && Anfra.user.permissions.canExportData);
-button.addEventListener('click', async () => {
-  button.disabled = true;
-  button.setAttribute('aria-busy', 'true');
-  try {
-    await byRegion.export();
-  } catch (err) {
-    toast.textContent = `Export failed: ${err.message}`;
-    toast.hidden = false;
-    setTimeout(() => { toast.hidden = true; }, 6000);
-  } finally {
-    button.disabled = false;
-    button.removeAttribute('aria-busy');
-  }
-});
-```
-
-- Resolves once the file is made and its download has started, with
-  `{ url, filename, format, rowCount, expiresAt }`. The frame cannot download, so the host does.
-- Options, all optional: `filename` (default: the app's title and the query's name, `Sales -
-  byRegion.csv`; the extension is added), `format` (`'csv'`), `formatOptions`
-  (`{ header: 'labels' | 'names' | 'none', bom }`; `bom` defaults to `true`, which Excel needs for
-  non-ASCII text), `signal` (an `AbortSignal` to cancel it; `query.abort()` does not).
-- Values are written raw, as `query.result.rows` holds them: numbers with every digit, dates in
-  ISO 8601, `null` as an empty cell.
-- A large result takes as long as the query does to run in full: keep the button disabled until
-  it settles.
-
 ## Structure
 
 A definition can mark its parts in its HTML, so the Inspect panel in `anfra serve` shows them as
@@ -215,7 +156,7 @@ attribute each.
 | `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
 | `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
 | `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. A control lives in a block like a query does: its own block when it stands alone, or the block of the chart it belongs to. |
-| `data-anfra-render="skip"` | any element | Left out of every [rendering](#renderings), with what it holds: a download button, a spinner. |
+| `data-anfra-render="skip"` | any element | Left out of every [picture](downloads.md#pictures-of-the-app), with what it holds: a download button, a spinner. |
 
 - Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
   creates several apps, write `app/name` with the app's index (`1/trend`); a bare name is app 0.
@@ -234,77 +175,6 @@ attribute each.
 `[Revenue over time](data-anfra-block="trend")`, or just `data-anfra-block="trend"` when the
 node has no label. The part in parentheses is the attribute as written in the file: search the
 definition for it to find the element the user means, then change that element and what draws it.
-
-## Renderings
-
-`Anfra.render()` draws the whole app, or one block or container of the [structure](#structure),
-as the reader sees it now, and has the host save it as a PNG or a PDF. The Inspect panel in
-`anfra serve` offers the same for any block or container, and for the whole page in its toolbar,
-with nothing written in the app.
-
-```js
-await Anfra.render({ block: 'trend', format: 'png' });       // a block, by its data-anfra-block id
-await Anfra.render({ container: 'kpis', format: 'pdf' });    // a container
-await Anfra.render({ format: 'pdf' });                       // the whole app
-```
-
-- Options: `filename` (default: the app's title and the node's label or id, `Sales - Revenue.png`;
-  the extension is added), `pixelRatio` (default: the screen's, at least 2).
-- Resolves once the file is saved, with `{ filename, format, width, height, blob, omitted }`.
-  `omitted` lists the images left blank, by URL (see below); tell the reader when it isn't empty.
-  Rejects with a `ValidationError` naming the node: no element marked with that id, or a picture
-  too large for a canvas.
-- It draws at once, what is on the page: `await app.execute()` first if results may be stale.
-- A PDF is one page holding the picture, not a printed document: its text isn't selectable.
-
-A download button, with its feedback out of the layout:
-
-```html
-<section data-anfra-block="trend" data-anfra-label="Revenue over time">
-  <button id="png-trend" class="png" data-anfra-render="skip" hidden>↓ PNG</button>
-  …
-</section>
-<div id="toast" role="status" hidden></div>
-<style>
-  .png[aria-busy="true"] { cursor: progress; opacity: .6; }
-  #toast { position: fixed; bottom: 16px; right: 16px; padding: 8px 12px; border-radius: 6px;
-           background: #b42318; color: #fff; }
-</style>
-```
-
-```js
-const button = document.querySelector('#png-trend');
-const toast = document.querySelector('#toast');
-const showToast = (text) => {
-  toast.textContent = text;
-  toast.hidden = false;
-  setTimeout(() => { toast.hidden = true; }, 6000);
-};
-button.hidden = !(Anfra.features.render && Anfra.user.permissions.canExportData);
-button.addEventListener('click', async () => {
-  button.disabled = true;
-  button.setAttribute('aria-busy', 'true');
-  try {
-    const { omitted } = await Anfra.render({ block: 'trend', format: 'png' });
-    if (omitted.length) showToast(`Saved; ${omitted.length} image(s) left blank (no CORS).`);
-  } catch (err) {
-    showToast(`Download failed: ${err.message}`);
-  } finally {
-    button.disabled = false;
-    button.removeAttribute('aria-busy');
-  }
-});
-```
-
-What comes out as it looks on the page, and what doesn't:
-
-- Charts on a canvas (ECharts' default) or SVG, HTML, CSS, images and fonts served with CORS.
-- An entry animation caught mid-way: turn it off (`animation: false`) in an app that may be rendered.
-- WebGL is blank unless the chart sets `preserveDrawingBuffer: true`.
-- An image whose server sends no CORS headers is left blank, its space kept, and listed in
-  `omitted`; a web font without CORS falls back to another font. Serve both from servers that send
-  CORS headers (jsDelivr, Google Fonts), or mark such an image `data-anfra-render="skip"`.
-- Nothing inside an iframe of the app's own.
 
 ## Filter
 
@@ -407,11 +277,11 @@ chart.on('click', (p) => {
 
 | Class | When | What to do |
 | --- | --- | --- |
-| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. Also how `Anfra.render()` rejects. | Fix the declaring line, or the node, it names. |
+| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
 | `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
-| `TransportError` | Network or session problem; or, from `query.export()`, a host that cannot make exports. | Show a retry. Hide an export button when `Anfra.features.export` is false. |
+| `TransportError` | Network or session problem. | Show a retry. |
 
-Every error has `entity`, the query or control name it concerns. `query.export()` rejects with
-these classes too, rather than storing the error on the query. Check the class with `err.name`
-(`'PermissionError'`), since the classes themselves aren't exposed as globals.
+Every error has `entity`, the query or control name it concerns. Check the class with `err.name`
+(`'PermissionError'`), since the classes themselves aren't exposed as globals. Downloads reject
+with these classes too: see [downloads.md](downloads.md).
