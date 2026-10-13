@@ -40,10 +40,11 @@ means, which date counts, what to exclude, each with your recommended answer.
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
 `createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
 each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
-queries, if any, the reader can export. List an export only when the user asked for downloads, or
-propose one where it plainly helps (a detail table) and let them decide; none is the default. Show
-it to the user and get a yes before writing the file. When the data cannot answer the request, say
-so and offer the nearest thing it can.
+queries, if any, the reader can export as data, and which parts as a picture (PNG or PDF of a
+block, or of the whole app). List a download only when the user asked for one, or propose one
+where it plainly helps (a detail table to export, a chart to paste into slides) and let them
+decide; none is the default. Show it to the user and get a yes before writing the file. When the
+data cannot answer the request, say so and offer the nearest thing it can.
 
 ## 3. Write and check the queries
 
@@ -107,6 +108,15 @@ initiative (`query.export()`, see [references/api.md](references/api.md#exportin
 failure in a toast. Never put export text in the card next to the button: it shifts the layout,
 and the browser's download already says it worked. Don't build a CSV from `query.result.rows`: a
 paged result holds only the pages loaded, and an export is every row.
+
+Add a picture download only for a part the agreed design lists, never on your own initiative
+(`Anfra.render()`, see [references/api.md](references/api.md#renderings)): shown only when
+`Anfra.features.render && Anfra.user.permissions.canExportData`, the button marked
+`data-anfra-render="skip"` so it isn't in the picture, busy while it runs, and its failure in a
+toast, never in text next to it that shifts the layout. A picture is drawn from the page, so for
+any app that may be rendered: turn chart entry animations off (ECharts `animation: false`), load
+images and web fonts from servers that send CORS headers (jsDelivr, Google Fonts), and give a
+WebGL chart `preserveDrawingBuffer: true`.
 
 Render each query's four states: `executing` (loading), `success`, `error` (show
 `error.message`), and success with no rows ("No sales this week", never a bare zero). Log
