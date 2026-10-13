@@ -13,7 +13,8 @@ import, no setup, no await.
   Under `anfra serve` it is the machine's user, with every permission and the machine's time zone.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
 - `Anfra.features`: what the host can do beyond queries. `export` is whether `query.export()` can
-  work here; `true` under `anfra serve`.
+  work here, `render` whether `Anfra.render()` can; both `true` under `anfra serve`.
+- `Anfra.render(request)`: a picture of the app or one of its parts. See [Renderings](#renderings).
 
 ## Field references
 
@@ -214,6 +215,7 @@ attribute each.
 | `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
 | `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
 | `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. A control lives in a block like a query does: its own block when it stands alone, or the block of the chart it belongs to. |
+| `data-anfra-render="skip"` | any element | Left out of every [rendering](#renderings), with what it holds: a download button, a spinner. |
 
 - Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
   creates several apps, write `app/name` with the app's index (`1/trend`); a bare name is app 0.
@@ -232,6 +234,77 @@ attribute each.
 `[Revenue over time](data-anfra-block="trend")`, or just `data-anfra-block="trend"` when the
 node has no label. The part in parentheses is the attribute as written in the file: search the
 definition for it to find the element the user means, then change that element and what draws it.
+
+## Renderings
+
+`Anfra.render()` draws the whole app, or one block or container of the [structure](#structure),
+as the reader sees it now, and has the host save it as a PNG or a PDF. The Inspect panel in
+`anfra serve` offers the same for any block or container, and for the whole page in its toolbar,
+with nothing written in the app.
+
+```js
+await Anfra.render({ block: 'trend', format: 'png' });       // a block, by its data-anfra-block id
+await Anfra.render({ container: 'kpis', format: 'pdf' });    // a container
+await Anfra.render({ format: 'pdf' });                       // the whole app
+```
+
+- Options: `filename` (default: the app's title and the node's label or id, `Sales - Revenue.png`;
+  the extension is added), `pixelRatio` (default: the screen's, at least 2).
+- Resolves once the file is saved, with `{ filename, format, width, height, blob, omitted }`.
+  `omitted` lists the images left blank, by URL (see below); tell the reader when it isn't empty.
+  Rejects with a `ValidationError` naming the node: no element marked with that id, or a picture
+  too large for a canvas.
+- It draws at once, what is on the page: `await app.execute()` first if results may be stale.
+- A PDF is one page holding the picture, not a printed document: its text isn't selectable.
+
+A download button, with its feedback out of the layout:
+
+```html
+<section data-anfra-block="trend" data-anfra-label="Revenue over time">
+  <button id="png-trend" class="png" data-anfra-render="skip" hidden>↓ PNG</button>
+  …
+</section>
+<div id="toast" role="status" hidden></div>
+<style>
+  .png[aria-busy="true"] { cursor: progress; opacity: .6; }
+  #toast { position: fixed; bottom: 16px; right: 16px; padding: 8px 12px; border-radius: 6px;
+           background: #b42318; color: #fff; }
+</style>
+```
+
+```js
+const button = document.querySelector('#png-trend');
+const toast = document.querySelector('#toast');
+const showToast = (text) => {
+  toast.textContent = text;
+  toast.hidden = false;
+  setTimeout(() => { toast.hidden = true; }, 6000);
+};
+button.hidden = !(Anfra.features.render && Anfra.user.permissions.canExportData);
+button.addEventListener('click', async () => {
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  try {
+    const { omitted } = await Anfra.render({ block: 'trend', format: 'png' });
+    if (omitted.length) showToast(`Saved; ${omitted.length} image(s) left blank (no CORS).`);
+  } catch (err) {
+    showToast(`Download failed: ${err.message}`);
+  } finally {
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+  }
+});
+```
+
+What comes out as it looks on the page, and what doesn't:
+
+- Charts on a canvas (ECharts' default) or SVG, HTML, CSS, images and fonts served with CORS.
+- An entry animation caught mid-way: turn it off (`animation: false`) in an app that may be rendered.
+- WebGL is blank unless the chart sets `preserveDrawingBuffer: true`.
+- An image whose server sends no CORS headers is left blank, its space kept, and listed in
+  `omitted`; a web font without CORS falls back to another font. Serve both from servers that send
+  CORS headers (jsDelivr, Google Fonts), or mark such an image `data-anfra-render="skip"`.
+- Nothing inside an iframe of the app's own.
 
 ## Filter
 
@@ -334,7 +407,7 @@ chart.on('click', (p) => {
 
 | Class | When | What to do |
 | --- | --- | --- |
-| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
+| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. Also how `Anfra.render()` rejects. | Fix the declaring line, or the node, it names. |
 | `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
 | `TransportError` | Network or session problem; or, from `query.export()`, a host that cannot make exports. | Show a retry. Hide an export button when `Anfra.features.export` is false. |
