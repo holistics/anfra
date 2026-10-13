@@ -1,3 +1,13 @@
+## [0.8.0](https://github.com/holistics/anfra/compare/anfra-v0.7.1...anfra-v0.8.0) (2026-10-13)
+
+### Features
+
+* **sdk:** export a query's result from a Data App ([5ae069e](https://github.com/holistics/anfra/commit/5ae069e6255658d7a730227fb4d6d8e328757b2f))
+## [0.7.2](https://github.com/holistics/anfra/compare/anfra-v0.7.1...anfra-v0.7.2) (2026-10-13)
+
+### Features
+
+* **sdk:** export a query's result from a Data App ([5ae069e](https://github.com/holistics/anfra/commit/5ae069e6255658d7a730227fb4d6d8e328757b2f))
 ## [0.7.1](https://github.com/holistics/anfra/compare/anfra-v0.7.0...anfra-v0.7.1) (2026-10-12)
 
 ### Features
