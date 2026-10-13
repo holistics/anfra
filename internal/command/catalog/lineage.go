@@ -18,14 +18,25 @@ var Lineage = command.Define(command.Def[LineageInput, LineageResult]{
 		"sources upstream of it), as a diagram: cards in layers, upstream first, linked by what uses it.",
 	ReadOnly:   true,
 	Idempotent: true,
-	Needs:      func(LineageInput) command.Sidecars { return command.Sidecars{Node: true} },
+	Needs:      func(LineageInput) command.Sidecars { return command.Sidecars{Node: true, CanalQuery: true} },
 	Check:      LineageInput.check,
 	Run: func(ctx context.Context, cc command.CommandContext, in LineageInput) (LineageResult, error) {
-		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
+		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
+			return LineageResult{}, err
+		}
+		local, err := localRepo(cc, "Lineage")
+		if err != nil {
 			return LineageResult{}, err
 		}
 		targets := in.targets()
-		res, err := cc.Clients.Node.CatalogLineage(ctx, anfranode.CatalogLineageRequest{Targets: targets, Limit: in.Limit, Offset: in.Offset})
+		res, err := cc.Clients.Node.CatalogLineage(ctx, anfranode.CatalogLineageRequest{
+			Context: anfranode.CatalogContext{
+				RepoPath:          local.Dir,
+				SourcesPath:       local.ContextSourcesPath(),
+				CanalQueryBaseURL: cc.Clients.CanalQuery.BaseURL(),
+			},
+			Targets: targets, Limit: in.Limit, Offset: in.Offset,
+		})
 		if err != nil {
 			return LineageResult{}, err
 		}

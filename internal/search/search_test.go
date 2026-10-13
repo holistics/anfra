@@ -63,11 +63,13 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 	if captured.Query != "type:aml.model orders" {
 		t.Fatalf("query = %q, want type:aml.model orders", captured.Query)
 	}
-	if captured.CatalogPath != r.CatalogPath() {
-		t.Fatalf("catalogPath = %q, want %q", captured.CatalogPath, r.CatalogPath())
+	want := anfranode.CatalogContext{
+		RepoPath:          r.Dir,
+		SourcesPath:       filepath.Join(r.ConfigDir, "context_sources.yml"),
+		CanalQueryBaseURL: "http://127.0.0.1:9000",
 	}
-	if captured.CanalQueryBaseURL != "http://127.0.0.1:9000" {
-		t.Fatalf("canalQueryBaseUrl = %q", captured.CanalQueryBaseURL)
+	if captured.Context != want {
+		t.Fatalf("context = %+v, want %+v", captured.Context, want)
 	}
 	results, _ := res["results"].([]any)
 	if len(results) != 1 {

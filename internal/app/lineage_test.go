@@ -5,13 +5,16 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/command/catalog"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -36,13 +39,22 @@ func fakeLineageNode(t *testing.T, answer string) (*anfranode.Client, *anfranode
 	return anfranode.NewClientHTTP(node.URL), &got
 }
 
-func TestLineageDeclaresOnlyAnfraNode(t *testing.T) {
+func TestLineageDeclaresAnfraNodeAndCanalQuery(t *testing.T) {
 	cmd, ok := Find("lineage")
 	if !ok {
 		t.Fatal("lineage command was not registered")
 	}
-	if needs := cmd.Needs([]byte(`{"targets":[{"parent":"orders","child":"amount"}]}`)); !needs.Node || needs.CanalQuery {
-		t.Fatalf("lineage sidecars = %+v, want anfra-node alone", needs)
+	if needs := cmd.Needs([]byte(`{"targets":[{"parent":"orders","child":"amount"}]}`)); !needs.Node || !needs.CanalQuery {
+		t.Fatalf("lineage sidecars = %+v, want anfra-node and canal-query", needs)
+	}
+}
+
+func lineageContext(node *anfranode.Client) command.CommandContext {
+	return command.CommandContext{
+		Clients:        command.Clients{Node: node, CanalQuery: canalquery.NewClient("http://127.0.0.1:9000/", false)},
+		Repo:           repo.Local{Dir: "/repo", ID: "repo-1", ConfigDir: "/repo/.anfra"}.Repo(),
+		AllowLocalRepo: true,
+		DataPerms:      dataperm.Unrestricted(),
 	}
 }
 
@@ -52,13 +64,16 @@ func TestLineageTracesEachField(t *testing.T) {
 	node, got := fakeLineageNode(t, `{"results":[`+
 		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","diagram":{"version":1,"query":"needed_by:(fqn:ecommerce.revenue)","total":0,"matched":[],"schema":{"edges":{},"types":{}},"layers":[],"cards":[]}},`+
 		`{"target":{"parent":"orders","child":"amount"},"query":"needed_by:(fqn:orders.amount)","error":"boom"}]}`)
-	cc := command.CommandContext{Clients: command.Clients{Node: node}, DataPerms: dataperm.Unrestricted()}
+	cc := lineageContext(node)
 
 	out, err := Invoke(context.Background(), cc, "lineage", []byte(`{"targets":[{"parent":" ecommerce ","child":"revenue "},{"parent":"orders","child":"amount"}],"limit":5,"offset":10}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := anfranode.CatalogLineageRequest{
+		Context: anfranode.CatalogContext{
+			RepoPath: "/repo", SourcesPath: filepath.Join("/repo/.anfra", "context_sources.yml"), CanalQueryBaseURL: "http://127.0.0.1:9000",
+		},
 		Targets: []anfranode.LineageTarget{{Parent: "ecommerce", Child: "revenue"}, {Parent: "orders", Child: "amount"}},
 		Limit:   5, Offset: 10,
 	}
@@ -76,7 +91,7 @@ func TestLineageTracesEachField(t *testing.T) {
 // is called.
 func TestLineageRefusesWhatIsNotAField(t *testing.T) {
 	node, got := fakeLineageNode(t, `{"results":[]}`)
-	cc := command.CommandContext{Clients: command.Clients{Node: node}, DataPerms: dataperm.Unrestricted()}
+	cc := lineageContext(node)
 	for _, input := range []string{`{}`, `{"targets":[]}`, `{"targets":[{"parent":" ","child":"amount"}]}`} {
 		_, err := Invoke(context.Background(), cc, "lineage", []byte(input))
 		if !errors.Is(err, apperr.ValidationFailed) {

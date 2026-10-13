@@ -410,9 +410,17 @@ func (c *Client) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (Vali
 type CatalogIngestRequest struct {
 	RepoPath          string `json:"repoPath"`
 	SourcesPath       string `json:"sourcesPath"`
-	CatalogPath       string `json:"catalogPath"`
 	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
 	Source            string `json:"source,omitempty"`
+}
+
+// CatalogContext is the repo a catalog call is about, as anfra-node needs it:
+// where the repo and its context sources are, and the canal-query to reach them
+// through. The same values catalog.ingest takes.
+type CatalogContext struct {
+	RepoPath          string `json:"repoPath"`
+	SourcesPath       string `json:"sourcesPath"`
+	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
 }
 
 // IngestCatalog builds the local search catalog through anfra-node. The
@@ -423,12 +431,11 @@ func (c *Client) IngestCatalog(ctx context.Context, req CatalogIngestRequest) er
 }
 
 // CatalogSearchRequest mirrors anfra-node's catalog.search params. The Go host
-// supplies the local catalog path and canal-query URL; anfra-node owns search
-// parsing, planning, and result shaping.
+// supplies the catalog's context; anfra-node owns search parsing, planning, and
+// result shaping.
 type CatalogSearchRequest struct {
-	CatalogPath       string `json:"catalogPath"`
-	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
-	Query             string `json:"query"`
+	Context CatalogContext `json:"context"`
+	Query   string         `json:"query"`
 }
 
 type CatalogSearchResult map[string]any
