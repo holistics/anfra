@@ -14,18 +14,28 @@ Then, once:
 make setup
 ```
 
-It installs the web workspace (`web/`) and the git hooks that check commit messages, and writes `.env.local` from `.env.local.example` if there is none (it never overwrites one). Fill it in: `ANFRA_DEV_REPO`, the repo `make dev` serves, and the sidecars, below. The `Makefile` reads it and exports it to everything it runs.
+It installs the web workspace (`web/`) and the git hooks that check commit messages, writes `.env.local` from `.env.local.example` if there is none (it never overwrites one), and downloads the sidecars, below. Fill `.env.local` in: `ANFRA_DEV_REPO`, the repo `make dev` serves. The `Makefile` reads it and exports it to everything it runs.
 
 The `Makefile`'s other tools (air, hivemind, overmind, golangci-lint) are pinned in `tools/go.mod` and run with `go tool`: nothing to install.
 
 ### Sidecars
 
-anfra built from source embeds no sidecars, so it needs them from elsewhere. Build each from its own repo, or take the binary from one of its releases, and set, in `.env.local`, absolute paths to them:
+anfra built from source embeds no sidecars, so it needs them from elsewhere. `manifest.yml` pins the release of each that anfra's own releases embed, and that is the one to develop and test against: `scripts/sidecars.sh` downloads it for your machine into `.sidecars/` (git-ignored), one copy of each.
+
+```sh
+make sidecars   # download the pinned releases, replacing the ones there; after a pin moves
+```
+
+It needs [gh](https://cli.github.com), logged in (`gh auth login`) as an account that can read holistics/holistics-core and holistics/canal, whose releases are private.
+
+`make dev` and `make test-sidecars` run `scripts/sidecars.sh check` first: it downloads a sidecar `.sidecars/` lacks, and fails when one is not the pinned version (each says its version with `--version`), with how to fix it. It never replaces one on its own: `make sidecars` does.
+
+To run your own build of a sidecar instead, set, in `.env.local`, an absolute path to it. The check holds it to the pin too; `ANFRA_SIDECAR_SKIP_VERSION_CHECK=1` runs one whose version is not the pin on purpose.
 
 - `ANFRA_NODE_BIN`: anfra-node. In anfra-node's repo, from its folder: `bash scripts/build-sidecar.sh <out path>`.
 - `ANFRA_CANAL_QUERY_BIN`: canal-query. In canal-query's repo, from its root: `CGO_ENABLED=1 go build -tags=duckdb_arrow -o <out path> ./app/query`. It needs cgo, for DuckDB, so it builds for the machine it runs on only.
 
-`manifest.yml` names the release of each that anfra's own releases embed. Or set `ANFRA_NODE_URL` / `ANFRA_CANAL_QUERY_URL` to dial sidecars already running, so a rebuild of anfra doesn't respawn them. See [sidecars](docs/designs/sidecars.md).
+Or set `ANFRA_NODE_URL` / `ANFRA_CANAL_QUERY_URL` to dial sidecars already running, so a rebuild of anfra doesn't respawn them; the check leaves those alone. See [sidecars](docs/designs/sidecars.md).
 
 ## Running it
 
@@ -54,7 +64,7 @@ make test       # the Go tests, then the web workspace's
 
 `make check` runs golangci-lint at the version `tools/go.mod` pins, which must match the one CI's workflow pins; `go mod tidy --diff`; `scripts/openapi.sh diff`; the SDK's generated types against the spec; and both web packages' typechecks. It builds the SDK's type declarations, which the frontend's typecheck reads, and nothing else. CI also builds the frontend (`pnpm build:web`) and checks that a breaking change to the API is declared by a commit.
 
-Some Go tests run commands against real sidecars, and skip themselves unless `ANFRA_NODE_BIN` and `ANFRA_CANAL_QUERY_BIN` are set (`internal/app/sidecars_test.go`).
+Some Go tests run commands against real sidecars (`internal/app/sidecars_test.go`), and the dev warehouse (`docker compose -f docker-compose.dev.yml up -d postgres`). They skip themselves unless `ANFRA_NODE_BIN` and `ANFRA_CANAL_QUERY_BIN` are both set, and `make test` then says so. `make test-sidecars` runs the Go tests with them, against the pinned sidecars or your own; `make test` runs them too when `.env.local` names both, after checking their versions.
 
 ### When the API changes
 

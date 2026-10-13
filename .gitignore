@@ -13,6 +13,9 @@ node_modules/
 /bin/
 /tmp/
 
+# The sidecar releases make dev runs (scripts/sidecars.sh).
+/.sidecars/
+
 # Maintainers' own settings for make (see .env.local.example).
 /.env.local
 /image/
