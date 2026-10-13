@@ -42,11 +42,12 @@ means, which date counts, what to exclude, each with your recommended answer.
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
 `createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
 each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
-queries, if any, the reader can export as data, and which parts as a picture (PNG or PDF of a
-block, or of the whole app). List a download only when the user asked for one, or propose one
-where it plainly helps (a detail table to export, a chart to paste into slides) and let them
-decide; none is the default. Show it to the user and get a yes before writing the file. When the
-data cannot answer the request, say so and offer the nearest thing it can.
+blocks, if any, the reader can download from, one line each with its formats (`trend: CSV`). List
+a download only when the user asked for one, or propose one where it plainly helps (a detail
+table's data) and let them decide; none is the default. Leave pictures (PNG, PDF) to the host,
+which offers them for every block and the whole page, unless the user asks for them in the app.
+Show it to the user and get a yes before writing the file. When the data cannot answer the
+request, say so and offer the nearest thing it can.
 
 ## 3. Write and check the queries
 
@@ -104,9 +105,10 @@ already draws (dim the unselected ones) rather than recreating the series, or th
 its entry animation on every click. With ECharts, merge with a plain `setOption(option)` for a
 selection change and keep `replaceMerge` for a new result.
 
-Add a download (a query's data, or a picture of a part) only where the agreed design lists one,
-never on your own initiative: read [references/downloads.md](references/downloads.md) for the call
-and its button, whose feedback never shifts the layout. Don't build a CSV from
+Add a download only where the agreed design lists one, never on your own initiative, and read
+[references/downloads.md](references/downloads.md) first: a block gets at most one download
+control, in its header, with every agreed format an item of it, never a button per format; a
+picture of the whole app is one control in the page's header. Don't build a CSV from
 `query.result.rows`: a paged result holds only the pages loaded. Any app may be pictured from the
 host's toolbar, so keep every app render-safe: chart entry animations off (ECharts
 `animation: false`), images and web fonts from servers that send CORS headers (jsDelivr, Google
