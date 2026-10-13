@@ -5,7 +5,7 @@
  */
 export { coreClient, type CoreClient } from './client';
 export {
-  coreApiBackend, toQueryInput, SUGGESTION_LIMIT, type CoreApiBackendOptions,
+  coreApiBackend, toQueryInput, toExportInput, SUGGESTION_LIMIT, type CoreApiBackendOptions,
 } from './backend';
 export { loadDatasets, toDescriptor, type LoadedDatasets } from './datasets';
 export { toSdkError, type ApiErrorBody } from './errors';

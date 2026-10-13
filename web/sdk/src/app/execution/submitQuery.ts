@@ -4,11 +4,13 @@ import type {
   Backend,
   BackendCondition,
   BackendDateDrill,
+  BackendExportRequest,
   BackendFilter,
   BackendQueryRequest,
   BackendQueryResult,
   Condition,
   DateGrain,
+  ExportOptions,
   QueryResult,
   SelectionCondition,
 } from '../../common/types';
@@ -93,12 +95,17 @@ export interface SelectionInput {
   expression?: string;
 }
 
-export function buildRequest (
+/**
+ * What a run and an export of a query share: the query, and everything that reaches it (mapped
+ * controls, the selection, the reader's sort, the timezone). One builder, so a page of a query and
+ * its export cannot drift apart.
+ */
+function buildQuery (
   query: Query,
   mappings: Mapping[],
   selection: SelectionInput,
   context: SubmitContext,
-): BackendQueryRequest {
+): Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input' | 'timezone'> {
   const mappedFilters = mappings
     .map((mapping) => toFilter(mapping, mapping.from.appliedCondition))
     .filter((filter): filter is BackendFilter => filter !== undefined);
@@ -128,12 +135,54 @@ export function buildRequest (
       sorts: query.sort.map((sort) => ({ field: sort.field, direction: sort.direction ?? 'asc' })),
       dateDrills,
     },
-    // Omitted for a query that declares no page size, so the backend returns every row.
-    ...(query.pageSize !== undefined ? { page: query.page, pageSize: query.pageSize } : {}),
     // Omitted entirely when the app declares none, so the backend applies its own default rather
     // than the SDK guessing the browser's.
     ...(context.timezone ? { timezone: context.timezone } : {}),
+  };
+}
+
+export function buildRequest (
+  query: Query,
+  mappings: Mapping[],
+  selection: SelectionInput,
+  context: SubmitContext,
+): BackendQueryRequest {
+  return {
+    ...buildQuery(query, mappings, selection, context),
+    // Omitted for a query that declares no page size, so the backend returns every row.
+    ...(query.pageSize !== undefined ? { page: query.page, pageSize: query.pageSize } : {}),
     ...(context.bustCache ? { bustCache: true } : {}),
+  };
+}
+
+/**
+ * The file's default name: the app's title and the query's name, or the query's name alone. A
+ * title is free text, and the server refuses a name holding `/` or `\`, so those are replaced.
+ */
+export function defaultExportFilename (query: Query, title: string | undefined): string {
+  const safeTitle = title?.replace(/[/\\]/g, '-').replace(/\p{Cc}/gu, '').trim();
+  return safeTitle ? `${safeTitle} - ${query.name}` : query.name;
+}
+
+/**
+ * An export of the query: the run's query with no page, every row, and the file's format and name.
+ * A CSV starts with a byte-order mark unless the author says otherwise, since a person opens it;
+ * a format other than CSV gets no default it might not take.
+ */
+export function buildExportRequest (
+  query: Query,
+  mappings: Mapping[],
+  selection: SelectionInput,
+  context: SubmitContext & { title?: string },
+  options: ExportOptions,
+): BackendExportRequest {
+  const format = options.format ?? 'csv';
+  const formatOptions = format === 'csv' ? { bom: true, ...options.formatOptions } : options.formatOptions;
+  return {
+    ...buildQuery(query, mappings, selection, context),
+    format,
+    ...(formatOptions ? { formatOptions } : {}),
+    filename: options.filename?.trim() || defaultExportFilename(query, context.title),
   };
 }
 

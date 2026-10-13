@@ -3,6 +3,8 @@ import { ValidationError, type DataAppError } from '../common/errors';
 import type { DatasetIndex } from './validation';
 import type { AppContext } from './internal';
 import type {
+  ExportOptions,
+  ExportResult,
   QueryDeclaration,
   QueryResult,
   QuerySort,
@@ -169,6 +171,20 @@ export class Query extends Observable {
     if (!this.hasMore) return;
     this._page += 1;
     await this.app.fetchPage(this);
+  }
+
+  /**
+   * Exports this query's whole result as a file, and has the host save it for the reader.
+   *
+   * Every row, not only the pages loaded, with what the result on screen was last run with: the
+   * mapped controls, the selection, the sort, the timezone. A control the reader changed but has
+   * not applied is not in it. Resolves once the file is made and its download has started, with
+   * its link and row count; rejects with a `DataAppError` naming this query, and changes nothing on
+   * the query either way. Show the button when `Anfra.features.export` and
+   * `Anfra.user.permissions.canExportData` are both true.
+   */
+  export (options: ExportOptions = {}): Promise<ExportResult> {
+    return this.app.exportQuery(this, options);
   }
 
   /**

@@ -47,6 +47,7 @@ export function mountDataApp (options: MountOptions): MountedDataApp {
   const provision: Provision = {
     datasets: options.datasets,
     user: options.user,
+    features: { export: typeof options.backend.exportQuery === 'function' },
     hostOrigin: doc.defaultView?.location.origin ?? '*',
   };
   frame.srcdoc = provisionDocument(options.definition, { baseHref: options.baseHref, provision, frameScript });

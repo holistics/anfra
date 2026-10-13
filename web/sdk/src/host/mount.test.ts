@@ -24,6 +24,20 @@ describe('mountDataApp', () => {
     expect(app.frame.isConnected).toBe(false);
   });
 
+  it('tells the frame whether its Backend can export', () => {
+    const without = mountDataApp(options());
+    const withExport = mountDataApp({
+      ...options(),
+      backend: stubBackend({
+        exportQuery: { url: 'u', filename: 'f.csv', format: 'csv', rowCount: 0, expiresAt: new Date() },
+      }).backend,
+    });
+    expect(without.frame.srcdoc).toContain('"features":{"export":false}');
+    expect(withExport.frame.srcdoc).toContain('"features":{"export":true}');
+    without.unmount();
+    withExport.unmount();
+  });
+
   it('refuses to mount without its frame script', () => {
     expect(() => mountDataApp({ ...options(), frameScript: undefined })).toThrow(/built without its frame script/);
   });

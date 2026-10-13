@@ -1,8 +1,9 @@
+import { TransportError } from '../common/errors';
 import type {
   BridgeError, FrameMessage, HostMessage,
 } from '../common/bridge';
 import type {
-  Backend, InspectedApp, InspectedStructure, LocateTarget,
+  Backend, BackendExportRequest, ExportResult, InspectedApp, InspectedStructure, LocateTarget,
 } from '../common/types';
 
 export interface BridgeHandle {
@@ -30,6 +31,36 @@ export interface BridgeCallbacks {
 function toBridgeError (err: unknown): BridgeError {
   const e = err as Error | undefined;
   return { name: e?.name ?? 'QueryError', message: e?.message ?? 'The query failed.' };
+}
+
+/**
+ * Save an export's file for the reader, from the host's page: a frame without `allow-downloads`
+ * cannot, and following a link is how a browser writes a file to disk without holding it. A link
+ * to another origin (a presigned URL) ignores `download`; its server's `Content-Disposition` names
+ * the file instead.
+ */
+function saveFile (doc: Document, link: ExportResult): void {
+  const a = doc.createElement('a');
+  a.href = link.url;
+  a.download = link.filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/** Make the export, then start saving it, then answer the frame with its link. */
+async function exportAndSave (
+  backend: Backend,
+  doc: Document,
+  request: BackendExportRequest,
+  signal: AbortSignal,
+): Promise<ExportResult> {
+  if (!backend.exportQuery) throw new TransportError('This host cannot make exports.');
+  const link = await backend.exportQuery(request, signal);
+  saveFile(doc, link);
+  return link;
 }
 
 /**
@@ -78,7 +109,9 @@ export function serveBridge (
           ? backend.submitQuery(message.request, controller.signal)
           : message.method === 'fieldSuggestions'
             ? backend.fieldSuggestions(message.request, controller.signal)
-            : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
+            : message.method === 'exportQuery'
+              ? exportAndSave(backend, frame.ownerDocument, message.request, controller.signal)
+              : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
         result
           .then((value) => reply({ type: 'anfra:response', id, ok: true, result: value }))
           .catch((err: unknown) => {
