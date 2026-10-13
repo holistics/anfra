@@ -4,11 +4,13 @@ import {
   Control, DateDrillControl, Filter,
 } from './controls';
 import { CrossFilter, Mapping, type Edge } from './mapping';
-import { DataAppError, QueryError, ValidationError } from '../common/errors';
+import {
+  DataAppError, PermissionError, QueryError, TransportError, ValidationError,
+} from '../common/errors';
 import {
   assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
 } from './validation';
-import { runQuery, type SubmitContext } from './execution/submitQuery';
+import { buildExportRequest, runQuery, type SubmitContext } from './execution/submitQuery';
 import { deriveSelection } from './selection';
 import { markersFor } from './structure';
 import { overlayFor, scrollTo } from './overlay';
@@ -20,6 +22,8 @@ import type {
   DateDrillDeclaration,
   ExecuteOptions,
   ExecuteSummary,
+  ExportOptions,
+  ExportResult,
   FilterAggregation,
   ConditionValue,
   FilterDeclaration,
@@ -139,6 +143,19 @@ function selectionKey (selection: Selection | undefined): string {
 function toDataAppError (err: unknown, entity: string): DataAppError {
   if (err instanceof DataAppError) return err;
   return new QueryError((err as Error)?.message ?? 'The query failed.', entity, err);
+}
+
+/**
+ * An export's error, naming its query. Errors crossing the bridge lose their entity, and an export
+ * has no state of its own to carry the name, so the author's `catch` is the only place it can go.
+ */
+function toExportError (err: unknown, entity: string): DataAppError {
+  if (err instanceof DataAppError && err.entity) return err;
+  const message = (err as Error | undefined)?.message || 'The export failed.';
+  if (err instanceof PermissionError) return new PermissionError(message, entity);
+  if (err instanceof TransportError) return new TransportError(message, err.status, entity);
+  if (err instanceof ValidationError) return new ValidationError(message, entity);
+  return new QueryError(message, entity, err);
 }
 
 export class App extends Observable implements AppContext {
@@ -590,6 +607,33 @@ export class App extends Observable implements AppContext {
       throw error;
     } finally {
       if (query.controller === controller) query.controller = undefined;
+    }
+  }
+
+  /**
+   * @internal Backs `query.export()`. Built from the applied state, as `fetchPage` is, so the file
+   * holds what the reader is looking at, every row of it. Touches nothing on the query.
+   */
+  async exportQuery (query: Query, options: ExportOptions = {}): Promise<ExportResult> {
+    const { backend } = this;
+    if (this.features?.export === false || !backend.exportQuery) {
+      throw new TransportError('This host cannot make exports.', undefined, query.name);
+    }
+    const request = buildExportRequest(
+      query,
+      this.mappingsTo(query.name),
+      {
+        conditions: this.selectionConditionsFor(query.name, 'applied'),
+        expression: this.selectionExpressionFor(query.name, 'applied'),
+      },
+      { backend, timezone: this._timezone, title: this.title },
+      options,
+    );
+    try {
+      return await backend.exportQuery(request, options.signal ?? new AbortController().signal);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      throw toExportError(err, query.name);
     }
   }
 

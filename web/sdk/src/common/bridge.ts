@@ -4,16 +4,19 @@
  * makes to its Backend crosses here, and the host answers it.
  */
 import type {
-  BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp, InspectedStructure, LocateTarget, User,
+  BackendExportRequest, BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp, InspectedStructure,
+  LocateTarget, SdkFeatures, User,
 } from './types';
 
 /** The Backend methods a frame may call: the bridge serves these and nothing else. */
-export type BridgeMethod = 'submitQuery' | 'fieldSuggestions';
+export type BridgeMethod = 'submitQuery' | 'fieldSuggestions' | 'exportQuery';
 
 /** What the host provisions a frame with, as JSON in `<script type="application/json" id="anfra-provision">`. */
 export interface Provision {
   datasets: Record<string, DatasetDescriptor>;
   user: User;
+  /** What the host can do beyond queries, such as exports. Absent from a host older than this field. */
+  features?: SdkFeatures;
   /** The host page's origin: where the frame posts, so nothing else can read its messages. */
   hostOrigin: string;
 }
@@ -25,6 +28,8 @@ export type FrameMessage =
   | { type: 'anfra:ready' }
   | { type: 'anfra:request', id: number, method: 'submitQuery', request: BackendQueryRequest }
   | { type: 'anfra:request', id: number, method: 'fieldSuggestions', request: FieldSuggestionsRequest }
+  /** The host makes the file, starts saving it for the reader, then answers its link. */
+  | { type: 'anfra:request', id: number, method: 'exportQuery', request: BackendExportRequest }
   | { type: 'anfra:cancel', id: number }
   | { type: 'anfra:inspect', apps: InspectedApp[], structure: InspectedStructure }
   /** In pick mode, the reader chose a node, or left the mode (null, on Escape). */

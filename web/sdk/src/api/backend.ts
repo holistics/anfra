@@ -1,6 +1,7 @@
 import { QueryError, TransportError } from '../common/errors';
 import type {
-  Backend, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue, DatasetDescriptor, FieldSuggestionsRequest,
+  Backend, BackendExportRequest, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue, DatasetDescriptor,
+  ExportResult, FieldSuggestionsRequest,
 } from '../common/types';
 import { coreClient, type CoreClient } from './client';
 import type { components } from './schema';
@@ -8,6 +9,7 @@ import { toSdkError, type ApiErrorBody } from './errors';
 
 type QueryRunInput = components['schemas']['QueryRunInput'];
 type Column = components['schemas']['Column'];
+type ExportInput = components['schemas']['ExportInput'];
 
 /** How many values a filter control is offered at most. */
 export const SUGGESTION_LIMIT = 100;
@@ -36,6 +38,20 @@ export function toQueryInput (request: BackendQueryRequest): QueryRunInput {
   };
 }
 
+/** The core.query.export input an export request is: the query as a run sends it, and the file. */
+export function toExportInput (request: BackendExportRequest): ExportInput {
+  return {
+    query: request.aql,
+    dataset: request.dataset,
+    input: request.input as ExportInput['input'],
+    ...(request.timezone ? { timezone: request.timezone } : {}),
+    // The server names its formats; one it does not know it refuses, with a message the author sees.
+    ...(request.format ? { format: request.format as ExportInput['format'] } : {}),
+    ...(request.formatOptions ? { format_options: request.formatOptions } : {}),
+    ...(request.filename ? { filename: request.filename } : {}),
+  };
+}
+
 /**
  * The API's columns as a Data App takes them, their types required. The API's column leaves them
  * out where nothing can say them (a SQL query, a query not yet run), but a Data App's query is an
@@ -55,10 +71,11 @@ function toColumns (columns: Column[]): ColumnMeta[] {
   });
 }
 
-async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal) {
+/** A call's answer, or the SDK error its failure is. */
+async function answer<T> (call: () => Promise<{ data?: T, error?: unknown, response: Response }>): Promise<T> {
   let result;
   try {
-    result = await client.POST('/core.query', { body, signal });
+    result = await call();
   } catch (err) {
     if (isAbort(err)) throw err;
     throw new TransportError(`The server could not be reached: ${(err as Error).message}`);
@@ -68,9 +85,13 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
   return data;
 }
 
+function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal) {
+  return answer(() => client.POST('/core.query', { body, signal }));
+}
+
 /**
- * A Backend over the core API: a Data App's queries as `core.query`, and its field suggestions as
- * one `core.query` too. The same on every host: `/api` on `anfra serve`, `/api/o/{org}` on
+ * A Backend over the core API: a Data App's queries as `core.query`, its field suggestions as one
+ * `core.query` too, and its exports as `core.query.export`. The same on every host: `/api` on `anfra serve`, `/api/o/{org}` on
  * anfra-cloud. A host's page uses it; a Data App's frame never does.
  */
 export function coreApiBackend (base: string | CoreClient, options: CoreApiBackendOptions = {}): Backend {
@@ -122,6 +143,18 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
       return data.result.records
         .map((row) => row[0])
         .filter((v): v is ConditionValue => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
+    },
+
+    /** An export as `core.query.export`: the server runs the query to completion, then answers its link. */
+    async exportQuery (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult> {
+      const link = await answer(() => client.POST('/core.query.export', { body: toExportInput(request), signal }));
+      return {
+        url: link.url,
+        filename: link.filename,
+        format: link.format,
+        rowCount: link.row_count,
+        expiresAt: new Date(link.expires_at),
+      };
     },
   };
 }

@@ -60,6 +60,39 @@ describe('serveBridge', () => {
     expect(replies).toEqual([{ type: 'anfra:response', id: 1, ok: false, error: { name: 'PermissionError', message: 'Not yours.' } }]);
   });
 
+  describe('an export', () => {
+    const link = {
+      url: 'http://host/exports/download/t0k3n/revenue.csv', filename: 'revenue.csv', format: 'csv', rowCount: 3, expiresAt: new Date(0),
+    };
+    const exportRequest = { ...query, format: 'csv', formatOptions: { bom: true }, filename: 'revenue' };
+
+    it('is made by the Backend, saved from the host page, then answered with its link', async () => {
+      const clicked: { href: string, download: string, connected: boolean }[] = [];
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push({ href: this.href, download: this.download, connected: this.isConnected });
+      });
+      const exportQuery = vi.fn(async () => link);
+      bridge = serveBridge(frame, backend({ exportQuery }));
+      fromFrame({ type: 'anfra:request', id: 3, method: 'exportQuery', request: exportRequest });
+      await settle();
+      expect(exportQuery).toHaveBeenCalledWith(exportRequest, expect.any(AbortSignal));
+      expect(clicked).toEqual([{ href: link.url, download: 'revenue.csv', connected: true }]);
+      expect(document.querySelector('a[download]')).toBeNull();
+      expect(replies).toEqual([{ type: 'anfra:response', id: 3, ok: true, result: link }]);
+    });
+
+    it('fails as a TransportError when the Backend cannot export, saving nothing', async () => {
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click');
+      bridge = serveBridge(frame, backend());
+      fromFrame({ type: 'anfra:request', id: 4, method: 'exportQuery', request: exportRequest });
+      await settle();
+      expect(click).not.toHaveBeenCalled();
+      expect(replies).toEqual([{
+        type: 'anfra:response', id: 4, ok: false, error: { name: 'TransportError', message: 'This host cannot make exports.' },
+      }]);
+    });
+  });
+
   it("aborts a call the frame cancels, and answers nothing for it", async () => {
     let signal: AbortSignal | undefined;
     bridge = serveBridge(frame, backend({
