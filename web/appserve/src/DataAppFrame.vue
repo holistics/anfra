@@ -40,6 +40,7 @@ onMounted(async () => {
       backend: coreApiBackend(api, { datasets: props.datasets }),
       onInspect: (apps, structure) => emit('inspect', apps, structure),
       onPick: (node) => emit('pick', node),
+      render: true,
       title: 'Data App',
     });
     mounted.frame.classList.add('data-app');

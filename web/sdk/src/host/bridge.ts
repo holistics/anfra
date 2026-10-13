@@ -27,7 +27,7 @@ export interface BridgeHandle {
 }
 
 export interface BridgeOptions {
-  /** Whether the frame may render. Off, its asks are refused and `render` rejects. */
+  /** Whether the frame may render: off unless true, and off, its asks are refused and `render` rejects. */
   render?: boolean;
   /** The renderer's code (`anfra-sdk:renderer`), sent to the frame on its first rendering. */
   renderer?: string;
@@ -144,7 +144,7 @@ export function serveBridge (
   let nextRender = 1;
   let saving = false;
   const saves: number[] = [];
-  const rendering = options.render !== false && !!options.renderer;
+  const rendering = options.render === true && !!options.renderer;
   let inspecting = false;
   const win = frame.ownerDocument.defaultView ?? window;
 

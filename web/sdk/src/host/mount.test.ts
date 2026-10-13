@@ -38,14 +38,16 @@ describe('mountDataApp', () => {
     withExport.unmount();
   });
 
-  it('tells the frame it may render when it has the renderer, unless turned off', () => {
-    const on = mountDataApp({ ...options(), renderer: 'code' });
+  it('tells the frame it may render only when turned on and it has the renderer', () => {
+    const on = mountDataApp({ ...options(), renderer: 'code', render: true });
+    const unasked = mountDataApp({ ...options(), renderer: 'code' });
     const off = mountDataApp({ ...options(), renderer: 'code', render: false });
-    const none = mountDataApp(options());
+    const none = mountDataApp({ ...options(), render: true });
     expect(on.frame.srcdoc).toContain('"render":true}');
+    expect(unasked.frame.srcdoc).toContain('"render":false}');
     expect(off.frame.srcdoc).toContain('"render":false}');
     expect(none.frame.srcdoc).toContain('"render":false}');
-    [on, off, none].forEach((app) => app.unmount());
+    [on, unasked, off, none].forEach((app) => app.unmount());
   });
 
   it('refuses to mount without its frame script', () => {
