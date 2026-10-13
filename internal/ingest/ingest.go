@@ -5,8 +5,6 @@ package ingest
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
@@ -23,14 +21,10 @@ func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, 
 	if canal == nil {
 		return "", fmt.Errorf("ingest requires the canal-query sidecar")
 	}
-	if err := os.MkdirAll(r.CatalogDir(), 0o755); err != nil {
-		return "", fmt.Errorf("create catalog dir: %w", err)
-	}
 
 	req := anfranode.CatalogIngestRequest{
 		RepoPath:          r.Dir,
-		SourcesPath:       filepath.Join(r.ConfigDir, "context_sources.yml"), // anfra-node owns ingest source config parsing; Go only resolves the repo path.
-		CatalogPath:       r.CatalogPath(),
+		SourcesPath:       r.ContextSourcesPath(),
 		CanalQueryBaseURL: canal.BaseURL(),
 		Source:            source,
 	}

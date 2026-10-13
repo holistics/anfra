@@ -48,6 +48,12 @@ func (p Local) CatalogPath() string {
 	return filepath.Join(p.CatalogDir(), "catalog.duckdb")
 }
 
+// ContextSourcesPath is the repo's context sources config. anfra-node parses it;
+// Go only resolves where it is.
+func (p Local) ContextSourcesPath() string {
+	return filepath.Join(p.ConfigDir, "context_sources.yml")
+}
+
 // Repo is this local repo, as a command receives it.
 func (p Local) Repo() Repo { return Repo{id: p.ID, local: &p} }
 

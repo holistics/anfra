@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,12 +62,6 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 	}
 	if captured.SourcesPath != filepath.Join(r.ConfigDir, "context_sources.yml") {
 		t.Fatalf("sourcesPath = %q", captured.SourcesPath)
-	}
-	if captured.CatalogPath != r.CatalogPath() {
-		t.Fatalf("catalogPath = %q, want %q", captured.CatalogPath, r.CatalogPath())
-	}
-	if info, err := os.Stat(r.CatalogDir()); err != nil || !info.IsDir() {
-		t.Fatalf("catalog dir was not created: info=%v err=%v", info, err)
 	}
 	if captured.CanalQueryBaseURL != "http://127.0.0.1:9000" {
 		t.Fatalf("canalQueryBaseUrl = %q", captured.CanalQueryBaseURL)

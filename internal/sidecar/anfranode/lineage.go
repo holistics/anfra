@@ -9,10 +9,10 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-// CatalogLineageRequest mirrors anfra-node's catalog.lineage params: the fields
-// to trace, and the page of what each one needs. It reads the catalog the last
-// catalog.ingest of the same anfra-node built.
+// CatalogLineageRequest mirrors anfra-node's catalog.lineage params: the
+// catalog's context, the fields to trace, and the page of what each one needs.
 type CatalogLineageRequest struct {
+	Context CatalogContext  `json:"context"`
 	Targets []LineageTarget `json:"targets"`
 	Limit   int             `json:"limit,omitzero"`
 	Offset  int             `json:"offset,omitzero"`
@@ -38,7 +38,7 @@ type TargetDiagram struct {
 	Error   string        `json:"error,omitempty"`
 }
 
-// CatalogLineage traces fields through the catalog anfra-node last ingested.
+// CatalogLineage traces fields through the catalog of the request's context.
 func (c *Client) CatalogLineage(ctx context.Context, req CatalogLineageRequest) (CatalogLineageResult, error) {
 	var res CatalogLineageResult
 	err := c.Call(ctx, "catalog.lineage", req, &res)
