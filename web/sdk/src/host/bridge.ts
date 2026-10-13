@@ -35,15 +35,49 @@ export interface BridgeOptions {
 
 const RENDERING_OFF = 'This host does not render Data Apps.';
 
+/** What a frame may save: a rendering, told by its first bytes, never by what the frame says it is. */
+const PICTURES = [
+  { ext: 'png', type: 'image/png', signature: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { ext: 'pdf', type: 'application/pdf', signature: [0x25, 0x50, 0x44, 0x46, 0x2d] },
+] as const;
+
+/** Saves a frame may start: one at a time, and this many in this window, so an app can't flood the reader. */
+const SAVES_PER_WINDOW = 5;
+const SAVE_WINDOW_MS = 10_000;
+
 /**
- * Save a file the frame made, from the host's page: the frame has no `allow-downloads`. The object
- * URL is kept a moment, since the browser reads it after the click returns.
+ * The name a picture is saved under: the frame's, without what a file system or a reader would
+ * misread (control characters, path separators), ending in the extension its bytes call for. A
+ * name that pretends otherwise (`report.pdf.exe`) keeps its words and gets the real extension.
  */
-function saveBlob (doc: Document, { blob, filename }: SaveFileRequest): void {
-  const url = URL.createObjectURL(blob);
+export function pictureFilename (filename: unknown, ext: string): string {
+  const name = (typeof filename === 'string' ? filename : '')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .trim()
+    .replace(/^[.\s]+|[.\s]+$/g, '')
+    .slice(0, 200) || 'Rendering';
+  return name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
+}
+
+/**
+ * Save a file the frame made, from the host's page: the frame has no `allow-downloads`, and this
+ * gives back only what a rendering needs. The file must be a PNG or a PDF by its bytes; it is saved
+ * as that type, under a name ending in that extension. The object URL is kept a moment, since the
+ * browser reads it after the click returns.
+ */
+async function saveBlob (doc: Document, request: SaveFileRequest): Promise<void> {
+  const blob = request?.blob;
+  if (!(blob instanceof Blob)) throw new ValidationError('A rendering must be saved as a file.');
+  const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  const picture = PICTURES.find(({ signature }) => signature.every((byte, i) => head[i] === byte));
+  if (!picture) throw new ValidationError('Only a PNG or a PDF rendering can be saved.');
+
+  const url = URL.createObjectURL(new Blob([blob], { type: picture.type }));
   const a = doc.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = pictureFilename(request.filename, picture.ext);
+  a.rel = 'noopener';
   a.style.display = 'none';
   doc.body.appendChild(a);
   a.click();
@@ -108,6 +142,8 @@ export function serveBridge (
   const inFlight = new Map<number, AbortController>();
   const renderings = new Map<number, { resolve: (r: Rendering) => void, reject: (e: Error) => void }>();
   let nextRender = 1;
+  let saving = false;
+  const saves: number[] = [];
   const rendering = options.render !== false && !!options.renderer;
   let inspecting = false;
   const win = frame.ownerDocument.defaultView ?? window;
@@ -157,7 +193,18 @@ export function serveBridge (
                 ? (async () => {
                   if (!rendering) throw new ValidationError(RENDERING_OFF);
                   if (message.method === 'renderer') return options.renderer;
-                  saveBlob(frame.ownerDocument, message.request);
+                  const now = Date.now();
+                  while (saves.length && now - saves[0] >= SAVE_WINDOW_MS) saves.shift();
+                  if (saving || saves.length >= SAVES_PER_WINDOW) {
+                    throw new ValidationError('Too many files saved at once: try again in a few seconds.');
+                  }
+                  saving = true;
+                  saves.push(now);
+                  try {
+                    await saveBlob(frame.ownerDocument, message.request);
+                  } finally {
+                    saving = false;
+                  }
                   return null;
                 })()
                 : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
