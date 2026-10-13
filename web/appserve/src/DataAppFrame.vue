@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { coreApiBackend } from '@holistics/anfra-sdk/api';
-import type { DatasetDescriptor, InspectedApp, User } from '@holistics/anfra-sdk/common';
+import type {
+  DatasetDescriptor, InspectedApp, Rendering, RenderRequest, User,
+} from '@holistics/anfra-sdk/common';
 import type { InspectedStructure, LocateTarget } from './inspect';
 import { mountDataApp, type MountedDataApp } from '@holistics/anfra-sdk/host';
 import { api, definition } from './server';
@@ -55,11 +57,14 @@ watch(() => props.picking, (on) => mounted?.setPicking(on));
 
 onBeforeUnmount(() => mounted?.unmount());
 
-// The inspect panel reaches the page through here: highlight a node, scroll to one, or to an
-// entity wherever it is drawn. Nothing comes back but the next snapshot.
+// The inspect panel and the toolbar reach the page through here: highlight a node, scroll to one,
+// or to an entity wherever it is drawn; and render the page or a node, which the frame saves.
 defineExpose({
   highlight: (node: string | null) => mounted?.highlight(node),
   locate: (target: LocateTarget) => mounted?.locate(target),
+  render: (request: RenderRequest): Promise<Rendering> => (mounted
+    ? mounted.render(request)
+    : Promise.reject(new Error('The Data App is not loaded yet.'))),
 });
 </script>
 

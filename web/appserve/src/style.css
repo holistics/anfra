@@ -358,6 +358,41 @@ code { font-size: 12px; color: var(--muted); }
 }
 
 .popover .hint { display: block; color: var(--muted); }
+
+.download { position: relative; }
+.download .icon-button[aria-busy="true"] { cursor: progress; opacity: 0.6; }
+.menu {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.menu button { padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: inherit; text-align: left; }
+.menu button:hover { background: var(--hover); }
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  max-width: min(480px, 90vw);
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  box-shadow: var(--shadow);
+}
+.toast.error { border-color: transparent; background: var(--danger-bg); color: var(--danger); }
 .popover ul { margin: 8px 0 0; padding-left: 18px; }
 .popover li { margin-bottom: 4px; }
 
@@ -568,6 +603,8 @@ code { font-size: 12px; color: var(--muted); }
 .detail { flex: none; max-height: 45%; overflow: auto; padding: 8px 14px 16px; border-top: 1px solid var(--border); }
 .detail h5 { margin-top: 4px; }
 .detail .card { margin-top: 16px; }
+.detail-actions { display: flex; gap: 6px; margin-top: 8px; }
+.detail-actions .icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
 .inspect .card.flash { animation: flash 1.5s ease-out; }
 @keyframes flash { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } }
 

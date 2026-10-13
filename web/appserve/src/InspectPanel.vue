@@ -10,6 +10,7 @@ import {
   countProblems, findNode, formatCondition, handleFor, usageOf,
   type InspectedApp, type InspectedStructure, type LocateTarget, type StructureNode,
 } from './inspect';
+import type { RenderFormat, RenderRequest } from '@holistics/anfra-sdk/common';
 
 // `apps` and `structure` are undefined until the frame has reported.
 const props = defineProps<{
@@ -24,7 +25,15 @@ const emit = defineEmits<{
   locate: [target: LocateTarget],
   select: [node: string | undefined],
   pick: [on: boolean],
+  render: [request: RenderRequest],
 }>();
+
+// A container or block, by its id; rendered and saved by the frame.
+function render (node: StructureNode, format: RenderFormat): void {
+  if (!node.id) return;
+  emit('render', node.kind === 'block' ? { block: node.id, format } : { container: node.id, format });
+}
+const renderable = (node: StructureNode) => (node.kind === 'container' || node.kind === 'block') && !!node.id && !node.problems.length;
 
 const tab = ref<'structure' | 'data'>('structure');
 const selected = computed(() => (props.structure && props.selectedNode ? findNode(props.structure.nodes, props.selectedNode) : undefined));
@@ -124,6 +133,7 @@ const selectedEntity = computed(() => {
           @select="select"
           @view="viewData"
           @copy="copyHandle"
+          @download="render($event, 'png')"
         />
       </div>
 
@@ -138,6 +148,14 @@ const selectedEntity = computed(() => {
           <template v-if="selected.children.length"><dt>Holds</dt><dd>{{ selected.children.length }} node{{ selected.children.length === 1 ? '' : 's' }}</dd></template>
         </dl>
         <p v-for="(problem, i) in selected.problems" :key="i" class="error-text" role="alert">{{ problem }}</p>
+        <div v-if="renderable(selected)" class="detail-actions">
+          <button type="button" class="tool" data-testid="download-png" @click="render(selected, 'png')">
+            <Icon name="download" />PNG
+          </button>
+          <button type="button" class="tool" data-testid="download-pdf" @click="render(selected, 'pdf')">
+            <Icon name="download" />PDF
+          </button>
+        </div>
         <EntityCard v-if="selectedEntity" v-bind="selectedEntity" @locate="emit('locate', $event)" />
       </section>
     </div>

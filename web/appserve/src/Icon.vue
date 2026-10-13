@@ -17,6 +17,7 @@ const PATHS = {
   copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
   check: 'M5 12l5 5 9-10',
   table: 'M4 5h16v14H4z M4 10h16 M4 15h16 M10 10v9',
+  download: 'M12 4v11 M7 10l5 5 5-5 M5 20h14',
 } as const;
 
 defineProps<{ name: keyof typeof PATHS }>();
