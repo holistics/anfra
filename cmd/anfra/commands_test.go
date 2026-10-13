@@ -145,6 +145,48 @@ func TestFlagValues(t *testing.T) {
 	}
 }
 
+type listedInput struct {
+	Items []struct {
+		Name string `json:"name"`
+	} `json:"items,omitempty" doc:"the items"`
+}
+
+func (listedInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return command.ArgsSchema[listedInput](s)
+}
+
+var listed = command.Define(command.Def[listedInput, struct{}]{
+	Name: "listed", Short: "Take a list of objects.",
+	Run: func(context.Context, command.CommandContext, listedInput) (struct{}, error) { return struct{}{}, nil },
+})
+
+// An object array arg's flag is a JSON array of objects, and nothing else.
+func TestObjectArrayFlag(t *testing.T) {
+	flagArg := map[string]string{"items": "items"}
+	cmd := buildCobraCommand(listed)
+	if err := cmd.ParseFlags([]string{"--items", ` [{"name":"a"}] `}); err != nil {
+		t.Fatal(err)
+	}
+	values, err := flagValues(cmd.Flags(), listed.Args(), flagArg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := jsonkit.Marshal(values)
+	if want := `{"items":[{"name":"a"}]}`; string(got) != want {
+		t.Errorf("input = %s, want %s", got, want)
+	}
+
+	for _, bad := range []string{"a", `{"name":"a"}`, `["a"]`, "[null]", "null"} {
+		cmd := buildCobraCommand(listed)
+		if err := cmd.ParseFlags([]string{"--items", bad}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := flagValues(cmd.Flags(), listed.Args(), flagArg); err == nil {
+			t.Errorf("--items %s was accepted", bad)
+		}
+	}
+}
+
 type dottedOptions struct {
 	Header string   `json:"header,omitempty" enum:"labels,names,none" doc:"the header row"`
 	Rows   int      `json:"rows,omitempty" doc:"rows to write"`

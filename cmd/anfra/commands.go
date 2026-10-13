@@ -104,6 +104,9 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			}
 			usage += ")"
 		}
+		if a.Type == command.ArgObjectArray {
+			usage += " (a JSON array of objects)"
+		}
 		// pflag has no native aliases, so each alias is a flag of its own, setting
 		// the same arg: the op knows each arg by one name.
 		addFlag(cmd, a, a.Flag(), a.Shorthand, usage)
@@ -163,7 +166,8 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 // only those set, so an unset one is absent, and the op applies its default and
 // sees which of a group are set. An object arg's flag is JSON, refused when it is
 // not an object; or its fields are set by their own flags, and make the object,
-// but not both.
+// but not both. An object array arg's flag is JSON, refused when it is not an
+// array of objects.
 func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string) (map[string]any, error) {
 	values := map[string]any{}
 	objects := map[string]map[string]any{} // an object arg set by its fields' flags
@@ -180,11 +184,20 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 			objects[arg][field] = flagValue(f, fieldType(args, arg, field))
 			return
 		}
+		raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
+		if argType(args, key) == command.ArgObjectArray {
+			var objs []map[string]any
+			if jsonkit.Unmarshal(raw, &objs) != nil || objs == nil || slices.ContainsFunc(objs, func(o map[string]any) bool { return o == nil }) {
+				err = fmt.Errorf("--%s takes a JSON array of objects, such as '[{\"name\": \"a\"}]'", f.Name)
+				return
+			}
+			values[key] = raw
+			return
+		}
 		if argType(args, key) != command.ArgObject {
 			values[key] = flagValue(f, argType(args, key))
 			return
 		}
-		raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
 		var obj map[string]any
 		if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
 			err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
@@ -225,7 +238,7 @@ func flagValue(f *pflag.Flag, t command.ArgType) any {
 
 func addFlag(cmd *cobra.Command, a command.Arg, name, short, usage string) {
 	switch a.Type {
-	case command.ArgString, command.ArgObject:
+	case command.ArgString, command.ArgObject, command.ArgObjectArray:
 		cmd.Flags().StringP(name, short, a.Default, usage)
 	case command.ArgInt:
 		cmd.Flags().IntP(name, short, 0, usage)
