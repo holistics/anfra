@@ -1,4 +1,4 @@
-// Formatting for the inspect panel. What it shows is what the Anfra SDK posts out of the frame
+// Formatting for the inspect panel. What it shows is what the anfra SDK posts out of the frame
 // while the panel is open: every app's state (`App.toInspectJSON()`) and the page's structure.
 // Its types are the SDK's. Rows are never part of it.
 import type {

@@ -91,7 +91,7 @@ jobs:
           echo "a breaking change to the core API, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
           exit 1
 
-  # The Anfra SDK and the appserve frontend (the pnpm workspace): typecheck, tests, the build a
+  # The anfra SDK and the appserve frontend (the pnpm workspace): typecheck, tests, the build a
   # release embeds, and the SDK's API types fresh from api/openapi.yaml.
   web:
     runs-on: ubuntu-latest

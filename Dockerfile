@@ -71,5 +71,5 @@ ENTRYPOINT ["/usr/bin/tini", "--", "anfra"]
 CMD ["serve", "--addr", "0.0.0.0:7878"]
 
 LABEL org.opencontainers.image.source=https://github.com/holistics/anfra \
-      org.opencontainers.image.description="Anfra: anfra serve for a repo mounted at /repo" \
+      org.opencontainers.image.description="anfra: anfra serve for a repo mounted at /repo" \
       org.opencontainers.image.licenses=Apache-2.0

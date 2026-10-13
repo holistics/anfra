@@ -1,5 +1,5 @@
 // What the appserve frontend asks its server: the appserve backend's routes (/appserve/…), and the
-// core API (/api) through the Anfra SDK's client, as any client of anfra does.
+// core API (/api) through the anfra SDK's client, as any client of anfra does.
 import { coreClient, loadDatasets } from '@holistics/anfra-sdk/api';
 import type { DatasetDescriptor, User } from '@holistics/anfra-sdk/common';
 import type { CatalogEntry } from './catalog';

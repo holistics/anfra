@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Reader is who reads the Data Apps, as the Anfra SDK provisions a user: on anfra serve, the
+// Reader is who reads the Data Apps, as the anfra SDK provisions a user: on anfra serve, the
 // local user, who may see everything.
 type Reader struct {
 	ID          int         `json:"id"`
