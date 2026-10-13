@@ -39,6 +39,7 @@ func TestCommandsRefuseWithoutTheirSidecars(t *testing.T) {
 	for cmd, input := range map[string]string{
 		"ingest":   `{}`,
 		"search":   `{"query":["revenue"]}`,
+		"lineage":  `{"targets":[{"parent":"orders","child":"amount"}]}`,
 		"validate": `{}`,
 		"query":    `{"query":"q","dataset":"d"}`,
 		"show":     `{"fqn":"ecommerce"}`,

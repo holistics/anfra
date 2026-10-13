@@ -119,6 +119,7 @@ export function bootstrap (win: Window): void {
       result.expiresAt = new Date(result.expiresAt);
       return result;
     }),
+    lineage: (request, signal) => call('lineage', request, signal),
   };
 
   // Neither is ever cancelled; the signal is made only once one is asked.

@@ -106,6 +106,30 @@ describe('coreApiBackend', () => {
     await expect(coreApiBackend(client).submitQuery(request, signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  describe('lineage', () => {
+    const traced = {
+      results: [{
+        target: { parent: 'orders', child: 'amount' },
+        query: 'needed_by:(fqn:orders.amount)',
+        diagram: {
+          version: 1, query: 'needed_by:(fqn:orders.amount)', total: 0, matched: [], schema: { edges: {}, types: {} }, layers: [], cards: [],
+        },
+      }],
+    };
+
+    it('traces as core.lineage, sending the request and answering the answer as they are', async () => {
+      const { client, sent } = api(ok(traced));
+      const request = { targets: [{ parent: 'orders', child: 'amount' }], limit: 5, offset: 10 };
+      await expect(coreApiBackend(client).lineage!(request, signal)).resolves.toEqual(traced);
+      expect(sent).toEqual([{ url: 'http://host/api/core.lineage', body: request }]);
+    });
+
+    it("maps the API's error to the SDK's", async () => {
+      const { client } = api(fail(503, { code: 'anfra.sidecar_unavailable', scope: 'Server', message: 'this command requires the anfra-node sidecar' }));
+      await expect(coreApiBackend(client).lineage!({ targets: [{ parent: 'orders', child: 'amount' }] }, signal)).rejects.toThrowError(TransportError);
+    });
+  });
+
   describe('field suggestions', () => {
     const datasets: Record<string, DatasetDescriptor> = {
       sales: {

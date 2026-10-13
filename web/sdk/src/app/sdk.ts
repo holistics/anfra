@@ -1,8 +1,9 @@
 import { App } from './app';
 import { DatasetIndex } from './validation';
-import { ValidationError } from '../common/errors';
+import { TransportError, ValidationError } from '../common/errors';
 import type {
-  AppDeclaration, Backend, DatasetDescriptor, Rendering, RenderRequest, SdkEnvironment, SdkFeatures, User,
+  AppDeclaration, Backend, DatasetDescriptor, LineageOptions, LineageResult, LineageTarget, Rendering, RenderRequest,
+  SdkEnvironment, SdkFeatures, User,
 } from '../common/types';
 import { version } from '../../package.json';
 
@@ -109,6 +110,31 @@ export class Sdk {
       return Promise.reject(new ValidationError('This host does not render Data Apps: check Anfra.features.render first.'));
     }
     return this.renderHook(request);
+  }
+
+  /**
+   * Trace fields through the repo's catalog: what each one is built from (the fields, models and
+   * sources upstream of it), as a diagram to draw. Name each field by its parent and its name in
+   * it: `{ parent: 'orders', child: 'amount' }` for a model's field, `{ parent: 'ecommerce', child:
+   * 'revenue' }` for a dataset's metric. The catalog is the one the host last ingested. A field
+   * that cannot be traced answers its `error`, and the others still answer; a host that cannot
+   * trace lineage rejects with a `TransportError`.
+   */
+  lineage (targets: LineageTarget | readonly LineageTarget[], options: LineageOptions = {}): Promise<LineageResult> {
+    const list: LineageTarget[] = Array.isArray(targets) ? [...targets] : [targets as LineageTarget];
+    const named = (s: unknown) => typeof s === 'string' && s.trim() !== '';
+    if (list.length === 0 || list.some((t) => typeof t !== 'object' || t === null || !named(t.parent) || !named(t.child))) {
+      return Promise.reject(new ValidationError(
+        "Anfra.lineage() takes one or more fields, each by its parent and its name in it, such as { parent: 'orders', child: 'amount' }.",
+      ));
+    }
+    if (!this.backend.lineage) return Promise.reject(new TransportError('This host cannot trace lineage.'));
+    const { limit, offset, signal = new AbortController().signal } = options;
+    return this.backend.lineage({
+      targets: list.map(({ parent, child }) => ({ parent, child })),
+      ...(limit !== undefined ? { limit } : {}),
+      ...(offset !== undefined ? { offset } : {}),
+    }, signal);
   }
 
   /**

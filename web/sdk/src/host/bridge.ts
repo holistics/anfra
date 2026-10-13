@@ -207,7 +207,10 @@ export function serveBridge (
                   }
                   return null;
                 })()
-                : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
+                : message.method === 'lineage'
+                  ? (backend.lineage?.(message.request, controller.signal)
+                    ?? Promise.reject(new TransportError('This host cannot trace lineage.')))
+                  : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
         result
           .then((value) => reply({ type: 'anfra:response', id, ok: true, result: value }))
           .catch((err: unknown) => {

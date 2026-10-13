@@ -1,6 +1,7 @@
 import type {
   Backend,
   BackendExportRequest,
+  BackendLineageRequest,
   BackendQueryRequest,
   BackendQueryResult,
   ColumnMeta,
@@ -8,6 +9,7 @@ import type {
   DatasetDescriptor,
   ExportResult,
   FieldSuggestionsRequest,
+  LineageResult,
   User,
 } from '../common/types';
 
@@ -78,7 +80,8 @@ export const salesDataset: DatasetDescriptor = {
 export type StubCall =
   | { method: 'submitQuery', request: BackendQueryRequest, signal: AbortSignal }
   | { method: 'fieldSuggestions', request: FieldSuggestionsRequest, signal: AbortSignal }
-  | { method: 'exportQuery', request: BackendExportRequest, signal: AbortSignal };
+  | { method: 'exportQuery', request: BackendExportRequest, signal: AbortSignal }
+  | { method: 'lineage', request: BackendLineageRequest, signal: AbortSignal };
 
 type Answer<Req, Res> = Res | Error | ((request: Req, signal: AbortSignal) => Res | Error | Promise<Res | Error>);
 
@@ -89,6 +92,8 @@ export interface StubOptions {
   fieldSuggestions?: Answer<FieldSuggestionsRequest, ConditionValue[]>;
   /** Answers `exportQuery`, likewise. Left out, the Backend has no `exportQuery`: a host that cannot export. */
   exportQuery?: Answer<BackendExportRequest, ExportResult>;
+  /** Answers `lineage`, likewise. Left out, the Backend has no `lineage`: a host that cannot trace it. */
+  lineage?: Answer<BackendLineageRequest, LineageResult>;
 }
 
 export interface Stub {
@@ -134,6 +139,12 @@ export function stubBackend (options: StubOptions = {}): Stub {
     backend.exportQuery = (request, signal) => {
       calls.push({ method: 'exportQuery', request, signal });
       return answer(options.exportQuery, request, signal, 'exportQuery');
+    };
+  }
+  if (options.lineage !== undefined) {
+    backend.lineage = (request, signal) => {
+      calls.push({ method: 'lineage', request, signal });
+      return answer(options.lineage, request, signal, 'lineage');
     };
   }
 

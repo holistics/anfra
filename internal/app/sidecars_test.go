@@ -88,6 +88,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}}, "", apperr.ValidationFailed},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
+		{"lineage, after ingest", valid, clients, Request{Command: "lineage", Args: map[string]any{"targets": []any{map[string]any{"parent": "products", "child": "name"}}}}, ok, nil},
 		{"show, the repo", valid, clients, Request{Command: "show"}, ok, nil},
 		{"show, a dataset", valid, clients, Request{Command: "show", Args: map[string]any{"fqn": "ecommerce"}}, ok, nil},
 		{"show, a dataset that is not there", valid, clients, Request{Command: "show", Args: map[string]any{"fqn": "nosuch"}}, "", apperr.ValidationFailed},

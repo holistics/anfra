@@ -1,7 +1,7 @@
 import { QueryError, TransportError } from '../common/errors';
 import type {
-  Backend, BackendExportRequest, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue, DatasetDescriptor,
-  ExportResult, FieldSuggestionsRequest,
+  Backend, BackendExportRequest, BackendLineageRequest, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue,
+  DatasetDescriptor, ExportResult, FieldSuggestionsRequest, LineageResult,
 } from '../common/types';
 import { coreClient, type CoreClient } from './client';
 import type { components } from './schema';
@@ -72,7 +72,7 @@ function toColumns (columns: Column[]): ColumnMeta[] {
 }
 
 /** A call's answer, or the SDK error its failure is. */
-async function answer<T> (call: () => Promise<{ data?: T, error?: unknown, response: Response }>): Promise<T> {
+async function callNodeAPI<T> (call: () => Promise<{ data?: T, error?: unknown, response: Response }>): Promise<T> {
   let result;
   try {
     result = await call();
@@ -86,13 +86,13 @@ async function answer<T> (call: () => Promise<{ data?: T, error?: unknown, respo
 }
 
 function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal) {
-  return answer(() => client.POST('/core.query', { body, signal }));
+  return callNodeAPI(() => client.POST('/core.query', { body, signal }));
 }
 
 /**
  * A Backend over the core API: a Data App's queries as `core.query`, its field suggestions as one
- * `core.query` too, and its exports as `core.query.export`. The same on every host: `/api` on `anfra serve`, `/api/o/{org}` on
- * anfra-cloud. A host's page uses it; a Data App's frame never does.
+ * `core.query` too, its exports as `core.query.export`, and its lineage as `core.lineage`. The same on
+ * every host: `/api` on `anfra serve`, `/api/o/{org}` on anfra-cloud. A host's page uses it; a Data App's frame never does.
  */
 export function coreApiBackend (base: string | CoreClient, options: CoreApiBackendOptions = {}): Backend {
   const client = typeof base === 'string' ? coreClient(base) : base;
@@ -147,7 +147,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
 
     /** An export as `core.query.export`: the server runs the query to completion, then answers its link. */
     async exportQuery (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult> {
-      const link = await answer(() => client.POST('/core.query.export', { body: toExportInput(request), signal }));
+      const link = await callNodeAPI(() => client.POST('/core.query.export', { body: toExportInput(request), signal }));
       return {
         url: link.url,
         filename: link.filename,
@@ -155,6 +155,11 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         rowCount: link.row_count,
         expiresAt: new Date(link.expires_at),
       };
+    },
+
+    /** Lineage as `core.lineage`, whose answer is the SDK's as it is. */
+    lineage (request: BackendLineageRequest, signal: AbortSignal): Promise<LineageResult> {
+      return callNodeAPI(() => client.POST('/core.lineage', { body: request, signal }));
     },
   };
 }

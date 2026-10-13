@@ -4,15 +4,15 @@
  * makes to its Backend crosses here, and the host answers it.
  */
 import type {
-  BackendExportRequest, BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp, InspectedStructure,
-  LocateTarget, Rendering, RenderRequest, SdkFeatures, User,
+  BackendExportRequest, BackendLineageRequest, BackendQueryRequest, DatasetDescriptor, FieldSuggestionsRequest, InspectedApp,
+  InspectedStructure, LocateTarget, Rendering, RenderRequest, SdkFeatures, User,
 } from './types';
 
 /**
  * What a frame may ask its host: the Backend's methods, and the two a rendering needs (the
  * renderer's code, and saving a file). The bridge serves these and nothing else.
  */
-export type BridgeMethod = 'submitQuery' | 'fieldSuggestions' | 'exportQuery' | 'renderer' | 'saveFile';
+export type BridgeMethod = 'submitQuery' | 'fieldSuggestions' | 'exportQuery' | 'lineage' | 'renderer' | 'saveFile';
 
 /** A file the frame made, for the host to save for the reader: the frame cannot download. */
 export interface SaveFileRequest {
@@ -37,6 +37,7 @@ export type FrameMessage =
   | { type: 'anfra:ready' }
   | { type: 'anfra:request', id: number, method: 'submitQuery', request: BackendQueryRequest }
   | { type: 'anfra:request', id: number, method: 'fieldSuggestions', request: FieldSuggestionsRequest }
+  | { type: 'anfra:request', id: number, method: 'lineage', request: BackendLineageRequest }
   /** The host makes the file, starts saving it for the reader, then answers its link. */
   | { type: 'anfra:request', id: number, method: 'exportQuery', request: BackendExportRequest }
   /** The renderer's code, asked for on the frame's first rendering; answered as a string. */

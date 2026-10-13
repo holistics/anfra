@@ -19,7 +19,7 @@ import (
 func NewRegistry() *apikit.Registry[command.CommandContext] {
 	reg := apikit.NewRegistry(apikit.RegistryConfig[command.CommandContext]{Namespace: errcode.NS})
 	reg.Group("core", "anfra core's commands: query a dataset of the semantic layer, compile or validate a query, "+
-		"validate the repo, and build and search its catalog.")
+		"validate the repo, and build its catalog, search it and trace lineage through it.")
 	for _, c := range Commands {
 		c.Register(reg)
 	}
