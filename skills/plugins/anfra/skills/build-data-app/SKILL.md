@@ -38,8 +38,10 @@ the week before, with a country picker"). Ask only what changes the numbers: wha
 means, which date counts, what to exclude, each with your recommended answer.
 
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
-`createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, and
-how each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example). Show
+`createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
+each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
+queries, if any, the reader can export. List an export only when the user asked for downloads, or
+propose one where it plainly helps (a detail table) and let them decide; none is the default. Show
 it to the user and get a yes before writing the file. When the data cannot answer the request, say
 so and offer the nearest thing it can.
 
@@ -99,8 +101,8 @@ already draws (dim the unselected ones) rather than recreating the series, or th
 its entry animation on every click. With ECharts, merge with a plain `setOption(option)` for a
 selection change and keep `replaceMerge` for a new result.
 
-If the reader should be able to take the data away, add an export button for the query
-(`query.export()`, see [references/api.md](references/api.md#exporting)): shown only when
+Add an export button only for a query the agreed design lists as exportable, never on your own
+initiative (`query.export()`, see [references/api.md](references/api.md#exporting)): shown only when
 `Anfra.features.export && Anfra.user.permissions.canExportData`, busy while it runs, and its
 failure in a toast. Never put export text in the card next to the button: it shifts the layout,
 and the browser's download already says it worked. Don't build a CSV from `query.result.rows`: a
