@@ -1,3 +1,14 @@
+## [0.3.1](https://github.com/holistics/anfra-skills/compare/anfra-v0.3.0...anfra-v0.3.1) (2026-10-13)
+
+### Features
+
+* **plugins.anfra:** export a query's result in build-data-app ([891050d](https://github.com/holistics/anfra-skills/commit/891050d3b7201a67ccd25103c0832db956a2793b))
+
+### Bug Fixes
+
+* **plugins.anfra:** add export buttons only when the design agrees ([4388238](https://github.com/holistics/anfra-skills/commit/43882387c9ada4cb6d0e41704b2ab654f8af8609))
+* **plugins.anfra:** keep export feedback out of the layout ([bb4db43](https://github.com/holistics/anfra-skills/commit/bb4db434c3c8bec49591ae35fd85966b5680c436))
+
 ## [0.3.0](https://github.com/holistics/anfra-skills/compare/anfra-v0.2.1...anfra-v0.3.0) (2026-10-12)
 
 ### ⚠ BREAKING CHANGES
