@@ -134,18 +134,41 @@ not applied is not in it; `execute()` first if it should be.
 Offer it only where it can work, and show its progress and failure yourself: an export changes
 nothing on the query (`state`, `result` and `error` stay as they are).
 
+**Feedback takes no layout space.** An export button usually sits in a card or a chart's header:
+text appended next to it or below it ("Exported 198 rows.") pushes the card's content around. So:
+
+- **Progress is on the button itself**: disabled, with `aria-busy`, and a label that keeps its
+  width (swap the icon, not the text, or give the button a fixed `min-width`).
+- **Success needs no message**: the browser's own download is the confirmation.
+- **Failure goes in a toast** (`position: fixed`, outside the flow), dismissed after a few
+  seconds, never in the card.
+
+```html
+<button id="export-revenue" class="export" hidden>↓ CSV</button>
+<div id="toast" role="status" hidden></div>
+<style>
+  .export[aria-busy="true"] { cursor: progress; opacity: .6; }
+  #toast { position: fixed; bottom: 16px; right: 16px; padding: 8px 12px; border-radius: 6px;
+           background: #b42318; color: #fff; }
+</style>
+```
+
 ```js
 const button = document.querySelector('#export-revenue');
+const toast = document.querySelector('#toast');
 button.hidden = !(Anfra.features.export && Anfra.user.permissions.canExportData);
 button.addEventListener('click', async () => {
   button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
   try {
-    const { rowCount } = await byRegion.export();
-    status.textContent = `Exported ${rowCount} rows.`;
+    await byRegion.export();
   } catch (err) {
-    status.textContent = `Export failed: ${err.message}`;
+    toast.textContent = `Export failed: ${err.message}`;
+    toast.hidden = false;
+    setTimeout(() => { toast.hidden = true; }, 6000);
   } finally {
     button.disabled = false;
+    button.removeAttribute('aria-busy');
   }
 });
 ```
