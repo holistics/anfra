@@ -12,6 +12,8 @@ import, no setup, no await.
 - `Anfra.user`: `{ id, name, email, role, timezone, permissions: { canViewGeneratedSql, canExportData } }`.
   Under `anfra serve` it is the machine's user, with every permission and the machine's time zone.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
+- `Anfra.features`: what the host can do beyond queries. `export` is whether `query.export()` can
+  work here; `true` under `anfra serve`.
 
 ## Field references
 
@@ -82,6 +84,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. |
 | `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
+| `await query.export(options?)` | Downloads the query's whole result as a file for the reader. See [Exporting](#exporting). |
 | `query.abort()` | Cancels this query's in-flight request. |
 | `query.subscribe(fn)` | Change listener for just this query. |
 | `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
@@ -120,6 +123,43 @@ query.result.rows    // [{ month: '2026-01-01', total: '1234.5' }, ...]
 - `result.debug` has `executedAt`, `executedSql`, `fromCache`, and for an AQL query `executedAql`: your AQL
   with the reader's filters, sorts and date drills applied — the first thing to log when a
   control seems to do nothing.
+
+## Exporting
+
+`query.export()` has the host make a file of the query's **whole result** and save it for the
+reader: every row, not only the pages loaded, with what the result on screen was last run with
+(the mapped controls, the selection, the sort, the timezone). A control the reader changed but has
+not applied is not in it; `execute()` first if it should be.
+
+Offer it only where it can work, and show its progress and failure yourself: an export changes
+nothing on the query (`state`, `result` and `error` stay as they are).
+
+```js
+const button = document.querySelector('#export-revenue');
+button.hidden = !(Anfra.features.export && Anfra.user.permissions.canExportData);
+button.addEventListener('click', async () => {
+  button.disabled = true;
+  try {
+    const { rowCount } = await byRegion.export();
+    status.textContent = `Exported ${rowCount} rows.`;
+  } catch (err) {
+    status.textContent = `Export failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+```
+
+- Resolves once the file is made and its download has started, with
+  `{ url, filename, format, rowCount, expiresAt }`. The frame cannot download, so the host does.
+- Options, all optional: `filename` (default: the app's title and the query's name, `Sales -
+  byRegion.csv`; the extension is added), `format` (`'csv'`), `formatOptions`
+  (`{ header: 'labels' | 'names' | 'none', bom }`; `bom` defaults to `true`, which Excel needs for
+  non-ASCII text), `signal` (an `AbortSignal` to cancel it; `query.abort()` does not).
+- Values are written raw, as `query.result.rows` holds them: numbers with every digit, dates in
+  ISO 8601, `null` as an empty cell.
+- A large result takes as long as the query does to run in full: keep the button disabled until
+  it settles.
 
 ## Structure
 
@@ -274,7 +314,8 @@ chart.on('click', (p) => {
 | `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
 | `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
-| `TransportError` | Network or session problem. | Show a retry. |
+| `TransportError` | Network or session problem; or, from `query.export()`, a host that cannot make exports. | Show a retry. Hide an export button when `Anfra.features.export` is false. |
 
-Every error has `entity`, the query or control name it concerns. Check the class with `err.name`
+Every error has `entity`, the query or control name it concerns. `query.export()` rejects with
+these classes too, rather than storing the error on the query. Check the class with `err.name`
 (`'PermissionError'`), since the classes themselves aren't exposed as globals.

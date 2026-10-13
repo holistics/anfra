@@ -99,6 +99,12 @@ already draws (dim the unselected ones) rather than recreating the series, or th
 its entry animation on every click. With ECharts, merge with a plain `setOption(option)` for a
 selection change and keep `replaceMerge` for a new result.
 
+If the reader should be able to take the data away, add an export button for the query
+(`query.export()`, see [references/api.md](references/api.md#exporting)): shown only when
+`Anfra.features.export && Anfra.user.permissions.canExportData`, disabled while it runs, with its
+failure on the page. Don't build a CSV from `query.result.rows`: a paged result holds only the
+pages loaded, and an export is every row.
+
 Render each query's four states: `executing` (loading), `success`, `error` (show
 `error.message`), and success with no rows ("No sales this week", never a bare zero). Log
 `result.columns`, `result.rows[0]` and `result.debug?.executedAql` on each query's first success:
