@@ -1,9 +1,9 @@
-import { TransportError } from '../common/errors';
+import { TransportError, ValidationError } from '../common/errors';
 import type {
-  BridgeError, FrameMessage, HostMessage,
+  BridgeError, FrameMessage, HostMessage, SaveFileRequest,
 } from '../common/bridge';
 import type {
-  Backend, BackendExportRequest, ExportResult, InspectedApp, InspectedStructure, LocateTarget,
+  Backend, BackendExportRequest, ExportResult, InspectedApp, InspectedStructure, LocateTarget, Rendering, RenderRequest,
 } from '../common/types';
 
 export interface BridgeHandle {
@@ -18,7 +18,37 @@ export interface BridgeHandle {
   locate: (target: LocateTarget) => void;
   /** Start or stop pick mode in the frame: pointing outlines marked elements, a click reports one. */
   setPicking: (on: boolean) => void;
+  /**
+   * Render the app, or one block or container, once its running queries settle, and save the file
+   * for the reader. Rejects with a `ValidationError` when the frame can't, or rendering is off.
+   */
+  render: (request: RenderRequest) => Promise<Rendering>;
   stop: () => void;
+}
+
+export interface BridgeOptions {
+  /** Whether the frame may render. Off, its asks are refused and `render` rejects. */
+  render?: boolean;
+  /** The renderer's code (`anfra-sdk:renderer`), sent to the frame on its first rendering. */
+  renderer?: string;
+}
+
+const RENDERING_OFF = 'This host does not render Data Apps.';
+
+/**
+ * Save a file the frame made, from the host's page: the frame has no `allow-downloads`. The object
+ * URL is kept a moment, since the browser reads it after the click returns.
+ */
+function saveBlob (doc: Document, { blob, filename }: SaveFileRequest): void {
+  const url = URL.createObjectURL(blob);
+  const a = doc.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export interface BridgeCallbacks {
@@ -73,8 +103,12 @@ export function serveBridge (
   frame: HTMLIFrameElement,
   backend: Backend,
   callbacks: BridgeCallbacks = {},
+  options: BridgeOptions = {},
 ): BridgeHandle {
   const inFlight = new Map<number, AbortController>();
+  const renderings = new Map<number, { resolve: (r: Rendering) => void, reject: (e: Error) => void }>();
+  let nextRender = 1;
+  const rendering = options.render !== false && !!options.renderer;
   let inspecting = false;
   const win = frame.ownerDocument.defaultView ?? window;
 
@@ -97,6 +131,14 @@ export function serveBridge (
       case 'anfra:picked':
         if (inspecting) callbacks.onPick?.(message.node);
         return;
+      case 'anfra:rendered': {
+        const pending = renderings.get(message.id);
+        if (!pending) return;
+        renderings.delete(message.id);
+        if (message.ok) pending.resolve(message.result);
+        else pending.reject(new ValidationError(message.error.message));
+        return;
+      }
       case 'anfra:cancel':
         inFlight.get(message.id)?.abort();
         inFlight.delete(message.id);
@@ -111,7 +153,14 @@ export function serveBridge (
             ? backend.fieldSuggestions(message.request, controller.signal)
             : message.method === 'exportQuery'
               ? exportAndSave(backend, frame.ownerDocument, message.request, controller.signal)
-              : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
+              : message.method === 'renderer' || message.method === 'saveFile'
+                ? (async () => {
+                  if (!rendering) throw new ValidationError(RENDERING_OFF);
+                  if (message.method === 'renderer') return options.renderer;
+                  saveBlob(frame.ownerDocument, message.request);
+                  return null;
+                })()
+                : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
         result
           .then((value) => reply({ type: 'anfra:response', id, ok: true, result: value }))
           .catch((err: unknown) => {
@@ -141,10 +190,20 @@ export function serveBridge (
     setPicking (on) {
       reply({ type: 'anfra:pick-watch', on });
     },
+    render (request) {
+      if (!rendering) return Promise.reject(new ValidationError(RENDERING_OFF));
+      const id = nextRender++;
+      return new Promise<Rendering>((resolve, reject) => {
+        renderings.set(id, { resolve, reject });
+        reply({ type: 'anfra:render', id, request });
+      });
+    },
     stop () {
       win.removeEventListener('message', onMessage);
       inFlight.forEach((controller) => controller.abort());
       inFlight.clear();
+      renderings.forEach(({ reject }) => reject(new ValidationError('The Data App was unmounted before its rendering finished.')));
+      renderings.clear();
     },
   };
 }

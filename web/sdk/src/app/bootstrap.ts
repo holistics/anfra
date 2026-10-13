@@ -4,10 +4,12 @@
  * forwards every call to the host over the bridge, and installs the SDK as the `Anfra` global.
  * The only code in a frame that knows about postMessage.
  */
-import { PermissionError, QueryError, TransportError } from '../common/errors';
+import {
+  PermissionError, QueryError, TransportError, ValidationError,
+} from '../common/errors';
 import { PROVISION_ELEMENT_ID } from '../common/bridge';
 import type {
-  BridgeError, BridgeMethod, FrameMessage, HostMessage, Provision,
+  BridgeError, BridgeMethod, FrameMessage, HostMessage, Provision, SaveFileRequest,
 } from '../common/bridge';
 import type { Backend, BackendQueryResult, ExportResult } from '../common/types';
 import { createSdk } from './sdk';
@@ -15,6 +17,7 @@ import { installSandbox } from './sandbox';
 import { buildStructure, describeNode, type BuiltStructure } from './structure';
 import { overlayFor, scrollTo } from './overlay';
 import { startPick } from './pick';
+import { createRender, settle } from './render';
 import type { LocateTarget, StructureNode } from '../common/types';
 
 function abortError (): Error {
@@ -29,6 +32,7 @@ function toError (error: BridgeError | undefined): Error {
   switch (error?.name) {
     case 'PermissionError': return new PermissionError(error.message);
     case 'TransportError': return new TransportError(error.message);
+    case 'ValidationError': return new ValidationError(error.message);
     default: return new QueryError(error?.message || 'The query failed.');
   }
 }
@@ -72,6 +76,16 @@ export function bootstrap (win: Window): void {
       case 'anfra:pick-watch':
         setPicking(message.on);
         return;
+      case 'anfra:render': {
+        const { id } = message;
+        settle(win, () => instance.apps)
+          .then(() => instance.render(message.request))
+          .then(
+            (result) => post({ type: 'anfra:rendered', id, ok: true, result }),
+            (err: unknown) => post({ type: 'anfra:rendered', id, ok: false, error: { name: (err as Error)?.name ?? 'ValidationError', message: (err as Error)?.message ?? 'The rendering failed.' } }),
+          );
+        return;
+      }
       default:
     }
   });
@@ -107,13 +121,23 @@ export function bootstrap (win: Window): void {
     }),
   };
 
+  // Neither is ever cancelled; the signal is made only once one is asked.
+  const render = createRender(win, {
+    ask: {
+      renderer: () => call<string>('renderer', null, new AbortController().signal),
+      saveFile: (request: SaveFileRequest) => call('saveFile', request, new AbortController().signal),
+    },
+    apps: () => instance.apps,
+  });
+
   const instance = createSdk({
     datasets: provision.datasets,
     user: provision.user,
     backend,
-    // A host older than `features` provisions none: say no export rather than let the bridge's
-    // Backend, which has every method, claim one.
-    features: { export: false, ...provision.features },
+    render,
+    // A host older than `features` provisions none: say it can neither export nor render, rather
+    // than let the bridge's Backend, which has every method, claim an export.
+    features: { export: false, render: false, ...provision.features },
   });
 
   // Inspection: while the host's inspect panel is open, post a snapshot of every app, and of the

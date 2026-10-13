@@ -4,6 +4,7 @@ import type {
 } from '../common/types';
 import { serveBridge, type BridgeCallbacks, type BridgeHandle } from './bridge';
 import { builtFrameScript } from './frameScript';
+import { builtRenderer } from './rendererScript';
 import { provisionDocument } from './provision';
 
 export interface MountOptions extends BridgeCallbacks {
@@ -19,10 +20,17 @@ export interface MountOptions extends BridgeCallbacks {
   backend: Backend;
   /** The frame script; the one built into this package unless given (tests). */
   frameScript?: string;
+  /**
+   * Whether the frame may render itself as a PNG or PDF (`Anfra.render()`, `render()` here). On by
+   * default; a platform that forbids taking data out turns it off.
+   */
+  render?: boolean;
+  /** The renderer's script; the one built into this package unless given (tests). */
+  renderer?: string;
   title?: string;
 }
 
-export interface MountedDataApp extends Pick<BridgeHandle, 'setInspecting' | 'highlight' | 'locate' | 'setPicking'> {
+export interface MountedDataApp extends Pick<BridgeHandle, 'setInspecting' | 'highlight' | 'locate' | 'setPicking' | 'render'> {
   frame: HTMLIFrameElement;
   /** Stop answering the frame, and remove it. */
   unmount: () => void;
@@ -43,11 +51,18 @@ export function mountDataApp (options: MountOptions): MountedDataApp {
   frame.title = options.title ?? 'Data App';
   options.container.appendChild(frame);
 
-  const bridge = serveBridge(frame, options.backend, { onInspect: options.onInspect, onPick: options.onPick });
+  const renderer = options.renderer ?? builtRenderer();
+  const render = options.render !== false && !!renderer;
+  const bridge = serveBridge(
+    frame,
+    options.backend,
+    { onInspect: options.onInspect, onPick: options.onPick },
+    { render, renderer },
+  );
   const provision: Provision = {
     datasets: options.datasets,
     user: options.user,
-    features: { export: typeof options.backend.exportQuery === 'function' },
+    features: { export: typeof options.backend.exportQuery === 'function', render },
     hostOrigin: doc.defaultView?.location.origin ?? '*',
   };
   frame.srcdoc = provisionDocument(options.definition, { baseHref: options.baseHref, provision, frameScript });
@@ -58,6 +73,7 @@ export function mountDataApp (options: MountOptions): MountedDataApp {
     highlight: bridge.highlight,
     locate: bridge.locate,
     setPicking: bridge.setPicking,
+    render: bridge.render,
     unmount () {
       bridge.stop();
       frame.remove();

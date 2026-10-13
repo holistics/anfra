@@ -32,10 +32,20 @@ describe('mountDataApp', () => {
         exportQuery: { url: 'u', filename: 'f.csv', format: 'csv', rowCount: 0, expiresAt: new Date() },
       }).backend,
     });
-    expect(without.frame.srcdoc).toContain('"features":{"export":false}');
-    expect(withExport.frame.srcdoc).toContain('"features":{"export":true}');
+    expect(without.frame.srcdoc).toContain('"features":{"export":false,');
+    expect(withExport.frame.srcdoc).toContain('"features":{"export":true,');
     without.unmount();
     withExport.unmount();
+  });
+
+  it('tells the frame it may render when it has the renderer, unless turned off', () => {
+    const on = mountDataApp({ ...options(), renderer: 'code' });
+    const off = mountDataApp({ ...options(), renderer: 'code', render: false });
+    const none = mountDataApp(options());
+    expect(on.frame.srcdoc).toContain('"render":true}');
+    expect(off.frame.srcdoc).toContain('"render":false}');
+    expect(none.frame.srcdoc).toContain('"render":false}');
+    [on, off, none].forEach((app) => app.unmount());
   });
 
   it('refuses to mount without its frame script', () => {
