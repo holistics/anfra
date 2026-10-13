@@ -91,7 +91,7 @@ The one thing a server provides for exports, as it provides its clients and data
 ## Later, and separate
 
 - **Asynchronous exports** (an export too long for the op's timeout, "email me when it's ready"): their own API design, not a `status` field guessed now.
-- **Renderings** (PNG, PDF): a separate export, of a visualization or a Data App, made by rendering it.
+- **Renderings** (PNG, PDF), of a Data App or a part of it: not an export but a picture, made in the reader's browser ([data-apps.md](data-apps.md#renderings-a-picture-of-what-the-reader-sees)).
 - **Formats beyond CSV**, each a new value of `format`, with its options.
 - **Display formatting** of values, as its own option.
 

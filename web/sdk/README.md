@@ -55,6 +55,17 @@ if (Anfra.features.export && Anfra.user.permissions.canExportData) {
 `export()` resolves once the file is made and the host has started saving it, with its link and
 `rowCount`. The file is a CSV named after the app and the query unless you pass `filename`.
 
+A reader can download a picture of the app, or of one block or container, as they see it:
+
+```js
+await Anfra.render({ block: 'trend', format: 'png' });   // or 'pdf'; no node: the whole app
+```
+
+Check `Anfra.features.render` and `Anfra.user.permissions.canExportData` before offering it, and
+mark what shouldn't be drawn (the download button itself) `data-anfra-render="skip"`. Serve images
+and web fonts with CORS: an image without it is left blank (listed in the result's `omitted`), a
+font without it falls back.
+
 `Anfra.datasets` describes what there is to query. For TypeScript, `@holistics/anfra-sdk/ambient` declares the
 global.
 
@@ -94,7 +105,8 @@ const mounted = mountDataApp({
   user,
   backend: coreApiBackend(client, { datasets }),         // queries, field suggestions and exports, as core ops
 });
-// mounted.setInspecting(true) to receive inspection snapshots; mounted.unmount() when done.
+// mounted.setInspecting(true) to receive inspection snapshots; mounted.render({ format: 'pdf' }) to
+// save a picture of the app (render: false above turns rendering off); mounted.unmount() when done.
 ```
 
 `mountDataApp` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`,
@@ -105,7 +117,7 @@ with the frame bootstrap and the provisioned data ahead of it. The bootstrap's B
 A Data App definition can come from any author, often an agent, which may not think of security while building an analysis. So the SDK guards it for its author, and makes the safe way the easy one:
 
 - Its frame has an opaque origin. Its own requests to the API are cross-origin, which `anfra serve` refuses, and carry no credentials on a platform that has them.
-- The bridge answers only the Backend's own methods, `submitQuery`, `fieldSuggestions` and `exportQuery`. Nothing else of the API is reachable from a frame.
+- The bridge answers only the Backend's methods, `submitQuery`, `fieldSuggestions` and `exportQuery`, and the two a rendering needs, the renderer's code and saving its file. Nothing else of the API is reachable from a frame.
 - `@holistics/anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.  A test on the built frame script holds this.
 
 ## Development

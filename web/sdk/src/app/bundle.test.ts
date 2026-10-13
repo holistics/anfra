@@ -82,4 +82,10 @@ describe('the frame script', () => {
       expect(code, marker).not.toContain(marker);
     }
   });
+
+  it('carries no renderer: the host sends it on a frame\'s first rendering', () => {
+    for (const marker of ['foreignObject', 'html-to-image', 'DCTDecode']) {
+      expect(code, marker).not.toContain(marker);
+    }
+  });
 });
