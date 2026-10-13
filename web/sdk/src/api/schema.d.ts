@@ -21,6 +21,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/core.lineage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trace fields through the local catalog: what each one is built from
+         * @description Trace each field through the local catalog to what it is built from (the fields, models and
+         *     sources upstream of it), as a diagram: cards in layers, upstream first, linked by what uses it.
+         */
+        post: operations["core.lineage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core.query": {
         parameters: {
             query?: never;
@@ -250,6 +271,104 @@ export interface components {
             step: string;
             text: string;
         };
+        Diagram: {
+            /** @description every card, in layer order */
+            cards: components["schemas"]["DiagramCard"][];
+            /** @description the cards in layers, upstream first */
+            layers: components["schemas"]["DiagramLayer"][];
+            /** @description the ids of this page's matched entities, in search order */
+            matched: string[];
+            /** @description the catalog search the lineage is */
+            query: string;
+            schema: components["schemas"]["DiagramSchema"];
+            /**
+             * Format: int64
+             * @description how many entities the search matched, over every page
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
+            version: 1;
+        };
+        DiagramCard: {
+            /** @description its type is not a top-level one, but its container is not in the lineage */
+            detached?: boolean;
+            /** @description the catalog's id of the entity */
+            id: string;
+            label: string;
+            /** Format: int64 */
+            layer: number;
+            /** @description edge type → the entities it links to; a link is on its edge's from entity */
+            links?: {
+                [key: string]: (string | {
+                    id: string;
+                    props: {
+                        [key: string]: unknown;
+                    };
+                })[];
+            };
+            /** @description the entity's properties */
+            props?: {
+                [key: string]: unknown;
+            };
+            /** @description the entity this node is a copy of */
+            ref?: string;
+            /** @description the node's children, grouped by type */
+            sections?: components["schemas"]["DiagramSection"][];
+            tags?: string[];
+            /** @description the catalog's entity type, such as aml.model or aml.metric */
+            type: string;
+        };
+        DiagramLayer: {
+            card_ids: string[];
+            /** Format: int64 */
+            index: number;
+            /** @description the entity types of its cards */
+            types: string[];
+        };
+        DiagramNode: {
+            /** @description the catalog's id of the entity */
+            id: string;
+            label: string;
+            /** @description edge type → the entities it links to; a link is on its edge's from entity */
+            links?: {
+                [key: string]: (string | {
+                    id: string;
+                    props: {
+                        [key: string]: unknown;
+                    };
+                })[];
+            };
+            /** @description the entity's properties */
+            props?: {
+                [key: string]: unknown;
+            };
+            /** @description the entity this node is a copy of */
+            ref?: string;
+            /** @description the node's children, grouped by type */
+            sections?: components["schemas"]["DiagramSection"][];
+            tags?: string[];
+            /** @description the catalog's entity type, such as aml.model or aml.metric */
+            type: string;
+        };
+        DiagramSchema: {
+            /** @description edge type → what it means */
+            edges: {
+                [key: string]: string;
+            };
+            /** @description entity type → edge type → the entity types it links to; top_level: true for a type no section holds */
+            types: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        DiagramSection: {
+            nodes: components["schemas"]["DiagramNode"][];
+            type: string;
+        };
         /** @description This server cannot make exports. */
         ErrorBodyExportsUnavailable: {
             /** @constant */
@@ -392,9 +511,42 @@ export interface components {
             /** @description where to download the file: a plain GET, with no credentials, until expires_at */
             url: string;
         };
+        FieldLineage: {
+            /** @description the field's lineage; absent with error */
+            diagram?: components["schemas"]["Diagram"];
+            /** @description why the field's lineage could not be traced */
+            error?: string;
+            /** @description the catalog search its lineage is, which search also takes; empty when the field could not be searched for */
+            query: string;
+            /** @description the field, as asked */
+            target: components["schemas"]["LineageTarget"];
+        };
         IngestInput: {
             /** @description optional context source key to ingest */
             source?: string;
+        };
+        LineageInput: {
+            /**
+             * Format: int64
+             * @description at most this many upstream entities per field; absent, all of them
+             */
+            limit?: number;
+            /**
+             * Format: int64
+             * @description skip this many upstream entities first, to page with limit
+             */
+            offset?: number;
+            /** @description the fields to trace, each by its parent and its name in it: {"parent": "orders", "child": "amount"} */
+            targets?: components["schemas"]["LineageTarget"][];
+        };
+        LineageResult: {
+            results: components["schemas"]["FieldLineage"][];
+        };
+        LineageTarget: {
+            /** @description the field's name in its parent: a dimension, a measure or a metric */
+            child: string;
+            /** @description the fqn of what holds the field: a model, or a dataset */
+            parent: string;
         };
         NoInput: Record<string, never>;
         QueryCondition: {
@@ -662,6 +814,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": string;
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.lineage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LineageInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineageResult"];
                 };
             };
             /** @description invalid_request */

@@ -70,6 +70,10 @@ font without it falls back.
 `Anfra.datasets` describes what there is to query. For TypeScript, `@holistics/anfra-sdk/ambient` declares the
 global.
 
+`Anfra.lineage({ parent: 'orders', child: 'amount' })` traces fields through the repo's catalog, each named
+by its parent and its name in it: what each is built from, as a diagram to draw (`results[i].diagram`), or
+why it could not be (`results[i].error`). It reads the catalog the host last ingested (`anfra ingest`).
+
 A definition can mark its parts, so a host's inspect panel can show them as a tree and find them on
 the page:
 
@@ -104,7 +108,7 @@ const mounted = mountDataApp({
   baseHref: '/appserve/files/sales/',                    // where its relative URLs resolve
   datasets,
   user,
-  backend: coreApiBackend(client, { datasets }),         // queries, field suggestions and exports, as core ops
+  backend: coreApiBackend(client, { datasets }),         // queries, field suggestions and exports, as core ops; lineage as core.lineage
   render: true,                                          // let it save PNGs and PDFs of itself (off by default)
 });
 // mounted.setInspecting(true) to receive inspection snapshots; mounted.render({ format: 'pdf' }) to
@@ -119,7 +123,7 @@ with the frame bootstrap and the provisioned data ahead of it. The bootstrap's B
 A Data App definition can come from any author, often an agent, which may not think of security while building an analysis. So the SDK guards it for its author, and makes the safe way the easy one:
 
 - Its frame has an opaque origin. Its own requests to the API are cross-origin, which `anfra serve` refuses, and carry no credentials on a platform that has them.
-- The bridge answers only the Backend's methods, `submitQuery`, `fieldSuggestions` and `exportQuery`, and the two a rendering needs, the renderer's code and saving its file. Nothing else of the API is reachable from a frame.
+- The bridge answers only the Backend's methods, `submitQuery`, `fieldSuggestions`, `exportQuery` and the optional `lineage`, and the two a rendering needs, the renderer's code and saving its file. Nothing else of the API is reachable from a frame.
 - `@holistics/anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.  A test on the built frame script holds this.
 
 ## Development

@@ -1,5 +1,6 @@
 // Package catalog is the commands over the local search catalog: ingest builds
-// it from the repo's context sources, and search queries it.
+// it from the repo's context sources, search queries it, and lineage traces
+// fields through it.
 package catalog
 
 import (

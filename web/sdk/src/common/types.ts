@@ -721,6 +721,93 @@ export interface FieldSuggestionsRequest {
   q: string;
 }
 
+/** What `Anfra.lineage()` takes besides its fields. Every field is optional. */
+export interface LineageOptions {
+  /** At most this many upstream entities per field. All of them unless given. */
+  limit?: number;
+  /** Skip this many upstream entities first, to page with `limit`. */
+  offset?: number;
+  /** Cancels the call. */
+  signal?: AbortSignal;
+}
+
+/** A field to trace: its parent, and its name in it. */
+export interface LineageTarget {
+  /** The fqn of what holds the field: a model, or a dataset. */
+  parent: string;
+  /** The field's name in its parent: a dimension, a measure or a metric. */
+  child: string;
+}
+
+/** A lineage call: the fields to trace, and the page of what each is built from. */
+export interface BackendLineageRequest {
+  targets: LineageTarget[];
+  limit?: number;
+  offset?: number;
+}
+
+/** Each field's lineage, in the order asked. */
+export interface LineageResult {
+  results: FieldLineage[];
+}
+
+/** One field's lineage, or why it could not be traced: exactly one of `diagram` and `error`. */
+export interface FieldLineage {
+  /** The field, as asked. */
+  target: LineageTarget;
+  /** The catalog search its lineage is. */
+  query: string;
+  diagram?: LineageDiagram;
+  error?: string;
+}
+
+/**
+ * A field's lineage, laid out to be drawn, in the API's own names: cards (the entities drawn at the
+ * top level, their children nested in `sections`) in layers, upstream first, linked by what uses
+ * what. `schema` says which entity types it has and how they connect.
+ */
+export interface LineageDiagram {
+  version: 1;
+  query: string;
+  /** How many entities the search matched, over every page. */
+  total: number;
+  /** The ids of this page's matched entities. */
+  matched: string[];
+  schema: {
+    /** Edge type → what it means. */
+    edges: Record<string, string>;
+    /** Entity type → edge type → the entity types it links to; `top_level: true` for a type no section holds. */
+    types: Record<string, Record<string, unknown>>;
+  };
+  layers: { index: number, types: string[], card_ids: string[] }[];
+  /** Every card, in layer order. */
+  cards: LineageCard[];
+}
+
+/** An entity of a lineage diagram. */
+export interface LineageNode {
+  /** The catalog's id of the entity. */
+  id: string;
+  /** The catalog's entity type, such as `aml.model` or `aml.metric`. */
+  type: string;
+  label: string;
+  /** The entity this node is a copy of. */
+  ref?: string;
+  tags?: string[];
+  props?: Record<string, unknown>;
+  /** Edge type → the entities it links to: an id, or an id with the edge's properties. */
+  links?: Record<string, (string | { id: string, props: Record<string, unknown> })[]>;
+  /** The node's children, grouped by type. */
+  sections?: { type: string, nodes: LineageNode[] }[];
+}
+
+/** A node drawn at the top level, in its layer. */
+export interface LineageCard extends LineageNode {
+  layer: number;
+  /** Its type is not a top-level one, but its container is not in the lineage. */
+  detached?: boolean;
+}
+
 /**
  * What the SDK sends queries to, supplied by the provisioner. Each call either resolves or
  * rejects; how the backend gets there (synchronously, as polled jobs, over a bridge) is its own
@@ -736,4 +823,9 @@ export interface Backend {
    * a host that cannot export leaves it out, and `query.export()` rejects with a `TransportError`.
    */
   exportQuery? (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult>;
+  /**
+   * Trace fields through the catalog: what each is built from. Optional: a host that cannot leaves
+   * it out, and `Anfra.lineage()` rejects with a `TransportError`.
+   */
+  lineage? (request: BackendLineageRequest, signal: AbortSignal): Promise<LineageResult>;
 }

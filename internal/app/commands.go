@@ -22,6 +22,7 @@ var Commands = []command.Command{
 	query.Export,
 	catalog.Ingest,
 	catalog.Search,
+	catalog.Lineage,
 	show.Show,
 	validate.Validate,
 }

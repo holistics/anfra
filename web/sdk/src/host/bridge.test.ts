@@ -107,6 +107,29 @@ describe('serveBridge', () => {
     });
   });
 
+  describe('lineage', () => {
+    const request = { targets: [{ parent: 'orders', child: 'amount' }], limit: 5 };
+    const traced = { results: [{ target: { parent: 'orders', child: 'amount' }, query: 'needed_by:(fqn:orders.amount)', error: 'no catalog' }] };
+
+    it("is answered by the host's Backend", async () => {
+      const lineage = vi.fn(async () => traced);
+      bridge = serveBridge(frame, backend({ lineage }));
+      fromFrame({ type: 'anfra:request', id: 3, method: 'lineage', request });
+      await settle();
+      expect(lineage).toHaveBeenCalledWith(request, expect.any(AbortSignal));
+      expect(replies).toEqual([{ type: 'anfra:response', id: 3, ok: true, result: traced }]);
+    });
+
+    it('fails as a TransportError when the Backend cannot trace it', async () => {
+      bridge = serveBridge(frame, backend());
+      fromFrame({ type: 'anfra:request', id: 4, method: 'lineage', request });
+      await settle();
+      expect(replies).toEqual([{
+        type: 'anfra:response', id: 4, ok: false, error: { name: 'TransportError', message: 'This host cannot trace lineage.' },
+      }]);
+    });
+  });
+
   describe('renderings', () => {
     const rendering = { render: true, renderer: 'window.__anfraRenderer = {};' };
 
