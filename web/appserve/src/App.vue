@@ -6,7 +6,9 @@ import AppTree from './AppTree.vue';
 import DataAppFrame from './DataAppFrame.vue';
 import Icon from './Icon.vue';
 import InspectPanel from './InspectPanel.vue';
-import type { DatasetDescriptor, User } from '@holistics/anfra-sdk/common';
+import type {
+  DatasetDescriptor, RenderFormat, RenderRequest, User,
+} from '@holistics/anfra-sdk/common';
 import type { InspectedApp, InspectedStructure } from './inspect';
 import {
   filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
@@ -169,6 +171,36 @@ const structure = ref<InspectedStructure>();
 const selectedNode = ref<string>();
 const picking = ref(false);
 const frame = ref<InstanceType<typeof DataAppFrame>>();
+
+// Renderings: the whole page from the toolbar, a node from the inspect panel. The frame saves the
+// file; a failure shows for a few seconds, out of the page's way.
+const downloadOpen = ref(false);
+const rendering = ref(false);
+const toast = ref<{ text: string, error: boolean }>();
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function showToast (text: string, error: boolean): void {
+  toast.value = { text, error };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.value = undefined; }, 8000);
+}
+async function render (request: RenderRequest): Promise<void> {
+  downloadOpen.value = false;
+  if (!frame.value || rendering.value) return;
+  rendering.value = true;
+  try {
+    const { omitted } = await frame.value.render(request);
+    // Saved, but not all of it: say what is missing, so a blank isn't a surprise.
+    if (omitted.length) {
+      showToast(`Saved, with ${omitted.length === 1 ? 'an image' : `${omitted.length} images`} left blank: `
+        + `${omitted.join(', ')} ${omitted.length === 1 ? 'sends' : 'send'} no CORS headers.`, false);
+    }
+  } catch (err) {
+    showToast(`Couldn't render: ${(err as Error).message}`, true);
+  } finally {
+    rendering.value = false;
+  }
+}
+const renderPage = (format: RenderFormat) => render({ format });
 
 function onInspect (apps: InspectedApp[], shape: InspectedStructure): void {
   inspected.value = apps;
@@ -485,6 +517,25 @@ onBeforeUnmount(() => {
           >
             <Icon name="inspect" />
           </button>
+          <div class="download">
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Download Data App"
+              title="Download as PNG or PDF"
+              data-testid="download"
+              :aria-expanded="downloadOpen"
+              :aria-busy="rendering"
+              :disabled="!selected || rendering"
+              @click="downloadOpen = !downloadOpen"
+            >
+              <Icon name="download" />
+            </button>
+            <div v-if="downloadOpen" class="menu" role="menu" data-testid="download-menu">
+              <button type="button" role="menuitem" data-testid="download-page-png" @click="renderPage('png')">PNG image</button>
+              <button type="button" role="menuitem" data-testid="download-page-pdf" @click="renderPage('pdf')">PDF</button>
+            </div>
+          </div>
           <button
             type="button"
             class="icon-button"
@@ -500,6 +551,7 @@ onBeforeUnmount(() => {
         <div v-if="loading" class="progress" role="progressbar" aria-label="Loading Data App" data-testid="loading" />
       </header>
       <div class="viewer-body" :class="{ dragging }">
+        <p v-if="toast" class="toast" :class="{ error: toast.error }" :role="toast.error ? 'alert' : 'status'" data-testid="render-toast">{{ toast.text }}</p>
         <p v-if="selected && frameError" class="notice error" role="alert" data-testid="frame-error">{{ frameError }}</p>
         <DataAppFrame
           v-else-if="selected && datasets && reader"
@@ -537,6 +589,7 @@ onBeforeUnmount(() => {
               @locate="frame?.locate($event)"
               @select="onSelect"
               @pick="picking = $event"
+              @render="render"
             />
           </div>
         </template>
