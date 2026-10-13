@@ -18,6 +18,9 @@ func TestParseArgsRefusesMistakes(t *testing.T) {
 		"a positional object": struct {
 			O *struct{} `json:"o,omitempty" cli:"positional" doc:"x"`
 		}{},
+		"a positional object array": struct {
+			O []struct{} `json:"o,omitempty" cli:"positional" doc:"x"`
+		}{},
 		"an embedded pointer": struct {
 			*embedded
 		}{},
@@ -49,6 +52,9 @@ func TestParseArgsRefusesMistakes(t *testing.T) {
 		}{},
 		"help, which every command has": struct {
 			H bool `json:"help,omitempty" doc:"x"`
+		}{},
+		"a required object array": struct {
+			O []struct{} `json:"o" doc:"x"`
 		}{},
 		"an object field the CLI sets, with no doc": struct {
 			O *struct {

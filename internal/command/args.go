@@ -20,6 +20,7 @@ const (
 	ArgStringArray ArgType = "string_array" // a []string field
 	ArgInt         ArgType = "int"          // an int field
 	ArgObject      ArgType = "object"       // a pointer to a struct; the CLI takes it as JSON, or by its fields
+	ArgObjectArray ArgType = "object_array" // a slice of structs; the CLI takes it as JSON
 )
 
 // Arg is one of a command's args, parsed from a field of its In struct:
@@ -49,7 +50,7 @@ const (
 // An object arg's string, bool, int and []string fields are its Fields: the CLI
 // sets each with a flag of its own, --<arg>.<field>, read from the field's json,
 // doc and enum tags. A field holding an object, or a list of them, is set only
-// through the arg's JSON.
+// through the arg's JSON. An object array arg is set only through its JSON.
 //
 // Fields without a json tag are not args, except an embedded struct, whose args
 // are In's own (as huma and encoding/json flatten it too). An In with args
@@ -129,6 +130,8 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 				return nil, fmt.Errorf("arg %s: %w", name, err)
 			}
 			a.Fields = fields
+		case f.Type.Kind() == reflect.Slice && f.Type.Elem().Kind() == reflect.Struct:
+			a.Type = ArgObjectArray
 		default:
 			return nil, fmt.Errorf("arg %s: unsupported type %s", name, f.Type)
 		}

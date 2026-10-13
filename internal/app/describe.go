@@ -32,7 +32,7 @@ type CommandSpec struct {
 // ArgSpec is an arg as an API caller sees it.
 type ArgSpec struct {
 	Name     string          // the /call key
-	Type     command.ArgType // string, bool, string_array, int or object
+	Type     command.ArgType // string, bool, string_array, int, object or object_array
 	Required bool
 	Enum     []string // the allowed values, when closed
 	Default  string   // the value when unset, if any
