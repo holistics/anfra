@@ -4,7 +4,19 @@ import {
 import type { FrameMessage, HostMessage } from '../common/bridge';
 import { PermissionError, ValidationError } from '../common/errors';
 import type { Backend } from '../common/types';
-import { serveBridge, type BridgeHandle } from './bridge';
+import { pictureFilename, serveBridge, type BridgeHandle } from './bridge';
+
+// jsdom's Blob has no arrayBuffer(), which every browser the SDK runs in has.
+if (!Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function arrayBuffer (this: Blob) {
+    return new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(this);
+    });
+  };
+}
 
 let frame: HTMLIFrameElement;
 let replies: HostMessage[];
@@ -28,6 +40,8 @@ function fromFrame (message: FrameMessage, source: Window | null = frame.content
 }
 
 const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+/** Until the frame has had `count` answers: reading a file's bytes takes more than a tick. */
+const answered = (count: number) => vi.waitFor(() => { expect(replies.length).toBeGreaterThanOrEqual(count); });
 
 function backend (overrides: Partial<Backend> = {}): Backend {
   return {
@@ -96,24 +110,82 @@ describe('serveBridge', () => {
   describe('renderings', () => {
     const rendering = { render: true, renderer: 'window.__anfraRenderer = {};' };
 
-    it("sends the renderer's code when the frame asks, and saves the file it makes", async () => {
-      const clicked: { href: string, download: string }[] = [];
+    const png = () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0])]);
+    const pdf = () => new Blob(['%PDF-1.4\n']);
+    let clicked: { href: string, download: string }[];
+    let saved: Blob[];
+
+    beforeEach(() => {
+      clicked = [];
+      saved = [];
       vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
         clicked.push({ href: this.href, download: this.download });
       });
-      URL.createObjectURL = vi.fn(() => 'blob:rendering');
+      URL.createObjectURL = vi.fn((blob: Blob) => { saved.push(blob); return `blob:${saved.length}`; });
       URL.revokeObjectURL = vi.fn();
+    });
+
+    const save = (id: number, blob: unknown, filename: unknown) => fromFrame(
+      { type: 'anfra:request', id, method: 'saveFile', request: { blob, filename } } as FrameMessage,
+    );
+
+    it("sends the renderer's code when the frame asks, and saves the file it makes", async () => {
       bridge = serveBridge(frame, backend(), {}, rendering);
-      const blob = new Blob(['png']);
       fromFrame({ type: 'anfra:request', id: 1, method: 'renderer', request: null });
-      fromFrame({ type: 'anfra:request', id: 2, method: 'saveFile', request: { blob, filename: 'Sales.png' } });
-      await settle();
+      save(2, png(), 'Sales.png');
+      await answered(2);
       expect(replies).toEqual([
         { type: 'anfra:response', id: 1, ok: true, result: rendering.renderer },
         { type: 'anfra:response', id: 2, ok: true, result: null },
       ]);
-      expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
-      expect(clicked).toEqual([{ href: 'blob:rendering', download: 'Sales.png' }]);
+      expect(clicked).toEqual([{ href: 'blob:1', download: 'Sales.png' }]);
+      expect(saved[0].type).toBe('image/png');
+    });
+
+    it('saves a file as the picture its bytes are, under a name ending in its extension', async () => {
+      bridge = serveBridge(frame, backend(), {}, rendering);
+      save(1, pdf(), 'Q3 report.pdf.exe');
+      await answered(1);
+      expect(replies).toEqual([{ type: 'anfra:response', id: 1, ok: true, result: null }]);
+      expect(clicked).toEqual([{ href: 'blob:1', download: 'Q3 report.pdf.exe.pdf' }]);
+      expect(saved[0].type).toBe('application/pdf');
+    });
+
+    it('refuses to save what is not a PNG or a PDF, whatever it is called', async () => {
+      bridge = serveBridge(frame, backend(), {}, rendering);
+      save(1, new Blob(['MZ\x90\x00'], { type: 'image/png' }), 'Sales.png');
+      await answered(1);
+      save(2, 'not a blob', 'Sales.png');
+      await answered(2);
+      expect(replies).toEqual([
+        { type: 'anfra:response', id: 1, ok: false, error: { name: 'ValidationError', message: 'Only a PNG or a PDF rendering can be saved.' } },
+        { type: 'anfra:response', id: 2, ok: false, error: { name: 'ValidationError', message: 'A rendering must be saved as a file.' } },
+      ]);
+      expect(clicked).toEqual([]);
+    });
+
+    it('saves one file at a time, and a few in a window', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        bridge = serveBridge(frame, backend(), {}, rendering);
+        save(1, png(), 'a');
+        save(2, png(), 'b');
+        await answered(2);
+        for (let id = 3; id <= 7; id++) {
+          save(id, png(), String(id));
+          await answered(id);
+        }
+        vi.setSystemTime(Date.now() + 10_000);
+        save(8, png(), 'later');
+        await answered(8);
+        const busy = { name: 'ValidationError', message: 'Too many files saved at once: try again in a few seconds.' };
+        expect(replies.map((r) => (r.type === 'anfra:response' && !r.ok ? [r.id, r.error] : r.type === 'anfra:response' && r.id))).toEqual([
+          [2, busy], 1, 3, 4, 5, 6, [7, busy], 8,
+        ]);
+        expect(clicked.map((c) => c.download)).toEqual(['a.png', '3.png', '4.png', '5.png', '6.png', 'later.png']);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('asks the frame to render, and answers with what it rendered or why it could not', async () => {
@@ -135,7 +207,7 @@ describe('serveBridge', () => {
       bridge = serveBridge(frame, backend(), {}, { render: false, renderer: 'code' });
       await expect(bridge.render({ format: 'png' })).rejects.toThrow(/does not render/);
       fromFrame({ type: 'anfra:request', id: 1, method: 'renderer', request: null });
-      fromFrame({ type: 'anfra:request', id: 2, method: 'saveFile', request: { blob: new Blob(), filename: 'x.png' } });
+      save(2, png(), 'x.png');
       await settle();
       expect(replies).toEqual([
         { type: 'anfra:response', id: 1, ok: false, error: { name: 'ValidationError', message: 'This host does not render Data Apps.' } },
@@ -149,6 +221,20 @@ describe('serveBridge', () => {
       bridge.stop();
       bridge = undefined;
       await expect(pending).rejects.toThrow(/unmounted/);
+    });
+  });
+
+  describe('pictureFilename', () => {
+    it('keeps the words, drops what a file system or a reader would misread, and ends in the extension', () => {
+      expect(pictureFilename('Sales - Revenue.png', 'png')).toBe('Sales - Revenue.png');
+      expect(pictureFilename('Sales - Revenue.PNG', 'png')).toBe('Sales - Revenue.PNG');
+      expect(pictureFilename('Sales 2026.10', 'pdf')).toBe('Sales 2026.10.pdf');
+      expect(pictureFilename('../../etc/passwd', 'png')).toBe('-..-etc-passwd.png');
+      expect(pictureFilename('invoice\u202egnp.exe', 'png')).toBe('invoicegnp.exe.png');
+      expect(pictureFilename('a\nb\u0000c', 'png')).toBe('abc.png');
+      expect(pictureFilename('   ...  ', 'png')).toBe('Rendering.png');
+      expect(pictureFilename(42, 'pdf')).toBe('Rendering.pdf');
+      expect(pictureFilename('x'.repeat(300), 'png')).toHaveLength(204);
     });
   });
 
