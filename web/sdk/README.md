@@ -61,7 +61,8 @@ A reader can download a picture of the app, or of one block or container, as the
 await Anfra.render({ block: 'trend', format: 'png' });   // or 'pdf'; no node: the whole app
 ```
 
-Check `Anfra.features.render` and `Anfra.user.permissions.canExportData` before offering it, and
+It works only where the host turned rendering on (`mountDataApp({ render: true })`; `anfra serve`
+does). Check `Anfra.features.render` and `Anfra.user.permissions.canExportData` before offering it, and
 mark what shouldn't be drawn (the download button itself) `data-anfra-render="skip"`. Serve images
 and web fonts with CORS: an image without it is left blank (listed in the result's `omitted`), a
 font without it falls back.
@@ -104,9 +105,10 @@ const mounted = mountDataApp({
   datasets,
   user,
   backend: coreApiBackend(client, { datasets }),         // queries, field suggestions and exports, as core ops
+  render: true,                                          // let it save PNGs and PDFs of itself (off by default)
 });
 // mounted.setInspecting(true) to receive inspection snapshots; mounted.render({ format: 'pdf' }) to
-// save a picture of the app (render: false above turns rendering off); mounted.unmount() when done.
+// save a picture of the app (needs render: true); mounted.unmount() when done.
 ```
 
 `mountDataApp` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`,

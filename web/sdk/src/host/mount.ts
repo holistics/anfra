@@ -21,8 +21,9 @@ export interface MountOptions extends BridgeCallbacks {
   /** The frame script; the one built into this package unless given (tests). */
   frameScript?: string;
   /**
-   * Whether the frame may render itself as a PNG or PDF (`Anfra.render()`, `render()` here). On by
-   * default; a platform that forbids taking data out turns it off.
+   * Whether the frame may render itself as a PNG or PDF (`Anfra.render()`, `render()` here). Off
+   * unless turned on: rendering has the host save a file the frame made, so a host opts in to it
+   * (docs/designs/data-apps.md, Renderings).
    */
   render?: boolean;
   /** The renderer's script; the one built into this package unless given (tests). */
@@ -52,7 +53,7 @@ export function mountDataApp (options: MountOptions): MountedDataApp {
   options.container.appendChild(frame);
 
   const renderer = options.renderer ?? builtRenderer();
-  const render = options.render !== false && !!renderer;
+  const render = options.render === true && !!renderer;
   const bridge = serveBridge(
     frame,
     options.backend,
