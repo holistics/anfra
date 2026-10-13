@@ -41,6 +41,18 @@ func TestIsNewer(t *testing.T) {
 	}
 }
 
+func TestTagVersion(t *testing.T) {
+	for tag, want := range map[string]string{
+		"v0.9.0":       "0.9.0",
+		"anfra-v0.8.0": "0.8.0", // releases up to 0.8.0
+		"0.9.0":        "0.9.0",
+	} {
+		if got := tagVersion(tag); got != want {
+			t.Errorf("tagVersion(%q) = %q, want %q", tag, got, want)
+		}
+	}
+}
+
 func TestProgressReader(t *testing.T) {
 	// Drain 1000 bytes with a known total through the progress reader.
 	var buf bytes.Buffer

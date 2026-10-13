@@ -29,10 +29,12 @@ import (
 
 const (
 	// The GitHub repo whose Releases hold the anfra binaries.
-	repoSlug  = "holistics/anfra"
-	tagPrefix = "anfra-v"
-	apiBase   = "https://api.github.com"
-	userAgent = "anfra-cli"
+	repoSlug = "holistics/anfra"
+	// Release tags are v<version>; those up to 0.8.0 were anfra-v<version>.
+	tagPrefix       = "v"
+	legacyTagPrefix = "anfra-v"
+	apiBase         = "https://api.github.com"
+	userAgent       = "anfra-cli"
 
 	// How long a cached update check stays fresh (matches gh/deno's 24h).
 	checkTTL = 24 * time.Hour
@@ -45,8 +47,8 @@ const (
 
 // Release is the latest release plus the asset for the running platform.
 type Release struct {
-	Version  string // e.g. "0.2.0" (tag without the anfra-v prefix)
-	Tag      string // e.g. "anfra-v0.2.0"
+	Version  string // e.g. "0.2.0" (the tag without its prefix)
+	Tag      string // e.g. "v0.2.0"
 	AssetURL string // GitHub API asset URL (octet-stream download) for this platform
 }
 
@@ -140,7 +142,7 @@ func Latest(ctx context.Context) (*Release, error) {
 	if err := jsonkit.UnmarshalRead(resp.Body, &rel); err != nil {
 		return nil, fmt.Errorf("decode release: %w", err)
 	}
-	out := &Release{Tag: rel.TagName, Version: strings.TrimPrefix(rel.TagName, tagPrefix)}
+	out := &Release{Tag: rel.TagName, Version: tagVersion(rel.TagName)}
 	for _, a := range rel.Assets {
 		if a.Name == want {
 			out.AssetURL = a.URL
@@ -166,12 +168,15 @@ func (r *Release) IsNewer() bool {
 	return semver.Compare(canonicalVersion(r.Version), canonicalVersion(cur)) > 0
 }
 
+// tagVersion strips a release tag's prefix, v or anfra-v, if it has one.
+func tagVersion(tag string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(tag, legacyTagPrefix), tagPrefix)
+}
+
 // canonicalVersion strips any anfra-v / v prefix and re-adds a single "v", so
 // semver.Compare always sees a valid version regardless of the input format.
 func canonicalVersion(v string) string {
-	v = strings.TrimPrefix(v, tagPrefix)
-	v = strings.TrimPrefix(v, "v")
-	return "v" + v
+	return "v" + tagVersion(v)
 }
 
 // Apply downloads the platform asset and atomically replaces the running binary.

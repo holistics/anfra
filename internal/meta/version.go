@@ -9,7 +9,7 @@ import (
 // Version is the anfra version this binary is.
 //
 // A release injects it at build time, as the `version` from manifest.yml (the
-// single source of truth, which also names the `anfra-v<version>` tag):
+// single source of truth, which also names the `v<version>` tag):
 //
 //	go build -ldflags "-X github.com/holistics/anfra/internal/meta.Version=0.4.3"
 //
