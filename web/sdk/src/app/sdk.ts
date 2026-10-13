@@ -39,7 +39,11 @@ export class Sdk {
 
   private readonly backend: Backend;
 
-  private readonly features: SdkFeatures;
+  /**
+   * What the host can do beyond queries. `export` says whether `query.export()` can work here: show
+   * an export button only when it and `user.permissions.canExportData` are both true.
+   */
+  readonly features: Readonly<SdkFeatures>;
 
   constructor (environment: SdkEnvironment) {
     if (!environment?.datasets) {
@@ -74,7 +78,12 @@ export class Sdk {
       ]),
     );
     this.backend = environment.backend;
-    this.features = Object.freeze({ ...environment.features });
+    this.features = Object.freeze({
+      ...environment.features,
+      // Known from the Backend itself when the host does not say. In a frame the bridge's Backend
+      // has every method, so there it is the host's provision that says.
+      export: environment.features?.export ?? typeof environment.backend.exportQuery === 'function',
+    });
   }
 
   createApp (declaration: AppDeclaration = {}): App {

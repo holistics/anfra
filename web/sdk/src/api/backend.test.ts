@@ -149,4 +149,58 @@ describe('coreApiBackend', () => {
       expect(sent).toEqual([]);
     });
   });
+
+  describe('exportQuery', () => {
+    const exportRequest = {
+      dataset: 'sales',
+      aql: request.aql,
+      input: request.input,
+      timezone: 'Asia/Ho_Chi_Minh',
+      format: 'csv',
+      formatOptions: { bom: true, header: 'names' as const },
+      filename: 'Sales - revenue',
+    };
+
+    it('exports as core.query.export, and answers the link the way the SDK takes it', async () => {
+      const { client, sent } = api(ok({
+        url: 'http://host/exports/download/t0k3n/Sales%20-%20revenue.csv',
+        filename: 'Sales - revenue.csv',
+        format: 'csv',
+        row_count: 2,
+        expires_at: '2026-10-13T10:00:00Z',
+      }));
+      const link = await coreApiBackend(client).exportQuery!(exportRequest, signal);
+      expect(sent).toEqual([{
+        url: 'http://host/api/core.query.export',
+        body: {
+          query: request.aql,
+          dataset: 'sales',
+          input: request.input,
+          timezone: 'Asia/Ho_Chi_Minh',
+          format: 'csv',
+          format_options: { bom: true, header: 'names' },
+          filename: 'Sales - revenue',
+        },
+      }]);
+      expect(link).toEqual({
+        url: 'http://host/exports/download/t0k3n/Sales%20-%20revenue.csv',
+        filename: 'Sales - revenue.csv',
+        format: 'csv',
+        rowCount: 2,
+        expiresAt: new Date('2026-10-13T10:00:00Z'),
+      });
+    });
+
+    it('fails as the SDK error the API error is', async () => {
+      const { client } = api(
+        fail(500, { code: 'exports_unavailable', scope: 'server', message: 'This server cannot make exports.' }),
+        fail(422, {
+          code: 'validation_failed', scope: 'client', message: 'invalid', details: { violations: [{ field: 'filename', message: 'a file name cannot hold control characters' }] },
+        }),
+      );
+      const backend = coreApiBackend(client);
+      await expect(backend.exportQuery!(exportRequest, signal)).rejects.toThrow(TransportError);
+      await expect(backend.exportQuery!(exportRequest, signal)).rejects.toThrow(/filename: a file name cannot hold control characters/);
+    });
+  });
 });

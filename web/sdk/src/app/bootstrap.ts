@@ -9,7 +9,7 @@ import { PROVISION_ELEMENT_ID } from '../common/bridge';
 import type {
   BridgeError, BridgeMethod, FrameMessage, HostMessage, Provision,
 } from '../common/bridge';
-import type { Backend, BackendQueryResult } from '../common/types';
+import type { Backend, BackendQueryResult, ExportResult } from '../common/types';
 import { createSdk } from './sdk';
 import { installSandbox } from './sandbox';
 import { buildStructure, describeNode, type BuiltStructure } from './structure';
@@ -101,9 +101,20 @@ export function bootstrap (win: Window): void {
       return result;
     }),
     fieldSuggestions: (request, signal) => call('fieldSuggestions', request, signal),
+    exportQuery: (request, signal) => call<ExportResult>('exportQuery', request, signal).then((result) => {
+      result.expiresAt = new Date(result.expiresAt);
+      return result;
+    }),
   };
 
-  const instance = createSdk({ datasets: provision.datasets, user: provision.user, backend });
+  const instance = createSdk({
+    datasets: provision.datasets,
+    user: provision.user,
+    backend,
+    // A host older than `features` provisions none: say no export rather than let the bridge's
+    // Backend, which has every method, claim one.
+    features: { export: false, ...provision.features },
+  });
 
   // Inspection: while the host's inspect panel is open, post a snapshot of every app, and of the
   // page's structure, on each change. The instance is the only way to reach an app the author

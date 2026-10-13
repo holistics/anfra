@@ -79,6 +79,13 @@ export interface User {
  */
 export interface SdkFeatures {
   dateDrill?: boolean;
+  /**
+   * Whether the host can export a query's result (`query.export()`): its Backend has
+   * `exportQuery`. `mountDataApp` says so for every frame; `createSdk` reads it off the Backend
+   * when the host does not. An author shows an export button when this and
+   * `user.permissions.canExportData` are both true.
+   */
+  export?: boolean;
 }
 
 export interface SdkEnvironment {
@@ -605,6 +612,62 @@ export interface BackendQueryResult {
   debug?: QueryDebug;
 }
 
+/** A file format an export can be written in. CSV is the only one yet; a server may add more. */
+export type ExportFormat = 'csv' | (string & {});
+
+/** A format's options. Each applies to the formats it names; the server refuses one given to another. */
+export interface ExportFormatOptions {
+  /** csv: the header row: the columns' labels (the default), their names, or none. */
+  header?: 'labels' | 'names' | 'none';
+  /** csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text. */
+  bom?: boolean;
+}
+
+/** What `query.export()` takes. Every field is optional. */
+export interface ExportOptions {
+  /**
+   * The file's name, with the format's extension added when it has none. Defaults to the app's
+   * title and the query's name (`Sales - revenueByMonth.csv`), or the query's name alone.
+   */
+  filename?: string;
+  /** `csv` unless given. */
+  format?: ExportFormat;
+  /** For CSV, `bom` defaults to `true`: a person opens what a Data App exports. */
+  formatOptions?: ExportFormatOptions;
+  /** Cancels the export. `query.abort()` does not: an export is not the query's run. */
+  signal?: AbortSignal;
+}
+
+/**
+ * A query's whole result as a file: what the Backend made, and the host has already started
+ * saving for the reader. `url` works with a plain `GET` until `expiresAt`.
+ */
+export interface ExportResult {
+  url: string;
+  filename: string;
+  format: ExportFormat;
+  /** The rows the file holds. */
+  rowCount: number;
+  expiresAt: Date;
+}
+
+/**
+ * An export: the same query a run sends, built by the same code so the two cannot drift, but with
+ * no page (an export is every row) and no cache to bust; plus the file's format and name.
+ */
+export interface BackendExportRequest {
+  /** The dataset's `name`, as in `DatasetDescriptor.name`. */
+  dataset: string;
+  /** The query's AQL, verbatim. */
+  aql: string;
+  input: QueryInput;
+  /** Absent when the app declares none, leaving the backend's default. */
+  timezone?: string;
+  format?: ExportFormat;
+  formatOptions?: ExportFormatOptions;
+  filename?: string;
+}
+
 export interface FieldSuggestionsRequest {
   /** The dataset's `name`. */
   dataset: string;
@@ -624,4 +687,9 @@ export interface FieldSuggestionsRequest {
 export interface Backend {
   submitQuery (request: BackendQueryRequest, signal: AbortSignal): Promise<BackendQueryResult>;
   fieldSuggestions (request: FieldSuggestionsRequest, signal: AbortSignal): Promise<ConditionValue[]>;
+  /**
+   * Export a query's whole result as a file, and answer its link once the file is ready. Optional:
+   * a host that cannot export leaves it out, and `query.export()` rejects with a `TransportError`.
+   */
+  exportQuery? (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult>;
 }

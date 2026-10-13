@@ -1,10 +1,12 @@
 import type {
   Backend,
+  BackendExportRequest,
   BackendQueryRequest,
   BackendQueryResult,
   ColumnMeta,
   ConditionValue,
   DatasetDescriptor,
+  ExportResult,
   FieldSuggestionsRequest,
   User,
 } from '../common/types';
@@ -75,7 +77,8 @@ export const salesDataset: DatasetDescriptor = {
 
 export type StubCall =
   | { method: 'submitQuery', request: BackendQueryRequest, signal: AbortSignal }
-  | { method: 'fieldSuggestions', request: FieldSuggestionsRequest, signal: AbortSignal };
+  | { method: 'fieldSuggestions', request: FieldSuggestionsRequest, signal: AbortSignal }
+  | { method: 'exportQuery', request: BackendExportRequest, signal: AbortSignal };
 
 type Answer<Req, Res> = Res | Error | ((request: Req, signal: AbortSignal) => Res | Error | Promise<Res | Error>);
 
@@ -84,6 +87,8 @@ export interface StubOptions {
   submitQuery?: Answer<BackendQueryRequest, BackendQueryResult>;
   /** Answers `fieldSuggestions`, likewise. */
   fieldSuggestions?: Answer<FieldSuggestionsRequest, ConditionValue[]>;
+  /** Answers `exportQuery`, likewise. Left out, the Backend has no `exportQuery`: a host that cannot export. */
+  exportQuery?: Answer<BackendExportRequest, ExportResult>;
 }
 
 export interface Stub {
@@ -91,6 +96,8 @@ export interface Stub {
   calls: StubCall[];
   /** Just the query requests, in order — what most tests assert on. */
   readonly queries: BackendQueryRequest[];
+  /** Just the export requests, in order. */
+  readonly exports: BackendExportRequest[];
 }
 
 function abortError (): Error {
@@ -123,12 +130,21 @@ export function stubBackend (options: StubOptions = {}): Stub {
       return answer(options.fieldSuggestions, request, signal, 'fieldSuggestions');
     },
   };
+  if (options.exportQuery !== undefined) {
+    backend.exportQuery = (request, signal) => {
+      calls.push({ method: 'exportQuery', request, signal });
+      return answer(options.exportQuery, request, signal, 'exportQuery');
+    };
+  }
 
   return {
     backend,
     calls,
     get queries () {
       return calls.flatMap((call) => (call.method === 'submitQuery' ? [call.request] : []));
+    },
+    get exports () {
+      return calls.flatMap((call) => (call.method === 'exportQuery' ? [call.request] : []));
     },
   };
 }
