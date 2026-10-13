@@ -4,7 +4,7 @@
 # on one runner; both sidecars are prebuilt per target by their own repos'
 # workflows — so this job only *collects* and cross-builds.
 #
-# Runs on an `anfra-v*` tag push: normally the one tag_and_release.yml pushes with its
+# Runs on a `v*` tag push: normally the one tag_and_release.yml pushes with its
 # deploy key, or a tag pushed by hand. The manifest.yml at that commit pins the sidecar
 # releases to embed and the version baked into the binary. Also runs on
 # workflow_dispatch: on a tag it releases that tag, on a branch it's a test build
@@ -17,8 +17,8 @@ name: Build anfra release
 on:
   push:
     tags:
-      - "anfra-v*"
-  # On a branch: a test build (uploads artifacts, no release). On a tag (`--ref anfra-v…`):
+      - "v*"
+  # On a branch: a test build (uploads artifacts, no release). On a tag (`--ref v…`):
   # (re)releases that tag.
   workflow_dispatch:
 
@@ -71,7 +71,7 @@ jobs:
         env:
           VERSION: ${{ steps.m.outputs.version }}
         run: |
-          test "anfra-v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
+          test "v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
           sdk="$(jq -r .version web/sdk/package.json)"
           test "$sdk" = "$VERSION" || { echo "web/sdk/package.json version $sdk != manifest version $VERSION (pnpm bump sets both)"; exit 1; }
           scripts/release-notes.sh "$VERSION" > /dev/null

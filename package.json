@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "husky",
     "commit": "cz",
-    "changelog": "conventional-changelog -n conventional-changelog.config.mjs -i CHANGELOG.md -s -t anfra-v",
+    "changelog": "conventional-changelog -n conventional-changelog.config.mjs -i CHANGELOG.md -s -t v",
     "bump": "bash scripts/bump.sh",
     "build:sdk": "pnpm --filter @holistics/anfra-sdk build",
     "dev:sdk": "pnpm --filter @holistics/anfra-sdk dev",

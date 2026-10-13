@@ -77,9 +77,14 @@ asset="${BIN_NAME}-${os}-${arch}.gz"
 # The /releases/latest/download/<asset> and /releases/download/<tag>/<asset>
 # endpoints 302 straight to the CDN, so no API call is needed.
 if [ -n "${ANFRA_VERSION:-}" ]; then
-    tag="${ANFRA_VERSION#anfra-v}"; tag="anfra-v${tag#v}"
+    version="${ANFRA_VERSION#anfra-v}"; version="${version#v}"
+    # Releases are tagged v<version>; those up to 0.8.0 were tagged anfra-v<version>.
+    case "$version" in
+        0.[0-7].*|0.8.0) tag="anfra-v${version}" ;;
+        *)               tag="v${version}" ;;
+    esac
     url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
-    wanted="anfra ${tag#anfra-v}"
+    wanted="anfra ${version}"
 else
     url="https://github.com/${REPO}/releases/latest/download/${asset}"
     wanted="the latest anfra"

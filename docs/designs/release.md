@@ -4,15 +4,15 @@ A release is one `anfra` binary per platform, with both sidecars embedded ([side
 
 ## `manifest.yml`, the single source
 
-`manifest.yml` holds the release's `version` and the sidecar releases it embeds (`sidecars:`, a holistics-core release tag for anfra-node and a canal release tag for canal-query). The version names the git tag (`anfra-v<version>`), is compiled into the binary, and names the image's tags, so the three always agree.
+`manifest.yml` holds the release's `version` and the sidecar releases it embeds (`sidecars:`, a holistics-core release tag for anfra-node and a canal release tag for canal-query). The version names the git tag (`v<version>`, which is also the Go module version of `github.com/holistics/anfra`; releases up to 0.8.0 were tagged `anfra-v<version>`, which Go does not read as a version), is compiled into the binary, and names the image's tags, so the three always agree.
 
 To cut a release, on a branch:
 
-1. `pnpm bump <version>` (`scripts/bump.sh`) sets `version`, and the SDK's (`web/sdk/package.json`), and prepends the changes since the last `anfra-v*` tag to `CHANGELOG.md`, from conventional commits (`conventional-changelog.config.mjs` says which commit types appear).
+1. `pnpm bump <version>` (`scripts/bump.sh`) sets `version`, and the SDK's (`web/sdk/package.json`), and prepends the changes since the last `v*` tag to `CHANGELOG.md`, from conventional commits (`conventional-changelog.config.mjs` says which commit types appear).
 2. Update the sidecar pins too, if this release takes new ones. A pin change needs a version bump, or no new tag is cut.
 3. Merge to `main`.
 
-`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`. If the version has no tag yet, it creates `anfra-v<version>` and pushes it with a deploy key (`ANFRA_DEPLOY_KEY`), and the push triggers `build_release.yml`. The deploy key is needed twice over: the repository's tag ruleset blocks creating release tags, and the workflow's own token cannot bypass it, while a deploy key can; and a tag pushed with the workflow's own token would not trigger another workflow. `build_release.yml` also runs on a tag pushed by hand, and on `workflow_dispatch`: dispatched on a tag (`gh workflow run build_release.yml --ref anfra-v<version>`), it releases that tag again; dispatched on a branch, it is a test build, which uploads artifacts and publishes nothing.
+`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`. If the version has no tag yet, it creates `v<version>` and pushes it with a deploy key (`ANFRA_DEPLOY_KEY`), and the push triggers `build_release.yml`. The deploy key is needed twice over: the repository's tag ruleset blocks creating release tags, and the workflow's own token cannot bypass it, while a deploy key can; and a tag pushed with the workflow's own token would not trigger another workflow. `build_release.yml` also runs on a tag pushed by hand, and on `workflow_dispatch`: dispatched on a tag (`gh workflow run build_release.yml --ref v<version>`), it releases that tag again; dispatched on a branch, it is a test build, which uploads artifacts and publishes nothing.
 
 ## The build
 

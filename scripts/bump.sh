@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bump the anfra release version and regenerate CHANGELOG.md from conventional
 # commits. Review + commit the result and merge to main; tag_and_release.yml then
-# tags `anfra-v<version>` (read from manifest.yml) and the assembler publishes it.
+# tags `v<version>` (read from manifest.yml) and the assembler publishes it.
 #
 # Usage: pnpm bump <version>     e.g. pnpm bump 0.2.0
 set -euo pipefail
@@ -13,7 +13,7 @@ sed -i.bak -E "s/^version: .*/version: ${version}/" manifest.yml && rm -f manife
 # The SDK is published with each release, at its version (build_release.yml checks they agree).
 (cd web/sdk && npm pkg set version="$version")
 
-# Prepend the changes since the last anfra-v* tag to the changelog. The pending
+# Prepend the changes since the last v* tag to the changelog. The pending
 # release version is passed via a context file (mirrors canal's bump) — otherwise
 # conventional-changelog reads it from package.json (which has none) and emits an
 # empty "## []" header.
@@ -26,7 +26,7 @@ pnpm exec conventional-changelog \
   -n conventional-changelog.config.mjs \
   -c "$ctx" \
   -i CHANGELOG.md -s \
-  -t anfra-v
+  -t v
 
 echo "Bumped manifest.yml and web/sdk/package.json -> ${version} and updated CHANGELOG.md."
-echo "Review both, commit, and merge to main to cut anfra-v${version}."
+echo "Review both, commit, and merge to main to cut v${version}."

@@ -1,5 +1,5 @@
 # Cut an anfra release. When manifest.yml lands on main with a `version` that has
-# no matching tag yet, create `anfra-v<version>`; the tag push then triggers
+# no matching tag yet, create `v<version>`; the tag push then triggers
 # build_release.yml, which assembles + publishes.
 #
 # The tag is pushed with a deploy key (ANFRA_DEPLOY_KEY), not GITHUB_TOKEN:
@@ -35,7 +35,7 @@ jobs:
         run: |
           version="$(yq '.version' manifest.yml)"
           test -n "$version" && test "$version" != null || { echo "no version in manifest.yml"; exit 1; }
-          tag="anfra-v$version"
+          tag="v$version"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "$tag already exists — bump manifest.yml version to cut a release"
           else
