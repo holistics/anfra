@@ -35,6 +35,8 @@ import (
 //	docker compose -f docker-compose.dev.yml up -d postgres
 //	ANFRA_NODE_BIN=… ANFRA_CANAL_QUERY_BIN=… go test ./internal/app -run TestCommandsAgainstRealSidecars
 //
+// or make test-sidecars, against the sidecars manifest.yml pins.
+//
 // Without the binaries it is skipped.
 func TestCommandsAgainstRealSidecars(t *testing.T) {
 	if os.Getenv("ANFRA_NODE_BIN") == "" || os.Getenv("ANFRA_CANAL_QUERY_BIN") == "" {
