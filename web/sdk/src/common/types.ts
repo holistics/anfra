@@ -1,9 +1,14 @@
 /**
  * Public types. Nothing here may leak an internal wire shape: `VizSetting` in particular is never
  * part of this surface, and the query API's payload shapes are built in `execution/submitQuery.ts`
- * rather than exposed. See docs/adr/0001.
+ * rather than exposed. See docs/adr/0001. What is the core API's own shape, as it publishes it
+ * (`api/openapi.yaml`), is that shape: taken from `schema.d.ts`, so the two cannot drift. Types
+ * only: nothing of the API client reaches `common`, nor the frame.
  */
+import type { components } from '../api/schema';
 import type { FilterAggregation } from './aggregations';
+
+type Schemas = components['schemas'];
 
 // Derived from the one runtime list `assertValidFilterAggregation` checks against, so the
 // published type and the check can never disagree.
@@ -610,15 +615,10 @@ export interface BackendFilter {
  * An AQL condition applied on top of the query: the escape hatch for a cross-filter selection the
  * ANDed `filters` cannot express, such as `(A and B) or (C and D)`. Generated, never author-written.
  */
-export interface BackendCondition {
-  expr: string;
-}
+export type BackendCondition = Schemas['QueryCondition'];
 
 /** A reader's sort, naming a result column. Replaces the query's own `sorts` when present. */
-export interface BackendSort {
-  field: string;
-  direction: 'asc' | 'desc';
-}
+export type BackendSort = Schemas['QuerySort'];
 
 /** Redraw every dimension built directly on `field` at `grain`, keeping its alias. Not a filter. */
 export interface BackendDateDrill {
@@ -666,12 +666,7 @@ export interface BackendQueryResult {
 export type ExportFormat = 'csv' | (string & {});
 
 /** A format's options. Each applies to the formats it names; the server refuses one given to another. */
-export interface ExportFormatOptions {
-  /** csv: the header row: the columns' labels (the default), their names, or none. */
-  header?: 'labels' | 'names' | 'none';
-  /** csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text. */
-  bom?: boolean;
-}
+export type ExportFormatOptions = Schemas['ExportFormatOptions'];
 
 /** What `query.export()` takes. Every field is optional. */
 export interface ExportOptions {
@@ -738,81 +733,29 @@ export interface LineageOptions {
 }
 
 /** A field to trace: its parent, and its name in it. */
-export interface LineageTarget {
-  /** The fqn of what holds the field: a model, or a dataset. */
-  parent: string;
-  /** The field's name in its parent: a dimension, a measure or a metric. */
-  child: string;
-}
+export type LineageTarget = Schemas['LineageTarget'];
 
 /** A lineage call: the fields to trace, and the page of what each is built from. */
-export interface BackendLineageRequest {
-  targets: LineageTarget[];
-  limit?: number;
-  offset?: number;
-}
+export type BackendLineageRequest = Omit<Schemas['LineageInput'], 'targets'> & { targets: LineageTarget[] };
 
 /** Each field's lineage, in the order asked. */
-export interface LineageResult {
-  results: FieldLineage[];
-}
+export type LineageResult = Schemas['LineageResult'];
 
 /** One field's lineage, or why it could not be traced: exactly one of `diagram` and `error`. */
-export interface FieldLineage {
-  /** The field, as asked. */
-  target: LineageTarget;
-  /** The catalog search its lineage is. */
-  query: string;
-  diagram?: LineageDiagram;
-  error?: string;
-}
+export type FieldLineage = Schemas['FieldLineage'];
 
 /**
  * A field's lineage, laid out to be drawn, in the API's own names: cards (the entities drawn at the
  * top level, their children nested in `sections`) in layers, upstream first, linked by what uses
  * what. `schema` says which entity types it has and how they connect.
  */
-export interface LineageDiagram {
-  version: 1;
-  query: string;
-  /** How many entities the search matched, over every page. */
-  total: number;
-  /** The ids of this page's matched entities. */
-  matched: string[];
-  schema: {
-    /** Edge type → what it means. */
-    edges: Record<string, string>;
-    /** Entity type → edge type → the entity types it links to; `top_level: true` for a type no section holds. */
-    types: Record<string, Record<string, unknown>>;
-  };
-  layers: { index: number, types: string[], card_ids: string[] }[];
-  /** Every card, in layer order. */
-  cards: LineageCard[];
-}
+export type LineageDiagram = Schemas['Diagram'];
 
 /** An entity of a lineage diagram. */
-export interface LineageNode {
-  /** The catalog's id of the entity. */
-  id: string;
-  /** The catalog's entity type, such as `aml.model` or `aml.metric`. */
-  type: string;
-  label: string;
-  /** The entity this node is a copy of. */
-  ref?: string;
-  tags?: string[];
-  props?: Record<string, unknown>;
-  /** Edge type → the entities it links to: an id, or an id with the edge's properties. */
-  links?: Record<string, (string | { id: string, props: Record<string, unknown> })[]>;
-  /** The node's children, grouped by type. */
-  sections?: { type: string, nodes: LineageNode[] }[];
-}
+export type LineageNode = Schemas['DiagramNode'];
 
 /** A node drawn at the top level, in its layer. */
-export interface LineageCard extends LineageNode {
-  layer: number;
-  /** Its type is not a top-level one, but its container is not in the lineage. */
-  detached?: boolean;
-}
+export type LineageCard = Schemas['DiagramCard'];
 
 /**
  * What the SDK sends queries to, supplied by the provisioner. Each call either resolves or
