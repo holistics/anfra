@@ -85,6 +85,25 @@ A release is a version bump merged to main: `pnpm bump <version>` updates `manif
 
 The Docker image is built from release binaries; the `Dockerfile`'s header says how to build it locally.
 
+### Cloud login URL
+
+Optionally set `ANFRA_CLOUD_URL` when running `make build` or `make build-dev` to embed a
+default cloud URL. Release CI uses the optional repository Actions variable of the same
+name. Builds validate supplied values, but do not require one.
+
+At runtime, `ANFRA_CLOUD_URL` overrides the built-in default. An explicitly empty value
+disables it. Bare `anfra auth login` shows the effective URL alongside organization URL
+entry; with neither setting, it goes straight to URL entry. The binary does not load
+`.env.local`; set the runtime override in the shell or process environment.
+Without terminal stdin and stderr, supply an explicit organization URL.
+
+The value must be an absolute HTTPS origin, or HTTP on literal `127.0.0.1` or `[::1]` for
+local testing, without userinfo, query, fragment or a path other than `/`. Login lowercases
+the scheme and hostname and removes the default port and final slash.
+
+For a local cloud server, run `ANFRA_CLOUD_URL=http://127.0.0.1:5173 bin/anfra auth login`.
+Use the cloud's public origin (Vite in local development), not `localhost` for HTTP.
+
 ## Debugging
 
 - **Logs:** each repo's go to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log` (`~/.anfra` by default), anfra's records and the sidecars' stderr together. `ANFRA_LOG_STDERR=1` also writes them to stderr; `LOG_LEVEL` sets the level.
