@@ -26,11 +26,16 @@ var Statuses = map[apperr.Code]int{
 // against, and what CI holds to additive change.
 func Spec() ([]byte, error) {
 	reg := apikit.NewRegistry(apikit.RegistryConfig[struct{}]{Namespace: NS})
-	reg.Group(Group, GroupSummary)
+	for _, g := range Groups {
+		reg.Group(g.Name, g.Summary)
+	}
 	register[struct{}, StatusOut](reg, StatusOp)
 	register[ListMissingBlobsIn, ListMissingBlobsOut](reg, ListMissingBlobsOp)
 	register[CreateBlobsIn, CreateBlobsOut](reg, CreateBlobsOp)
 	register[PublishIn, PublishOut](reg, PublishOp)
+	register[struct{}, ListDataSourcesOut](reg, ListDataSourcesOp)
+	register[CreateDataSourceIn, DataSource](reg, CreateDataSourceOp)
+	register[TestDataSourceIn, TestDataSourceOut](reg, TestDataSourceOp)
 	h := apikit.HTTP[struct{}]{
 		Codes:   httpkit.Codes{Namespaces: []apperr.Namespace{NS}, Status: Statuses},
 		Title:   "anfra remote server",

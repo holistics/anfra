@@ -138,6 +138,14 @@ type remote struct {
 	uploads  int  // create_blobs calls
 	forget   bool // drop every blob once, as housekeeping would
 	cookie   string
+	// The org's data sources, name to type, and what it was sent for each one
+	// created; listing or creating refused when set.
+	sources      map[string]string
+	created      map[string]map[string]any
+	forbidList   bool
+	forbidCreate bool
+	unreachable  map[string]string // a data source's check failing, with this reason
+	tested       int               // data_sources.test calls
 }
 
 func (s *remote) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -201,6 +209,35 @@ func (s *remote) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		replaced := &remoteapi.Replaced{Revision: rev(), PublishedBy: s.by}
 		s.deployed, s.revision, s.by = in.Files, s.revision+1, &remoteapi.Person{ID: "u1", Email: "ada@example.com"}
 		reply(remoteapi.PublishOut{Revision: rev(), Changed: true, Replaced: replaced})
+	case remoteapi.ListDataSourcesOp.Name:
+		if s.forbidList {
+			refuse(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		out := remoteapi.ListDataSourcesOut{DataSources: []remoteapi.DataSource{}}
+		for name, typ := range s.sources {
+			out.DataSources = append(out.DataSources, remoteapi.DataSource{Name: name, Type: typ})
+		}
+		reply(out)
+	case remoteapi.CreateDataSourceOp.Name:
+		if s.forbidCreate {
+			refuse(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		var in remoteapi.CreateDataSourceIn
+		_ = jsonkit.UnmarshalRead(r.Body, &in)
+		s.sources[in.Name], s.created[in.Name] = in.Type, in.Connection
+		reply(remoteapi.DataSource{Name: in.Name, Type: in.Type})
+	case remoteapi.TestDataSourceOp.Name:
+		if s.forbidCreate { // checking a connection is the admin's, as adding one is
+			refuse(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		s.tested++
+		var in remoteapi.TestDataSourceIn
+		_ = jsonkit.UnmarshalRead(r.Body, &in)
+		reason, failing := s.unreachable[in.Name]
+		reply(remoteapi.TestDataSourceOut{OK: !failing, Message: reason})
 	default:
 		http.NotFound(w, r)
 	}
@@ -208,7 +245,7 @@ func (s *remote) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newRemote(t *testing.T) (*remote, string) {
 	t.Helper()
-	s := &remote{blobs: map[string][]byte{}, limits: remoteapi.Limits{Files: 100, UploadBlobs: 1000, UploadBytes: 1 << 20}}
+	s := &remote{blobs: map[string][]byte{}, sources: map[string]string{}, created: map[string]map[string]any{}, limits: remoteapi.Limits{Files: 100, UploadBlobs: 1000, UploadBytes: 1 << 20}}
 	srv := httptest.NewServer(s)
 	t.Cleanup(srv.Close)
 	t.Setenv("ANFRA_HOME", t.TempDir())
@@ -248,7 +285,33 @@ func run(t *testing.T, dir string, o publishOptions, ask prompt) (string, string
 }
 
 func never(t *testing.T) prompt {
-	return func(q string) (bool, bool) { t.Errorf("asked %q", q); return false, true }
+	return func(q string, choices ...string) (int, bool) { t.Errorf("asked %q", q); return len(choices) - 1, true }
+}
+
+// noTerminal is a prompt nobody can answer.
+func noTerminal(string, ...string) (int, bool) { return 0, false }
+
+// script answers questions in turn, each by its choice's name, and records
+// them: what a person at a terminal would.
+type script struct {
+	t       *testing.T
+	answers []string
+	asked   []string
+}
+
+func (s *script) ask(question string, choices ...string) (int, bool) {
+	s.t.Helper()
+	s.asked = append(s.asked, question)
+	if len(s.answers) == 0 {
+		s.t.Fatalf("asked %q, with no answer left", question)
+	}
+	answer := s.answers[0]
+	s.answers = s.answers[1:]
+	i := slices.Index(choices, answer)
+	if i < 0 {
+		s.t.Fatalf("asked %q with %v; the answer %q is not among them", question, choices, answer)
+	}
+	return i, true
 }
 
 // A publish uploads what the remote lacks, then deploys every file; publishing
@@ -334,11 +397,11 @@ func TestPublishConfirmsReplacingChanges(t *testing.T) {
 	s.by, s.revision = &remoteapi.Person{ID: "u2", Email: "bob@example.com"}, s.revision+1
 	write(t, dir, map[string]string{"a.aml": "a2"})
 	var asked string
-	_, errOut, err := run(t, dir, o, func(q string) (bool, bool) { asked = q; return false, true })
+	_, errOut, err := run(t, dir, o, func(q string, _ ...string) (int, bool) { asked = q; return 1, true })
 	if err == nil || asked == "" || !strings.Contains(errOut, "bob@example.com") || !strings.Contains(errOut, "This repo was last published by bob@example.com") {
 		t.Fatalf("declined: err %v, asked %q, said %q", err, asked, errOut)
 	}
-	if _, _, err := run(t, dir, o, func(string) (bool, bool) { return false, false }); err == nil || !strings.Contains(err.Error(), "--yes") {
+	if _, _, err := run(t, dir, o, noTerminal); err == nil || !strings.Contains(err.Error(), "--yes") {
 		t.Errorf("without a terminal: %v, want a refusal naming --yes", err)
 	}
 	deployed := len(s.deployed)
@@ -462,4 +525,10 @@ func TestSetConfigStringRefusesSafely(t *testing.T) {
 	if err := setConfigString(path, "remote", "url", "https://bi.example.com/o/acme"); err == nil || !strings.Contains(err.Error(), ".lock exists") {
 		t.Errorf("err = %v, want the held lock refused", err)
 	}
+}
+
+func refuse(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = jsonkit.MarshalWrite(w, apperr.Envelope{Error: apperr.Response{Code: code, Message: code}})
 }
