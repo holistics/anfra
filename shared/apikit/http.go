@@ -51,6 +51,10 @@ type HTTP[Call any] struct {
 	// After sees a successful output before it is written: setting a cookie the
 	// op asked for, say. A stream has no output, and is not seen.
 	After func(w http.ResponseWriter, out any)
+	// BeforeError sees the original error before an HTTP error response begins.
+	// It may set headers only; httpkit still owns status, body and logging.
+	// Errors carried inside an already-started stream do not call it. Nil: none.
+	BeforeError func(w http.ResponseWriter, r *http.Request, err error)
 	// Headers are the request headers the host reads for an op, published with
 	// it.
 	Headers func(m Meta) []*huma.Param
@@ -88,7 +92,7 @@ func (h HTTP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 	mux.HandleFunc(root+"/", func(w http.ResponseWriter, r *http.Request) {
 		httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "No such endpoint."))
 	})
-	return mux
+	return httpkit.WithErrorHeaders(mux, h.BeforeError)
 }
 
 // Spec is the OpenAPI document for reg's HTTP ops, in YAML, built without a

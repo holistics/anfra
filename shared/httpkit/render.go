@@ -1,6 +1,7 @@
 package httpkit
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,10 +12,29 @@ import (
 	"github.com/holistics/anfra/shared/requestid"
 )
 
+type errorHeadersKey struct{}
+
+// WithErrorHeaders calls headers with the original error before WriteError
+// commits a response within h. The callback may only set response headers; it
+// must not write a status or body. Errors rendered inside a committed stream
+// do not call it. A nil callback leaves h unchanged.
+func WithErrorHeaders(h http.Handler, headers func(http.ResponseWriter, *http.Request, error)) http.Handler {
+	if headers == nil {
+		return h
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), errorHeadersKey{}, headers)
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 // WriteError is the one place an HTTP error is rendered: the public code's
 // status, the envelope, and Retry-After when the details know it. It records the
 // error for the request's log line.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
+	if headers, ok := r.Context().Value(errorHeadersKey{}).(func(http.ResponseWriter, *http.Request, error)); ok {
+		headers(w, r, err)
+	}
 	setError(r.Context(), err)
 	resp := codesOf(r.Context()).Render(err, requestid.From(r.Context()))
 	if ra, ok := resp.Details.(RetryAfter); ok && ra.RetryAfterSeconds() > 0 {
