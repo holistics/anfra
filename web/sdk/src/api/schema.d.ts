@@ -290,7 +290,7 @@ export interface components {
              * Format: int64
              * @enum {integer}
              */
-            version: 1;
+            version: 2;
         };
         DiagramCard: {
             /** @description its type is not a top-level one, but its container is not in the lineage */
@@ -300,15 +300,8 @@ export interface components {
             label: string;
             /** Format: int64 */
             layer: number;
-            /** @description edge type → the entities it links to; a link is on its edge's from entity */
-            links?: {
-                [key: string]: (string | {
-                    id: string;
-                    props: {
-                        [key: string]: unknown;
-                    };
-                })[];
-            };
+            /** @description the node's links; a link is on its edge's from entity */
+            links?: components["schemas"]["DiagramLink"][];
             /** @description the entity's properties */
             props?: {
                 [key: string]: unknown;
@@ -328,19 +321,22 @@ export interface components {
             /** @description the entity types of its cards */
             types: string[];
         };
+        DiagramLink: {
+            /** @description the edge's properties, when it has some */
+            props?: {
+                [key: string]: unknown;
+            };
+            /** @description the linked entity's id */
+            to: string;
+            /** @description the edge type, such as refers or includes */
+            type: string;
+        };
         DiagramNode: {
             /** @description the catalog's id of the entity */
             id: string;
             label: string;
-            /** @description edge type → the entities it links to; a link is on its edge's from entity */
-            links?: {
-                [key: string]: (string | {
-                    id: string;
-                    props: {
-                        [key: string]: unknown;
-                    };
-                })[];
-            };
+            /** @description the node's links; a link is on its edge's from entity */
+            links?: components["schemas"]["DiagramLink"][];
             /** @description the entity's properties */
             props?: {
                 [key: string]: unknown;
@@ -358,12 +354,18 @@ export interface components {
             edges: {
                 [key: string]: string;
             };
-            /** @description entity type → edge type → the entity types it links to; top_level: true for a type no section holds */
+            /** @description entity type → how it connects */
             types: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
+                [key: string]: components["schemas"]["DiagramSchemaType"];
             };
+        };
+        DiagramSchemaType: {
+            /** @description edge type → the entity types it links to */
+            edges: {
+                [key: string]: string[];
+            };
+            /** @description no entity of the type is a child in a section */
+            top_level: boolean;
         };
         DiagramSection: {
             nodes: components["schemas"]["DiagramNode"][];

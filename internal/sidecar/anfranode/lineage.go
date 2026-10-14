@@ -1,14 +1,6 @@
 package anfranode
 
-import (
-	"context"
-	"encoding/json/jsontext"
-	"fmt"
-
-	"github.com/danielgtaylor/huma/v2"
-
-	"github.com/holistics/anfra/shared/jsonkit"
-)
+import "context"
 
 // CatalogLineageRequest mirrors anfra-node's catalog.lineage params: the
 // catalog's context, the fields to trace, and the page of what each one needs.
@@ -51,7 +43,7 @@ func (c *Client) CatalogLineage(ctx context.Context, req CatalogLineageRequest) 
 // upstream to downstream, and the links between them. The core API passes it
 // through as anfra-node formats it.
 type Diagram struct {
-	Version int            `json:"version" enum:"1"`
+	Version int            `json:"version" enum:"2"`
 	Query   string         `json:"query" doc:"the catalog search the lineage is"`
 	Total   int            `json:"total" doc:"how many entities the search matched, over every page"`
 	Matched []string       `json:"matched" doc:"the ids of this page's matched entities, in search order"`
@@ -63,8 +55,14 @@ type Diagram struct {
 // DiagramSchema is which entity types the diagram has, and how they connect,
 // read from the diagram itself.
 type DiagramSchema struct {
-	Edges map[string]string         `json:"edges" doc:"edge type → what it means"`
-	Types map[string]map[string]any `json:"types" doc:"entity type → edge type → the entity types it links to; top_level: true for a type no section holds"`
+	Edges map[string]string            `json:"edges" doc:"edge type → what it means"`
+	Types map[string]DiagramSchemaType `json:"types" doc:"entity type → how it connects"`
+}
+
+// DiagramSchemaType is how the entities of one type connect.
+type DiagramSchemaType struct {
+	TopLevel bool                `json:"top_level" doc:"no entity of the type is a child in a section"`
+	Edges    map[string][]string `json:"edges" doc:"edge type → the entity types it links to"`
 }
 
 // DiagramLayer is one layer of cards.
@@ -76,14 +74,14 @@ type DiagramLayer struct {
 
 // DiagramNode is an entity of the lineage, with its children.
 type DiagramNode struct {
-	ID       string                   `json:"id" doc:"the catalog's id of the entity"`
-	Type     string                   `json:"type" doc:"the catalog's entity type, such as aml.model or aml.metric"`
-	Label    string                   `json:"label"`
-	Ref      string                   `json:"ref,omitempty" doc:"the entity this node is a copy of"`
-	Tags     []string                 `json:"tags,omitempty"`
-	Props    map[string]any           `json:"props,omitempty" doc:"the entity's properties"`
-	Links    map[string][]DiagramLink `json:"links,omitempty" doc:"edge type → the entities it links to; a link is on its edge's from entity"`
-	Sections []DiagramSection         `json:"sections,omitempty" doc:"the node's children, grouped by type"`
+	ID       string           `json:"id" doc:"the catalog's id of the entity"`
+	Type     string           `json:"type" doc:"the catalog's entity type, such as aml.model or aml.metric"`
+	Label    string           `json:"label"`
+	Ref      string           `json:"ref,omitempty" doc:"the entity this node is a copy of"`
+	Tags     []string         `json:"tags,omitempty"`
+	Props    map[string]any   `json:"props,omitempty" doc:"the entity's properties"`
+	Links    []DiagramLink    `json:"links,omitempty" doc:"the node's links; a link is on its edge's from entity"`
+	Sections []DiagramSection `json:"sections,omitempty" doc:"the node's children, grouped by type"`
 }
 
 // DiagramSection is a node's children of one type.
@@ -99,64 +97,9 @@ type DiagramCard struct {
 	Detached bool `json:"detached,omitzero" doc:"its type is not a top-level one, but its container is not in the lineage"`
 }
 
-// DiagramLink is a link's target: the entity's id alone, or with the edge's
-// properties when it has some.
+// DiagramLink is an edge from a node.
 type DiagramLink struct {
-	ID string
-	// Props is nil for a link that is the id alone, and non-nil, even empty,
-	// for one with its properties, so each is written back as it was read.
-	Props map[string]any
-}
-
-type diagramLinkWithProps struct {
-	ID    string         `json:"id"`
-	Props map[string]any `json:"props"`
-}
-
-// MarshalJSONTo encodes the link as anfra-node does: the id alone when it has
-// no properties.
-func (l DiagramLink) MarshalJSONTo(enc *jsontext.Encoder) error {
-	if l.Props == nil {
-		return jsonkit.MarshalEncode(enc, l.ID)
-	}
-	return jsonkit.MarshalEncode(enc, diagramLinkWithProps(l))
-}
-
-func (l *DiagramLink) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	switch dec.PeekKind() {
-	case jsontext.KindString:
-		*l = DiagramLink{}
-		return jsonkit.UnmarshalDecode(dec, &l.ID)
-	case jsontext.KindBeginObject:
-		var w diagramLinkWithProps
-		if err := jsonkit.UnmarshalDecode(dec, &w); err != nil {
-			return err
-		}
-		if w.Props == nil {
-			w.Props = map[string]any{}
-		}
-		*l = DiagramLink(w)
-		return nil
-	default:
-		return fmt.Errorf("a diagram link is an id or an object with its id and props, not %s", dec.PeekKind())
-	}
-}
-
-// Schema publishes the union: an id, or an id with the edge's properties.
-func (DiagramLink) Schema(huma.Registry) *huma.Schema {
-	return &huma.Schema{
-		Description: "the linked entity's id; or, when the edge has properties, the id with them",
-		OneOf: []*huma.Schema{
-			{Type: huma.TypeString},
-			{
-				Type:     huma.TypeObject,
-				Required: []string{"id", "props"},
-				Properties: map[string]*huma.Schema{
-					"id":    {Type: huma.TypeString},
-					"props": {Type: huma.TypeObject, AdditionalProperties: true},
-				},
-				AdditionalProperties: false,
-			},
-		},
-	}
+	Type  string         `json:"type" doc:"the edge type, such as refers or includes"`
+	To    string         `json:"to" doc:"the linked entity's id"`
+	Props map[string]any `json:"props,omitempty" doc:"the edge's properties, when it has some"`
 }
