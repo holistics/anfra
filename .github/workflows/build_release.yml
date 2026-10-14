@@ -34,6 +34,7 @@ jobs:
     env:
       TAG: ${{ github.ref_name }}
       IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
+      ANFRA_CLOUD_URL: ${{ vars.ANFRA_CLOUD_URL }}
     steps:
       - uses: actions/checkout@v4 # on a tag push this is the tag's commit (manifest pinned there)
 
@@ -42,6 +43,11 @@ jobs:
           go-version-file: go.mod
       - name: the Go the release builds with (go.mod's toolchain line)
         run: go version
+
+      - name: Validate the optional default cloud URL
+        run: |
+          cloud_url="$(go run ./scripts/cloud-url)"
+          echo "ANFRA_CLOUD_URL=$cloud_url" >> "$GITHUB_ENV"
 
       # The Data Apps frontend, which every target embeds (internal/appserve/dist): built once,
       # it is the same files on every platform. A binary without it serves only a page saying
@@ -106,7 +112,7 @@ jobs:
             cp "sidecars/canal-query-$t" internal/sidecar/canalquery/assets/canal-query
             # -s -w strips the host's symbol table + DWARF (Phase 0).
             GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
-              -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION" \
+              -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION -X main.defaultCloudURL=$ANFRA_CLOUD_URL" \
               -o "release/anfra-$t" ./cmd/anfra
             # The image packages the Linux binaries as they are, laid out by platform
             # (<os>/<arch>/anfra) for the Dockerfile.
