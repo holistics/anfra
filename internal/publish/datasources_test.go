@@ -1,4 +1,4 @@
-package main
+package publish
 
 import (
 	"slices"
@@ -37,7 +37,7 @@ func TestPublishOffersMissingDataSources(t *testing.T) {
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
 
 	ask := &script{t: t, answers: []string{"yes", "skip", "yes"}} // dev: create, then skip once unreachable; warehouse: create
-	_, errOut, err := run(t, dir, publishOptions{setOrg: url}, ask.ask)
+	_, errOut, err := run(t, dir, Options{SetOrg: url}, ask.ask)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestPublishCreatesAnUnreachableDataSourceWhenChosen(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
 	ask := &script{t: t, answers: []string{"yes", "create anyway", "no", "no"}} // dev, events, warehouse
-	if _, _, err := run(t, dir, publishOptions{setOrg: url}, ask.ask); err != nil {
+	if _, _, err := run(t, dir, Options{SetOrg: url}, ask.ask); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := s.created["dev"]; !ok {
@@ -95,17 +95,17 @@ func TestPublishCreatesDataSourcesOnlyWhenAgreed(t *testing.T) {
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
 
 	declined := &script{t: t, answers: []string{"no", "no", "no"}} // dev, events, warehouse
-	if _, _, err := run(t, dir, publishOptions{setOrg: url}, declined.ask); err != nil {
+	if _, _, err := run(t, dir, Options{SetOrg: url}, declined.ask); err != nil {
 		t.Fatal(err)
 	}
-	_, errOut, err := run(t, dir, publishOptions{setOrg: url}, noTerminal)
+	_, errOut, err := run(t, dir, Options{SetOrg: url}, noTerminal)
 	if err != nil || len(s.created) != 0 || s.tested != 0 || !strings.Contains(errOut, "--create-data-sources") {
 		t.Fatalf("not agreed: err %v, created %v, %d checks; said %q", err, s.created, s.tested, errOut)
 	}
 	if len(s.deployed) != 1 {
 		t.Error("the publish did not go ahead")
 	}
-	_, errOut, err = run(t, dir, publishOptions{setOrg: url, createDataSources: true}, noTerminal)
+	_, errOut, err = run(t, dir, Options{SetOrg: url, CreateDataSources: true}, noTerminal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,13 +125,13 @@ func TestPublishWithoutDataSourcePermissions(t *testing.T) {
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
 
 	s.forbidList = true
-	_, errOut, err := run(t, dir, publishOptions{setOrg: url, createDataSources: true}, never(t))
+	_, errOut, err := run(t, dir, Options{SetOrg: url, CreateDataSources: true}, never(t))
 	if err != nil || !strings.Contains(errOut, "An org admin can check it has dev, events, warehouse") {
 		t.Errorf("listing refused: %v, said %q", err, errOut)
 	}
 	s.forbidList, s.forbidCreate = false, true
 	write(t, dir, map[string]string{"a.aml": "a2"})
-	_, errOut, err = run(t, dir, publishOptions{setOrg: url, createDataSources: true}, never(t))
+	_, errOut, err = run(t, dir, Options{SetOrg: url, CreateDataSources: true}, never(t))
 	if err != nil || !strings.Contains(errOut, "Only an org admin can add data sources: ask one to add dev, events, warehouse") || len(s.created) != 0 {
 		t.Errorf("adding refused: %v, created %v, said %q", err, s.created, errOut)
 	}
@@ -147,7 +147,7 @@ func TestPublishWithoutLocalDataSources(t *testing.T) {
 	s.forbidList = true // not even asked
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a"})
-	if _, errOut, err := run(t, dir, publishOptions{setOrg: url}, never(t)); err != nil || strings.Contains(errOut, "data source") {
+	if _, errOut, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil || strings.Contains(errOut, "data source") {
 		t.Errorf("%v, said %q", err, errOut)
 	}
 }

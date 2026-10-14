@@ -1,4 +1,4 @@
-package main
+package publish
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 // Never changed: a data source the org has, though it differs from this one;
 // separate connections per environment are the point of keeping them out of the
 // repo. A type that differs is said, since the two compile to different SQL.
-func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, errOut io.Writer, ask prompt) error {
+func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, errOut io.Writer, ask Prompt) error {
 	local, err := localDataSources(dir)
 	if err != nil {
 		fmt.Fprintf(errOut, "Not checking the org's data sources: %v\n", err)
@@ -66,7 +66,7 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 	var skipped []string
 	for i, d := range missing {
 		if !create {
-			yes, asked := confirm(ask, fmt.Sprintf("Data source %s is not available on the org yet. Would you like to create it? "+
+			yes, asked := Confirm(ask, fmt.Sprintf("Data source %s is not available on the org yet. Would you like to create it? "+
 				"This would send its connection, credentials included, to the server.", d.Name))
 			if !asked {
 				for _, rest := range missing[i:] {
@@ -105,7 +105,7 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 // createDataSource checks the server can reach d, then creates it, or, when it
 // cannot, asks whether to create it anyway; created is false for one skipped. An
 // error is the server's (forbidden, for one who may not add data sources).
-func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, errOut io.Writer, ask prompt) (created bool, err error) {
+func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, errOut io.Writer, ask Prompt) (created bool, err error) {
 	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
 	if err != nil {
 		return false, err
