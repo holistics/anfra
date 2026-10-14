@@ -45,31 +45,41 @@ type GroupListing struct {
 	Ops     []OpEntry `json:"ops"`
 }
 
+// ScopeRequirements is optional host metadata, not an authorization decision.
+// Derived requirements describe candidate visibility; invocation checks exact input.
+type ScopeRequirements interface {
+	OAuthScopeRequirements() (required, possible []string)
+}
+
 // OpEntry is an op in its group's listing.
 type OpEntry struct {
-	Name        string `json:"name"`
-	Summary     string `json:"summary"`
-	ReadOnly    bool   `json:"read_only"`
-	Idempotent  bool   `json:"idempotent"`
-	Destructive bool   `json:"destructive"`
+	Name                   string   `json:"name"`
+	Summary                string   `json:"summary"`
+	ReadOnly               bool     `json:"read_only"`
+	Idempotent             bool     `json:"idempotent"`
+	Destructive            bool     `json:"destructive"`
+	RequiredScopes         []string `json:"required_scopes,omitempty"`
+	PossibleRequiredScopes []string `json:"possible_required_scopes,omitempty"`
 }
 
 // Usage is all an agent needs to call an op: what it is for, what it takes,
 // what it answers, and how it can fail.
 type Usage struct {
-	Name        string         `json:"name"`
-	Summary     string         `json:"summary"`
-	Doc         string         `json:"doc,omitempty"`
-	ReadOnly    bool           `json:"read_only"`
-	Idempotent  bool           `json:"idempotent"`
-	Destructive bool           `json:"destructive"`
-	Input       map[string]any `json:"input"`
-	Output      map[string]any `json:"output"`
+	Name                   string         `json:"name"`
+	Summary                string         `json:"summary"`
+	Doc                    string         `json:"doc,omitempty"`
+	ReadOnly               bool           `json:"read_only"`
+	Idempotent             bool           `json:"idempotent"`
+	Destructive            bool           `json:"destructive"`
+	Input                  map[string]any `json:"input"`
+	Output                 map[string]any `json:"output"`
+	Errors                 []ErrorEntry   `json:"errors"`
+	RequiredScopes         []string       `json:"required_scopes,omitempty"`
+	PossibleRequiredScopes []string       `json:"possible_required_scopes,omitempty"`
 	// Events are what the op streams, over HTTP with Accept:
 	// application/x-ndjson, instead of answering its page: for an op that
 	// returns a Run.
 	Events []map[string]any `json:"events,omitempty"`
-	Errors []ErrorEntry     `json:"errors"`
 }
 
 // ErrorEntry is a code an op can fail with.
@@ -105,7 +115,11 @@ func (d Discovery[Call]) Group(ctx context.Context, reg OpSet[Call], r Call, inc
 	g := GroupListing{Name: group, Summary: reg.GroupSummary(group), Ops: []OpEntry{}}
 	for _, o := range ops {
 		if m := o.Meta(); GroupOf(m.Name) == group {
-			g.Ops = append(g.Ops, OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive})
+			entry := OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive}
+			if scopes, ok := m.Ext.(ScopeRequirements); ok {
+				entry.RequiredScopes, entry.PossibleRequiredScopes = scopes.OAuthScopeRequirements()
+			}
+			g.Ops = append(g.Ops, entry)
 		}
 	}
 	if len(g.Ops) == 0 {
@@ -143,6 +157,9 @@ func (d Discovery[Call]) Usage(ctx context.Context, rt *Runtime, reg OpSet[Call]
 			return Usage{}, err
 		}
 		u.Events = append(u.Events, e)
+	}
+	if scopes, ok := m.Ext.(ScopeRequirements); ok {
+		u.RequiredScopes, u.PossibleRequiredScopes = scopes.OAuthScopeRequirements()
 	}
 	for _, c := range d.codes(m) {
 		u.Errors = append(u.Errors, ErrorEntry{Code: c.String(), Scope: string(c.Scope()), Message: c.Message()})
