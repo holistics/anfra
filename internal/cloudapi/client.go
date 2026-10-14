@@ -24,8 +24,9 @@ type Client struct {
 type ClientOptions struct {
 	// HTTP is the client to send with; nil means http.DefaultClient.
 	HTTP *http.Client
-	// Authorize adds the caller's credential to a request.
-	Authorize func(*http.Request)
+	// Authorize resolves current credentials immediately before each request.
+	// An error prevents dispatch; authentication failures are never retried.
+	Authorize func(*http.Request) error
 	// UserAgent names the client and its version, for a server to tell which
 	// clients still call it.
 	UserAgent string
@@ -36,6 +37,12 @@ func NewClient(org Org, opts ClientOptions) *Client {
 	if opts.HTTP == nil {
 		opts.HTTP = http.DefaultClient
 	}
+	client := *opts.HTTP
+	// Credentials must never follow redirects, even to related hosts. A cookie
+	// jar could otherwise combine browser sessions with the selected bearer.
+	client.Jar = nil
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	opts.HTTP = &client
 	return &Client{org: org, opts: opts}
 }
 
@@ -150,7 +157,9 @@ func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, e
 		req.Header.Set("User-Agent", c.opts.UserAgent)
 	}
 	if c.opts.Authorize != nil {
-		c.opts.Authorize(req)
+		if err := c.opts.Authorize(req); err != nil {
+			return out, err
+		}
 	}
 	resp, err := c.opts.HTTP.Do(req)
 	if err != nil {

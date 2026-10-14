@@ -139,7 +139,7 @@ type server struct {
 	limits   cloudapi.Limits
 	uploads  int  // create_blobs calls
 	forget   bool // drop every blob once, as housekeeping would
-	cookie   string
+	bearer   string
 	// The org's data sources, name to type, and what it was sent for each one
 	// created; listing or creating refused when set.
 	sources      map[string]string
@@ -155,8 +155,9 @@ type server struct {
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if c, err := r.Cookie("anfra_session"); err == nil {
-		s.cookie = c.Value
+	s.bearer = r.Header.Get("Authorization")
+	if r.Header.Get("Cookie") != "" {
+		panic("publish combined cookie and bearer credentials")
 	}
 	op, ok := strings.CutPrefix(r.URL.Path, "/api/o/acme/")
 	if !ok {
@@ -276,15 +277,15 @@ func newServer(t *testing.T) (*server, string) {
 }
 
 // testEnv is a publish's surroundings, as the command gives them: ask answering,
-// local validation passing (no sidecars here), and a session cookie for a
+// local validation passing (no sidecars here), and a bearer token for a
 // credential.
 func testEnv(ask Prompt) (Env, *bytes.Buffer, *bytes.Buffer) {
 	var out, errOut bytes.Buffer
 	return Env{
 		Out: &out, ErrOut: &errOut, Ask: ask,
 		Validate: func(context.Context, io.Writer) error { return nil },
-		Credential: func() (func(*http.Request), error) {
-			return func(r *http.Request) { r.Header.Add("Cookie", "anfra_session=dev-session") }, nil
+		Credential: func(context.Context, cloudapi.Org) (func(*http.Request) error, error) {
+			return func(r *http.Request) error { r.Header.Set("Authorization", "Bearer dev-token"); return nil }, nil
 		},
 		UserAgent: "anfra/test",
 	}, &out, &errOut
@@ -356,8 +357,8 @@ func TestPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Published repo@") || s.cookie != "dev-session" {
-		t.Errorf("out = %q, cookie %q", out, s.cookie)
+	if !strings.Contains(out, "Published repo@") || s.bearer != "Bearer dev-token" {
+		t.Errorf("out = %q, bearer %q", out, s.bearer)
 	}
 	paths := func() (ps []string) {
 		for _, f := range s.deployed {
@@ -458,7 +459,9 @@ func TestPublishSaysWhatIsMissing(t *testing.T) {
 		t.Errorf("no org: %v", err)
 	}
 	env, _, _ := testEnv(never(t))
-	env.Credential = func() (func(*http.Request), error) { return nil, errors.New("not signed in") }
+	env.Credential = func(context.Context, cloudapi.Org) (func(*http.Request) error, error) {
+		return nil, errors.New("not signed in")
+	}
 	if err := Run(context.Background(), dir, Options{SetOrg: url}, env); err == nil || err.Error() != "not signed in" {
 		t.Errorf("no credential: %v", err)
 	}
@@ -492,4 +495,105 @@ func refuse(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = jsonkit.MarshalWrite(w, apperr.Envelope{Error: apperr.Response{Code: code, Message: code}})
+}
+
+// Destination writes happen only after explicit selection and successful
+// credential loading, but before any remote publish work.
+func TestFirstPublishDestinationOrdering(t *testing.T) {
+	for _, scenario := range []string{"success", "cancel", "credential failure", "config failure", "publish failure", "dry run"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, address := newServer(t)
+			org, err := cloudapi.ParseOrg(address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			original := "# keep this comment\nother: untouched\n"
+			write(t, dir, map[string]string{"a.aml": "a", ".anfra/config.yml": original})
+			env, _, _ := testEnv(never(t))
+			selected, loaded := 0, 0
+			env.SelectOrg = func(context.Context) (cloudapi.Org, error) {
+				selected++
+				if scenario == "cancel" {
+					return cloudapi.Org{}, errors.New("cancelled login")
+				}
+				return org, nil
+			}
+			env.Credential = func(_ context.Context, got cloudapi.Org) (func(*http.Request) error, error) {
+				loaded++
+				if got != org {
+					t.Fatalf("credentials selected for %v", got)
+				}
+				before, err := os.ReadFile(repoconfig.Path(dir))
+				if err != nil || string(before) != original {
+					t.Fatal("config changed before credential loading")
+				}
+				if scenario == "credential failure" {
+					return nil, errors.New("login/save failed")
+				}
+				if scenario == "config failure" {
+					if err := os.Mkdir(repoconfig.Path(dir)+".lock", 0o700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return func(r *http.Request) error { r.Header.Set("Authorization", "Bearer selected"); return nil }, nil
+			}
+			env.Validate = func(context.Context, io.Writer) error {
+				got, ok, err := readOrg(dir)
+				if err != nil || !ok || got != org {
+					t.Fatal("validation began before destination was saved")
+				}
+				if scenario == "publish failure" {
+					return errors.New("validation refused publish")
+				}
+				return nil
+			}
+			err = Run(context.Background(), dir, Options{DryRun: scenario == "dry run"}, env)
+			success := scenario == "success" || scenario == "dry run"
+			if (err == nil) != success {
+				t.Fatalf("result: %v", err)
+			}
+			if scenario == "dry run" && (selected != 0 || loaded != 0) {
+				t.Fatal("dry run selected org/authenticated")
+			}
+			after, readErr := os.ReadFile(repoconfig.Path(dir))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if scenario == "success" || scenario == "publish failure" {
+				if !strings.HasPrefix(string(after), original) || !strings.Contains(string(after), "url: "+address) {
+					t.Fatalf("unrelated config changed: %q", after)
+				}
+			} else if string(after) != original {
+				t.Fatalf("failed or dry publish changed config: %q", after)
+			}
+			if scenario != "success" && s.deployed != nil {
+				t.Fatal("failed flow published")
+			}
+		})
+	}
+}
+
+func TestConfiguredPublishNeverSubstitutesStoredOrg(t *testing.T) {
+	_, address := newServer(t)
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"a.aml": "a", ".anfra/config.yml": "org:\n  url: " + address + "\n"})
+	env, _, _ := testEnv(never(t))
+	env.SelectOrg = func(context.Context) (cloudapi.Org, error) {
+		t.Fatal("configured destination opened picker")
+		return cloudapi.Org{}, nil
+	}
+	env.Credential = func(_ context.Context, org cloudapi.Org) (func(*http.Request) error, error) {
+		if org.String() != address {
+			t.Fatal("selected different org")
+		}
+		return nil, errors.New("use anfra auth login " + address)
+	}
+	if err := Run(context.Background(), dir, Options{Yes: true}, env); err == nil {
+		t.Fatal("missing credentials accepted")
+	}
+	org, _, err := readOrg(dir)
+	if err != nil || org.String() != address {
+		t.Fatal("configured destination changed")
+	}
 }
