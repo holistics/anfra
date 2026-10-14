@@ -7,7 +7,7 @@
 export
 
 .DEFAULT_GOAL := help
-.PHONY: help setup sidecars dev dev-tmux build test test-sidecars check
+.PHONY: help setup sidecars dev dev-tmux build build-dev test test-sidecars check
 
 help: ## List the targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -18,7 +18,7 @@ TOOL := go tool -modfile=tools/go.mod
 # <this>+<commit>[.dirty] (internal/meta). Exported, like every variable here, so air's build
 # (make dev) injects it too.
 ANFRA_BASE_VERSION := $(shell sed -n 's/^version: *//p' manifest.yml)
-BUILD_FLAGS := -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION)"
+BUILD_FLAGS = -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION) -X github.com/holistics/anfra/internal/hostedorigin.embeddedOrigin=$$hosted_origin"
 
 # The JavaScript dependencies, brought up to date before make dev starts its processes: after a
 # branch switch or a lockfile change, they are what goes stale. Not --frozen-lockfile, as CI's is:
@@ -54,6 +54,7 @@ sidecars: ## Download the sidecar releases manifest.yml pins into .sidecars/, re
 	scripts/sidecars.sh fetch
 
 dev: ## Run the Go server and the SDK, each rebuilt on change, in this terminal (hivemind)
+	@go run ./scripts/hosted-origin >/dev/null
 	@test -n "$$ANFRA_DEV_REPO" || { echo "set ANFRA_DEV_REPO, in .env.local, to a repo with Data Apps for anfra serve to run in"; exit 1; }
 	scripts/sidecars.sh check
 	$(JS_DEPS)
@@ -61,6 +62,7 @@ dev: ## Run the Go server and the SDK, each rebuilt on change, in this terminal 
 	$(TOOL) hivemind Procfile.dev
 
 dev-tmux: ## The same, under overmind in tmux: restart or attach to each process on its own
+	@go run ./scripts/hosted-origin >/dev/null
 	@command -v tmux >/dev/null || { echo "make dev-tmux needs tmux, which overmind runs the processes in"; exit 1; }
 	@test -n "$$ANFRA_DEV_REPO" || { echo "set ANFRA_DEV_REPO, in .env.local, to a repo with Data Apps for anfra serve to run in"; exit 1; }
 	scripts/sidecars.sh check
@@ -69,8 +71,14 @@ dev-tmux: ## The same, under overmind in tmux: restart or attach to each process
 	$(TOOL) overmind start -f Procfile.dev
 
 build: ## Build the Data App frontend, then anfra with it, into bin/, as a release is
-	pnpm build:web
-	go build $(BUILD_FLAGS) -o bin/ ./cmd/anfra
+	@hosted_origin="$$(go run ./scripts/hosted-origin)" && \
+		pnpm build:web && \
+		go build $(BUILD_FLAGS) -o bin/ ./cmd/anfra
+
+# Air uses the same build-time configuration on every rebuild, without rebuilding the frontend.
+build-dev:
+	@hosted_origin="$$(go run ./scripts/hosted-origin)" && \
+		go build $(BUILD_FLAGS) -o ./tmp/anfra ./cmd/anfra
 
 # The Go tests that run against real sidecars run only when .env.local names both; make
 # test-sidecars runs them against the pinned releases.

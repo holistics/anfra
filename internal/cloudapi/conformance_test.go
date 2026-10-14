@@ -42,6 +42,22 @@ func TestConformsToTheServersContract(t *testing.T) {
 			if !ok {
 				t.Fatalf("the server has no %s", c.op)
 			}
+			// Every operation this bearer-only CLI calls must admit OAuth on the
+			// server contract, including an authentication challenge on failure.
+			security, _ := op["security"].([]any)
+			bearer := false
+			for _, alternative := range security {
+				requirements, _ := alternative.(map[string]any)
+				if _, ok := requirements["oauthBearer"]; ok && len(requirements) == 1 {
+					bearer = true
+				}
+			}
+			if !bearer {
+				t.Error("operation does not admit standalone OAuth bearer credentials")
+			}
+			if dig(op, "responses", "401", "headers", "WWW-Authenticate") == nil {
+				t.Error("operation lacks bearer authentication challenge")
+			}
 			req := dig(op, "requestBody", "content", "application/json", "schema")
 			if req == nil {
 				t.Fatalf("%s takes no JSON body", c.op)
