@@ -92,6 +92,12 @@ export interface SdkFeatures {
    * `user.permissions.canExportData` are both true.
    */
   render?: boolean;
+  /**
+   * Whether `Anfra.lineage()` can trace fields here: the host's Backend has `lineage`.
+   * `mountDataApp` says so for every frame; `createSdk` reads it off the Backend when the host
+   * does not.
+   */
+  lineage?: boolean;
 }
 
 export interface SdkEnvironment {

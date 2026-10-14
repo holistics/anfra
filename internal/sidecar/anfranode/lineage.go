@@ -3,6 +3,7 @@ package anfranode
 import (
 	"context"
 	"encoding/json/jsontext"
+	"fmt"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -101,7 +102,9 @@ type DiagramCard struct {
 // DiagramLink is a link's target: the entity's id alone, or with the edge's
 // properties when it has some.
 type DiagramLink struct {
-	ID    string
+	ID string
+	// Props is nil for a link that is the id alone, and non-nil, even empty,
+	// for one with its properties, so each is written back as it was read.
 	Props map[string]any
 }
 
@@ -110,26 +113,33 @@ type diagramLinkWithProps struct {
 	Props map[string]any `json:"props"`
 }
 
-// MarshalJSONTo encodes the link as anfra-node does: the id alone when the edge
-// has no properties.
+// MarshalJSONTo encodes the link as anfra-node does: the id alone when it has
+// no properties.
 func (l DiagramLink) MarshalJSONTo(enc *jsontext.Encoder) error {
-	if len(l.Props) == 0 {
+	if l.Props == nil {
 		return jsonkit.MarshalEncode(enc, l.ID)
 	}
 	return jsonkit.MarshalEncode(enc, diagramLinkWithProps(l))
 }
 
-func (l *DiagramLink) UnmarshalJSON(b []byte) error {
-	if jsontext.Value(b).Kind() == '"' {
+func (l *DiagramLink) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	switch dec.PeekKind() {
+	case jsontext.KindString:
 		*l = DiagramLink{}
-		return jsonkit.Unmarshal(b, &l.ID)
+		return jsonkit.UnmarshalDecode(dec, &l.ID)
+	case jsontext.KindBeginObject:
+		var w diagramLinkWithProps
+		if err := jsonkit.UnmarshalDecode(dec, &w); err != nil {
+			return err
+		}
+		if w.Props == nil {
+			w.Props = map[string]any{}
+		}
+		*l = DiagramLink(w)
+		return nil
+	default:
+		return fmt.Errorf("a diagram link is an id or an object with its id and props, not %s", dec.PeekKind())
 	}
-	var w diagramLinkWithProps
-	if err := jsonkit.Unmarshal(b, &w); err != nil {
-		return err
-	}
-	*l = DiagramLink(w)
-	return nil
 }
 
 // Schema publishes the union: an id, or an id with the edge's properties.

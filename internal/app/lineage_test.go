@@ -59,7 +59,7 @@ func lineageContext(node *anfranode.Client) command.CommandContext {
 }
 
 // Each field goes to anfra-node by its parent and child, trimmed, and comes
-// back by them, in the order asked, a field that failed among them.
+// back as it was asked, in the order asked, a field that failed among them.
 func TestLineageTracesEachField(t *testing.T) {
 	node, got := fakeLineageNode(t, `{"results":[`+
 		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","diagram":{"version":1,"query":"needed_by:(fqn:ecommerce.revenue)","total":0,"matched":[],"schema":{"edges":{},"types":{}},"layers":[],"cards":[]}},`+
@@ -81,9 +81,23 @@ func TestLineageTracesEachField(t *testing.T) {
 		t.Errorf("sent %+v, want %+v", *got, want)
 	}
 	res := out.(catalog.LineageResult)
-	if len(res.Results) != 2 || res.Results[0].Target != want.Targets[0] || res.Results[0].Diagram == nil ||
+	asked := anfranode.LineageTarget{Parent: " ecommerce ", Child: "revenue "}
+	if len(res.Results) != 2 || res.Results[0].Target != asked || res.Results[0].Diagram == nil ||
 		res.Results[1].Target != want.Targets[1] || res.Results[1].Error != "boom" || res.Results[1].Diagram != nil {
 		t.Errorf("answer = %+v", res)
+	}
+}
+
+// An answer for another field than the one asked, in its place, is an error,
+// not that field's lineage.
+func TestLineageRefusesAnAnswerForAnotherField(t *testing.T) {
+	node, _ := fakeLineageNode(t, `{"results":[`+
+		`{"target":{"parent":"orders","child":"amount"},"query":"needed_by:(fqn:orders.amount)","error":"boom"},`+
+		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","error":"boom"}]}`)
+	_, err := Invoke(context.Background(), lineageContext(node), "lineage",
+		[]byte(`{"targets":[{"parent":"ecommerce","child":"revenue"},{"parent":"orders","child":"amount"}]}`))
+	if err == nil {
+		t.Fatal("answers out of order were taken")
 	}
 }
 

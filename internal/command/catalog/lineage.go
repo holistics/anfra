@@ -45,7 +45,10 @@ var Lineage = command.Define(command.Def[LineageInput, LineageResult]{
 		}
 		out := LineageResult{Results: make([]FieldLineage, len(targets))}
 		for i, r := range res.Results {
-			out.Results[i] = FieldLineage{Target: targets[i], Query: r.Query, Diagram: r.Diagram, Error: r.Error}
+			if r.Target != targets[i] {
+				return LineageResult{}, fmt.Errorf("anfra-node traced %s.%s where %s.%s was asked", r.Target.Parent, r.Target.Child, targets[i].Parent, targets[i].Child)
+			}
+			out.Results[i] = FieldLineage{Target: in.Targets[i], Query: r.Query, Diagram: r.Diagram, Error: r.Error}
 		}
 		return out, nil
 	},

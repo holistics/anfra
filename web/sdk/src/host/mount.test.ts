@@ -38,15 +38,24 @@ describe('mountDataApp', () => {
     withExport.unmount();
   });
 
+  it('tells the frame whether its Backend can trace lineage', () => {
+    const without = mountDataApp(options());
+    const withLineage = mountDataApp({ ...options(), backend: stubBackend({ lineage: { results: [] } }).backend });
+    expect(without.frame.srcdoc).toContain('"lineage":false}');
+    expect(withLineage.frame.srcdoc).toContain('"lineage":true}');
+    without.unmount();
+    withLineage.unmount();
+  });
+
   it('tells the frame it may render only when turned on and it has the renderer', () => {
     const on = mountDataApp({ ...options(), renderer: 'code', render: true });
     const unasked = mountDataApp({ ...options(), renderer: 'code' });
     const off = mountDataApp({ ...options(), renderer: 'code', render: false });
     const none = mountDataApp({ ...options(), render: true });
-    expect(on.frame.srcdoc).toContain('"render":true}');
-    expect(unasked.frame.srcdoc).toContain('"render":false}');
-    expect(off.frame.srcdoc).toContain('"render":false}');
-    expect(none.frame.srcdoc).toContain('"render":false}');
+    expect(on.frame.srcdoc).toContain('"render":true,');
+    expect(unasked.frame.srcdoc).toContain('"render":false,');
+    expect(off.frame.srcdoc).toContain('"render":false,');
+    expect(none.frame.srcdoc).toContain('"render":false,');
     [on, unasked, off, none].forEach((app) => app.unmount());
   });
 

@@ -43,7 +43,7 @@ export class Sdk {
   /**
    * What the host can do beyond queries. `export` says whether `query.export()` can work here, and
    * `render` whether `render()` can: show either's button only when it and
-   * `user.permissions.canExportData` are both true.
+   * `user.permissions.canExportData` are both true. `lineage` says whether `lineage()` can.
    */
   readonly features: Readonly<SdkFeatures>;
 
@@ -89,6 +89,7 @@ export class Sdk {
       // has every method, so there it is the host's provision that says.
       export: environment.features?.export ?? typeof environment.backend.exportQuery === 'function',
       render: environment.features?.render ?? typeof environment.render === 'function',
+      lineage: environment.features?.lineage ?? typeof environment.backend.lineage === 'function',
     });
   }
 
@@ -116,19 +117,22 @@ export class Sdk {
    * Trace fields through the repo's catalog: what each one is built from (the fields, models and
    * sources upstream of it), as a diagram to draw. Name each field by its parent and its name in
    * it: `{ parent: 'orders', child: 'amount' }` for a model's field, `{ parent: 'ecommerce', child:
-   * 'revenue' }` for a dataset's metric. The catalog is the one the host last ingested. A field
-   * that cannot be traced answers its `error`, and the others still answer; a host that cannot
-   * trace lineage rejects with a `TransportError`.
+   * 'revenue' }` for a dataset's metric. Nothing needs ingesting first: the host builds the repo's
+   * catalog when it has to. A field that cannot be traced answers its `error`, and the others still
+   * answer; a host that cannot trace lineage (see `features.lineage`) rejects with a
+   * `TransportError`.
    */
   lineage (targets: LineageTarget | readonly LineageTarget[], options: LineageOptions = {}): Promise<LineageResult> {
     const list: LineageTarget[] = Array.isArray(targets) ? [...targets] : [targets as LineageTarget];
     const named = (s: unknown) => typeof s === 'string' && s.trim() !== '';
     if (list.length === 0 || list.some((t) => typeof t !== 'object' || t === null || !named(t.parent) || !named(t.child))) {
       return Promise.reject(new ValidationError(
-        "Anfra.lineage() an array of targets, each by its parent and its name in it, such as { parent: 'ecommerce', child: 'revenue' }.",
+        "Anfra.lineage() takes a target or an array of targets, each by its parent and its name in it, such as { parent: 'ecommerce', child: 'revenue' }.",
       ));
     }
-    if (!this.backend.lineage) return Promise.reject(new TransportError('This host cannot trace lineage.'));
+    if (!this.backend.lineage || this.features.lineage === false) {
+      return Promise.reject(new TransportError('This host cannot trace lineage: check Anfra.features.lineage first.'));
+    }
     const { limit, offset, signal = new AbortController().signal } = options;
     return this.backend.lineage({
       targets: list.map(({ parent, child }) => ({ parent, child })),

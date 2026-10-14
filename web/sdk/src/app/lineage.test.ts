@@ -43,6 +43,17 @@ describe('Anfra.lineage', () => {
 
   it('fails as a TransportError on a host that cannot trace lineage', async () => {
     const { sdk: anfra } = sdk(stubBackend());
+    expect(anfra.features.lineage).toBe(false);
     await expect(anfra.lineage(amount)).rejects.toThrowError(TransportError);
+  });
+
+  it('says it can trace when the Backend can, and asks nothing when the host says it cannot', async () => {
+    expect(sdk().sdk.features.lineage).toBe(true);
+    const stub = stubBackend({ lineage: traced });
+    const anfra = createSdk({
+      datasets: { sales: salesDataset }, user: testUser, backend: stub.backend, features: { lineage: false },
+    });
+    await expect(anfra.lineage(amount)).rejects.toThrowError(TransportError);
+    expect(stub.calls).toEqual([]);
   });
 });
