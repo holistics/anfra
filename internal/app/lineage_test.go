@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -72,7 +71,7 @@ func TestLineageTracesEachField(t *testing.T) {
 	}
 	want := anfranode.CatalogLineageRequest{
 		Context: anfranode.CatalogContext{
-			RepoPath: "/repo", SourcesPath: filepath.Join("/repo/.anfra", "context_sources.yml"), CanalQueryBaseURL: "http://127.0.0.1:9000",
+			RepoRef: anfranode.RepoRef{RepoID: "repo-1", RepoPath: "/repo"}, CanalQueryBaseURL: "http://127.0.0.1:9000",
 		},
 		Targets: []anfranode.LineageTarget{{Parent: "ecommerce", Child: "revenue"}, {Parent: "orders", Child: "amount"}},
 		Limit:   5, Offset: 10,

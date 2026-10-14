@@ -24,17 +24,9 @@ var Lineage = command.Define(command.Def[LineageInput, LineageResult]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return LineageResult{}, err
 		}
-		local, err := localRepo(cc, "Lineage")
-		if err != nil {
-			return LineageResult{}, err
-		}
 		targets := in.targets()
 		res, err := cc.Clients.Node.CatalogLineage(ctx, anfranode.CatalogLineageRequest{
-			Context: anfranode.CatalogContext{
-				RepoPath:          local.Dir,
-				SourcesPath:       local.ContextSourcesPath(),
-				CanalQueryBaseURL: cc.Clients.CanalQuery.BaseURL(),
-			},
+			Context: anfranode.CatalogContextOf(cc.Repo, cc.Clients.CanalQuery.BaseURL()),
 			Targets: targets, Limit: in.Limit, Offset: in.Offset,
 		})
 		if err != nil {

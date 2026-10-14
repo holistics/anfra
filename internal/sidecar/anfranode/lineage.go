@@ -34,6 +34,9 @@ type TargetDiagram struct {
 // CatalogLineage traces fields through the catalog of the request's context.
 func (c *Client) CatalogLineage(ctx context.Context, req CatalogLineageRequest) (CatalogLineageResult, error) {
 	var res CatalogLineageResult
+	if err := req.Context.check(); err != nil {
+		return res, err
+	}
 	err := c.Call(ctx, "catalog.lineage", req, &res)
 	return res, err
 }

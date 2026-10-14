@@ -12,9 +12,9 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
-// Run asks anfra-node to search the local catalog. Go owns orchestration
-// (sidecars, repo paths, canal endpoint); anfra-node owns search execution.
-func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Local, query string) (anfranode.CatalogSearchResult, error) {
+// Run asks anfra-node to search the repo's catalog. Go owns orchestration
+// (sidecars, which repo, canal endpoint); anfra-node owns search execution.
+func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Repo, query string) (anfranode.CatalogSearchResult, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("search query is required")
 	}
@@ -26,11 +26,7 @@ func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, 
 	}
 
 	return node.SearchCatalog(ctx, anfranode.CatalogSearchRequest{
-		Context: anfranode.CatalogContext{
-			RepoPath:          r.Dir,
-			SourcesPath:       r.ContextSourcesPath(),
-			CanalQueryBaseURL: canal.BaseURL(),
-		},
-		Query: query,
+		Context: anfranode.CatalogContextOf(r, canal.BaseURL()),
+		Query:   query,
 	})
 }

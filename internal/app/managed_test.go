@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
-	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -130,11 +128,11 @@ func TestAManagedRepoValidatesWithoutDataSources(t *testing.T) {
 	}
 }
 
-// Ingest and search are not supported for managed repos yet: catalog_unavailable,
-// before anything is called.
-func TestAManagedRepoHasNoCatalog(t *testing.T) {
+// The catalog commands reach anfra-node with the repo as every repo-scoped call
+// names it: a managed repo by its revision, never a path.
+func TestAManagedRepoHasACatalog(t *testing.T) {
 	var node fakeNode
-	srv := node.serve(t, map[string]any{})
+	srv := node.serve(t, map[string]any{"results": []any{map[string]any{"target": map[string]any{"parent": "orders", "child": "amount"}, "query": "q"}}})
 	cc := command.CommandContext{
 		Clients: command.Clients{
 			Node:       anfranode.NewClientHTTP(srv.URL),
@@ -143,13 +141,27 @@ func TestAManagedRepoHasNoCatalog(t *testing.T) {
 		Repo:      managedRepo(t),
 		DataPerms: dataperm.Unrestricted(),
 	}
-	for cmd, input := range map[string]string{"ingest": `{}`, "search": `{"query":["revenue"]}`} {
-		if _, err := Invoke(context.Background(), cc, cmd, []byte(input)); !errors.Is(err, errcode.CatalogUnavailable) {
-			t.Errorf("%s: %v, want catalog_unavailable", cmd, err)
+	for cmd, input := range map[string]string{
+		"ingest":  `{}`,
+		"search":  `{"query":["revenue"]}`,
+		"lineage": `{"targets":[{"parent":"orders","child":"amount"}]}`,
+	} {
+		if _, err := Invoke(context.Background(), cc, cmd, []byte(input)); err != nil {
+			t.Errorf("%s: %v", cmd, err)
 		}
 	}
-	if len(node.calls) != 0 {
-		t.Errorf("anfra-node was called: %v", node.calls)
+	if want := []string{"catalog.ingest", "catalog.search", "catalog.lineage"}; len(node.calls) != len(want) {
+		t.Fatalf("calls = %v, want one each of %v", node.calls, want)
+	}
+	for i, p := range node.params {
+		c, _ := p["context"].(map[string]any)
+		if c["revision"] != "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b@0123456789abcdef0123456789abcdef01234567" ||
+			c["repoId"] != "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b" || c["canalQueryBaseUrl"] != srv.URL {
+			t.Errorf("%s context = %v", node.calls[i], c)
+		}
+		if _, sent := c["repoPath"]; sent {
+			t.Errorf("%s: a managed repo sent repoPath %v", node.calls[i], c["repoPath"])
+		}
 	}
 }
 

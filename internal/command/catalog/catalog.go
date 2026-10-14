@@ -5,18 +5,14 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/command"
-	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/ingest"
-	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/search"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
-	"github.com/holistics/anfra/shared/apperr"
 )
 
 // Ingest builds the local search catalog from context sources.
@@ -30,11 +26,7 @@ var Ingest = command.Define(command.Def[IngestInput, string]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return "", err
 		}
-		local, err := localRepo(cc, "Ingest")
-		if err != nil {
-			return "", err
-		}
-		return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, local, in.Source)
+		return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, in.Source)
 	},
 })
 
@@ -48,26 +40,9 @@ var Search = command.Define(command.Def[SearchInput, anfranode.CatalogSearchResu
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return nil, err
 		}
-		local, err := localRepo(cc, "Search")
-		if err != nil {
-			return nil, err
-		}
-		return search.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, local, strings.TrimSpace(strings.Join(in.Query, " ")))
+		return search.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, strings.TrimSpace(strings.Join(in.Query, " ")))
 	},
 })
-
-// localRepo is the repo's directory, where the catalog is built and read. cmd is
-// the command, for its refusal on a managed repo, which is not supported yet.
-func localRepo(cc command.CommandContext, cmd string) (repo.Local, error) {
-	if cc.Repo.IsZero() {
-		return repo.Local{}, fmt.Errorf("no repo: the host built an invocation without one")
-	}
-	local, ok := cc.Repo.Local()
-	if !ok {
-		return repo.Local{}, apperr.New(errcode.CatalogUnavailable, cmd+" is not supported for managed repos yet.")
-	}
-	return local, nil
-}
 
 // IngestInput is ingest's input.
 type IngestInput struct {

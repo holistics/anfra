@@ -47,9 +47,10 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 	repoDir := t.TempDir()
 	r := repo.Local{
 		Dir:       repoDir,
+		ID:        "repo-123",
 		DataDir:   filepath.Join(t.TempDir(), "repos", "repo-123"),
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
-	}
+	}.Repo()
 	res, err := Run(context.Background(),
 		anfranode.NewClientHTTP(node.URL),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
@@ -64,8 +65,7 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 		t.Fatalf("query = %q, want type:aml.model orders", captured.Query)
 	}
 	want := anfranode.CatalogContext{
-		RepoPath:          r.Dir,
-		SourcesPath:       filepath.Join(r.ConfigDir, "context_sources.yml"),
+		RepoRef:           anfranode.RepoRef{RepoID: "repo-123", RepoPath: repoDir},
 		CanalQueryBaseURL: "http://127.0.0.1:9000",
 	}
 	if captured.Context != want {
@@ -81,7 +81,7 @@ func TestRunRequiresQuery(t *testing.T) {
 	_, err := Run(context.Background(),
 		anfranode.NewClientHTTP("http://127.0.0.1:9001"),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
-		repo.Local{},
+		repo.Repo{},
 		" ",
 	)
 	if err == nil || !strings.Contains(err.Error(), "search query is required") {
