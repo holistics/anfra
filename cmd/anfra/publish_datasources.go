@@ -12,12 +12,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/shared/remoteapi"
 )
 
-// offerDataSourcesToRemote adds to the org the data sources this repo uses here
+// offerDataSourcesToOrg adds to the org the data sources this repo uses here
 // (.anfra/data_sources.yml) and the org lacks, one at a time, each once the
 // person agrees: asked at a terminal, or --create-data-sources without one. A
 // connection, credentials included, is never sent unasked, not even to check it.
@@ -28,7 +28,7 @@ import (
 // Never changed: a data source the org has, though it differs from this one;
 // separate connections per environment are the point of keeping them out of the
 // repo. A type that differs is said, since the two compile to different SQL.
-func offerDataSourcesToRemote(ctx context.Context, c *remoteapi.Client, dir string, create bool, errOut io.Writer, ask prompt) error {
+func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, errOut io.Writer, ask prompt) error {
 	local, err := localDataSources(dir)
 	if err != nil {
 		fmt.Fprintf(errOut, "Not checking the org's data sources: %v\n", err)
@@ -38,7 +38,7 @@ func offerDataSourcesToRemote(ctx context.Context, c *remoteapi.Client, dir stri
 		return nil
 	}
 	have, err := c.ListDataSources(ctx)
-	if remoteapi.IsForbidden(err) {
+	if cloudapi.IsForbidden(err) {
 		fmt.Fprintf(errOut, "Not checking the org's data sources: listing them needs permission to query data sources. "+
 			"An org admin can check it has %s.\n", strings.Join(slices.Sorted(maps.Keys(local)), ", "))
 		return nil
@@ -46,7 +46,7 @@ func offerDataSourcesToRemote(ctx context.Context, c *remoteapi.Client, dir stri
 	if err != nil {
 		return err
 	}
-	byName := make(map[string]remoteapi.DataSource, len(have))
+	byName := make(map[string]cloudapi.DataSource, len(have))
 	for _, d := range have {
 		byName[d.Name] = d
 	}
@@ -81,7 +81,7 @@ func offerDataSourcesToRemote(ctx context.Context, c *remoteapi.Client, dir stri
 			}
 		}
 		created, err := createDataSource(ctx, c, d, errOut, ask)
-		if remoteapi.IsForbidden(err) {
+		if cloudapi.IsForbidden(err) {
 			names := make([]string, 0, len(missing)-i)
 			for _, rest := range missing[i:] {
 				names = append(names, rest.Name)
@@ -105,8 +105,8 @@ func offerDataSourcesToRemote(ctx context.Context, c *remoteapi.Client, dir stri
 // createDataSource checks the server can reach d, then creates it, or, when it
 // cannot, asks whether to create it anyway; created is false for one skipped. An
 // error is the server's (forbidden, for one who may not add data sources).
-func createDataSource(ctx context.Context, c *remoteapi.Client, d datasource.DataSource, errOut io.Writer, ask prompt) (created bool, err error) {
-	check, err := c.TestDataSource(ctx, remoteapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
+func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, errOut io.Writer, ask prompt) (created bool, err error) {
+	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
 	if err != nil {
 		return false, err
 	}
@@ -121,8 +121,8 @@ func createDataSource(ctx context.Context, c *remoteapi.Client, d datasource.Dat
 			return false, nil
 		}
 	}
-	if _, err := c.CreateDataSource(ctx, remoteapi.CreateDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection}); err != nil {
-		if remoteapi.IsForbidden(err) {
+	if _, err := c.CreateDataSource(ctx, cloudapi.CreateDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection}); err != nil {
+		if cloudapi.IsForbidden(err) {
 			return false, err
 		}
 		fmt.Fprintf(errOut, "Data source %s was not created: %v\n", d.Name, err)

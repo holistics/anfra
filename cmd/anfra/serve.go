@@ -31,7 +31,6 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
-	"github.com/holistics/anfra/shared/remoteapi"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -462,25 +461,16 @@ func stopWhenIdle(ctx context.Context, next http.Handler, idle time.Duration, st
 // registry with no repo or sidecars: for a client generated without a running
 // server, and the committed api/openapi.yaml (scripts/openapi.sh).
 func newOpenAPICmd() *cobra.Command {
-	var remote bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "openapi",
 		Short: "Print the core API's OpenAPI document (the contract `anfra serve` serves)",
 		Long: "Print the core API's OpenAPI document, in YAML: the contract `anfra serve` serves at\n" +
 			"/api/openapi.json, here without a repo or a running server — to generate a client, or to\n" +
-			"give an agent the API.\n\n" +
-			"With --remote, the publish protocol's instead: what an anfra remote server serves for\n" +
-			"`anfra publish` (shared/remoteapi).",
+			"give an agent the API.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			var spec []byte
-			var err error
-			if remote {
-				spec, err = remoteapi.Spec()
-			} else {
-				none := func(*http.Request) command.CommandContext { return command.CommandContext{} }
-				spec, err = coreAPI(none).Spec(app.NewRuntime(), app.NewRegistry())
-			}
+			none := func(*http.Request) command.CommandContext { return command.CommandContext{} }
+			spec, err := coreAPI(none).Spec(app.NewRuntime(), app.NewRegistry())
 			if err != nil {
 				return err
 			}
@@ -488,8 +478,6 @@ func newOpenAPICmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&remote, "remote", false, "print the publish protocol's document: what an anfra remote server serves")
-	return cmd
 }
 
 // --- the client: a CLI call routed to the repo's running server ---

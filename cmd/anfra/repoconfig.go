@@ -12,8 +12,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/shared/remoteapi"
 )
 
 // configFile is the repo's settings, in its config folder: committed, written by
@@ -23,11 +23,11 @@ const configFile = "config.yml"
 
 // repoConfig is what anfra reads from configFile.
 type repoConfig struct {
-	Remote struct {
-		// URL is where `anfra publish` publishes the repo: an org's address on an
-		// anfra remote server. Never a credential.
+	Org struct {
+		// URL is the org `anfra publish` publishes the repo to, by its address on
+		// its server. Never a credential.
 		URL string `yaml:"url"`
-	} `yaml:"remote"`
+	} `yaml:"org"`
 }
 
 func configPath(dir string) string { return filepath.Join(dir, repo.ConfigDirName, configFile) }
@@ -47,21 +47,21 @@ func readConfig(dir string) (repoConfig, error) {
 	return c, nil
 }
 
-// readRemote is where the repo publishes; ok is false when that is not set.
-func readRemote(dir string) (r remoteapi.Remote, ok bool, err error) {
+// readOrg is the org the repo publishes to; ok is false when that is not set.
+func readOrg(dir string) (org cloudapi.Org, ok bool, err error) {
 	c, err := readConfig(dir)
-	if err != nil || c.Remote.URL == "" {
-		return r, false, err
+	if err != nil || c.Org.URL == "" {
+		return org, false, err
 	}
-	if r, err = remoteapi.ParseRemote(c.Remote.URL); err != nil {
-		return r, false, fmt.Errorf("%s: remote.url: %w", configPath(dir), err)
+	if org, err = cloudapi.ParseOrg(c.Org.URL); err != nil {
+		return org, false, fmt.Errorf("%s: org.url: %w", configPath(dir), err)
 	}
-	return r, true, nil
+	return org, true, nil
 }
 
-// setRemote records r as where the repo publishes.
-func setRemote(dir string, r remoteapi.Remote) error {
-	return setConfigString(configPath(dir), "remote", "url", r.String())
+// setOrg records org as the one the repo publishes to.
+func setOrg(dir string, org cloudapi.Org) error {
+	return setConfigString(configPath(dir), "org", "url", org.String())
 }
 
 // setConfigString sets section.key to value in the YAML file at path, as git

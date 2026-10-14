@@ -44,11 +44,27 @@ Run `generate` after changing anything a command publishes: a command added, rem
 
 The document's version is the contract's, not the binary's: it does not change with every release.
 
-## The publish protocol: `api/remote.yaml`
+### Public and internal ops
 
-A second, smaller contract: what an anfra remote server serves for `anfra publish` (`repos.status`, `repos.list_missing_blobs`, `repos.create_blobs`, `repos.publish`). It is not the core API, and `anfra serve` does not serve it: anfra core defines it (`shared/remoteapi`: types, codes, a client) and the CLI calls it; a server such as anfra-cloud implements it with the same types. `scripts/openapi.sh generate` writes it beside the core API's (`anfra openapi --remote`).
+*Decided 2026-10-14, not built; anfra-cloud's `framework/api_framework.md` has the design.*
 
-Its clients are ones the server does not ship with (the CLI, scripts, agents), which it cannot reload, so it changes additively (new ops, optional inputs, outputs, codes), and a client ignores what it does not know. A breaking change is avoided; when one is unavoidable it is declared, as for the core API, and CI refuses one that is not. Before anfra is stable, the CLI and the server are meant to run matching releases; a compatibility number, which the server checks to refuse a client it cannot serve, comes with stability.
+Every op a host serves is reachable from the internet, so every op meets the same bar:
+authenticated where the host authenticates, authorized, validated, failing with formal codes. What
+a host's documentation says is how formal and stable an op is: `apikit` will let a host mark an op,
+or one field of its schema, internal (`x-anfra-internal: true`), which leaves it out of the
+published spec, for ops serving the host's own frontend alone. Clients a host does not ship with
+use public ops only.
+
+**anfra core marks nothing internal.** Every core op is a command, so also a CLI command, an MCP
+tool and part of the core API that Data Apps and the SDK are written against: public by
+construction. The flag is for a host's own ops (anfra-cloud's web app's); when it lands, a test
+here holds every core op public.
+
+## Publishing: anfra-cloud's contract, vendored
+
+`anfra publish` calls the server of the org a repo publishes to, an anfra-cloud: `repos.status`, `repos.list_missing_blobs`, `repos.create_blobs`, `repos.publish`, and `data_sources.list`, `.test`, `.create` for the data sources the repo uses. Those ops are not the core API, and `anfra serve` does not serve them: they are anfra-cloud's, and its `api/openapi.yaml` is their contract. anfra core vendors that file (`internal/cloudapi/openapi.yaml`, copied with `scripts/cloudapi.sh sync`; by hand for now, a proper sync process later) and writes its own types for the ops the CLI calls (`internal/cloudapi`: types, codes, a client). A test holds those types to the vendored contract: every member sent is one the server takes, every member it requires is sent, and every member read is one it answers, each of the same type.
+
+The CLI calls public ops only, which anfra-cloud changes additively, so an older CLI keeps working; it ignores what it does not know. What a repo is (which files a publish carries, how content is named) stays core's: `shared/repoformat`, which anfra-cloud imports.
 
 ## Clients from the contract
 
