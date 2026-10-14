@@ -1,4 +1,7 @@
-package main
+// Package repoconfig is a repo's settings file, .anfra/config.yml: committed,
+// written by hand, and by anfra only through SetString, which changes nothing
+// but the value it sets.
+package repoconfig
 
 import (
 	"bytes"
@@ -7,22 +10,18 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repo"
 )
 
-// configFile is the repo's settings, in its config folder: committed, written by
-// hand, and by commands only through setConfigString, which changes nothing but
-// the value it sets.
-const configFile = "config.yml"
+// FileName is the settings file, in the repo's config folder.
+const FileName = "config.yml"
 
-// repoConfig is what anfra reads from configFile.
-type repoConfig struct {
+// Config is what anfra reads from the settings file.
+type Config struct {
 	Org struct {
 		// URL is the org `anfra publish` publishes the repo to, by its address on
 		// its server. Never a credential.
@@ -30,11 +29,13 @@ type repoConfig struct {
 	} `yaml:"org"`
 }
 
-func configPath(dir string) string { return filepath.Join(dir, repo.ConfigDirName, configFile) }
+// Path is the settings file of the repo at dir.
+func Path(dir string) string { return filepath.Join(dir, repo.ConfigDirName, FileName) }
 
-func readConfig(dir string) (repoConfig, error) {
-	var c repoConfig
-	raw, err := os.ReadFile(configPath(dir))
+// Read is the settings of the repo at dir: none set when it has no file.
+func Read(dir string) (Config, error) {
+	var c Config
+	raw, err := os.ReadFile(Path(dir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return c, nil
 	}
@@ -42,29 +43,12 @@ func readConfig(dir string) (repoConfig, error) {
 		return c, err
 	}
 	if err := yaml.Unmarshal(raw, &c); err != nil {
-		return c, fmt.Errorf("read %s: %w", configPath(dir), err)
+		return c, fmt.Errorf("read %s: %w", Path(dir), err)
 	}
 	return c, nil
 }
 
-// readOrg is the org the repo publishes to; ok is false when that is not set.
-func readOrg(dir string) (org cloudapi.Org, ok bool, err error) {
-	c, err := readConfig(dir)
-	if err != nil || c.Org.URL == "" {
-		return org, false, err
-	}
-	if org, err = cloudapi.ParseOrg(c.Org.URL); err != nil {
-		return org, false, fmt.Errorf("%s: org.url: %w", configPath(dir), err)
-	}
-	return org, true, nil
-}
-
-// setOrg records org as the one the repo publishes to.
-func setOrg(dir string, org cloudapi.Org) error {
-	return setConfigString(configPath(dir), "org", "url", org.String())
-}
-
-// setConfigString sets section.key to value in the YAML file at path, as git
+// SetString sets section.key to value in the YAML file at path, as git
 // config sets a key: the file is parsed only to find where things are, and the
 // new file is the old one's bytes with the value's bytes replaced, so comments,
 // order and formatting are untouched; written to a lock file and renamed over the
@@ -79,23 +63,23 @@ func setOrg(dir string, org cloudapi.Org) error {
 //
 // value must be a plain scalar that reads back as itself; the result is parsed
 // again and checked before it replaces the file.
-func setConfigString(path, section, key, value string) error {
+func SetString(path, section, key, value string) error {
 	original, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	edited, err := editConfigString(original, section, key, value)
+	edited, err := editString(original, section, key, value)
 	if err != nil {
 		return fmt.Errorf("%s: %w; write it by hand:\n\n%s:\n  %s: %s", path, err, section, key, value)
 	}
-	if err := checkConfigString(edited, section, key, value); err != nil {
+	if err := checkString(edited, section, key, value); err != nil {
 		return fmt.Errorf("%s: %w (this is a bug in anfra; the file is unchanged)", path, err)
 	}
 	return replaceFile(path, edited)
 }
 
-// editConfigString is setConfigString's edit, on the file's bytes.
-func editConfigString(original []byte, section, key, value string) ([]byte, error) {
+// editString is SetString's edit, on the file's bytes.
+func editString(original []byte, section, key, value string) ([]byte, error) {
 	block := section + ":\n  " + key + ": " + value + "\n"
 	if len(bytes.TrimSpace(original)) == 0 {
 		return []byte("# This repo's anfra settings: committed, and free of credentials.\n" + block), nil
@@ -203,8 +187,8 @@ func scalarSpan(src []byte, n *yaml.Node) (start, end int, err error) {
 	return 0, 0, errors.New("its value does not end on its line")
 }
 
-// checkConfigString parses edited and checks section.key reads back as value.
-func checkConfigString(edited []byte, section, key, value string) error {
+// checkString parses edited and checks section.key reads back as value.
+func checkString(edited []byte, section, key, value string) error {
 	var m map[string]any
 	if err := yaml.Unmarshal(edited, &m); err != nil {
 		return fmt.Errorf("the edit is not valid YAML: %w", err)
@@ -250,7 +234,8 @@ func replaceFile(path string, content []byte) error {
 	return nil
 }
 
-// configHint is how a message names a config setting, for a person to find it.
-func configHint(section, key string) string {
-	return strings.Join([]string{repo.ConfigDirName + "/" + configFile, section + "." + key}, " ")
+// Hint is how a message names a setting, for a person to find it:
+// ".anfra/config.yml org.url".
+func Hint(section, key string) string {
+	return repo.ConfigDirName + "/" + FileName + " " + section + "." + key
 }
