@@ -152,6 +152,46 @@ export function serveBridge (
   const reply = (message: HostMessage) => frame.contentWindow?.postMessage(message, '*');
   const sendWatch = () => reply({ type: 'anfra:inspect-watch', open: inspecting });
 
+  /** Save a rendering the frame made: one at a time, and only so many in a window. */
+  const save = async (request: SaveFileRequest): Promise<null> => {
+    const now = Date.now();
+    while (saves.length && now - saves[0] >= SAVE_WINDOW_MS) saves.shift();
+    if (saving || saves.length >= SAVES_PER_WINDOW) {
+      throw new ValidationError('Too many files saved at once: try again in a few seconds.');
+    }
+    saving = true;
+    saves.push(now);
+    try {
+      await saveBlob(frame.ownerDocument, request);
+    } finally {
+      saving = false;
+    }
+    return null;
+  };
+
+  /** Answer one of the frame's asks: a Backend method, or one of the two a rendering needs. */
+  const answer = async (message: Extract<FrameMessage, { type: 'anfra:request' }>, signal: AbortSignal): Promise<unknown> => {
+    switch (message.method) {
+      case 'submitQuery':
+        return backend.submitQuery(message.request, signal);
+      case 'fieldSuggestions':
+        return backend.fieldSuggestions(message.request, signal);
+      case 'exportQuery':
+        return exportAndSave(backend, frame.ownerDocument, message.request, signal);
+      case 'lineage':
+        if (!backend.lineage) throw new TransportError('This host cannot trace lineage.');
+        return backend.lineage(message.request, signal);
+      case 'renderer':
+        if (!rendering) throw new ValidationError(RENDERING_OFF);
+        return options.renderer;
+      case 'saveFile':
+        if (!rendering) throw new ValidationError(RENDERING_OFF);
+        return save(message.request);
+      default:
+        throw new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`);
+    }
+  };
+
   const onMessage = (event: MessageEvent) => {
     if (event.source !== frame.contentWindow) return;
     const message = event.data as FrameMessage | undefined;
@@ -183,35 +223,7 @@ export function serveBridge (
         const { id } = message;
         const controller = new AbortController();
         inFlight.set(id, controller);
-        const result = message.method === 'submitQuery'
-          ? backend.submitQuery(message.request, controller.signal)
-          : message.method === 'fieldSuggestions'
-            ? backend.fieldSuggestions(message.request, controller.signal)
-            : message.method === 'exportQuery'
-              ? exportAndSave(backend, frame.ownerDocument, message.request, controller.signal)
-              : message.method === 'renderer' || message.method === 'saveFile'
-                ? (async () => {
-                  if (!rendering) throw new ValidationError(RENDERING_OFF);
-                  if (message.method === 'renderer') return options.renderer;
-                  const now = Date.now();
-                  while (saves.length && now - saves[0] >= SAVE_WINDOW_MS) saves.shift();
-                  if (saving || saves.length >= SAVES_PER_WINDOW) {
-                    throw new ValidationError('Too many files saved at once: try again in a few seconds.');
-                  }
-                  saving = true;
-                  saves.push(now);
-                  try {
-                    await saveBlob(frame.ownerDocument, message.request);
-                  } finally {
-                    saving = false;
-                  }
-                  return null;
-                })()
-                : message.method === 'lineage'
-                  ? (backend.lineage?.(message.request, controller.signal)
-                    ?? Promise.reject(new TransportError('This host cannot trace lineage.')))
-                  : Promise.reject(new Error(`No such Backend method: ${String((message as { method: unknown }).method)}`));
-        result
+        answer(message, controller.signal)
           .then((value) => reply({ type: 'anfra:response', id, ok: true, result: value }))
           .catch((err: unknown) => {
             // A cancelled call already rejected in the frame; there is no one left to answer.

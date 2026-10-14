@@ -47,3 +47,29 @@ func TestDiagramRoundTrips(t *testing.T) {
 		t.Errorf("round trip changed the diagram:\n got %s\nwant %s", gotJSON, wantJSON)
 	}
 }
+
+// A link keeps the form it came in: an object stays an object even with no
+// properties, and what is neither an id nor an object is refused.
+func TestDiagramLinkKeepsItsForm(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`"x"`, `"x"`},
+		{`{"id":"x","props":{}}`, `{"id":"x","props":{}}`},
+		{`{"id":"x"}`, `{"id":"x","props":{}}`},
+		{`{"id":"x","props":{"via":"join"}}`, `{"id":"x","props":{"via":"join"}}`},
+	} {
+		var l DiagramLink
+		if err := jsonkit.Unmarshal([]byte(tc.in), &l); err != nil {
+			t.Errorf("%s: %v", tc.in, err)
+			continue
+		}
+		if b, err := jsonkit.Marshal(l); err != nil || string(b) != tc.want {
+			t.Errorf("%s: wrote %s, %v; want %s", tc.in, b, err, tc.want)
+		}
+	}
+	for _, in := range []string{`null`, `1`, `["x"]`} {
+		var l DiagramLink
+		if err := jsonkit.Unmarshal([]byte(in), &l); err == nil {
+			t.Errorf("%s: read as %+v, want an error", in, l)
+		}
+	}
+}

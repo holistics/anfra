@@ -136,9 +136,9 @@ export function bootstrap (win: Window): void {
     user: provision.user,
     backend,
     render,
-    // A host older than `features` provisions none: say it can neither export nor render, rather
-    // than let the bridge's Backend, which has every method, claim an export.
-    features: { export: false, render: false, ...provision.features },
+    // A host older than `features` provisions none: say it can neither export, render nor trace,
+    // rather than let the bridge's Backend, which has every method, claim them.
+    features: { export: false, render: false, lineage: false, ...provision.features },
   });
 
   // Inspection: while the host's inspect panel is open, post a snapshot of every app, and of the

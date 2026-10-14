@@ -72,7 +72,7 @@ function toColumns (columns: Column[]): ColumnMeta[] {
 }
 
 /** A call's answer, or the SDK error its failure is. */
-async function callNodeAPI<T> (call: () => Promise<{ data?: T, error?: unknown, response: Response }>): Promise<T> {
+async function callCoreAPI<T> (call: () => Promise<{ data?: T, error?: unknown, response: Response }>): Promise<T> {
   let result;
   try {
     result = await call();
@@ -86,7 +86,7 @@ async function callNodeAPI<T> (call: () => Promise<{ data?: T, error?: unknown, 
 }
 
 function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal) {
-  return callNodeAPI(() => client.POST('/core.query', { body, signal }));
+  return callCoreAPI(() => client.POST('/core.query', { body, signal }));
 }
 
 /**
@@ -147,7 +147,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
 
     /** An export as `core.query.export`: the server runs the query to completion, then answers its link. */
     async exportQuery (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult> {
-      const link = await callNodeAPI(() => client.POST('/core.query.export', { body: toExportInput(request), signal }));
+      const link = await callCoreAPI(() => client.POST('/core.query.export', { body: toExportInput(request), signal }));
       return {
         url: link.url,
         filename: link.filename,
@@ -159,7 +159,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
 
     /** Lineage as `core.lineage`, whose answer is the SDK's as it is. */
     lineage (request: BackendLineageRequest, signal: AbortSignal): Promise<LineageResult> {
-      return callNodeAPI(() => client.POST('/core.lineage', { body: request, signal }));
+      return callCoreAPI(() => client.POST('/core.lineage', { body: request, signal }));
     },
   };
 }

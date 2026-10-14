@@ -116,7 +116,7 @@ const mounted = mountDataApp({
 ```
 
 `mountDataApp` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`,
-with the frame bootstrap and the provisioned data ahead of it. The bootstrap's Backend forwards each call to the host over postMessage; the host answers it with the Backend it was given. An export's file is saved from the host's page, by following its link: the frame can't download. A Backend without `exportQuery` makes a host that can't export, and its frames see `Anfra.features.export` false.
+with the frame bootstrap and the provisioned data ahead of it. The bootstrap's Backend forwards each call to the host over postMessage; the host answers it with the Backend it was given. An export's file is saved from the host's page, by following its link: the frame can't download. A Backend without `exportQuery` makes a host that can't export, and its frames see `Anfra.features.export` false; likewise a Backend without `lineage`, and `Anfra.features.lineage`.
 
 ## The boundary
 

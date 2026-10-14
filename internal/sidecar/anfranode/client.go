@@ -416,7 +416,8 @@ type CatalogIngestRequest struct {
 
 // CatalogContext is the repo a catalog call is about, as anfra-node needs it:
 // where the repo and its context sources are, and the canal-query to reach them
-// through. The same values catalog.ingest takes.
+// through. The same values catalog.ingest takes, so catalog.search and
+// catalog.lineage can ingest on their own and need no catalog.ingest first.
 type CatalogContext struct {
 	RepoPath          string `json:"repoPath"`
 	SourcesPath       string `json:"sourcesPath"`
