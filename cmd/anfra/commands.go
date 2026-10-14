@@ -185,7 +185,8 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 			return
 		}
 		raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
-		if argType(args, key) == command.ArgObjectArray {
+		t := argType(args, key)
+		if t == command.ArgObjectArray {
 			var objs []map[string]any
 			if jsonkit.Unmarshal(raw, &objs) != nil || objs == nil || slices.ContainsFunc(objs, func(o map[string]any) bool { return o == nil }) {
 				err = fmt.Errorf("--%s takes a JSON array of objects, such as '[{\"name\": \"a\"}]'", f.Name)
@@ -194,8 +195,8 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 			values[key] = raw
 			return
 		}
-		if argType(args, key) != command.ArgObject {
-			values[key] = flagValue(f, argType(args, key))
+		if t != command.ArgObject {
+			values[key] = flagValue(f, t)
 			return
 		}
 		var obj map[string]any

@@ -150,7 +150,7 @@ components:
           type: integer
         version:
           enum:
-            - 1
+            - 2
           format: int64
           type: integer
       required:
@@ -177,25 +177,10 @@ components:
           format: int64
           type: integer
         links:
-          additionalProperties:
-            items:
-              description: the linked entity's id; or, when the edge has properties, the id with them
-              oneOf:
-                - type: string
-                - additionalProperties: false
-                  properties:
-                    id:
-                      type: string
-                    props:
-                      additionalProperties: true
-                      type: object
-                  required:
-                    - id
-                    - props
-                  type: object
-            type: array
-          description: edge type → the entities it links to; a link is on its edge's from entity
-          type: object
+          description: the node's links; a link is on its edge's from entity
+          items:
+            $ref: "#/components/schemas/DiagramLink"
+          type: array
         props:
           additionalProperties: {}
           description: the entity's properties
@@ -241,6 +226,23 @@ components:
         - types
         - card_ids
       type: object
+    DiagramLink:
+      additionalProperties: false
+      properties:
+        props:
+          additionalProperties: {}
+          description: the edge's properties, when it has some
+          type: object
+        to:
+          description: the linked entity's id
+          type: string
+        type:
+          description: the edge type, such as refers or includes
+          type: string
+      required:
+        - type
+        - to
+      type: object
     DiagramNode:
       additionalProperties: false
       properties:
@@ -250,25 +252,10 @@ components:
         label:
           type: string
         links:
-          additionalProperties:
-            items:
-              description: the linked entity's id; or, when the edge has properties, the id with them
-              oneOf:
-                - type: string
-                - additionalProperties: false
-                  properties:
-                    id:
-                      type: string
-                    props:
-                      additionalProperties: true
-                      type: object
-                  required:
-                    - id
-                    - props
-                  type: object
-            type: array
-          description: edge type → the entities it links to; a link is on its edge's from entity
-          type: object
+          description: the node's links; a link is on its edge's from entity
+          items:
+            $ref: "#/components/schemas/DiagramLink"
+          type: array
         props:
           additionalProperties: {}
           description: the entity's properties
@@ -303,13 +290,29 @@ components:
           type: object
         types:
           additionalProperties:
-            additionalProperties: {}
-            type: object
-          description: "entity type → edge type → the entity types it links to; top_level: true for a type no section holds"
+            $ref: "#/components/schemas/DiagramSchemaType"
+          description: entity type → how it connects
           type: object
       required:
         - edges
         - types
+      type: object
+    DiagramSchemaType:
+      additionalProperties: false
+      properties:
+        edges:
+          additionalProperties:
+            items:
+              type: string
+            type: array
+          description: edge type → the entity types it links to
+          type: object
+        top_level:
+          description: no entity of the type is a child in a section
+          type: boolean
+      required:
+        - top_level
+        - edges
       type: object
     DiagramSection:
       additionalProperties: false

@@ -62,7 +62,7 @@ func lineageContext(node *anfranode.Client) command.CommandContext {
 // back as it was asked, in the order asked, a field that failed among them.
 func TestLineageTracesEachField(t *testing.T) {
 	node, got := fakeLineageNode(t, `{"results":[`+
-		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","diagram":{"version":1,"query":"needed_by:(fqn:ecommerce.revenue)","total":0,"matched":[],"schema":{"edges":{},"types":{}},"layers":[],"cards":[]}},`+
+		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","diagram":{"version":2,"query":"needed_by:(fqn:ecommerce.revenue)","total":0,"matched":[],"schema":{"edges":{},"types":{}},"layers":[],"cards":[]}},`+
 		`{"target":{"parent":"orders","child":"amount"},"query":"needed_by:(fqn:orders.amount)","error":"boom"}]}`)
 	cc := lineageContext(node)
 
