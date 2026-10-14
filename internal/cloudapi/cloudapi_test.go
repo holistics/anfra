@@ -17,7 +17,8 @@ func TestParseOrg(t *testing.T) {
 	for raw, want := range map[string]cloudapi.Org{
 		"https://bi.example.com/o/acme":      {Origin: "https://bi.example.com", Slug: "acme"},
 		"https://bi.example.com:8443/o/a-1/": {Origin: "https://bi.example.com:8443", Slug: "a-1"},
-		"http://localhost:8080/o/acme":       {Origin: "http://localhost:8080", Slug: "acme"},
+		"https://BI.Example.com:443/o/acme":  {Origin: "https://bi.example.com", Slug: "acme"},
+		"http://[::1]:80/o/acme":             {Origin: "http://[::1]", Slug: "acme"},
 		"http://127.0.0.1:8080/o/acme":       {Origin: "http://127.0.0.1:8080", Slug: "acme"},
 	} {
 		got, err := cloudapi.ParseOrg(raw)
@@ -26,6 +27,19 @@ func TestParseOrg(t *testing.T) {
 		}
 	}
 	for _, raw := range []string{
+		"http://localhost:8080/o/acme",
+		"https://::1/o/acme",
+		"https://[fe80::1%25eth0]/o/acme",
+		"https://bad_host/o/acme",
+		"http://127.0.0.2/o/acme",
+		"https://bi.example.com/o/a-",
+		"https://bi.example.com/o/" + strings.Repeat("a", 64),
+		"https://bi.example.com/o/acme%2fx",
+		"https://bi.example.com/o/%61cme",
+		"https://bi.example.com:/o/acme",
+		"https://bi.example.com:65536/o/acme",
+		"https://bi.example.com/o/acme?",
+		"https://bi.example.com/o/acme#",
 		"bi.example.com/o/acme",               // no scheme
 		"ftp://bi.example.com/o/acme",         // not http(s)
 		"https://bi.example.com",              // no org
