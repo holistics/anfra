@@ -12,10 +12,10 @@
 </p>
 
 <p align="center">
-  <a href="https://demo.anfra.ai/apps/business-apps/funnel-analysis"><img src="docs/images/gallery/funnel-analysis.webp" alt="Funnel analysis app built with anfra" width="720"></a>
+  <a href="https://demo.anfra.ai/apps/dashboards/funnel-analysis"><img src="docs/images/gallery/funnel-analysis.webp" alt="Funnel analysis app built with anfra" width="720"></a>
 </p>
 <p align="center">
-  <em>A funnel analysis app built by a coding agent with anfra. <a href="https://demo.anfra.ai/apps/business-apps/funnel-analysis">Try it live →</a></em>
+  <em>A funnel analysis app built by a coding agent with anfra. <a href="https://demo.anfra.ai/apps/dashboards/funnel-analysis">Try it live →</a></em>
 </p>
 
 ## What is anfra?
