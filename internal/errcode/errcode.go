@@ -45,6 +45,4 @@ var (
 	// DataPermsMissing is: a platform serving managed repos never builds a local
 	// one, and one that serves a directory says so.
 	LocalRepoNotAllowed = apperr.DefinePublicCode(NS, "local_repo_not_allowed", apperr.Client, "This host does not allow local repos.")
-	// CatalogUnavailable: ingest or search on a managed repo, not supported yet.
-	CatalogUnavailable = apperr.DefinePublicCode(NS, "catalog_unavailable", apperr.Server, "Not supported for managed repos yet.")
 )

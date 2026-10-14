@@ -404,30 +404,40 @@ func (c *Client) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (Vali
 	return res, err
 }
 
-// CatalogIngestRequest mirrors anfra-node's catalog.ingest params. The Go host
-// starts sidecars and passes runtime paths/URLs; anfra-node owns source parsing
-// and ingestion internals.
+// CatalogIngestRequest mirrors anfra-node's catalog.ingest params: the
+// catalog's context, and optionally the one context source to ingest.
+// anfra-node owns source parsing and ingestion internals.
 type CatalogIngestRequest struct {
-	RepoPath          string `json:"repoPath"`
-	SourcesPath       string `json:"sourcesPath"`
-	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
-	Source            string `json:"source,omitempty"`
+	Context CatalogContext `json:"context"`
+	Source  string         `json:"source,omitempty"`
 }
 
 // CatalogContext is the repo a catalog call is about, as anfra-node needs it:
-// where the repo and its context sources are, and the canal-query to reach them
-// through. The same values catalog.ingest takes, so catalog.search and
-// catalog.lineage can ingest on their own and need no catalog.ingest first.
+// the repo, named as every repo-scoped call names it (a directory, or a revision
+// a host keeps), and the canal-query to reach its context sources through.
+// anfra-node reads the context sources from the repo itself
+// (.anfra/context_sources.yml), as it reads its AML, so a managed repo, which has
+// no directory, needs no path either. catalog.ingest, catalog.search and
+// catalog.lineage all take it, so search and lineage can ingest on their own and
+// need no catalog.ingest first.
 type CatalogContext struct {
-	RepoPath          string `json:"repoPath"`
-	SourcesPath       string `json:"sourcesPath"`
+	RepoRef
 	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
+}
+
+// CatalogContextOf is r's catalog context, its context sources reached through
+// the canal-query at canalQueryBaseURL.
+func CatalogContextOf(r repo.Repo, canalQueryBaseURL string) CatalogContext {
+	return CatalogContext{RepoRef: RefTo(r), CanalQueryBaseURL: canalQueryBaseURL}
 }
 
 // IngestCatalog builds the local search catalog through anfra-node. The
 // anfra-node method is a void RPC: success means the catalog was written, while
 // failures are returned through the JSON-RPC error channel.
 func (c *Client) IngestCatalog(ctx context.Context, req CatalogIngestRequest) error {
+	if err := req.Context.check(); err != nil {
+		return err
+	}
 	return c.Call(ctx, "catalog.ingest", req, nil)
 }
 
@@ -444,6 +454,9 @@ type CatalogSearchResult map[string]any
 // SearchCatalog searches the active local catalog through anfra-node.
 func (c *Client) SearchCatalog(ctx context.Context, req CatalogSearchRequest) (CatalogSearchResult, error) {
 	var res CatalogSearchResult
+	if err := req.Context.check(); err != nil {
+		return res, err
+	}
 	err := c.Call(ctx, "catalog.search", req, &res)
 	return res, err
 }

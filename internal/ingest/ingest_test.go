@@ -41,9 +41,10 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 	repoDir := t.TempDir()
 	r := repo.Local{
 		Dir:       repoDir,
+		ID:        "repo-123",
 		DataDir:   filepath.Join(t.TempDir(), "repos", "repo-123"),
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
-	}
+	}.Repo()
 	res, err := Run(context.Background(),
 		anfranode.NewClientHTTP(node.URL),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
@@ -57,14 +58,12 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 	if captured.Source != "warehouse" {
 		t.Fatalf("source = %q, want warehouse", captured.Source)
 	}
-	if captured.RepoPath != r.Dir {
-		t.Fatalf("repoPath = %q, want %q", captured.RepoPath, r.Dir)
+	want := anfranode.CatalogContext{
+		RepoRef:           anfranode.RepoRef{RepoID: "repo-123", RepoPath: repoDir},
+		CanalQueryBaseURL: "http://127.0.0.1:9000",
 	}
-	if captured.SourcesPath != filepath.Join(r.ConfigDir, "context_sources.yml") {
-		t.Fatalf("sourcesPath = %q", captured.SourcesPath)
-	}
-	if captured.CanalQueryBaseURL != "http://127.0.0.1:9000" {
-		t.Fatalf("canalQueryBaseUrl = %q", captured.CanalQueryBaseURL)
+	if captured.Context != want {
+		t.Fatalf("context = %+v, want %+v", captured.Context, want)
 	}
 	if res != "ingest complete" {
 		t.Fatalf("result = %q, want ingest complete", res)
@@ -75,7 +74,7 @@ func TestRunRequiresCanalQueryClient(t *testing.T) {
 	_, err := Run(context.Background(),
 		anfranode.NewClientHTTP("http://127.0.0.1:9001"),
 		nil,
-		repo.Local{},
+		repo.Repo{},
 		"",
 	)
 	if err == nil || !strings.Contains(err.Error(), "canal-query sidecar") {

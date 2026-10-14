@@ -182,9 +182,6 @@ var (
 	// LocalRepoNotAllowed: an Invocation on a local repo (OpenRepo) without
 	// AllowLocalRepo. A host mistake, never declared by an op.
 	LocalRepoNotAllowed = errcode.LocalRepoNotAllowed
-	// CatalogUnavailable: ingest or search on a managed repo (see ManagedRepo),
-	// not supported yet.
-	CatalogUnavailable = errcode.CatalogUnavailable
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.
@@ -219,8 +216,7 @@ func OpenRepo(dir string) Repo { return repo.Resolve(dir).Repo() }
 // which must not change from one revision to the next; revision is
 // "<repo>@<sha>", the commit's full sha. anfra-node must be configured to read
 // revisions (its git service). It has no directory, so no data_sources.yml: the
-// host supplies its data sources on the Invocation. Ingest and search are not
-// supported for managed repos yet (CatalogUnavailable).
+// host supplies its data sources on the Invocation.
 func ManagedRepo(id, revision string) (Repo, error) { return repo.Managed(id, revision) }
 
 // The command metadata Describe returns: aliases, not wrappers, like the types

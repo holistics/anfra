@@ -67,7 +67,7 @@ inv := engine.Invocation{
   - `Connection(name)`: one data source, connection included, only to run a query, for the data source it targets. The one place to retrieve a connection and authorize its use; answer `engine.ErrUnknownDataSource` for a name you have no data source by.
   - `validate` asks for neither. Without them, the commands that compile refuse.
   - A platform that already holds them all can pass an `engine.DataSourceSet`.
-- `ingest` and `search` are not supported for managed repos yet: they answer `catalog_unavailable`.
+- `ingest`, `search` and `lineage` work on a managed repo as on a directory: anfra-node reads its context sources (`.anfra/context_sources.yml`) at the revision.
 - `res.Status` is `engine.StatusOK`, or `engine.StatusInvalid` for a command that ran and judged its input invalid (validation diagnostics). That is an outcome, not an error. `res.Data` is the answer.
 - `engine.Commands()` and `engine.Describe()` list what you can dispatch, and how each is called.
 - `Exports` is where `query.export` puts its file: an `engine.ExportStore` you provide, which writes the file and answers a link to it that expires (object storage with presigned URLs, say). Without one, an export fails with `engine.ExportsUnavailable`. Its links must work for whoever called: where they reach you, not where you listen. See [designs/export-store.md](../designs/export-store.md).
