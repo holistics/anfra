@@ -27,4 +27,6 @@ allow-licenses:
 # Packages reviewed by hand whose license isn't on the list above (e.g. reported as
 # LicenseRef-clearlydefined-OTHER), as purls without versions: pkg:golang/<module>,
 # pkg:npm/<name>. Never add a strong copyleft package here.
-allow-dependencies-licenses: []
+allow-dependencies-licenses:
+  # Code is MIT; CC-BY-3.0 applies to the README's Go gopher artwork.
+  - pkg:golang/github.com/sahilm/fuzzy

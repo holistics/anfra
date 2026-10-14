@@ -935,6 +935,179 @@ components:
     NoInput:
       additionalProperties: false
       type: object
+    OAuthApprovalInput:
+      additionalProperties: false
+      properties:
+        org_id:
+          format: uuid
+          type: string
+        request_handle:
+          maxLength: 43
+          minLength: 43
+          type: string
+      required:
+        - request_handle
+        - org_id
+      type: object
+    OAuthConsent:
+      additionalProperties: false
+      properties:
+        client:
+          $ref: "#/components/schemas/OAuthConsentClientStruct"
+        expires_at:
+          format: date-time
+          type: string
+        org_hint:
+          type:
+            - string
+            - "null"
+        orgs:
+          items:
+            $ref: "#/components/schemas/OAuthConsentOrg"
+          type: array
+        resources:
+          items:
+            type: string
+          type: array
+        scopes:
+          items:
+            type: string
+          type: array
+      required:
+        - client
+        - scopes
+        - resources
+        - org_hint
+        - expires_at
+        - orgs
+      type: object
+    OAuthConsentClientStruct:
+      additionalProperties: false
+      properties:
+        builtin:
+          type: boolean
+        name:
+          type: string
+      required:
+        - name
+        - builtin
+      type: object
+    OAuthConsentInput:
+      additionalProperties: false
+      properties:
+        request_handle:
+          maxLength: 43
+          minLength: 43
+          type: string
+      required:
+        - request_handle
+      type: object
+    OAuthConsentOrg:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        slug:
+          type: string
+      required:
+        - id
+        - slug
+        - name
+        - role
+      type: object
+    OAuthDecisionOutput:
+      additionalProperties: false
+      properties:
+        redirect_url:
+          type: string
+      required:
+        - redirect_url
+      type: object
+    OAuthGrantSummary:
+      additionalProperties: false
+      properties:
+        client_id:
+          type: string
+        client_name:
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        org_name:
+          type: string
+        org_slug:
+          type: string
+        registration_kind:
+          type: string
+        resources:
+          items:
+            type: string
+          type: array
+        revoked_at:
+          format: date-time
+          type:
+            - string
+            - "null"
+        scopes:
+          items:
+            type: string
+          type: array
+        status:
+          enum:
+            - active
+            - revoked
+            - expired
+            - membership_invalidated
+            - unavailable
+          type: string
+        tenant_id:
+          type: string
+        usable:
+          type: boolean
+      required:
+        - id
+        - tenant_id
+        - org_slug
+        - org_name
+        - client_id
+        - client_name
+        - registration_kind
+        - scopes
+        - resources
+        - created_at
+        - expires_at
+        - revoked_at
+        - usable
+        - status
+      type: object
+    OAuthGrantsOutput:
+      additionalProperties: false
+      properties:
+        grants:
+          items:
+            $ref: "#/components/schemas/OAuthGrantSummary"
+          type: array
+      required:
+        - grants
+      type: object
+    OAuthRevokeGrantInput:
+      additionalProperties: false
+      properties:
+        grant_id:
+          format: uuid
+          type: string
+      required:
+        - grant_id
+      type: object
     OrgView:
       additionalProperties: false
       properties:
@@ -1703,6 +1876,15 @@ components:
       required:
         - violations
       type: object
+  securitySchemes:
+    oauthBearer:
+      description: Org-bound OAuth access token for the API resource; issued scope all is limited by the current membership role.
+      scheme: bearer
+      type: http
+    sessionCookie:
+      in: cookie
+      name: anfra_session
+      type: apiKey
 info:
   title: anfra
   version: "0"
@@ -1755,6 +1937,22 @@ paths:
                   - error
                 type: object
           description: unauthenticated, invalid_credentials
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -1803,6 +2001,8 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
   /accounts.register:
     post:
       description: "Only when self-registration is open; otherwise not_found. Creates no org: create one with orgs.create, or accept an invitation."
@@ -1837,6 +2037,33 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "404":
           content:
             application/json:
@@ -1907,6 +2134,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - {}
+        - sessionCookie: []
   /core.ingest:
     post:
       operationId: core.ingest
@@ -1951,6 +2181,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2029,6 +2264,9 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.query:
     post:
       description: "Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have."
@@ -2074,6 +2312,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2165,6 +2408,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.query.compile:
     post:
       description: "Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have."
@@ -2210,6 +2456,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2290,6 +2541,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.query.export:
     post:
       description: |-
@@ -2340,6 +2594,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2442,6 +2701,9 @@ paths:
       x-destructive: false
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.query.validate:
     post:
       description: "Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have."
@@ -2487,6 +2749,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2565,6 +2832,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.search:
     post:
       operationId: core.search
@@ -2610,6 +2880,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2688,6 +2963,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.show:
     post:
       description: |-
@@ -2740,6 +3018,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2818,6 +3101,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.validate:
     post:
       operationId: core.validate
@@ -2862,6 +3148,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -2940,6 +3231,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /core.version:
     post:
       operationId: core.version
@@ -2984,6 +3278,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3060,6 +3359,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /data_sources.create:
     post:
       description: The connection is kept sealed, and never returned. A name the org already has is refused.
@@ -3105,6 +3407,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3181,6 +3488,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /data_sources.delete:
     post:
       description: Queries on the models that use it fail until a data source by its name is added again.
@@ -3227,6 +3537,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3292,6 +3607,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /data_sources.list:
     post:
       description: "Connections are never returned, by this op or any other. For whoever may query data sources directly (admins, today): which warehouses an org connects to goes with being able to query them."
@@ -3338,6 +3656,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3403,6 +3726,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /data_sources.test:
     post:
       description: "Runs a trivial statement on the warehouse. A connection that fails is an answer, ok false with the warehouse's reason, not an error: the check ran. Test a connection before adding it, or before replacing one, as well as after. Admins only, as for adding one: the connection is the warehouse's credentials."
@@ -3448,6 +3774,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3524,6 +3855,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /data_sources.update:
     post:
       description: A connection given replaces the old one whole; what is not given is kept.
@@ -3570,6 +3904,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3646,6 +3985,9 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /invitations.accept:
     post:
       description: "Signed in, send only the token: the account joins the org. Signed out, also send an email and a password: a new account is created, joined and signed in. An address that already has an account is account_exists — sign in, then accept."
@@ -3680,6 +4022,33 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "404":
           content:
             application/json:
@@ -3761,6 +4130,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - {}
+        - sessionCookie: []
   /invitations.create:
     post:
       description: "Returns a single-use link, valid for seven days. Pass it to the invitee yourself: it is shown once, and only its hash is kept."
@@ -3806,6 +4178,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -3882,6 +4259,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /invitations.lookup:
     post:
       operationId: invitations.lookup
@@ -3915,6 +4295,33 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "404":
           content:
             application/json:
@@ -3974,6 +4381,594 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - {}
+        - sessionCookie: []
+  /oauth.approve:
+    post:
+      operationId: oauth.approve
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthApprovalInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthDecisionOutput"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Approve access to one selected organization.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /oauth.consent:
+    post:
+      operationId: oauth.consent
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthConsentInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthConsent"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Load and bind a browser authorization request to this session.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /oauth.deny:
+    post:
+      operationId: oauth.deny
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthConsentInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthDecisionOutput"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Deny this browser authorization request.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /oauth.grants:
+    post:
+      operationId: oauth.grants
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthGrantsOutput"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: List your connected-app grants across organizations.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+  /oauth.revoke_grant:
+    post:
+      operationId: oauth.revoke_grant
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthRevokeGrantInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Revoke one of your connected-app grants.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
   /orgs.create:
     post:
       description: Anyone signed in may create an org, and becomes its admin.
@@ -4019,6 +5014,22 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -4067,6 +5078,8 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
   /orgs.list:
     post:
       description: Call an org's ops below its address, /api/o/{slug}/, to act in it.
@@ -4113,6 +5126,22 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -4150,6 +5179,8 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
   /repos.create_blobs:
     post:
       description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless.
@@ -4195,6 +5226,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -4271,6 +5307,9 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /repos.list_missing_blobs:
     post:
       description: Compute each file's git blob id locally and name them all; upload only what is listed, with repos.create_blobs. A repeat publish of a small edit uploads one blob.
@@ -4316,6 +5355,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -4392,6 +5436,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /repos.publish:
     post:
       description: "List every file, as path and blob id: a file not listed is deleted. Upload the content first; blobs_missing names any that is not. Files that fail validation are refused with repo_invalid, carrying the engine's problems, and nothing is published. The last publish wins: the answer says what it replaced."
@@ -4437,6 +5484,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -4526,6 +5578,9 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /repos.status:
     post:
       description: Read before publishing, to show what a publish will replace, and to batch uploads within the limits.
@@ -4572,6 +5627,11 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
         "403":
           content:
             application/json:
@@ -4637,6 +5697,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
   /sessions.create:
     post:
       description: Starts a session; over HTTP it is set as a cookie. A wrong password and an unknown address are the same invalid_credentials, by design.
@@ -4677,11 +5740,29 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyInvalidCredentials"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                      - $ref: "#/components/schemas/ErrorBodyInvalidCredentials"
                 required:
                   - error
                 type: object
-          description: invalid_credentials
+          description: unauthenticated, invalid_credentials
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -4730,6 +5811,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - {}
+        - sessionCookie: []
   /sessions.delete:
     post:
       description: "Ends the current session and clears its cookie. Always succeeds: whether the session was still live is not something the caller needs to learn."
@@ -4765,6 +5849,33 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -4802,6 +5913,9 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+      security:
+        - {}
+        - sessionCookie: []
   /sessions.get:
     post:
       description: Answers unauthenticated when signed out. The account's orgs come from orgs.list.
@@ -4848,6 +5962,22 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -4885,6 +6015,8 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
   /setup.complete:
     post:
       description: "Needs the setup token from the server's log. The account becomes the installation's admin and the org's, and is signed in. Afterwards, setup is closed: not_found."
@@ -4919,6 +6051,33 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "404":
           content:
             application/json:
@@ -4989,6 +6148,9 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - {}
+        - sessionCookie: []
   /setup.status:
     post:
       operationId: setup.status
@@ -5023,6 +6185,33 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
         "412":
           content:
             application/json:
@@ -5060,6 +6249,9 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - {}
+        - sessionCookie: []
 servers:
   - url: /api
-x-anfra-compat: 5
+x-anfra-compat: 6

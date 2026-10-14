@@ -2,11 +2,13 @@ package cloudapi_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/shared/apperr"
@@ -17,7 +19,8 @@ func TestParseOrg(t *testing.T) {
 	for raw, want := range map[string]cloudapi.Org{
 		"https://bi.example.com/o/acme":      {Origin: "https://bi.example.com", Slug: "acme"},
 		"https://bi.example.com:8443/o/a-1/": {Origin: "https://bi.example.com:8443", Slug: "a-1"},
-		"http://localhost:8080/o/acme":       {Origin: "http://localhost:8080", Slug: "acme"},
+		"https://BI.Example.com:443/o/acme":  {Origin: "https://bi.example.com", Slug: "acme"},
+		"http://[::1]:80/o/acme":             {Origin: "http://[::1]", Slug: "acme"},
 		"http://127.0.0.1:8080/o/acme":       {Origin: "http://127.0.0.1:8080", Slug: "acme"},
 	} {
 		got, err := cloudapi.ParseOrg(raw)
@@ -26,6 +29,19 @@ func TestParseOrg(t *testing.T) {
 		}
 	}
 	for _, raw := range []string{
+		"http://localhost:8080/o/acme",
+		"https://::1/o/acme",
+		"https://[fe80::1%25eth0]/o/acme",
+		"https://bad_host/o/acme",
+		"http://127.0.0.2/o/acme",
+		"https://bi.example.com/o/a-",
+		"https://bi.example.com/o/" + strings.Repeat("a", 64),
+		"https://bi.example.com/o/acme%2fx",
+		"https://bi.example.com/o/%61cme",
+		"https://bi.example.com:/o/acme",
+		"https://bi.example.com:65536/o/acme",
+		"https://bi.example.com/o/acme?",
+		"https://bi.example.com/o/acme#",
 		"bi.example.com/o/acme",               // no scheme
 		"ftp://bi.example.com/o/acme",         // not http(s)
 		"https://bi.example.com",              // no org
@@ -76,7 +92,7 @@ func TestClient(t *testing.T) {
 	}
 	c := cloudapi.NewClient(r, cloudapi.ClientOptions{
 		UserAgent: "anfra/test",
-		Authorize: func(req *http.Request) { req.Header.Set("Authorization", "Bearer t") },
+		Authorize: func(req *http.Request) error { req.Header.Set("Authorization", "Bearer t"); return nil },
 	})
 	ctx := context.Background()
 
@@ -99,5 +115,69 @@ func TestClient(t *testing.T) {
 	_, err = c.Status(ctx)
 	if err == nil || !strings.Contains(err.Error(), "not an anfra error") {
 		t.Errorf("a non-anfra answer: %v", err)
+	}
+}
+
+func TestClientDoesNotForwardBearerOnRedirect(t *testing.T) {
+	var followed bool
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { followed = true }))
+	defer destination.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer local-token" || r.Header.Get("Cookie") != "" {
+			t.Error("wrong source credentials")
+		}
+		http.Redirect(w, r, destination.URL, http.StatusTemporaryRedirect)
+	}))
+	defer source.Close()
+	org, err := cloudapi.ParseOrg(source.URL + "/o/acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: func(r *http.Request) error { r.Header.Set("Authorization", "Bearer local-token"); return nil }})
+	if _, err := client.Status(context.Background()); err == nil {
+		t.Fatal("redirect accepted")
+	}
+	if followed {
+		t.Fatal("bearer request followed redirect")
+	}
+}
+
+func TestSlowPublishUsesCallerDeadline(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(31 * time.Second):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"revision":"repo@slow","changed":true}`))
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	org, err := cloudapi.ParseOrg(server.URL + "/o/acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	out, err := cloudapi.NewClient(org, cloudapi.ClientOptions{}).Publish(ctx, cloudapi.PublishIn{})
+	if err != nil || out.Revision != "repo@slow" {
+		t.Fatalf("slow publish: %v %v", out, err)
+	}
+}
+
+func TestClientStopsBeforeDispatchOnCredentialFailure(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+	defer server.Close()
+	org, err := cloudapi.ParseOrg(server.URL + "/o/acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := errors.New("credential refresh uncertain")
+	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: func(*http.Request) error { return expected }})
+	if _, err := client.Status(context.Background()); !errors.Is(err, expected) {
+		t.Fatalf("credential failure lost: %v", err)
+	}
+	if called {
+		t.Fatal("API request dispatched despite unavailable credentials")
 	}
 }
