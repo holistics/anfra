@@ -1,4 +1,4 @@
-package remoteapi
+package cloudapi
 
 import (
 	"bytes"
@@ -12,11 +12,11 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-// Client calls the publish ops of one org on an anfra remote server: one call
-// each, which the caller batches within the server's Limits.
+// Client calls the ops `anfra publish` uses on one org: one call each, which
+// the caller batches within the server's Limits.
 type Client struct {
-	remote Remote
-	opts   ClientOptions
+	org  Org
+	opts ClientOptions
 }
 
 // ClientOptions are what a Client sends with every call.
@@ -30,15 +30,15 @@ type ClientOptions struct {
 	UserAgent string
 }
 
-// NewClient is a client of r.
-func NewClient(r Remote, opts ClientOptions) *Client {
+// NewClient is a client of org.
+func NewClient(org Org, opts ClientOptions) *Client {
 	if opts.HTTP == nil {
 		opts.HTTP = http.DefaultClient
 	}
-	return &Client{remote: r, opts: opts}
+	return &Client{org: org, opts: opts}
 }
 
-// Error is an anfra remote server's answer to a call that failed: its error body, and the
+// Error is the server's answer to a call that failed: its error body, and the
 // HTTP status.
 type Error struct {
 	Status   int
@@ -47,25 +47,20 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Response.Code + ": " + e.Response.Message }
 
-// IsCode reports whether err is an anfra remote server's answer with code c.
-func IsCode(err error, c apperr.AnyCode) bool {
+// IsCode reports whether err is the server's answer with code.
+func IsCode(err error, code string) bool {
 	e, ok := errors.AsType[*Error](err)
-	return ok && e.Response.Code == c.Code().Public().String()
+	return ok && e.Response.Code == code
 }
 
-// IsForbidden reports a server refusing the caller the op: a server's own code,
-// forbidden, which every anfra server answers a caller lacking the permission
-// with.
-func IsForbidden(err error) bool {
-	e, ok := errors.AsType[*Error](err)
-	return ok && e.Response.Code == "forbidden"
-}
+// IsForbidden reports the server refusing the caller the op.
+func IsForbidden(err error) bool { return IsCode(err, CodeForbidden) }
 
 // Missing is the blob ids a blobs_missing answer names; ok is false for any
 // other error.
 func Missing(err error) (oids []string, ok bool) {
-	e, isRemote := errors.AsType[*Error](err)
-	if !isRemote || e.Response.Code != BlobsMissing.Code().String() {
+	e, isServers := errors.AsType[*Error](err)
+	if !isServers || e.Response.Code != CodeBlobsMissing {
 		return nil, false
 	}
 	raw, err := jsonkit.Marshal(e.Response.Details)
@@ -81,41 +76,41 @@ func Missing(err error) (oids []string, ok bool) {
 
 // Status is the org's published revision, and the server's limits.
 func (c *Client) Status(ctx context.Context) (StatusOut, error) {
-	return call[StatusOut](ctx, c, StatusOp.Name, struct{}{})
+	return call[StatusOut](ctx, c, OpStatus, struct{}{})
 }
 
 // ListMissingBlobs is those of oids the org's repo lacks, in the order given.
 func (c *Client) ListMissingBlobs(ctx context.Context, oids []string) ([]string, error) {
-	out, err := call[ListMissingBlobsOut](ctx, c, ListMissingBlobsOp.Name, ListMissingBlobsIn{OIDs: oids})
+	out, err := call[ListMissingBlobsOut](ctx, c, OpListMissingBlobs, ListMissingBlobsIn{OIDs: oids})
 	return out.OIDs, err
 }
 
 // CreateBlobs uploads blobs and returns their ids, in order.
 func (c *Client) CreateBlobs(ctx context.Context, blobs [][]byte) ([]string, error) {
-	out, err := call[CreateBlobsOut](ctx, c, CreateBlobsOp.Name, CreateBlobsIn{Blobs: blobs})
+	out, err := call[CreateBlobsOut](ctx, c, OpCreateBlobs, CreateBlobsIn{Blobs: blobs})
 	return out.OIDs, err
 }
 
 // Publish publishes in.Files as the whole of the org's repo.
 func (c *Client) Publish(ctx context.Context, in PublishIn) (PublishOut, error) {
-	return call[PublishOut](ctx, c, PublishOp.Name, in)
+	return call[PublishOut](ctx, c, OpPublish, in)
 }
 
 // ListDataSources is the org's data sources, by name and type.
 func (c *Client) ListDataSources(ctx context.Context) ([]DataSource, error) {
-	out, err := call[ListDataSourcesOut](ctx, c, ListDataSourcesOp.Name, struct{}{})
+	out, err := call[ListDataSourcesOut](ctx, c, OpListDataSources, struct{}{})
 	return out.DataSources, err
 }
 
 // CreateDataSource adds a data source to the org, its connection sent to be kept
 // sealed.
 func (c *Client) CreateDataSource(ctx context.Context, in CreateDataSourceIn) (DataSource, error) {
-	return call[DataSource](ctx, c, CreateDataSourceOp.Name, in)
+	return call[DataSource](ctx, c, OpCreateDataSource, in)
 }
 
 // TestDataSource checks the server can connect to a data source.
 func (c *Client) TestDataSource(ctx context.Context, in TestDataSourceIn) (TestDataSourceOut, error) {
-	return call[TestDataSourceOut](ctx, c, TestDataSourceOp.Name, in)
+	return call[TestDataSourceOut](ctx, c, OpTestDataSource, in)
 }
 
 // call posts in to op and decodes its answer, ignoring members it does not know:
@@ -126,7 +121,7 @@ func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, e
 	if err != nil {
 		return out, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.remote.Endpoint(op), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.org.Endpoint(op), bytes.NewReader(body))
 	if err != nil {
 		return out, err
 	}
@@ -140,22 +135,22 @@ func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, e
 	}
 	resp, err := c.opts.HTTP.Do(req)
 	if err != nil {
-		return out, fmt.Errorf("reach %s: %w", c.remote, err)
+		return out, fmt.Errorf("reach %s: %w", c.org, err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {
-		return out, fmt.Errorf("read %s's answer to %s: %w", c.remote, op, err)
+		return out, fmt.Errorf("read %s's answer to %s: %w", c.org, op, err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		var env apperr.Envelope
 		if jsonkit.Unmarshal(raw, &env) != nil || env.Error.Code == "" {
-			return out, fmt.Errorf("%s answered %s with %s, not an anfra error: is it an anfra server?", c.remote, op, resp.Status)
+			return out, fmt.Errorf("%s answered %s with %s, not an anfra error: is it an anfra server?", c.org, op, resp.Status)
 		}
 		return out, &Error{Status: resp.StatusCode, Response: env.Error}
 	}
 	if err := jsonkit.Unmarshal(raw, &out); err != nil {
-		return out, fmt.Errorf("decode %s's answer to %s: %w", c.remote, op, err)
+		return out, fmt.Errorf("decode %s's answer to %s: %w", c.org, op, err)
 	}
 	return out, nil
 }

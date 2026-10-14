@@ -21,22 +21,24 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/jsonkit"
-	"github.com/holistics/anfra/shared/remoteapi"
+	"github.com/holistics/anfra/shared/repoformat"
 )
 
-// sessionEnv carries a session token to publish with, until `anfra login`
-// exists: for development only, against a server whose session is a cookie.
-const sessionEnv = "ANFRA_REMOTE_SESSION"
+// sessionEnv carries an anfra-cloud session token to publish with, until
+// `anfra login` exists: for development only, sent as anfra-cloud's session
+// cookie.
+const sessionEnv = "ANFRA_CLOUD_SESSION"
 
 // publishOptions are anfra publish's flags.
 type publishOptions struct {
-	message   string
-	setRemote string
-	dryRun    bool
-	yes       bool
+	message string
+	setOrg  string
+	dryRun  bool
+	yes     bool
 	// createDataSources adds the data sources the repo uses and the org lacks
 	// without asking.
 	createDataSources bool
@@ -46,25 +48,24 @@ func newPublishCmd() *cobra.Command {
 	var o publishOptions
 	cmd := &cobra.Command{
 		Use:   "publish",
-		Short: "Publish this repo to its org on an anfra remote server: its files, as they are now, become the published version",
-		Long: "Publish this repo's files to its org on an anfra remote server, as they are in this folder now, committed\n" +
+		Short: "Publish this repo to its org: its files, as they are now, become the published version",
+		Long: "Publish this repo's files to its org, as they are in this folder now, committed\n" +
 			"in git or not. They replace what is published there, all of it: a file not here is deleted there.\n" +
 			"They are validated here first, then on the server, which publishes nothing that fails.\n\n" +
 			"Which files: the repo's own, its .aml files and its Data Apps (everything under apps/), wherever they\n" +
 			"are in the folder, except under a dot-folder or node_modules. Nothing else is published: not .anfra/\n" +
 			"(data_sources.yml holds credentials), nor a .env, notes or build output beside the repo. .gitignore does\n" +
 			"not apply: it says what belongs in git, not what is published. --dry-run lists the files and stops.\n\n" +
-			"Where to: the org's address on the anfra remote server, https://<server>/o/<org>, kept in\n" +
-			".anfra/config.yml (remote.url) and committed, so everyone publishes to the same org. --set-remote sets it,\n" +
-			"and publishes there. The anfra remote server is not a git remote.",
+			"Where to: the org's address on its server, https://<server>/o/<org>, kept in .anfra/config.yml\n" +
+			"(org.url) and committed, so everyone publishes to the same org. --set-org sets it, and publishes there.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return publish(cmd.Context(), ".", o, cmd.OutOrStdout(), cmd.ErrOrStderr(), stdinPrompt(cmd.InOrStdin(), cmd.ErrOrStderr()))
 		},
 	}
 	f := cmd.Flags()
-	f.StringVarP(&o.message, "message", "m", "", "what this publish is, for the repo's history on the anfra remote server (default: in a git repo, HEAD's commit)")
-	f.StringVar(&o.setRemote, "set-remote", "", "set where the repo publishes, an org's address on an anfra remote server, https://<server>/o/<org> (.anfra/config.yml remote.url), and publish there")
+	f.StringVarP(&o.message, "message", "m", "", "what this publish is, for the org's history of the repo (default: in a git repo, HEAD's commit)")
+	f.StringVar(&o.setOrg, "set-org", "", "set the org the repo publishes to, by its address, https://<server>/o/<org> (.anfra/config.yml org.url), and publish there")
 	f.BoolVar(&o.dryRun, "dry-run", false, "list the files that would be published, and stop")
 	f.BoolVar(&o.createDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server")
 	f.BoolVarP(&o.yes, "yes", "y", false, "publish without asking, though the repo was last published elsewhere (needed without a terminal)")
@@ -116,7 +117,7 @@ func stdinPrompt(in io.Reader, out io.Writer) prompt {
 // publish publishes the repo at dir: PUBLISH.md's flow, from file selection to
 // the server's answer. Progress goes to errOut; the outcome to out.
 func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.Writer, ask prompt) error {
-	remote, err := publishRemote(dir, o.setRemote, o.dryRun, errOut)
+	org, err := targetOrg(dir, o.setOrg, o.dryRun, errOut)
 	if err != nil {
 		return err
 	}
@@ -126,13 +127,13 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 	}
 	selected := fmt.Sprintf("%d files of the repo", len(files))
 	if leftOut > 0 {
-		selected += fmt.Sprintf(" (%d other files in this folder are not part of it: a publish carries .aml files and Data Apps under %s/)", leftOut, remoteapi.AppsDir)
+		selected += fmt.Sprintf(" (%d other files in this folder are not part of it: a publish carries .aml files and Data Apps under %s/)", leftOut, repoformat.AppsDir)
 	}
 	if o.dryRun {
 		for _, f := range files {
 			fmt.Fprintln(out, f)
 		}
-		fmt.Fprintf(errOut, "Would publish %s to %s.\n", selected, remote)
+		fmt.Fprintf(errOut, "Would publish %s to %s.\n", selected, org)
 		return nil
 	}
 	if len(files) == 0 {
@@ -142,13 +143,13 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 	if err != nil {
 		return err
 	}
-	client := remoteapi.NewClient(remote, remoteapi.ClientOptions{Authorize: authorize, UserAgent: "anfra/" + meta.Version})
+	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: authorize, UserAgent: "anfra/" + meta.Version})
 
 	fmt.Fprintln(errOut, "Validating…")
 	if err := validateRepo(ctx, errOut); err != nil {
 		return err
 	}
-	if err := offerDataSourcesToRemote(ctx, client, dir, o.createDataSources, errOut, ask); err != nil {
+	if err := offerDataSourcesToOrg(ctx, client, dir, o.createDataSources, errOut, ask); err != nil {
 		return err
 	}
 
@@ -159,7 +160,7 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 		if err != nil {
 			return err
 		}
-		oids[f], sizes[f] = remoteapi.BlobID(content), len(content)
+		oids[f], sizes[f] = repoformat.BlobID(content), len(content)
 	}
 
 	status, err := client.Status(ctx)
@@ -168,17 +169,17 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 	}
 	limits := status.Publish.Limits
 	if len(files) > limits.Files {
-		return fmt.Errorf("the repo has %d files to publish; %s takes at most %d", len(files), remote, limits.Files)
+		return fmt.Errorf("the repo has %d files to publish; %s takes at most %d", len(files), org, limits.Files)
 	}
 	for _, f := range files {
 		if sizes[f] > limits.UploadBytes {
-			return fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], remote, limits.UploadBytes)
+			return fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], org, limits.UploadBytes)
 		}
 	}
 	// What was published since this folder last published is replaced, unseen:
 	// there is no pull. So it is said, and confirmed (PUBLISH.md §anfra publish).
 	state := publishState(dir)
-	if status.PublishedBy != nil && state.last(remote) != status.Revision {
+	if status.PublishedBy != nil && state.last(org) != status.Revision {
 		// TODO(OAUTH.md): "you" for the signed-in user's own publishes, once the
 		// CLI knows who it is.
 		fmt.Fprintf(errOut, "This repo was last published by %s on %s.\n",
@@ -207,13 +208,13 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 		return err
 	}
 
-	in := remoteapi.PublishIn{Message: cmp.Or(o.message, gitMessage(ctx, dir))}
+	in := cloudapi.PublishIn{Message: cmp.Or(o.message, gitMessage(ctx, dir))}
 	for _, f := range files {
-		in.Files = append(in.Files, remoteapi.File{Path: f, OID: oids[f]})
+		in.Files = append(in.Files, cloudapi.File{Path: f, OID: oids[f]})
 	}
-	fmt.Fprintf(errOut, "Publishing %s to %s…\n", selected, remote)
+	fmt.Fprintf(errOut, "Publishing %s to %s…\n", selected, org)
 	res, err := client.Publish(ctx, in)
-	if again, ok := remoteapi.Missing(err); ok {
+	if again, ok := cloudapi.Missing(err); ok {
 		// Uploaded, then collected before this publish named it: once more.
 		if err := up.upload(ctx, again); err != nil {
 			return err
@@ -223,7 +224,7 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 	if err != nil {
 		return err
 	}
-	state.record(remote, res.Revision)
+	state.record(org, res.Revision)
 	if !res.Changed {
 		_, err = fmt.Fprintf(out, "Nothing changed: %s is already published.\n", res.Revision)
 		return err
@@ -235,30 +236,30 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 	return nil
 }
 
-// publishRemote is where a publish goes: the repo's remote, or set, which it
+// targetOrg is the org a publish goes to: the repo's, or set, which it
 // records first (but not on a dry run, which changes nothing).
-func publishRemote(dir, set string, dryRun bool, errOut io.Writer) (remoteapi.Remote, error) {
+func targetOrg(dir, set string, dryRun bool, errOut io.Writer) (cloudapi.Org, error) {
 	if set == "" {
-		r, ok, err := readRemote(dir)
+		r, ok, err := readOrg(dir)
 		if err != nil {
-			return remoteapi.Remote{}, err
+			return cloudapi.Org{}, err
 		}
 		if !ok {
-			return remoteapi.Remote{}, fmt.Errorf("this repo has nowhere to publish to (%s): publish with --set-remote https://<server>/o/<org>, an org's address on an anfra remote server", configHint("remote", "url"))
+			return cloudapi.Org{}, fmt.Errorf("this repo has no org to publish to (%s): publish with --set-org https://<server>/o/<org>, the org's address", configHint("org", "url"))
 		}
 		return r, nil
 	}
-	r, err := remoteapi.ParseRemote(set)
+	r, err := cloudapi.ParseOrg(set)
 	if err != nil {
-		return remoteapi.Remote{}, err
+		return cloudapi.Org{}, err
 	}
 	if dryRun {
 		return r, nil
 	}
-	if err := setRemote(dir, r); err != nil {
-		return remoteapi.Remote{}, err
+	if err := setOrg(dir, r); err != nil {
+		return cloudapi.Org{}, err
 	}
-	fmt.Fprintf(errOut, "This repo publishes to %s (%s).\n", r, configHint("remote", "url"))
+	fmt.Fprintf(errOut, "This repo publishes to %s (%s).\n", r, configHint("org", "url"))
 	return r, nil
 }
 
@@ -300,7 +301,7 @@ func validateHere(ctx context.Context, errOut io.Writer) error {
 
 // listMissing asks which of oids the org's repo lacks, in calls of at most
 // perCall.
-func listMissing(ctx context.Context, c *remoteapi.Client, oids []string, perCall int) ([]string, error) {
+func listMissing(ctx context.Context, c *cloudapi.Client, oids []string, perCall int) ([]string, error) {
 	var missing []string
 	for batch := range slices.Chunk(oids, max(perCall, 1)) {
 		m, err := c.ListMissingBlobs(ctx, batch)
@@ -314,11 +315,11 @@ func listMissing(ctx context.Context, c *remoteapi.Client, oids []string, perCal
 
 // uploader uploads a publish's content to the org's repo.
 type uploader struct {
-	client   *remoteapi.Client
+	client   *cloudapi.Client
 	dir      string
 	byOID    map[string]string // blob id → a file holding it
 	sizes    map[string]int    // file → its size
-	limits   remoteapi.Limits
+	limits   cloudapi.Limits
 	progress io.Writer
 }
 
@@ -357,7 +358,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 		if err != nil {
 			return err
 		}
-		if remoteapi.BlobID(content) != oid {
+		if repoformat.BlobID(content) != oid {
 			return fmt.Errorf("%s changed while publishing: publish again", path)
 		}
 		if len(batch) == limits.UploadBlobs || size+len(content) > limits.UploadBytes {
@@ -371,7 +372,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 }
 
 // selectFiles is the files a publish sends, slash-separated, relative to dir,
-// sorted: the repo's own, as remoteapi.Publishable says, the same on every
+// sorted: the repo's own, as repoformat.Publishable says, the same on every
 // machine, with or without git. leftOut counts the folder's other files, which
 // a publish does not carry. A symlink, or anything but a regular file, among
 // the repo's own is refused by name: never skipped, which would delete it on the
@@ -394,7 +395,7 @@ func selectFiles(dir string) (files []string, leftOut int, err error) {
 			return filepath.SkipDir // nothing under it is publishable: not worth walking
 		case d.IsDir():
 			return nil
-		case !remoteapi.Publishable(rel):
+		case !repoformat.Publishable(rel):
 			leftOut++
 		case d.Type()&fs.ModeSymlink != 0:
 			refused = append(refused, rel+" (a symlink)")
@@ -450,13 +451,13 @@ func (s publishedState) read() map[string]string {
 	return m
 }
 
-func (s publishedState) last(r remoteapi.Remote) string { return s.read()[r.String()] }
+func (s publishedState) last(org cloudapi.Org) string { return s.read()[org.String()] }
 
 // record notes revision as published from here. Best-effort: without it, the
 // next publish asks before replacing what it cannot tell was its own.
-func (s publishedState) record(r remoteapi.Remote, revision string) {
+func (s publishedState) record(org cloudapi.Org, revision string) {
 	m := s.read()
-	m[r.String()] = revision
+	m[org.String()] = revision
 	raw, err := jsonkit.Marshal(m)
 	if err != nil {
 		return
@@ -466,7 +467,7 @@ func (s publishedState) record(r remoteapi.Remote, revision string) {
 	}
 }
 
-func who(p *remoteapi.Person) string {
+func who(p *cloudapi.Person) string {
 	switch {
 	case p == nil:
 		return "nobody (the repo's starting files)"

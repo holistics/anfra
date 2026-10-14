@@ -1,0 +1,5065 @@
+components:
+  schemas:
+    AQLDiagnostic:
+      additionalProperties: false
+      properties:
+        column:
+          format: int64
+          type: integer
+        line:
+          format: int64
+          type: integer
+        message:
+          type: string
+        severity:
+          type: string
+      required:
+        - message
+        - severity
+      type: object
+    AcceptIn:
+      additionalProperties: false
+      properties:
+        email:
+          description: "Signed out only: the new account's address."
+          type: string
+        password:
+          description: "Signed out only: the new account's password."
+          type: string
+        token:
+          description: "The invitation token: the part of the link after '#'."
+          type: string
+      required:
+        - token
+      type: object
+    AcceptOut:
+      additionalProperties: false
+      properties:
+        org:
+          $ref: "#/components/schemas/OrgView"
+      required:
+        - org
+      type: object
+    ChangePasswordIn:
+      additionalProperties: false
+      properties:
+        current_password:
+          description: The password the account has now.
+          type: string
+        new_password:
+          description: The password to replace it with.
+          type: string
+      required:
+        - current_password
+        - new_password
+      type: object
+    Column:
+      additionalProperties: false
+      properties:
+        adhoc:
+          description: a query-local expression, not a field the dataset defines
+          type: boolean
+        aggregation:
+          description: an aggregated field's aggregation, such as sum or count distinct
+          type: string
+        arrow_type:
+          additionalProperties: true
+          description: the Arrow type canal-query read the values as, by which they are written; absent before the query runs
+          properties:
+            label:
+              description: "the type as arrow-go spells it, such as decimal(38, 2): for people, not to decide on"
+              type: string
+            type:
+              description: "the type's name, as Schema.fbs's Type union names it, in snake_case: int, floating_point, decimal, utf8, bool, date, timestamp, list, struct, ..."
+              type: string
+          required:
+            - type
+            - label
+          type: object
+        db_type:
+          description: "the database's own name of the column's type: for debugging, never to decide on, since it varies by database and driver; absent before the query runs"
+          type: string
+        fieldName:
+          description: the field it draws; for an adhoc column, its name
+          type: string
+        isMeasure:
+          type: boolean
+        label:
+          type: string
+        modelId:
+          description: the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column
+          type: string
+        name:
+          description: the column's key, as in fields
+          type: string
+        semantic_type:
+          description: "what the column's values mean, in AML's types, plus bit: a true or false stored as a bit, written as true and false or as \"1\" and \"0\" by how the database produced it. Decide by it. Absent when no AQL types the column (a SQL query, or AQL that is not an explore): see arrow_type. Unknown when its AQL type has no meaning in AML (time, duration, ...)"
+          enum:
+            - bit
+            - date
+            - datetime
+            - json
+            - number
+            - text
+            - truefalse
+            - unknown
+          type: string
+      required:
+        - name
+        - fieldName
+        - label
+        - adhoc
+        - isMeasure
+      type: object
+    CompileError:
+      additionalProperties: false
+      properties:
+        col:
+          format: int64
+          type: integer
+        filePath:
+          type: string
+        message:
+          type: string
+        row:
+          format: int64
+          type: integer
+      required:
+        - message
+      type: object
+    CompiledQuery:
+      additionalProperties: false
+      properties:
+        aql:
+          description: "the AQL compiled: the query with its Query Input applied; absent for a SQL query"
+          type: string
+        columns:
+          description: what each column of an explore query's answer will be, and its semantic type; absent for other queries
+          items:
+            $ref: "#/components/schemas/Column"
+          type: array
+        sql:
+          type: string
+      required:
+        - sql
+      type: object
+    ContextEntry:
+      additionalProperties: false
+      properties:
+        params:
+          additionalProperties: {}
+          type: object
+        step:
+          type: string
+        text:
+          type: string
+      required:
+        - step
+        - text
+      type: object
+    CreateBlobsIn:
+      additionalProperties: false
+      properties:
+        blobs:
+          description: File contents, base64. At most limits.upload_blobs, of at most limits.upload_bytes in all.
+          items:
+            contentEncoding: base64
+            type: string
+          type: array
+      required:
+        - blobs
+      type: object
+    CreateBlobsOut:
+      additionalProperties: false
+      properties:
+        oids:
+          items:
+            type: string
+          type: array
+      required:
+        - oids
+      type: object
+    CreateDataSourceIn:
+      additionalProperties: false
+      properties:
+        connection:
+          additionalProperties: {}
+          description: "The database driver's settings (host, user, password and so on), passed to it unchanged. Write-only: no response ever includes it."
+          type: object
+        name:
+          description: "What AML's data_source_name refers to: a letter, then letters, digits and underscores, at most 63."
+          type: string
+        type:
+          description: "The database type: postgresql, bigquery, snowflake."
+          type: string
+      required:
+        - name
+        - type
+        - connection
+      type: object
+    CreateOrgIn:
+      additionalProperties: false
+      properties:
+        name:
+          description: Its display name; the slug when empty.
+          type: string
+        slug:
+          description: "The org's address in URLs: lowercase letters, digits and hyphens."
+          type: string
+      required:
+        - slug
+      type: object
+    CredentialsIn:
+      additionalProperties: false
+      properties:
+        email:
+          description: The account's email address.
+          type: string
+        password:
+          description: The account's password.
+          type: string
+      required:
+        - email
+        - password
+      type: object
+    DataSourceView:
+      additionalProperties: false
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        name:
+          description: What AML's data_source_name refers to.
+          type: string
+        type:
+          description: "The database type, which is also the SQL dialect: postgresql, bigquery, snowflake."
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - name
+        - type
+        - created_at
+        - updated_at
+      type: object
+    ErrorBodyAccountExists:
+      additionalProperties: false
+      description: An account already exists for this email. Sign in to continue.
+      properties:
+        code:
+          const: account_exists
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyApiVersionMismatch:
+      additionalProperties: false
+      description: This app is out of date. Reload to continue.
+      properties:
+        code:
+          const: api_version_mismatch
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 412
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyBlobsMissing:
+      additionalProperties: false
+      description: Some files' content has not been uploaded.
+      properties:
+        code:
+          const: blobs_missing
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/MissingBlobs"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyExportsUnavailable:
+      additionalProperties: false
+      description: This server cannot make exports.
+      properties:
+        code:
+          const: exports_unavailable
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 501
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyForbidden:
+      additionalProperties: false
+      description: You do not have permission to do this.
+      properties:
+        code:
+          const: forbidden
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 403
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyInternalServerError:
+      additionalProperties: false
+      description: Something went wrong on our side.
+      properties:
+        code:
+          const: internal_server_error
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyInvalidCredentials:
+      additionalProperties: false
+      description: The email or password is incorrect.
+      properties:
+        code:
+          const: invalid_credentials
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 401
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyInvalidRequest:
+      additionalProperties: false
+      description: The request is not valid.
+      properties:
+        code:
+          const: invalid_request
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/Violations"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 400
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyNotFound:
+      additionalProperties: false
+      description: Not found.
+      properties:
+        code:
+          const: not_found
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 404
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyQueryFailed:
+      additionalProperties: false
+      description: The query failed to run on its data source.
+      properties:
+        code:
+          const: query_failed
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 502
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyQueryInvalid:
+      additionalProperties: false
+      description: The query is invalid.
+      properties:
+        code:
+          const: query_invalid
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/QueryValidation"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyRateLimited:
+      additionalProperties: false
+      description: Too many requests. Try again shortly.
+      properties:
+        code:
+          const: rate_limited
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/RetryAfter"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 429
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyRepoInvalid:
+      additionalProperties: false
+      description: The repo has errors. Fix them, then publish again.
+      properties:
+        code:
+          const: repo_invalid
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/RepoProblems"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodySidecarUnavailable:
+      additionalProperties: false
+      description: A sidecar is unavailable.
+      properties:
+        code:
+          const: sidecar_unavailable
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 503
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyUnauthenticated:
+      additionalProperties: false
+      description: Sign in to continue.
+      properties:
+        code:
+          const: unauthenticated
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 401
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyUnavailable:
+      additionalProperties: false
+      description: The service is temporarily unavailable. Try again shortly.
+      properties:
+        code:
+          const: unavailable
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/RetryAfter"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 503
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyValidationFailed:
+      additionalProperties: false
+      description: Some of the input is not valid.
+      properties:
+        code:
+          const: validation_failed
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/Violations"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ExportFormatOptions:
+      additionalProperties: false
+      properties:
+        bom:
+          description: "csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open"
+          type: boolean
+        header:
+          description: "csv: the header row: the columns' labels (the default; what readers see), their names (their keys in a query's answer, stable for programs), or none"
+          enum:
+            - labels
+            - names
+            - none
+          type: string
+      type: object
+    ExportInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        filename:
+          description: the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name
+          type: string
+        format:
+          default: csv
+          description: the file's format
+          enum:
+            - csv
+          type: string
+        format_options:
+          $ref: "#/components/schemas/ExportFormatOptions"
+          description: the format's options
+        input:
+          $ref: "#/components/schemas/QueryTransforms"
+          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          type: string
+      required:
+        - query
+      type: object
+    ExportLink:
+      additionalProperties: false
+      properties:
+        expires_at:
+          description: when the link stops working
+          format: date-time
+          type: string
+        filename:
+          description: the file's name, as a download saves it
+          type: string
+        format:
+          description: the file's format
+          type: string
+        row_count:
+          description: the rows the file holds
+          format: int64
+          type: integer
+        url:
+          description: "where to download the file: a plain GET, with no credentials, until expires_at"
+          type: string
+      required:
+        - url
+        - filename
+        - format
+        - row_count
+        - expires_at
+      type: object
+    IngestInput:
+      additionalProperties: false
+      properties:
+        source:
+          description: optional context source key to ingest
+          type: string
+      type: object
+    InviteIn:
+      additionalProperties: false
+      properties:
+        email:
+          description: The invitee's address. It labels the invitation; the link is what admits them.
+          type: string
+        role:
+          description: The role they join with.
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+      required:
+        - email
+        - role
+      type: object
+    InviteOut:
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        path:
+          description: The invitation link, relative to the installation. Its secret is after '#'.
+          type: string
+        role:
+          type: string
+        url:
+          description: The absolute link, when the installation's address is configured.
+          type: string
+      required:
+        - email
+        - role
+        - expires_at
+        - path
+      type: object
+    Limits:
+      additionalProperties: false
+      properties:
+        files:
+          description: The most files one publish may have, and the most blob ids one repos.list_missing_blobs call may name.
+          format: int64
+          type: integer
+        upload_blobs:
+          description: The most blobs one repos.create_blobs call may carry.
+          format: int64
+          type: integer
+        upload_bytes:
+          description: "The most content bytes one repos.create_blobs call may carry, before base64: also the largest file."
+          format: int64
+          type: integer
+      required:
+        - files
+        - upload_blobs
+        - upload_bytes
+      type: object
+    ListDataSourcesOut:
+      additionalProperties: false
+      properties:
+        data_sources:
+          items:
+            $ref: "#/components/schemas/DataSourceView"
+          type: array
+      required:
+        - data_sources
+      type: object
+    ListMissingBlobsIn:
+      additionalProperties: false
+      properties:
+        oids:
+          description: "Git blob ids of the files to publish: sha1 of \"blob <size>\\0\" and the content. At most limits.files."
+          items:
+            type: string
+          type: array
+      required:
+        - oids
+      type: object
+    ListMissingBlobsOut:
+      additionalProperties: false
+      properties:
+        oids:
+          description: The blob ids to upload with repos.create_blobs before publishing.
+          items:
+            type: string
+          type: array
+      required:
+        - oids
+      type: object
+    MissingBlobs:
+      additionalProperties: false
+      properties:
+        oids:
+          description: The blob ids to upload with repos.create_blobs.
+          items:
+            type: string
+          type: array
+      required:
+        - oids
+      type: object
+    NameIn:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+      required:
+        - name
+      type: object
+    NoInput:
+      additionalProperties: false
+      type: object
+    OrgView:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+        slug:
+          type: string
+      required:
+        - id
+        - slug
+        - name
+        - role
+      type: object
+    OrgsOut:
+      additionalProperties: false
+      properties:
+        orgs:
+          items:
+            $ref: "#/components/schemas/OrgView"
+          type: array
+      required:
+        - orgs
+      type: object
+    PasswordChanged:
+      additionalProperties: false
+      type: object
+    PendingOut:
+      additionalProperties: false
+      properties:
+        org_slug:
+          type: string
+        role:
+          type: string
+      required:
+        - org_slug
+        - role
+      type: object
+    Person:
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        id:
+          type: string
+      required:
+        - id
+        - email
+      type: object
+    PublishFile:
+      additionalProperties: false
+      properties:
+        oid:
+          description: Its content's git blob id, uploaded with repos.create_blobs.
+          type: string
+        path:
+          description: Slash-separated, relative to the repo root.
+          type: string
+      required:
+        - path
+        - oid
+      type: object
+    PublishIn:
+      additionalProperties: false
+      properties:
+        files:
+          description: "Every file of the repo, as it is to be published: a file not listed is deleted. At most limits.files."
+          items:
+            $ref: "#/components/schemas/PublishFile"
+          type: array
+        message:
+          description: What the publish is, for the repo's history.
+          type: string
+      required:
+        - files
+      type: object
+    PublishOut:
+      additionalProperties: false
+      properties:
+        changed:
+          description: "False when the files were already the published ones: nothing changed."
+          type: boolean
+        replaced:
+          $ref: "#/components/schemas/Replaced"
+          description: The published revision this publish replaced; absent when nothing changed.
+        revision:
+          description: The revision now published.
+          type: string
+      required:
+        - revision
+        - changed
+      type: object
+    PublishSettings:
+      additionalProperties: false
+      properties:
+        limits:
+          $ref: "#/components/schemas/Limits"
+      required:
+        - limits
+      type: object
+    QueryCondition:
+      additionalProperties: false
+      properties:
+        expr:
+          description: an AQL condition
+          type: string
+      required:
+        - expr
+      type: object
+    QueryDateDrill:
+      additionalProperties: false
+      properties:
+        field:
+          description: "model.field: a date field"
+          type: string
+        grain:
+          description: the grain, such as month
+          type: string
+      required:
+        - field
+        - grain
+      type: object
+    QueryFilter:
+      additionalProperties: false
+      properties:
+        aggregation:
+          description: the condition applies to this aggregate of field, such as sum
+          type: string
+        field:
+          description: model.field for a dataset field, or the name of a dataset metric
+          type: string
+        modifier:
+          description: the date unit of a relative operator, such as day
+          type: string
+        operator:
+          description: the operator, such as is, contains, between, last
+          type: string
+        values:
+          description: "the operator's values, by the field's type: a number as a string in JSON's number syntax, such as \"9007199254740993\" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none"
+          items: {}
+          type: array
+      required:
+        - field
+        - operator
+        - values
+      type: object
+    QueryInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+      required:
+        - query
+      type: object
+    QueryResult:
+      additionalProperties: false
+      properties:
+        aql:
+          description: "the AQL that ran: the query with its Query Input applied; absent for a SQL query"
+          type: string
+        columns:
+          description: one per field of result, in order
+          items:
+            $ref: "#/components/schemas/Column"
+          type: array
+        result:
+          $ref: "#/components/schemas/QueryRows"
+        sql:
+          type: string
+      required:
+        - sql
+        - columns
+        - result
+      type: object
+    QueryRows:
+      additionalProperties: false
+      properties:
+        fields:
+          items:
+            type: string
+          type: array
+        records:
+          description: "one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as \"NaN\", \"Infinity\" and \"-Infinity\", and so at any depth of a list, map or struct; null as null"
+          items:
+            items: {}
+            type: array
+          type: array
+      required:
+        - fields
+        - records
+      type: object
+    QueryRunInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        input:
+          $ref: "#/components/schemas/QueryTransforms"
+          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        page:
+          description: the 1-based page of rows to answer; needs a page size
+          format: int64
+          minimum: 1
+          type: integer
+        page_size:
+          description: rows per page; alone, the first page
+          format: int64
+          minimum: 1
+          type: integer
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          type: string
+      required:
+        - query
+      type: object
+    QuerySort:
+      additionalProperties: false
+      properties:
+        direction:
+          description: the direction
+          enum:
+            - asc
+            - desc
+          type: string
+        field:
+          description: a result column's name
+          type: string
+      required:
+        - field
+        - direction
+      type: object
+    QueryTransforms:
+      additionalProperties: false
+      properties:
+        conditions:
+          description: AQL conditions ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryCondition"
+          type: array
+        dateDrills:
+          description: date fields redrawn at another grain, their columns' names kept
+          items:
+            $ref: "#/components/schemas/QueryDateDrill"
+          type: array
+        filters:
+          description: conditions on fields, ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryFilter"
+          type: array
+        sorts:
+          description: sorts by result column, replacing the query's own
+          items:
+            $ref: "#/components/schemas/QuerySort"
+          type: array
+      type: object
+    QueryValidation:
+      additionalProperties: false
+      properties:
+        diagnostics:
+          items:
+            $ref: "#/components/schemas/AQLDiagnostic"
+          type: array
+        valid:
+          type: boolean
+      required:
+        - valid
+        - diagnostics
+      type: object
+    Replaced:
+      additionalProperties: false
+      properties:
+        published_at:
+          format: date-time
+          type: string
+        published_by:
+          $ref: "#/components/schemas/Person"
+          description: Who published it; absent for the repo's starting files.
+        revision:
+          type: string
+      required:
+        - revision
+        - published_at
+      type: object
+    RepoProblems:
+      additionalProperties: false
+      properties:
+        validation:
+          description: "The engine's validation of the files published, as core.validate answers: its diagnostics and reports."
+      required:
+        - validation
+      type: object
+    RepoValidation:
+      additionalProperties: false
+      properties:
+        diagnostics:
+          items:
+            $ref: "#/components/schemas/CompileError"
+          type: array
+        reports:
+          items:
+            $ref: "#/components/schemas/ValidationReport"
+          type: array
+        valid:
+          type: boolean
+      required:
+        - valid
+        - diagnostics
+        - reports
+      type: object
+    ReportTrace:
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+        loc:
+          $ref: "#/components/schemas/ReportTraceLoc"
+        name:
+          type: string
+      required:
+        - kind
+        - name
+      type: object
+    ReportTraceLoc:
+      additionalProperties: false
+      properties:
+        column:
+          format: int64
+          type: integer
+        filePath:
+          type: string
+        line:
+          format: int64
+          type: integer
+      required:
+        - filePath
+      type: object
+    RetryAfter:
+      additionalProperties: false
+      properties:
+        retry_after_seconds:
+          format: int64
+          type: integer
+      required:
+        - retry_after_seconds
+      type: object
+    SearchInput:
+      additionalProperties: false
+      properties:
+        query:
+          description: search query
+          items:
+            type: string
+          type: array
+      type: object
+    SessionOut:
+      additionalProperties: false
+      properties:
+        user:
+          $ref: "#/components/schemas/UserView"
+      required:
+        - user
+      type: object
+    SetupIn:
+      additionalProperties: false
+      properties:
+        email:
+          description: The first account's address.
+          type: string
+        org_name:
+          description: Its display name; the slug when empty.
+          type: string
+        org_slug:
+          description: The first org's address in URLs.
+          type: string
+        password:
+          description: The first account's password.
+          type: string
+        setup_token:
+          description: The token in the server's log on first boot.
+          type: string
+      required:
+        - setup_token
+        - email
+        - password
+        - org_slug
+      type: object
+    SetupOut:
+      additionalProperties: false
+      properties:
+        org:
+          $ref: "#/components/schemas/OrgView"
+        user:
+          $ref: "#/components/schemas/UserView"
+      required:
+        - user
+        - org
+      type: object
+    SetupStatusOut:
+      additionalProperties: false
+      properties:
+        available:
+          type: boolean
+      required:
+        - available
+      type: object
+    ShowDataset:
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        fqn:
+          description: the dataset's fully qualified name, as AQL and the catalog name it
+          type: string
+        kind:
+          enum:
+            - dataset
+          type: string
+        label:
+          type: string
+        metrics:
+          description: the dataset's metrics; absent in outline
+          items:
+            $ref: "#/components/schemas/ShowField"
+          type: array
+        models:
+          description: the models the dataset uses; absent in outline
+          items:
+            $ref: "#/components/schemas/ShowModel"
+          type: array
+        name:
+          type: string
+      required:
+        - kind
+        - fqn
+        - name
+      type: object
+    ShowField:
+      additionalProperties: false
+      properties:
+        aggregation:
+          description: a measure's aggregation, such as sum or count distinct; custom for a custom one
+          type: string
+        definedInDataset:
+          description: a dimension the dataset declares on one of its models
+          type: boolean
+        definition:
+          description: the definition of a field or metric written in AQL
+          type: string
+        description:
+          type: string
+        format:
+          description: how a value displays, as the AML declares it
+        fqn:
+          description: "the catalog's identity: <model fqn>.<name>, or <dataset fqn>.<name> for a dataset-level field or a metric"
+          type: string
+        hidden:
+          type: boolean
+        label:
+          type: string
+        name:
+          description: AQL writes <model fqn>.<name>; a metric, its name alone
+          type: string
+        role:
+          enum:
+            - dimension
+            - measure
+            - param
+            - metric
+          type: string
+        type:
+          description: the compiled data type, such as number, text, date, datetime, truefalse
+          type: string
+      required:
+        - fqn
+        - name
+        - role
+        - type
+        - hidden
+      type: object
+    ShowInput:
+      additionalProperties: false
+      properties:
+        fqn:
+          description: the fqn of the object to show; absent, the repo
+          type: string
+        type:
+          default: aml.dataset
+          description: the catalog's entity type of fqn; aml.dataset is the only one for now
+          enum:
+            - aml.dataset
+          type: string
+      type: object
+    ShowModel:
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/ShowField"
+          type: array
+        fqn:
+          description: "the model's fully qualified name: what AQL writes before a field"
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+      required:
+        - fqn
+        - name
+        - fields
+      type: object
+    ShowRepo:
+      additionalProperties: false
+      properties:
+        datasets:
+          description: the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why
+          items:
+            $ref: "#/components/schemas/ShowDataset"
+          type: array
+        kind:
+          enum:
+            - repo
+          type: string
+      required:
+        - kind
+        - datasets
+      type: object
+    ShowResult:
+      additionalProperties: false
+      properties:
+        diagnostics:
+          description: "what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete"
+          items:
+            $ref: "#/components/schemas/CompileError"
+          type: array
+        object:
+          description: the object shown, by kind; a client must accept a kind it does not know
+          discriminator:
+            mapping:
+              dataset: "#/components/schemas/ShowDataset"
+              repo: "#/components/schemas/ShowRepo"
+            propertyName: kind
+          oneOf:
+            - $ref: "#/components/schemas/ShowRepo"
+            - $ref: "#/components/schemas/ShowDataset"
+      required:
+        - object
+        - diagnostics
+      type: object
+    SignedIn:
+      additionalProperties: false
+      properties:
+        user:
+          $ref: "#/components/schemas/UserView"
+      required:
+        - user
+      type: object
+    SignedOut:
+      additionalProperties: false
+      type: object
+    StatusOut:
+      additionalProperties: false
+      properties:
+        publish:
+          $ref: "#/components/schemas/PublishSettings"
+        published_at:
+          format: date-time
+          type: string
+        published_by:
+          $ref: "#/components/schemas/Person"
+          description: Who published it; absent for the repo's starting files, which the org's creation put there.
+        revision:
+          description: "The published revision. Opaque: show it, do not parse it."
+          type: string
+      required:
+        - revision
+        - published_at
+        - publish
+      type: object
+    TestDataSourceIn:
+      additionalProperties: false
+      properties:
+        connection:
+          additionalProperties: {}
+          description: "With type: the connection to check, not kept. Write-only."
+          type: object
+        name:
+          description: A data source the org has; alone, it is the one checked.
+          type: string
+        type:
+          description: "With connection: the database type of a data source not yet added."
+          type: string
+      type: object
+    TestDataSourceOut:
+      additionalProperties: false
+      properties:
+        message:
+          description: Why not, in the warehouse's words, when not ok.
+          type: string
+        ok:
+          description: Whether the server connected and ran a trivial statement.
+          type: boolean
+      required:
+        - ok
+      type: object
+    TokenIn:
+      additionalProperties: false
+      properties:
+        token:
+          description: "The invitation token: the part of the link after '#'."
+          type: string
+      required:
+        - token
+      type: object
+    UpdateIn:
+      additionalProperties: false
+      properties:
+        connection:
+          additionalProperties: {}
+          description: A new connection, replacing the old one whole; absent, it is kept. Write-only.
+          type: object
+        name:
+          description: The data source to change.
+          type: string
+        type:
+          description: A new database type; absent, the type is kept.
+          type: string
+      required:
+        - name
+      type: object
+    UpdateInfo:
+      additionalProperties: false
+      properties:
+        available:
+          type: boolean
+        latest:
+          type: string
+      required:
+        - latest
+        - available
+      type: object
+    UserView:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        id:
+          type: string
+      required:
+        - id
+        - email
+        - display_name
+        - email_verified
+      type: object
+    ValidateInput:
+      additionalProperties: false
+      properties:
+        globs:
+          description: optional file globs; report only diagnostics for matching files
+          items:
+            type: string
+          type: array
+      type: object
+    ValidationReport:
+      additionalProperties: false
+      properties:
+        code: {}
+        filePath:
+          type: string
+        fqn:
+          type: string
+        message:
+          type: string
+        severity:
+          type: string
+        trace:
+          items:
+            $ref: "#/components/schemas/ReportTrace"
+          type: array
+        type:
+          type: string
+        validator:
+          type: string
+      required:
+        - validator
+        - filePath
+        - type
+        - fqn
+        - severity
+        - message
+      type: object
+    VersionResult:
+      additionalProperties: false
+      properties:
+        update:
+          $ref: "#/components/schemas/UpdateInfo"
+        version:
+          type: string
+      required:
+        - version
+      type: object
+    Violation:
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+        field:
+          type: string
+        message:
+          type: string
+      required:
+        - field
+        - code
+        - message
+      type: object
+    Violations:
+      additionalProperties: false
+      properties:
+        violations:
+          items:
+            $ref: "#/components/schemas/Violation"
+          type: array
+      required:
+        - violations
+      type: object
+info:
+  title: anfra
+  version: "0"
+openapi: 3.1.0
+paths:
+  /accounts.change_password:
+    post:
+      description: Needs the current password. Revokes every session the account holds, then starts a fresh one for the caller.
+      operationId: accounts.change_password
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordChanged"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                      - $ref: "#/components/schemas/ErrorBodyInvalidCredentials"
+                required:
+                  - error
+                type: object
+          description: unauthenticated, invalid_credentials
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Change the signed-in account's password.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /accounts.register:
+    post:
+      description: "Only when self-registration is open; otherwise not_found. Creates no org: create one with orgs.create, or accept an invitation."
+      operationId: accounts.register
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CredentialsIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignedIn"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Create an account and sign in.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /core.ingest:
+    post:
+      operationId: core.ingest
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Build the local search catalog from context sources
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /core.query:
+    post:
+      description: "Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have."
+      operationId: core.query
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRunInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                      - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                required:
+                  - error
+                type: object
+          description: validation_failed, query_invalid
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "502":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyQueryFailed"
+                required:
+                  - error
+                type: object
+          description: query_failed
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Run a query: its rows, and the SQL that produced them"
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.query.compile:
+    post:
+      description: "Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have."
+      operationId: core.query.compile
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRunInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompiledQuery"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                      - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                required:
+                  - error
+                type: object
+          description: validation_failed, query_invalid
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Compile a query to SQL, without running it
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.query.export:
+    post:
+      description: |-
+        Export a query's whole result as a file: a link to download it.
+
+        The query runs to completion before the answer, so a query that fails fails here. The CLI downloads the file, to stdout or --output; --link prints the answer instead.
+
+        Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have.
+      operationId: core.query.export
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportLink"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                      - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                required:
+                  - error
+                type: object
+          description: validation_failed, query_invalid
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "501":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyExportsUnavailable"
+                required:
+                  - error
+                type: object
+          description: exports_unavailable
+        "502":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyQueryFailed"
+                required:
+                  - error
+                type: object
+          description: query_failed
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Export a query's whole result as a file: a link to download it"
+      x-destructive: false
+      x-idempotent: false
+      x-read-only: false
+  /core.query.validate:
+    post:
+      description: "Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have."
+      operationId: core.query.validate
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryValidation"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Validate a query: its diagnostics, without running it"
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.search:
+    post:
+      operationId: core.search
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: {}
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Search the local catalog
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.show:
+    post:
+      description: |-
+        Show an object of the repo, read from its compiled AML: with no fqn, the repo and every dataset
+        in full; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not its
+        implementation: names, labels, types, roles and AQL definitions, never SQL or tables. What is
+        wrong in the repo for it comes with it, as diagnostics: files that do not compile, a data source
+        it does not configure.
+
+        Showing a dataset needs access to query it; showing the repo, every dataset at once, needs access to them all.
+      operationId: core.show
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShowInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Show the repo's datasets, or one dataset: their models, fields and metrics"
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.validate:
+    post:
+      operationId: core.validate
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoValidation"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Validate the AML repo, optionally scoped to file globs
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.version:
+    post:
+      operationId: core.version
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Print the anfra version
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /data_sources.create:
+    post:
+      description: The connection is kept sealed, and never returned. A name the org already has is refused.
+      operationId: data_sources.create
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDataSourceIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSourceView"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Add a data source to the org: a name its models refer to, and the connection to the warehouse."
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /data_sources.delete:
+    post:
+      description: Queries on the models that use it fail until a data source by its name is added again.
+      operationId: data_sources.delete
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Remove a data source from the org.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /data_sources.list:
+    post:
+      description: "Connections are never returned, by this op or any other. For whoever may query data sources directly (admins, today): which warehouses an org connects to goes with being able to query them."
+      operationId: data_sources.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListDataSourcesOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: The org's data sources, by name and type.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /data_sources.test:
+    post:
+      description: "Runs a trivial statement on the warehouse. A connection that fails is an answer, ok false with the warehouse's reason, not an error: the check ran. Test a connection before adding it, or before replacing one, as well as after. Admins only, as for adding one: the connection is the warehouse's credentials."
+      operationId: data_sources.test
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestDataSourceIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDataSourceOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Check that the server can connect to a data source: one the org has, by name, or one not yet added, by type and connection."
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /data_sources.update:
+    post:
+      description: A connection given replaces the old one whole; what is not given is kept.
+      operationId: data_sources.update
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Change a data source's type or connection.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /invitations.accept:
+    post:
+      description: "Signed in, send only the token: the account joins the org. Signed out, also send an email and a password: a new account is created, joined and signed in. An address that already has an account is account_exists — sign in, then accept."
+      operationId: invitations.accept
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyAccountExists"
+                required:
+                  - error
+                type: object
+          description: account_exists
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Accept an invitation.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /invitations.create:
+    post:
+      description: "Returns a single-use link, valid for seven days. Pass it to the invitee yourself: it is shown once, and only its hash is kept."
+      operationId: invitations.create
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Invite someone to the org, with a role.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /invitations.lookup:
+    post:
+      operationId: invitations.lookup
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Which org an invitation link joins, and with what role.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /orgs.create:
+    post:
+      description: Anyone signed in may create an org, and becomes its admin.
+      operationId: orgs.create
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrgIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgView"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Create an org, as its admin.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /orgs.list:
+    post:
+      description: Call an org's ops below its address, /api/o/{slug}/, to act in it.
+      operationId: orgs.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: The orgs the signed-in account belongs to, with its role in each.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /repos.create_blobs:
+    post:
+      description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless.
+      operationId: repos.create_blobs
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBlobsIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateBlobsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Upload file contents to the org's repo, for a publish to name by blob id.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /repos.list_missing_blobs:
+    post:
+      description: Compute each file's git blob id locally and name them all; upload only what is listed, with repos.create_blobs. A repeat publish of a small edit uploads one blob.
+      operationId: repos.list_missing_blobs
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListMissingBlobsIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMissingBlobsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: "Which of the given blob ids the org's repo does not have yet: the content to upload before publishing."
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /repos.publish:
+    post:
+      description: "List every file, as path and blob id: a file not listed is deleted. Upload the content first; blobs_missing names any that is not. Files that fail validation are refused with repo_invalid, carrying the engine's problems, and nothing is published. The last publish wins: the answer says what it replaced."
+      operationId: repos.publish
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyBlobsMissing"
+                required:
+                  - error
+                type: object
+          description: blobs_missing
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                      - $ref: "#/components/schemas/ErrorBodyRepoInvalid"
+                required:
+                  - error
+                type: object
+          description: validation_failed, repo_invalid
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: Publish files as the whole of the org's repo, once they pass validation.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /repos.status:
+    post:
+      description: Read before publishing, to show what a publish will replace, and to batch uploads within the limits.
+      operationId: repos.status
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The org the request acts in, by its slug.
+      summary: The published revision of the org's repo, who published it and when, and the limits for publishing.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /sessions.create:
+    post:
+      description: Starts a session; over HTTP it is set as a cookie. A wrong password and an unknown address are the same invalid_credentials, by design.
+      operationId: sessions.create
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CredentialsIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignedIn"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidCredentials"
+                required:
+                  - error
+                type: object
+          description: invalid_credentials
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Sign in with an email and a password.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /sessions.delete:
+    post:
+      description: "Ends the current session and clears its cookie. Always succeeds: whether the session was still live is not something the caller needs to learn."
+      operationId: sessions.delete
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignedOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Sign out.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /sessions.get:
+    post:
+      description: Answers unauthenticated when signed out. The account's orgs come from orgs.list.
+      operationId: sessions.get
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: The account the current session belongs to.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /setup.complete:
+    post:
+      description: "Needs the setup token from the server's log. The account becomes the installation's admin and the org's, and is signed in. Afterwards, setup is closed: not_found."
+      operationId: setup.complete
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: "Set up the installation: its first account and org."
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /setup.status:
+    post:
+      operationId: setup.status
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupStatusOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Whether this installation still needs setting up.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+servers:
+  - url: /api
+x-anfra-compat: 5
