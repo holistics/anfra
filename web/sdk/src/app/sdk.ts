@@ -125,7 +125,7 @@ export class Sdk {
     const named = (s: unknown) => typeof s === 'string' && s.trim() !== '';
     if (list.length === 0 || list.some((t) => typeof t !== 'object' || t === null || !named(t.parent) || !named(t.child))) {
       return Promise.reject(new ValidationError(
-        "Anfra.lineage() takes one or more fields, each by its parent and its name in it, such as { parent: 'orders', child: 'amount' }.",
+        "Anfra.lineage() an array of targets, each by its parent and its name in it, such as { parent: 'ecommerce', child: 'revenue' }.",
       ));
     }
     if (!this.backend.lineage) return Promise.reject(new TransportError('This host cannot trace lineage.'));
