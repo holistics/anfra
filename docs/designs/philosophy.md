@@ -19,7 +19,7 @@ Each command is defined once, in one registry ([commands-and-api.md](commands-an
 
 - The CLI offers every command, and also commands that act on this machine (`serve`, `init`, `update`, `skills`), which are never served: a server must not do that for its callers.
 - The HTTP API and MCP serve every command.
-- The SDK's API client can call every served command; a Data App itself reaches only queries and lineage, through its host ([data-apps.md](data-apps.md)).
+- The SDK's API client can call every served command; a Data App itself reaches only queries, through its host ([data-apps.md](data-apps.md)).
 - The engine can run every command; the platform embedding it decides which to expose, and to whom.
 
 ## Who it is for
