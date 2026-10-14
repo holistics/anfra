@@ -1,3 +1,12 @@
+## [0.9.0](https://github.com/holistics/anfra/compare/v0.8.0...v0.9.0) (2026-10-14)
+
+### Features
+
+* **engine:** add ingest context for lineage and search ([5c6510f](https://github.com/holistics/anfra/commit/5c6510f62db0ee533992f49228933c8074559102))
+* **engine:** better types ([fa960a0](https://github.com/holistics/anfra/commit/fa960a0154f2da9d4bca5a4d35592563c8d019f0))
+* lineage sdk ([4e3f213](https://github.com/holistics/anfra/commit/4e3f21333aeafd19ab98d9d12767f71348fe9e90))
+* minor improvements and refactoring ([d916b32](https://github.com/holistics/anfra/commit/d916b32cb72aad047f27feb06b5b60389533f07c))
+* **sdk:** fix copywritings ([58e49a8](https://github.com/holistics/anfra/commit/58e49a89b93b13050bf24cfcdf1db10ad6392fc5))
 ## [0.8.0](https://github.com/holistics/anfra/compare/anfra-v0.7.1...anfra-v0.8.0) (2026-10-13)
 
 ### Features
