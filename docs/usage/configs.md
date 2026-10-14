@@ -109,11 +109,14 @@ See [designs/release.md](../designs/release.md#updates).
 | `ANFRA_GITHUB_TOKEN` (or `GH_TOKEN`, `GITHUB_TOKEN`) | A GitHub token, used only when an anonymous request for releases is refused. The first one set is used. |
 | `CI` | When set, anfra never starts a background update check. CI systems set it. |
 
-### Publishing
+### Publishing and login
+
+See [Publishing and login](publishing.md) for signing in, publishing a repo, and managing
+stored credentials. The repo's publish destination is `org.url` in `.anfra/config.yml` (above).
 
 | Variable | Effect |
 |---|---|
-| `ANFRA_REMOTE_SESSION` | **For development, until `anfra login` exists:** the session token `anfra publish` publishes with, sent as the server's session cookie. Unset, `anfra publish` refuses, saying so. |
+| `ANFRA_CLOUD_URL` | Overrides the build's default cloud URL for `anfra auth login`. An explicitly empty value disables that default. An HTTPS origin, or HTTP on literal `127.0.0.1` or `[::1]` for local testing. See [DEVELOPMENT.md](../../DEVELOPMENT.md#cloud-login-url) for build-time configuration and URL requirements. |
 
 ### Data Apps
 
