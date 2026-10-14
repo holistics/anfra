@@ -7,7 +7,7 @@
 export
 
 .DEFAULT_GOAL := help
-.PHONY: help setup sidecars dev dev-tmux build test test-sidecars check
+.PHONY: help setup sidecars dev dev-tmux build build-dev test test-sidecars check
 
 help: ## List the targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -18,7 +18,7 @@ TOOL := go tool -modfile=tools/go.mod
 # <this>+<commit>[.dirty] (internal/meta). Exported, like every variable here, so air's build
 # (make dev) injects it too.
 ANFRA_BASE_VERSION := $(shell sed -n 's/^version: *//p' manifest.yml)
-BUILD_FLAGS := -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION)"
+BUILD_FLAGS = -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION) -X main.defaultCloudURL=$$cloud_url"
 
 # The JavaScript dependencies, brought up to date before make dev starts its processes: after a
 # branch switch or a lockfile change, they are what goes stale. Not --frozen-lockfile, as CI's is:
@@ -70,7 +70,13 @@ dev-tmux: ## The same, under overmind in tmux: restart or attach to each process
 
 build: ## Build the Data App frontend, then anfra with it, into bin/, as a release is
 	pnpm build:web
-	go build $(BUILD_FLAGS) -o bin/ ./cmd/anfra
+	@cloud_url="$$(go run ./scripts/cloud-url)" && \
+		go build $(BUILD_FLAGS) -o bin/ ./cmd/anfra
+
+# Air rebuilds Go without rebuilding the frontend.
+build-dev:
+	@cloud_url="$$(go run ./scripts/cloud-url)" && \
+		go build $(BUILD_FLAGS) -o ./tmp/anfra ./cmd/anfra
 
 # The Go tests that run against real sidecars run only when .env.local names both; make
 # test-sidecars runs them against the pinned releases.
