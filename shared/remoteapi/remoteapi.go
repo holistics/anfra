@@ -25,6 +25,10 @@
 //     lacks;
 //  3. repos.create_blobs: upload those, in batches within the limits;
 //  4. repos.publish: publish every file, by path and blob id, as the whole repo.
+//
+// Before it, `anfra publish` may add the data sources the repo uses and the org
+// lacks (data_sources.list, data_sources.create), when the person agrees: a
+// connection is never sent unasked.
 package remoteapi
 
 import (
@@ -59,11 +63,27 @@ type MissingBlobs struct {
 	OIDs []string `json:"oids" doc:"The blob ids to upload with repos.create_blobs."`
 }
 
-// Group is the ops' group, and its summary.
-const (
-	Group        = "repos"
-	GroupSummary = "Your org's repo: what is published, and publishing a new version of it, as `anfra publish` does."
+// Group is a group of the protocol's ops: the first segment of their names, and
+// its summary. A server serving the ops declares their groups with these, so the
+// names cannot drift from the ops'.
+type Group struct {
+	Name, Summary string
+}
+
+// The protocol's groups.
+var (
+	ReposGroup = Group{
+		Name:    "repos",
+		Summary: "Your org's repo: what is published, and publishing a new version of it, as `anfra publish` does.",
+	}
+	DataSourcesGroup = Group{
+		Name:    "data_sources",
+		Summary: "Your org's data sources: the warehouses its models query, and their connections.",
+	}
 )
+
+// Groups are the protocol's groups; every op is in one.
+var Groups = []Group{ReposGroup, DataSourcesGroup}
 
 // Op is one of the protocol's ops, as it defines it: what a server serves it
 // with, beside its types.
@@ -113,8 +133,70 @@ var (
 	}
 )
 
+// The data source ops `anfra publish` uses, to add what the repo uses and the org
+// lacks. A server's own data source ops (changing, removing) are its own.
+var (
+	// ListDataSourcesOp: struct{} in, ListDataSourcesOut out.
+	ListDataSourcesOp = Op{
+		Name:     "data_sources.list",
+		Summary:  "The org's data sources, by name and type.",
+		Doc:      "Connections are never returned, by this op or any other.",
+		ReadOnly: true,
+	}
+	// CreateDataSourceOp: CreateDataSourceIn in, DataSource out.
+	CreateDataSourceOp = Op{
+		Name:    "data_sources.create",
+		Summary: "Add a data source to the org: a name its models refer to, and the connection to the warehouse.",
+		Doc:     "The connection is kept sealed, and never returned. A name the org already has is refused.",
+		Errors:  []apperr.AnyCode{apperr.ValidationFailed},
+	}
+	// TestDataSourceOp: TestDataSourceIn in, TestDataSourceOut out.
+	TestDataSourceOp = Op{
+		Name:    "data_sources.test",
+		Summary: "Check that the server can connect to a data source: one the org has, by name, or one not yet added, by type and connection.",
+		Doc: "Runs a trivial statement on the warehouse. A connection that fails is an answer, ok false with the warehouse's reason, " +
+			"not an error: the check ran. Test a connection before adding it, or before replacing one, as well as after.",
+		Errors:   []apperr.AnyCode{apperr.ValidationFailed},
+		ReadOnly: true,
+	}
+)
+
 // Ops are the protocol's ops.
-var Ops = []Op{StatusOp, ListMissingBlobsOp, CreateBlobsOp, PublishOp}
+var Ops = []Op{StatusOp, ListMissingBlobsOp, CreateBlobsOp, PublishOp, ListDataSourcesOp, CreateDataSourceOp, TestDataSourceOp}
+
+// DataSource is a data source as a response shows it: never its connection.
+type DataSource struct {
+	Name      string    `json:"name" doc:"What AML's data_source_name refers to."`
+	Type      string    `json:"type" doc:"The database type, which is also the SQL dialect: postgresql, bigquery, snowflake."`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ListDataSourcesOut is the org's data sources.
+type ListDataSourcesOut struct {
+	DataSources []DataSource `json:"data_sources"`
+}
+
+// TestDataSourceIn is a data source to check: one the org has, by Name alone, or
+// one it has not, by Type and Connection (and a Name, to say in the answer).
+type TestDataSourceIn struct {
+	Name       string         `json:"name,omitempty" doc:"A data source the org has; alone, it is the one checked."`
+	Type       string         `json:"type,omitempty" doc:"With connection: the database type of a data source not yet added."`
+	Connection map[string]any `json:"connection,omitempty" doc:"With type: the connection to check, not kept. Write-only."`
+}
+
+// TestDataSourceOut is a check's outcome.
+type TestDataSourceOut struct {
+	OK      bool   `json:"ok" doc:"Whether the server connected and ran a trivial statement."`
+	Message string `json:"message,omitempty" doc:"Why not, in the warehouse's words, when not ok."`
+}
+
+// CreateDataSourceIn is a new data source.
+type CreateDataSourceIn struct {
+	Name       string         `json:"name" doc:"What AML's data_source_name refers to: a letter, then letters, digits and underscores, at most 63."`
+	Type       string         `json:"type" doc:"The database type: postgresql, bigquery, snowflake."`
+	Connection map[string]any `json:"connection" doc:"The database driver's settings (host, user, password and so on), passed to it unchanged. Write-only: no response ever includes it."`
+}
 
 // StatusOut is the org's published revision, and the server's publishing limits.
 type StatusOut struct {

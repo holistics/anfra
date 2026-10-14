@@ -163,3 +163,13 @@ func TestPublishable(t *testing.T) {
 		}
 	}
 }
+
+// Every op is in one of the protocol's groups: the first segment of its name.
+func TestEveryOpIsInAGroup(t *testing.T) {
+	for _, o := range remoteapi.Ops {
+		group, _, _ := strings.Cut(o.Name, ".")
+		if !slices.ContainsFunc(remoteapi.Groups, func(g remoteapi.Group) bool { return g.Name == group }) {
+			t.Errorf("%s is in group %q, which is not among remoteapi.Groups", o.Name, group)
+		}
+	}
+}

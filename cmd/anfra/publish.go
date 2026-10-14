@@ -37,6 +37,9 @@ type publishOptions struct {
 	setRemote string
 	dryRun    bool
 	yes       bool
+	// createDataSources adds the data sources the repo uses and the org lacks
+	// without asking.
+	createDataSources bool
 }
 
 func newPublishCmd() *cobra.Command {
@@ -63,25 +66,50 @@ func newPublishCmd() *cobra.Command {
 	f.StringVarP(&o.message, "message", "m", "", "what this publish is, for the repo's history on the anfra remote server (default: in a git repo, HEAD's commit)")
 	f.StringVar(&o.setRemote, "set-remote", "", "set where the repo publishes, an org's address on an anfra remote server, https://<server>/o/<org> (.anfra/config.yml remote.url), and publish there")
 	f.BoolVar(&o.dryRun, "dry-run", false, "list the files that would be published, and stop")
+	f.BoolVar(&o.createDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server")
 	f.BoolVarP(&o.yes, "yes", "y", false, "publish without asking, though the repo was last published elsewhere (needed without a terminal)")
 	return cmd
 }
 
-// prompt asks a yes-or-no question; ok is false when nobody can answer it (not
-// a terminal).
-type prompt func(question string) (yes, ok bool)
+// prompt asks a question with choices, the last one the default (the safe
+// answer), and returns the choice's index; ok is false when nobody can answer it
+// (not a terminal).
+type prompt func(question string, choices ...string) (choice int, ok bool)
 
+// confirm asks a yes-or-no question, no the default.
+func confirm(ask prompt, question string) (yes, ok bool) {
+	choice, ok := ask(question, "yes", "no")
+	return ok && choice == 0, ok
+}
+
+// stdinPrompt asks on out and reads answers from in: a choice's first letter or
+// whole name, or nothing for the default. One reader for every question, so an
+// answer read ahead is not lost to the next one.
 func stdinPrompt(in io.Reader, out io.Writer) prompt {
-	return func(question string) (bool, bool) {
+	var lines *bufio.Reader
+	return func(question string, choices ...string) (int, bool) {
 		if f, isFile := in.(*os.File); isFile {
 			if stat, err := f.Stat(); err != nil || stat.Mode()&os.ModeCharDevice == 0 {
-				return false, false
+				return 0, false
 			}
 		}
-		fmt.Fprint(out, question+" [y/N] ")
-		line, _ := bufio.NewReader(in).ReadString('\n')
+		if lines == nil {
+			lines = bufio.NewReader(in)
+		}
+		fallback := len(choices) - 1
+		labels := make([]string, len(choices))
+		for i, c := range choices {
+			labels[i] = "[" + c[:1] + "]" + c[1:]
+		}
+		fmt.Fprintf(out, "%s %s (default: %s) ", question, strings.Join(labels, " / "), choices[fallback])
+		line, _ := lines.ReadString('\n')
 		answer := strings.ToLower(strings.TrimSpace(line))
-		return answer == "y" || answer == "yes", true
+		for i, c := range choices {
+			if answer != "" && (answer == c || answer == c[:1]) {
+				return i, true
+			}
+		}
+		return fallback, true
 	}
 }
 
@@ -120,6 +148,9 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 	if err := validateRepo(ctx, errOut); err != nil {
 		return err
 	}
+	if err := offerDataSourcesToRemote(ctx, client, dir, o.createDataSources, errOut, ask); err != nil {
+		return err
+	}
 
 	oids := make(map[string]string, len(files)) // path → blob id
 	sizes := make(map[string]int, len(files))
@@ -153,7 +184,7 @@ func publish(ctx context.Context, dir string, o publishOptions, out, errOut io.W
 		fmt.Fprintf(errOut, "This repo was last published by %s on %s.\n",
 			who(status.PublishedBy), status.PublishedAt.Local().Format(time.DateTime))
 		if !o.yes {
-			yes, ok := ask("Confirm publishing a new version?")
+			yes, ok := confirm(ask, "Confirm publishing a new version?")
 			if !ok {
 				return errors.New("not published: there is no one to confirm it here; pass --yes to publish")
 			}

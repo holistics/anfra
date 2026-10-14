@@ -53,6 +53,14 @@ func IsCode(err error, c apperr.AnyCode) bool {
 	return ok && e.Response.Code == c.Code().Public().String()
 }
 
+// IsForbidden reports a server refusing the caller the op: a server's own code,
+// forbidden, which every anfra server answers a caller lacking the permission
+// with.
+func IsForbidden(err error) bool {
+	e, ok := errors.AsType[*Error](err)
+	return ok && e.Response.Code == "forbidden"
+}
+
 // Missing is the blob ids a blobs_missing answer names; ok is false for any
 // other error.
 func Missing(err error) (oids []string, ok bool) {
@@ -91,6 +99,23 @@ func (c *Client) CreateBlobs(ctx context.Context, blobs [][]byte) ([]string, err
 // Publish publishes in.Files as the whole of the org's repo.
 func (c *Client) Publish(ctx context.Context, in PublishIn) (PublishOut, error) {
 	return call[PublishOut](ctx, c, PublishOp.Name, in)
+}
+
+// ListDataSources is the org's data sources, by name and type.
+func (c *Client) ListDataSources(ctx context.Context) ([]DataSource, error) {
+	out, err := call[ListDataSourcesOut](ctx, c, ListDataSourcesOp.Name, struct{}{})
+	return out.DataSources, err
+}
+
+// CreateDataSource adds a data source to the org, its connection sent to be kept
+// sealed.
+func (c *Client) CreateDataSource(ctx context.Context, in CreateDataSourceIn) (DataSource, error) {
+	return call[DataSource](ctx, c, CreateDataSourceOp.Name, in)
+}
+
+// TestDataSource checks the server can connect to a data source.
+func (c *Client) TestDataSource(ctx context.Context, in TestDataSourceIn) (TestDataSourceOut, error) {
+	return call[TestDataSourceOut](ctx, c, TestDataSourceOp.Name, in)
 }
 
 // call posts in to op and decodes its answer, ignoring members it does not know:

@@ -36,6 +36,45 @@ components:
       required:
         - oids
       type: object
+    CreateDataSourceIn:
+      additionalProperties: false
+      properties:
+        connection:
+          additionalProperties: {}
+          description: "The database driver's settings (host, user, password and so on), passed to it unchanged. Write-only: no response ever includes it."
+          type: object
+        name:
+          description: "What AML's data_source_name refers to: a letter, then letters, digits and underscores, at most 63."
+          type: string
+        type:
+          description: "The database type: postgresql, bigquery, snowflake."
+          type: string
+      required:
+        - name
+        - type
+        - connection
+      type: object
+    DataSource:
+      additionalProperties: false
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        name:
+          description: What AML's data_source_name refers to.
+          type: string
+        type:
+          description: "The database type, which is also the SQL dialect: postgresql, bigquery, snowflake."
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - name
+        - type
+        - created_at
+        - updated_at
+      type: object
     ErrorBodyBlobsMissing:
       additionalProperties: false
       description: Some files' content has not been uploaded.
@@ -217,6 +256,16 @@ components:
         - upload_blobs
         - upload_bytes
       type: object
+    ListDataSourcesOut:
+      additionalProperties: false
+      properties:
+        data_sources:
+          items:
+            $ref: "#/components/schemas/DataSource"
+          type: array
+      required:
+        - data_sources
+      type: object
     ListMissingBlobsIn:
       additionalProperties: false
       properties:
@@ -341,6 +390,32 @@ components:
         - published_at
         - publish
       type: object
+    TestDataSourceIn:
+      additionalProperties: false
+      properties:
+        connection:
+          additionalProperties: {}
+          description: "With type: the connection to check, not kept. Write-only."
+          type: object
+        name:
+          description: A data source the org has; alone, it is the one checked.
+          type: string
+        type:
+          description: "With connection: the database type of a data source not yet added."
+          type: string
+      type: object
+    TestDataSourceOut:
+      additionalProperties: false
+      properties:
+        message:
+          description: Why not, in the warehouse's words, when not ok.
+          type: string
+        ok:
+          description: Whether the server connected and ran a trivial statement.
+          type: boolean
+      required:
+        - ok
+      type: object
     Violation:
       additionalProperties: false
       properties:
@@ -370,6 +445,176 @@ info:
   version: "0"
 openapi: 3.1.0
 paths:
+  /data_sources.create:
+    post:
+      description: The connection is kept sealed, and never returned. A name the org already has is refused.
+      operationId: data_sources.create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDataSourceIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSource"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: "The org published to, by its slug: the end of its address, https://bi.example.com/o/<org>."
+      summary: "Add a data source to the org: a name its models refer to, and the connection to the warehouse."
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /data_sources.list:
+    post:
+      description: Connections are never returned, by this op or any other.
+      operationId: data_sources.list
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListDataSourcesOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: "The org published to, by its slug: the end of its address, https://bi.example.com/o/<org>."
+      summary: The org's data sources, by name and type.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /data_sources.test:
+    post:
+      description: "Runs a trivial statement on the warehouse. A connection that fails is an answer, ok false with the warehouse's reason, not an error: the check ran. Test a connection before adding it, or before replacing one, as well as after."
+      operationId: data_sources.test
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestDataSourceIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDataSourceOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: "The org published to, by its slug: the end of its address, https://bi.example.com/o/<org>."
+      summary: "Check that the server can connect to a data source: one the org has, by name, or one not yet added, by type and connection."
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
   /repos.create_blobs:
     post:
       description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless.
