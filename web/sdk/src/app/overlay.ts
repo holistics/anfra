@@ -2,8 +2,11 @@
  * The overlay: how a frame shows a node on its page, for the host's inspect panel and for the
  * definition's own `locate()`. A tinted box over each marked element and a label naming the node,
  * drawn above everything and ignoring the pointer. In the frame's document because the host cannot
- * reach it; the only UI the SDK draws, and only while someone is inspecting.
+ * reach it, in the kernel's part of the plugin layer, and only while someone is inspecting or
+ * locating.
  */
+import { layerRoot } from './layer';
+
 export const OVERLAY_ID = 'anfra-overlay';
 
 /** How long a flash (the author's `locate()`) stays. */
@@ -44,21 +47,24 @@ export class Overlay {
   private readonly reposition = () => this.draw();
 
   constructor (private readonly doc: Document) {
-    const existing = doc.getElementById(OVERLAY_ID);
-    if (existing) {
-      this.root = existing;
+    const layer = layerRoot(doc, 'anfra');
+    const existing = layer.getElementById(OVERLAY_ID);
+    if (existing instanceof (doc.defaultView?.HTMLElement ?? HTMLElement)) {
+      this.root = existing as HTMLElement;
     } else {
       this.root = doc.createElement('div');
       this.root.id = OVERLAY_ID;
       this.root.setAttribute('aria-hidden', 'true');
       this.root.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;display:none;');
-      (doc.body ?? doc.documentElement).appendChild(this.root);
+      layer.appendChild(this.root);
     }
   }
 
   /** Show the overlay on these elements, labelled, until `hide()` or the next `show()`. */
   show (elements: readonly Element[], text: OverlayLabel): void {
     this.clearTimer();
+    // The page may have been redrawn around it (a definition replacing its body).
+    if (!this.root.isConnected) layerRoot(this.doc, 'anfra').appendChild(this.root);
     this.shown = [...elements];
     this.text = text;
     if (!this.shown.length) { this.hide(); return; }

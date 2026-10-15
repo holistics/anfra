@@ -23,8 +23,34 @@ export interface ProvisionOptions {
   /** Where the definition's relative URLs resolve: the directory it was read from. */
   baseHref: string;
   provision: Provision;
-  /** The frame script (`@holistics/anfra-sdk/app`'s IIFE), run before any of the definition's own. */
+  /** The frame script (`@holistics/anfra-sdk/app`'s kernel, as `__anfraKernel`), run before any of the definition's own. */
   frameScript: string;
+  /** The installed plugins' frame setups (each assigning `__anfraPlugin`), run after the kernel, in this order. */
+  setups?: readonly { name: string, setup: string }[];
+}
+
+/**
+ * The one script a frame starts with: the kernel, then each plugin's setup, then the bootstrap,
+ * all inside one function so that neither the kernel nor a setup is left on the frame's window,
+ * where the definition would find it.
+ */
+export function composeFrameScript (frameScript: string, setups: readonly { name: string, setup: string }[] = []): string {
+  const plugins = setups.map(({ name, setup }) => [
+    '(function () {',
+    'var __anfraPlugin;',
+    setup,
+    `__setups.push([${JSON.stringify(name)}, __anfraPlugin && __anfraPlugin.default]);`,
+    '})();',
+  ].join('\n'));
+  return [
+    '(function () {',
+    'var __anfraKernel;',
+    frameScript,
+    'var __setups = [];',
+    ...plugins,
+    '__anfraKernel.bootstrap(window, __setups);',
+    '})();',
+  ].join('\n');
 }
 
 const charsetRe = /<meta[^>]*charset[^>]*>/i;
@@ -32,7 +58,7 @@ const headRe = /<head[^>]*>/i;
 
 /**
  * A Data App's frame document: its definition, with its base URL, the provision data and the frame
- * script added at the top of its <head> (after <meta charset> when there is one, so the encoding is
+ * script (the kernel and the plugins' setups) added at the top of its <head> (after <meta charset> when there is one, so the encoding is
  * still declared first), so `Anfra` exists before the definition's first script runs. The
  * definition itself never mentions the SDK.
  */
@@ -40,7 +66,7 @@ export function provisionDocument (definition: string, options: ProvisionOptions
   const injected = [
     `<base href="${escapeAttribute(options.baseHref)}">`,
     `<script type="application/json" id="${PROVISION_ELEMENT_ID}">${scriptJSON(options.provision)}</script>`,
-    `<script>${scriptCode(options.frameScript)}</script>`,
+    `<script>${scriptCode(composeFrameScript(options.frameScript, options.setups))}</script>`,
   ].join('\n');
   for (const re of [charsetRe, headRe]) {
     const match = re.exec(definition);

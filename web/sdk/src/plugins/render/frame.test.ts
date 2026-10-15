@@ -1,58 +1,39 @@
 import {
-  afterEach, beforeEach, describe, expect, it, vi,
+  beforeEach, describe, expect, it, vi,
 } from 'vitest';
-import { ValidationError } from '../common/errors';
-import type { SaveFileRequest } from '../common/bridge';
-import type { RenderRequest } from '../common/types';
-import { RENDERER_GLOBAL, RenderFailure, type DrawOptions, type Renderer } from '../render/types';
-import { createRender } from './render';
-import { createSdk } from './sdk';
-import { salesDataset, stubBackend, testUser } from './testSupport';
-import { OVERLAY_ID } from './overlay';
+import { ValidationError } from '../../common/errors';
+import type { Rendering, RenderRequest } from '../../common/types';
+import { RenderFailure, type DrawOptions, type Renderer } from '../../render/types';
+import { testFrame } from '../../app/testFrame';
+import { layerRoot, LAYER_ATTRIBUTE } from '../../app/layer';
+import type { SaveFileRequest } from './types';
+import setupRender from './frame';
 
 type Draw = Renderer['draw'];
-const globals = window as unknown as Record<string, unknown>;
 
 let draw: ReturnType<typeof vi.fn<Draw>>;
 let saved: SaveFileRequest[];
-let rendererAsked: number;
 
 function setup (title?: string) {
-  const sdk = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: stubBackend().backend });
-  sdk.createApp(title ? { title } : {});
-  const render = createRender(window, {
-    ask: {
-      renderer: async () => {
-        rendererAsked += 1;
-        // jsdom runs no injected script: install what the host's code would have.
-        globals[RENDERER_GLOBAL] = globals.__testRenderer;
-        return '';
-      },
-      saveFile: async (request) => { saved.push(request); },
-    },
-    apps: () => sdk.apps,
+  const frame = testFrame({
+    setups: [['render', setupRender]],
+    answers: { 'render.save': async (request: SaveFileRequest) => { saved.push(request); return null; } },
+    bodies: { render: { draw } },
   });
-  return { render, sdk };
+  frame.anfra.createApp(title ? { title } : {});
+  const render = (request: RenderRequest): Promise<Rendering> => frame.anfra.render!(request);
+  return { render, frame };
 }
 
 beforeEach(() => {
   document.body.innerHTML = `
-    <div id="${OVERLAY_ID}"></div>
     <section data-anfra-container="page" data-anfra-label="Overview">
       <div data-anfra-block="trend" data-anfra-label="Revenue / month"><button data-anfra-render="skip">Download</button></div>
       <div data-anfra-block="plain"></div>
     </section>`;
   document.title = 'Sales page';
   saved = [];
-  rendererAsked = 0;
   draw = vi.fn<Draw>(async () => ({ blob: new Blob(['x']), width: 300, height: 200, omitted: [] }));
-  globals.__testRenderer = { draw };
-  delete globals[RENDERER_GLOBAL];
-});
-
-afterEach(() => {
-  delete globals.__testRenderer;
-  delete globals[RENDERER_GLOBAL];
 });
 
 describe('Anfra.render, in the frame', () => {
@@ -85,19 +66,20 @@ describe('Anfra.render, in the frame', () => {
     expect(saved).toHaveLength(1);
   });
 
-  it('asks the host for the renderer once', async () => {
-    const { render } = setup();
+  it('asks the host for the renderer, its body, once', async () => {
+    const { render, frame } = setup();
     await render({ block: 'plain', format: 'png' });
     await render({ block: 'plain', format: 'png' });
-    expect(rendererAsked).toBe(1);
+    expect(frame.calls.filter((call) => call.name === 'anfra.body')).toEqual([{ name: 'anfra.body', request: { plugin: 'render' } }]);
   });
 
-  it('never draws the overlay or what is marked to skip', async () => {
+  it('never draws the plugin layer or what is marked to skip', async () => {
     const { render } = setup();
+    layerRoot(document, 'anfra');
     await render({ format: 'png' });
     const { skip } = draw.mock.calls[0][1] as DrawOptions;
 
-    expect(skip(document.getElementById(OVERLAY_ID)!)).toBe(true);
+    expect(skip(document.querySelector(`[${LAYER_ATTRIBUTE}]`)!)).toBe(true);
     expect(skip(document.querySelector('[data-anfra-render="skip"]')!)).toBe(true);
     expect(skip(document.querySelector('[data-anfra-block="plain"]')!)).toBe(false);
   });
@@ -129,17 +111,23 @@ describe('Anfra.render, in the frame', () => {
 });
 
 describe('Anfra.render, on the SDK', () => {
-  it('is refused where the host serves no rendering, and says so in features', async () => {
-    const without = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: stubBackend().backend });
-    expect(without.features.render).toBe(false);
-    await expect(without.render({ format: 'png' })).rejects.toThrow(/does not render/);
+  it('is absent where the host did not install the plugin', () => {
+    const frame = testFrame();
+    expect(frame.anfra.plugins.has('render')).toBe(false);
+    expect(frame.anfra.render).toBeUndefined();
+  });
 
-    const render = vi.fn();
-    const off = createSdk({
-      datasets: { sales: salesDataset }, user: testUser, backend: stubBackend().backend, render, features: { render: false },
-    });
-    expect(off.features.render).toBe(false);
-    await expect(off.render({ format: 'png' })).rejects.toBeInstanceOf(ValidationError);
-    expect(render).not.toHaveBeenCalled();
+  it('draws for the host, by its call, once the page settles', async () => {
+    const { frame } = setup('Sales');
+
+    const result = await frame.call<Rendering>('render.draw', { block: 'trend', format: 'png' });
+
+    expect(result).toMatchObject({ filename: 'Sales - Revenue - month.png', width: 300 });
+    expect(saved).toHaveLength(1);
+  });
+
+  it('answers the host a refusal as a ValidationError', async () => {
+    const { frame } = setup();
+    await expect(frame.call('render.draw', { block: 'nope', format: 'png' })).rejects.toBeInstanceOf(ValidationError);
   });
 });

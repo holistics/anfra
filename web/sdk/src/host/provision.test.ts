@@ -3,7 +3,7 @@ import { PROVISION_ELEMENT_ID, type Provision } from '../common/bridge';
 import { salesDataset, testUser } from '../app/testSupport';
 import { provisionDocument } from './provision';
 
-const provision: Provision = { datasets: { sales: salesDataset }, user: testUser, hostOrigin: 'http://127.0.0.1:7878' };
+const provision: Provision = { datasets: { sales: salesDataset }, user: testUser, plugins: [], hostOrigin: 'http://127.0.0.1:7878' };
 const options = { baseHref: '/appserve/files/sales/', provision, frameScript: 'window.FRAME = 1;' };
 
 describe('provisionDocument', () => {

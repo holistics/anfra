@@ -1,11 +1,35 @@
 import { App } from './app';
+import type { Query } from './query';
+import type { Control } from './controls';
+import type { EntityExtensions } from './extensions';
 import { DatasetIndex } from './validation';
-import { TransportError, ValidationError } from '../common/errors';
+import { ValidationError } from '../common/errors';
+import type { PluginInfo } from '../common/bridge';
 import type {
   AppDeclaration, Backend, DatasetDescriptor, LineageOptions, LineageResult, LineageTarget, Rendering, RenderRequest,
   SdkEnvironment, SdkFeatures, User,
 } from '../common/types';
 import { version } from '../../package.json';
+
+/** The plugins a host installed, as `Anfra.plugins`. */
+export class InstalledPlugins {
+  /** Each plugin's name and version, in the order the host installed them. */
+  readonly list: readonly Readonly<PluginInfo>[];
+
+  constructor (plugins: readonly PluginInfo[]) {
+    this.list = Object.freeze(plugins.map(({ name, version }) => Object.freeze({ name, version })));
+  }
+
+  /** Whether the host installed the plugin named `name`. */
+  has (name: string): boolean {
+    return this.list.some((plugin) => plugin.name === name);
+  }
+
+  /** The installed plugin's version, or undefined. */
+  version (name: string): string | undefined {
+    return this.list.find((plugin) => plugin.name === name)?.version;
+  }
+}
 
 /** The package's version: anfra's own, as each release publishes the SDK with it. */
 export const VERSION: string = version;
@@ -41,13 +65,16 @@ export class Sdk {
   private readonly backend: Backend;
 
   /**
-   * What the host can do beyond queries. `export` says whether `query.export()` can work here, and
-   * `render` whether `render()` can: show either's button only when it and
-   * `user.permissions.canExportData` are both true. `lineage` says whether `lineage()` can.
+   * The plugins the host installed. A plugin adds its API under its own name (`Anfra.lineage`,
+   * `query.export`), and a plugin that isn't installed adds nothing: check `Anfra.plugins.has(name)`
+   * before using an optional one.
    */
-  readonly features: Readonly<SdkFeatures>;
+  readonly plugins: InstalledPlugins;
 
-  private readonly renderHook?: (request: RenderRequest) => Promise<Rendering>;
+  private readonly features: Readonly<SdkFeatures>;
+
+  /** @internal What plugins add to each query and control, by plugin name (the kernel's `provideOn*`). */
+  readonly extensions: EntityExtensions<Query, Control> = { query: new Map(), control: new Map() };
 
   constructor (environment: SdkEnvironment) {
     if (!environment?.datasets) {
@@ -82,63 +109,15 @@ export class Sdk {
       ]),
     );
     this.backend = environment.backend;
-    this.renderHook = environment.render;
-    this.features = Object.freeze({
-      ...environment.features,
-      // Known from the Backend itself when the host does not say. In a frame the bridge's Backend
-      // has every method, so there it is the host's provision that says.
-      export: environment.features?.export ?? typeof environment.backend.exportQuery === 'function',
-      render: environment.features?.render ?? typeof environment.render === 'function',
-      lineage: environment.features?.lineage ?? typeof environment.backend.lineage === 'function',
-    });
+    this.features = Object.freeze({ ...environment.features });
+    this.plugins = new InstalledPlugins(environment.plugins ?? []);
   }
 
   createApp (declaration: AppDeclaration = {}): App {
-    const app = new App(declaration, this.indices, this.backend, this.features);
+    const app = new App(declaration, this.indices, this.backend, this.features, this.extensions);
     app.index = this._apps.length;
     this._apps.push(app);
     return app;
-  }
-
-  /**
-   * Render the whole app, or one block or container of its structure by id, as a PNG or a PDF, and
-   * have the host save it for the reader. What is drawn is what the page shows now: `await
-   * app.execute()` first for fresh results. Elements marked `data-anfra-render="skip"` are left out.
-   * Rejects with a `ValidationError` naming what to fix.
-   */
-  render (request: RenderRequest): Promise<Rendering> {
-    if (!this.renderHook || this.features.render === false) {
-      return Promise.reject(new ValidationError('This host does not render Data Apps: check Anfra.features.render first.'));
-    }
-    return this.renderHook(request);
-  }
-
-  /**
-   * Trace fields through the repo's catalog: what each one is built from (the fields, models and
-   * sources upstream of it), as a diagram to draw. Name each field by its parent and its name in
-   * it: `{ parent: 'orders', child: 'amount' }` for a model's field, `{ parent: 'ecommerce', child:
-   * 'revenue' }` for a dataset's metric. Nothing needs ingesting first: the host builds the repo's
-   * catalog when it has to. A field that cannot be traced answers its `error`, and the others still
-   * answer; a host that cannot trace lineage (see `features.lineage`) rejects with a
-   * `TransportError`.
-   */
-  lineage (targets: LineageTarget | readonly LineageTarget[], options: LineageOptions = {}): Promise<LineageResult> {
-    const list: LineageTarget[] = Array.isArray(targets) ? [...targets] : [targets as LineageTarget];
-    const named = (s: unknown) => typeof s === 'string' && s.trim() !== '';
-    if (list.length === 0 || list.some((t) => typeof t !== 'object' || t === null || !named(t.parent) || !named(t.child))) {
-      return Promise.reject(new ValidationError(
-        "Anfra.lineage() takes a target or an array of targets, each by its parent and its name in it, such as { parent: 'ecommerce', child: 'revenue' }.",
-      ));
-    }
-    if (!this.backend.lineage || this.features.lineage === false) {
-      return Promise.reject(new TransportError('This host cannot trace lineage: check Anfra.features.lineage first.'));
-    }
-    const { limit, offset, signal = new AbortController().signal } = options;
-    return this.backend.lineage({
-      targets: list.map(({ parent, child }) => ({ parent, child })),
-      ...(limit !== undefined ? { limit } : {}),
-      ...(offset !== undefined ? { offset } : {}),
-    }, signal);
   }
 
   /**
@@ -152,6 +131,29 @@ export class Sdk {
   get apps (): readonly App[] {
     return this._apps;
   }
+}
+
+/**
+ * What anfra's own plugins add to `Anfra`, each only where its host installed it: check
+ * `Anfra.plugins.has(name)` first. Typed here so an author's editor knows them; a plugin outside the
+ * SDK adds its own, untyped unless it says.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- a plugin's member, on the class it is added to
+export interface Sdk {
+  /**
+   * The `lineage` plugin: trace fields through the repo's catalog, as a diagram to draw. Name each
+   * field by its parent and its name in it (`{ parent: 'ecommerce', child: 'revenue' }`). A field
+   * that cannot be traced answers its `error`, and the others still answer.
+   */
+  readonly lineage?: (targets: LineageTarget | readonly LineageTarget[], options?: LineageOptions) => Promise<LineageResult>;
+  /**
+   * The `render` plugin: render the whole app, or one block or container of its structure by id,
+   * as a PNG or a PDF, and have the host save it for the reader. What is drawn is what the page
+   * shows now: `await app.execute()` first for fresh results. Elements marked
+   * `data-anfra-render="skip"` are left out. Show its button only when
+   * `Anfra.user.permissions.canExportData` is true too.
+   */
+  readonly render?: (request: RenderRequest) => Promise<Rendering>;
 }
 
 export function createSdk (environment: SdkEnvironment): Sdk {
