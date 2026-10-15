@@ -433,6 +433,19 @@ export interface components {
             /** @constant */
             status: 422;
         };
+        /** @description The query's result is larger than this server allows. */
+        ErrorBodyResultTooLarge: {
+            /** @constant */
+            code: "result_too_large";
+            context?: components["schemas"]["ContextEntry"][];
+            details?: components["schemas"]["ResultLimit"];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "user";
+            /** @constant */
+            status: 422;
+        };
         /** @description A sidecar is unavailable. */
         ErrorBodySidecarUnavailable: {
             /** @constant */
@@ -667,6 +680,10 @@ export interface components {
             filePath: string;
             /** Format: int64 */
             line?: number;
+        };
+        ResultLimit: {
+            /** Format: int64 */
+            max_rows: number;
         };
         SearchInput: {
             /** @description search query */
@@ -965,14 +982,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description validation_failed, query_invalid */
+            /** @description validation_failed, query_invalid, result_too_large */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"];
+                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"] | components["schemas"]["ErrorBodyResultTooLarge"];
                     };
                 };
             };

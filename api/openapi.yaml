@@ -471,6 +471,36 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyResultTooLarge:
+      additionalProperties: false
+      description: The query's result is larger than this server allows.
+      properties:
+        code:
+          const: result_too_large
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/ResultLimit"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodySidecarUnavailable:
       additionalProperties: false
       description: A sidecar is unavailable.
@@ -927,6 +957,15 @@ components:
       required:
         - filePath
       type: object
+    ResultLimit:
+      additionalProperties: false
+      properties:
+        max_rows:
+          format: int64
+          type: integer
+      required:
+        - max_rows
+      type: object
     SearchInput:
       additionalProperties: false
       properties:
@@ -1377,10 +1416,11 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyValidationFailed"
                       - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                      - $ref: "#/components/schemas/ErrorBodyResultTooLarge"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid
+          description: validation_failed, query_invalid, result_too_large
         "500":
           content:
             application/json:
