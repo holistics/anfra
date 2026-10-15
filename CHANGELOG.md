@@ -1,3 +1,8 @@
+## [0.9.1](https://github.com/holistics/anfra/compare/v0.9.0...v0.9.1) (2026-10-15)
+
+### Bug Fixes
+
+* fix incorrect anfra-node version ([d3fd713](https://github.com/holistics/anfra/commit/d3fd71327e4f7d4bcfd2a95b56f0ac5c5d73d282))
 ## [0.9.0](https://github.com/holistics/anfra/compare/v0.8.0...v0.9.0) (2026-10-14)
 
 ### Features
