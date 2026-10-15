@@ -60,7 +60,7 @@ func TestRunningAsksForOneConnection(t *testing.T) {
 	spy := &spySources{set: warehouse}
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "warehouse", DBType: "postgresql"}}
 	canal := canalquery.NewClient("http://127.0.0.1:1", false) // nothing listens: the run fails after the data source is fetched
-	_, _ = Execute(context.Background(), canal, spy, compiled, NoLimit, Limits{})
+	_ = Stream(context.Background(), canal, spy, compiled, Unbounded, canalquery.Handler{Row: func(canalquery.Row) error { return nil }})
 	if spy.dialects != 0 || len(spy.connections) != 1 || spy.connections[0] != "warehouse" {
 		t.Errorf("running asked for %d dialects and connections %v; want the warehouse connection only", spy.dialects, spy.connections)
 	}
@@ -83,11 +83,11 @@ func TestRunsWithTheDataSourcesSettings(t *testing.T) {
 func TestConnectionRefusals(t *testing.T) {
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "gone"}}
 	canal := canalquery.NewClient("http://127.0.0.1:1", false)
-	if _, err := Execute(context.Background(), canal, &spySources{set: warehouse}, compiled, NoLimit, Limits{}); err == nil || !strings.Contains(err.Error(), `"gone" is not defined`) {
+	if err := Stream(context.Background(), canal, &spySources{set: warehouse}, compiled, Unbounded, canalquery.Handler{}); err == nil || !strings.Contains(err.Error(), `"gone" is not defined`) {
 		t.Errorf("an unknown data source: %v", err)
 	}
 	denied := errors.New("the host refuses this data source")
-	if _, err := Execute(context.Background(), canal, &spySources{set: warehouse, err: denied}, compiled, NoLimit, Limits{}); !errors.Is(err, denied) {
+	if err := Stream(context.Background(), canal, &spySources{set: warehouse, err: denied}, compiled, Unbounded, canalquery.Handler{}); !errors.Is(err, denied) {
 		t.Errorf("the host's refusal: %v, want it as it is", err)
 	}
 }

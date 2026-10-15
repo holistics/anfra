@@ -65,7 +65,11 @@ type Usage struct {
 	Destructive bool           `json:"destructive"`
 	Input       map[string]any `json:"input"`
 	Output      map[string]any `json:"output"`
-	Errors      []ErrorEntry   `json:"errors"`
+	// Events are what the op streams, over HTTP with Accept:
+	// application/x-ndjson, instead of answering its page: for an op that
+	// returns a Run.
+	Events []map[string]any `json:"events,omitempty"`
+	Errors []ErrorEntry     `json:"errors"`
 }
 
 // ErrorEntry is a code an op can fail with.
@@ -133,6 +137,13 @@ func (d Discovery[R]) Usage(ctx context.Context, rt *Runtime, reg *Registry[R], 
 	}
 	u := Usage{Name: m.Name, Summary: m.Summary, Doc: m.Doc, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive,
 		Input: in, Output: out, Errors: []ErrorEntry{}}
+	for _, t := range o.EventTypes() {
+		e, err := rt.Inline(rt.Schema(t))
+		if err != nil {
+			return Usage{}, err
+		}
+		u.Events = append(u.Events, e)
+	}
 	for _, c := range d.codes(m) {
 		u.Errors = append(u.Errors, ErrorEntry{Code: c.String(), Scope: string(c.Scope()), Message: c.Message()})
 	}

@@ -130,7 +130,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		}
 		name = in.DataSource
 		run = func(h canalquery.Handler) error {
-			return query.StreamSQL(ctx, cc.Clients.CanalQuery, ds, in.Query, h)
+			return query.StreamSQL(ctx, cc.Clients.CanalQuery, ds, in.Query, query.Unbounded, h)
 		}
 	} else {
 		aql, limit, err := in.aql()
@@ -153,7 +153,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		}
 		name, described = in.Dataset, compiled.Columns
 		run = func(h canalquery.Handler) error {
-			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, limit, h)
+			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.RowBounds{Truncate: limit}, h)
 		}
 	}
 	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, run)
@@ -205,7 +205,7 @@ func writeCSV(ctx context.Context, store command.ExportStore, filename string, o
 		},
 	})
 	if err != nil {
-		return command.ExportLink{}, failed(err)
+		return command.ExportLink{}, asQueryFailed(err)
 	}
 	if w.Flush(); w.Error() != nil {
 		return command.ExportLink{}, fmt.Errorf("write the export's rows: %w", w.Error())

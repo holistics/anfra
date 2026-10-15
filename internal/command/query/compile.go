@@ -6,24 +6,10 @@ import (
 	"strings"
 
 	"github.com/holistics/anfra/internal/command"
-	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
-	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 )
-
-// failed formalises canal-query's failure to run a query as query_failed, with
-// canal's message. A client-scope error from canal is a request the engine
-// built wrong — the engine's bug, not the data source's — and stays
-// unclassified, as does anything else.
-func failed(err error) error {
-	e, ok := errors.AsType[*canalquery.Error](err)
-	if !ok || e.Scope == "Client" {
-		return err
-	}
-	return apperr.Encapsulate(err, errcode.QueryFailed, e.Message)
-}
 
 // sourceOf is what the invocation's queries compile against and run on: its
 // repo, with the repo's data sources (command.CommandContext.ResolveDataSources).

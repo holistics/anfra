@@ -8,13 +8,15 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
-// QueryResult is the `query` result: the SQL that ran, the AQL it was compiled
-// from, what each column is, and the rows.
+// QueryResult is the `query` result answered whole: the SQL that ran, the AQL it
+// was compiled from, what each column is, and one page of rows — page_size's,
+// or the first MaxPageSize without one.
 type QueryResult struct {
 	SQL     string    `json:"sql"`
 	AQL     string    `json:"aql,omitempty" doc:"the AQL that ran: the query with its Query Input applied; absent for a SQL query"`
 	Columns []Column  `json:"columns" doc:"one per field of result, in order"`
 	Result  QueryRows `json:"result"`
+	HasMore bool      `json:"has_more" doc:"there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"`
 }
 
 type QueryRows struct {

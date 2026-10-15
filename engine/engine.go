@@ -183,6 +183,10 @@ var (
 	// ResultTooLarge: a query whose result has more rows than the Invocation's
 	// QueryLimits allow; it fails rather than being cut short.
 	ResultTooLarge = query.ResultTooLarge
+	// PageTooLarge: a page of a query's result, answered whole, larger in bytes
+	// than the Invocation's QueryLimits allow; it fails rather than being cut
+	// short, so that page numbers stay exact.
+	PageTooLarge = query.PageTooLarge
 	// ErrUnknownDataSource is what DataSources.Connection answers for a name the
 	// repo has no data source by.
 	ErrUnknownDataSource = datasource.ErrUnknown

@@ -13,55 +13,23 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Query runs a query: its rows, and the SQL that produced them.
-var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
-	Name:     "query",
-	Short:    "Run a query: its rows, and the SQL that produced them",
+// Query runs a query: its rows, and the SQL that produced them — as one page,
+// or streamed as it runs (QueryRun).
+var Query = command.Define(command.Def[QueryRunInput, QueryRun]{
+	Name:  "query",
+	Short: "Run a query: its rows, and the SQL that produced them",
+	Long: `Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
+Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
+Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.`,
 	ReadOnly: true,
 	Timeout:  10 * time.Minute,
 	Needs: func(in QueryRunInput) command.Sidecars {
 		return command.Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 	},
 	Check:  QueryRunInput.check,
-	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge},
-	Run: func(ctx context.Context, cc command.CommandContext, in QueryRunInput) (QueryResult, error) {
-		if in.Lang == "sql" {
-			ds, err := in.dataSource(ctx, cc)
-			if err != nil {
-				return QueryResult{}, err
-			}
-			if err := command.RequireSidecars(cc, command.Sidecars{CanalQuery: true}); err != nil {
-				return QueryResult{}, err
-			}
-			r, err := query.ExecuteSQL(ctx, cc.Clients.CanalQuery, ds, in.Query, cc.QueryLimits)
-			if err != nil {
-				return QueryResult{}, failed(err)
-			}
-			return QueryResult{SQL: r.SQL, Columns: describeColumns(r.Header, nil),
-				Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
-		}
-		aql, limit, err := in.aql()
-		if err != nil {
-			return QueryResult{}, err
-		}
-		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
-			return QueryResult{}, err
-		}
-		src, err := sourceOf(cc)
-		if err != nil {
-			return QueryResult{}, err
-		}
-		compiled, err := compileAQL(ctx, cc, src, in.Dataset, aql, in.run())
-		if err != nil {
-			return QueryResult{}, err
-		}
-		r, err := query.Execute(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, limit, cc.QueryLimits)
-		if err != nil {
-			return QueryResult{}, failed(err)
-		}
-		return QueryResult{SQL: r.SQL, AQL: compiled.AQL, Columns: describeColumns(r.Header, compiled.Columns),
-			Result: QueryRows{Fields: r.Fields, Records: r.Records}}, nil
-	},
+	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge},
+	Events: queryEvents,
+	Run:    newQueryRun,
 })
 
 // Compile compiles a query to SQL, without running it.

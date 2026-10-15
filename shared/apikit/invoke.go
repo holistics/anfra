@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"reflect"
 	"slices"
 
 	"github.com/holistics/anfra/shared/apperr"
@@ -19,7 +21,22 @@ import (
 // in an org), send valid input, hold the permissions. Admission comes before
 // decoding, so a caller who may not call the op cannot probe its validation;
 // only authorization needs the input, since it may be derived from it.
-func (o *registered[R, C, In, Out]) Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (_ any, err error) {
+func (o *registered[R, C, In, Out]) Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (any, error) {
+	return o.invoke(ctx, rt, r, raw, nil)
+}
+
+// InvokeStream is Invoke for an op that returns a Run, emitting its events
+// rather than answering its page.
+func (o *registered[R, C, In, Out]) InvokeStream(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(any) error) error {
+	if o.events == nil {
+		return fmt.Errorf("op %q does not stream: it returns no Run", o.decl.Name)
+	}
+	_, err := o.invoke(ctx, rt, r, raw, emit)
+	return err
+}
+
+// invoke runs the op; with emit, streaming its Run.
+func (o *registered[R, C, In, Out]) invoke(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(any) error) (_ any, err error) {
 	var params []any
 	if o.params != nil {
 		params = o.params(r)
@@ -40,14 +57,17 @@ func (o *registered[R, C, In, Out]) Invoke(ctx context.Context, rt *Runtime, r R
 			return nil, err
 		}
 	}
-	out, err := o.handle(ctx, rt, c, in)
+	if emit != nil && rt.Strict {
+		emit = o.checkedEmit(rt, emit)
+	}
+	out, err := o.handle(ctx, rt, c, in, emit)
 	if err != nil {
 		if rt.Strict {
 			o.checkDeclared(rt, err)
 		}
 		return nil, err
 	}
-	if rt.Strict {
+	if rt.Strict && emit == nil {
 		if err := decode.CheckOutput(rt.Schemas, o.OutType(), out); err != nil {
 			panic(fmt.Sprintf("op %q: %v", o.decl.Name, err))
 		}
@@ -55,21 +75,60 @@ func (o *registered[R, C, In, Out]) Invoke(ctx context.Context, rt *Runtime, r R
 	return out, nil
 }
 
-// handle runs the handler within the op's timeout. Running out of it is the
-// host's to name (Runtime.Timeout) — unless the caller's own context ended
-// first, which is the caller going away.
-func (o *registered[R, C, In, Out]) handle(parent context.Context, rt *Runtime, c C, in In) (Out, error) {
+// handle runs the handler within the op's timeout — and, when it returns a Run,
+// reads the run within the same timeout: its page, or with emit its stream.
+// Running out of it is the host's to name (Runtime.Timeout) — unless the
+// caller's own context ended first, which is the caller going away.
+func (o *registered[R, C, In, Out]) handle(parent context.Context, rt *Runtime, c C, in In, emit func(any) error) (any, error) {
 	timeout := o.decl.Timeout
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	out, err := o.decl.Handle(ctx, c, in)
+	out, err := o.read(ctx, c, in, emit)
 	if err != nil && rt.Timeout != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && parent.Err() == nil {
 		return out, rt.Timeout(err)
 	}
 	return out, err
+}
+
+func (o *registered[R, C, In, Out]) read(ctx context.Context, c C, in In, emit func(any) error) (any, error) {
+	out, err := o.decl.Handle(ctx, c, in)
+	if err != nil {
+		return nil, err
+	}
+	r, ok := any(out).(run)
+	if !ok {
+		return out, nil
+	}
+	if emit != nil {
+		// The op has accepted the request: the stream starts, and what fails from
+		// here on ends it rather than answering an error.
+		if err := emit(StreamStart{Type: "start"}); err != nil {
+			return nil, err
+		}
+		return nil, r.stream(ctx, emit)
+	}
+	return r.page(ctx)
+}
+
+// checkedEmit is emit checking each of the op's own events against its event
+// schema, as strict mode checks an output.
+func (o *registered[R, C, In, Out]) checkedEmit(rt *Runtime, emit func(any) error) func(any) error {
+	return func(e any) error {
+		t := reflect.TypeOf(e)
+		if !slices.Contains(o.events, t) {
+			if slices.Contains(slices.Collect(maps.Values(reservedEvents)), t) {
+				return emit(e)
+			}
+			panic(fmt.Sprintf("op %q: emitted a %v, which is none of its events", o.decl.Name, t))
+		}
+		if err := decode.CheckOutput(rt.Schemas, t, e); err != nil {
+			panic(fmt.Sprintf("op %q: event: %v", o.decl.Name, err))
+		}
+		return emit(e)
+	}
 }
 
 // implied are the public codes apikit itself produces, which no op declares.

@@ -5,21 +5,38 @@ import { coreApiBackend, SUGGESTION_LIMIT } from './backend';
 import { coreClient } from './client';
 import type { components } from './schema';
 
-type Answer = { status: number, body: unknown } | Error;
+type Answer = { status: number, body: unknown } | { events: string } | Error;
 
 /** A core API answering each call with the next answer, recording what it was sent. */
 function api (...answers: Answer[]) {
-  const sent: { url: string, body: unknown }[] = [];
+  const sent: { url: string, body: unknown, accept?: string }[] = [];
   const fetchImpl = vi.fn(async (input: Request) => {
-    sent.push({ url: input.url, body: await input.clone().json() });
+    sent.push({ url: input.url, body: await input.clone().json(), accept: input.headers.get('Accept') ?? undefined });
     const answer = answers.shift();
     if (answer instanceof Error) throw answer;
+    if (answer && 'events' in answer) {
+      return new Response(answer.events, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
+    }
     return new Response(JSON.stringify(answer?.body), { status: answer?.status ?? 500, headers: { 'Content-Type': 'application/json' } });
   });
   return { client: coreClient('http://host/api', fetchImpl as unknown as typeof fetch), sent };
 }
 
 const ok = (body: unknown): Answer => ({ status: 200, body });
+/** A streamed answer: each event a line, as the server writes them. */
+const streamed = (...events: unknown[]): Answer => ({ events: events.map((e) => JSON.stringify(e) + '\n').join('') });
+
+/** A query's page, streamed as the server streams it: its SQL, its header, its rows, its summary. */
+function asStream (page: { sql: string, aql?: string, columns: unknown[], result: { fields: string[], records: unknown[][] } }): Answer {
+  return streamed(
+    { type: 'start' },
+    { type: 'compiled', sql: page.sql, ...(page.aql ? { aql: page.aql } : {}) },
+    { type: 'header', columns: page.columns, fields: page.result.fields },
+    ...(page.result.records.length ? [{ type: 'rows', records: page.result.records }] : []),
+    { type: 'summary', row_count: page.result.records.length, has_more: false },
+    { type: 'end', status: 'succeeded' },
+  );
+}
 const fail = (status: number, error: Record<string, unknown>): Answer => ({ status, body: { error } });
 
 const request: BackendQueryRequest = {
@@ -54,12 +71,13 @@ it("names exactly the semantic types the API answers", () => {
 });
 
 describe('coreApiBackend', () => {
-  it('runs a query as core.query, the Query Input passed through, and answers it the way the SDK takes it', async () => {
-    const { client, sent } = api(ok(answered));
+  it('runs a query as core.query, streamed, the Query Input passed through, and answers it the way the SDK takes it', async () => {
+    const { client, sent } = api(asStream(answered));
     const result = await coreApiBackend(client).submitQuery(request, signal);
     expect(sent).toEqual([{
       url: 'http://host/api/core.query',
       body: { query: request.aql, dataset: 'sales', input: request.input, page: 2, page_size: 10, timezone: 'Asia/Ho_Chi_Minh' },
+      accept: 'application/x-ndjson',
     }]);
     expect(result).toMatchObject({
       columns: answered.columns,
@@ -71,19 +89,60 @@ describe('coreApiBackend', () => {
 
   it("fails a query whose columns come without their types, which a Data App decides by", async () => {
     const { semantic_type: _, ...untyped } = answered.columns[0];
-    const { client } = api(ok({ ...answered, columns: [untyped] }));
+    const { client } = api(asStream({ ...answered, columns: [untyped] }));
     await expect(coreApiBackend(client).submitQuery(request, signal)).rejects.toThrowError(
       new QueryError("The server answered column 'status' without its types (semantic_type, arrow_type, db_type), "
         + 'which a Data App decides by: the server is older than this SDK.'),
     );
   });
 
-  it('leaves an unpaged query unpaged', async () => {
-    const { client, sent } = api(ok(answered));
+  describe('an unpaged query', () => {
     const { page, pageSize, ...unpaged } = request;
-    const result = await coreApiBackend(client).submitQuery(unpaged, signal);
-    expect(sent[0].body).not.toHaveProperty('page_size');
-    expect(result.meta).toEqual({ numRows: 2 });
+    const events = [
+      { type: 'start' },
+      { type: 'status', phase: 'compiling' },
+      { type: 'compiled', sql: answered.sql, aql: answered.aql },
+      { type: 'status', phase: 'executing' },
+      { type: 'header', columns: answered.columns, fields: ['status'] },
+      { type: 'ping' },
+      { type: 'rows', records: [['paid']] },
+      { type: 'rows', records: [['open']] },
+      { type: 'summary', row_count: 2, has_more: false },
+    ];
+
+    it('is sent unpaged, and gathered into every row', async () => {
+      const { client, sent } = api(streamed(...events, { type: 'end', status: 'succeeded' }));
+      const result = await coreApiBackend(client).submitQuery(unpaged, signal);
+      expect(sent[0].body).not.toHaveProperty('page_size');
+      expect(sent[0].accept).toBe('application/x-ndjson');
+      expect(result).toMatchObject({
+        columns: answered.columns,
+        values: [['paid'], ['open']],
+        meta: { numRows: 2 },
+        debug: { executedAql: 'explore { … }', executedSql: 'select 1' },
+      });
+    });
+
+    it('fails as its end says, as an error response would', async () => {
+      const failed = { type: 'end', status: 'failed', error: { code: 'result_too_large', scope: 'user', status: 422, message: 'Too many rows.', request_id: 'req_1' } };
+      const { client } = api(streamed(...events.slice(0, 7), failed));
+      const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
+      expect(err).toBeInstanceOf(QueryError);
+      expect(err.message).toBe('Too many rows.');
+    });
+
+    it('fails when the stream is cut before its end', async () => {
+      const { client } = api(streamed(...events.slice(0, 7)));
+      const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
+      expect(err).toBeInstanceOf(TransportError);
+    });
+
+    it('fails as an error response when refused before it starts', async () => {
+      const { client } = api(fail(422, { code: 'validation_failed', scope: 'user', message: 'Invalid.', details: { violations: [{ field: 'dataset', message: 'Unknown dataset.' }] } }));
+      const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
+      expect(err).toBeInstanceOf(QueryError);
+      expect(err.message).toBe('dataset: Unknown dataset.');
+    });
   });
 
   it.each([
@@ -148,7 +207,7 @@ describe('coreApiBackend', () => {
     };
 
     it("are one distinct-values query, narrowed for a text field by what the reader typed", async () => {
-      const { client, sent } = api(ok({ ...answered, result: { fields: ['value'], records: [['paid'], [null], [{ x: 1 }], [3], [true]] } }));
+      const { client, sent } = api(asStream({ ...answered, result: { fields: ['value'], records: [['paid'], [null], [{ x: 1 }], [3], [true]] } }));
       const values = await coreApiBackend(client, { datasets }).fieldSuggestions({ dataset: 'sales', model: 'orders', field: 'status', q: ' pa ' }, signal);
       expect(sent[0].body).toEqual({
         query: 'explore { dimensions { value: orders.status } }',
@@ -161,7 +220,7 @@ describe('coreApiBackend', () => {
     });
 
     it('do not narrow a field that is not text', async () => {
-      const { client, sent } = api(ok({ ...answered, result: { fields: ['value'], records: [] } }));
+      const { client, sent } = api(asStream({ ...answered, result: { fields: ['value'], records: [] } }));
       await coreApiBackend(client, { datasets }).fieldSuggestions({ dataset: 'sales', model: 'orders', field: 'amount', q: '12' }, signal);
       expect((sent[0].body as { input: { filters: unknown[] } }).input.filters).toEqual([]);
     });

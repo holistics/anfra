@@ -51,7 +51,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run a query: its rows, and the SQL that produced them */
+        /**
+         * Run a query: its rows, and the SQL that produced them
+         * @description Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
+         *     Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
+         *     Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.
+         */
         post: operations["core.query"];
         delete?: never;
         options?: never;
@@ -408,6 +413,19 @@ export interface components {
             /** @constant */
             status: 400;
         };
+        /** @description The page is larger than this server answers at once. */
+        ErrorBodyPageTooLarge: {
+            /** @constant */
+            code: "page_too_large";
+            context?: components["schemas"]["ContextEntry"][];
+            details?: components["schemas"]["PageLimit"];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "user";
+            /** @constant */
+            status: 422;
+        };
         /** @description The query failed to run on its data source. */
         ErrorBodyQueryFailed: {
             /** @constant */
@@ -564,6 +582,20 @@ export interface components {
             parent: string;
         };
         NoInput: Record<string, never>;
+        PageLimit: {
+            /** Format: int64 */
+            max_bytes: number;
+        };
+        QueryCompiled: {
+            /** @description the AQL that runs: the query with its Query Input applied; absent for a SQL query */
+            aql?: string;
+            sql: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "compiled";
+        };
         QueryCondition: {
             /** @description an AQL condition */
             expr: string;
@@ -586,6 +618,16 @@ export interface components {
             /** @description the operator's values, by the field's type: a number as a string in JSON's number syntax, such as "9007199254740993" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none */
             values: unknown[];
         };
+        QueryHeader: {
+            /** @description one per field, in order */
+            columns: components["schemas"]["Column"][];
+            fields: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "header";
+        };
         QueryInput: {
             /** @description the data source a SQL query runs against */
             data_source?: string;
@@ -600,11 +642,22 @@ export interface components {
             /** @description the query */
             query: string;
         };
+        QueryRecords: {
+            /** @description one array per row, its values in fields' order, written as a page's records are */
+            records: unknown[][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rows";
+        };
         QueryResult: {
             /** @description the AQL that ran: the query with its Query Input applied; absent for a SQL query */
             aql?: string;
             /** @description one per field of result, in order */
             columns: components["schemas"]["Column"][];
+            /** @description there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row */
+            has_more: boolean;
             result: components["schemas"]["QueryRows"];
             sql: string;
         };
@@ -650,6 +703,17 @@ export interface components {
             /** @description a result column's name */
             field: string;
         };
+        QuerySummary: {
+            /** @description a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false */
+            has_more: boolean;
+            /** Format: int64 */
+            row_count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "summary";
+        };
         QueryTransforms: {
             /** @description AQL conditions ANDed with the query's own filters */
             conditions?: components["schemas"]["QueryCondition"][];
@@ -680,6 +744,16 @@ export interface components {
             filePath: string;
             /** Format: int64 */
             line?: number;
+        };
+        Response: {
+            code: string;
+            context?: components["schemas"]["ContextEntry"][];
+            details?: unknown;
+            message: string;
+            request_id: string;
+            scope: string;
+            /** Format: int64 */
+            status?: number;
         };
         ResultLimit: {
             /** Format: int64 */
@@ -773,6 +847,38 @@ export interface components {
             sidecars?: components["schemas"]["SidecarHealth"];
             /** @enum {string} */
             state: "healthy" | "degraded" | "not_running";
+        };
+        StreamEnd: {
+            error?: components["schemas"]["Response"];
+            /** @enum {string} */
+            status: "succeeded" | "failed";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "end";
+        };
+        StreamPing: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ping";
+        };
+        StreamStart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "start";
+        };
+        StreamStatus: {
+            phase: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "status";
         };
         UpdateInfo: {
             available: boolean;
@@ -969,6 +1075,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueryResult"];
+                    "application/x-ndjson": components["schemas"]["QueryCompiled"] | components["schemas"]["QueryHeader"] | components["schemas"]["QueryRecords"] | components["schemas"]["QuerySummary"] | components["schemas"]["StreamStart"] | components["schemas"]["StreamStatus"] | components["schemas"]["StreamEnd"] | components["schemas"]["StreamPing"];
                 };
             };
             /** @description invalid_request */
@@ -982,14 +1089,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description validation_failed, query_invalid, result_too_large */
+            /** @description validation_failed, query_invalid, result_too_large, page_too_large */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"] | components["schemas"]["ErrorBodyResultTooLarge"];
+                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"] | components["schemas"]["ErrorBodyResultTooLarge"] | components["schemas"]["ErrorBodyPageTooLarge"];
                     };
                 };
             };

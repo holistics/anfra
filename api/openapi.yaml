@@ -413,6 +413,36 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyPageTooLarge:
+      additionalProperties: false
+      description: The page is larger than this server answers at once.
+      properties:
+        code:
+          const: page_too_large
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/PageLimit"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyQueryFailed:
       additionalProperties: false
       description: The query failed to run on its data source.
@@ -714,6 +744,31 @@ components:
     NoInput:
       additionalProperties: false
       type: object
+    PageLimit:
+      additionalProperties: false
+      properties:
+        max_bytes:
+          format: int64
+          type: integer
+      required:
+        - max_bytes
+      type: object
+    QueryCompiled:
+      additionalProperties: false
+      properties:
+        aql:
+          description: "the AQL that runs: the query with its Query Input applied; absent for a SQL query"
+          type: string
+        sql:
+          type: string
+        type:
+          enum:
+            - compiled
+          type: string
+      required:
+        - type
+        - sql
+      type: object
     QueryCondition:
       additionalProperties: false
       properties:
@@ -760,6 +815,27 @@ components:
         - operator
         - values
       type: object
+    QueryHeader:
+      additionalProperties: false
+      properties:
+        columns:
+          description: one per field, in order
+          items:
+            $ref: "#/components/schemas/Column"
+          type: array
+        fields:
+          items:
+            type: string
+          type: array
+        type:
+          enum:
+            - header
+          type: string
+      required:
+        - type
+        - columns
+        - fields
+      type: object
     QueryInput:
       additionalProperties: false
       properties:
@@ -783,6 +859,23 @@ components:
       required:
         - query
       type: object
+    QueryRecords:
+      additionalProperties: false
+      properties:
+        records:
+          description: one array per row, its values in fields' order, written as a page's records are
+          items:
+            items: {}
+            type: array
+          type: array
+        type:
+          enum:
+            - rows
+          type: string
+      required:
+        - type
+        - records
+      type: object
     QueryResult:
       additionalProperties: false
       properties:
@@ -794,6 +887,9 @@ components:
           items:
             $ref: "#/components/schemas/Column"
           type: array
+        has_more:
+          description: "there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"
+          type: boolean
         result:
           $ref: "#/components/schemas/QueryRows"
         sql:
@@ -802,6 +898,7 @@ components:
         - sql
         - columns
         - result
+        - has_more
       type: object
     QueryRows:
       additionalProperties: false
@@ -847,6 +944,7 @@ components:
         page_size:
           description: rows per page; alone, the first page
           format: int64
+          maximum: 10000
           minimum: 1
           type: integer
         query:
@@ -874,6 +972,24 @@ components:
       required:
         - field
         - direction
+      type: object
+    QuerySummary:
+      additionalProperties: false
+      properties:
+        has_more:
+          description: "a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false"
+          type: boolean
+        row_count:
+          format: int64
+          type: integer
+        type:
+          enum:
+            - summary
+          type: string
+      required:
+        - type
+        - row_count
+        - has_more
       type: object
     QueryTransforms:
       additionalProperties: false
@@ -956,6 +1072,31 @@ components:
           type: integer
       required:
         - filePath
+      type: object
+    Response:
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details: {}
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          type: string
+        status:
+          format: int64
+          type: integer
+      required:
+        - code
+        - scope
+        - message
+        - request_id
       type: object
     ResultLimit:
       additionalProperties: false
@@ -1161,6 +1302,57 @@ components:
           type: string
       required:
         - state
+      type: object
+    StreamEnd:
+      additionalProperties: false
+      properties:
+        error:
+          $ref: "#/components/schemas/Response"
+        status:
+          enum:
+            - succeeded
+            - failed
+          type: string
+        type:
+          enum:
+            - end
+          type: string
+      required:
+        - type
+        - status
+      type: object
+    StreamPing:
+      additionalProperties: false
+      properties:
+        type:
+          enum:
+            - ping
+          type: string
+      required:
+        - type
+      type: object
+    StreamStart:
+      additionalProperties: false
+      properties:
+        type:
+          enum:
+            - start
+          type: string
+      required:
+        - type
+      type: object
+    StreamStatus:
+      additionalProperties: false
+      properties:
+        phase:
+          type: string
+        type:
+          enum:
+            - status
+          type: string
+      required:
+        - type
+        - phase
       type: object
     UpdateInfo:
       additionalProperties: false
@@ -1382,6 +1574,10 @@ paths:
       x-read-only: true
   /core.query:
     post:
+      description: |-
+        Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
+        Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
+        Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.
       operationId: core.query
       requestBody:
         content:
@@ -1395,6 +1591,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QueryResult"
+            application/x-ndjson:
+              schema:
+                discriminator:
+                  mapping:
+                    compiled: "#/components/schemas/QueryCompiled"
+                    end: "#/components/schemas/StreamEnd"
+                    header: "#/components/schemas/QueryHeader"
+                    ping: "#/components/schemas/StreamPing"
+                    rows: "#/components/schemas/QueryRecords"
+                    start: "#/components/schemas/StreamStart"
+                    status: "#/components/schemas/StreamStatus"
+                    summary: "#/components/schemas/QuerySummary"
+                  propertyName: type
+                oneOf:
+                  - $ref: "#/components/schemas/QueryCompiled"
+                  - $ref: "#/components/schemas/QueryHeader"
+                  - $ref: "#/components/schemas/QueryRecords"
+                  - $ref: "#/components/schemas/QuerySummary"
+                  - $ref: "#/components/schemas/StreamStart"
+                  - $ref: "#/components/schemas/StreamStatus"
+                  - $ref: "#/components/schemas/StreamEnd"
+                  - $ref: "#/components/schemas/StreamPing"
           description: OK
         "400":
           content:
@@ -1417,10 +1635,11 @@ paths:
                       - $ref: "#/components/schemas/ErrorBodyValidationFailed"
                       - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
                       - $ref: "#/components/schemas/ErrorBodyResultTooLarge"
+                      - $ref: "#/components/schemas/ErrorBodyPageTooLarge"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid, result_too_large
+          description: validation_failed, query_invalid, result_too_large, page_too_large
         "500":
           content:
             application/json:
