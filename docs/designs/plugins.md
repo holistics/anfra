@@ -53,7 +53,9 @@ Events are not calls nobody waits on: "the snapshot changed" is not a request, a
 
 **A call is host-only unless its plugin opts it in to the frame.** Whatever the frame can call, the definition can call, since frame halves share its realm; a call meant for the host (one that spends the host's credentials, say) must not be reachable by forgetting to guard it. A frame call to a host-only call is refused before any middleware or handler runs.
 
-**Every call carries who made it**: the frame (and which mount), the host, or a named plugin's host half. Middleware can treat the definition's queries apart from the ones an agent plugin runs.
+**Every call carries who made it, and who started it.** `caller` is who made it: the frame (and which mount), the host, or a named plugin's host half. `chain` is every hop that led to it, outermost first, and `origin` its start, the frame or the host. A query an agent plugin runs for the frame's prompt has the agent as its `caller` and the frame as its `origin`: a platform's quota counts it by `origin`, an audit log names the agent by `caller`. Without the chain, a frame-callable plugin call would launder what the frame started into the plugin's own calls.
+
+**A plugin may hold its call to what the frame may call** (`call(name, request, { asOrigin: true })`): started by the frame, it is refused unless the frame could make it itself. It is for a handler that forwards a call, or a request, the frame chose, so the plugin can't be made the frame's deputy for a host-only call. It is not the default: an agent plugin's own calls (the one spending the host's model key) are the plugin's to make, whoever asked.
 
 **A frame's event reaches the host only if a plugin declared it** (`host.events`), and only as that plugin's check passed it: what the check returns is what listeners get, and nothing (`undefined`, or a check that throws) drops the event. An event's payload is the definition's to make up, as a call's request is, so the plugin that owns the event is where its shape is checked, once, rather than in each host's listener. `inspect` passes a snapshot or a pick only while the host watches, and only of its shape.
 

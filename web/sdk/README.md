@@ -162,7 +162,11 @@ createHost({
 ```
 
 It may change the request, answer in the plugin's place (not calling `next`), refuse (throwing), or
-change the answer. `call.caller` says who made the call: the frame, the host, or another plugin.
+change the answer. `call.caller` says who made the call: the frame, the host, or another plugin;
+`call.origin` who started it, through any plugins between (`call.chain`). Count what the frame
+started by `origin`: a query a plugin runs for the frame's request has the plugin as its `caller`.
+A handler forwarding a call or request the frame chose makes it with `{ asOrigin: true }`, so it
+is refused if the frame couldn't make it itself.
 
 ### A plugin of your own
 
