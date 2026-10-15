@@ -124,9 +124,9 @@ Render each query's four states: `executing` (loading), `success`, `error` (show
 the real row keys, value types and the AQL that ran.
 
 `Anfra.lineage` is a plain promise outside the app: `execute()` does not re-run it and
-`subscribe` does not hear it. Track its loading state yourself, render a target's `error`, a
-rejected call and an empty diagram (`total` of 0) as well as the diagram, and log the first
-diagram as JSON. Put on the page the definitions, dates and
+`subscribe` does not hear it. Track its loading state yourself, render a target's `error` (a
+string), a rejected call and an empty diagram (`total` of 0) as well as the diagram, and log the
+first diagram as JSON. Put on the page the definitions, dates and
 any rounding a reader needs to trust a number.
 
 ## 5. Run and check it
@@ -147,7 +147,8 @@ If you can drive a browser, open the app, exercise every control and click, and 
 of the app's frame, not just the page. Otherwise ask the user to, and to report what they see
 against what they expected, with that console. Read errors against
 [references/api.md](references/api.md#errors): a `ValidationError` names a declaring line (or an
-`Anfra.lineage` call with an unknown field); a
+`Anfra.lineage` call with an empty or malformed target list; an unknown field comes back
+as that target's `error` or an empty diagram); a
 `QueryError` carries anfra's message about the AQL, or names the bad entry (`filters[0].field`).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
 explains it. If you could not check the interface, say so rather than claiming it works.
