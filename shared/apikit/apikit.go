@@ -64,6 +64,11 @@ type Def[C, In, Out any] struct {
 	HTTP bool // served at POST /api/<Name>
 	MCP  bool // served as an MCP tool named Name
 
+	// Events are the types a Run's events may be, one value of each, when its
+	// Event type is an interface: each its own schema, told apart by its type.
+	// Empty when Event is one struct.
+	Events []any
+
 	// Ext is the host's own declaration of the op, carried to Meta for the host's
 	// transports: who may call it, its rate limit. apikit never reads it.
 	Ext any
@@ -111,9 +116,19 @@ type Op[R any] interface {
 	// InSchema is the input's schema, as Invoke validates it: transports publish
 	// it, so what is validated and what is published are the same.
 	InSchema(rt *Runtime) *huma.Schema
+	// OutType is what Invoke answers: the output, or a Run's page.
 	OutType() reflect.Type
-	// Invoke runs the op on raw JSON input, for the request r.
+	// EventTypes are what InvokeStream emits, beside apikit's own events: a
+	// Run's events, of one type or several (Def.Events). Nil for an op that does
+	// not return a Run, which only Invoke serves.
+	EventTypes() []reflect.Type
+	// Invoke runs the op on raw JSON input, for the request r. An op that
+	// returns a Run answers its page.
 	Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (any, error)
+	// InvokeStream runs an op that returns a Run, emitting its events. An error
+	// returned before the first event is the op refusing, as Invoke's would be;
+	// after it, the run failing.
+	InvokeStream(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(event any) error) error
 }
 
 // name is a dotted op name: a group, then a verb, each lowercase snake_case.
@@ -145,9 +160,16 @@ func Register[R, C, In, Out any](reg *Registry[R], adm Admission[R, C], d *Def[C
 			panic(fmt.Sprintf("op %q: name the input and output types; an anonymous struct has no schema name", d.Name))
 		}
 	}
+	var events []reflect.Type
+	if _, event, ok := runTypes(reflect.TypeFor[Out]()); ok {
+		events = eventTypesOf(d.Name, event, d.Events)
+	} else if len(d.Events) > 0 {
+		panic(fmt.Sprintf("op %q: has events but returns no Run", d.Name))
+	}
 	frozen := *d
 	frozen.Errors = slices.Clone(d.Errors)
-	reg.add(&registered[R, C, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params})
+	frozen.Events = slices.Clone(d.Events)
+	reg.add(&registered[R, C, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params, events: events})
 }
 
 // registered is a registered op: the frozen copy of its declaration, its
@@ -157,6 +179,7 @@ type registered[R, C, In, Out any] struct {
 	adm    Admission[R, C]
 	step   appstep.Def
 	params func(R) []any
+	events []reflect.Type
 }
 
 func (o *registered[R, C, In, Out]) Meta() Meta {
@@ -181,4 +204,8 @@ func (o *registered[R, C, In, Out]) InSchema(rt *Runtime) *huma.Schema {
 	return rt.Schema(reflect.TypeFor[In]())
 }
 
-func (o *registered[R, C, In, Out]) OutType() reflect.Type { return reflect.TypeFor[Out]() }
+func (o *registered[R, C, In, Out]) OutType() reflect.Type {
+	return OutputType(reflect.TypeFor[Out]())
+}
+
+func (o *registered[R, C, In, Out]) EventTypes() []reflect.Type { return o.events }

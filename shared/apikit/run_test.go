@@ -1,0 +1,403 @@
+package apikit_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/httpkit"
+	"github.com/holistics/anfra/shared/jsonkit"
+	"gopkg.in/yaml.v3"
+
+	"github.com/holistics/anfra/shared/apikit"
+)
+
+// An op that returns a Run: it counts to n, a tick event per number, and answers
+// the total as its page. A negative n is refused by the handler, before any
+// event; fail_at fails the run once it has ticked that far.
+
+type countIn struct {
+	N      int `json:"n"`
+	FailAt int `json:"fail_at,omitempty"`
+	// Pause waits this many milliseconds after the first tick.
+	Pause int `json:"pause,omitempty"`
+}
+
+type countPage struct {
+	Total int `json:"total"`
+}
+
+type countEvent struct {
+	Type string `json:"type" enum:"tick"`
+	I    int    `json:"i"`
+}
+
+type countRun = apikit.Run[countPage, countEvent]
+
+func count(name string, timeout time.Duration) *apikit.Def[string, countIn, countRun] {
+	return &apikit.Def[string, countIn, countRun]{
+		Name: name, Summary: "Count.", HTTP: true, MCP: true, Timeout: timeout, Errors: []apperr.AnyCode{notAllow, tooSlow},
+		Handle: func(_ context.Context, _ string, in countIn) (countRun, error) {
+			if in.N < 0 {
+				return countRun{}, apperr.New(apperr.InvalidRequest, "Count to a number that is not negative.")
+			}
+			tick := func(ctx context.Context, emit func(countEvent) error) error {
+				for i := range in.N {
+					if in.FailAt > 0 && i == in.FailAt {
+						return notAllow
+					}
+					if err := emit(countEvent{Type: "tick", I: i}); err != nil {
+						return err
+					}
+					if i == 0 && in.Pause > 0 {
+						select {
+						case <-time.After(time.Duration(in.Pause) * time.Millisecond):
+						case <-ctx.Done():
+							return ctx.Err()
+						}
+					}
+				}
+				return nil
+			}
+			return countRun{
+				Page: func(ctx context.Context) (countPage, error) {
+					total := 0
+					err := tick(ctx, func(countEvent) error { total++; return nil })
+					return countPage{Total: total}, err
+				},
+				Stream: func(ctx context.Context, events apikit.Events[countEvent]) error {
+					if err := events.Status("counting"); err != nil {
+						return err
+					}
+					return tick(ctx, events.Emit)
+				},
+			}, nil
+		},
+	}
+}
+
+// Invoke answers a Run's page; InvokeStream emits start, then the run's status
+// and its events. Its types are the page's and the events'.
+func TestARunAnswersItsPageOrItsEvents(t *testing.T) {
+	o := one(t, count("a.count", 0))
+	if o.OutType().Name() != "countPage" || len(o.EventTypes()) != 1 || o.EventTypes()[0].Name() != "countEvent" {
+		t.Errorf("types = %v, %v; want the page's and the events'", o.OutType(), o.EventTypes())
+	}
+	out, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, []byte(`{"n":3}`))
+	if err != nil || out.(countPage).Total != 3 {
+		t.Errorf("page = %v, %v; want a total of 3", out, err)
+	}
+	var got []string
+	err = o.InvokeStream(context.Background(), runtime(), request{user: "ann"}, []byte(`{"n":2}`), func(e any) error {
+		got = append(got, fmt.Sprintf("%T", e))
+		return nil
+	})
+	if want := "apikit.StreamStart,apikit.StreamStatus,apikit_test.countEvent,apikit_test.countEvent"; err != nil || strings.Join(got, ",") != want {
+		t.Errorf("events = %v, %v; want %s", got, err, want)
+	}
+	greeting := one(t, greet("greetings.create"))
+	if greeting.EventTypes() != nil {
+		t.Error("an op without a Run has an event type")
+	}
+	if err := greeting.InvokeStream(context.Background(), runtime(), request{user: "ann"}, []byte(`{"name":"Zed"}`), func(any) error { return nil }); err == nil {
+		t.Error("an op without a Run streamed")
+	}
+}
+
+// The op's timeout covers reading the run, which happens after the handler has
+// returned: in a page and in a stream alike.
+func TestTheTimeoutCoversTheRun(t *testing.T) {
+	o := one(t, count("slow.count", 20*time.Millisecond))
+	in := []byte(`{"n":2,"pause":5000}`)
+	if _, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, in); code(err) != "too_slow" {
+		t.Errorf("page: got %v, want too_slow", err)
+	}
+	err := o.InvokeStream(context.Background(), runtime(), request{user: "ann"}, in, func(any) error { return nil })
+	if code(err) != "too_slow" {
+		t.Errorf("stream: got %v, want too_slow", err)
+	}
+}
+
+func countServer(t *testing.T, defs ...*apikit.Def[string, countIn, countRun]) http.Handler {
+	t.Helper()
+	reg := newRegistry()
+	for _, d := range defs {
+		apikit.Register(reg, admission, d)
+	}
+	return httpkit.Wrap(adapter().Handler(runtime(), reg), httpkit.Config{Codes: codes})
+}
+
+// lines are an NDJSON body's events, decoded.
+func lines(t *testing.T, body string) []map[string]any {
+	t.Helper()
+	var events []map[string]any
+	for l := range strings.SplitSeq(strings.TrimSpace(body), "\n") {
+		var e map[string]any
+		if err := jsonkit.Unmarshal([]byte(l), &e); err != nil {
+			t.Fatalf("line %q: %v", l, err)
+		}
+		events = append(events, e)
+	}
+	return events
+}
+
+func types(events []map[string]any) string {
+	var ts []string
+	for _, e := range events {
+		ts = append(ts, e["type"].(string))
+	}
+	return strings.Join(ts, ",")
+}
+
+// Over HTTP, a request that accepts NDJSON gets the events, one per line; any
+// other gets the page as JSON.
+func TestHTTPStreamsWhenAsked(t *testing.T) {
+	h := countServer(t, count("a.count", 0))
+	w := do(h, http.MethodPost, "/api/a.count", "ann", `{"n":2}`)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "application/json" || !strings.Contains(w.Body.String(), `"total":2`) {
+		t.Errorf("JSON: %d %s %s", w.Code, w.Header().Get("Content-Type"), w.Body)
+	}
+	w = do(h, http.MethodPost, "/api/a.count", "ann", `{"n":2}`, "Accept", "application/json, application/x-ndjson;q=0.9")
+	if w.Code != 200 || w.Header().Get("Content-Type") != apikit.NDJSON || types(lines(t, w.Body.String())) != "start,status,tick,tick,end" {
+		t.Errorf("stream: %d %s %s", w.Code, w.Header().Get("Content-Type"), w.Body)
+	}
+}
+
+// What the handler refuses, before the stream starts, is an ordinary error
+// response; a failure after it ends the stream with end, failed, carrying the
+// error as an error response's body would. A run that succeeds ends with end,
+// succeeded.
+func TestAStreamsErrors(t *testing.T) {
+	h := countServer(t, count("a.count", 0))
+	w := do(h, http.MethodPost, "/api/a.count", "ann", `{"n":-1}`, "Accept", apikit.NDJSON)
+	if w.Code != 400 || w.Header().Get("Content-Type") != "application/json" || !strings.Contains(w.Body.String(), `"invalid_request"`) {
+		t.Errorf("refused: %d %s", w.Code, w.Body)
+	}
+	w = do(h, http.MethodPost, "/api/a.count", "", `{"n":1}`, "Accept", apikit.NDJSON)
+	if w.Code != 401 {
+		t.Errorf("not admitted: %d %s", w.Code, w.Body)
+	}
+	w = do(h, http.MethodPost, "/api/a.count", "ann", `{"n":3,"fail_at":2}`, "Accept", apikit.NDJSON)
+	events := lines(t, w.Body.String())
+	if w.Code != 200 || types(events) != "start,status,tick,tick,end" {
+		t.Fatalf("failed: %d %s", w.Code, w.Body)
+	}
+	end := events[len(events)-1]
+	if e, _ := end["error"].(map[string]any); end["status"] != "failed" || e["code"] != "not_allowed" || e["status"] != float64(403) || e["request_id"] == "" {
+		t.Errorf("end = %v", end)
+	}
+	w = do(h, http.MethodPost, "/api/a.count", "ann", `{"n":1}`, "Accept", apikit.NDJSON)
+	if end := lines(t, w.Body.String()); end[len(end)-1]["status"] != "succeeded" || end[len(end)-1]["error"] != nil {
+		t.Errorf("succeeded: %s", w.Body)
+	}
+}
+
+// A stream idle for the ping interval gets a ping, which keeps proxies from
+// closing it.
+func TestAnIdleStreamIsPinged(t *testing.T) {
+	defer apikit.SetPingEvery(20 * time.Millisecond)()
+	h := countServer(t, count("a.count", 0))
+	w := do(h, http.MethodPost, "/api/a.count", "ann", `{"n":2,"pause":100}`, "Accept", apikit.NDJSON)
+	got := types(lines(t, w.Body.String()))
+	if !strings.HasPrefix(got, "start,status,tick,ping") || !strings.HasSuffix(got, "ping,tick,end") {
+		t.Errorf("events = %s, want pings between the ticks", got)
+	}
+}
+
+// A mounted op that returns a Run streams through the host's admission.
+func TestAMountedRunStreams(t *testing.T) {
+	lib := apikit.NewRegistry(apikit.RegistryConfig[team]{Namespace: libNS})
+	lib.Group("core", "The library's commands.")
+	apikit.Register(lib, apikit.Admission[team, team]{Admit: func(_ context.Context, t team) (team, error) { return t, nil }},
+		&apikit.Def[team, countIn, countRun]{Name: "core.count", Summary: "Count.", HTTP: true,
+			Handle: func(ctx context.Context, _ team, in countIn) (countRun, error) {
+				return count("core.count", 0).Handle(ctx, "", in)
+			}})
+	var bound []string
+	host := newRegistry()
+	host.Group("core", "Mounted.")
+	apikit.Mount(host, lib, "core.count", mounting(&bound))
+	o, _ := host.Lookup("core.count")
+	if o.EventTypes() == nil {
+		t.Fatal("the mounted op does not stream")
+	}
+	n := 0
+	err := o.InvokeStream(context.Background(), runtime(), request{user: "ann"}, []byte(`{"n":2}`), func(any) error { n++; return nil })
+	if err != nil || n != 4 || len(bound) != 1 {
+		t.Errorf("events %d, err %v, bound %v; want start, status and 2 ticks through the host's admission", n, err, bound)
+	}
+	err = o.InvokeStream(context.Background(), runtime(), request{}, []byte(`{"n":2}`), func(any) error { return nil })
+	if !errors.Is(err, noEntry) {
+		t.Errorf("not admitted: %v", err)
+	}
+}
+
+// The document gives a Run's 200 both forms: the page as JSON, and the events
+// as NDJSON — the op's, then apikit's — told apart by their type. Discovery
+// shows the events too.
+func TestARunsSpec(t *testing.T) {
+	reg := newRegistry()
+	apikit.Register(reg, admission, count("a.count", 0))
+	raw, err := adapter().Spec(runtime(), reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]struct {
+				Content map[string]struct {
+					Schema struct {
+						Ref   string `yaml:"$ref"`
+						OneOf []struct {
+							Ref string `yaml:"$ref"`
+						} `yaml:"oneOf"`
+						Discriminator struct {
+							PropertyName string            `yaml:"propertyName"`
+							Mapping      map[string]string `yaml:"mapping"`
+						} `yaml:"discriminator"`
+					} `yaml:"schema"`
+				} `yaml:"content"`
+			} `yaml:"responses"`
+		} `yaml:"paths"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ok := doc.Paths["/a.count"]["post"].Responses["200"].Content
+	if !strings.HasSuffix(ok["application/json"].Schema.Ref, "/CountPage") {
+		t.Errorf("JSON 200 = %+v, want the page", ok["application/json"])
+	}
+	var refs []string
+	for _, s := range ok[apikit.NDJSON].Schema.OneOf {
+		refs = append(refs, s.Ref[strings.LastIndex(s.Ref, "/")+1:])
+	}
+	if strings.Join(refs, ",") != "CountEvent,StreamStart,StreamStatus,StreamEnd,StreamPing" {
+		t.Errorf("NDJSON 200 = %v", refs)
+	}
+	d := ok[apikit.NDJSON].Schema.Discriminator
+	if d.PropertyName != "type" || !strings.HasSuffix(d.Mapping["tick"], "/CountEvent") || !strings.HasSuffix(d.Mapping["end"], "/StreamEnd") || len(d.Mapping) != 5 {
+		t.Errorf("discriminator = %+v", d)
+	}
+
+	disc := apikit.Discovery[request]{Codes: codes}
+	u, err := disc.Usage(context.Background(), runtime(), reg, request{user: "ann"}, func(apikit.Meta) bool { return true }, "a.count")
+	if err != nil || u.Events == nil || u.Output == nil {
+		t.Errorf("usage = %+v, %v; want its output and its events", u, err)
+	}
+}
+
+// An op's events name their types in a "type" field's enum, none of them
+// apikit's own; Register refuses anything else.
+func TestRegisterChecksTheEventTypes(t *testing.T) {
+	type untyped struct {
+		I int `json:"i"`
+	}
+	type noEnum struct {
+		Type string `json:"type"`
+	}
+	type taken struct {
+		Type string `json:"type" enum:"rows,end"`
+	}
+	register := func(def func(reg *apikit.Registry[request])) func() {
+		return func() { def(newRegistry()) }
+	}
+	mustPanic(t, `string field "type"`, register(func(reg *apikit.Registry[request]) {
+		apikit.Register(reg, admission, &apikit.Def[string, struct{}, apikit.Run[countPage, untyped]]{Name: "a.x", Summary: "x",
+			Handle: func(context.Context, string, struct{}) (apikit.Run[countPage, untyped], error) {
+				return apikit.Run[countPage, untyped]{}, nil
+			}})
+	}))
+	mustPanic(t, `string field "type"`, register(func(reg *apikit.Registry[request]) {
+		apikit.Register(reg, admission, &apikit.Def[string, struct{}, apikit.Run[countPage, noEnum]]{Name: "a.x", Summary: "x",
+			Handle: func(context.Context, string, struct{}) (apikit.Run[countPage, noEnum], error) {
+				return apikit.Run[countPage, noEnum]{}, nil
+			}})
+	}))
+	mustPanic(t, `"end" is reserved by apikit`, register(func(reg *apikit.Registry[request]) {
+		apikit.Register(reg, admission, &apikit.Def[string, struct{}, apikit.Run[countPage, taken]]{Name: "a.x", Summary: "x",
+			Handle: func(context.Context, string, struct{}) (apikit.Run[countPage, taken], error) {
+				return apikit.Run[countPage, taken]{}, nil
+			}})
+	}))
+}
+
+// An op whose events are of several types: an interface, each type declared in
+// Events. Each is its own schema, mapped from its type's name.
+
+type letterEvent interface{ letter() }
+
+type vowel struct {
+	Type string `json:"type" enum:"vowel"`
+	V    string `json:"v"`
+}
+
+type consonant struct {
+	Type string `json:"type" enum:"consonant"`
+	C    string `json:"c"`
+}
+
+func (vowel) letter()     {}
+func (consonant) letter() {}
+
+type lettersRun = apikit.Run[countPage, letterEvent]
+
+func letters() *apikit.Def[string, struct{}, lettersRun] {
+	return &apikit.Def[string, struct{}, lettersRun]{
+		Name: "a.letters", Summary: "Spell.", HTTP: true, Events: []any{vowel{}, consonant{}},
+		Handle: func(context.Context, string, struct{}) (lettersRun, error) {
+			return lettersRun{
+				Page: func(context.Context) (countPage, error) { return countPage{Total: 2}, nil },
+				Stream: func(_ context.Context, events apikit.Events[letterEvent]) error {
+					if err := events.Emit(consonant{Type: "consonant", C: "h"}); err != nil {
+						return err
+					}
+					return events.Emit(vowel{Type: "vowel", V: "i"})
+				},
+			}, nil
+		},
+	}
+}
+
+func TestARunWithSeveralEventTypes(t *testing.T) {
+	reg := newRegistry()
+	apikit.Register(reg, admission, letters())
+	h := httpkit.Wrap(adapter().Handler(runtime(), reg), httpkit.Config{Codes: codes})
+	w := do(h, http.MethodPost, "/api/a.letters", "ann", `{}`, "Accept", apikit.NDJSON)
+	if got := types(lines(t, w.Body.String())); got != "start,consonant,vowel,end" {
+		t.Errorf("events = %s", got)
+	}
+	raw, err := adapter().Spec(runtime(), reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`consonant: "#/components/schemas/Consonant"`, `vowel: "#/components/schemas/Vowel"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("the spec does not map %s", want)
+		}
+	}
+}
+
+// Register refuses events that are an interface without their types declared,
+// a declared type that is not one of them, and two types of one name.
+func TestRegisterChecksSeveralEventTypes(t *testing.T) {
+	for want, events := range map[string][]any{
+		"declare each type in Events":         nil,
+		"does not implement":                  {vowel{}, struct{ Type string }{}},
+		`two of its events are named "vowel"`: {vowel{}, vowelToo{}},
+	} {
+		d := letters()
+		d.Events = events
+		mustPanic(t, want, func() { apikit.Register(newRegistry(), admission, d) })
+	}
+}
+
+type vowelToo struct {
+	Type string `json:"type" enum:"vowel"`
+}
+
+func (vowelToo) letter() {}

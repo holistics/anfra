@@ -27,7 +27,9 @@ import (
 //
 // In is a struct whose fields are the command's args, described by field tags
 // (see Arg); it is also the op's input type. Out is the answer: Run returns one,
-// and Valid, if set, judges it.
+// and Valid, if set, judges it. Out may be an apikit.Run, for a command that
+// answers as it works: its page is then the answer, and its events what the op
+// streams.
 type Def[In, Out any] struct {
 	// Name is dotted by group: "query.compile" is the CLI's `query compile`, and
 	// the op core.query.compile.
@@ -60,6 +62,9 @@ type Def[In, Out any] struct {
 	NonDestructive bool
 	// Timeout bounds the command as an op; zero means apikit's default.
 	Timeout time.Duration
+	// Events are the types of a Run's events, when they are several (see
+	// apikit.Def.Events).
+	Events []any
 }
 
 // OpName is the op a command is served as: core.<command>.
@@ -73,7 +78,8 @@ type Command interface {
 	Long() string
 	// Args are the command's args, parsed from its In.
 	Args() []Arg
-	// Output is the type of the command's answer.
+	// Output is the type of the command's answer: a Run's page, for a command
+	// that returns one.
 	Output() reflect.Type
 	// CanBeInvalid reports whether the command's answer carries a verdict.
 	CanBeInvalid() bool
@@ -118,7 +124,7 @@ func (c *command[In, Out]) Name() string         { return c.def.Name }
 func (c *command[In, Out]) Short() string        { return c.def.Short }
 func (c *command[In, Out]) Long() string         { return c.def.Long }
 func (c *command[In, Out]) Args() []Arg          { return cloneArgs(c.args) }
-func (c *command[In, Out]) Output() reflect.Type { return reflect.TypeFor[Out]() }
+func (c *command[In, Out]) Output() reflect.Type { return apikit.OutputType(reflect.TypeFor[Out]()) }
 func (c *command[In, Out]) CanBeInvalid() bool   { return c.def.Valid != nil }
 
 func (c *command[In, Out]) Errors() []apperr.Code {
@@ -181,7 +187,7 @@ func (c *command[In, Out]) Register(reg *apikit.Registry[CommandContext]) {
 	}
 	apikit.Register(reg, admission, &apikit.Def[CommandContext, In, Out]{
 		Name: OpName(c.def.Name), Summary: c.def.Short, Doc: c.def.Long, Errors: errs,
-		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, NonDestructive: c.def.NonDestructive, Timeout: c.def.Timeout, HTTP: true, MCP: true,
+		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, NonDestructive: c.def.NonDestructive, Timeout: c.def.Timeout, HTTP: true, MCP: true, Events: c.def.Events,
 		Handle: func(ctx context.Context, cc CommandContext, in In) (Out, error) {
 			applyDefaults(c.args, &in)
 			if c.def.Check != nil {

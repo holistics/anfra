@@ -193,9 +193,9 @@ func TestAQLTakesTheLimitOut(t *testing.T) {
 
 // canal-query's failures are query_failed, except a client-scope one: a request
 // the engine built wrong is the engine's bug, and stays unclassified.
-func TestFailed(t *testing.T) {
+func TestAsQueryFailed(t *testing.T) {
 	for scope, want := range map[string]bool{"User": true, "Server": true, "Client": false} {
-		err := failed(fmt.Errorf("execute: %w", &canalquery.Error{Message: "boom", Scope: scope}))
+		err := asQueryFailed(fmt.Errorf("execute: %w", &canalquery.Error{Message: "boom", Scope: scope}))
 		if got := errors.Is(err, errcode.QueryFailed); got != want {
 			t.Errorf("canal scope %s: query_failed = %v, want %v", scope, got, want)
 		}

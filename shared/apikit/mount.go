@@ -76,11 +76,26 @@ type mounted[R, C, From any] struct {
 func (o *mounted[R, C, From]) Meta() Meta                        { return o.meta }
 func (o *mounted[R, C, From]) InSchema(rt *Runtime) *huma.Schema { return o.inner.InSchema(rt) }
 func (o *mounted[R, C, From]) OutType() reflect.Type             { return o.inner.OutType() }
+func (o *mounted[R, C, From]) EventTypes() []reflect.Type        { return o.inner.EventTypes() }
 
 // Invoke runs the host's steps, then the mounted op, within the overlay's
 // timeout when it set one (the op's own still applies inside it). Every call is
 // the host's private step for the op, around the mounted op's own.
-func (o *mounted[R, C, From]) Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (_ any, err error) {
+func (o *mounted[R, C, From]) Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (any, error) {
+	return o.invoke(ctx, rt, r, raw, func(ctx context.Context, from From) (any, error) {
+		return o.inner.Invoke(ctx, rt, from, raw)
+	})
+}
+
+// InvokeStream is Invoke, streaming the mounted op's Run.
+func (o *mounted[R, C, From]) InvokeStream(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(any) error) error {
+	_, err := o.invoke(ctx, rt, r, raw, func(ctx context.Context, from From) (any, error) {
+		return nil, o.inner.InvokeStream(ctx, rt, from, raw, emit)
+	})
+	return err
+}
+
+func (o *mounted[R, C, From]) invoke(ctx context.Context, rt *Runtime, r R, raw []byte, inner func(context.Context, From) (any, error)) (_ any, err error) {
 	var params []any
 	if o.params != nil {
 		params = o.params(r)
@@ -106,12 +121,12 @@ func (o *mounted[R, C, From]) Invoke(ctx context.Context, rt *Runtime, r R, raw 
 		return nil, err
 	}
 	if o.meta.Timeout == 0 || o.meta.Timeout == o.inner.Meta().Timeout {
-		return o.inner.Invoke(ctx, rt, from, raw)
+		return inner(ctx, from)
 	}
-	inner, cancel := context.WithTimeout(ctx, o.meta.Timeout)
+	bounded, cancel := context.WithTimeout(ctx, o.meta.Timeout)
 	defer cancel()
-	out, err := o.inner.Invoke(inner, rt, from, raw)
-	if err != nil && rt.Timeout != nil && errors.Is(inner.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+	out, err := inner(bounded, from)
+	if err != nil && rt.Timeout != nil && errors.Is(bounded.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 		return out, rt.Timeout(err)
 	}
 	return out, err

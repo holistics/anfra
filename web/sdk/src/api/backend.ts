@@ -6,10 +6,15 @@ import type {
 import { coreClient, type CoreClient } from './client';
 import type { components } from './schema';
 import { toSdkError, type ApiErrorBody } from './errors';
+import { readEvents } from './stream';
 
 type QueryRunInput = components['schemas']['QueryRunInput'];
 type Column = components['schemas']['Column'];
 type ExportInput = components['schemas']['ExportInput'];
+type QueryResult = components['schemas']['QueryResult'];
+type QueryEvent = components['schemas']['QueryCompiled'] | components['schemas']['QueryHeader']
+  | components['schemas']['QueryRecords'] | components['schemas']['QuerySummary']
+  | components['schemas']['StreamStart'] | components['schemas']['StreamStatus'];
 
 /** How many values a filter control is offered at most. */
 export const SUGGESTION_LIMIT = 100;
@@ -85,8 +90,41 @@ async function callCoreAPI<T> (call: () => Promise<{ data?: T, error?: unknown, 
   return data;
 }
 
-function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal) {
-  return callCoreAPI(() => client.POST('/core.query', { body, signal }));
+/**
+ * A query, streamed (`Accept: application/x-ndjson`), gathered as it arrives into the page's
+ * shape: the page with `page_size`, and every row without — which one JSON answer, a page, cannot
+ * carry. Every query goes this way, so there is one path; the server holds one batch at a time.
+ */
+async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal): Promise<QueryResult> {
+  const stream = await callCoreAPI(() => client.POST('/core.query', {
+    body, signal, parseAs: 'stream', headers: { Accept: 'application/x-ndjson' },
+  }));
+  if (!stream) throw new TransportError('The server answered the query with no body.');
+  const result: QueryResult = { sql: '', columns: [], result: { fields: [], records: [] }, has_more: false };
+  try {
+    await readEvents<QueryEvent>(stream, (event) => {
+      switch (event.type) {
+        case 'compiled':
+          result.sql = event.sql;
+          if (event.aql) result.aql = event.aql;
+          break;
+        case 'header':
+          result.columns = event.columns;
+          result.result.fields = event.fields;
+          break;
+        case 'rows':
+          for (const row of event.records) result.result.records.push(row);
+          break;
+        case 'summary':
+          result.has_more = event.has_more;
+          break;
+      }
+    });
+  } catch (err) {
+    if (isAbort(err) || !(err instanceof Error) || err.name !== 'TypeError') throw err;
+    throw new TransportError(`The connection to the server failed: ${err.message}`);
+  }
+  return result;
 }
 
 /**

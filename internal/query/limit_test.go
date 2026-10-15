@@ -61,28 +61,34 @@ func canalAnswering(t *testing.T, rows int) (*canalquery.Client, *float64) {
 
 var sqlSource = datasource.DataSource{Name: "warehouse", DBType: "postgresql", Connection: map[string]any{"password": "secret"}}
 
+// rows collects what a stream hands its handler.
+func rows(n *int) canalquery.Handler {
+	return canalquery.Handler{Row: func(canalquery.Row) error { *n++; return nil }}
+}
+
 // A result over the maximum fails with ResultTooLarge, naming the maximum,
-// rather than coming back cut short.
+// rather than coming back cut short; the row past it never reaches the handler.
 func TestResultOverTheMaximumFails(t *testing.T) {
 	canal, truncate := canalAnswering(t, 3)
-	_, err := ExecuteSQL(context.Background(), canal, sqlSource, "select 1", Limits{MaxResultRows: 2})
+	n := 0
+	err := StreamSQL(context.Background(), canal, sqlSource, "select 1", RowBounds{Truncate: NoLimit, Max: 2}, rows(&n))
 	if !errors.Is(err, ResultTooLarge) {
 		t.Fatalf("err = %v, want result_too_large", err)
 	}
 	if d, ok := apperr.DetailsOf(err, ResultTooLarge); !ok || d.MaxRows != 2 {
 		t.Errorf("details = %+v, %v; want max_rows 2", d, ok)
 	}
-	if *truncate != 3 {
-		t.Errorf("asked canal for %v rows, want one past the maximum: 3", *truncate)
+	if *truncate != 3 || n != 2 {
+		t.Errorf("asked canal for %v rows and handled %d; want one past the maximum, 3, and the maximum, 2", *truncate, n)
 	}
 }
 
 // A result at the maximum is answered whole.
 func TestResultAtTheMaximumIsAnswered(t *testing.T) {
 	canal, _ := canalAnswering(t, 2)
-	r, err := ExecuteSQL(context.Background(), canal, sqlSource, "select 1", Limits{MaxResultRows: 2})
-	if err != nil || len(r.Records) != 2 {
-		t.Fatalf("got %v rows, %v; want 2 rows", r, err)
+	n := 0
+	if err := StreamSQL(context.Background(), canal, sqlSource, "select 1", RowBounds{Truncate: NoLimit, Max: 2}, rows(&n)); err != nil || n != 2 {
+		t.Fatalf("got %d rows, %v; want 2 rows", n, err)
 	}
 }
 
@@ -91,11 +97,24 @@ func TestResultAtTheMaximumIsAnswered(t *testing.T) {
 func TestOwnLimitWithinTheMaximum(t *testing.T) {
 	canal, truncate := canalAnswering(t, 2)
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "warehouse", DBType: "postgresql"}}
-	r, err := Execute(context.Background(), canal, datasource.Set{"warehouse": sqlSource}, compiled, 2, Limits{MaxResultRows: 5})
-	if err != nil || len(r.Records) != 2 {
-		t.Fatalf("got %v, %v; want 2 rows", r, err)
+	n := 0
+	err := Stream(context.Background(), canal, datasource.Set{"warehouse": sqlSource}, compiled, RowBounds{Truncate: 2, Max: 5}, rows(&n))
+	if err != nil || n != 2 {
+		t.Fatalf("got %d rows, %v; want 2 rows", n, err)
 	}
 	if *truncate != 2 {
 		t.Errorf("asked canal for %v rows, want the query's own limit: 2", *truncate)
+	}
+}
+
+// Unbounded asks canal for every row, however many: for an export.
+func TestAllRowsAsksForEveryRow(t *testing.T) {
+	canal, truncate := canalAnswering(t, 3)
+	n := 0
+	if err := StreamSQL(context.Background(), canal, sqlSource, "select 1", Unbounded, rows(&n)); err != nil || n != 3 {
+		t.Fatalf("got %d rows, %v; want 3", n, err)
+	}
+	if *truncate != NoLimit {
+		t.Errorf("asked canal for %v rows, want every row", *truncate)
 	}
 }

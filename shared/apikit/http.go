@@ -19,7 +19,9 @@ import (
 
 // HTTP serves a registry's HTTP ops: every op at POST /api/<name> — or below a
 // base the host gives it, /api/o/{org}/<name> — its whole input as the JSON body,
-// its output as the body of a 200, an error as its code's body. It translates and
+// its output as the body of a 200, an error as its code's body. An op that
+// returns a Run answers its page, or streams its events as NDJSON to a request
+// that accepts them (Accept: application/x-ndjson). It translates and
 // nothing more: the op layer validates, admits and runs; the host's hooks add
 // what is its own.
 //
@@ -47,7 +49,7 @@ type HTTP[R any] struct {
 	// op, when the handler is built.
 	Guard func(m Meta) func(w http.ResponseWriter, r *http.Request) error
 	// After sees a successful output before it is written: setting a cookie the
-	// op asked for, say.
+	// op asked for, say. A stream has no output, and is not seen.
 	After func(w http.ResponseWriter, out any)
 	// Headers are the request headers the host reads for an op, published with
 	// it.
@@ -219,6 +221,10 @@ func (h HTTP[R]) serve(w http.ResponseWriter, r *http.Request, rt *Runtime, rout
 		return
 	}
 
+	if o.EventTypes() != nil && wantsStream(r) {
+		h.stream(w, r, rt, req, raw, o)
+		return
+	}
 	out, err := o.Invoke(r.Context(), rt, req, raw)
 	if err != nil {
 		if errors.Is(r.Context().Err(), context.Canceled) {
@@ -255,6 +261,9 @@ func (h HTTP[R]) operation(rt *Runtime, o Op[R], base *Base) *huma.Operation {
 			}},
 		},
 		Extensions: map[string]any{"x-read-only": m.ReadOnly, "x-idempotent": m.Idempotent, "x-destructive": m.Destructive},
+	}
+	if events := o.EventTypes(); events != nil {
+		operation.Responses["200"].Content[NDJSON] = &huma.MediaType{Schema: streamSchema(rt, m.Name, events)}
 	}
 	if base != nil {
 		operation.Servers = []*huma.Server{{URL: root + base.Path, Variables: base.Variables}}
@@ -304,6 +313,26 @@ func (h HTTP[R]) operation(rt *Runtime, o Op[R], base *Base) *huma.Operation {
 		}
 	}
 	return operation
+}
+
+// streamSchema is a stream's line: one of apikit's events or the op's, told
+// apart by their type.
+func streamSchema(rt *Runtime, op string, events []reflect.Type) *huma.Schema {
+	d := &huma.Discriminator{PropertyName: "type", Mapping: map[string]string{}}
+	var oneOf []*huma.Schema
+	for _, t := range events {
+		s := rt.Schema(t)
+		for _, name := range opEventNames(op, t) {
+			d.Mapping[name] = s.Ref
+		}
+		oneOf = append(oneOf, s)
+	}
+	for _, name := range []string{"start", "status", "end", "ping"} {
+		s := rt.Schema(reservedEvents[name])
+		d.Mapping[name] = s.Ref
+		oneOf = append(oneOf, s)
+	}
+	return &huma.Schema{OneOf: oneOf, Discriminator: d}
 }
 
 // errorBodyRef is the reference to code's error body schema, which it adds to

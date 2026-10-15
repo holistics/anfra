@@ -23,6 +23,14 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	WriteJSON(w, resp.Status, apperr.Envelope{Error: resp})
 }
 
+// RenderError is an error as WriteError would answer it, for a response that has
+// already begun — a stream, whose status is sent — to carry in its body. It
+// records the error for the request's log line, as WriteError does.
+func RenderError(r *http.Request, err error) apperr.Response {
+	setError(r.Context(), err)
+	return codesOf(r.Context()).Render(err, requestid.From(r.Context()))
+}
+
 // RetryAfter is implemented by error details that know how long a client should
 // wait before trying again; WriteError sends it as the Retry-After header.
 type RetryAfter interface{ RetryAfterSeconds() int }
