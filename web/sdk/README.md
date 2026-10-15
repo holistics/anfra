@@ -21,7 +21,8 @@ The package root exports nothing; each entrypoint is for a different side of a D
 | Entrypoint | For | Holds |
 |---|---|---|
 | `@holistics/anfra-sdk/app` | a Data App definition, in its frame | the **app runtime** (`createApp`, queries, controls, cross-filters, results and state), and the **frame bootstrap** that provisions it from its host |
-| `@holistics/anfra-sdk/host` | the page hosting a Data App | provisioning its frame, mounting it sandboxed, and answering its calls over the **bridge** |
+| `@holistics/anfra-sdk/host` | the page hosting a Data App | the **host runtime**: the plugins and middleware a page installs, provisioning each frame, mounting it sandboxed, and answering its calls over the **bridge**; `definePlugin` for a plugin of your own |
+| `@holistics/anfra-sdk/plugins` | the page hosting a Data App | anfra's own **plugins**: `core` (queries), `export`, `lineage`, `render`, `inspect` |
 | `@holistics/anfra-sdk/api` | the host's page, scripts, tests | a client for the core API, generated from anfra's spec, and a **Backend** over it |
 | `@holistics/anfra-sdk/common` | all of the above | the contract they share: types, error classes, the bridge's messages |
 
@@ -44,10 +45,15 @@ app.subscribe(() => render(byRegion.result));
 await app.execute();
 ```
 
-A reader can download a query's whole result, with the inputs its result on screen was run with:
+Everything beyond queries comes from a **plugin** the host installed, which adds its API under its
+own name (`query.export`, `Anfra.render`, `Anfra.lineage`). Where the host didn't install it, the
+member isn't there: check `Anfra.plugins.has(name)` before using an optional one.
+
+A reader can download a query's whole result, with the inputs its result on screen was run with
+(the `export` plugin):
 
 ```js
-if (Anfra.features.export && Anfra.user.permissions.canExportData) {
+if (Anfra.plugins.has('export') && Anfra.user.permissions.canExportData) {
   button.onclick = () => byRegion.export().catch((err) => showError(err.message));
 }
 ```
@@ -55,14 +61,15 @@ if (Anfra.features.export && Anfra.user.permissions.canExportData) {
 `export()` resolves once the file is made and the host has started saving it, with its link and
 `rowCount`. The file is a CSV named after the app and the query unless you pass `filename`.
 
-A reader can download a picture of the app, or of one block or container, as they see it:
+A reader can download a picture of the app, or of one block or container, as they see it (the
+`render` plugin):
 
 ```js
 await Anfra.render({ block: 'trend', format: 'png' });   // or 'pdf'; no node: the whole app
 ```
 
-It works only where the host turned rendering on (`mountDataApp({ render: true })`; `anfra serve`
-does). Check `Anfra.features.render` and `Anfra.user.permissions.canExportData` before offering it, and
+It works only where the host installed `render` (`anfra serve` does). Check
+`Anfra.plugins.has('render')` and `Anfra.user.permissions.canExportData` before offering it, and
 mark what shouldn't be drawn (the download button itself) `data-anfra-render="skip"`. Serve images
 and web fonts with CORS: an image without it is left blank (listed in the result's `omitted`), a
 font without it falls back.
@@ -70,7 +77,7 @@ font without it falls back.
 `Anfra.datasets` describes what there is to query. For TypeScript, `@holistics/anfra-sdk/ambient` declares the
 global.
 
-`Anfra.lineage({ parent: 'orders', child: 'amount' })` traces fields through the repo's catalog, each named
+`Anfra.lineage({ parent: 'orders', child: 'amount' })` (the `lineage` plugin) traces fields through the repo's catalog, each named
 by its parent and its name in it: what each is built from, as a diagram to draw (`results[i].diagram`), or
 why it could not be (`results[i].error`). It reads the catalog the host last ingested (`anfra ingest`).
 
@@ -97,33 +104,97 @@ inspects, and never thrown over: a wrong name or a block inside a block is repor
 
 ```ts
 import { coreApiBackend, coreClient, loadDatasets } from '@holistics/anfra-sdk/api';
-import { mountDataApp } from '@holistics/anfra-sdk/host';
+import { createHost } from '@holistics/anfra-sdk/host';
+import {
+  corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin,
+} from '@holistics/anfra-sdk/plugins';
 
 const client = coreClient('/api');                       // the core API, on whichever server serves it
 const { datasets } = await loadDatasets(client);         // every dataset, through core.show
+const backend = coreApiBackend(client, { datasets });    // queries, suggestions, exports and lineage, as core ops
 
-const mounted = mountDataApp({
+const host = createHost({                                // one per page
+  plugins: [
+    corePlugin(backend),                                 // required: runs the queries
+    exportPlugin(backend),                               // query.export()
+    lineagePlugin(backend),                              // Anfra.lineage()
+    renderPlugin(),                                      // Anfra.render(): the host saves PNGs and PDFs the frame makes
+    inspectPlugin(),                                     // what an inspect panel needs
+  ],
+});
+
+const mounted = host.mount({
   container: document.querySelector('#data-app')!,
   definition: await (await fetch('/appserve/files/sales/overview.html')).text(),
   baseHref: '/appserve/files/sales/',                    // where its relative URLs resolve
   datasets,
   user,
-  backend: coreApiBackend(client, { datasets }),         // queries, field suggestions and exports, as core ops; lineage as core.lineage
-  render: true,                                          // let it save PNGs and PDFs of itself (off by default)
 });
-// mounted.setInspecting(true) to receive inspection snapshots; mounted.render({ format: 'pdf' }) to
-// save a picture of the app (needs render: true); mounted.unmount() when done.
+await mounted.call('render.draw', { format: 'pdf' });    // save a picture of the app
+mounted.on('inspect.snapshot', ({ apps, structure }) => …);
+await mounted.call('inspect.watch', true);               // start the snapshots
+mounted.unmount();                                       // when done
 ```
 
-`mountDataApp` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`,
-with the frame bootstrap and the provisioned data ahead of it. The bootstrap's Backend forwards each call to the host over postMessage; the host answers it with the Backend it was given. An export's file is saved from the host's page, by following its link: the frame can't download. A Backend without `exportQuery` makes a host that can't export, and its frames see `Anfra.features.export` false; likewise a Backend without `lineage`, and `Anfra.features.lineage`.
+`host.mount` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`, with
+the frame's kernel, the provisioned data and each plugin's frame setup ahead of it. Every call the
+frame makes, and every call a plugin makes of another, goes through the host's one pipeline to the
+plugin that answers it. An export's file is saved from the host's page, by following its link: the
+frame can't download.
+
+### Middleware
+
+Middleware wraps calls by name (`*`, `core.*`, `core.submitQuery`), in order of `stage`, then name:
+
+```ts
+createHost({
+  plugins,
+  middleware: [{
+    name: 'log',
+    match: '*',
+    handle: async (request, call, next) => {
+      const started = Date.now();
+      try { return await next(request); } finally { console.log(call.name, call.caller, Date.now() - started); }
+    },
+  }],
+});
+```
+
+It may change the request, answer in the plugin's place (not calling `next`), refuse (throwing), or
+change the answer. `call.caller` says who made the call: the frame, the host, or another plugin.
+
+### A plugin of your own
+
+```ts
+import { definePlugin } from '@holistics/anfra-sdk/host';
+
+const notes = definePlugin({
+  name: 'notes',
+  version: '1.0.0',
+  requires: ['core'],                                    // installing it without them fails
+  host: {
+    calls: {
+      add: { frame: true, handler: (note, call) => save(note, call.signal) },   // frame: true, or the frame can't call it
+    },
+  },
+  frame: { setup },                                      // script source; see below
+});
+```
+
+A frame half is script source, since it is provisioned into an opaque-origin frame. Write it as a
+module whose default export takes the kernel (`FrameKernel` from `@holistics/anfra-sdk/app`), and
+build it as an IIFE that leaves its exports in `__anfraPlugin` (esbuild: `format: 'iife'`,
+`globalName: '__anfraPlugin'`). It runs once, before the definition: it adds the plugin's API with
+`kernel.provide` (`Anfra.notes`) or `kernel.provideOnQuery` (`query.notes`), makes calls with
+`kernel.call`, answers the host's with `kernel.handle`, and draws only in `kernel.layer()`, its own
+shadow root above the page. See [docs/designs/plugins.md](../../docs/designs/plugins.md).
 
 ## The boundary
 
 A Data App definition can come from any author, often an agent, which may not think of security while building an analysis. So the SDK guards it for its author, and makes the safe way the easy one:
 
 - Its frame has an opaque origin. Its own requests to the API are cross-origin, which `anfra serve` refuses, and carry no credentials on a platform that has them.
-- The bridge answers only the Backend's methods, `submitQuery`, `fieldSuggestions`, `exportQuery` and the optional `lineage`, and the two a rendering needs, the renderer's code and saving its file. Nothing else of the API is reachable from a frame.
+- The frame reaches only the calls its host's plugins let it make (`frame: true`); every other call is the host's. Nothing else of the API is reachable from a frame.
 - `@holistics/anfra-sdk/app` imports only `common`: the script injected into a frame carries no API client.  A test on the built frame script holds this.
 
 ## Development
@@ -131,7 +202,7 @@ A Data App definition can come from any author, often an agent, which may not th
 From the repository root, after `pnpm install`:
 
 ```sh
-pnpm build:sdk     # dist/{common,app,host,api}.js, with the frame script built into host
+pnpm build:sdk     # dist/{common,app,host,plugins,api}.js, with the frame script built into host and the plugins' into plugins
 pnpm dev:sdk       # the same, rebuilt on change
 pnpm test:sdk      # vitest
 ```
