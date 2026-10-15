@@ -130,6 +130,10 @@ type (
 	// from a request body, or a caller could assert their own permissions.
 	Invocation = command.CommandContext
 
+	// QueryLimits bound what a query may cost the host, set on an Invocation as
+	// QueryLimits. The zero value is the defaults (a million result rows).
+	QueryLimits = query.Limits
+
 	// ExportStore is where exports go, set on an Invocation as Exports: a file
 	// written once, then a link to it that expires. A host provides its own
 	// (object storage and presigned URLs, say); without one, an export fails
@@ -176,6 +180,9 @@ var (
 	QueryFailed = errcode.QueryFailed
 	// ExportsUnavailable: an export, on an Invocation with no Exports store.
 	ExportsUnavailable = errcode.ExportsUnavailable
+	// ResultTooLarge: a query whose result has more rows than the Invocation's
+	// QueryLimits allow; it fails rather than being cut short.
+	ResultTooLarge = query.ResultTooLarge
 	// ErrUnknownDataSource is what DataSources.Connection answers for a name the
 	// repo has no data source by.
 	ErrUnknownDataSource = datasource.ErrUnknown

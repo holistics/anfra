@@ -23,7 +23,7 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 		return command.Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 	},
 	Check:  QueryRunInput.check,
-	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable},
+	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge},
 	Run: func(ctx context.Context, cc command.CommandContext, in QueryRunInput) (QueryResult, error) {
 		if in.Lang == "sql" {
 			ds, err := in.dataSource(ctx, cc)
@@ -33,7 +33,7 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 			if err := command.RequireSidecars(cc, command.Sidecars{CanalQuery: true}); err != nil {
 				return QueryResult{}, err
 			}
-			r, err := query.ExecuteSQL(ctx, cc.Clients.CanalQuery, ds, in.Query)
+			r, err := query.ExecuteSQL(ctx, cc.Clients.CanalQuery, ds, in.Query, cc.QueryLimits)
 			if err != nil {
 				return QueryResult{}, failed(err)
 			}
@@ -55,7 +55,7 @@ var Query = command.Define(command.Def[QueryRunInput, QueryResult]{
 		if err != nil {
 			return QueryResult{}, err
 		}
-		r, err := query.Execute(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, limit)
+		r, err := query.Execute(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, limit, cc.QueryLimits)
 		if err != nil {
 			return QueryResult{}, failed(err)
 		}

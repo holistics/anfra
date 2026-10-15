@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -25,6 +26,47 @@ import (
 // NoLimit is the row limit meaning "no truncation" (canal's truncate_rows uses a
 // negative value for this).
 const NoLimit = -1
+
+// DefaultMaxResultRows is the most rows a query's result may hold when the host
+// sets no maximum (Limits.MaxResultRows).
+const DefaultMaxResultRows = 1_000_000
+
+// Limits bound what a query may cost the host. The zero value is the defaults.
+type Limits struct {
+	// MaxResultRows is the most rows a query's result may hold: a query that
+	// produces more fails with ResultTooLarge rather than being cut short. Zero:
+	// DefaultMaxResultRows.
+	MaxResultRows int
+}
+
+func (l Limits) maxResultRows() int {
+	if l.MaxResultRows > 0 {
+		return l.MaxResultRows
+	}
+	return DefaultMaxResultRows
+}
+
+// ResultTooLarge is a query whose result has more rows than the host allows: it
+// fails rather than being cut short, since a chart drawn from part of a result
+// says something the whole would not. The maximum is in its details.
+var ResultTooLarge = apperr.DefinePublicCodeWith[ResultLimit](errcode.NS, "result_too_large", apperr.User,
+	"The query's result is larger than this server allows.")
+
+// ResultLimit is the maximum a result went past.
+type ResultLimit struct {
+	MaxRows int `json:"max_rows"`
+}
+
+// rowCap is the truncate_rows to ask canal for: the query's own limit when it is
+// within maxRows, otherwise one row past maxRows, so that a result over the
+// maximum shows itself by that extra row instead of being cut (capped). A
+// maxRows of zero or less is no maximum.
+func rowCap(limit, maxRows int) (truncate int, capped bool) {
+	if maxRows <= 0 || (limit != NoLimit && limit <= maxRows) {
+		return limit, false
+	}
+	return maxRows + 1, true
+}
 
 // limitDirectiveRe matches an anfra-level `limit:` directive trailing an AQL
 // query — the closing brace of the query block, whitespace, then `limit: <n>` to
@@ -139,12 +181,13 @@ type RunResult struct {
 // callers can distinguish a compile failure (a query problem) from an execution
 // failure (a data-source/DB problem). truncateRows caps the rows canal returns
 // (NoLimit for all rows); it's how anfra applies the AQL `limit:` directive.
-func Execute(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, truncateRows int) (*RunResult, error) {
+// limits bound the result: past them, the query fails with ResultTooLarge.
+func Execute(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, truncateRows int, limits Limits) (*RunResult, error) {
 	ds, err := dataSourceOf(ctx, sources, compiled)
 	if err != nil {
 		return nil, err
 	}
-	return run(ctx, canal, ds, canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType, TruncateRows: truncateRows})
+	return run(ctx, canal, ds, canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType, TruncateRows: truncateRows}, limits)
 }
 
 // Stream is Execute that hands the result to h as it arrives, its header
@@ -169,9 +212,9 @@ func dataSourceOf(ctx context.Context, sources datasource.DataSources, compiled 
 
 // ExecuteSQL runs sql on ds as it is: the caller wrote it in the data source's
 // dialect, with its own LIMIT. Nothing is compiled into it — no restriction
-// applies.
-func ExecuteSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string) (*RunResult, error) {
-	return run(ctx, canal, ds, canalquery.Statement{SQL: sql, DBType: ds.DBType, TruncateRows: NoLimit})
+// applies. limits are as for Execute.
+func ExecuteSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string, limits Limits) (*RunResult, error) {
+	return run(ctx, canal, ds, canalquery.Statement{SQL: sql, DBType: ds.DBType, TruncateRows: NoLimit}, limits)
 }
 
 // StreamSQL is ExecuteSQL that hands the result to h as it arrives, its header
@@ -180,14 +223,24 @@ func StreamSQL(ctx context.Context, canal *canalquery.Client, ds datasource.Data
 	return stream(ctx, canal, ds, canalquery.Statement{SQL: sql, DBType: ds.DBType, TruncateRows: NoLimit}, h)
 }
 
-func run(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, st canalquery.Statement) (*RunResult, error) {
+// run holds the whole result, so it is where limits bound it: canal is asked for
+// no more than one row past the maximum, and that row fails the query.
+func run(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, st canalquery.Statement, limits Limits) (*RunResult, error) {
 	st, err := on(ds, st)
 	if err != nil {
 		return nil, err
 	}
+	maxRows := limits.maxResultRows()
+	var capped bool
+	st.TruncateRows, capped = rowCap(st.TruncateRows, maxRows)
 	result, err := canal.Execute(ctx, st)
 	if err != nil {
 		return nil, fmt.Errorf("execute query on data source %q: %w", ds.Name, err)
+	}
+	if capped && len(result.Rows) > maxRows {
+		return nil, apperr.NewWith(ResultTooLarge,
+			fmt.Sprintf("The query's result has more than %d rows, more than this server allows. Narrow the query, or add a limit.", maxRows),
+			ResultLimit{MaxRows: maxRows})
 	}
 	return &RunResult{SQL: st.SQL, Header: result.Header, Records: result.Rows}, nil
 }

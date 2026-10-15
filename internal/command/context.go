@@ -6,6 +6,7 @@ import (
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -51,6 +52,10 @@ type CommandContext struct {
 	// DataPerms are the restrictions to compile into queries. Required for
 	// EVERY invocation, not only the ones that read data — see app.Dispatch.
 	DataPerms dataperm.Set
+	// QueryLimits bound what a query may cost the host: a result over them fails
+	// with query.ResultTooLarge rather than being cut short. An export, which
+	// streams to a file, is not bound by them. Zero: the defaults.
+	QueryLimits query.Limits
 	// Attribution names the caller for logs and audit. Never read by a command,
 	// and never by the query layer — see internal/attribution.
 	Attribution attribution.Fields
