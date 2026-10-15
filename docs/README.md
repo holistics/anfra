@@ -19,6 +19,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [result values](designs/result-values.md) | What a query's answer holds: values encoded (every number a string), and each column's semantic, Arrow and database types. |
 | [numbers in the SDK](designs/sdk-numbers.md) | What a Data App gets for a number: the API's string and its column's type, which say what it is; helpers come later. |
 | [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, appserve. |
+| [Data App plugins](designs/plugins.md) | Everything a Data App reaches is a plugin the host installs: calls, middleware, frame halves, the plugin layer. |
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
