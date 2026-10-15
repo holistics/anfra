@@ -55,6 +55,12 @@ Events are not calls nobody waits on: "the snapshot changed" is not a request, a
 
 **Every call carries who made it**: the frame (and which mount), the host, or a named plugin's host half. Middleware can treat the definition's queries apart from the ones an agent plugin runs.
 
+**A frame's event reaches the host only if a plugin declared it** (`host.events`), and only as that plugin's check passed it: what the check returns is what listeners get, and nothing (`undefined`, or a check that throws) drops the event. An event's payload is the definition's to make up, as a call's request is, so the plugin that owns the event is where its shape is checked, once, rather than in each host's listener. `inspect` passes a snapshot or a pick only while the host watches, and only of its shape.
+
+**What crosses back to the frame when a call fails** is the SDK's error class and message (`ValidationError`, `QueryError`, `PermissionError`, `TransportError`), which were written for an author to read. Any other error, from a bug, a middleware or a library, crosses as a plain `QueryError` with no message of its own, since its message may hold what the frame must not see: a URL, an id, a server's error. A handler or middleware that wants the frame to read why throws one of the SDK's classes.
+
+The kernel's own call, a plugin's frame body (`anfra.body`), is a call like any other: frame-callable, through the middleware.
+
 ## The host side
 
 One **host runtime** per page holds the installed plugins and the middleware, and frames are mounted into it. Each host half gets a per-mount context when a frame mounts, disposed when it unmounts: per-frame state (a rate limit on saving files) lives there, state shared across frames (a cache) on the plugin. Middleware is registered once and sees every frame on the page.
@@ -68,6 +74,8 @@ Every call is dispatched by name through one pipeline, whether the frame made it
 Middleware is code the host, or a plugin's host half, puts around calls chosen by name (`*`, `core.*`, `core.submitQuery`). Like Koa's, each layer gets the call and `next`; it may change the call, answer it in place of the plugin (a cache), refuse it, or change the answer. For a streamed call it may wrap the stream itself, item by item, not only its start. Cancellation passes through every layer.
 
 Its order is declared, not taken from registration order: every system surveyed for this design (Rollup, Vite, webpack's Tapable, Fastify) ended up adding explicit ordering when array position stopped being enough. Each call keeps a trace of the layers it went through, for debugging.
+
+**A plugin's middleware is as powerful as the host's**: it sees and may change every call on the page, its own plugin's or not, and so does a host half, which runs with everything the host page has (its session, its API client). Installing a plugin is trusting it with the whole page. A plugin's frame half is the other way round: it runs beside the definition, trusted by nothing.
 
 What middleware is for: logging (what appserve's and the reference host's inspectors show), adding a request id, a cache, masking, a platform checking quota or permission before a call leaves the page. It is not where anything is enforced: a platform enforces on its server, which the host half's requests reach.
 
@@ -150,6 +158,7 @@ Their frame halves are built by the SDK's build (`web/sdk/tsup.config.ts`): `src
 - **Services** (cordis, Koishi; Fastify's decorators): plugins handing each other objects. Every use of another plugin would bypass middleware, so a platform's quota would miss the queries an agent runs; and services bring a dependency graph and lifecycle a host that installs its plugins once doesn't need.
 - **Plugin-defined hooks** (Tapable, Rollup's hooks): extension points through which plugins change each other's behaviour. Middleware covers the host; in the frame a hook enforces nothing. The one need for fan-out (many plugins contributing to one, such as tools for an agent) is an extension point a plugin owns, decided with the agent plugin.
 - **Hot reload**: plugins are installed when a page loads.
+- **Scoping a plugin's middleware to its own calls**: a plugin is trusted with the page anyway (its host half could make any call itself), so a scope would read as a boundary it isn't. A host that installs a plugin it trusts less wraps it, or doesn't install it.
 - **Plugins adding to the definition's markup** (a "view data" button on every block): the definition is everything the author wrote. If wanted, an attribute the author writes opts a block in.
 - **Definitions declaring the plugins they need**, refused at mount when one is missing: additive, if hosts want it.
 

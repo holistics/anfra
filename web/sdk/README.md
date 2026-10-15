@@ -177,10 +177,18 @@ const notes = definePlugin({
     calls: {
       add: { frame: true, handler: (note, call) => save(note, call.signal) },   // frame: true, or the frame can't call it
     },
+    events: {
+      changed: (payload) => (typeof payload === 'string' ? payload : undefined),  // a frame's event, checked; undefined drops it
+    },
   },
   frame: { setup },                                      // script source; see below
 });
 ```
+
+A plugin's host half runs with everything the host page has, and its middleware sees every call on
+the page: installing a plugin is trusting it with the page. Treat what the frame sends (a call's
+request, an event's payload) as untrusted, and throw one of the SDK's error classes for a failure
+the frame should read: any other error reaches it only as "The call failed."
 
 A frame half is script source, since it is provisioned into an opaque-origin frame. Write it as a
 module whose default export takes the kernel (`FrameKernel` from `@holistics/anfra-sdk/app`), and
