@@ -3,48 +3,47 @@
 // Node, not jsdom: esbuild can't run under jsdom. The frame script is loaded into a fresh `vm`
 // context instead, with a stand-in for the frame's window.
 import {
-  afterAll, afterEach, beforeAll, describe, expect, it, vi,
+  afterEach, beforeAll, describe, expect, it, vi,
 } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { build } from 'tsup';
+import { build } from 'esbuild';
 import { PROVISION_ELEMENT_ID, type FrameMessage, type Provision } from '../common/bridge';
+import { composeFrameScript } from '../host/provision';
 import { salesDataset, testUser } from './testSupport';
 
-// The frame script is what a host injects into a Data App's frame. Build it the way `pnpm build`
-// does and run it as a frame would, so this checks the artifact, not the source.
+// The frame script is what a host injects into a Data App's frame: the kernel, then each plugin's
+// setup. Build them the way `pnpm build` does (tsup.config.ts) and run them as a frame would, so
+// this checks the artifacts, not the source.
 const here = path.dirname(fileURLToPath(import.meta.url));
-let outDir: string;
+let kernel: string;
+let inspect: string;
 let code: string;
 
-beforeAll(async () => {
-  outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'anfra-sdk-frame-'));
-  await build({
-    entry: { frame: path.join(here, 'frame.ts') },
-    format: ['iife'],
-    target: 'es2020',
-    outDir,
-    silent: true,
-    config: false,
+async function script (entry: string, globalName: string): Promise<string> {
+  const result = await build({
+    entryPoints: [path.join(here, entry)], bundle: true, format: 'iife', globalName, target: 'es2020', write: false, keepNames: true,
   });
-  code = fs.readFileSync(path.join(outDir, 'frame.global.js'), 'utf-8');
-}, 60_000);
+  return result.outputFiles[0].text;
+}
 
-afterAll(() => {
-  fs.rmSync(outDir, { recursive: true, force: true });
-});
+beforeAll(async () => {
+  kernel = await script('frame.ts', '__anfraKernel');
+  inspect = await script('../plugins/inspect/frame.ts', '__anfraPlugin');
+  code = composeFrameScript(kernel, [{ name: 'inspect', setup: inspect }]);
+}, 60_000);
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe('the frame script', () => {
-  it('provisions the SDK from its host, installs `Anfra`, and says it is ready', () => {
+  it('provisions the SDK from its host, runs the plugins\' setups, installs `Anfra`, and says it is ready', () => {
     vi.useFakeTimers();
-    const provision: Provision = { datasets: { sales: salesDataset }, user: testUser, hostOrigin: 'http://127.0.0.1:7878' };
+    const provision: Provision = {
+      datasets: { sales: salesDataset }, user: testUser, plugins: [{ name: 'core', version: '1' }, { name: 'inspect', version: '1' }], hostOrigin: 'http://127.0.0.1:7878',
+    };
     const posted: [FrameMessage, string][] = [];
     const parent = { postMessage: (message: FrameMessage, origin: string) => posted.push([message, origin]) };
     let onMessage: ((event: { source: unknown, data: unknown }) => void) | undefined;
@@ -59,25 +58,29 @@ describe('the frame script', () => {
       },
     };
     frame.window = frame;
+    frame.console = console;
 
     vm.runInNewContext(code, frame);
 
-    const anfra = frame.Anfra as { createApp: unknown, datasets: Record<string, unknown>, user: unknown };
+    const anfra = frame.Anfra as { createApp: unknown, datasets: Record<string, unknown>, plugins: { has: (name: string) => boolean } };
     expect(typeof anfra?.createApp).toBe('function');
     expect(Object.keys(anfra.datasets)).toEqual(['sales']);
+    expect(anfra.plugins.has('inspect')).toBe(true);
     expect(posted).toEqual([[{ type: 'anfra:ready' }, 'http://127.0.0.1:7878']]);
-    // The host's messages: watching posts a snapshot at once (apps and structure), and a locate
-    // posts a fresh one after. No document is touched until then: nothing is drawn or observed
-    // for a frame nobody inspects.
-    onMessage!({ source: parent, data: { type: 'anfra:inspect-watch', open: true } });
-    expect(posted.at(-1)).toEqual([{ type: 'anfra:inspect', apps: [], structure: { nodes: [], usage: {} } }, 'http://127.0.0.1:7878']);
-    onMessage!({ source: parent, data: { type: 'anfra:locate', target: { app: 0, kind: 'query', name: 'nothing' } } });
+    // Neither the kernel nor a setup is left on the frame's window.
+    expect(Object.keys(frame).filter((key) => key.startsWith('__anfra'))).toEqual([]);
+    // The host's events to `inspect`: watching posts a snapshot at once (apps and structure), and
+    // a locate posts a fresh one after. No document is touched until then: nothing is drawn or
+    // observed for a frame nobody inspects.
+    onMessage!({ source: parent, data: { type: 'anfra:event', name: 'inspect.watch', payload: true } });
+    expect(posted.at(-1)).toEqual([{ type: 'anfra:event', name: 'inspect.snapshot', payload: { apps: [], structure: { nodes: [], usage: {} } } }, 'http://127.0.0.1:7878']);
+    onMessage!({ source: parent, data: { type: 'anfra:event', name: 'inspect.locate', payload: { app: 0, kind: 'query', name: 'nothing' } } });
     vi.advanceTimersByTime(100);
     expect(posted).toHaveLength(3);
-    expect(posted.at(-1)?.[0]).toMatchObject({ type: 'anfra:inspect', apps: [] });
+    expect(posted.at(-1)?.[0]).toMatchObject({ type: 'anfra:event', name: 'inspect.snapshot' });
   });
 
-  it('carries no API client: a frame reaches data only over the bridge', () => {
+  it('carries no API client, nor does a plugin\'s setup: a frame reaches data only over the bridge', () => {
     for (const marker of ['openapi-fetch', '/core.query', '/core.show', 'coreApiBackend', 'fetch(']) {
       expect(code, marker).not.toContain(marker);
     }

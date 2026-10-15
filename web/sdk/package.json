@@ -1,7 +1,7 @@
 {
   "name": "@holistics/anfra-sdk",
   "version": "0.9.1",
-  "description": "Data Apps on anfra: the authoring layer (app), what hosts one (host), the core API client (api), and their shared contract (common)",
+  "description": "Data Apps on anfra: the authoring layer (app), what hosts one (host), anfra's plugins (plugins), the core API client (api), and their shared contract (common)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -25,6 +25,10 @@
     "./api": {
       "types": "./dist/api.d.ts",
       "import": "./dist/api.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js"
     },
     "./ambient": {
       "types": "./dist/ambient.d.ts"

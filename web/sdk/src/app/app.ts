@@ -12,11 +12,13 @@ import {
 } from './validation';
 import { buildExportRequest, runQuery, type SubmitContext } from './execution/submitQuery';
 import { deriveSelection } from './selection';
+import { applyExtensions, type EntityExtensions } from './extensions';
 import { markersFor } from './structure';
 import { overlayFor, scrollTo } from './overlay';
 import type { AppContext } from './internal';
 import type {
   Backend,
+  BackendExportRequest,
   AppDeclaration,
   AppJson,
   DateDrillDeclaration,
@@ -192,6 +194,8 @@ export class App extends Observable implements AppContext {
     datasets: Record<string, DatasetIndex>,
     backend: Backend,
     features?: SdkFeatures,
+    /** @internal What plugins add to each query and control. */
+    private readonly extensions?: EntityExtensions<Query, Control>,
   ) {
     super();
     this.title = declaration.title;
@@ -224,7 +228,7 @@ export class App extends Observable implements AppContext {
 
   createQuery (name: string, declaration: QueryDeclaration): Query {
     this.assertNameFree(name, 'query');
-    const query = new Query(name, this, declaration);
+    const query = applyExtensions(new Query(name, this, declaration), this.extensions?.query);
     this._queries.set(name, query);
     // Declaring is a change too: a host inspecting the app sees the new entity at once, and a
     // dynamic app's render runs once more, which it already handles for an entity with no result.
@@ -237,7 +241,7 @@ export class App extends Observable implements AppContext {
     const dataset = declaration.dataset
       ? this.datasetIndex(declaration.dataset, name)
       : this.soleDataset(name, declaration.field);
-    const filter = new Filter(name, this, declaration, dataset, this.backend);
+    const filter = applyExtensions(new Filter(name, this, declaration, dataset, this.backend), this.extensions?.control);
     this._controls.set(name, filter);
     this.notify();
     return filter;
@@ -255,7 +259,7 @@ export class App extends Observable implements AppContext {
       );
     }
     this.assertNameFree(name, 'date drill control');
-    const control = new DateDrillControl(name, this, declaration);
+    const control = applyExtensions(new DateDrillControl(name, this, declaration), this.extensions?.control);
     this._controls.set(name, control);
     this.notify();
     return control;
@@ -611,14 +615,15 @@ export class App extends Observable implements AppContext {
   }
 
   /**
-   * @internal Backs `query.export()`. Built from the applied state, as `fetchPage` is, so the file
-   * holds what the reader is looking at, every row of it. Touches nothing on the query.
+   * @internal Backs the `export` plugin's `query.export()`. Built from the applied state, as
+   * `fetchPage` is, so the file holds what the reader is looking at, every row of it. `send` makes
+   * the export (the plugin's call); this touches nothing on the query.
    */
-  async exportQuery (query: Query, options: ExportOptions = {}): Promise<ExportResult> {
-    const { backend } = this;
-    if (this.features?.export === false || !backend.exportQuery) {
-      throw new TransportError('This host cannot make exports.', undefined, query.name);
-    }
+  async exportQuery (
+    query: Query,
+    options: ExportOptions,
+    send: (request: BackendExportRequest, signal: AbortSignal) => Promise<ExportResult>,
+  ): Promise<ExportResult> {
     const request = buildExportRequest(
       query,
       this.mappingsTo(query.name),
@@ -626,11 +631,11 @@ export class App extends Observable implements AppContext {
         conditions: this.selectionConditionsFor(query.name, 'applied'),
         expression: this.selectionExpressionFor(query.name, 'applied'),
       },
-      { backend, timezone: this._timezone, title: this.title },
+      { backend: this.backend, timezone: this._timezone, title: this.title },
       options,
     );
     try {
-      return await backend.exportQuery(request, options.signal ?? new AbortController().signal);
+      return await send(request, options.signal ?? new AbortController().signal);
     } catch (err) {
       if (isAbort(err)) throw err;
       throw toExportError(err, query.name);

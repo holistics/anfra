@@ -1,6 +1,7 @@
 import {
   afterEach, describe, expect, it,
 } from 'vitest';
+import { layerRoot } from './layer';
 import { createSdk } from './sdk';
 import {
   buildStructure, describeNode, markersFor, parseRef, usageKey,
@@ -157,8 +158,8 @@ describe('markersFor and locate', () => {
     html('<div data-anfra-query="revenue"></div><div data-anfra-control="region"></div>');
     expect(revenue.locate()).toBe(true);
     expect(region.locate()).toBe(true);
-    expect(document.getElementById('anfra-overlay')?.style.display).toBe('block');
-    expect(document.querySelector('[data-testid="anfra-overlay-label"]')?.textContent).toBe('controlregion');
+    expect((layerRoot(document, 'anfra').getElementById('anfra-overlay') as HTMLElement | null)?.style.display).toBe('block');
+    expect(layerRoot(document, 'anfra').querySelector('[data-testid="anfra-overlay-label"]')?.textContent).toBe('controlregion');
   });
 
   it('describes a node for the overlay by kind, id, label and size', () => {

@@ -9,6 +9,6 @@ export {
 export { FILTER_AGGREGATIONS } from './aggregations';
 export { PROVISION_ELEMENT_ID } from './bridge';
 export type {
-  BridgeError, BridgeMethod, FrameMessage, HostMessage, Provision,
+  BridgeError, BridgeMessage, FrameMessage, HostMessage, PluginInfo, Provision,
 } from './bridge';
 export type * from './types';

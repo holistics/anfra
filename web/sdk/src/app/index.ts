@@ -5,7 +5,9 @@
  *
  * See docs/designs/data-apps.md, at the repository root, for the design.
  */
-export { createSdk, Sdk, VERSION } from './sdk';
+export {
+  createSdk, Sdk, InstalledPlugins, VERSION,
+} from './sdk';
 export { installSandbox, SANDBOX_GLOBAL } from './sandbox';
 export { App } from './app';
 export { Query } from './query';
@@ -13,5 +15,7 @@ export { Control, Filter, DateDrillControl } from './controls';
 export { ATTR as STRUCTURE_ATTRIBUTES, buildStructure, parseRef } from './structure';
 export { OVERLAY_ID } from './overlay';
 export { Mapping, CrossFilter, type Edge } from './mapping';
-export { bootstrap } from './bootstrap';
+export { bootstrap, type PluginSetup } from './bootstrap';
+export { type FrameKernel } from './kernel';
+export { LAYER_ATTRIBUTE } from './layer';
 export * from '../common';

@@ -2,7 +2,10 @@ import {
   afterEach, beforeEach, describe, expect, it, vi,
 } from 'vitest';
 import { FLASH_MS, OVERLAY_ID, overlayFor } from './overlay';
-import { startPick } from './pick';
+import { startPick } from '../plugins/inspect/pick';
+import { layerRoot } from './layer';
+
+const overlayRoot = () => layerRoot(document, 'anfra').getElementById(OVERLAY_ID) as HTMLElement;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); document.body.innerHTML = ''; });
@@ -12,7 +15,7 @@ describe('the overlay', () => {
     document.body.innerHTML = '<div id="a"></div><div id="b"></div>';
     const overlay = overlayFor(document);
     expect(overlayFor(document)).toBe(overlay);
-    const root = document.getElementById(OVERLAY_ID)!;
+    const root = overlayRoot();
     expect(root.style.display).toBe('none');
     overlay.show([document.getElementById('a')!, document.getElementById('b')!], {
       kind: 'query', name: 'revenue', note: '1 of 2', size: '0 × 0',
