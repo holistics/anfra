@@ -20,9 +20,10 @@ One `↓` button per block. With one item it downloads on click; with more, it o
 Its feedback stays out of the layout, since text added next to it ("Exported 198 rows.") pushes the
 card's content around:
 
-- **Shown** only when the host can do it and the reader may: items whose `Anfra.features.export`
-  or `Anfra.features.render`, and `Anfra.user.permissions.canExportData`, are true; no items, no
-  button.
+- **Shown** only when the host can do it and the reader may: items whose plugin is installed
+  (`Anfra.plugins.has('export')` or `Anfra.plugins.has('render')`) and
+  `Anfra.user.permissions.canExportData` is true; no items, no button. Where a plugin isn't
+  installed its API isn't there at all: `query.export` and `Anfra.render` are `undefined`.
 - **Progress is on the button**: `aria-busy`, its label unchanged. **Success needs no message**:
   the browser's own download says it. **Failure goes in a toast** (`position: fixed`, out of the
   flow), gone after a few seconds.
@@ -64,7 +65,7 @@ const showToast = (text) => {
 function downloadControl (root, items) {
   const button = root.querySelector('button');
   const menu = root.querySelector('.dl-menu');
-  const allowed = items.filter((item) => Anfra.features[item.feature] && Anfra.user.permissions.canExportData);
+  const allowed = items.filter((item) => Anfra.plugins.has(item.feature) && Anfra.user.permissions.canExportData);
   button.hidden = allowed.length === 0;
 
   const run = async (item) => {
