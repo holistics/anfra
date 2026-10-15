@@ -1,6 +1,6 @@
 # Exports
 
-> Status: built. The core: `query.export` (`internal/command/query/export.go`), the `ExportStore` interface (`internal/command/export.go`), and anfra's own store, for `anfra serve` and the CLI (`internal/exports`, [export-store.md](export-store.md)). The SDK: `query.export()` in a Data App, `Backend.exportQuery`, the bridge and the download ([data-apps.md](data-apps.md#what-each-query-carries-the-query-and-the-readers-state)).
+> Status: built. The core: `query.export` (`internal/command/query/export.go`), the `ExportStore` interface (`internal/command/export.go`), and anfra's own store, for `anfra serve` and the CLI (`internal/exports`, [export-store.md](export-store.md)). The SDK: the `export` plugin, with `query.export()` in a Data App, `Backend.exportQuery`, the bridge and the download ([data-apps.md](data-apps.md#what-each-query-carries-the-query-and-the-readers-state)).
 
 An export is a query's whole result as a file: what a reader downloads from a Data App, what a script saves, what an agent hands to its user. A query answers a page of rows for a screen to show (once results are paginated); an export answers all of them, as a file, without anfra or the browser holding them in memory.
 
