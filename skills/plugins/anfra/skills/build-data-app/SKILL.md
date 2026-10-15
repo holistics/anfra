@@ -11,10 +11,14 @@ supplies data and state; every pixel is yours.
 
 References, read when a step needs them:
 
-- [references/api.md](references/api.md): every SDK call, the result shape, lineage, errors. **Read it
-  before writing any code; do not invent APIs.**
-- [references/downloads.md](references/downloads.md): exporting a query's data and pictures of
-  the app, with their button. Read it only when the agreed design lists a download.
+- [references/api.md](references/api.md): every SDK call, the result shape, the plugins, errors.
+  **Read it before writing any code; do not invent APIs.**
+- [references/plugins/](references/plugins/): one file per built-in plugin beyond `core`
+  ([export](references/plugins/export.md), [render](references/plugins/render.md),
+  [lineage](references/plugins/lineage.md)). Read one only when the agreed design uses that plugin,
+  and check `Anfra.plugins.has(name)` before using it.
+- [references/downloads.md](references/downloads.md): the download button for exports and pictures.
+  Read it only when the agreed design lists a download.
 - [references/example.html](references/example.html): a complete app in the default look. Start a
   new file from its skeleton, or from the closest app already in `apps/`.
 - [references/DESIGN.md](references/DESIGN.md): the anfra app design guide (colors, type,
@@ -65,7 +69,7 @@ a definitions panel beside a chart. An app that only shows numbers needs none.
 
 When it is in, add to the declaration list which fields the app traces, when (on load, or when the
 reader picks a field or clicks a chart), and how the diagram is drawn (see
-[references/api.md](references/api.md#lineage)).
+[references/plugins/lineage.md](references/plugins/lineage.md)).
 
 ## Look and feel
 

@@ -12,15 +12,34 @@ import, no setup, no await.
 - `Anfra.user`: `{ id, name, email, role, timezone, permissions: { canViewGeneratedSql, canExportData } }`.
   Under `anfra serve` it is the machine's user, with every permission and the machine's time zone.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
-- `Anfra.plugins`: what the host installed beyond queries. Each plugin adds its API under its own
-  name, and only where it is installed: `export` adds `query.export()`, `render` adds
-  `Anfra.render()`, `lineage` adds `Anfra.lineage()`. Elsewhere the member is `undefined`, so
-  check `Anfra.plugins.has('export')` (or `'render'`, `'lineage'`) before using one. All three are
-  installed under `anfra serve`.
-- `Anfra.render(request)` (the `render` plugin): a PNG or PDF of the app or one of its parts. See
-  [downloads.md](downloads.md#pictures-of-the-app).
-- `Anfra.lineage(targets, options?)` (the `lineage` plugin): what fields are built from. See
-  [Lineage](#lineage).
+- `Anfra.plugins`: the plugins the host installed. See [Plugins](#plugins).
+
+## Plugins
+
+Everything the app reaches beyond its own page comes from a **plugin** the host installs. A plugin
+adds its API under its own name (`query.export`, `Anfra.render`, `Anfra.lineage`), and **only where
+it is installed**: on a host without it, the member is `undefined`, and calling it throws a
+`TypeError`.
+
+- `Anfra.plugins.has(name)`: whether the host installed it. Check before using any plugin other
+  than `core`, and leave out (or hide) what it would offer when it is missing.
+- `Anfra.plugins.list`: `[{ name, version }]`, every installed plugin.
+
+**`core` is always there.** It runs the queries and a filter's suggestions: everything below
+(`createApp`, queries, controls, cross-filtering, structure) works through it, on every host. Never
+check for it.
+
+The other built-in plugins, each with its own reference. Read one only when the agreed design uses
+that plugin:
+
+| Plugin | Adds | Reference |
+| --- | --- | --- |
+| `export` | `query.export(options?)`: a query's whole result as a file | [plugins/export.md](plugins/export.md) |
+| `render` | `Anfra.render(request)`: a PNG or PDF of the app or one of its parts | [plugins/render.md](plugins/render.md) |
+| `lineage` | `Anfra.lineage(targets, options?)`: what fields are built from | [plugins/lineage.md](plugins/lineage.md) |
+| `inspect` | Nothing for the app: the host's Inspect panel reads the app's [structure](#structure) through it. | |
+
+`anfra serve` installs all four. Another host may install fewer, or plugins of its own.
 
 ## Field references
 
@@ -91,7 +110,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. |
 | `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
-| `await query.export(options?)` | The `export` plugin: downloads the query's whole result as a file for the reader. See [downloads.md](downloads.md#exporting-a-querys-data). |
+| `await query.export(options?)` | The `export` plugin, where installed: downloads the query's whole result as a file for the reader. See [plugins/export.md](plugins/export.md). |
 | `query.abort()` | Cancels this query's in-flight request. |
 | `query.subscribe(fn)` | Change listener for just this query. |
 | `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
@@ -161,7 +180,7 @@ attribute each.
 | `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
 | `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
 | `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. A control lives in a block like a query does: its own block when it stands alone, or the block of the chart it belongs to. |
-| `data-anfra-render="skip"` | any element | Left out of every [picture](downloads.md#pictures-of-the-app), with what it holds: a download button, a spinner. |
+| `data-anfra-render="skip"` | any element | Left out of every [picture](plugins/render.md), with what it holds: a download button, a spinner. |
 
 - Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
   creates several apps, write `app/name` with the app's index (`1/trend`); a bare name is app 0.
@@ -278,85 +297,15 @@ chart.on('click', (p) => {
 - Both queries must use the same dataset. No self-edges.
 - Clear with `app.clearSelection(); app.execute();`.
 
-## Lineage
-
-`Anfra.lineage` traces fields upstream through the repo's catalog: which other metrics and which
-model fields a metric uses, and the models those fields belong to (a model's table is its
-`props.table_name`). Use it for an app that explains where a number comes from, or a field
-catalog. It reads the catalog `anfra ingest` builds, not the AML: after an AML change, run
-`anfra ingest` or lineage shows the old definitions. It is a plain promise, outside `createApp`,
-`execute()` and `subscribe`, and nothing re-runs it for you. Offer it only when
-`Anfra.plugins.has('lineage')`: on a host without the plugin, `Anfra.lineage` is `undefined`.
-
-```js
-const controller = new AbortController();
-const { results: [revenue, country] } = await Anfra.lineage([
-  { parent: 'ecommerce', child: 'revenue' },  // a dataset metric: the dataset's fqn, the metric's name
-  { parent: 'customers', child: 'country' },  // a model field: the model's fqn, the field's name
-], { limit: 50, signal: controller.signal }); // options are all optional
-```
-
-- **Targets** name a field by what holds it, not as a [field reference](#field-references): a
-  dataset metric `revenue` is `{ parent: <dataset fqn>, child: 'revenue' }`, a model field
-  `customers.country` is `{ parent: 'customers', child: 'country' }`. Take names from
-  `Anfra.datasets`. One target may be passed without the array; the answer is still `results`.
-- **Results**: `results` has one entry per target, in the same order:
-  `{ target, query, diagram }`, or `{ target, query, error }` when that field could not be traced.
-  `error` is a **string**, not an `Error`: render it as is. The others still have their diagrams.
-- **An empty diagram** (`total` of 0, no error) means nothing is upstream of the field, or the
-  catalog does not know it. A model dimension that is a plain column comes back empty: it has no
-  lineage to draw, so show it as a source column (its model's `table_name` and the column) rather
-  than as "not found".
-- **The promise rejects** when the call itself is wrong or fails: an empty list or a target
-  without a non-empty `parent` and `child` (`ValidationError`), a host without lineage or an
-  unreachable server (`TransportError`), a reader refused (`PermissionError`). It rejects, rather
-  than throws, so the `try`/`catch` around the `await` sees it.
-- **Options**: `limit` / `offset` page the matched entities; `diagram.total` counts them over every
-  page, so `diagram.matched.length < diagram.total` means there are more. `signal` cancels: the
-  promise then rejects with an error whose `name` is `'AbortError'`. Abort the previous call when a
-  newer pick replaces it, and ignore an `AbortError`.
-
-### Diagram shape
-
-```js
-diagram.total    // matched entities, over every page
-diagram.matched  // this page's matched entity ids: what the field is built from, for paging
-                 // only. It may leave out the traced field and holds ids no card draws.
-diagram.layers   // [{ index: 0, types: ['aml.model'], card_ids: ['aml.model:…'] }, ...]: the columns, upstream first
-diagram.cards    // every card, in layer order:
-                 // [{ id, type: 'aml.model', label, layer: 0, props, links, sections }, ...]
-diagram.schema   // { edges: { refers: 'A refers B: A uses B. …' },
-                 //   types: { 'aml.model': { edges: { refers: ['aml.table'] }, top_level: true } } }
-```
-
-- A **card** is a model, dataset, table, … Its `layer` is its column: data flows from lower layers
-  to higher ones. Draw one column per `diagram.layers` entry, its cards looked up by `card_ids`.
-  A card's `sections` group its nodes by type: `[{ type: 'aml.dimension', nodes: [...] }]`. A node
-  may have `sections` of its own, so walk them recursively. `detached: true` marks a node whose
-  container is not on the diagram.
-- **A card holds every field of its model, or every metric of its dataset**, not only the ones on
-  the lineage. The lineage is the `refers` links. Find the traced field as the node whose
-  `props.fqn` is `` `${parent}.${child}` ``, follow `refers` links from it until none are left, and
-  draw (or highlight) only the nodes reached. Drawing the cards as they come shows every metric
-  of the dataset for any metric.
-- Every card and node has an `id` unique in the diagram (`aml.dimension:ab8ed0924c5a`), a `type`,
-  a `label`, optional `props` (catalog properties: `name`, `fqn`, `file_path`, `data_type`,
-  `description`, …), optional `tags`, optional `links`, and `ref` when it is a copy of another
-  entity.
-- **`links`** is an array on the edge's *from* node: `[{ to: id, type: 'refers', props? }]`.
-  `{ to: B, type: 'refers' }` on A means A uses B.
-- `schema.edges` explains each edge type in words: read it, rather than guessing what an unfamiliar
-  edge means.
-
 ## Errors
 
 | Class | When | What to do |
 | --- | --- | --- |
-| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. `Anfra.lineage` rejects with one for an empty or malformed target list. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
+| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. A plugin's call may reject with one: `Anfra.lineage` for an empty or malformed target list. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
 | `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
 | `TransportError` | Network or session problem. | Show a retry. |
 
 Every error has `entity`, the query or control name it concerns. Check the class with `err.name`
-(`'PermissionError'`), since the classes themselves aren't exposed as globals. Downloads reject
-with these classes too: see [downloads.md](downloads.md).
+(`'PermissionError'`), since the classes themselves aren't exposed as globals. Plugins reject with
+these classes too: see each one's reference.
