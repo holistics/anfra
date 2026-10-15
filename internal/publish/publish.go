@@ -49,9 +49,11 @@ type Env struct {
 	// the server, whose verdict on exactly the published files is the one that
 	// publishes (PUBLISH.md §Decisions).
 	Validate func(context.Context, io.Writer) error
-	// Credential is what every call to the server carries; asked for only once a
-	// publish will call it.
-	Credential func() (func(*http.Request), error)
+	// Credential checks the selected login before destination configuration is
+	// saved, returning an authorizer that resolves credentials for every request.
+	Credential func(context.Context, cloudapi.Org) (func(*http.Request) error, error)
+	// SelectOrg explicitly selects a first destination; nil means no interactive terminal.
+	SelectOrg func(context.Context) (cloudapi.Org, error)
 	// UserAgent names the CLI and its version, for the server.
 	UserAgent string
 }
@@ -60,7 +62,11 @@ type Env struct {
 // server's answer. Progress goes to env.ErrOut; the outcome to env.Out.
 func Run(ctx context.Context, dir string, o Options, env Env) error {
 	out, errOut, ask := env.Out, env.ErrOut, env.Ask
-	org, err := targetOrg(dir, o.SetOrg, o.DryRun, errOut)
+	org, configured, err := readOrg(dir)
+	if o.SetOrg != "" {
+		org, err = cloudapi.ParseOrg(o.SetOrg)
+		configured = true
+	}
 	if err != nil {
 		return err
 	}
@@ -76,15 +82,40 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		for _, f := range files {
 			fmt.Fprintln(out, f)
 		}
-		fmt.Fprintf(errOut, "Would publish %s to %s.\n", selected, org)
+		if configured {
+			fmt.Fprintf(errOut, "Would publish %s to %s.\n", selected, org)
+		} else {
+			fmt.Fprintf(errOut, "Would publish %s (no org configured).\n", selected)
+		}
 		return nil
 	}
 	if len(files) == 0 {
 		return errors.New("there are no files to publish")
 	}
-	authorize, err := env.Credential()
+	if !configured {
+		if env.SelectOrg == nil {
+			return errors.New("this repo has no org to publish to: set org.url or pass --set-org https://<server>/o/<org>; destination selection requires an interactive terminal")
+		}
+		org, err = env.SelectOrg(ctx)
+		if err != nil {
+			return err
+		}
+		// Selection is supplied by the command; keep the same address validation
+		// as configured destinations before selecting credentials or writing config.
+		org, err = cloudapi.ParseOrg(org.String())
+		if err != nil {
+			return err
+		}
+	}
+	authorize, err := env.Credential(ctx, org)
 	if err != nil {
 		return err
+	}
+	if !configured || o.SetOrg != "" {
+		if err := setOrg(dir, org); err != nil {
+			return err
+		}
+		fmt.Fprintf(errOut, "This repo publishes to %s (%s).\n", org, repoconfig.Hint("org", "url"))
 	}
 	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: authorize, UserAgent: env.UserAgent})
 
@@ -177,33 +208,6 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		fmt.Fprintf(out, "It replaced %s, published by %s on %s.\n", r.Revision, who(r.PublishedBy), r.PublishedAt.Local().Format(time.DateTime))
 	}
 	return nil
-}
-
-// targetOrg is the org a publish goes to: the repo's, or set, which it
-// records first (but not on a dry run, which changes nothing).
-func targetOrg(dir, set string, dryRun bool, errOut io.Writer) (cloudapi.Org, error) {
-	if set == "" {
-		r, ok, err := readOrg(dir)
-		if err != nil {
-			return cloudapi.Org{}, err
-		}
-		if !ok {
-			return cloudapi.Org{}, fmt.Errorf("this repo has no org to publish to (%s): publish with --set-org https://<server>/o/<org>, the org's address", repoconfig.Hint("org", "url"))
-		}
-		return r, nil
-	}
-	r, err := cloudapi.ParseOrg(set)
-	if err != nil {
-		return cloudapi.Org{}, err
-	}
-	if dryRun {
-		return r, nil
-	}
-	if err := setOrg(dir, r); err != nil {
-		return cloudapi.Org{}, err
-	}
-	fmt.Fprintf(errOut, "This repo publishes to %s (%s).\n", r, repoconfig.Hint("org", "url"))
-	return r, nil
 }
 
 // listMissing asks which of oids the org's repo lacks, in calls of at most

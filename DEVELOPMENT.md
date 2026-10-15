@@ -85,6 +85,20 @@ A release is a version bump merged to main: `pnpm bump <version>` updates `manif
 
 The Docker image is built from release binaries; the `Dockerfile`'s header says how to build it locally.
 
+### Hosted login origin
+
+Set the repository Actions configuration variable `ANFRA_HOSTED_ORIGIN` before running
+`build_release.yml` (including branch test builds). The workflow refuses a missing or invalid
+value. It must be an absolute HTTPS origin without userinfo, query, fragment or a path other
+than `/`; builds lowercase the scheme and hostname and remove the default port and final slash.
+The production origin is deployment configuration, not a URL chosen in source.
+
+For `make build`, `make dev` and `make dev-tmux`, optionally set `ANFRA_HOSTED_ORIGIN` in the
+build environment or `.env.local`. Supplied values are validated and embedded through Go
+linker flags. Omit it to develop without the hosted-login action: bare interactive login
+still offers stored organizations and URL entry. Without terminal stdin and stderr, supply
+an explicit org URL. Runtime environment changes never override the embedded origin.
+
 ## Debugging
 
 - **Logs:** each repo's go to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log` (`~/.anfra` by default), anfra's records and the sidecars' stderr together. `ANFRA_LOG_STDERR=1` also writes them to stderr; `LOG_LEVEL` sets the level.

@@ -6,21 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/cliauth"
+	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/publish"
 )
-
-// sessionEnv carries an anfra-cloud session token to publish with, until
-// `anfra login` exists: for development only, sent as anfra-cloud's session
-// cookie.
-const sessionEnv = "ANFRA_CLOUD_SESSION"
 
 func newPublishCmd() *cobra.Command {
 	var o publish.Options
@@ -35,15 +31,26 @@ func newPublishCmd() *cobra.Command {
 			"(data_sources.yml holds credentials), nor a .env, notes or build output beside the repo. .gitignore does\n" +
 			"not apply: it says what belongs in git, not what is published. --dry-run lists the files and stops.\n\n" +
 			"Where to: the org's address on its server, https://<server>/o/<org>, kept in .anfra/config.yml\n" +
-			"(org.url) and committed, so everyone publishes to the same org. --set-org sets it, and publishes there.",
+			"(org.url) and committed, so everyone publishes to the same org. --set-org sets it, and publishes there.\n" +
+			"Without a destination, an interactive terminal offers stored logins or new authentication.\n" +
+			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n" +
+			"--yes skips overwrite confirmation only. --dry-run never authenticates or writes configuration.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
+			ask := publish.Prompt(func(string, ...string) (int, bool) { return 0, false })
+			var selectOrg func(context.Context) (cloudapi.Org, error)
+			if terminal.interactive {
+				ask = stdinPrompt(terminal.in, terminal.out)
+				selectOrg = terminal.selectPublishOrg
+			}
 			return publish.Run(cmd.Context(), ".", o, publish.Env{
 				Out:        cmd.OutOrStdout(),
 				ErrOut:     cmd.ErrOrStderr(),
-				Ask:        stdinPrompt(cmd.InOrStdin(), cmd.ErrOrStderr()),
+				Ask:        ask,
 				Validate:   validateHere,
-				Credential: sessionCredential,
+				Credential: (cliauth.Manager{}).Authorize,
+				SelectOrg:  selectOrg,
 				UserAgent:  "anfra/" + meta.Version,
 			})
 		},
@@ -86,19 +93,6 @@ func stdinPrompt(in io.Reader, out io.Writer) publish.Prompt {
 		}
 		return fallback, true
 	}
-}
-
-// sessionCredential is the credential a publish carries.
-//
-// TODO(OAUTH.md): `anfra login`, and its stored token. Until then, a session
-// token from the environment, sent as the session cookie anfra-cloud's web app
-// uses: for development only.
-func sessionCredential() (func(*http.Request), error) {
-	token := os.Getenv(sessionEnv)
-	if token == "" {
-		return nil, errors.New("not signed in: `anfra login` does not exist yet; for development, set " + sessionEnv + " to a session token")
-	}
-	return func(r *http.Request) { r.Header.Add("Cookie", "anfra_session="+token) }, nil
 }
 
 // validateHere runs validate on this repo before a publish, as `anfra validate`
