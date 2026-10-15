@@ -46,7 +46,8 @@ export interface CallDefinition {
 /**
  * Code around calls, chosen by name: `*`, `<plugin>.*`, or one call's full name. It may change the
  * request, answer in place of the plugin (not calling `next`), refuse the call (throwing), or change
- * the answer. Every call passes through it, whoever made it.
+ * the answer. Every call passes through it, whoever made it. A plugin's middleware is as powerful as
+ * the host's: it sees and may change every call on the page, not only its plugin's.
  */
 export interface Middleware {
   /** Names the middleware in a call's trace, and orders it among middleware of the same stage. */
@@ -73,9 +74,20 @@ export interface MountContext {
   onReady: (listener: () => void) => () => void;
 }
 
+/**
+ * Checks one of a frame's events before the host hears it: what it returns is what listeners get,
+ * and `undefined` drops the event. A frame's events are as untrusted as its calls.
+ */
+export type EventCheck = (payload: unknown, mount: MountContext) => unknown;
+
 export interface HostHalf {
   /** The calls this plugin answers, by their name under the plugin (`submitQuery`, not `core.submitQuery`). */
   calls?: Record<string, CallHandler | CallDefinition>;
+  /**
+   * The events a frame may send under this plugin's name (`snapshot`, not `inspect.snapshot`), each
+   * with its check. An event no installed plugin declares never reaches the host.
+   */
+  events?: Record<string, EventCheck>;
   /** Middleware this plugin puts around calls, its own or others'. */
   middleware?: readonly Middleware[];
   /** Each time a frame is mounted. What it returns runs when the frame is unmounted. */
@@ -105,14 +117,26 @@ const NAME = /^[a-z][a-z0-9-]*$/;
 /** Names reserved for the kernel: its own calls, and members of `Anfra` and its entities. */
 export const RESERVED_NAMES: ReadonlySet<string> = new Set(['anfra', 'plugins']);
 
-/** A plugin, checked: its name, and its calls' names. */
-export function definePlugin<P extends Plugin> (plugin: P): P {
-  if (!NAME.test(plugin?.name ?? '')) {
+const MEMBER = /^[A-Za-z][A-Za-z0-9]*$/;
+
+/**
+ * Check a plugin's names, which name its calls, events and API, and end up in the frame's script:
+ * its own, and its calls' and events'. Throws on the first that is wrong.
+ */
+export function checkPlugin (plugin: Plugin): void {
+  if (typeof plugin?.name !== 'string' || !NAME.test(plugin.name)) {
     throw new Error(`A plugin's name is lowercase letters, digits and dashes, starting with a letter: '${String(plugin?.name)}' is not.`);
   }
   if (RESERVED_NAMES.has(plugin.name)) throw new Error(`'${plugin.name}' is reserved for the SDK: name the plugin something else.`);
-  for (const call of Object.keys(plugin.host?.calls ?? {})) {
-    if (!/^[A-Za-z][A-Za-z0-9]*$/.test(call)) throw new Error(`Plugin '${plugin.name}': '${call}' is not a call name (letters and digits).`);
+  for (const [kind, names] of [['call', Object.keys(plugin.host?.calls ?? {})], ['event', Object.keys(plugin.host?.events ?? {})]] as const) {
+    for (const name of names) {
+      if (!MEMBER.test(name)) throw new Error(`Plugin '${plugin.name}': '${name}' is not ${kind === 'call' ? 'a call' : 'an event'} name (letters and digits).`);
+    }
   }
+}
+
+/** A plugin, checked (`checkPlugin`). A host checks every plugin it installs anyway. */
+export function definePlugin<P extends Plugin> (plugin: P): P {
+  checkPlugin(plugin);
   return plugin;
 }
