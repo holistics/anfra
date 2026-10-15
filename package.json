@@ -1,7 +1,7 @@
 {
   "name": "anfra-tooling",
   "private": true,
-  "description": "Node tooling for the anfra Go repo: commitlint (conventional commits), conventional-changelog, and the Anfra SDK's workspace.",
+  "description": "Node tooling for the anfra Go repo: commitlint (conventional commits), conventional-changelog, and the anfra SDK's workspace.",
   "scripts": {
     "prepare": "husky",
     "commit": "cz",

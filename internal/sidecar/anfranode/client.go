@@ -238,7 +238,7 @@ type CompileToSQLRequest struct {
 // QueryTransforms is a query's Query Input: the structured transforms it
 // carries on one run (a Data App's control filters, cross-filter conditions,
 // sorts and date drills), applied by anfra-node rewriting its AQL before it
-// compiles. The core API passes it through in these names, amql's and the Anfra
+// compiles. The core API passes it through in these names, amql's and the anfra
 // SDK's: anfra-node checks the values (an operator, a grain).
 type QueryTransforms struct {
 	Filters    []QueryFilter    `json:"filters,omitempty" doc:"conditions on fields, ANDed with the query's own filters"`
@@ -294,7 +294,7 @@ type CompileToSQLResult struct {
 // ExploreColumn is one column of a query's answer: the key its values come back
 // under, and the dataset field it draws, in the names AQL uses in the dataset.
 // anfra-node describes an explore query's; the core API passes them through in
-// these names, amql's and the Anfra SDK's.
+// these names, amql's and the anfra SDK's.
 type ExploreColumn struct {
 	Name        string `json:"name" doc:"the column's key, as in fields"`
 	FieldName   string `json:"fieldName" doc:"the field it draws; for an adhoc column, its name"`

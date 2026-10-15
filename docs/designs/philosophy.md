@@ -12,7 +12,7 @@ Core is built to be built on. It exposes the same capabilities through several d
 
 - **The CLI** (`anfra <command>`), for a person or an agent at a terminal.
 - **The HTTP API and MCP** (`anfra serve`), for local tools, agents and Data Apps.
-- **The Anfra SDK** (`web/sdk`), for the pages that run and host Data Apps.
+- **The anfra SDK** (`web/sdk`), for the pages that run and host Data Apps.
 - **The engine** (`engine/`), for a platform that embeds anfra in its own server ([engine.md](engine.md)).
 
 Each command is defined once, in one registry ([commands-and-api.md](commands-and-api.md)), so a capability means the same thing whichever door it is reached through. Which commands a door offers differs, by design:
@@ -26,8 +26,8 @@ Each command is defined once, in one registry ([commands-and-api.md](commands-an
 
 - **Local app authors:** people, and their coding agents, who model data and build Data Apps in a repo on their own machine, and run them with `anfra serve`.
 - **Local platform builders:** people who build their own tools on a running anfra (a notebook, an editor plugin, an agent workflow) through the HTTP API, MCP and the SDK.
-- **Platforms embedding the engine:** a BI platform, internal portal or hosted product that runs anfra in-process and adds what core leaves out: users, permissions, sharing. Anfra Cloud is one such platform; core does not assume it is the only one.
-- **A preview of Anfra Cloud:** a repo that works under `anfra serve` works unchanged when a hosted platform serves it, so local work is not throwaway.
+- **Platforms embedding the engine:** a BI platform, internal portal or hosted product that runs anfra in-process and adds what core leaves out: users, permissions, sharing. anfra Cloud is one such platform; core does not assume it is the only one.
+- **A preview of anfra Cloud:** a repo that works under `anfra serve` works unchanged when a hosted platform serves it, so local work is not throwaway.
 
 How far that goes is settled for the API: a platform's API contains the core API unchanged (the same op names, paths, inputs, answers and error codes) and only adds around it: its own ops, and who may call what. So the same query gets the same answer anywhere, except that a platform's data restrictions may narrow it. What a platform does around the API (sign-in, which ops a caller may call, how a repo reaches it, the page Data Apps open in) is the platform's own.
 

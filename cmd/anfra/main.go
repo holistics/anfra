@@ -72,7 +72,7 @@ func main() {
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "anfra",
-		Short: "Anfra — local-first agentic analytics infrastructure",
+		Short: "anfra — local-first agentic analytics infrastructure",
 		// Setting Version makes cobra add `--version` (and `-v`, since it's free) to
 		// the root. Mirrors the `version` command, which the server also serves.
 		Version: meta.Version,
