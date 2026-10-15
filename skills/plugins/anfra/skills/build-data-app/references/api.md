@@ -13,7 +13,8 @@ import, no setup, no await.
   Under `anfra serve` it is the machine's user, with every permission and the machine's time zone.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
 - `Anfra.features`: what the host can do beyond queries. `export` is whether `query.export()` can
-  work here, `render` whether `Anfra.render()` can; both `true` under `anfra serve`.
+  work here, `render` whether `Anfra.render()` can, `lineage` whether `Anfra.lineage()` can; all
+  `true` under `anfra serve`.
 - `Anfra.render(request)`: a PNG or PDF of the app or one of its parts. See
   [downloads.md](downloads.md#pictures-of-the-app).
 - `Anfra.lineage(targets, options?)`: what fields are built from. See [Lineage](#lineage).
@@ -276,11 +277,13 @@ chart.on('click', (p) => {
 
 ## Lineage
 
-`Anfra.lineage` traces fields upstream through the repo's catalog: which model fields a metric or
-measure uses, which models a dataset joins, on to the tables. Use it for an app that explains where
-a number comes from, or a field catalog. It reads the semantic layer, not an app: it is a plain
-promise, outside `createApp`, `execute()` and `subscribe`, and nothing re-runs it for you. Offer it
-only when `Anfra.features.lineage` is true: on a host without lineage every call rejects with a
+`Anfra.lineage` traces fields upstream through the repo's catalog: which other metrics and which
+model fields a metric uses, and the models those fields belong to (a model's table is its
+`props.table_name`). Use it for an app that explains where a number comes from, or a field
+catalog. It reads the catalog `anfra ingest` builds, not the AML: after an AML change, run
+`anfra ingest` or lineage shows the old definitions. It is a plain promise, outside `createApp`,
+`execute()` and `subscribe`, and nothing re-runs it for you. Offer it only when
+`Anfra.features.lineage` is true: on a host without lineage every call rejects with a
 `TransportError`.
 
 ```js
@@ -296,10 +299,12 @@ const { results: [revenue, country] } = await Anfra.lineage([
   `customers.country` is `{ parent: 'customers', child: 'country' }`. Take names from
   `Anfra.datasets`. One target may be passed without the array; the answer is still `results`.
 - **Results**: `results` has one entry per target, in the same order:
-  `{ target, query, diagram }`, or `{ target, query, error }` when that field could not be traced
-  (a field the catalog cannot find comes back here, or as a diagram whose `total` is 0: render
-  both). `error` is a **string**, not an `Error`: render it as is. The others still have their
-  diagrams.
+  `{ target, query, diagram }`, or `{ target, query, error }` when that field could not be traced.
+  `error` is a **string**, not an `Error`: render it as is. The others still have their diagrams.
+- **An empty diagram** (`total` of 0, no error) means nothing is upstream of the field, or the
+  catalog does not know it. A model dimension that is a plain column comes back empty: it has no
+  lineage to draw, so show it as a source column (its model's `table_name` and the column) rather
+  than as "not found".
 - **The promise rejects** when the call itself is wrong or fails: an empty list or a target
   without a non-empty `parent` and `child` (`ValidationError`), a host without lineage or an
   unreachable server (`TransportError`), a reader refused (`PermissionError`). It rejects, rather
@@ -313,7 +318,8 @@ const { results: [revenue, country] } = await Anfra.lineage([
 
 ```js
 diagram.total    // matched entities, over every page
-diagram.matched  // this page's matched entity ids, in search order: the traced field
+diagram.matched  // this page's matched entity ids: what the field is built from, for paging
+                 // only. It may leave out the traced field and holds ids no card draws.
 diagram.layers   // [{ index: 0, types: ['aml.model'], card_ids: ['aml.model:…'] }, ...]: the columns, upstream first
 diagram.cards    // every card, in layer order:
                  // [{ id, type: 'aml.model', label, layer: 0, props, links, sections }, ...]
@@ -324,8 +330,13 @@ diagram.schema   // { edges: { refers: 'A refers B: A uses B. …' },
 - A **card** is a model, dataset, table, … Its `layer` is its column: data flows from lower layers
   to higher ones. Draw one column per `diagram.layers` entry, its cards looked up by `card_ids`.
   A card's `sections` group its nodes by type: `[{ type: 'aml.dimension', nodes: [...] }]`. A node
-  may have `sections` of its own, so walk them recursively. A card holds only what is on the
-  lineage, not every field of its model; `detached: true` marks one whose container is not on it.
+  may have `sections` of its own, so walk them recursively. `detached: true` marks a node whose
+  container is not on the diagram.
+- **A card holds every field of its model, or every metric of its dataset**, not only the ones on
+  the lineage. The lineage is the `refers` links. Find the traced field as the node whose
+  `props.fqn` is `` `${parent}.${child}` ``, follow `refers` links from it until none are left, and
+  draw (or highlight) only the nodes reached. Drawing the cards as they come shows every metric
+  of the dataset for any metric.
 - Every card and node has an `id` unique in the diagram (`aml.dimension:ab8ed0924c5a`), a `type`,
   a `label`, optional `props` (catalog properties: `name`, `fqn`, `file_path`, `data_type`,
   `description`, …), optional `tags`, optional `links`, and `ref` when it is a copy of another
