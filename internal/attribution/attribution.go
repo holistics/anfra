@@ -17,11 +17,13 @@ package attribution
 // log or span.
 //
 // It is a map rather than a struct because the engine genuinely does not
-// interpret any of it. A `TenantID` field would have put tenancy into the
-// engine's type system — the very thing the engine is supposed to have no
-// notion of — and would have needed an engine change every time a host wanted
-// to carry one more identifier. Hosts put in whatever they can attribute by:
-// a tenant, a user, a session, a request id.
+// interpret any of it, and a host should not need an engine change to carry one
+// more identifier. Hosts put in whatever they can attribute by: a tenant, a
+// user, a session, a request id.
+//
+// The tenant is also command.CommandContext.TenantID, which is not attribution:
+// canal-query isolates warehouse connections by it, so it changes how a query
+// runs, and is a field the engine passes on, not a label.
 //
 // Values are strings because the destination is a log field. Rendering is the
 // host's job, which keeps log output predictable and stops a live object being

@@ -42,7 +42,7 @@ func sqlRun(t *testing.T, rows int, limits query.Limits) (QueryRun, *float64) {
 	}))
 	t.Cleanup(srv.Close)
 	cc := command.CommandContext{
-		Clients:     command.Clients{CanalQuery: canalquery.NewClient(srv.URL, false)},
+		Clients:     command.Clients{CanalQuery: canalquery.NewClient(srv.URL, false).ForTenant("org_1")},
 		DataSources: datasource.Set{"warehouse": {Name: "warehouse", DBType: "postgresql", Connection: map[string]any{"password": "secret"}}},
 		QueryLimits: limits,
 	}

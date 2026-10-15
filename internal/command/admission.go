@@ -17,7 +17,8 @@ var HostMistakes = []apperr.Code{errcode.DataPermsMissing, errcode.DataPermsUnen
 // admission is the precondition every command has: nothing runs until the host
 // has stated what the caller may see (see app.Dispatch), nor on a local repo the
 // host did not allow (CommandContext.AllowLocalRepo). The host's CommandContext
-// is otherwise the handler's as it is.
+// is otherwise the handler's as it is, its canal-query client bound to its
+// tenant.
 var admission = apikit.Admission[CommandContext, CommandContext]{
 	Admit: func(_ context.Context, cc CommandContext) (CommandContext, error) {
 		if !cc.DataPerms.Decided() {
@@ -27,6 +28,9 @@ var admission = apikit.Admission[CommandContext, CommandContext]{
 			return CommandContext{}, apperr.New(errcode.LocalRepoNotAllowed,
 				"repo "+cc.Repo.String()+" is a local directory, which this host does not allow: a platform serving "+
 					"managed repos builds them with ManagedRepo, and one that serves a directory sets AllowLocalRepo")
+		}
+		if cc.Clients.CanalQuery != nil {
+			cc.Clients.CanalQuery = cc.Clients.CanalQuery.ForTenant(cc.TenantID)
 		}
 		return cc, nil
 	},

@@ -23,6 +23,8 @@ type Client struct {
 	baseURL string
 	http    *http.Client
 	pool    map[string]any // pool_options sent with each query
+	// tenant is whom the queries run for (ForTenant): canal-query's tenant_id.
+	tenant string
 }
 
 // NewClient builds a client for the canal-query at baseURL. With
@@ -204,6 +206,16 @@ type queryJob struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// ForTenant is the client running queries for tenant: canal-query keys its
+// warehouse connection pools by it, so that tenants never share a connection,
+// and records it on its spans. A client without one runs no query: a host that
+// serves several tenants must not have them share pools by omission.
+func (c *Client) ForTenant(tenant string) *Client {
+	t := *c
+	t.tenant = tenant
+	return &t
+}
+
 // queryRequest mirrors canal-query's POST /query params. We use skip_cache +
 // stream_result + a header with Arrow types: a header object, then every row as
 // a JSON array, one per line, then a trailer object — no cache/lake involved.
@@ -213,7 +225,7 @@ type queryRequest struct {
 	Dbconfig              map[string]any        `json:"dbconfig"`
 	Dbsetting             map[string]any        `json:"dbsetting"`
 	PoolOptions           map[string]any        `json:"pool_options"`
-	TenantID              int                   `json:"tenant_id"`
+	TenantID              string                `json:"tenant_id"`
 	Job                   queryJob              `json:"job"`
 	SkipCache             bool                  `json:"skip_cache"`
 	StreamResult          bool                  `json:"stream_result"`
@@ -313,6 +325,9 @@ func duckdbInMemory(dbconfig map[string]any) bool {
 // that are JSON arrays, and a trailer at its end. A query's error comes in the
 // trailer, which may come with no header before it.
 func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
+	if c.tenant == "" {
+		return errors.New("canal-query: no tenant to run the query for (the invocation's TenantID)")
+	}
 	dbsetting := st.DBSetting
 	if dbsetting == nil {
 		dbsetting = map[string]any{} // canal-query requires one
@@ -323,7 +338,7 @@ func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
 		Dbconfig:              st.DBConfig,
 		Dbsetting:             dbsetting,
 		PoolOptions:           c.poolFor(st),
-		TenantID:              1,
+		TenantID:              c.tenant,
 		Job:                   queryJob{ID: -1, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
 		SkipCache:             true,
 		StreamResult:          true,

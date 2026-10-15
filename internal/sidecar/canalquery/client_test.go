@@ -45,7 +45,7 @@ func streaming(t *testing.T, lines ...string) (*Client, *map[string]any) {
 		_, _ = w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 	}))
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, false), &sent
+	return NewClient(srv.URL, false).ForTenant("org_1"), &sent
 }
 
 // A pooling client pools a query, except on an in-memory DuckDB, whose every
@@ -77,7 +77,7 @@ var statement = Statement{SQL: "select 1", DBType: "postgres", TruncateRows: -1}
 
 // anfra asks for a stream with a header first, with the fields' Arrow types,
 // and integers as strings, as decimals are, so a JavaScript client keeps every
-// digit.
+// digit; for the client's tenant, as a string.
 func TestRequest(t *testing.T) {
 	canal, sent := streaming(t, header, trailer)
 	if _, err := canal.Execute(context.Background(), statement); err != nil {
@@ -86,7 +86,7 @@ func TestRequest(t *testing.T) {
 	stream, _ := (*sent)["stream_result_options"].(map[string]any)
 	output, _ := (*sent)["json_output_data_options"].(map[string]any)
 	if (*sent)["stream_result"] != true || stream["header"] != true || stream["header_arrow_types"] != true ||
-		output["integers_as_strings"] != true {
+		output["integers_as_strings"] != true || (*sent)["tenant_id"] != "org_1" {
 		t.Errorf("request = %v", *sent)
 	}
 	if setting, ok := (*sent)["dbsetting"].(map[string]any); !ok || len(setting) != 0 {
@@ -105,6 +105,19 @@ func TestRequestSettings(t *testing.T) {
 	setting, _ := (*sent)["dbsetting"].(map[string]any)
 	if setting["statement_timeout_ms"] != float64(60000) || setting["require_ssl"] != true || len(setting) != 2 {
 		t.Errorf("dbsetting = %v", (*sent)["dbsetting"])
+	}
+}
+
+// A client without a tenant runs no query: a host serving several tenants must
+// not have them share canal-query's connection pools by omission.
+func TestNoTenantNoQuery(t *testing.T) {
+	canal, sent := streaming(t, header, trailer)
+	_, err := NewClient("http://127.0.0.1:1", false).Execute(context.Background(), statement)
+	if err == nil || !strings.Contains(err.Error(), "no tenant") {
+		t.Errorf("err = %v, want refused for no tenant", err)
+	}
+	if _, err := canal.ForTenant("org_2").Execute(context.Background(), statement); err != nil || (*sent)["tenant_id"] != "org_2" {
+		t.Errorf("ForTenant: %v, sent %v", err, (*sent)["tenant_id"])
 	}
 }
 
@@ -212,7 +225,7 @@ func TestUnreachable(t *testing.T) {
 	url := "http://" + l.Addr().String()
 	l.Close() // nothing listens there now
 
-	canal := NewClient(url, false)
+	canal := NewClient(url, false).ForTenant("org_1")
 	if _, err := canal.Execute(context.Background(), Statement{SQL: "select 1", DBType: "postgres"}); !errors.Is(err, errcode.SidecarUnavailable) {
 		t.Errorf("canal-query down: %v, want sidecar_unavailable", err)
 	}
