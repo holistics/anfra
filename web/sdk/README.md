@@ -75,7 +75,8 @@ and web fonts with CORS: an image without it is left blank (listed in the result
 font without it falls back.
 
 `Anfra.datasets` describes what there is to query. For TypeScript, `@holistics/anfra-sdk/ambient` declares the
-global.
+global. A plugin's members are typed as optional: check the member itself (`if (Anfra.render)`,
+`query.export?.()`), which narrows it.
 
 `Anfra.lineage({ parent: 'orders', child: 'amount' })` (the `lineage` plugin) traces fields through the repo's catalog, each named
 by its parent and its name in it: what each is built from, as a diagram to draw (`results[i].diagram`), or
@@ -187,7 +188,20 @@ build it as an IIFE that leaves its exports in `__anfraPlugin` (esbuild: `format
 `globalName: '__anfraPlugin'`). It runs once, before the definition: it adds the plugin's API with
 `kernel.provide` (`Anfra.notes`) or `kernel.provideOnQuery` (`query.notes`), makes calls with
 `kernel.call`, answers the host's with `kernel.handle`, and draws only in `kernel.layer()`, its own
-shadow root above the page. See [docs/designs/plugins.md](../../docs/designs/plugins.md).
+shadow root above the page.
+
+Ship its types as an entry in the SDK's plugin registry, so a TypeScript author sees `Anfra.notes`
+and `query.notes` (optional, as at runtime):
+
+```ts
+declare module '@holistics/anfra-sdk/app' {
+  interface AnfraPlugins {
+    notes: { anfra: NotesApi, query: QueryNotesApi };   // anfra: Anfra.notes; query, control: on each one
+  }
+}
+```
+
+See [docs/designs/plugins.md](../../docs/designs/plugins.md).
 
 ## The boundary
 

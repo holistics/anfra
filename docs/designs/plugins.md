@@ -94,7 +94,7 @@ A setup gets the **kernel** (`FrameKernel`, `web/sdk/src/app/kernel.ts`), one pe
 
 ### API for the author
 
-A frame half adds API only under its own name: `Anfra.<plugin>` (`kernel.provide`), `query.<plugin>` and `control.<plugin>` (`kernel.provideOnQuery`, `provideOnControl`, made the first time each entity's is read). Two plugins cannot collide, and a reader of a definition can tell which plugin a call needs. What a plugin adds to queries and controls is kept on the SDK instance and put on each entity as its app creates it, never on a shared prototype. anfra's own plugins' members are typed on `Sdk` and `Query` as optional, so an editor knows them.
+A frame half adds API only under its own name: `Anfra.<plugin>` (`kernel.provide`), `query.<plugin>` and `control.<plugin>` (`kernel.provideOnQuery`, `provideOnControl`, made the first time each entity's is read). Two plugins cannot collide, and a reader of a definition can tell which plugin a call needs. What a plugin adds to queries and controls is kept on the SDK instance and put on each entity as its app creates it, never on a shared prototype. Their types come from one registry: see [Types](#types).
 
 **A plugin that is not installed adds nothing.** Its members are absent, not stubs that reject: the kernel knows no plugin by name, so it could not stub one written after it. A definition that uses an optional plugin checks first:
 
@@ -105,6 +105,29 @@ if (Anfra.plugins.has('export')) {
 ```
 
 `Anfra.plugins` lists the installed plugins and their versions. It replaces `Anfra.features`.
+
+### Types
+
+The members plugins add are dynamic, but an author writing TypeScript still sees them, typed and optional, as they are at runtime. Types only matter while writing: nothing here changes what runs.
+
+**One registry, `AnfraPlugins`** (`web/sdk/src/app/pluginTypes.ts`), maps each plugin's name to what it adds where: `anfra` for `Anfra.<plugin>`, `query` for `query.<plugin>`, `control` for `control.<plugin>`. `Sdk`, `Query` and `Control` take their plugin members from it: each optional and named after its plugin, so the types say what the runtime does, a member is there only where its plugin is. anfra's own plugins are in it. A plugin outside the SDK adds its entry from the declarations its package ships, by module augmentation:
+
+```ts
+declare module '@holistics/anfra-sdk/app' {
+  interface AnfraPlugins {
+    notes: { anfra: { add: (text: string) => Promise<void> }, query: (text: string) => void };
+  }
+}
+```
+
+and `Anfra.notes` and `query.notes` are typed wherever that file is in the author's project, beside `@holistics/anfra-sdk/ambient`. One entry per plugin keeps the name it registers under and the names of its members from drifting apart, as they would if each plugin declared its members on `Sdk` and `Query` by hand.
+
+**Checking the member narrows it.** `if (Anfra.render) Anfra.render(…)` and `query.export?.()` type-check under `strict`, and are right at runtime too. `Anfra.plugins.has(name)` completes the names in the registry and takes any other, but narrows nothing: a check on one object can't make another's member present, and a query's members would stay optional anyway. So `has` is for deciding what to offer (a button, a menu item), and the member's own check is for calling it. No accessor (`Anfra.plugins.get('export')`) is added for this: the member check already does it, with nothing new to learn.
+
+**Later, if wanted:**
+
+- **A host declaring what it installs.** A host that always installs `export` could ship declarations marking it present (`interface AnfraInstalled { export: true }`), so its members become required. A definition relying on that is type-safe only on hosts that install them, which is the trade-off `has` already makes at runtime. Additive to the registry.
+- **Where TypeScript is compiled.** A definition is one HTML file of plain scripts, so TypeScript needs a build step, the author's or the host's. That touches "nothing to build or deploy" ([data-apps.md](data-apps.md#why-one-html-file)) and is a decision of its own. The types above serve either.
 
 ### The plugin layer
 
