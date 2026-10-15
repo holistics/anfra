@@ -20,8 +20,7 @@ import, no setup, no await.
 
 ## Field references
 
-How you name a field **to the SDK** (in `createFilter` and `mapControl`; `Anfra.lineage` names it
-by its parent, see [Lineage](#lineage)):
+How you name a field **to the SDK** (in `createFilter` and `mapControl`):
 `model.field` for a model field, a bare `name` for a dataset-level metric. Names come from
 `Anfra.datasets`, never from labels. A filter's `field` is checked at once (a `ValidationError`
 with a "did you mean"); a `mapControl` field is not checked until the query runs, so a typo there
@@ -336,34 +335,12 @@ diagram.schema   // { edges: { refers: 'A refers B: A uses B. …' },
 - `schema.edges` explains each edge type in words: read it, rather than guessing what an unfamiliar
   edge means.
 
-The traced field is the diagram's matched entity: take the first id of `diagram.matched` that is
-in the diagram, and fall back to finding it by its `props` (`name`, `fqn`). Log the first diagram
-(`console.log(JSON.stringify(diagram))`) so the user's console paste shows you the real types, ids
-and props before you refine the rendering.
-
-```js
-function edges (diagram) {
-  const byId = new Map();
-  const index = (node) => {
-    byId.set(node.id, node);
-    (node.sections ?? []).forEach((s) => s.nodes.forEach(index));
-  };
-  diagram.cards.forEach(index);
-  // One line per link: data flows from what a node uses to the node.
-  return [...byId.values()].flatMap((node) => (node.links ?? [])
-    .map((link) => ({ from: link.to, to: node.id, type: link.type })));
-}
-const cardById = new Map(diagram.cards.map((card) => [card.id, card]));
-const columns = diagram.layers.map((layer) => layer.card_ids.map((id) => cardById.get(id)));
-// One column per entry of `columns`, one box per card in it, then draw edges(diagram) between boxes.
-```
-
 ## Errors
 
 | Class | When | What to do |
 | --- | --- | --- |
 | `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. `Anfra.lineage` rejects with one for an empty or malformed target list. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
-| `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. (A lineage result's `error` is a plain string, not a `QueryError`.) | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
+| `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
 | `TransportError` | Network or session problem. | Show a retry. |
 

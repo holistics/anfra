@@ -40,18 +40,26 @@ the week before, with a country picker"). Ask only what changes the numbers: wha
 means, which date counts, what to exclude, each with your recommended answer.
 
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
-`createFilter`, `createDateDrill`, `mapControl`, `mapCrossFilter` and `Anfra.lineage` call, with
+`createFilter`, `createDateDrill`, `mapControl`, `mapCrossFilter` and `lineage` call, with
 real field names, how each query renders (chart or table; default ECharts 6 from jsDelivr, as in
 the example), and which blocks, if any, the reader can download from, one line each with its
 formats (`trend: CSV`). List a download only when the user asked for one, or propose one where it
 plainly helps (a detail table's data) and let them decide; none is the default. Leave pictures
 (PNG, PDF) to the host, which offers them for every block and the whole page, unless the user asks
-for them in the app. For an app that shows where numbers come from (a "how is this metric built"
-panel, a field catalog), say which fields it traces, when (on load, or when the reader picks a
-field or clicks a chart), and how the diagram is drawn (see
-[references/api.md](references/api.md#lineage)); skip lineage for an app that only shows data. Show
-it to the user and get a yes before writing the file. When the data cannot answer the request, say
-so and offer the nearest thing it can.
+for them in the app. Show it to the user and get a yes before writing the file. When the data
+cannot answer the request, say so and offer the nearest thing it can.
+
+### 2.1 Lineage
+
+Lineage explains and governs a metric rather than showing its value: it answers what the metric is
+built from, the dimensions, measures and other metrics it depends on, and on through the models to
+the tables. Add it when the user asks for it, or when the request is about tracing, understanding
+or governing a metric: "how is revenue calculated", "which tables feed this KPI", a field catalog,
+a definitions panel beside a chart. An app that only shows numbers needs none.
+
+When it is in, add to the declaration list which fields the app traces, when (on load, or when the
+reader picks a field or clicks a chart), and how the diagram is drawn (see
+[references/api.md](references/api.md#lineage)).
 
 ## 3. Write and check the queries
 
