@@ -17,5 +17,8 @@ export { OVERLAY_ID } from './overlay';
 export { Mapping, CrossFilter, type Edge } from './mapping';
 export { bootstrap, type PluginSetup } from './bootstrap';
 export { type FrameKernel } from './kernel';
+export type {
+  AnfraPlugins, PluginApi, PluginMembers, PluginName,
+} from './pluginTypes';
 export { LAYER_ATTRIBUTE } from './layer';
 export * from '../common';
