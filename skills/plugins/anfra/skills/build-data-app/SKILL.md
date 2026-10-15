@@ -39,15 +39,14 @@ Restate the request as one result the user can check ("revenue for the last full
 the week before, with a country picker"). Ask only what changes the numbers: what a business word
 means, which date counts, what to exclude, each with your recommended answer.
 
-Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
-`createFilter`, `createDateDrill`, `mapControl`, `mapCrossFilter` and `lineage` call, with
-real field names, how each query renders (chart or table; default ECharts 6 from jsDelivr, as in
-the example), and which blocks, if any, the reader can download from, one line each with its
-formats (`trend: CSV`). List a download only when the user asked for one, or propose one where it
-plainly helps (a detail table's data) and let them decide; none is the default. Leave pictures
-(PNG, PDF) to the host, which offers them for every block and the whole page, unless the user asks
-for them in the app. Show it to the user and get a yes before writing the file. When the data
-cannot answer the request, say so and offer the nearest thing it can.
+`createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
+each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
+blocks, if any, the reader can download from, one line each with its formats (`trend: CSV`). List
+a download only when the user asked for one, or propose one where it plainly helps (a detail
+table's data) and let them decide; none is the default. Leave pictures (PNG, PDF) to the host,
+which offers them for every block and the whole page, unless the user asks for them in the app.
+Show it to the user and get a yes before writing the file. When the data cannot answer the
+request, say so and offer the nearest thing it can.
 
 ### 2.1 Lineage
 
@@ -129,12 +128,7 @@ Fonts), and `preserveDrawingBuffer: true` on a WebGL chart.
 Render each query's four states: `executing` (loading), `success`, `error` (show
 `error.message`), and success with no rows ("No sales this week", never a bare zero). Log
 `result.columns`, `result.rows[0]` and `result.debug?.executedAql` on each query's first success:
-the real row keys, value types and the AQL that ran.
-
-`Anfra.lineage` is a plain promise outside the app: `execute()` does not re-run it and
-`subscribe` does not hear it. Track its loading state yourself, render a target's `error` (a
-string), a rejected call and an empty diagram (`total` of 0) as well as the diagram, and log the
-first diagram as JSON. Put on the page the definitions, dates and
+the real row keys, value types and the AQL that ran. Put on the page the definitions, dates and
 any rounding a reader needs to trust a number.
 
 ## 5. Run and check it
