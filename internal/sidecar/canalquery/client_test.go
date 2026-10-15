@@ -3,6 +3,7 @@ package canalquery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -251,4 +252,31 @@ func TestExternalDoesNotSpawn(t *testing.T) {
 		t.Fatal("Client() is nil")
 	}
 	canal.Close()
+}
+
+// Progress reaches the handler before the header, read as canal-query wrote it;
+// a handler without Progress ignores it.
+func TestProgress(t *testing.T) {
+	step := `{"__holistics_progress__":true,"kind":"step","at_ms":3,"step":"executing_query.poll_query"}`
+	id := `{"__holistics_progress__":true,"kind":"dw_query_id","at_ms":5,"dw_query_id":"job_1"}`
+	scanned := `{"__holistics_progress__":true,"kind":"dw_bytes_processed","at_ms":9,"dw_bytes_processed":2048}`
+	canal, _ := streaming(t, step, id, scanned, header, `["1","2","{}",true]`, trailer)
+	var got []string
+	err := canal.Stream(context.Background(), statement, Handler{
+		Progress: func(p Progress) error {
+			got = append(got, fmt.Sprintf("%s %d %s%s", p.Kind, p.AtMs, p.Step, p.DwQueryID))
+			if p.DwBytesProcessed != nil {
+				got = append(got, fmt.Sprint(*p.DwBytesProcessed))
+			}
+			return nil
+		},
+		Header: func(Header) error { got = append(got, "header"); return nil },
+		Row:    func(Row) error { got = append(got, "row"); return nil },
+	})
+	if want := "step 3 executing_query.poll_query|dw_query_id 5 job_1|dw_bytes_processed 9 |2048|header|row"; err != nil || strings.Join(got, "|") != want {
+		t.Errorf("handled %q, %v; want %q", strings.Join(got, "|"), err, want)
+	}
+	if _, err := canal.Execute(context.Background(), statement); err != nil {
+		t.Errorf("without a Progress handler: %v", err)
+	}
 }

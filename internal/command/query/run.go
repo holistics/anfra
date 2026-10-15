@@ -3,6 +3,8 @@ package query
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/datasource"
@@ -21,9 +23,11 @@ const MaxPageSize = 10_000
 // events (QueryEvent).
 type QueryRun = apikit.Run[QueryResult, QueryEvent]
 
-// QueryEvent is one of query's own events, in a stream: compiled, then header,
-// then rows in batches, then summary. Which phase the query is in — compiling,
-// executing — is the stream's status.
+// QueryEvent is one of query's own events, in a stream: compiled, then
+// warehouse_query once the warehouse has the query, then header, then rows in
+// batches, then summary. Which phase the query is in — compiling_query, then
+// canal-query's connecting_to_dw, executing_query, fetching_query_result, and
+// retrying_query — is the stream's status.
 type QueryEvent interface{ queryEvent() }
 
 // QueryCompiled is the SQL the query runs, as soon as it is known.
@@ -31,6 +35,13 @@ type QueryCompiled struct {
 	Type string `json:"type" enum:"compiled"`
 	SQL  string `json:"sql"`
 	AQL  string `json:"aql,omitempty" doc:"the AQL that runs: the query with its Query Input applied; absent for a SQL query"`
+}
+
+// QueryWarehouse is the query's id on the warehouse, as soon as it has one: to
+// find it there — in its query history, its billing — or to cancel it there.
+type QueryWarehouse struct {
+	Type string `json:"type" enum:"warehouse_query"`
+	ID   string `json:"id" doc:"the warehouse's own id of the query; for Postgres, the process id of the backend running it"`
 }
 
 // QueryHeader is what each column of the result is, once the result's shape is
@@ -53,15 +64,20 @@ type QuerySummary struct {
 	Type     string `json:"type" enum:"summary"`
 	RowCount int    `json:"row_count"`
 	HasMore  bool   `json:"has_more" doc:"a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false"`
+	// BytesScanned is what the warehouse read to run the query, as it reports
+	// it: BigQuery and Athena.
+	BytesScanned *int64  `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
+	Timings      Timings `json:"timings"`
 }
 
-func (QueryCompiled) queryEvent() {}
-func (QueryHeader) queryEvent()   {}
-func (QueryRecords) queryEvent()  {}
-func (QuerySummary) queryEvent()  {}
+func (QueryCompiled) queryEvent()  {}
+func (QueryWarehouse) queryEvent() {}
+func (QueryHeader) queryEvent()    {}
+func (QueryRecords) queryEvent()   {}
+func (QuerySummary) queryEvent()   {}
 
 // queryEvents are query's events, for its op to declare.
-var queryEvents = []any{QueryCompiled{}, QueryHeader{}, QueryRecords{}, QuerySummary{}}
+var queryEvents = []any{QueryCompiled{}, QueryWarehouse{}, QueryHeader{}, QueryRecords{}, QuerySummary{}}
 
 // A stream's rows are sent in batches of at most batchRows rows, or once a
 // batch holds batchBytes: it holds one batch at a time, whatever it delivers.
@@ -116,62 +132,135 @@ func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRunInpu
 
 // sink receives a run's result as it is produced.
 type sink struct {
-	status   func(phase string) error
-	compiled func(sql, aql string) error
-	header   func(columns []Column, fields []string) error
-	row      func(canalquery.Row) error
+	status    func(phase string) error
+	compiled  func(sql, aql string) error
+	warehouse func(id string) error
+	scanned   func(bytes int64)
+	header    func(columns []Column, fields []string) error
+	row       func(canalquery.Row) error
 }
 
-// execute compiles the query, when it is AQL, and runs it, its result truncated
-// at truncate rows (query.NoLimit: none) and failing past the host's maximum.
-func (q queryRun) execute(ctx context.Context, truncate int, s sink) error {
-	canal := q.cc.Clients.CanalQuery
-	bounds := query.RowBounds{Truncate: truncate, Max: q.cc.QueryLimits.ResultRows()}
-	if q.in.Lang == "sql" {
-		if err := s.compiled(q.in.Query, ""); err != nil {
-			return err
-		}
-		if err := s.status("executing"); err != nil {
-			return err
-		}
-		err := query.StreamSQL(ctx, canal, q.ds, q.in.Query, bounds, canalquery.Handler{
-			Header: func(h canalquery.Header) error { return s.header(describeColumns(h, nil), h.Fields) },
-			Row:    s.row,
-		})
-		if err != nil {
-			return asQueryFailed(err)
-		}
+// Timings are when each step of a run started, in order, in milliseconds since
+// the run started; and when it ended. They are what is known, not what is
+// derived from it: a step ends where the next step at its level or above starts
+// (a child step, "executing_query.poll_query", is within its parent), or at
+// EndMs — canal-query's rule for its steps, which it reports only the starts of.
+type Timings struct {
+	Steps []TimedStep `json:"steps" doc:"each step as it started, in order; a step run again, after a retry, is here again"`
+	EndMs int64       `json:"end_ms" doc:"when the run ended, in ms since it started: its total time, and where its last steps end"`
+}
+
+// TimedStep is when a step of the run started.
+type TimedStep struct {
+	Step    string `json:"step" doc:"compiling_query; canal-query's steps by its names (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
+	StartMs int64  `json:"start_ms" doc:"when it started, in ms since the run started"`
+}
+
+// tracker follows a run: the phase it is in, for the stream's status, and its
+// timeline, for Timings. canal-query's times count from when it started
+// answering; canalAt puts them on the run's timeline.
+type tracker struct {
+	s       sink
+	start   time.Time
+	canalAt int64
+	current string
+	steps   []TimedStep
+}
+
+func newTracker(s sink) *tracker { return &tracker{s: s, start: time.Now(), steps: []TimedStep{}} }
+
+func (t *tracker) since() int64 { return time.Since(t.start).Milliseconds() }
+
+// begin records a step starting at, and reports the phase it is in — its top
+// step — unless the run is in it already.
+func (t *tracker) begin(step string, at int64) error {
+	t.steps = append(t.steps, TimedStep{Step: step, StartMs: at})
+	phase, _, _ := strings.Cut(step, ".")
+	if phase == t.current {
 		return nil
 	}
-	if err := s.status("compiling"); err != nil {
-		return err
+	t.current = phase
+	return t.s.status(phase)
+}
+
+// requested marks the request to canal-query going: its times count from here.
+func (t *tracker) requested() { t.canalAt = t.since() }
+
+// progress is canal-query's progress: its steps, and a retry as retrying_query;
+// its warehouse query id, and what it scanned.
+func (t *tracker) progress(p canalquery.Progress) error {
+	at := t.canalAt + p.AtMs
+	switch p.Kind {
+	case "step":
+		return t.begin(p.Step, at)
+	case "retry":
+		return t.begin("retrying_query", at)
+	case "dw_query_id":
+		return t.s.warehouse(p.DwQueryID)
+	case "dw_bytes_processed":
+		if p.DwBytesProcessed != nil {
+			t.s.scanned(*p.DwBytesProcessed)
+		}
+	}
+	return nil
+}
+
+func (t *tracker) timings() Timings { return Timings{Steps: t.steps, EndMs: t.since()} }
+
+// execute compiles the query, when it is AQL, and runs it, its result truncated
+// at truncate rows (query.NoLimit: none) and failing past the host's maximum;
+// and answers its timings.
+func (q queryRun) execute(ctx context.Context, truncate int, s sink) (Timings, error) {
+	canal := q.cc.Clients.CanalQuery
+	bounds := query.Bounded(truncate, q.cc.QueryLimits)
+	t := newTracker(s)
+	if q.in.Lang == "sql" {
+		if err := s.compiled(q.in.Query, ""); err != nil {
+			return Timings{}, err
+		}
+		t.requested()
+		err := query.StreamSQL(ctx, canal, q.ds, q.in.Query, bounds, canalquery.Handler{
+			Progress: t.progress,
+			Header:   func(h canalquery.Header) error { return s.header(describeColumns(h, nil), h.Fields) },
+			Row:      s.row,
+		})
+		if err != nil {
+			return Timings{}, asQueryFailed(err)
+		}
+		return t.timings(), nil
+	}
+	if err := t.begin("compiling_query", 0); err != nil {
+		return Timings{}, err
 	}
 	compiled, err := compileAQL(ctx, q.cc, q.src, q.in.Dataset, q.aql, q.in.run())
 	if err != nil {
-		return err
+		return Timings{}, err
 	}
 	if err := s.compiled(compiled.SQL, compiled.AQL); err != nil {
-		return err
+		return Timings{}, err
 	}
-	if err := s.status("executing"); err != nil {
-		return err
-	}
+	t.requested()
 	err = query.Stream(ctx, canal, q.src.DataSources, compiled, bounds, canalquery.Handler{
-		Header: func(h canalquery.Header) error { return s.header(describeColumns(h, compiled.Columns), h.Fields) },
-		Row:    s.row,
+		Progress: t.progress,
+		Header:   func(h canalquery.Header) error { return s.header(describeColumns(h, compiled.Columns), h.Fields) },
+		Row:      s.row,
 	})
 	if err != nil {
-		return asQueryFailed(err)
+		return Timings{}, asQueryFailed(err)
 	}
-	return nil
+	return t.timings(), nil
 }
 
 // asQueryFailed is err as query_failed, with canal's message, when it is
 // canal-query failing to run the query — the data source's failure. A
 // client-scope error from canal is a request the engine built wrong — the
 // engine's bug, not the data source's — and stays unclassified, as does
-// anything else: our own errors, such as result_too_large, pass as they are.
+// anything else; an error with a code already, such as result_too_large,
+// passes as it is.
 func asQueryFailed(err error) error {
+	if _, formal := err.(*apperr.Error); formal {
+		return err
+	}
 	e, ok := errors.AsType[*canalquery.Error](err)
 	if !ok || e.Scope == "Client" {
 		return err
@@ -194,8 +283,10 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 	maxBytes := q.cc.QueryLimits.PageBytes()
 	r := QueryResult{Result: QueryRows{Records: []canalquery.Row{}}}
 	size := 0
-	err := q.execute(ctx, truncate, sink{
-		status: func(string) error { return nil },
+	timings, err := q.execute(ctx, truncate, sink{
+		status:    func(string) error { return nil },
+		warehouse: func(string) error { return nil },
+		scanned:   func(int64) {},
 		compiled: func(sql, aql string) error {
 			r.SQL, r.AQL = sql, aql
 			return nil
@@ -222,6 +313,7 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 	if q.in.PageSize > 0 {
 		r.HasMore = len(r.Result.Records) == q.in.PageSize
 	}
+	r.Timings = timings
 	return r, nil
 }
 
@@ -230,6 +322,7 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 // to the host's maximum (query.Limits).
 func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) error {
 	batch, size, count := []canalquery.Row{}, 0, 0
+	var scanned *int64
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
@@ -238,11 +331,15 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 		batch, size = []canalquery.Row{}, 0
 		return err
 	}
-	err := q.execute(ctx, q.limit, sink{
+	timings, err := q.execute(ctx, q.limit, sink{
 		status: events.Status,
 		compiled: func(sql, aql string) error {
 			return events.Emit(QueryCompiled{Type: "compiled", SQL: sql, AQL: aql})
 		},
+		warehouse: func(id string) error {
+			return events.Emit(QueryWarehouse{Type: "warehouse_query", ID: id})
+		},
+		scanned: func(bytes int64) { scanned = &bytes },
 		header: func(columns []Column, fields []string) error {
 			return events.Emit(QueryHeader{Type: "header", Columns: columns, Fields: fields})
 		},
@@ -260,5 +357,6 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 	if err := flush(); err != nil {
 		return err
 	}
-	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: q.in.PageSize > 0 && count == q.in.PageSize})
+	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: q.in.PageSize > 0 && count == q.in.PageSize,
+		BytesScanned: scanned, Timings: timings})
 }

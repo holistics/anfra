@@ -33,7 +33,7 @@ function asStream (page: { sql: string, aql?: string, columns: unknown[], result
     { type: 'compiled', sql: page.sql, ...(page.aql ? { aql: page.aql } : {}) },
     { type: 'header', columns: page.columns, fields: page.result.fields },
     ...(page.result.records.length ? [{ type: 'rows', records: page.result.records }] : []),
-    { type: 'summary', row_count: page.result.records.length, has_more: false },
+    { type: 'summary', row_count: page.result.records.length, has_more: false, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }, { step: 'executing_query', start_ms: 40 }], end_ms: 95 } },
     { type: 'end', status: 'succeeded' },
   );
 }
@@ -83,7 +83,10 @@ describe('coreApiBackend', () => {
       columns: answered.columns,
       values: [['paid'], ['open']],
       meta: { page: 2, pageSize: 10, numRows: 2 },
-      debug: { executedAql: 'explore { … }', executedSql: 'select 1', fromCache: false },
+      debug: {
+        executedAql: 'explore { … }', executedSql: 'select 1', fromCache: false,
+        timings: { steps: [{ step: 'compiling_query', startMs: 0 }, { step: 'executing_query', startMs: 40 }], endMs: 95 },
+      },
     });
   });
 
@@ -107,7 +110,7 @@ describe('coreApiBackend', () => {
       { type: 'ping' },
       { type: 'rows', records: [['paid']] },
       { type: 'rows', records: [['open']] },
-      { type: 'summary', row_count: 2, has_more: false },
+      { type: 'summary', row_count: 2, has_more: false, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }], end_ms: 12 } },
     ];
 
     it('is sent unpaged, and gathered into every row', async () => {

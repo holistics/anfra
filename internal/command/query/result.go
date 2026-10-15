@@ -17,6 +17,7 @@ type QueryResult struct {
 	Columns []Column  `json:"columns" doc:"one per field of result, in order"`
 	Result  QueryRows `json:"result"`
 	HasMore bool      `json:"has_more" doc:"there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"`
+	Timings Timings   `json:"timings"`
 }
 
 type QueryRows struct {

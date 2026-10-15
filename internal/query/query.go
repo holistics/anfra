@@ -31,6 +31,10 @@ const NoLimit = -1
 // sets no maximum (Limits.MaxResultRows).
 const DefaultMaxResultRows = 1_000_000
 
+// DefaultMaxResultBytes is the most a query's result may hold, in bytes, when
+// the host sets no maximum (Limits.MaxResultBytes).
+const DefaultMaxResultBytes = 256 << 20
+
 // DefaultMaxPageBytes is the most a page of a query's result may hold, in its
 // rows' bytes, when the host sets no maximum (Limits.MaxPageBytes).
 const DefaultMaxPageBytes = 16 << 20
@@ -41,6 +45,11 @@ type Limits struct {
 	// produces more fails with ResultTooLarge rather than being cut short. Zero:
 	// DefaultMaxResultRows.
 	MaxResultRows int
+	// MaxResultBytes is the most a query's result may hold, in bytes, as
+	// canal-query holds it (Arrow data in memory, about what its JSON takes): a
+	// query that produces more fails with ResultTooLarge. Zero:
+	// DefaultMaxResultBytes.
+	MaxResultBytes int64
 	// MaxPageBytes is the most a page answered whole may hold, in its rows'
 	// bytes: a page over it fails with PageTooLarge rather than being cut short,
 	// so that page numbers stay exact. Zero: DefaultMaxPageBytes.
@@ -55,18 +64,34 @@ func (l Limits) ResultRows() int {
 	return DefaultMaxResultRows
 }
 
-// RowBounds bound how many of a query's rows are fetched: up to Truncate, where
-// the result is cut as the query asked (its limit: directive, or a page); and
-// no more than Max, past which the query fails with ResultTooLarge — the host's
-// maximum (Limits.ResultRows), bounding what it holds.
-type RowBounds struct {
-	Truncate int // NoLimit: every row the query produces
-	Max      int // zero: no maximum
+// ResultBytes is MaxResultBytes, or its default.
+func (l Limits) ResultBytes() int64 {
+	if l.MaxResultBytes > 0 {
+		return l.MaxResultBytes
+	}
+	return DefaultMaxResultBytes
+}
+
+// ResultBounds bound how much of a query's result is fetched: up to Truncate
+// rows, where the result is cut as the query asked (its limit: directive, or a
+// page); and no more than MaxRows rows or MaxBytes bytes, past which the query
+// fails with ResultTooLarge — the host's maximums (Limits), bounding what it
+// holds.
+type ResultBounds struct {
+	Truncate int   // NoLimit: every row the query produces
+	MaxRows  int   // zero: no maximum
+	MaxBytes int64 // zero: no maximum
+}
+
+// Bounded are the bounds of the host's maximums (limits), the result truncated
+// at truncate rows.
+func Bounded(truncate int, limits Limits) ResultBounds {
+	return ResultBounds{Truncate: truncate, MaxRows: limits.ResultRows(), MaxBytes: limits.ResultBytes()}
 }
 
 // Unbounded is every row, however many: for a result streamed to a file, which
 // holds none of it.
-var Unbounded = RowBounds{Truncate: NoLimit}
+var Unbounded = ResultBounds{Truncate: NoLimit}
 
 // PageBytes is MaxPageBytes, or its default.
 func (l Limits) PageBytes() int {
@@ -82,9 +107,10 @@ func (l Limits) PageBytes() int {
 var ResultTooLarge = apperr.DefinePublicCodeWith[ResultLimit](errcode.NS, "result_too_large", apperr.User,
 	"The query's result is larger than this server allows.")
 
-// ResultLimit is the maximum a result went past.
+// ResultLimit is the maximum a result went past: its rows, or its bytes.
 type ResultLimit struct {
-	MaxRows int `json:"max_rows"`
+	MaxRows  int   `json:"max_rows,omitempty"`
+	MaxBytes int64 `json:"max_bytes,omitempty"`
 }
 
 // PageTooLarge is a page of a query's result larger, in bytes, than the host
@@ -221,7 +247,7 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 // header first, holding none of it. Split from Compile so callers can distinguish a
 // compile failure (a query problem) from an execution failure (a data-source/DB
 // problem).
-func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, bounds RowBounds, h canalquery.Handler) error {
+func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, bounds ResultBounds, h canalquery.Handler) error {
 	ds, err := dataSourceOf(ctx, sources, compiled)
 	if err != nil {
 		return err
@@ -242,19 +268,20 @@ func dataSourceOf(ctx context.Context, sources datasource.DataSources, compiled 
 // StreamSQL runs sql on ds as it is: the caller wrote it in the data source's
 // dialect, with its own LIMIT. Nothing is compiled into it — no restriction
 // applies. bounds are as for Stream.
-func StreamSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string, bounds RowBounds, h canalquery.Handler) error {
+func StreamSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string, bounds ResultBounds, h canalquery.Handler) error {
 	return stream(ctx, canal, ds, canalquery.Statement{SQL: sql, DBType: ds.DBType}, bounds, h)
 }
 
 // stream fetches st's rows within bounds: canal is asked for no more than
-// bounds.Truncate, or one row past bounds.Max, and that row fails the query
-// before h sees it.
-func stream(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, st canalquery.Statement, bounds RowBounds, h canalquery.Handler) error {
+// bounds.Truncate rows, or one row past bounds.MaxRows, and that row fails the
+// query before h sees it; and to fail past bounds.MaxBytes itself.
+func stream(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, st canalquery.Statement, bounds ResultBounds, h canalquery.Handler) error {
 	st, err := on(ds, st)
 	if err != nil {
 		return err
 	}
-	maxRows := bounds.Max
+	st.MaxResultBytes = bounds.MaxBytes
+	maxRows := bounds.MaxRows
 	var capped bool
 	st.TruncateRows, capped = rowCap(bounds.Truncate, maxRows)
 	if capped {
@@ -269,6 +296,14 @@ func stream(ctx context.Context, canal *canalquery.Client, ds datasource.DataSou
 		}
 	}
 	if err := canal.Stream(ctx, st, h); err != nil {
+		if _, formal := err.(*apperr.Error); formal {
+			return err // h's own, such as the row maximum's: wrapping it would hide its code
+		}
+		if e, ok := errors.AsType[*canalquery.Error](err); ok && e.Type == canalquery.TypeResultTooLarge {
+			return apperr.EncapsulateWith(err, ResultTooLarge,
+				fmt.Sprintf("The query's result is larger than %d MiB, more than this server allows. Narrow the query, or add a limit.", bounds.MaxBytes>>20),
+				ResultLimit{MaxBytes: bounds.MaxBytes})
+		}
 		return fmt.Errorf("execute query on data source %q: %w", ds.Name, err)
 	}
 	return nil

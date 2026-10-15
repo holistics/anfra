@@ -92,13 +92,41 @@ func (c *Client) WaitReady(ctx context.Context) error {
 // Statement is a query for canal-query to run: SQL in the dialect of DBType, on
 // the data source DBConfig connects to, with DBSetting's options (both passed to
 // canal as they are; no DBSetting is canal's defaults), answering at most
-// TruncateRows rows (negative: all of them).
+// TruncateRows rows (negative: all of them), and failing once its result holds
+// more than MaxResultBytes (zero: no maximum) with TypeResultTooLarge.
+// canal-query counts those bytes as the result's Arrow data in memory, not as
+// the JSON it writes.
 type Statement struct {
-	SQL          string
-	DBType       string
-	DBConfig     map[string]any
-	DBSetting    map[string]any
-	TruncateRows int
+	SQL            string
+	DBType         string
+	DBConfig       map[string]any
+	DBSetting      map[string]any
+	TruncateRows   int
+	MaxResultBytes int64
+}
+
+// TypeResultTooLarge is the Error.Type of a result past its MaxResultBytes.
+const TypeResultTooLarge = "ResultTooLarge"
+
+// Progress is how a query's run is going, as canal-query reports it ahead of
+// its result. Kind says which of its other fields it has:
+//
+//   - "step": Step, the step the run has started: connecting_to_dw,
+//     executing_query, fetching_query_result, or a child of one, named after it
+//     ("executing_query.poll_query");
+//   - "dw_query_id": DwQueryID, the query's id on the warehouse;
+//   - "dw_bytes_processed": DwBytesProcessed, what the warehouse scanned, once
+//     it has run (BigQuery and Athena);
+//   - "retry": Attempt, the attempt about to start, after a failed one.
+//
+// AtMs is when, in milliseconds since canal-query started answering.
+type Progress struct {
+	Kind             string `json:"kind"`
+	AtMs             int64  `json:"at_ms"`
+	Step             string `json:"step,omitempty"`
+	DwQueryID        string `json:"dw_query_id,omitempty"`
+	DwBytesProcessed *int64 `json:"dw_bytes_processed,omitempty"`
+	Attempt          int    `json:"attempt,omitempty"`
 }
 
 // Header is what a result's rows hold, known before any row: each field's name,
@@ -161,12 +189,14 @@ func (ArrowType) Schema(huma.Registry) *huma.Schema {
 	}
 }
 
-// Handler receives a result as canal-query streams it: its Header first, then
-// each Row. An error from either stops the stream and is answered as it is. A
-// row is the handler's to keep: it is not reused.
+// Handler receives a result as canal-query streams it: its Progress as it goes,
+// its Header, then each Row. An error from any stops the stream and is answered
+// as it is. A row is the handler's to keep: it is not reused. Progress may be
+// nil.
 type Handler struct {
-	Header func(Header) error
-	Row    func(Row) error
+	Progress func(Progress) error
+	Header   func(Header) error
+	Row      func(Row) error
 }
 
 // Result is an executed query's header and rows.
@@ -232,12 +262,14 @@ type queryRequest struct {
 	StreamResultOptions   streamResultOptions   `json:"stream_result_options"`
 	JSONOutputDataOptions jsonOutputDataOptions `json:"json_output_data_options"`
 	TruncateRows          int                   `json:"truncate_rows"` // cap returned rows; negative = no truncation
+	MaxResultBytes        int64                 `json:"max_result_bytes,omitempty"`
 }
 
 // streamResultOptions are how canal-query frames a streamed result's rows.
 type streamResultOptions struct {
 	Header           bool `json:"header"`             // a header line before the rows
 	HeaderArrowTypes bool `json:"header_arrow_types"` // with the fields' Arrow types
+	Progress         bool `json:"progress"`           // the run's progress, a line an event, ahead of the header
 }
 
 // jsonOutputDataOptions are how canal-query writes rows as JSON.
@@ -248,15 +280,17 @@ type jsonOutputDataOptions struct {
 	IntegersAsStrings bool `json:"integers_as_strings"`
 }
 
-// streamObject is a line of the stream that is not a row: its header (first),
-// its trailer (last), or, on a response that is not a stream, an error object.
+// streamObject is a line of the stream that is not a row: its progress (before
+// its header), its header, its trailer (last), or, on a response that is not a
+// stream, an error object.
 type streamObject struct {
-	HolisticsHeader  bool           `json:"__holistics_header__"`
-	Fields           []string       `json:"fields"`
-	Types            []string       `json:"types"`
-	ArrowTypes       []ArrowType    `json:"arrow_types"`
-	HolisticsTrailer bool           `json:"__holistics_trailer__"`
-	Error            map[string]any `json:"error"`
+	HolisticsProgress bool           `json:"__holistics_progress__"`
+	HolisticsHeader   bool           `json:"__holistics_header__"`
+	Fields            []string       `json:"fields"`
+	Types             []string       `json:"types"`
+	ArrowTypes        []ArrowType    `json:"arrow_types"`
+	HolisticsTrailer  bool           `json:"__holistics_trailer__"`
+	Error             map[string]any `json:"error"`
 }
 
 // Error is canal-query's error object: its message, its type, and
@@ -342,9 +376,10 @@ func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
 		Job:                   queryJob{ID: -1, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
 		SkipCache:             true,
 		StreamResult:          true,
-		StreamResultOptions:   streamResultOptions{Header: true, HeaderArrowTypes: true},
+		StreamResultOptions:   streamResultOptions{Header: true, HeaderArrowTypes: true, Progress: true},
 		JSONOutputDataOptions: jsonOutputDataOptions{IntegersAsStrings: true},
 		TruncateRows:          st.TruncateRows,
+		MaxResultBytes:        st.MaxResultBytes,
 	})
 	if err != nil {
 		return err
@@ -376,6 +411,16 @@ func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
 				return fmt.Errorf("canal query failed (status %d): %s", resp.StatusCode, line)
 			}
 			switch {
+			case obj.HolisticsProgress: // before the header, but a late one is no reason to fail the query
+				if h.Progress != nil {
+					var p Progress
+					if err := jsonkit.Unmarshal(line, &p); err != nil {
+						return fmt.Errorf("canal-query reported unreadable progress: %w", err)
+					}
+					if err := h.Progress(p); err != nil {
+						return err
+					}
+				}
 			case obj.HolisticsTrailer && len(obj.Error) > 0:
 				return canalError(obj.Error)
 			case obj.HolisticsTrailer && !headed:

@@ -660,6 +660,7 @@ export interface components {
             has_more: boolean;
             result: components["schemas"]["QueryRows"];
             sql: string;
+            timings: components["schemas"]["Timings"];
         };
         QueryRows: {
             fields: string[];
@@ -704,10 +705,16 @@ export interface components {
             field: string;
         };
         QuerySummary: {
+            /**
+             * Format: int64
+             * @description the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)
+             */
+            bytes_scanned?: number;
             /** @description a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false */
             has_more: boolean;
             /** Format: int64 */
             row_count: number;
+            timings: components["schemas"]["Timings"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -727,6 +734,15 @@ export interface components {
         QueryValidation: {
             diagnostics: components["schemas"]["AQLDiagnostic"][];
             valid: boolean;
+        };
+        QueryWarehouse: {
+            /** @description the warehouse's own id of the query; for Postgres, the process id of the backend running it */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "warehouse_query";
         };
         RepoValidation: {
             diagnostics: components["schemas"]["CompileError"][];
@@ -757,7 +773,9 @@ export interface components {
         };
         ResultLimit: {
             /** Format: int64 */
-            max_rows: number;
+            max_bytes?: number;
+            /** Format: int64 */
+            max_rows?: number;
         };
         SearchInput: {
             /** @description search query */
@@ -879,6 +897,24 @@ export interface components {
              * @enum {string}
              */
             type: "status";
+        };
+        TimedStep: {
+            /**
+             * Format: int64
+             * @description when it started, in ms since the run started
+             */
+            start_ms: number;
+            /** @description compiling_query; canal-query's steps by its names (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again */
+            step: string;
+        };
+        Timings: {
+            /**
+             * Format: int64
+             * @description when the run ended, in ms since it started: its total time, and where its last steps end
+             */
+            end_ms: number;
+            /** @description each step as it started, in order; a step run again, after a retry, is here again */
+            steps: components["schemas"]["TimedStep"][];
         };
         UpdateInfo: {
             available: boolean;
@@ -1075,7 +1111,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueryResult"];
-                    "application/x-ndjson": components["schemas"]["QueryCompiled"] | components["schemas"]["QueryHeader"] | components["schemas"]["QueryRecords"] | components["schemas"]["QuerySummary"] | components["schemas"]["StreamStart"] | components["schemas"]["StreamStatus"] | components["schemas"]["StreamEnd"] | components["schemas"]["StreamPing"];
+                    "application/x-ndjson": components["schemas"]["QueryCompiled"] | components["schemas"]["QueryWarehouse"] | components["schemas"]["QueryHeader"] | components["schemas"]["QueryRecords"] | components["schemas"]["QuerySummary"] | components["schemas"]["StreamStart"] | components["schemas"]["StreamStatus"] | components["schemas"]["StreamEnd"] | components["schemas"]["StreamPing"];
                 };
             };
             /** @description invalid_request */
