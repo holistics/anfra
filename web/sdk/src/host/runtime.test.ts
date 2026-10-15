@@ -57,6 +57,14 @@ const call = (id: number, name: string, request: unknown = null) => fromFrame({
 });
 
 describe('createHost', () => {
+  it('checks every plugin\'s names, made with definePlugin or not', () => {
+    const core = corePlugin(backend());
+    for (const name of ['anfra', 'plugins', '__proto__', 'a.b', 'My Plugin']) {
+      expect(() => createHost({ plugins: [core, { name, version: '1' }] }), name).toThrow();
+    }
+    expect(() => createHost({ plugins: [core, { name: 'p', version: '1', host: { events: { 'x"y': (p) => p } } }] })).toThrow(/not an event name/);
+  });
+
   it('needs core, refuses a plugin twice, and one whose plugins are missing', () => {
     const core = corePlugin(backend());
     const needy = definePlugin({ name: 'needy', version: '1', requires: ['export', 'lineage'] });
@@ -175,6 +183,23 @@ describe('the frame\'s calls', () => {
     expect(seen).toMatchObject({ name: 'spy.look', caller: { kind: 'frame' }, mount: { frame: mounted!.frame } });
   });
 
+  it('send the frame only the SDK\'s errors\' messages, anything else as a plain failure', async () => {
+    const leaky = definePlugin({
+      name: 'leaky',
+      version: '1',
+      host: { calls: { boom: { frame: true, handler: () => { throw new Error('connect ECONNREFUSED 10.0.0.7:5432 tenant=acme'); } } } },
+    });
+    const refuse: Middleware = { name: 'refuse', match: 'core.*', handle: () => { throw new TypeError('secret is undefined'); } };
+    mount([corePlugin(backend()), leaky], [refuse]);
+    call(1, 'leaky.boom');
+    call(2, 'core.submitQuery', query);
+    await settle();
+    expect(replies).toEqual([
+      { type: 'anfra:result', id: 1, ok: false, error: { name: 'QueryError', message: 'The call failed.' } },
+      { type: 'anfra:result', id: 2, ok: false, error: { name: 'QueryError', message: 'The call failed.' } },
+    ]);
+  });
+
   it('answer a plugin\'s frame body, and nothing for a plugin without one', async () => {
     mount([corePlugin(backend()), definePlugin({ name: 'heavy', version: '1', frame: { setup: '', body: 'BODY' } })]);
     call(1, 'anfra.body', { plugin: 'heavy' });
@@ -256,6 +281,16 @@ describe('middleware', () => {
     expect(replies.map((r) => r.type === 'anfra:result' && r.ok)).toEqual([true, true]);
   });
 
+  it('wraps the kernel\'s own call, a plugin\'s body, like any other', async () => {
+    const seen: string[] = [];
+    const log: Middleware = { name: 'log', match: '*', handle: (r, c, next) => { seen.push(c.name); return next(r); } };
+    mount([corePlugin(backend()), definePlugin({ name: 'heavy', version: '1', frame: { setup: '', body: 'BODY' } })], [log]);
+    call(1, 'anfra.body', { plugin: 'heavy' });
+    await settle();
+    expect(seen).toEqual(['anfra.body']);
+    expect(replies).toEqual([{ type: 'anfra:result', id: 1, ok: true, result: 'BODY' }]);
+  });
+
   it('may come with a plugin', async () => {
     const seen: string[] = [];
     const logger = definePlugin({
@@ -290,7 +325,9 @@ describe('the host\'s side', () => {
 
   it('sends the frame events, hears its events, and its readiness, until unmounted', () => {
     const ready = vi.fn();
-    const plugin = definePlugin({ name: 'p', version: '1', host: { mount: (m) => m.onReady(ready) } });
+    const plugin = definePlugin({
+      name: 'p', version: '1', host: { mount: (m) => m.onReady(ready), events: { changed: (payload) => payload } },
+    });
     mount([corePlugin(backend()), plugin]);
     const heard = vi.fn();
     mounted!.on('p.changed', heard);
@@ -300,6 +337,23 @@ describe('the host\'s side', () => {
     fromFrame({ type: 'anfra:ready' });
     expect(heard).toHaveBeenCalledWith({ n: 1 });
     expect(ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('hears only the frame events a plugin declared, as its check passed them', () => {
+    const plugin = definePlugin({
+      name: 'p',
+      version: '1',
+      host: { events: { count: (payload) => (typeof payload === 'number' ? { n: payload } : undefined), broken: () => { throw new Error('no'); } } },
+    });
+    mount([corePlugin(backend()), plugin]);
+    const heard = vi.fn();
+    for (const name of ['p.count', 'p.other', 'p.broken', 'core.anything']) mounted!.on(name, heard);
+    fromFrame({ type: 'anfra:event', name: 'p.count', payload: 'lots' });
+    fromFrame({ type: 'anfra:event', name: 'p.other', payload: 1 });
+    fromFrame({ type: 'anfra:event', name: 'p.broken', payload: 1 });
+    fromFrame({ type: 'anfra:event', name: 'core.anything', payload: 1 });
+    fromFrame({ type: 'anfra:event', name: 'p.count', payload: 3 });
+    expect(heard.mock.calls).toEqual([[{ n: 3 }]]);
   });
 
   it('rejects a call into the frame still running when it unmounts, and disposes each plugin\'s mount', async () => {
