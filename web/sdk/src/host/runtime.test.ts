@@ -291,6 +291,60 @@ describe('middleware', () => {
     expect(replies).toEqual([{ type: 'anfra:result', id: 1, ok: true, result: 'BODY' }]);
   });
 
+  it('see who started a call a plugin makes for the frame, through every hop', async () => {
+    const seen: Pick<CallContext, 'caller' | 'chain' | 'origin'>[] = [];
+    const quota: Middleware = {
+      name: 'quota', match: 'core.submitQuery', handle: (request, context, next) => { seen.push({ caller: context.caller, chain: context.chain, origin: context.origin }); return next(request); },
+    };
+    const tools = definePlugin({
+      name: 'tools', version: '1', host: { calls: { query: (_r, context) => context.call('core.submitQuery', query) } },
+    });
+    const agent = definePlugin({
+      name: 'agent', version: '1', host: { calls: { ask: { frame: true, handler: (_r, context) => context.call('tools.query') } } },
+    });
+    mount([corePlugin(backend()), tools, agent], [quota]);
+    call(1, 'agent.ask');
+    await settle();
+    await mounted!.call('core.submitQuery', query);
+    expect(seen).toEqual([
+      {
+        caller: { kind: 'plugin', plugin: 'tools' },
+        chain: [{ kind: 'frame' }, { kind: 'plugin', plugin: 'agent' }, { kind: 'plugin', plugin: 'tools' }],
+        origin: { kind: 'frame' },
+      },
+      { caller: { kind: 'host' }, chain: [{ kind: 'host' }], origin: { kind: 'host' } },
+    ]);
+  });
+
+  it('hold a plugin\'s call to what the frame may call, when the plugin asks', async () => {
+    const secret = vi.fn(() => 'key');
+    const vault = definePlugin({ name: 'vault', version: '1', host: { calls: { key: secret } } });
+    const relay = definePlugin({
+      name: 'relay',
+      version: '1',
+      host: {
+        calls: {
+          // Forwards a call the frame names: the deputy a frame could misuse.
+          forward: { frame: true, handler: (name: string, context) => context.call(name, null, { asOrigin: true }) },
+          own: { frame: true, handler: (_r, context) => context.call('vault.key') },
+        },
+      },
+    });
+    mount([corePlugin(backend()), vault, relay]);
+    call(1, 'relay.forward', 'vault.key');
+    call(2, 'relay.forward', 'core.submitQuery');
+    call(3, 'relay.own');
+    await settle();
+    await expect(mounted!.call('relay.forward', 'vault.key')).resolves.toBe('key');
+    const byId = (r: BridgeMessage) => (r.type === 'anfra:result' ? r.id : 0);
+    expect([...replies].sort((a, b) => byId(a) - byId(b))).toEqual([
+      { type: 'anfra:result', id: 1, ok: false, error: { name: 'PermissionError', message: "'vault.key' can't be called from a Data App." } },
+      { type: 'anfra:result', id: 2, ok: true, result: { columns: [], values: [[1]] } },
+      { type: 'anfra:result', id: 3, ok: true, result: 'key' },
+    ]);
+    expect(secret).toHaveBeenCalledTimes(2);
+  });
+
   it('may come with a plugin', async () => {
     const seen: string[] = [];
     const logger = definePlugin({
