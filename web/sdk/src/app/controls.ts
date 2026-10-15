@@ -3,6 +3,7 @@
 import { Observable } from './observable';
 import { ValidationError } from '../common/errors';
 import type { AppContext } from './internal';
+import type { PluginMembers } from './pluginTypes';
 import type { DatasetIndex, ResolvedField } from './validation';
 import type {
   Backend,
@@ -245,3 +246,7 @@ export class DateDrillControl extends Control {
     return this.declaration;
   }
 }
+
+/** What the installed plugins add to every control (`AnfraPlugins`): each member is there only where its plugin is. */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- plugins' members, on the class they are added to
+export interface Control extends PluginMembers<'control'> {}
