@@ -84,10 +84,10 @@ func TestRouted(t *testing.T) {
 	}
 	var hasID bool
 	for _, kv := range ended[0].Attributes() {
-		hasID = hasID || (kv.Key == "request.id" && kv.Value.AsString() == id)
+		hasID = hasID || (kv.Key == "h.request.id" && kv.Value.AsString() == id)
 	}
 	if !hasID {
-		t.Errorf("the root span does not carry request.id %s", id)
+		t.Errorf("the root span does not carry h.request.id %s", id)
 	}
 }
 

@@ -147,7 +147,7 @@ func TestStartIsASpan(t *testing.T) {
 	if inner.Parent().SpanID() != outer.SpanContext().SpanID() {
 		t.Error("the inner step is not the outer step's child")
 	}
-	if a := attrs(outer); a["step.name"] != "Sales" {
+	if a := attrs(outer); a["h.step.name"] != "Sales" {
 		t.Errorf("attributes = %v", a)
 	}
 	if outer.Status().Code != codes.Unset {
@@ -161,7 +161,7 @@ func TestSpanRedactsSensitiveParams(t *testing.T) {
 	err := errBoom
 	_, span := apptracing.Start(context.Background(), invite, "email", "carol@example.com")
 	span.End(&err)
-	if a := attrs(spans(t)["test.invite"]); a["step.email"] != "[redacted]" {
+	if a := attrs(spans(t)["test.invite"]); a["h.step.email"] != "[redacted]" {
 		t.Errorf("attributes = %v", a)
 	}
 }

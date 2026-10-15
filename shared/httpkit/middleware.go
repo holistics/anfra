@@ -29,7 +29,7 @@ func assignRequestID(next http.Handler) http.Handler {
 }
 
 // traceRequests starts the request's root span, carrying the request id as
-// request.id, so a request id leads to its trace in one query
+// h.request.id, so a request id leads to its trace in one query
 // (error_handling.md §The request id). The span is named by its method until
 // the request is routed to an op (setRoute).
 //
@@ -38,7 +38,7 @@ func assignRequestID(next http.Handler) http.Handler {
 // our trace ids and sampling. It is kept as a link.
 func traceRequests(next http.Handler, trusted bool) http.Handler {
 	tagged := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("request.id", requestid.From(r.Context())))
+		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("h.request.id", requestid.From(r.Context())))
 		next.ServeHTTP(w, r)
 	})
 	traced := otelhttp.NewHandler(tagged, "",
