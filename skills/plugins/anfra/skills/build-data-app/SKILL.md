@@ -52,8 +52,8 @@ request, say so and offer the nearest thing it can.
 ### 2.1 Lineage
 
 Lineage explains and governs a metric rather than showing its value: it answers what the metric is
-built from, the dimensions, measures and other metrics it depends on, and on through the models to
-the tables. Add it when the user asks for it, or when the request is about tracing, understanding
+built from, the dimensions, measures and other metrics it depends on, and the models and source
+tables behind them. Add it when the user asks for it, or when the request is about tracing, understanding
 or governing a metric: "how is revenue calculated", "which tables feed this KPI", a field catalog,
 a definitions panel beside a chart. An app that only shows numbers needs none.
 
@@ -85,7 +85,12 @@ anfra query --dataset <fqn> '<aql>'
 ```
 
 Check its headline number against a direct SQL query on the source, or a simple invariant (parts
-summing to the total).
+summing to the total). Trace each lineage target the same way, and check its `refers` path is the
+one you expect:
+
+```sh
+anfra lineage --targets '[{"parent":"<dataset fqn>","child":"<metric>"}]'
+```
 
 ## 4. Write the file
 
@@ -139,7 +144,8 @@ anfra status               # is a server already running for this repo, and wher
 anfra serve                # if not: http://127.0.0.1:7878/apps/ (or the free port it prints)
 ```
 
-Leave it running: it reloads the open app whenever its file, or the AML, changes. Its header shows
+Leave it running: it reloads the open app whenever its file, or the AML, changes. Lineage is the
+exception: run `anfra ingest` after an AML change, or it shows the old definitions. Its header shows
 the repo's problems (AML that does not compile, a data source not configured). Its Inspect panel
 has two tabs: **Structure**, the tree of marked parts, with a problem count for markup it could
 not read (an unknown query name, a block inside a block), and **Data**, each query's state,
