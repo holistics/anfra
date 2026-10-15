@@ -58,7 +58,7 @@ Agents are among the main callers of anfra, and an agent reads `message` to corr
 
 **Fail only what failed.** When parts are independent, finish the rest and report the broken part beside the result. A dataset that can't be shown is left out of `core.show`'s answer and reported in its diagnostics; the others still load.
 
-**One request, one trail.** Every request served over HTTP or MCP gets an id, returned in the `Request-Id` header and in the error, logged on the request's one log line, and set on its root span as `request.id` (`shared/httpkit`). A user's report leads straight to what happened.
+**One request, one trail.** Every request served over HTTP or MCP gets an id, returned in the `Request-Id` header and in the error, logged on the request's one log line, and set on its root span as `h.request.id` (`shared/httpkit`). A user's report leads straight to what happened.
 
 ## Codes: public and internal, by namespace
 

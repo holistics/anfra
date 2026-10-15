@@ -53,7 +53,7 @@ func Start(ctx context.Context, def appstep.Def, kv ...any) (context.Context, *S
 	step := appstep.NewStep(def, kv...)
 	var attrs []attribute.KeyValue
 	for k, v := range step.Logged() {
-		attrs = append(attrs, attr("step."+k, v))
+		attrs = append(attrs, attr("h.step."+k, v))
 	}
 	// Ended by the caller, through Span.End: spancheck checks each caller instead
 	// (extra-start-span-signatures in .golangci.yml).
