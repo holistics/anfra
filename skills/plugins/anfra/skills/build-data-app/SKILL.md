@@ -39,6 +39,7 @@ Restate the request as one result the user can check ("revenue for the last full
 the week before, with a country picker"). Ask only what changes the numbers: what a business word
 means, which date counts, what to exclude, each with your recommended answer.
 
+Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
 `createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
 each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
 blocks, if any, the reader can download from, one line each with its formats (`trend: CSV`). List
