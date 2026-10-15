@@ -21,6 +21,14 @@ export interface CallContext {
   /** The call's full name, `<plugin>.<name>`. */
   readonly name: string;
   readonly caller: Caller;
+  /**
+   * Who led to this call, outermost first, ending with `caller`: a query an agent plugin runs for
+   * the frame's prompt is `[frame, plugin agent]`. Decide by it, or by `origin`, what a call started
+   * by the frame may do, since a plugin's call made for the frame has the plugin as its `caller`.
+   */
+  readonly chain: readonly Caller[];
+  /** Who started the chain: the frame, or the host (`chain[0]`). */
+  readonly origin: Caller;
   /** Aborts when the caller cancels. */
   readonly signal: AbortSignal;
   /** The frame the call is about: the one that made it, or the one the host named. */
@@ -29,10 +37,22 @@ export interface CallContext {
   readonly trace: readonly string[];
 }
 
+export interface HandlerCallOptions extends CallOptions {
+  /**
+   * Hold the call to what this chain's origin may call: started by the frame, it is refused unless
+   * the frame could make it itself. For a handler that forwards a call, or a request, the frame
+   * chose, so the plugin can't be made to make a host-only call for it.
+   */
+  asOrigin?: boolean;
+}
+
 /** What a plugin's handler gets: the call, and a way to make calls of its own as that plugin. */
 export interface HandlerContext extends CallContext {
-  /** Make another plugin's call, through the same pipeline, as this plugin, about the same frame. */
-  call: <T = unknown>(name: string, request?: unknown, options?: CallOptions) => Promise<T>;
+  /**
+   * Make another plugin's call, through the same pipeline, as this plugin, about the same frame. It
+   * carries this call's chain, with this plugin added.
+   */
+  call: <T = unknown>(name: string, request?: unknown, options?: HandlerCallOptions) => Promise<T>;
 }
 
 export type CallHandler = (request: any, context: HandlerContext) => unknown; // eslint-disable-line @typescript-eslint/no-explicit-any
