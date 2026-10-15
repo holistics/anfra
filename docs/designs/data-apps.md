@@ -1,6 +1,6 @@
 # Data Apps
 
-A **Data App** is an interactive analysis over a repo's datasets: something a reader opens and an author (often an agent) develops. Its **definition** is one HTML file under the repo's `apps/`, which declares its queries (in AQL, today), with controls and cross-filters, and renders their results with its own HTML, CSS and JavaScript. anfra supplies data and state, never UI.
+A **Data App** is an interactive analysis over a repo's datasets: something a reader opens and an author (often an agent) develops. Its **definition** is one HTML file under the repo's `apps/`, which declares its queries (in AQL, today), with controls and cross-filters, and renders their results with its own HTML, CSS and JavaScript. anfra supplies data and state; the author owns the page, and what anfra draws (an inspect overlay, a plugin's modal) stays in a layer above it. Every feature a Data App reaches beyond its page, running a query included, is a plugin its host installs ([plugins.md](plugins.md)).
 
 This doc is the design: how a definition becomes a running page, where each concern lives, and the boundaries that keep author code from reaching more than it should. The trust model behind those boundaries is [security.md](security.md); what belongs in core at all is [philosophy.md](philosophy.md).
 
