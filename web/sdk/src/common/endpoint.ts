@@ -18,9 +18,18 @@ export function isAbortError (err: unknown): boolean {
   return (err as Error | undefined)?.name === 'AbortError';
 }
 
+/** The SDK's error classes, by name: the only errors whose message crosses the bridge. */
+const SDK_ERRORS: ReadonlySet<string> = new Set(['ValidationError', 'QueryError', 'PermissionError', 'TransportError']);
+
+/**
+ * An error as it may cross: one of the SDK's classes keeps its message, which was written for the
+ * other side to read; anything else (a bug, a middleware's own error, a library's) crosses as a
+ * plain `QueryError`, since its message may hold what the frame must not see (a URL, an id, a stack).
+ */
 export function toBridgeError (err: unknown): BridgeError {
   const e = err as Error | undefined;
-  return { name: e?.name || 'QueryError', message: e?.message || 'The call failed.' };
+  if (e instanceof Error && SDK_ERRORS.has(e.name)) return { name: e.name, message: e.message || 'The call failed.' };
+  return { name: 'QueryError', message: 'The call failed.' };
 }
 
 /**

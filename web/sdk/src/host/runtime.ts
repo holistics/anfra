@@ -8,8 +8,9 @@ import type { BridgeMessage, PluginInfo, Provision } from '../common/bridge';
 import { createEndpoint, type Endpoint } from '../common/endpoint';
 import type { DatasetDescriptor, User } from '../common/types';
 import type {
-  CallContext, CallDefinition, Caller, CallOptions, HandlerContext, Middleware, MountContext, Plugin,
+  CallContext, CallDefinition, Caller, CallOptions, EventCheck, HandlerContext, Middleware, MountContext, Plugin,
 } from './plugin';
+import { checkPlugin } from './plugin';
 import { builtFrameScript } from './frameScript';
 import { provisionDocument } from './provision';
 
@@ -80,6 +81,7 @@ function matches (pattern: string, name: string): boolean {
 function install (plugins: readonly Plugin[]): Map<string, Answer> {
   const names = new Set<string>();
   for (const plugin of plugins) {
+    checkPlugin(plugin);
     if (names.has(plugin.name)) throw new Error(`Plugin '${plugin.name}' is installed twice.`);
     names.add(plugin.name);
   }
@@ -112,6 +114,22 @@ export function createHost (options: HostOptions): Host {
     ...plugins.flatMap((plugin) => plugin.host?.middleware ?? []),
   ].sort((a, b) => (a.stage ?? 0) - (b.stage ?? 0) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const bodies = new Map(plugins.flatMap((plugin) => (plugin.frame?.body ? [[plugin.name, plugin.frame.body] as const] : [])));
+  // The kernel's own call: a plugin's frame body. A call like any other, through the middleware.
+  answers.set(BODY_CALL, {
+    plugin: 'anfra',
+    definition: {
+      frame: true,
+      handler: (request: unknown) => {
+        const plugin = (request as { plugin?: unknown } | null)?.plugin;
+        const body = typeof plugin === 'string' ? bodies.get(plugin) : undefined;
+        if (body === undefined) throw new ValidationError(`No plugin '${String(plugin)}' with a frame body is installed.`);
+        return body;
+      },
+    },
+  });
+  // The events a frame may send, by full name, each with its plugin's check.
+  const events = new Map<string, EventCheck>(plugins.flatMap((plugin) => Object.entries(plugin.host?.events ?? {})
+    .map(([name, check]) => [`${plugin.name}.${name}`, check] as const)));
   const infos: PluginInfo[] = plugins.map(({ name, version }) => ({ name, version }));
   let nextMount = 1;
 
@@ -121,12 +139,6 @@ export function createHost (options: HostOptions): Host {
    */
   function dispatch (name: string, request: unknown, caller: Caller, mount: MountContext | undefined, signal: AbortSignal): Promise<unknown> {
     const answer = answers.get(name);
-    if (name === BODY_CALL) {
-      const plugin = (request as { plugin?: unknown } | null)?.plugin;
-      const body = typeof plugin === 'string' ? bodies.get(plugin) : undefined;
-      if (body === undefined) return Promise.reject(new ValidationError(`No plugin '${String(plugin)}' with a frame body is installed.`));
-      return Promise.resolve(body);
-    }
     if (!answer) return Promise.reject(new TransportError(`Nothing on this host answers '${name}'.`));
     if (caller.kind === 'frame' && answer.definition.frame !== true) {
       return Promise.reject(new PermissionError(`'${name}' can't be called from a Data App.`));
@@ -160,7 +172,7 @@ export function createHost (options: HostOptions): Host {
   /** A call the host or a plugin makes: a host half's, or a frame half's in `mount`'s frame. */
   function call (name: string, request: unknown, caller: Caller, mount: MountContext | undefined, callOptions: CallOptions = {}): Promise<unknown> {
     const signal = callOptions.signal ?? new AbortController().signal;
-    if (name !== BODY_CALL && !answers.has(name) && mount) return mount.call(name, request, { signal });
+    if (!answers.has(name) && mount) return mount.call(name, request, { signal });
     return dispatch(name, request, caller, mount, signal);
   }
 
@@ -204,8 +216,14 @@ export function createHost (options: HostOptions): Host {
       endpoint = createEndpoint(post, {
         answer: (name, request, signal) => dispatch(name, request, { kind: 'frame' }, context, signal),
         event: (name, payload) => {
+          // Only what a plugin declared, as its check let it through: the frame is untrusted.
+          const check = events.get(name);
+          if (!check || !listeners.has(name)) return;
+          let checked: unknown;
+          try { checked = check(payload, context); } catch { return; }
+          if (checked === undefined) return;
           listeners.get(name)?.forEach((listener) => {
-            try { listener(payload); } catch { /* one listener must not stop the others */ }
+            try { listener(checked); } catch { /* one listener must not stop the others */ }
           });
         },
       });
