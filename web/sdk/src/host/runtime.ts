@@ -8,7 +8,7 @@ import type { BridgeMessage, PluginInfo, Provision } from '../common/bridge';
 import { createEndpoint, type Endpoint } from '../common/endpoint';
 import type { DatasetDescriptor, User } from '../common/types';
 import type {
-  CallContext, CallDefinition, Caller, CallOptions, EventCheck, HandlerContext, Middleware, MountContext, Plugin,
+  CallContext, CallDefinition, Caller, CallOptions, EventCheck, HandlerCallOptions, HandlerContext, Middleware, MountContext, Plugin,
 } from './plugin';
 import { checkPlugin } from './plugin';
 import { builtFrameScript } from './frameScript';
@@ -137,16 +137,19 @@ export function createHost (options: HostOptions): Host {
    * Run a call through the middleware that match it, then its handler. Resolves to the answer;
    * `undefined` for a name no host half answers, which the caller decides about.
    */
-  function dispatch (name: string, request: unknown, caller: Caller, mount: MountContext | undefined, signal: AbortSignal): Promise<unknown> {
+  function dispatch (name: string, request: unknown, callers: readonly Caller[], mount: MountContext | undefined, signal: AbortSignal, asOrigin = false): Promise<unknown> {
     const answer = answers.get(name);
     if (!answer) return Promise.reject(new TransportError(`Nothing on this host answers '${name}'.`));
-    if (caller.kind === 'frame' && answer.definition.frame !== true) {
+    const caller = callers[callers.length - 1];
+    const origin = callers[0];
+    // The frame itself, or, when asked, a plugin calling for a chain the frame started.
+    if ((caller.kind === 'frame' || (asOrigin && origin.kind === 'frame')) && answer.definition.frame !== true) {
       return Promise.reject(new PermissionError(`'${name}' can't be called from a Data App.`));
     }
     const chain = middleware.filter((m) => (typeof m.match === 'string' ? [m.match] : m.match).some((p) => matches(p, name)));
     const trace: string[] = [];
     const context: CallContext = {
-      name, caller, signal, mount, trace,
+      name, caller, chain: callers, origin, signal, mount, trace,
     };
     const run = (index: number, current: unknown): Promise<unknown> => {
       if (signal.aborted) return Promise.reject(signal.reason ?? new Error('Aborted'));
@@ -154,7 +157,7 @@ export function createHost (options: HostOptions): Host {
       if (!layer) {
         const handlerContext: HandlerContext = {
           ...context,
-          call: (inner, innerRequest, innerOptions) => call(inner, innerRequest, { kind: 'plugin', plugin: answer.plugin }, mount, innerOptions) as never,
+          call: (inner, innerRequest, innerOptions) => call(inner, innerRequest, [...callers, { kind: 'plugin', plugin: answer.plugin }], mount, innerOptions) as never,
         };
         return Promise.resolve().then(() => answer.definition.handler(current, handlerContext));
       }
@@ -170,15 +173,15 @@ export function createHost (options: HostOptions): Host {
   }
 
   /** A call the host or a plugin makes: a host half's, or a frame half's in `mount`'s frame. */
-  function call (name: string, request: unknown, caller: Caller, mount: MountContext | undefined, callOptions: CallOptions = {}): Promise<unknown> {
+  function call (name: string, request: unknown, callers: readonly Caller[], mount: MountContext | undefined, callOptions: HandlerCallOptions = {}): Promise<unknown> {
     const signal = callOptions.signal ?? new AbortController().signal;
     if (!answers.has(name) && mount) return mount.call(name, request, { signal });
-    return dispatch(name, request, caller, mount, signal);
+    return dispatch(name, request, callers, mount, signal, callOptions.asOrigin === true);
   }
 
   return {
     plugins: infos,
-    call: (name, request, callOptions) => call(name, request, { kind: 'host' }, undefined, callOptions) as never,
+    call: (name, request, callOptions) => call(name, request, [{ kind: 'host' }], undefined, callOptions) as never,
     mount (mountOptions) {
       const frameScript = options.frameScript ?? builtFrameScript();
       if (!frameScript) throw new Error('@holistics/anfra-sdk/host: built without its frame script; build the package (pnpm build).');
@@ -214,7 +217,7 @@ export function createHost (options: HostOptions): Host {
         onReady: (listener) => listen(readyListeners, listener),
       };
       endpoint = createEndpoint(post, {
-        answer: (name, request, signal) => dispatch(name, request, { kind: 'frame' }, context, signal),
+        answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
         event: (name, payload) => {
           // Only what a plugin declared, as its check let it through: the frame is untrusted.
           const check = events.get(name);
@@ -259,7 +262,7 @@ export function createHost (options: HostOptions): Host {
 
       return {
         frame,
-        call: (name, request, callOptions) => call(name, request, { kind: 'host' }, context, callOptions) as never,
+        call: (name, request, callOptions) => call(name, request, [{ kind: 'host' }], context, callOptions) as never,
         emit: context.emit,
         on: context.on,
         unmount () {
