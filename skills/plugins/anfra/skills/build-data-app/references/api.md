@@ -16,11 +16,12 @@ import, no setup, no await.
   work here, `render` whether `Anfra.render()` can; both `true` under `anfra serve`.
 - `Anfra.render(request)`: a PNG or PDF of the app or one of its parts. See
   [downloads.md](downloads.md#pictures-of-the-app).
-- `Anfra.lineage(targets, options?)`: what dataset fields are built from. See [Lineage](#lineage).
+- `Anfra.lineage(targets, options?)`: what fields are built from. See [Lineage](#lineage).
 
 ## Field references
 
-How you name a field **to the SDK** (in `createFilter`, `mapControl` and `Anfra.lineage`):
+How you name a field **to the SDK** (in `createFilter` and `mapControl`; `Anfra.lineage` names it
+by its parent, see [Lineage](#lineage)):
 `model.field` for a model field, a bare `name` for a dataset-level metric. Names come from
 `Anfra.datasets`, never from labels. A filter's `field` is checked at once (a `ValidationError`
 with a "did you mean"); a `mapControl` field is not checked until the query runs, so a typo there
@@ -276,27 +277,34 @@ chart.on('click', (p) => {
 
 ## Lineage
 
-`Anfra.lineage` traces dataset fields upstream: which model fields a metric or measure uses, which
-models a dataset joins, on to the tables. Use it for an app that explains where a number comes
-from, or a field catalog. It reads the semantic layer, not an app: it is a plain promise, outside
-`createApp`, `execute()` and `subscribe`, and nothing re-runs it for you.
+`Anfra.lineage` traces fields upstream through the repo's catalog: which model fields a metric or
+measure uses, which models a dataset joins, on to the tables. Use it for an app that explains where
+a number comes from, or a field catalog. It reads the semantic layer, not an app: it is a plain
+promise, outside `createApp`, `execute()` and `subscribe`, and nothing re-runs it for you. Offer it
+only when `Anfra.features.lineage` is true: on a host without lineage every call rejects with a
+`TransportError`.
 
 ```js
 const controller = new AbortController();
-const [revenue, country] = await Anfra.lineage([
-  { dataset: 'ecommerce', field: 'revenue' },            // a dataset metric
-  { dataset: 'ecommerce', field: 'customers.country' },  // a model dimension or measure
-], { limit: 50, signal: controller.signal });           // options are all optional
+const { results: [revenue, country] } = await Anfra.lineage([
+  { parent: 'ecommerce', child: 'revenue' },  // a dataset metric: the dataset's fqn, the metric's name
+  { parent: 'customers', child: 'country' },  // a model field: the model's fqn, the field's name
+], { limit: 50, signal: controller.signal }); // options are all optional
 ```
 
-- **Targets** are field references (see [Field references](#field-references)), checked at once.
-  An unknown dataset or field, an empty list or a bad option **throws** a `ValidationError`
-  synchronously, before any promise exists, so a `.catch()` on the call does not see it. Take
-  names from `Anfra.datasets`.
-- **Results**: one per target, in the same order: `{ dataset, field, diagram }`, or
-  `{ dataset, field, error }` (a `QueryError`) when that target failed. The others still have
-  their diagrams. The promise rejects only when the whole call fails: the server is unreachable
-  (`TransportError`) or refuses the reader (`PermissionError`).
+- **Targets** name a field by what holds it, not as a [field reference](#field-references): a
+  dataset metric `revenue` is `{ parent: <dataset fqn>, child: 'revenue' }`, a model field
+  `customers.country` is `{ parent: 'customers', child: 'country' }`. Take names from
+  `Anfra.datasets`. One target may be passed without the array; the answer is still `results`.
+- **Results**: `results` has one entry per target, in the same order:
+  `{ target, query, diagram }`, or `{ target, query, error }` when that field could not be traced
+  (a field the catalog cannot find comes back here, or as a diagram whose `total` is 0: render
+  both). `error` is a **string**, not an `Error`: render it as is. The others still have their
+  diagrams.
+- **The promise rejects** when the call itself is wrong or fails: an empty list or a target
+  without a non-empty `parent` and `child` (`ValidationError`), a host without lineage or an
+  unreachable server (`TransportError`), a reader refused (`PermissionError`). It rejects, rather
+  than throws, so the `try`/`catch` around the `await` sees it.
 - **Options**: `limit` / `offset` page the matched entities; `diagram.total` counts them over every
   page, so `diagram.matched.length < diagram.total` means there are more. `signal` cancels: the
   promise then rejects with an error whose `name` is `'AbortError'`. Abort the previous call when a
@@ -306,28 +314,32 @@ const [revenue, country] = await Anfra.lineage([
 
 ```js
 diagram.total    // matched entities, over every page
-diagram.matched  // this page's matched entity ids
+diagram.matched  // this page's matched entity ids, in search order: the traced field
 diagram.layers   // [{ index: 0, types: ['aml.model'], card_ids: ['aml.model:…'] }, ...]: the columns, upstream first
 diagram.cards    // every card, in layer order:
                  // [{ id, type: 'aml.model', label, layer: 0, props, links, sections }, ...]
-diagram.schema   // { edges: { refers: 'A refers B: A uses B. …' }, types: { 'aml.model': { refers: [...] } } }
+diagram.schema   // { edges: { refers: 'A refers B: A uses B. …' },
+                 //   types: { 'aml.model': { edges: { refers: ['aml.table'] }, top_level: true } } }
 ```
 
 - A **card** is a model, dataset, table, … Its `layer` is its column: data flows from lower layers
-  to higher ones. Its `sections` group its nodes by type: `[{ type: 'aml.dimension', nodes: [...] }]`.
-  A node may have `sections` of its own, so walk them recursively. A card holds only what is on
-  the lineage, not every field of its model.
+  to higher ones. Draw one column per `diagram.layers` entry, its cards looked up by `card_ids`.
+  A card's `sections` group its nodes by type: `[{ type: 'aml.dimension', nodes: [...] }]`. A node
+  may have `sections` of its own, so walk them recursively. A card holds only what is on the
+  lineage, not every field of its model; `detached: true` marks one whose container is not on it.
 - Every card and node has an `id` unique in the diagram (`aml.dimension:ab8ed0924c5a`), a `type`,
   a `label`, optional `props` (catalog properties: `name`, `fqn`, `file_path`, `data_type`,
-  `description`, …) and optional `links`.
-- **`links`** maps an edge type to what this node points at: `{ refers: [id, ...] }` lists what it
-  uses. An entry is an id string, or `{ id, props }` when the edge carries properties.
+  `description`, …), optional `tags`, optional `links`, and `ref` when it is a copy of another
+  entity.
+- **`links`** is an array on the edge's *from* node: `[{ to: id, type: 'refers', props? }]`.
+  `{ to: B, type: 'refers' }` on A means A uses B.
 - `schema.edges` explains each edge type in words: read it, rather than guessing what an unfamiliar
   edge means.
 
-Nothing in the diagram marks which node is the target: find it by its `props` (`name`, `fqn`). Log
-the first diagram (`console.log(JSON.stringify(diagram))`) so the user's console paste shows you the
-real types, ids and props before you refine the rendering.
+The traced field is the diagram's matched entity: take the first id of `diagram.matched` that is
+in the diagram, and fall back to finding it by its `props` (`name`, `fqn`). Log the first diagram
+(`console.log(JSON.stringify(diagram))`) so the user's console paste shows you the real types, ids
+and props before you refine the rendering.
 
 ```js
 function edges (diagram) {
@@ -338,18 +350,20 @@ function edges (diagram) {
   };
   diagram.cards.forEach(index);
   // One line per link: data flows from what a node uses to the node.
-  return [...byId.values()].flatMap((node) => Object.values(node.links ?? {}).flat()
-    .map((to) => ({ from: typeof to === 'string' ? to : to.id, to: node.id })));
+  return [...byId.values()].flatMap((node) => (node.links ?? [])
+    .map((link) => ({ from: link.to, to: node.id, type: link.type })));
 }
-// One column per diagram.layers entry, one box per card in it, then draw edges(diagram) between boxes.
+const cardById = new Map(diagram.cards.map((card) => [card.id, card]));
+const columns = diagram.layers.map((layer) => layer.card_ids.map((id) => cardById.get(id)));
+// One column per entry of `columns`, one box per card in it, then draw edges(diagram) between boxes.
 ```
 
 ## Errors
 
 | Class | When | What to do |
 | --- | --- | --- |
-| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. Also thrown by `Anfra.lineage` for an unknown target or a bad option. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
-| `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. On a lineage result's `error` when that target failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
+| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. `Anfra.lineage` rejects with one for an empty or malformed target list. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
+| `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. (A lineage result's `error` is a plain string, not a `QueryError`.) | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
 | `TransportError` | Network or session problem. | Show a retry. |
 
