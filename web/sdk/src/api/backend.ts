@@ -12,7 +12,7 @@ type QueryRunInput = components['schemas']['QueryRunInput'];
 type Column = components['schemas']['Column'];
 type ExportInput = components['schemas']['ExportInput'];
 type QueryResult = components['schemas']['QueryResult'];
-type QueryEvent = components['schemas']['QueryCompiled'] | components['schemas']['QueryHeader']
+type QueryEvent = components['schemas']['QueryCompiled'] | components['schemas']['QueryWarehouse'] | components['schemas']['QueryHeader']
   | components['schemas']['QueryRecords'] | components['schemas']['QuerySummary']
   | components['schemas']['StreamStart'] | components['schemas']['StreamStatus'];
 
@@ -100,7 +100,7 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
     body, signal, parseAs: 'stream', headers: { Accept: 'application/x-ndjson' },
   }));
   if (!stream) throw new TransportError('The server answered the query with no body.');
-  const result: QueryResult = { sql: '', columns: [], result: { fields: [], records: [] }, has_more: false };
+  const result: QueryResult = { sql: '', columns: [], result: { fields: [], records: [] }, has_more: false, timings: { steps: [], end_ms: 0 } };
   try {
     await readEvents<QueryEvent>(stream, (event) => {
       switch (event.type) {
@@ -117,6 +117,7 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
           break;
         case 'summary':
           result.has_more = event.has_more;
+          result.timings = event.timings;
           break;
       }
     });
@@ -150,6 +151,10 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
           ...(data.aql ? { executedAql: data.aql } : {}),
           executedSql: data.sql,
           fromCache: false,
+          timings: {
+            steps: data.timings.steps.map((s) => ({ step: s.step, startMs: s.start_ms })),
+            endMs: data.timings.end_ms,
+          },
           executedAt: new Date(),
         },
       };

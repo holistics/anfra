@@ -153,7 +153,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		}
 		name, described = in.Dataset, compiled.Columns
 		run = func(h canalquery.Handler) error {
-			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.RowBounds{Truncate: limit}, h)
+			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.ResultBounds{Truncate: limit}, h)
 		}
 	}
 	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, run)

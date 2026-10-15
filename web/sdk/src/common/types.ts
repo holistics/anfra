@@ -341,6 +341,20 @@ export interface QueryDebug {
   executedSql?: string;
   fromCache: boolean;
   executedAt?: Date;
+  /** How the run's time went, where the server reports it. */
+  timings?: QueryTimings;
+}
+
+/**
+ * When each step of a query's run started, in order, in milliseconds since the run started; and
+ * when it ended. A step ends where the next step at its level or above starts — a child step,
+ * `executing_query.poll_query`, is within its parent — or at `endMs`. A step run again after a
+ * retry is listed again. Steps: `compiling_query`; canal-query's `connecting_to_dw`,
+ * `executing_query`, `fetching_query_result` and their children; `retrying_query`.
+ */
+export interface QueryTimings {
+  steps: { step: string, startMs: number }[];
+  endMs: number;
 }
 
 export interface QueryResult {

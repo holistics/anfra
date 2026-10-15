@@ -60,8 +60,8 @@ func NewEvents[Event any](emit func(any) error) Events[Event] { return Events[Ev
 // Emit sends one of the op's own events.
 func (e Events[Event]) Emit(ev Event) error { return e.emit(ev) }
 
-// Status reports the run's phase ("compiling", "executing"): what a client shows
-// while it waits.
+// Status reports the run's phase ("compiling_query", "executing_query"): what
+// a client shows while it waits.
 func (e Events[Event]) Status(phase string) error {
 	return e.emit(StreamStatus{Type: "status", Phase: phase})
 }

@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -71,9 +70,9 @@ func rows(n *int) canalquery.Handler {
 func TestResultOverTheMaximumFails(t *testing.T) {
 	canal, truncate := canalAnswering(t, 3)
 	n := 0
-	err := StreamSQL(context.Background(), canal, sqlSource, "select 1", RowBounds{Truncate: NoLimit, Max: 2}, rows(&n))
-	if !errors.Is(err, ResultTooLarge) {
-		t.Fatalf("err = %v, want result_too_large", err)
+	err := StreamSQL(context.Background(), canal, sqlSource, "select 1", ResultBounds{Truncate: NoLimit, MaxRows: 2}, rows(&n))
+	if apperr.From(err).Code != ResultTooLarge.Code() {
+		t.Fatalf("err = %v, want result_too_large as its code, not found deeper in its chain", err)
 	}
 	if d, ok := apperr.DetailsOf(err, ResultTooLarge); !ok || d.MaxRows != 2 {
 		t.Errorf("details = %+v, %v; want max_rows 2", d, ok)
@@ -87,7 +86,7 @@ func TestResultOverTheMaximumFails(t *testing.T) {
 func TestResultAtTheMaximumIsAnswered(t *testing.T) {
 	canal, _ := canalAnswering(t, 2)
 	n := 0
-	if err := StreamSQL(context.Background(), canal, sqlSource, "select 1", RowBounds{Truncate: NoLimit, Max: 2}, rows(&n)); err != nil || n != 2 {
+	if err := StreamSQL(context.Background(), canal, sqlSource, "select 1", ResultBounds{Truncate: NoLimit, MaxRows: 2}, rows(&n)); err != nil || n != 2 {
 		t.Fatalf("got %d rows, %v; want 2 rows", n, err)
 	}
 }
@@ -98,7 +97,7 @@ func TestOwnLimitWithinTheMaximum(t *testing.T) {
 	canal, truncate := canalAnswering(t, 2)
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "warehouse", DBType: "postgresql"}}
 	n := 0
-	err := Stream(context.Background(), canal, datasource.Set{"warehouse": sqlSource}, compiled, RowBounds{Truncate: 2, Max: 5}, rows(&n))
+	err := Stream(context.Background(), canal, datasource.Set{"warehouse": sqlSource}, compiled, ResultBounds{Truncate: 2, MaxRows: 5}, rows(&n))
 	if err != nil || n != 2 {
 		t.Fatalf("got %d rows, %v; want 2 rows", n, err)
 	}
