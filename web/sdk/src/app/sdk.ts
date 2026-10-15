@@ -6,9 +6,9 @@ import { DatasetIndex } from './validation';
 import { ValidationError } from '../common/errors';
 import type { PluginInfo } from '../common/bridge';
 import type {
-  AppDeclaration, Backend, DatasetDescriptor, LineageOptions, LineageResult, LineageTarget, Rendering, RenderRequest,
-  SdkEnvironment, SdkFeatures, User,
+  AppDeclaration, Backend, DatasetDescriptor, SdkEnvironment, SdkFeatures, User,
 } from '../common/types';
+import type { PluginMembers, PluginName } from './pluginTypes';
 import { version } from '../../package.json';
 
 /** The plugins a host installed, as `Anfra.plugins`. */
@@ -20,13 +20,16 @@ export class InstalledPlugins {
     this.list = Object.freeze(plugins.map(({ name, version }) => Object.freeze({ name, version })));
   }
 
-  /** Whether the host installed the plugin named `name`. */
-  has (name: string): boolean {
+  /**
+   * Whether the host installed the plugin named `name`. To call a plugin's member, check the member
+   * itself (`if (Anfra.render)`, `query.export?.()`): TypeScript narrows that, not this.
+   */
+  has (name: PluginName): boolean {
     return this.list.some((plugin) => plugin.name === name);
   }
 
   /** The installed plugin's version, or undefined. */
-  version (name: string): string | undefined {
+  version (name: PluginName): string | undefined {
     return this.list.find((plugin) => plugin.name === name)?.version;
   }
 }
@@ -133,28 +136,9 @@ export class Sdk {
   }
 }
 
-/**
- * What anfra's own plugins add to `Anfra`, each only where its host installed it: check
- * `Anfra.plugins.has(name)` first. Typed here so an author's editor knows them; a plugin outside the
- * SDK adds its own, untyped unless it says.
- */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- a plugin's member, on the class it is added to
-export interface Sdk {
-  /**
-   * The `lineage` plugin: trace fields through the repo's catalog, as a diagram to draw. Name each
-   * field by its parent and its name in it (`{ parent: 'ecommerce', child: 'revenue' }`). A field
-   * that cannot be traced answers its `error`, and the others still answer.
-   */
-  readonly lineage?: (targets: LineageTarget | readonly LineageTarget[], options?: LineageOptions) => Promise<LineageResult>;
-  /**
-   * The `render` plugin: render the whole app, or one block or container of its structure by id,
-   * as a PNG or a PDF, and have the host save it for the reader. What is drawn is what the page
-   * shows now: `await app.execute()` first for fresh results. Elements marked
-   * `data-anfra-render="skip"` are left out. Show its button only when
-   * `Anfra.user.permissions.canExportData` is true too.
-   */
-  readonly render?: (request: RenderRequest) => Promise<Rendering>;
-}
+/** What the installed plugins add to `Anfra` (`AnfraPlugins`): each member is there only where its plugin is. */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- plugins' members, on the class they are added to
+export interface Sdk extends PluginMembers<'anfra'> {}
 
 export function createSdk (environment: SdkEnvironment): Sdk {
   return new Sdk(environment);
