@@ -49,6 +49,13 @@ type CommandContext struct {
 	// never in the repo); for a local repo they override its file. Nil: a local
 	// repo's file, and a managed repo has none (see ResolveDataSources).
 	DataSources datasource.DataSources
+	// TenantID is the tenant the invocation acts for, as the host identifies it:
+	// its org, on a host that serves several. canal-query keys its warehouse
+	// connection pools by it, so that tenants never share a connection, and
+	// records it on its spans. Required to run a query: a host that serves one
+	// tenant (anfra's CLI and serve) names it too, rather than a default that a
+	// host serving several could fall into by omission.
+	TenantID string
 	// DataPerms are the restrictions to compile into queries. Required for
 	// EVERY invocation, not only the ones that read data — see app.Dispatch.
 	DataPerms dataperm.Set

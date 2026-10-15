@@ -56,7 +56,7 @@ func canalAnswering(t *testing.T, rows int) (*canalquery.Client, *float64) {
 		_, _ = w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 	}))
 	t.Cleanup(srv.Close)
-	return canalquery.NewClient(srv.URL, false), &truncate
+	return canalquery.NewClient(srv.URL, false).ForTenant("org_1"), &truncate
 }
 
 var sqlSource = datasource.DataSource{Name: "warehouse", DBType: "postgresql", Connection: map[string]any{"password": "secret"}}

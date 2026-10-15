@@ -36,9 +36,10 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 
 ## What the engine refuses to do
 
-**Make access decisions.** There is no principal, role, policy or tenant anywhere in the engine. The platform decides whether a caller may run a command before calling `Dispatch`. What crosses the boundary is the *consequence* of that decision:
+**Make access decisions.** There is no principal, role or policy anywhere in the engine, and a tenant only as an id it passes on. The platform decides whether a caller may run a command before calling `Dispatch`. What crosses the boundary is the *consequence* of that decision:
 
 - **`DataPerms`**: the data restrictions that apply to this caller. They are decision-bearing: the compiler reads the attributes, and changing one changes which rows come back. They cannot be left unset: `Dispatch` refuses an `Invocation` whose `DataPerms` nobody decided (`DataPermsMissing`), so "no restrictions" is something a platform states (`Unrestricted()`), never something it defaults into. A query that cannot apply restrictions (raw SQL) refuses `Restricted` ones (`DataPermsUnenforceable`).
+- **`TenantID`**: whom the call runs for, as the platform identifies it. The engine decides nothing by it: canal-query keys its warehouse connection pools by it, so tenants never share a connection, and records it on its spans. A query without one is refused, never run under a shared default.
 - **`Attribution`**: who the caller is, for logs, spans and audit. It is baggage and nothing else: no command reads it and it never reaches the compiler. A value that must change the rows belongs in `Attributes`, and the engine keeps the two apart.
 
 `Invocation` is the trusted half of a call: built server-side, never decoded from a request body, or a caller could assert their own permissions. `Request` (a command name and its args) is the untrusted half.
@@ -48,7 +49,7 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 ## What a platform brings
 
 - **Identity and authorization**: who is calling, and whether they may run this command on this input. `apikit.Mount` gives each op a platform-side `Admit`, `Authorize` and `Bind` around anfra's own validation and handler.
-- **The invocation**: the repo the call acts on, the sidecar clients, the `DataPerms` derived from the caller, and `Attribution` for its logs.
+- **The invocation**: the repo the call acts on, the sidecar clients, the tenant it runs for, the `DataPerms` derived from the caller, and `Attribution` for its logs.
 - **The transport**: HTTP, MCP or its own, with its own middleware.
 - **The sidecars**: running, reachable, and released with the versions this anfra pins (`manifest.yml`; see [release.md](release.md)).
 - **Its own codes and statuses**: either translating the engine's or importing them.

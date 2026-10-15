@@ -104,7 +104,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	// An export's file holds the whole result, under a header of the columns'
 	// labels, and its link says how many rows.
 	t.Run("query export, its file", func(t *testing.T) {
-		cc := command.CommandContext{Clients: clients, Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted(), Exports: store}
+		cc := command.CommandContext{Clients: clients, TenantID: "local", Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted(), Exports: store}
 		res, err := Dispatch(ctx, cc, Request{Command: "query.export", Args: map[string]any{"dataset": "ecommerce",
 			"query": "explore { dimensions { name: products.name } }", "format_options": map[string]any{"header": "names"}}})
 		if err != nil {
@@ -127,7 +127,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 
 	// A shaped run answers what ran and what each column is, and only its page.
 	t.Run("query, shaped, its answer", func(t *testing.T) {
-		cc := command.CommandContext{Clients: clients, Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
+		cc := command.CommandContext{Clients: clients, TenantID: "local", Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
 		res, err := Dispatch(ctx, cc, Request{Command: "query", Args: shaped(nil)})
 		if err != nil {
 			t.Fatal(err)
@@ -175,7 +175,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	// Every number is a string, with every digit, under columns that say what
 	// it is; and a number filter value is a string, kept as it is.
 	t.Run("query, numbers", func(t *testing.T) {
-		cc := command.CommandContext{Clients: clients, Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
+		cc := command.CommandContext{Clients: clients, TenantID: "local", Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
 		res, err := Dispatch(ctx, cc, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo",
 			"query": "select 9007199254740993::int8 as big, 12345678901234567890.123456789::numeric(38, 9) as amt, " +
 				"1234567.5::float8 as f, 'Infinity'::float8 as inf, 1e-7::float8 as tiny"}})
@@ -214,7 +214,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	// show answers the repo with every dataset in full, and a dataset in full; a broken file comes
 	// with it, and does not stop what compiles from being shown.
 	t.Run("show, its answers", func(t *testing.T) {
-		cc := command.CommandContext{Clients: clients, Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
+		cc := command.CommandContext{Clients: clients, TenantID: "local", Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
 		res, err := Dispatch(ctx, cc, Request{Command: "show"})
 		if err != nil {
 			t.Fatal(err)
@@ -251,7 +251,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	for _, tc := range cases {
 		ran[tc.req.Command] = true
 		t.Run(tc.name, func(t *testing.T) {
-			res, err := Dispatch(ctx, command.CommandContext{Clients: tc.clients, Repo: tc.repo, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted(), Exports: store}, tc.req)
+			res, err := Dispatch(ctx, command.CommandContext{Clients: tc.clients, TenantID: "local", Repo: tc.repo, AllowLocalRepo: true, DataPerms: dataperm.Unrestricted(), Exports: store}, tc.req)
 			if tc.fails != nil {
 				if !errors.Is(err, tc.fails) {
 					t.Fatalf("got %v, want %s", err, tc.fails.Code().Qualified())

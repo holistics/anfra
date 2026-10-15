@@ -44,7 +44,7 @@ Most concerns have a part on each side:
 | The semantic layer | Compiles, validates and shows a repo's models (AML by default). | Where repos come from and live, and which one a caller works in. | The current directory. |
 | Queries | Compiles semantic queries (AQL by default) and SQL, runs them on the warehouse, answers the rows. | Who may run them, and which rows they may see, passed in as data restrictions. | Anyone, every row. |
 | Data sources | Reads them from the repo's `.anfra/data_sources.yml`, and passes credentials only to the query engine. | Where those credentials come from, and who may manage them. | The file as the user wrote it. |
-| Callers | None: the engine knows no user, role or tenant. | Users, sign-in, sessions, tenancy. | The machine's user. |
+| Callers | None: the engine knows no user or role, and a tenant only as an id it passes on, to keep tenants' warehouse connections apart. | Users, sign-in, sessions, tenancy. | The machine's user. |
 | Data Apps | The runtime: the SDK, the sandboxed frame, the bridge, provisioning. | The page around them, who may open them, how they are shared. | The appserve pages. |
 | The API | The ops, their schemas and error codes: the core API. | The transport, admission, rate limits, and its own ops around the core API. | HTTP and MCP on loopback, no sign-in. |
 | History | Nothing: the repo is the record. | Hosting, audit, version history. | None. |

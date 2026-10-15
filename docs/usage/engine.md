@@ -32,7 +32,8 @@ repo := engine.OpenRepo("/srv/repos/sales") // a repo's directory
 inv := engine.Invocation{
 	Clients:        clients,
 	Repo:           repo,
-	AllowLocalRepo: true, // a directory is served on purpose; refused otherwise
+	AllowLocalRepo: true,  // a directory is served on purpose; refused otherwise
+	TenantID:       orgID, // whom it runs for: tenants never share warehouse connections
 	DataPerms:      engine.Restricted(engine.Attributes{"region": "APAC"}), // or engine.Unrestricted()
 	Attribution:    engine.Attribution{"user": userID},                      // for logs and traces only
 }
@@ -44,6 +45,7 @@ res, err := engine.Dispatch(ctx, inv, engine.Request{
 
 - `Invocation` is the trusted half of the call: build it on the server, never decode it from a request, or a caller could state their own permissions. `Request` is the untrusted half.
 - `AllowLocalRepo` must be set for a repo from `OpenRepo`: a command on a local repo is otherwise refused (`local_repo_not_allowed`), so a platform serving managed repos cannot serve a directory by mistake.
+- `TenantID` is the tenant the call runs for, as your platform identifies it (an org's id): canal-query keys its warehouse connection pools by it, so tenants never share a connection, and records it on its spans. A query without one is refused rather than run under a default, which a platform serving several tenants could fall into by omission; a platform serving one names it too.
 - `DataPerms` must be stated: `Dispatch` refuses an invocation without them. `Restricted` attributes change which rows a query returns; `Attribution` never does.
 
 ### A managed repo
@@ -56,6 +58,7 @@ inv := engine.Invocation{
 	Clients:     clients,
 	Repo:        repo,
 	DataSources: dataSources, // your engine.DataSources: dialects, and one connection on demand
+	TenantID:    orgID,
 	DataPerms:   engine.Unrestricted(),
 }
 ```
@@ -107,7 +110,7 @@ codes := httpkit.Codes{
 }
 admit := func(r *http.Request) (engine.Invocation, error) {
 	// Authenticate r, decide what the caller may see, and build their invocation.
-	return engine.Invocation{Clients: clients, Repo: repo, DataPerms: engine.Unrestricted()}, nil
+	return engine.Invocation{Clients: clients, Repo: repo, TenantID: orgID, DataPerms: engine.Unrestricted()}, nil
 }
 
 rt, ops := apikit.NewRuntime(), engine.Ops()

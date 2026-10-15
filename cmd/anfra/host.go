@@ -21,12 +21,14 @@ import (
 // anfra at, so no data restrictions apply. That is stated rather than
 // defaulted: a zero dataperm.Set is refused, not treated as permissive.
 //
-// No Attribution: there is one user and they are reading their own logs.
+// No Attribution: there is one user and they are reading their own logs. One
+// tenant, LocalTenant, for the same reason.
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
 	cc := command.CommandContext{
 		Clients:   clients,
 		Exports:   exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
 		Repo:      h.repo.Repo(),
+		TenantID:  LocalTenant,
 		DataPerms: dataperm.Unrestricted(),
 		// anfra core serves the directory it was pointed at: the local repo is the
 		// point, not a mistake.
@@ -37,6 +39,9 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 	}
 	return cc
 }
+
+// LocalTenant is the one tenant anfra's CLI and serve run for.
+const LocalTenant = "local"
 
 // hostContext carries the per-invocation repo + the sidecar Config (with the
 // host-aggregated log sink) so commands can spawn whichever sidecars they need.
