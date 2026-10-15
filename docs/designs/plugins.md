@@ -1,6 +1,6 @@
 # Data App plugins
 
-> Status: designed, being built. Replaces the SDK's hard-coded bridge (`web/sdk/src/host/bridge.ts`), the `Backend` mount option and `Anfra.features`. Streamed calls come next; the AI agent plugin after them.
+> Status: built: the host runtime (`web/sdk/src/host/runtime.ts`, `plugin.ts`), the frame's kernel (`web/sdk/src/app/bootstrap.ts`, `kernel.ts`, `layer.ts`), the bridge (`web/sdk/src/common/bridge.ts`, `endpoint.ts`) and anfra's plugins (`web/sdk/src/plugins`). It replaced a hard-coded bridge, the `Backend` mount option and `Anfra.features`. Streamed calls come next; the AI agent plugin after them.
 
 Everything a Data App reaches beyond its own page is a **plugin**: running a query, an export, lineage, a rendering, the inspect panel's highlight and pick. A host chooses the plugins its Data Apps get, and the same mechanism carries anfra's own features and the ones a host or a later release adds, such as an AI agent a reader prompts from the app, or a view of the rows under a chart.
 
@@ -26,19 +26,19 @@ What is not a plugin:
 - **The plumbing**: the bridge envelope, call ids and cancellation, the sandbox, provisioning, and the plugin runtime itself.
 - **The app model**: `App`, `Query`, controls, cross-filter selection, structure. No Data App exists without them, so making them optional would buy nothing.
 
-Every call that crosses the bridge is a plugin's, including running a query. anfra's features become five plugins:
+Every call that crosses the bridge is a plugin's, including running a query. anfra's features are five plugins (`web/sdk/src/plugins`):
 
-| Plugin | Calls and API |
-|---|---|
-| `core` | `core.submitQuery`, `core.fieldSuggestions`. Required. |
-| `export` | `export.query` (runs the export, saves the file from the host page); `query.export()`. |
-| `lineage` | `lineage.trace`; `Anfra.lineage()`. |
-| `render` | The rendering (host→frame), the renderer's body, saving a file (byte check, rate limit); `Anfra.render()`. |
-| `inspect` | The snapshot, highlight, locate, pick (both directions); `query.locate()`, `control.locate()`. |
+| Plugin | Calls (who may make them) | Events | API |
+|---|---|---|---|
+| `core` | `core.submitQuery`, `core.fieldSuggestions` (frame) | | none: the app model is its frame side. Required. |
+| `export` | `export.query` (frame): runs the export, saves the file from the host page | | `query.export()` |
+| `lineage` | `lineage.trace` (frame) | | `Anfra.lineage()` |
+| `render` | `render.save` (frame): byte check, rate limit; `render.draw`, answered by the frame half (host) | | `Anfra.render()`; the renderer is its frame body |
+| `inspect` | `inspect.watch`, `.highlight`, `.locate`, `.pick` (host), each sent on to the frame as an event | `inspect.snapshot`, `inspect.picked` (frame) | none |
 
-The call names above are illustrative; the code is the reference.
+The structure, the overlay and `query.locate()` / `control.locate()` stay the kernel's: they are the app model's own parts, and `inspect` draws with them rather than owning them.
 
-**`core` is required.** The app model runs its queries by calling `core.submitQuery`, by name, through the same pipeline as any caller: the kernel declares `core` as a requirement, as a plugin would. To point queries at another server, or answer them with fixtures in a test, a host installs another plugin named `core`, or puts middleware around it. This replaces the `Backend` mount option; a host that names no `core` gets one over `coreApiBackend`.
+**`core` is required.** The app model runs its queries by calling `core.submitQuery`, by name, through the same pipeline as any caller: the kernel declares `core` as a requirement, as a plugin would. To point queries at another server, or answer them with fixtures in a test, a host installs another plugin named `core`, or puts middleware around it. This replaces the `Backend` mount option. A host always names it (`corePlugin(coreApiBackend(api, { datasets }))`): the SDK can't know where the host's core API is, and a host runtime without `core` refuses to start.
 
 ## Calls and events
 
@@ -79,22 +79,22 @@ The SDK persists nothing. A host runtime lives as long as its page; a refresh st
 
 ### Setup and body
 
-A frame half reaches an opaque-origin frame as script source, so it is built to strings, as the app runtime and the renderer are today. It has two parts:
+A frame half reaches an opaque-origin frame as script source, so it is built to strings, as the app runtime is. It has two parts:
 
-- **The setup**, inlined into the provisioned document, runs after the kernel and before the definition, in install order. It registers the plugin's API, its lifecycle subscriptions and the calls the host may make into the frame. It is small.
-- **The body**, optional, is fetched over the bridge through a kernel helper on first use. Frames that never use the plugin never carry it. The renderer is the first body.
+- **The setup**, inlined into the provisioned document, runs after the kernel and before the definition, in install order. It registers the plugin's API, its lifecycle subscriptions and the calls the host may make into the frame. It is small. The kernel and every setup run inside one function (`composeFrameScript`), so none of them is left on the frame's window; a setup that throws is logged and skipped, and the rest run.
+- **The body**, optional, is fetched with the kernel's own call, `anfra.body`, on first use. Frames that never use the plugin never carry it. The renderer is the first body.
 
 The setup is what lets the definition find `Anfra.lineage` the moment its first script runs.
 
 ### What a frame half sees
 
-Frame halves read the kernel's app model and subscribe to its **lifecycle events**: an app created, a query's state changed. These are the kernel's, not hooks plugins define: a hook in the frame could enforce nothing, since the definition, loaded after, can patch anything in its realm.
+A setup gets the **kernel** (`FrameKernel`, `web/sdk/src/app/kernel.ts`), one per plugin: the SDK instance and its apps, the error classes, the overlay and the page's structure, the plugin's calls and events, its place in the plugin layer, its body. It hears of each app the definition creates (`onApp`), and of each change through the app's own `subscribe`. These are the kernel's, not hooks plugins define: a hook in the frame could enforce nothing, since the definition, loaded after, can patch anything in its realm.
 
 **Frame halves don't depend on each other.** What they share is the kernel's app model and structure. That keeps install order safe and the frame free of a dependency graph.
 
 ### API for the author
 
-A frame half adds API only under its own name: `Anfra.<plugin>`, `query.<plugin>`, `control.<plugin>`. Two plugins cannot collide, and a reader of a definition can tell which plugin a call needs.
+A frame half adds API only under its own name: `Anfra.<plugin>` (`kernel.provide`), `query.<plugin>` and `control.<plugin>` (`kernel.provideOnQuery`, `provideOnControl`, made the first time each entity's is read). Two plugins cannot collide, and a reader of a definition can tell which plugin a call needs. What a plugin adds to queries and controls is kept on the SDK instance and put on each entity as its app creates it, never on a shared prototype. anfra's own plugins' members are typed on `Sdk` and `Query` as optional, so an editor knows them.
 
 **A plugin that is not installed adds nothing.** Its members are absent, not stubs that reject: the kernel knows no plugin by name, so it could not stub one written after it. A definition that uses an optional plugin checks first:
 
@@ -114,13 +114,13 @@ UI that doesn't need the page's geometry (a chat panel, a settings form) belongs
 
 ## Packaging
 
-anfra's plugins are subpath exports of `@holistics/anfra-sdk` (`@holistics/anfra-sdk/plugins/export`, …), released with the kernel: a host always carries the frame halves it was built with, as it carries the app runtime ([data-apps.md](data-apps.md#the-pieces)), so frame and host never disagree. Each exports one plugin object:
+anfra's plugins are `@holistics/anfra-sdk/plugins` (`corePlugin`, `exportPlugin`, …), released with the kernel: a host always carries the frame halves it was built with, as it carries the app runtime ([data-apps.md](data-apps.md#the-pieces)), so frame and host never disagree. Each is a plugin object:
 
 ```ts
-{ name, version, requires, host, frame: { setup, body? } }   // setup and body: script source
+{ name, version, requires, host: { calls, middleware, mount }, frame: { setup, body? } }   // setup and body: script source
 ```
 
-The SDK exports `definePlugin` and a build helper that turns a frame half's source into its setup and body, checking it imports only `common`, as `app/bundle.test.ts` checks the app runtime. That shape is the contract for plugins outside the SDK. A first-party plugin that outgrows the SDK's release pace can move to a package of its own without changing it.
+Their frame halves are built by the SDK's build (`web/sdk/tsup.config.ts`): `src/plugins/<name>/frame.ts` as an IIFE leaving its exports in `__anfraPlugin`, `body.ts` in `__anfraBody`. `definePlugin` (`@holistics/anfra-sdk/host`) checks a plugin's names; a plugin outside the SDK builds its frame half the same way (the SDK README says how). That shape is the contract for plugins outside the SDK. A first-party plugin that outgrows the SDK's release pace can move to a package of its own without changing it.
 
 ## What was decided against
 
