@@ -12,12 +12,15 @@ import, no setup, no await.
 - `Anfra.user`: `{ id, name, email, role, timezone, permissions: { canViewGeneratedSql, canExportData } }`.
   Under `anfra serve` it is the machine's user, with every permission and the machine's time zone.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
-- `Anfra.features`: what the host can do beyond queries. `export` is whether `query.export()` can
-  work here, `render` whether `Anfra.render()` can, `lineage` whether `Anfra.lineage()` can; all
-  `true` under `anfra serve`.
-- `Anfra.render(request)`: a PNG or PDF of the app or one of its parts. See
+- `Anfra.plugins`: what the host installed beyond queries. Each plugin adds its API under its own
+  name, and only where it is installed: `export` adds `query.export()`, `render` adds
+  `Anfra.render()`, `lineage` adds `Anfra.lineage()`. Elsewhere the member is `undefined`, so
+  check `Anfra.plugins.has('export')` (or `'render'`, `'lineage'`) before using one. All three are
+  installed under `anfra serve`.
+- `Anfra.render(request)` (the `render` plugin): a PNG or PDF of the app or one of its parts. See
   [downloads.md](downloads.md#pictures-of-the-app).
-- `Anfra.lineage(targets, options?)`: what fields are built from. See [Lineage](#lineage).
+- `Anfra.lineage(targets, options?)` (the `lineage` plugin): what fields are built from. See
+  [Lineage](#lineage).
 
 ## Field references
 
@@ -88,7 +91,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. |
 | `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
-| `await query.export(options?)` | Downloads the query's whole result as a file for the reader. See [downloads.md](downloads.md#exporting-a-querys-data). |
+| `await query.export(options?)` | The `export` plugin: downloads the query's whole result as a file for the reader. See [downloads.md](downloads.md#exporting-a-querys-data). |
 | `query.abort()` | Cancels this query's in-flight request. |
 | `query.subscribe(fn)` | Change listener for just this query. |
 | `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
@@ -283,8 +286,7 @@ model fields a metric uses, and the models those fields belong to (a model's tab
 catalog. It reads the catalog `anfra ingest` builds, not the AML: after an AML change, run
 `anfra ingest` or lineage shows the old definitions. It is a plain promise, outside `createApp`,
 `execute()` and `subscribe`, and nothing re-runs it for you. Offer it only when
-`Anfra.features.lineage` is true: on a host without lineage every call rejects with a
-`TransportError`.
+`Anfra.plugins.has('lineage')`: on a host without the plugin, `Anfra.lineage` is `undefined`.
 
 ```js
 const controller = new AbortController();
