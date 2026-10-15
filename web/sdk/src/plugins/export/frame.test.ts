@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createSdk } from './sdk';
-import { QueryError, TransportError } from '../common/errors';
-import { salesDataset, stubBackend, testUser, textTypes, type StubOptions } from './testSupport';
-import type { ExportResult } from '../common/types';
+import { QueryError } from '../../common/errors';
+import { stubBackend, textTypes, type StubOptions } from '../../app/testSupport';
+import { flush, testFrame } from '../../app/testFrame';
+import type { Query } from '../../app/query';
+import type { ExportOptions, ExportResult } from '../../common/types';
+import setupExport from './frame';
+
+type Exportable = Query & { export: (options?: ExportOptions) => Promise<ExportResult> };
 
 const link: ExportResult = {
   url: 'http://127.0.0.1:7878/exports/download/t0k3n/revenue.csv',
@@ -24,10 +28,19 @@ function setup (options: StubOptions = { exportQuery: link }, title?: string) {
     },
     ...options,
   });
-  const sdk = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: stub.backend });
+  const frame = testFrame({
+    setups: [['export', setupExport]],
+    answers: {
+      'core.submitQuery': (request, signal) => stub.backend.submitQuery(request, signal),
+      ...(stub.backend.exportQuery ? { 'export.query': (request, signal) => stub.backend.exportQuery!(request, signal) } : {}),
+    },
+  });
+  const sdk = frame.anfra;
   const app = sdk.createApp({ ...(title ? { title } : {}), timezone: 'Asia/Singapore' });
-  const query = app.createQuery('revenue', { dataset: 'sales', aql, pageSize: 2 });
-  return { stub, sdk, app, query };
+  const query = app.createQuery('revenue', { dataset: 'sales', aql, pageSize: 2 }) as Exportable;
+  return {
+    stub, sdk, app, query, frame,
+  };
 }
 
 describe('query.export', () => {
@@ -119,23 +132,20 @@ describe('query.export', () => {
     expect({ state: query.state, result: query.result, error: query.error }).toEqual(before);
   });
 
-  it('rejects with a TransportError naming the query when the host cannot export', async () => {
-    const { stub, sdk, query } = setup({});
+  it('is the export plugin\'s: absent where the host did not install it', () => {
+    const frame = testFrame({ answers: {} });
+    const query = frame.anfra.createApp().createQuery('revenue', { dataset: 'sales', aql });
 
-    expect(sdk.features.export).toBe(false);
-    const err = await query.export().catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(TransportError);
-    expect((err as TransportError).message).toMatch(/cannot make exports/);
-    expect((err as TransportError).entity).toBe('revenue');
-    expect(stub.exports).toEqual([]);
+    expect(frame.anfra.plugins.has('export')).toBe(false);
+    expect((query as Partial<Exportable>).export).toBeUndefined();
   });
 
-  it('says whether the host can export, from the Backend or from the host', () => {
-    const backend = stubBackend({ exportQuery: link }).backend;
-    const env = { datasets: { sales: salesDataset }, user: testUser, backend };
+  it('asks the host by the plugin\'s call, and is the same function each time it is read', async () => {
+    const { query, frame } = setup();
 
-    expect(createSdk(env).features.export).toBe(true);
-    expect(createSdk({ ...env, features: { export: false } }).features.export).toBe(false);
+    expect(query.export).toBe(query.export);
+    await query.export();
+    expect(frame.calls.map((call) => call.name)).toEqual(['export.query']);
   });
 
   it('is cancelled by its own signal, not by query.abort()', async () => {
@@ -143,16 +153,18 @@ describe('query.export', () => {
     const { query } = setup({
       exportQuery: (_request, signal) => {
         seen = signal;
-        return new Promise<ExportResult>((resolve) => { setTimeout(() => resolve(link), 0); });
+        return new Promise<ExportResult>(() => {});
       },
     });
     const controller = new AbortController();
 
-    const pending = query.export({ signal: controller.signal });
+    const pending = query.export({ signal: controller.signal }).catch((err: unknown) => err);
     query.abort();
+    await flush();
     expect(seen?.aborted).toBe(false);
     controller.abort();
+    await flush();
     expect(seen?.aborted).toBe(true);
-    await pending;
+    expect(await pending).toMatchObject({ name: 'AbortError' });
   });
 });

@@ -2,7 +2,7 @@
  * Pick mode: while on, pointing at the page outlines the nearest marked element, a click chooses it
  * for the host's inspect panel and reaches nothing else, and Escape leaves the mode.
  */
-import { MARKED } from './structure';
+import { MARKED } from '../../app/structure';
 
 export interface PickHandlers {
   /** The marked element under the pointer changed; null when the pointer is on nothing marked. */

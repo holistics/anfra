@@ -26,6 +26,10 @@
       "types": "./dist/api.d.ts",
       "import": "./dist/api.js"
     },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js"
+    },
     "./ambient": {
       "types": "./dist/ambient.d.ts"
     }

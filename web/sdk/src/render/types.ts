@@ -1,10 +1,8 @@
 /**
- * The contract between a frame and the renderer its host sends it: the renderer, built as its own
- * script (`anfra-sdk:renderer`), installs itself as `self[RENDERER_GLOBAL]` when the frame injects it.
+ * The contract between a frame and the renderer: `render`'s frame body (`anfra-sdk:body/render`),
+ * which the frame runs on its first rendering.
  */
 import type { RenderFormat } from '../common/types';
-
-export const RENDERER_GLOBAL = '__anfraRenderer';
 
 export interface DrawOptions {
   format: RenderFormat;
