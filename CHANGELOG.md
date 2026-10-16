@@ -1,3 +1,9 @@
+## [0.10.0](https://github.com/holistics/anfra/compare/v0.9.1...v0.10.0) (2026-10-16)
+
+### Features
+
+* separate envs for sidecars and support serving pprof ([2516521](https://github.com/holistics/anfra/commit/25165215797dd90058f91395ff3decfd69c78813))
+* support data source settings ([6ddb716](https://github.com/holistics/anfra/commit/6ddb7168bbeb98577f0db25b90deb1d6e0b1729a))
 ## [0.9.1](https://github.com/holistics/anfra/compare/v0.9.0...v0.9.1) (2026-10-15)
 
 ### Bug Fixes
