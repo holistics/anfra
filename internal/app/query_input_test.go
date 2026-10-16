@@ -15,13 +15,13 @@ import (
 // applies to AQL alone, a page without its size, paging beside a limit:
 // directive, a time zone that is not one. query.validate takes none of it.
 func TestQueryRunChecks(t *testing.T) {
-	cc := command.CommandContext{DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{DataPerms: dataperm.Ungoverned()}
 	for _, tc := range []struct {
 		name, cmd, body string
 		code            apperr.AnyCode
 		field, vcode    string
 	}{
-		{"input on SQL", "query", `{"query":"select 1","lang":"sql","data_source":"demo","input":{}}`, apperr.ValidationFailed, "input", "unsupported"},
+		{"input on SQL", "query", `{"query":"select 1","lang":"sql","data_source":"demo","input":{"filters":[{"field":"f","operator":"is","values":["x"]}]}}`, apperr.ValidationFailed, "input", "unsupported"},
 		{"paging SQL", "query.compile", `{"query":"select 1","lang":"sql","data_source":"demo","page_size":10}`, apperr.ValidationFailed, "page_size", "unsupported"},
 		{"a time zone on SQL", "query", `{"query":"select 1","lang":"sql","data_source":"demo","timezone":"UTC"}`, apperr.ValidationFailed, "timezone", "unsupported"},
 		{"a page without its size", "query", `{"query":"q","dataset":"d","page":2}`, apperr.ValidationFailed, "page_size", "required"},

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -60,6 +61,16 @@ func canalAnswering(t *testing.T, rows int) (*canalquery.Client, *float64) {
 
 var sqlSource = datasource.DataSource{Name: "warehouse", DBType: "postgresql", Connection: map[string]any{"password": "secret"}}
 
+// ungoverned is "select 1", as written, on sqlSource.
+func ungoverned(t *testing.T) UngovernedSQL {
+	t.Helper()
+	sql, err := ConnectUngoverned(context.Background(), dataperm.Ungoverned(), datasource.Set{"warehouse": sqlSource}, "warehouse", "select 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sql
+}
+
 // rows collects what a stream hands its handler.
 func rows(n *int) canalquery.Handler {
 	return canalquery.Handler{Row: func(canalquery.Row) error { *n++; return nil }}
@@ -70,7 +81,7 @@ func rows(n *int) canalquery.Handler {
 func TestResultOverTheMaximumFails(t *testing.T) {
 	canal, truncate := canalAnswering(t, 3)
 	n := 0
-	err := StreamSQL(context.Background(), canal, sqlSource, "select 1", ResultBounds{Truncate: NoLimit, MaxRows: 2}, rows(&n))
+	err := ungoverned(t).Stream(context.Background(), canal, ResultBounds{Truncate: NoLimit, MaxRows: 2}, rows(&n))
 	if apperr.From(err).Code != ResultTooLarge.Code() {
 		t.Fatalf("err = %v, want result_too_large as its code, not found deeper in its chain", err)
 	}
@@ -86,7 +97,7 @@ func TestResultOverTheMaximumFails(t *testing.T) {
 func TestResultAtTheMaximumIsAnswered(t *testing.T) {
 	canal, _ := canalAnswering(t, 2)
 	n := 0
-	if err := StreamSQL(context.Background(), canal, sqlSource, "select 1", ResultBounds{Truncate: NoLimit, MaxRows: 2}, rows(&n)); err != nil || n != 2 {
+	if err := ungoverned(t).Stream(context.Background(), canal, ResultBounds{Truncate: NoLimit, MaxRows: 2}, rows(&n)); err != nil || n != 2 {
 		t.Fatalf("got %d rows, %v; want 2 rows", n, err)
 	}
 }
@@ -110,7 +121,7 @@ func TestOwnLimitWithinTheMaximum(t *testing.T) {
 func TestAllRowsAsksForEveryRow(t *testing.T) {
 	canal, truncate := canalAnswering(t, 3)
 	n := 0
-	if err := StreamSQL(context.Background(), canal, sqlSource, "select 1", Unbounded, rows(&n)); err != nil || n != 3 {
+	if err := ungoverned(t).Stream(context.Background(), canal, Unbounded, rows(&n)); err != nil || n != 3 {
 		t.Fatalf("got %d rows, %v; want 3", n, err)
 	}
 	if *truncate != NoLimit {

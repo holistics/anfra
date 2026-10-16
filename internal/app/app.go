@@ -51,7 +51,7 @@ type Response struct {
 // That requirement applies to EVERY command, including ones that read no data.
 // Exempting them would mean maintaining a list of which commands are exempt, and
 // such a list is only ever wrong in one direction: mark a data-reading command
-// exempt and it silently runs unrestricted. There is no list, so there is
+// exempt and it silently runs ungoverned. There is no list, so there is
 // nothing to get wrong — and a host that knows who is calling already has the
 // answer, so being asked for it costs nothing. The check is a precondition on
 // the context rather than on the request, so it runs before the command is even

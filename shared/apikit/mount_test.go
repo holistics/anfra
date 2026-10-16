@@ -23,6 +23,11 @@ func library() *apikit.Registry[team, team] {
 	apikit.Register(reg, adm, &apikit.Def[team, greetIn, greetOut]{
 		Name: "core.greet", Summary: "Greet someone.", Doc: "The library's doc.", HTTP: true, Timeout: time.Minute,
 		Errors: []apperr.AnyCode{notAllow},
+		// What the host authorizes on is the name as the library reads it.
+		Prepare: func(in greetIn) (greetIn, error) {
+			in.Name = strings.TrimSpace(in.Name)
+			return in, nil
+		},
 		Handle: func(_ context.Context, t team, in greetIn) (greetOut, error) {
 			return greetOut{Text: string(t) + " greets " + in.Name, Tags: []string{}}, nil
 		},
@@ -39,18 +44,31 @@ func library() *apikit.Registry[team, team] {
 
 var libNS = apperr.DefineNamespace("test_lib_mounted")
 
-func mounting(bound *[]string) apikit.Mounting[request, string, team] {
-	return apikit.Mounting[request, string, team]{
+// greetRef is the library's ref to core.greet, as a library exports it.
+var greetRef = apikit.OpRef[greetIn]{Name: "core.greet"}
+
+func mounting(bound *[]string) apikit.Mounting[request, string, team, greetIn] {
+	return apikit.Mounting[request, string, team, greetIn]{
 		Admit: admission.Admit,
-		Authorize: func(_ context.Context, _ request, user string, input apikit.Args) error {
-			if user == "bob" && input["name"] == "Zed" {
-				return notAllow
+		Authorize: func(_ context.Context, _ request, user string, in greetIn) (string, error) {
+			if user == "bob" && in.Name == "Zed" {
+				return "", notAllow
 			}
-			return nil
+			return user + " (greeting " + in.Name + ")", nil
 		},
-		Bind: func(_ context.Context, user string) (team, error) {
-			*bound = append(*bound, user)
-			return team("team of " + user), nil
+		Bind: func(_ context.Context, caller string) (team, error) {
+			*bound = append(*bound, caller)
+			return team("team of " + caller), nil
+		},
+	}
+}
+
+func untyped(bound *[]string) apikit.Mounting[request, string, team, any] {
+	return apikit.Mounting[request, string, team, any]{
+		Admit: admission.Admit,
+		Bind: func(_ context.Context, caller string) (team, error) {
+			*bound = append(*bound, caller)
+			return team("team of " + caller), nil
 		},
 	}
 }
@@ -59,7 +77,7 @@ func TestMount(t *testing.T) {
 	lib := library()
 	var bound []string
 	reg := newRegistry()
-	apikit.Mount(reg, lib, "core.greet", mounting(&bound), apikit.AppendDoc("Here, only for teams."))
+	apikit.Mount(reg, lib, greetRef, mounting(&bound), apikit.AppendDoc("Here, only for teams."))
 	o, ok := reg.Lookup("core.greet")
 	if !ok {
 		t.Fatal("the mounted op is not in the host's registry")
@@ -84,13 +102,20 @@ func TestMount(t *testing.T) {
 	if len(bound) != 0 {
 		t.Errorf("bound for a refused caller: %v", bound)
 	}
-	// Authorized first, validated after: the library's schema still refuses.
-	if _, err := o.Invoke(ctx, rt, request{user: "ann"}, []byte(`{"name":""}`)); code(err) != "invalid_request" {
+	// Validated before it is authorized: the library's schema refuses first.
+	if _, err := o.Invoke(ctx, rt, request{user: "bob"}, []byte(`{"name":""}`)); code(err) != "invalid_request" {
 		t.Errorf("invalid input: got %v", err)
 	}
-	out, err := o.Invoke(ctx, rt, request{user: "ann"}, []byte(`{"name":"Zed"}`))
-	if err != nil || out.(greetOut).Text != "team of ann greets Zed" {
-		t.Errorf("got %v, %v: want the library's handler, run with what Bind built", out, err)
+	// Authorized on the prepared input: the name trimmed, as the library reads it.
+	if _, err := o.Invoke(ctx, rt, request{user: "bob"}, []byte(`{"name":" Zed "}`)); code(err) != "not_allowed" {
+		t.Errorf("not authorized on the prepared input: got %v", err)
+	}
+	if len(bound) != 0 {
+		t.Errorf("bound for a refused caller: %v", bound)
+	}
+	out, err := o.Invoke(ctx, rt, request{user: "ann"}, []byte(`{"name":" Zed "}`))
+	if err != nil || out.(greetOut).Text != "team of ann (greeting Zed) greets Zed" {
+		t.Errorf("got %v, %v: want the library's handler, on the prepared input, run with what Bind built from Authorize's caller", out, err)
 	}
 	if _, err := o.Invoke(ctx, rt, request{user: "ann"}, []byte(`{"name":`)); code(err) != "invalid_request" {
 		t.Errorf("malformed JSON: got %v", err)
@@ -105,7 +130,7 @@ func TestMount(t *testing.T) {
 func TestMountTimeout(t *testing.T) {
 	var bound []string
 	reg := newRegistry()
-	apikit.Mount(reg, library(), "core.wait", mounting(&bound), apikit.WithTimeout(10*time.Millisecond))
+	apikit.Mount(reg, library(), apikit.Untyped("core.wait"), untyped(&bound), apikit.WithTimeout(10*time.Millisecond))
 	o, _ := reg.Lookup("core.wait")
 	if _, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, nil); code(err) != "too_slow" {
 		t.Errorf("got %v, want the host's timeout code", err)
@@ -115,8 +140,35 @@ func TestMountTimeout(t *testing.T) {
 func TestMountRefusesMistakes(t *testing.T) {
 	var bound []string
 	lib := library()
-	mustPanic(t, "not in the registry", func() { apikit.Mount(newRegistry(), lib, "core.nope", mounting(&bound)) })
+	mustPanic(t, "not in the registry", func() {
+		apikit.Mount(newRegistry(), lib, apikit.OpRef[greetIn]{Name: "core.nope"}, mounting(&bound))
+	})
+	mustPanic(t, "takes struct {}, not apikit_test.greetIn", func() {
+		apikit.Mount(newRegistry(), lib, apikit.OpRef[greetIn]{Name: "core.wait"}, mounting(&bound))
+	})
 	noBind := mounting(&bound)
 	noBind.Bind = nil
-	mustPanic(t, "Admit and Bind", func() { apikit.Mount(newRegistry(), lib, "core.greet", noBind) })
+	mustPanic(t, "Admit and Bind", func() { apikit.Mount(newRegistry(), lib, greetRef, noBind) })
+}
+
+// An untyped ref mounts any op; a library checks the refs it exports.
+func TestRefs(t *testing.T) {
+	lib := library()
+	if err := apikit.CheckRef(lib, greetRef); err != nil {
+		t.Errorf("greetRef: %v", err)
+	}
+	if err := apikit.CheckRef(lib, apikit.Untyped("core.greet")); err != nil {
+		t.Errorf("untyped: %v", err)
+	}
+	if err := apikit.CheckRef(lib, apikit.OpRef[greetIn]{Name: "core.wait"}); err == nil {
+		t.Error("a ref to an op of another input passed")
+	}
+	var bound []string
+	reg := newRegistry()
+	apikit.Mount(reg, lib, apikit.Untyped("core.greet"), untyped(&bound))
+	o, _ := reg.Lookup("core.greet")
+	out, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, []byte(`{"name":"Zed"}`))
+	if err != nil || out.(greetOut).Text != "team of ann greets Zed" {
+		t.Errorf("untyped: got %v, %v", out, err)
+	}
 }

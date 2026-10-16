@@ -64,7 +64,7 @@ func TestAManagedRepoIsSentAsItsRevision(t *testing.T) {
 	cc := command.CommandContext{
 		Clients:     command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
 		Repo:        managedRepo(t),
-		DataPerms:   dataperm.Unrestricted(),
+		DataPerms:   dataperm.Ungoverned(),
 		DataSources: datasource.Set{"warehouse": {Name: "warehouse", DBType: "bigquery"}},
 	}
 	if _, err := Invoke(context.Background(), cc, "query.compile", []byte(`{"query":"q","dataset":"ecommerce"}`)); err != nil {
@@ -94,7 +94,7 @@ func TestAManagedRepoNeedsTheHostsDataSources(t *testing.T) {
 	cc := command.CommandContext{
 		Clients:   command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
 		Repo:      managedRepo(t),
-		DataPerms: dataperm.Unrestricted(),
+		DataPerms: dataperm.Ungoverned(),
 	}
 	for cmd, input := range map[string]string{
 		"query.compile":  `{"query":"q","dataset":"ecommerce"}`,
@@ -118,7 +118,7 @@ func TestAManagedRepoValidatesWithoutDataSources(t *testing.T) {
 	cc := command.CommandContext{
 		Clients:   command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
 		Repo:      managedRepo(t),
-		DataPerms: dataperm.Unrestricted(),
+		DataPerms: dataperm.Ungoverned(),
 	}
 	if _, err := Invoke(context.Background(), cc, "validate", []byte(`{}`)); err != nil {
 		t.Fatalf("validate: %v", err)
@@ -139,7 +139,7 @@ func TestAManagedRepoHasACatalog(t *testing.T) {
 			CanalQuery: canalquery.NewClient(srv.URL, false),
 		},
 		Repo:      managedRepo(t),
-		DataPerms: dataperm.Unrestricted(),
+		DataPerms: dataperm.Ungoverned(),
 	}
 	for cmd, input := range map[string]string{
 		"ingest":  `{}`,
@@ -171,16 +171,16 @@ type countingSources struct {
 	connections int
 }
 
-func (c *countingSources) Connection(ctx context.Context, name string) (datasource.DataSource, error) {
+func (c *countingSources) Connection(ctx context.Context, name string, mode datasource.DataPermMode) (datasource.DataSource, error) {
 	c.connections++
-	return c.Set.Connection(ctx, name)
+	return c.Set.Connection(ctx, name, mode)
 }
 
 // Compiling a SQL query is returning it as it is: it checks the data source
 // exists, and never asks for its connection.
 func TestCompilingSQLAsksForNoConnection(t *testing.T) {
 	sources := &countingSources{Set: datasource.Set{"warehouse": {Name: "warehouse", DBType: "postgresql"}}}
-	cc := command.CommandContext{Repo: managedRepo(t), DataPerms: dataperm.Unrestricted(), DataSources: sources}
+	cc := command.CommandContext{Repo: managedRepo(t), DataPerms: dataperm.Ungoverned(), DataSources: sources}
 	if _, err := Invoke(context.Background(), cc, "query.compile", []byte(`{"query":"select 1","lang":"sql","data_source":"warehouse"}`)); err != nil {
 		t.Fatalf("query.compile in SQL: %v", err)
 	}

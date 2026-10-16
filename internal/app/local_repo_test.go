@@ -18,7 +18,7 @@ import (
 func TestEveryCommandRefusesADisallowedLocalRepo(t *testing.T) {
 	local := repo.Resolve(t.TempDir()).Repo()
 	for _, c := range Commands {
-		cc := command.CommandContext{Repo: local, DataPerms: dataperm.Unrestricted()}
+		cc := command.CommandContext{Repo: local, DataPerms: dataperm.Ungoverned()}
 		_, err := Invoke(context.Background(), cc, c.Name(), []byte(`{}`))
 		if !errors.Is(err, errcode.LocalRepoNotAllowed) {
 			t.Errorf("%s on a disallowed local repo: %v, want local_repo_not_allowed", c.Name(), err)
@@ -31,8 +31,8 @@ func TestEveryCommandRefusesADisallowedLocalRepo(t *testing.T) {
 // one stops there instead: past the guard.)
 func TestTheGuardLetsAllowedAndManagedReposThrough(t *testing.T) {
 	for name, cc := range map[string]command.CommandContext{
-		"allowed local": {Repo: repo.Resolve(t.TempDir()).Repo(), AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()},
-		"managed":       {Repo: managedRepo(t), DataPerms: dataperm.Unrestricted()},
+		"allowed local": {Repo: repo.Resolve(t.TempDir()).Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned()},
+		"managed":       {Repo: managedRepo(t), DataPerms: dataperm.Ungoverned()},
 	} {
 		if _, err := Invoke(context.Background(), cc, "validate", []byte(`{}`)); errors.Is(err, errcode.LocalRepoNotAllowed) || !errors.Is(err, errcode.SidecarUnavailable) {
 			t.Errorf("%s: %v, want past the guard, to sidecar_unavailable", name, err)

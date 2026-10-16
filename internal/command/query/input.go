@@ -12,7 +12,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/datasource"
-	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
@@ -40,10 +39,10 @@ func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema 
 // applies to checking one.
 type QueryRunInput struct {
 	QueryInput
-	Input    *anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
-	Page     int                        `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to answer; needs a page size"`
-	PageSize int                        `json:"page_size,omitempty" minimum:"1" maximum:"10000" doc:"rows per page; alone, the first page"`
-	Timezone string                     `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
+	Input    anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
+	Page     int                       `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to answer; needs a page size"`
+	PageSize int                       `json:"page_size,omitempty" minimum:"1" maximum:"10000" doc:"rows per page; alone, the first page"`
+	Timezone string                    `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
 }
 
 func (QueryRunInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
@@ -61,7 +60,7 @@ func (in QueryRunInput) check() error {
 		for _, a := range []struct {
 			name string
 			set  bool
-		}{{"input", in.Input != nil}, {"page", in.Page != 0}, {"page_size", in.PageSize != 0}, {"timezone", in.Timezone != ""}} {
+		}{{"input", !in.Input.IsZero()}, {"page", in.Page != 0}, {"page_size", in.PageSize != 0}, {"timezone", in.Timezone != ""}} {
 			if a.set {
 				return command.InvalidArg(a.name, "unsupported", a.name+" applies to an AQL query only: a SQL query runs as it is written")
 			}
@@ -87,7 +86,10 @@ func (in QueryRunInput) check() error {
 // run is what shapes the query's run, as anfra-node takes it. A page size alone
 // is the first page; the Query Input is passed through as it is.
 func (in QueryRunInput) run() query.Run {
-	r := query.Run{Input: in.Input, Timezone: in.Timezone}
+	r := query.Run{Timezone: in.Timezone}
+	if !in.Input.IsZero() {
+		r.Input = &in.Input
+	}
 	if in.PageSize != 0 {
 		r.Pagination = &anfranode.Pagination{Page: max(in.Page, 1), PageSize: in.PageSize}
 	}
@@ -129,18 +131,19 @@ func (in QueryInput) aql() (aql string, limit int, err error) {
 	return aql, limit, nil
 }
 
-// dataSource is a SQL query's data source, connection included, to run it on:
-// the one data source it names, and only that one is asked for.
-func (in QueryInput) dataSource(ctx context.Context, cc command.CommandContext) (datasource.DataSource, error) {
+// ungoverned is a SQL query, as written, on the data source it names,
+// connection included: only that one is asked for, and only for an ungoverned
+// caller.
+func (in QueryInput) ungoverned(ctx context.Context, cc command.CommandContext) (query.UngovernedSQL, error) {
 	sources, err := in.sqlSources(cc)
 	if err != nil {
-		return datasource.DataSource{}, err
+		return query.UngovernedSQL{}, err
 	}
-	ds, err := sources.Connection(ctx, in.DataSource)
+	sql, err := query.ConnectUngoverned(ctx, cc.DataPerms, sources, in.DataSource, in.Query)
 	if errors.Is(err, datasource.ErrUnknown) {
-		return datasource.DataSource{}, in.unknownDataSource()
+		return query.UngovernedSQL{}, in.unknownDataSource()
 	}
-	return ds, err
+	return sql, err
 }
 
 // checkDataSource checks a SQL query names a data source of the repo, without
@@ -160,13 +163,12 @@ func (in QueryInput) checkDataSource(ctx context.Context, cc command.CommandCont
 	return nil
 }
 
-// sqlSources is the repo's data sources, for a SQL query. Nothing restricts SQL,
-// so it runs only when the host stated the caller is unrestricted (it authorizes
-// the caller on the data source itself).
+// sqlSources is the repo's data sources, for a SQL query. Nothing governs SQL,
+// so it is answered only when the host stated the caller is ungoverned (it
+// authorizes the caller on the data source itself).
 func (in QueryInput) sqlSources(cc command.CommandContext) (datasource.DataSources, error) {
-	if cc.DataPerms.Restricted() {
-		return nil, apperr.New(errcode.DataPermsUnenforceable,
-			"a SQL query runs only for a caller with unrestricted data permissions: no restriction can be applied to it")
+	if err := query.CheckUngoverned(cc.DataPerms); err != nil {
+		return nil, err
 	}
 	return cc.ResolveDataSources()
 }

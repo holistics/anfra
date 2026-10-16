@@ -35,7 +35,7 @@ func TestSearchDeclaresRequiredSidecars(t *testing.T) {
 // A command that needs a sidecar refuses to run without it, as
 // sidecar_unavailable, rather than calling a client that is not there.
 func TestCommandsRefuseWithoutTheirSidecars(t *testing.T) {
-	cc := command.CommandContext{DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{DataPerms: dataperm.Ungoverned()}
 	for cmd, input := range map[string]string{
 		"ingest":   `{}`,
 		"search":   `{"query":["revenue"]}`,

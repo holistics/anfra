@@ -28,7 +28,7 @@ func handler(t *testing.T) (http.Handler, repo.Local) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	r := repo.Resolve(t.TempDir())
-	cc := command.CommandContext{Repo: r.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Unrestricted(),
+	cc := command.CommandContext{Repo: r.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned(),
 		Server: &command.ServerInfo{URL: "http://127.0.0.1:7878", InstanceID: "i-1", Version: "dev"}}
 	return serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr, serveMCP: true}), r
 }
@@ -186,7 +186,7 @@ func TestStopWhenIdle(t *testing.T) {
 func TestServeApps(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	r := repo.Resolve(t.TempDir())
-	cc := command.CommandContext{Repo: r.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{Repo: r.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned()}
 	apps := appserve.New(appserve.Options{RepoDir: r.Dir})
 	h := serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr, apps: apps})
 
@@ -260,7 +260,7 @@ func TestExportLinks(t *testing.T) {
 	files := exports.New(time.Hour)
 	defer files.Close()
 	r := repo.Resolve(t.TempDir())
-	cc := command.CommandContext{Repo: r.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{Repo: r.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned()}
 	h := serveHandler(serveConfig{logger: slog.New(slog.DiscardHandler), repo: r, context: cc, addr: serverAddr, exportFiles: files})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/core.query.export", nil)

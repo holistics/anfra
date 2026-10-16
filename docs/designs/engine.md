@@ -14,9 +14,10 @@ The public packages are `engine` and `shared/*` (`apperr`, `appstep`, `apptracin
 |---|---|
 | `Connect(ctx, nodeURL, canalQueryURL, …)` | dial the sidecars, which run on their own ([sidecars.md](sidecars.md)) |
 | `OpenRepo(dir)`, `ManagedRepo(id, revision)` | the repo to act on: a directory, or a managed repo, which the platform keeps (its git service) and the engine reads at a revision |
-| `Unrestricted()`, `Restricted(attrs)` | state what the caller may see |
+| `Governed(attrs)`, `Ungoverned()` | state how the caller's queries may read the data |
 | `Dispatch(ctx, inv, req)` | run one command |
 | `Ops()` | every command as an `apikit` op (`core.<command>`), to serve as it is |
+| `QueryOp`, `ShowOp`, … | refs to the ops a platform authorizes on, with their input types (`QueryRunInput`, …), to mount them by |
 | `Describe()`, `Commands()`, `ErrorCodes()` | what there is, for a platform to publish and to test against |
 
 The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are aliases of the internal ones, not wrappers: nothing converts between them, so nothing can drift.
@@ -38,7 +39,8 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 
 **Make access decisions.** There is no principal, role or policy anywhere in the engine, and a tenant only as an id it passes on. The platform decides whether a caller may run a command before calling `Dispatch`. What crosses the boundary is the *consequence* of that decision:
 
-- **`DataPerms`**: the data restrictions that apply to this caller. They are decision-bearing: the compiler reads the attributes, and changing one changes which rows come back. They cannot be left unset: `Dispatch` refuses an `Invocation` whose `DataPerms` nobody decided (`DataPermsMissing`), so "no restrictions" is something a platform states (`Unrestricted()`), never something it defaults into. A query that cannot apply restrictions (raw SQL) refuses `Restricted` ones (`DataPermsUnenforceable`).
+- **`DataPerms`**: how this caller's queries may read the data. `Governed(attrs)`: only through the semantic layer, compiled from a dataset with the repo's rules evaluated against the attributes; raw SQL is refused (`DataPermsUnenforceable`), even with no attributes. `Ungoverned()`: raw SQL runs too, and no rule applies. They are decision-bearing: the compiler reads the attributes, and changing one changes which rows come back. They cannot be left unset: `Dispatch` refuses an `Invocation` whose `DataPerms` nobody decided (`DataPermsMissing`), so "ungoverned" is something a platform states, never something it defaults into.
+- **The connection's mode**: every statement the engine runs is governed (compiled from a dataset) or ungoverned (SQL as written), and it asks `DataSources.Connection` for a connection in that statement's `DataPermMode`, from one place (`internal/query`'s `connect`). A platform may refuse a mode it did not grant the call on that data source: a second gate, behind its authorization and `DataPerms`, which decide and must be right on their own.
 - **`TenantID`**: whom the call runs for, as the platform identifies it. The engine decides nothing by it: canal-query keys its warehouse connection pools by it, so tenants never share a connection, and records it on its spans. A query without one is refused, never run under a shared default.
 - **`Attribution`**: who the caller is, for logs, spans and audit. It is baggage and nothing else: no command reads it and it never reaches the compiler. A value that must change the rows belongs in `Attributes`, and the engine keeps the two apart.
 
@@ -48,7 +50,7 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 
 ## What a platform brings
 
-- **Identity and authorization**: who is calling, and whether they may run this command on this input. `apikit.Mount` gives each op a platform-side `Admit`, `Authorize` and `Bind` around anfra's own validation and handler.
+- **Identity and authorization**: who is calling, and whether they may run this command on this input. `apikit.Mount` gives each op a platform-side `Admit`, `Authorize` and `Bind` around anfra's own validation and handler. `Authorize` reads the input as the op decoded and prepared it (`Def.Prepare`: defaults, normalization, the rules between args), typed by the op's ref (`QueryOp`), and answers the caller `Bind` gets: what the call was authorized for, for `Bind` to build the invocation from.
 - **The invocation**: the repo the call acts on, the sidecar clients, the tenant it runs for, the `DataPerms` derived from the caller, and `Attribution` for its logs.
 - **The transport**: HTTP, MCP or its own, with its own middleware.
 - **The sidecars**: running, reachable, and released with the versions this anfra pins (`manifest.yml`; see [release.md](release.md)).
@@ -81,11 +83,12 @@ sequenceDiagram
     T->>T: transport.Request(w, r) gives the Call
     T->>M: mounted.InvokeStream(call, raw input, emit), or mounted.Invoke(call, raw input)
     M->>M: mounting.Admit(call) gives the platform's Caller
-    M->>M: mounting.Authorize(call, caller, raw input)
+    M->>A: decode the raw input, then def.Prepare: defaults, Check
+    M->>M: mounting.Authorize(call, caller, prepared input) gives the Caller, with what it was authorized for
     M->>M: mounting.Bind(caller) gives the BoundCall (an Invocation)
-    M->>A: op.InvokeStream(boundCall, raw input, emit)
-    A->>A: admission.Admit(boundCall), the engine's own, gives the invocation, then decode the input
-    A->>H: def.Handle(invocation, input): defaults, Check, then the command's Run
+    M->>A: the op, on the prepared input: not decoded again
+    A->>A: admission.Admit(boundCall), the engine's own, gives the invocation
+    A->>H: def.Handle(invocation, input): the command's Run
     H-->>A: run, with run.Page and run.Stream, nothing done yet
     A->>X: executor.Submit(the platform's Caller, submission: the op, the run's work)
     X-->>A: execution, with its ID, execution.Page and execution.Stream
@@ -111,10 +114,10 @@ sequenceDiagram
     participant H as query (the command: Def.Handle, its Run)
 
     C->>T: POST core.query
-    T->>T: transport.Request(w, r) builds the Invocation: local repo, clients, TenantID local, DataPerms Unrestricted
+    T->>T: transport.Request(w, r) builds the Invocation: local repo, clients, TenantID local, DataPerms Ungoverned
     T->>A: op.InvokeStream(invocation, raw input, emit), or op.Invoke(invocation, raw input)
-    A->>A: admission.Admit(invocation), the engine's own, then decode the input
-    A->>H: def.Handle(invocation, input): defaults, Check, then the command's Run
+    A->>A: admission.Admit(invocation), the engine's own, then decode the input and def.Prepare it: defaults, Check
+    A->>H: def.Handle(invocation, input): the command's Run
     H-->>A: run, with run.Page and run.Stream, nothing done yet
     A-->>C: emit(start)
     A->>H: run.Stream(emit), or run.Page(): no executor, so now, in the call

@@ -68,17 +68,45 @@ type Dialect struct {
 // run a query on the data source it targets. validate asks for neither.
 //
 // A host serving a managed repo implements it over its own store: Dialects is
-// metadata, and Connection is where one data source's connection is retrieved,
-// and the caller's use of it authorized. A local repo's is its data_sources.yml
-// (Load).
+// metadata, and Connection is where one data source's connection is retrieved.
+// A local repo's is its data_sources.yml (Load).
 type DataSources interface {
 	// Dialects is the data sources the caller may compile against, by name and
 	// type.
 	Dialects(ctx context.Context) ([]Dialect, error)
-	// Connection is the data source by name, connection included. A name the repo
+	// Connection is the data source by name, connection included, for SQL that
+	// reads the data as mode says. A host may refuse a mode it did not grant the
+	// call on that data source: a second gate, behind its authorization and the
+	// invocation's DataPerms, which must be right on their own. A name the repo
 	// has no data source by is ErrUnknown; any other error is the host's, and
 	// reaches the caller as it is.
-	Connection(ctx context.Context, name string) (DataSource, error)
+	Connection(ctx context.Context, name string, mode DataPermMode) (DataSource, error)
+}
+
+// DataPermMode is how the SQL a connection carries reads the data: a fact about
+// the statement, which the engine states and a host may check, never a
+// decision. Every statement the engine runs is one of the two (internal/query).
+// The zero value is no mode, which a host refuses.
+type DataPermMode int
+
+const (
+	// DataPermModeGoverned: SQL the engine compiled from a dataset, with the
+	// invocation's DataPerms in it.
+	DataPermModeGoverned DataPermMode = iota + 1
+	// DataPermModeUngoverned: SQL as written, which nothing applies DataPerms
+	// to; run only for an invocation whose DataPerms are Ungoverned.
+	DataPermModeUngoverned
+)
+
+// String is the mode as logs name it.
+func (m DataPermMode) String() string {
+	switch m {
+	case DataPermModeGoverned:
+		return "governed"
+	case DataPermModeUngoverned:
+		return "ungoverned"
+	}
+	return fmt.Sprintf("DataPermMode(%d)", int(m))
 }
 
 // ErrUnknown is Connection's answer for a name the repo has no data source by.
@@ -98,8 +126,9 @@ func (s Set) Dialects(context.Context) ([]Dialect, error) {
 	return out, nil
 }
 
-// Connection is the data source named name in s.
-func (s Set) Connection(_ context.Context, name string) (DataSource, error) {
+// Connection is the data source named name in s, whatever the mode: a Set
+// holds no grants.
+func (s Set) Connection(_ context.Context, name string, _ DataPermMode) (DataSource, error) {
 	ds, ok := s[name]
 	if !ok {
 		return DataSource{}, fmt.Errorf("%w: %q", ErrUnknown, name)

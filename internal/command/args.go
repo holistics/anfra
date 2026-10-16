@@ -19,7 +19,7 @@ const (
 	ArgBool        ArgType = "bool"         // a bool field
 	ArgStringArray ArgType = "string_array" // a []string field
 	ArgInt         ArgType = "int"          // an int field
-	ArgObject      ArgType = "object"       // a pointer to a struct; the CLI takes it as JSON, or by its fields
+	ArgObject      ArgType = "object"       // a struct, held by value; the CLI takes it as JSON, or by its fields
 	ArgObjectArray ArgType = "object_array" // a slice of structs; the CLI takes it as JSON
 )
 
@@ -123,9 +123,13 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 			a.Type = ArgStringArray
 		case f.Type == reflect.TypeFor[int]():
 			a.Type = ArgInt
-		case f.Type.Kind() == reflect.Pointer && f.Type.Elem().Kind() == reflect.Struct:
+		case f.Type.Kind() == reflect.Struct || f.Type.Kind() == reflect.Pointer && f.Type.Elem().Kind() == reflect.Struct:
 			a.Type = ArgObject
-			fields, err := objectFields(f.Type.Elem())
+			obj := f.Type
+			if obj.Kind() == reflect.Pointer {
+				obj = obj.Elem()
+			}
+			fields, err := objectFields(obj)
 			if err != nil {
 				return nil, fmt.Errorf("arg %s: %w", name, err)
 			}
@@ -258,7 +262,8 @@ func ArgsSchema[In any](s *huma.Schema) *huma.Schema {
 }
 
 // applyDefaults sets each unset string arg with a default to it. The schema
-// publishes defaults but validation does not apply them, so the handler does.
+// publishes defaults but validation does not apply them, so preparing the
+// input does (command.prepare).
 func applyDefaults(args []Arg, in any) {
 	v := reflect.ValueOf(in).Elem()
 	for _, a := range args {

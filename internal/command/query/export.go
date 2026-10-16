@@ -45,11 +45,11 @@ var Export = command.Define(command.Def[ExportInput, command.ExportLink]{
 // file's format.
 type ExportInput struct {
 	QueryInput
-	Input         *anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
-	Timezone      string                     `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
-	Format        string                     `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
-	FormatOptions *ExportFormatOptions       `json:"format_options,omitempty" doc:"the format's options"`
-	Filename      string                     `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
+	Input         anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
+	Timezone      string                    `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
+	Format        string                    `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
+	FormatOptions ExportFormatOptions       `json:"format_options,omitempty" doc:"the format's options"`
+	Filename      string                    `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
 }
 
 func (ExportInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
@@ -97,12 +97,7 @@ func (in ExportInput) runInput() QueryRunInput {
 	return QueryRunInput{QueryInput: in.QueryInput, Input: in.Input, Timezone: in.Timezone}
 }
 
-func (in ExportInput) options() ExportFormatOptions {
-	if in.FormatOptions == nil {
-		return ExportFormatOptions{}
-	}
-	return *in.FormatOptions
-}
+func (in ExportInput) options() ExportFormatOptions { return in.FormatOptions }
 
 // streamFunc runs the query, handing its result to h as it arrives: its header,
 // then each row.
@@ -118,7 +113,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		run       streamFunc
 	)
 	if in.Lang == "sql" {
-		ds, err := in.dataSource(ctx, cc)
+		sql, err := in.ungoverned(ctx, cc)
 		if err != nil {
 			return command.ExportLink{}, err
 		}
@@ -130,7 +125,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		}
 		name = in.DataSource
 		run = func(h canalquery.Handler) error {
-			return query.StreamSQL(ctx, cc.Clients.CanalQuery, ds, in.Query, query.Unbounded, h)
+			return sql.Stream(ctx, cc.Clients.CanalQuery, query.Unbounded, h)
 		}
 	} else {
 		aql, limit, err := in.aql()

@@ -31,10 +31,9 @@ var (
 	// "Server" is a dependency failing; "Client" is a request the engine built
 	// wrong — its own bug, and already left unclassified.
 	QueryFailed = apperr.DefinePublicCode(NS, "query_failed", apperr.Server, "The query failed to run on its data source.")
-	// DataPermsUnenforceable: the caller's data permissions are restricted, and
-	// the query cannot apply them — raw SQL, which no restriction is compiled
-	// into. The host decided the caller may run it; it states that with
-	// Unrestricted.
+	// DataPermsUnenforceable: the caller's data permissions are governed, and
+	// the query cannot be — raw SQL, which no rule is compiled into. A host that
+	// decided the caller may run it states that with Ungoverned.
 	DataPermsUnenforceable = apperr.DefinePublicCode(NS, "data_perms_unenforceable", apperr.Client,
 		"These data permissions cannot be applied to this query.")
 	// ExportsUnavailable: the server stores no exports (it provides no

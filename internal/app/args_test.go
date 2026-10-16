@@ -20,7 +20,7 @@ import (
 // runs: everything a correct client could have got right, at once, as
 // invalid_request.
 func TestInputSchema(t *testing.T) {
-	cc := command.CommandContext{DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{DataPerms: dataperm.Ungoverned()}
 	for _, tc := range []struct {
 		name, body string
 		bad        apperr.Violations
@@ -60,7 +60,7 @@ func TestQueryInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cc := command.CommandContext{Repo: repo.Resolve(fixture).Repo(), AllowLocalRepo: true, DataPerms: dataperm.Unrestricted()}
+	cc := command.CommandContext{Repo: repo.Resolve(fixture).Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned()}
 	for _, tc := range []struct {
 		name  string
 		cmd   string
@@ -90,12 +90,12 @@ func TestQueryInputs(t *testing.T) {
 		})
 	}
 
-	// Nothing restricts raw SQL, so a restricted caller cannot run it at all.
-	restricted := cc
-	restricted.DataPerms = dataperm.Restricted(nil)
+	// Nothing governs raw SQL, so a governed caller cannot run it at all.
+	governed := cc
+	governed.DataPerms = dataperm.Governed(nil)
 	for _, cmd := range []string{"query", "query.compile"} {
-		if _, err := run(t, cmd, restricted, query.QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"}); !errors.Is(err, errcode.DataPermsUnenforceable) {
-			t.Errorf("%s: a restricted caller's SQL got %v, want data_perms_unenforceable", cmd, err)
+		if _, err := run(t, cmd, governed, query.QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"}); !errors.Is(err, errcode.DataPermsUnenforceable) {
+			t.Errorf("%s: a governed caller's SQL got %v, want data_perms_unenforceable", cmd, err)
 		}
 	}
 

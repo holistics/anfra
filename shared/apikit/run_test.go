@@ -221,7 +221,7 @@ func TestAMountedRunStreams(t *testing.T) {
 	var bound []string
 	host := newRegistry()
 	host.Group("core", "Mounted.")
-	apikit.Mount(host, lib, "core.count", mounting(&bound))
+	apikit.Mount(host, lib, apikit.Untyped("core.count"), untyped(&bound))
 	o, _ := host.Lookup("core.count")
 	if o.EventTypes() == nil {
 		t.Fatal("the mounted op does not stream")
@@ -291,7 +291,7 @@ func TestARegistrysExecutorExecutesItsRuns(t *testing.T) {
 	host.Group("a", "Letters.")
 	host.Group("core", "Mounted.")
 	apikit.Register(host, admission, count("a.count", 0))
-	apikit.Mount(host, countLibrary(), "core.count", mounting(new([]string)))
+	apikit.Mount(host, countLibrary(), apikit.Untyped("core.count"), untyped(new([]string)))
 	h := httpkit.Wrap(adapter().Handler(runtime(), host), httpkit.Config{Codes: codes})
 
 	for _, path := range []string{"/api/a.count", "/api/core.count"} {
@@ -319,7 +319,7 @@ func TestARegistrysExecutorExecutesItsRuns(t *testing.T) {
 func TestWithoutAnExecutorARunIsExecutedInline(t *testing.T) {
 	plain := newRegistry()
 	plain.Group("core", "Mounted.")
-	apikit.Mount(plain, countLibrary(), "core.count", mounting(new([]string)))
+	apikit.Mount(plain, countLibrary(), apikit.Untyped("core.count"), untyped(new([]string)))
 	w := do(httpkit.Wrap(adapter().Handler(runtime(), plain), httpkit.Config{Codes: codes}), http.MethodPost, "/api/core.count", "ann", `{"n":1}`, "Accept", apikit.NDJSON)
 	if events := lines(t, w.Body.String()); events[0]["type"] != "start" || events[0]["id"] != nil || events[len(events)-1]["status"] != "succeeded" {
 		t.Errorf("events = %v, want a start with no ID, and the run to succeed", events)
