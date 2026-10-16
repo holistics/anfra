@@ -1,6 +1,7 @@
 package apikit
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -119,8 +120,18 @@ type Runtime struct {
 	// invalid_request), strict mode accepts them from any op.
 	Implied []apperr.Code
 	// Timeout makes the error of an op that ran out of its time the host's —
-	// its "unavailable", say. Nil leaves the error as it is.
+	// its "unavailable", say. Nil leaves the error as it is. Its code is implied
+	// for every op, as Implied's are: an op cannot know it, least of all a
+	// mounted one, whose host's timeout may be the one that ran out.
 	Timeout func(err error) error
+}
+
+// timeoutCode is the public code Timeout answers, or the zero code without one.
+func (rt *Runtime) timeoutCode() apperr.Code {
+	if rt.Timeout == nil {
+		return apperr.Code{}
+	}
+	return apperr.From(rt.Timeout(context.DeadlineExceeded)).Code.Public()
 }
 
 // NewRuntime returns a runtime with a fresh schema registry.

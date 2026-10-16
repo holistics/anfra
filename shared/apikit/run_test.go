@@ -109,8 +109,8 @@ func TestARunAnswersItsPageOrItsEvents(t *testing.T) {
 	}
 }
 
-// The op's timeout covers reading the run, which happens after the handler has
-// returned: in a page and in a stream alike.
+// The op's timeout covers executing the run, which happens after the handler
+// has returned: in a page and in a stream alike.
 func TestTheTimeoutCoversTheRun(t *testing.T) {
 	o := one(t, count("slow.count", 20*time.Millisecond))
 	in := []byte(`{"n":2,"pause":5000}`)
@@ -490,3 +490,52 @@ type vowelToo struct {
 }
 
 func (vowelToo) letter() {}
+
+// holder is an executor that holds each run before executing it, as one
+// waiting for capacity does.
+type holder struct{ hold time.Duration }
+
+func (h holder) Submit(_ context.Context, _ string, s apikit.Submission) (apikit.Execution, error) {
+	return apikit.Execution{Work: apikit.Work{
+		Page: func(ctx context.Context) (any, error) {
+			time.Sleep(h.hold)
+			return s.Work.Page(ctx)
+		},
+		Stream: func(ctx context.Context, emit func(any) error) error {
+			time.Sleep(h.hold)
+			return s.Work.Stream(ctx, emit)
+		},
+	}}, nil
+}
+
+// The op's timeout — and a mount's — bounds its run from when the run starts,
+// not what its executor does first: a run held longer than the timeout still
+// has all of it, and running past it still runs out.
+func TestTheTimeoutStartsWithTheRun(t *testing.T) {
+	host := apikit.NewRegistry(apikit.RegistryConfig[request, string]{Namespace: hostNS, Executor: holder{hold: 60 * time.Millisecond}})
+	host.Group("a", "Letters.")
+	host.Group("core", "Mounted.")
+	apikit.Register(host, admission, count("a.count", 30*time.Millisecond))
+	apikit.Mount(host, countLibrary(), apikit.Untyped("core.count"), untyped(new([]string)), apikit.WithTimeout(30*time.Millisecond))
+
+	for _, name := range []string{"a.count", "core.count"} {
+		o, _ := host.Lookup(name)
+		for in, want := range map[string]string{`{"n":1}`: "", `{"n":2,"pause":200}`: "too_slow"} {
+			if _, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, []byte(in)); codeOrNone(err) != want {
+				t.Errorf("%s %s page: got %v, want %q", name, in, err, want)
+			}
+			err := o.InvokeStream(context.Background(), runtime(), request{user: "ann"}, []byte(in), func(any) error { return nil })
+			if codeOrNone(err) != want {
+				t.Errorf("%s %s stream: got %v, want %q", name, in, err, want)
+			}
+		}
+	}
+}
+
+// codeOrNone is err's public code, or "" for none.
+func codeOrNone(err error) string {
+	if err == nil {
+		return ""
+	}
+	return code(err)
+}

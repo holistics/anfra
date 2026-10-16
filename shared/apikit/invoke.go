@@ -7,6 +7,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"time"
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/apptracing"
@@ -103,7 +104,7 @@ func (o *registered[Call, Caller, In, Out]) run(ctx context.Context, rt *Runtime
 	if emit != nil && rt.Strict {
 		emit = o.checkedEmit(rt, emit)
 	}
-	out, err := o.withTimeout(ctx, rt, c, in, emit)
+	out, err := o.answer(ctx, rt, c, in, emit)
 	if err != nil {
 		if rt.Strict {
 			o.checkDeclared(rt, err)
@@ -118,31 +119,25 @@ func (o *registered[Call, Caller, In, Out]) run(ctx context.Context, rt *Runtime
 	return out, nil
 }
 
-// withTimeout answers the call within the op's timeout: the handler, and when
-// it returns a Run, the run's execution, within the same timeout. Running out
-// of it is the host's to name (Runtime.Timeout) — unless the caller's own
-// context ended first, which is the caller going away.
-func (o *registered[Call, Caller, In, Out]) withTimeout(parent context.Context, rt *Runtime, c Caller, in In, emit func(any) error) (any, error) {
-	timeout := o.decl.Timeout
-	if timeout == 0 {
-		timeout = DefaultTimeout
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-	out, err := o.answer(ctx, c, in, emit)
-	if err != nil && rt.Timeout != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && parent.Err() == nil {
-		return out, rt.Timeout(err)
-	}
-	return out, err
-}
-
 // answer is the op's answer: its handler's output; or, when the handler returns
 // a Run, the run submitted to its executor and executed in the form asked — a
 // stream, with emit, which starts once the executor has taken the run; or a
 // page. A mounted op's run is its host's: submitted to the mounting registry's
 // executor, for its caller.
-func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, c Caller, in In, emit func(any) error) (any, error) {
-	out, err := o.decl.Handle(ctx, c, in)
+//
+// The op's timeout bounds its own work: the handler, and the run from when it
+// starts — when the executor calls its Page or Stream — not what the executor
+// does before (waiting for capacity, say). So no executor has a timeout to
+// apply, and each run's deadline is its own, wherever it runs.
+func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, rt *Runtime, c Caller, in In, emit func(any) error) (any, error) {
+	timeout := o.decl.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	if host, ok := hostTimeoutFrom(ctx); ok && host < timeout {
+		timeout = host
+	}
+	out, err := withTimeout(ctx, rt, timeout, func(ctx context.Context) (Out, error) { return o.decl.Handle(ctx, c, in) })
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +149,7 @@ func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, c Caller
 	if !mounted {
 		submit = submitTo(o.executor, c, o.Meta())
 	}
-	exec, err := submit(ctx, r.work())
+	exec, err := submit(ctx, r.work().within(rt, timeout))
 	if err != nil {
 		return nil, err // refused: an ordinary error, nothing sent yet
 	}
@@ -167,6 +162,19 @@ func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, c Caller
 		return nil, err
 	}
 	return nil, exec.Stream(ctx, emit)
+}
+
+// withTimeout is fn within timeout. Running out of it is the host's to name
+// (Runtime.Timeout) — unless parent ended first, which is the caller going
+// away.
+func withTimeout[T any](parent context.Context, rt *Runtime, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	out, err := fn(ctx)
+	if err != nil && rt.Timeout != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && parent.Err() == nil {
+		return out, rt.Timeout(err)
+	}
+	return out, err
 }
 
 // checkedEmit is emit checking each of the op's own events against its event
@@ -192,7 +200,7 @@ var implied = []apperr.Code{apperr.InternalServerError, apperr.InvalidRequest.Co
 
 func (o *registered[Call, Caller, In, Out]) checkDeclared(rt *Runtime, err error) {
 	pub := apperr.From(err).Code.Public()
-	if slices.Contains(implied, pub) || slices.Contains(rt.Implied, pub) {
+	if slices.Contains(implied, pub) || slices.Contains(rt.Implied, pub) || pub == rt.timeoutCode() {
 		return
 	}
 	for _, c := range o.decl.Errors {
