@@ -1,3 +1,8 @@
+## [0.10.2](https://github.com/holistics/anfra/compare/v0.10.1...v0.10.2) (2026-10-16)
+
+### Bug Fixes
+
+* bump canal-query to 2.19.1 to avoid duckdb stuck loop ([48c1cd2](https://github.com/holistics/anfra/commit/48c1cd28b11b73b235b3a7e1c3e3caa449ed28c4))
 ## [0.10.1](https://github.com/holistics/anfra/compare/v0.10.0...v0.10.1) (2026-10-16)
 
 ### Features
