@@ -7,7 +7,7 @@ import (
 )
 
 // localSources is a data_sources.yml with warehouse and dev, which the org lacks,
-// and events, which it has as another type.
+// and events, which it has as another type. Only warehouse has settings.
 const localSources = `data_sources:
   warehouse:
     type: postgresql
@@ -15,6 +15,8 @@ const localSources = `data_sources:
       host: db.example.com
       port: 5432
       password: hunter2
+    settings:
+      require_ssl: true
   dev:
     type: postgresql
     connection:
@@ -58,11 +60,67 @@ func TestPublishOffersMissingDataSources(t *testing.T) {
 	if got := s.created["warehouse"]; got["password"] != "hunter2" || got["port"] == nil || s.sources["warehouse"] != "postgresql" {
 		t.Errorf("warehouse created as %v (%s)", got, s.sources["warehouse"])
 	}
+	if s.settings["warehouse"]["require_ssl"] != true || s.settings["dev"] != nil {
+		t.Errorf("created with settings %v, want warehouse's alone", s.settings)
+	}
+	if strings.Contains(errOut, "settings are not sent") {
+		t.Errorf("settings said unsent to a server that takes them: %q", errOut)
+	}
 	if _, ok := s.created["events"]; ok || s.sources["events"] != "snowflake" || !strings.Contains(errOut, "events is bigquery here and snowflake on the org") {
 		t.Errorf("events: created %v, now %s; said %q", s.created["events"], s.sources["events"], errOut)
 	}
 	if !strings.Contains(errOut, "Queries on the models using dev fail until the org has them") || len(s.deployed) != 1 {
 		t.Errorf("said %q; deployed %v", errOut, s.deployed)
+	}
+}
+
+// A server from before data sources had settings gets one without them, saying
+// so: the data source is still created.
+func TestPublishToAServerWithoutSettings(t *testing.T) {
+	s, url := newServer(t)
+	s.sources["events"] = "snowflake"
+	s.noSettings = true
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
+
+	ask := &script{t: t, answers: []string{"no", "yes"}} // dev: not now; warehouse: create
+	_, errOut, err := run(t, dir, Options{SetOrg: url}, ask.ask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.created["warehouse"]; !ok || s.settings["warehouse"] != nil {
+		t.Errorf("warehouse: created %v, settings %v; want created without them", s.created["warehouse"], s.settings["warehouse"])
+	}
+	if strings.Count(errOut, "Data source warehouse's settings are not sent") != 1 {
+		t.Errorf("the unsent settings are not said once: %q", errOut)
+	}
+}
+
+// A DuckDB data source is never offered, nor sent with --create-data-sources: it
+// is a file on this machine. It is warned about, and counted among those the
+// org lacks.
+func TestPublishWarnsAboutDuckDB(t *testing.T) {
+	for _, create := range []bool{false, true} {
+		s, url := newServer(t)
+		dir := t.TempDir()
+		write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": `data_sources:
+  local:
+    type: duckdb
+    connection:
+      path: data/shop.duckdb
+`})
+		ask := &script{t: t} // asks nothing
+		_, errOut, err := run(t, dir, Options{SetOrg: url, CreateDataSources: create}, ask.ask)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ask.asked) != 0 || s.tested != 0 || len(s.created) != 0 {
+			t.Errorf("create=%v: asked %q, tested %d, created %v; want none of it", create, ask.asked, s.tested, s.created)
+		}
+		if !strings.Contains(errOut, "Warning: data source local is duckdb, a file on this machine") ||
+			!strings.Contains(errOut, "Queries on the models using local fail until the org has them") {
+			t.Errorf("create=%v: said %q", create, errOut)
+		}
 	}
 }
 

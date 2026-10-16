@@ -48,6 +48,31 @@ func streaming(t *testing.T, lines ...string) (*Client, *map[string]any) {
 	return NewClient(srv.URL, false), &sent
 }
 
+// A pooling client pools a query, except on an in-memory DuckDB, whose every
+// connection is a database of its own.
+func TestPoolOptions(t *testing.T) {
+	canal := NewClient("http://canal", true)
+	for _, tc := range []struct {
+		dbtype   string
+		dbconfig map[string]any
+		pooled   bool
+	}{
+		{"postgres", map[string]any{"host": "h"}, true},
+		{"duckdb", map[string]any{"path": "data/shop.duckdb"}, true},
+		{"duckdb", map[string]any{"path": "/abs/shop.duckdb?access_mode=read_only"}, true},
+		{"duckdb", nil, false},
+		{"duckdb", map[string]any{"path": ""}, false},
+		{"duckdb", map[string]any{"path": ":memory:"}, false},
+		{"duckdb", map[string]any{"path": ":memory:?threads=4"}, false},
+		{"duckdb", map[string]any{"path": "?threads=4"}, false},
+	} {
+		got := canal.poolFor(Statement{DBType: tc.dbtype, DBConfig: tc.dbconfig})
+		if got["enabled"] != tc.pooled {
+			t.Errorf("%s %v: pool %v, want enabled=%v", tc.dbtype, tc.dbconfig, got, tc.pooled)
+		}
+	}
+}
+
 var statement = Statement{SQL: "select 1", DBType: "postgres", TruncateRows: -1}
 
 // anfra asks for a stream with a header first, with the fields' Arrow types,
@@ -63,6 +88,23 @@ func TestRequest(t *testing.T) {
 	if (*sent)["stream_result"] != true || stream["header"] != true || stream["header_arrow_types"] != true ||
 		output["integers_as_strings"] != true {
 		t.Errorf("request = %v", *sent)
+	}
+	if setting, ok := (*sent)["dbsetting"].(map[string]any); !ok || len(setting) != 0 {
+		t.Errorf("dbsetting = %v, want an empty object for canal's defaults", (*sent)["dbsetting"])
+	}
+}
+
+// A statement's settings reach canal-query as its dbsetting, unchanged.
+func TestRequestSettings(t *testing.T) {
+	canal, sent := streaming(t, header, trailer)
+	st := statement
+	st.DBSetting = map[string]any{"statement_timeout_ms": 60000, "require_ssl": true}
+	if _, err := canal.Execute(context.Background(), st); err != nil {
+		t.Fatal(err)
+	}
+	setting, _ := (*sent)["dbsetting"].(map[string]any)
+	if setting["statement_timeout_ms"] != float64(60000) || setting["require_ssl"] != true || len(setting) != 2 {
+		t.Errorf("dbsetting = %v", (*sent)["dbsetting"])
 	}
 }
 

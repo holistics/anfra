@@ -144,6 +144,8 @@ type server struct {
 	// created; listing or creating refused when set.
 	sources      map[string]string
 	created      map[string]map[string]any
+	settings     map[string]map[string]any // the settings each one was created with
+	noSettings   bool                      // a server from before data sources had settings
 	forbidList   bool
 	forbidCreate bool
 	unreachable  map[string]string // a data source's check failing, with this reason
@@ -228,7 +230,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		var in cloudapi.CreateDataSourceIn
 		_ = jsonkit.UnmarshalRead(r.Body, &in)
-		s.sources[in.Name], s.created[in.Name] = in.Type, in.Connection
+		if s.refusesSettings(w, in.Settings) {
+			return
+		}
+		s.sources[in.Name], s.created[in.Name], s.settings[in.Name] = in.Type, in.Connection, in.Settings
 		reply(cloudapi.DataSource{Name: in.Name, Type: in.Type})
 	case cloudapi.OpTestDataSource:
 		if s.forbidCreate { // checking a connection is the admin's, as adding one is
@@ -238,6 +243,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.tested++
 		var in cloudapi.TestDataSourceIn
 		_ = jsonkit.UnmarshalRead(r.Body, &in)
+		if s.refusesSettings(w, in.Settings) {
+			return
+		}
 		reason, failing := s.unreachable[in.Name]
 		reply(cloudapi.TestDataSourceOut{OK: !failing, Message: reason})
 	default:
@@ -245,9 +253,22 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// refusesSettings answers settings as an older server's schema does, as a
+// property it does not know, when it is one.
+func (s *server) refusesSettings(w http.ResponseWriter, settings map[string]any) bool {
+	if !s.noSettings || settings == nil {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	_ = jsonkit.MarshalWrite(w, apperr.Envelope{Error: apperr.Response{Code: "invalid_request", Message: "The request is not valid.",
+		Details: apperr.Violate(apperr.Violation{Field: "settings", Code: "unknown", Message: "Unknown property."})}})
+	return true
+}
+
 func newServer(t *testing.T) (*server, string) {
 	t.Helper()
-	s := &server{blobs: map[string][]byte{}, sources: map[string]string{}, created: map[string]map[string]any{}, limits: cloudapi.Limits{Files: 100, UploadBlobs: 1000, UploadBytes: 1 << 20}}
+	s := &server{blobs: map[string][]byte{}, sources: map[string]string{}, created: map[string]map[string]any{}, settings: map[string]map[string]any{}, limits: cloudapi.Limits{Files: 100, UploadBlobs: 1000, UploadBytes: 1 << 20}}
 	srv := httptest.NewServer(s)
 	t.Cleanup(srv.Close)
 	t.Setenv("ANFRA_HOME", t.TempDir())

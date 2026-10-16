@@ -37,8 +37,11 @@ components:
       properties:
         org:
           $ref: "#/components/schemas/OrgView"
+        verify_email:
+          description: "The new account is signed in but has not joined: verify its address with an email code, then accept again."
+          type: boolean
       required:
-        - org
+        - verify_email
       type: object
     ChangePasswordIn:
       additionalProperties: false
@@ -52,6 +55,18 @@ components:
       required:
         - current_password
         - new_password
+      type: object
+    CodeVerified:
+      additionalProperties: false
+      properties:
+        created:
+          description: Whether this sign-in created the account.
+          type: boolean
+        user:
+          $ref: "#/components/schemas/UserView"
+      required:
+        - user
+        - created
       type: object
     Column:
       additionalProperties: false
@@ -189,6 +204,10 @@ components:
         name:
           description: "What AML's data_source_name refers to: a letter, then letters, digits and underscores, at most 63."
           type: string
+        settings:
+          additionalProperties: {}
+          description: "The query engine's settings: timeouts, requiring SSL and the like, as data_sources.types lists them for the type. Each optional; a key the type does not list is refused. Absent: none, the engine's defaults."
+          type: object
         type:
           description: "The database type: postgresql, bigquery, snowflake."
           type: string
@@ -204,10 +223,22 @@ components:
           description: Its display name; the slug when empty.
           type: string
         slug:
-          description: "The org's address in URLs: lowercase letters, digits and hyphens."
+          description: "The organization's address in URLs: lowercase letters, digits and hyphens."
           type: string
       required:
         - slug
+      type: object
+    CreatedOrg:
+      additionalProperties: false
+      properties:
+        next:
+          description: "The path to open now: the organization's home, or its onboarding."
+          type: string
+        org:
+          $ref: "#/components/schemas/OrgView"
+      required:
+        - org
+        - next
       type: object
     CredentialsIn:
       additionalProperties: false
@@ -249,6 +280,34 @@ components:
       properties:
         code:
           const: account_exists
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyAccountNotLinked:
+      additionalProperties: false
+      description: An account with this email already exists. Sign in the way you did before, then add this sign-in method from your account.
+      properties:
+        code:
+          const: account_not_linked
           type: string
         context:
           items:
@@ -321,6 +380,62 @@ components:
           type: string
         status:
           const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyCodeExpired:
+      additionalProperties: false
+      description: This code has expired. Send a new one.
+      properties:
+        code:
+          const: code_expired
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 410
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyEmailUnverified:
+      additionalProperties: false
+      description: Verify your email address to accept this invitation.
+      properties:
+        code:
+          const: email_unverified
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 403
           type: integer
       required:
         - code
@@ -471,6 +586,34 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyInvitationEmailMismatch:
+      additionalProperties: false
+      description: This invitation is for another email address. Sign in with that address to accept it.
+      properties:
+        code:
+          const: invitation_email_mismatch
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyNotFound:
       additionalProperties: false
       description: Not found.
@@ -579,6 +722,34 @@ components:
           type: string
         status:
           const: 429
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyRegistrationClosed:
+      additionalProperties: false
+      description: There is no account for this email, and this installation does not take sign-ups. Ask an Admin of your organization to invite you.
+      properties:
+        code:
+          const: registration_closed
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 403
           type: integer
       required:
         - code
@@ -815,6 +986,118 @@ components:
         - row_count
         - expires_at
       type: object
+    Field:
+      additionalProperties: false
+      properties:
+        keeps_secrets:
+          description: Changing it keeps the saved secrets; changing any other field needs them given again.
+          type: boolean
+        key:
+          description: The key in the connection, exactly as the driver reads it.
+          type: string
+        kind:
+          description: text, number, or multiline (PEM or JSON text).
+          type: string
+        label:
+          type: string
+        placeholder:
+          description: An example value, or the default when left out.
+          type: string
+        required:
+          type: boolean
+        secret:
+          description: Never returned once saved.
+          type: boolean
+      required:
+        - key
+        - label
+        - kind
+      type: object
+    GetDataSourceOut:
+      additionalProperties: false
+      properties:
+        connection:
+          additionalProperties: {}
+          description: "The connection's fields that are not secret, as its type's fields in data_sources.types list them: never a password, key or token, nor a key the type does not list."
+          type: object
+        created_at:
+          format: date-time
+          type: string
+        name:
+          description: What AML's data_source_name refers to.
+          type: string
+        secrets:
+          description: "The keys of the secret fields the connection holds a value for, never their values: a form shows them as saved."
+          items:
+            type: string
+          type: array
+        settings:
+          additionalProperties: {}
+          description: "Its settings for the query engine, as data_sources.create or .update gave them: none of them is secret. Empty for the engine's defaults."
+          type: object
+        type:
+          description: "The database type, which is also the SQL dialect: postgresql, bigquery, snowflake."
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - connection
+        - secrets
+        - settings
+        - name
+        - type
+        - created_at
+        - updated_at
+      type: object
+    IdentitiesOut:
+      additionalProperties: false
+      properties:
+        email_code:
+          description: Whether a code sent to the account's address signs in to it.
+          type: boolean
+        identities:
+          items:
+            $ref: "#/components/schemas/IdentityView"
+          type: array
+      required:
+        - identities
+        - email_code
+      type: object
+    IdentityIn:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+      required:
+        - id
+      type: object
+    IdentityView:
+      additionalProperties: false
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        email:
+          description: The provider's address when it was linked.
+          type: string
+        enabled:
+          description: Whether this installation still offers the method; a disabled one signs nobody in.
+          type: boolean
+        id:
+          type: string
+        method:
+          enum:
+            - password
+            - google
+            - github
+          type: string
+      required:
+        - id
+        - method
+        - enabled
+        - created_at
+      type: object
     IngestInput:
       additionalProperties: false
       properties:
@@ -822,11 +1105,51 @@ components:
           description: optional context source key to ingest
           type: string
       type: object
+    InvitationIn:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+      required:
+        - id
+      type: object
+    InvitationView:
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        role:
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+      required:
+        - id
+        - email
+        - role
+        - expires_at
+      type: object
+    InvitationsOut:
+      additionalProperties: false
+      properties:
+        invitations:
+          items:
+            $ref: "#/components/schemas/InvitationView"
+          type: array
+      required:
+        - invitations
+      type: object
     InviteIn:
       additionalProperties: false
       properties:
         email:
-          description: The invitee's address. It labels the invitation; the link is what admits them.
+          description: The invitee's address. Only an account with it can accept the invitation.
           type: string
         role:
           description: The role they join with.
@@ -844,6 +1167,9 @@ components:
       properties:
         email:
           type: string
+        email_sent:
+          description: Whether the link was also emailed to the invitee.
+          type: boolean
         expires_at:
           format: date-time
           type: string
@@ -860,6 +1186,7 @@ components:
         - role
         - expires_at
         - path
+        - email_sent
       type: object
     Limits:
       additionalProperties: false
@@ -912,6 +1239,16 @@ components:
           type: array
       required:
         - oids
+      type: object
+    ListTypesOut:
+      additionalProperties: false
+      properties:
+        types:
+          items:
+            $ref: "#/components/schemas/Type"
+          type: array
+      required:
+        - types
       type: object
     MissingBlobs:
       additionalProperties: false
@@ -972,13 +1309,20 @@ components:
     PendingOut:
       additionalProperties: false
       properties:
+        email:
+          description: "The address it is for: only an account with it can accept."
+          type: string
+        org_name:
+          type: string
         org_slug:
           type: string
         role:
           type: string
       required:
         - org_slug
+        - org_name
         - role
+        - email
       type: object
     Person:
       additionalProperties: false
@@ -1326,6 +1670,30 @@ components:
             type: string
           type: array
       type: object
+    SendCodeIn:
+      additionalProperties: false
+      properties:
+        bot_token:
+          description: The Turnstile widget's token, when sign_in_methods.list gave a site key.
+          type: string
+        email:
+          description: The address to send the code to.
+          type: string
+        pending_token:
+          description: "A provider sign-in waiting for a proved address, from the sign-in redirect's #pending=."
+          type: string
+      required:
+        - email
+      type: object
+    SendCodeOut:
+      additionalProperties: false
+      properties:
+        challenge:
+          description: "Send it back with the code: the code alone signs nobody in."
+          type: string
+      required:
+        - challenge
+      type: object
     SessionOut:
       additionalProperties: false
       properties:
@@ -1333,6 +1701,45 @@ components:
           $ref: "#/components/schemas/UserView"
       required:
         - user
+      type: object
+    SetPasswordIn:
+      additionalProperties: false
+      properties:
+        challenge:
+          description: The challenge email_codes.send returned.
+          type: string
+        code:
+          description: The six digits from the email.
+          type: string
+        invitation_token:
+          description: "An invitation for this address: lets a new account be created where registration is closed."
+          type: string
+        password:
+          description: "The new password: at least 12 characters."
+          type: string
+      required:
+        - challenge
+        - code
+        - password
+      type: object
+    Setting:
+      additionalProperties: false
+      properties:
+        doc:
+          description: What it does, and its default when left out.
+          type: string
+        key:
+          description: The key in the settings, exactly as canal-query reads it.
+          type: string
+        kind:
+          description: number (a whole number, at least 1) or boolean.
+          type: string
+        label:
+          type: string
+      required:
+        - key
+        - label
+        - kind
       type: object
     SetupIn:
       additionalProperties: false
@@ -1344,7 +1751,7 @@ components:
           description: Its display name; the slug when empty.
           type: string
         org_slug:
-          description: The first org's address in URLs.
+          description: The first organization's address in URLs.
           type: string
         password:
           description: The first account's password.
@@ -1523,6 +1930,28 @@ components:
         - object
         - diagnostics
       type: object
+    SignInOptions:
+      additionalProperties: false
+      properties:
+        bot_check_site_key:
+          description: The Turnstile site key to render before sending an email code; absent when none is needed.
+          type: string
+        methods:
+          description: "The enabled sign-in methods, in display order: google, github, email_code, password."
+          items:
+            type: string
+          type: array
+        password_by_code:
+          description: "Whether a password can be set with an email code (passwords.set): to sign up, reset one, or add one."
+          type: boolean
+        registration_open:
+          description: Whether signing in with a new address creates an account.
+          type: boolean
+      required:
+        - methods
+        - registration_open
+        - password_by_code
+      type: object
     SignedIn:
       additionalProperties: false
       properties:
@@ -1544,7 +1973,7 @@ components:
           type: string
         published_by:
           $ref: "#/components/schemas/Person"
-          description: Who published it; absent for the repo's starting files, which the org's creation put there.
+          description: Who published it; absent for the repo's starting files, which the organization's creation put there.
         revision:
           description: "The published revision. Opaque: show it, do not parse it."
           type: string
@@ -1558,11 +1987,15 @@ components:
       properties:
         connection:
           additionalProperties: {}
-          description: "With type: the connection to check, not kept. Write-only."
+          description: "With type: the connection to check, not kept. With the name of a data source the organization has, of that type, its secrets left out are the saved ones, as data_sources.update would keep them, and refused as reenter where it would. Write-only."
           type: object
         name:
-          description: A data source the org has; alone, it is the one checked.
+          description: A data source the organization has; alone, it is the one checked.
           type: string
+        settings:
+          additionalProperties: {}
+          description: "The settings to check with, not kept. Absent: a data source the organization has, by name (of the type, if given), is checked with its saved ones; any other, with none."
+          type: object
         type:
           description: "With connection: the database type of a data source not yet added."
           type: string
@@ -1588,16 +2021,59 @@ components:
       required:
         - token
       type: object
+    Type:
+      additionalProperties: false
+      properties:
+        any_of:
+          description: Keys of which at least one must be given, beyond the required ones.
+          items:
+            type: string
+          type: array
+        fields:
+          description: The connection's keys, in the order a form asks for them.
+          items:
+            $ref: "#/components/schemas/Field"
+          type: array
+        label:
+          description: "Its name for people: PostgreSQL, BigQuery."
+          type: string
+        name:
+          description: "The database type, as a data source's type: postgresql, bigquery."
+          type: string
+        settings:
+          description: "The settings a data source of this type may have, each optional: how the server connects and queries. A key not listed is refused."
+          items:
+            $ref: "#/components/schemas/Setting"
+          type: array
+      required:
+        - name
+        - label
+        - fields
+        - settings
+      type: object
+    UpdateAccountIn:
+      additionalProperties: false
+      properties:
+        display_name:
+          description: The name the account is shown by.
+          type: string
+      required:
+        - display_name
+      type: object
     UpdateIn:
       additionalProperties: false
       properties:
         connection:
           additionalProperties: {}
-          description: A new connection, replacing the old one whole; absent, it is kept. Write-only.
+          description: A new connection; absent, it is kept. While the type stays, keys data_sources.get does not show (its secrets) are kept unless given, and a key given as null is removed; but a change to a field data_sources.types does not mark keeps_secrets (a host), or to a key it does not list, needs the saved secrets given again, refused as reenter otherwise. With a new type, it replaces the old one whole. Write-only.
           type: object
         name:
           description: The data source to change.
           type: string
+        settings:
+          additionalProperties: {}
+          description: "New settings, replacing the saved ones whole: {} for none. Absent, they are kept, except with a new type, which starts with none. The query engine's settings: timeouts, requiring SSL and the like, as data_sources.types lists them for the type. Each optional; a key the type does not list is refused."
+          type: object
         type:
           description: A new database type; absent, the type is kept.
           type: string
@@ -1668,6 +2144,22 @@ components:
         - fqn
         - severity
         - message
+      type: object
+    VerifyCodeIn:
+      additionalProperties: false
+      properties:
+        challenge:
+          description: The challenge email_codes.send returned.
+          type: string
+        code:
+          description: The six digits from the email.
+          type: string
+        invitation_token:
+          description: "An invitation for this address: lets a new account be created where registration is closed."
+          type: string
+      required:
+        - challenge
+        - code
       type: object
     VersionResult:
       additionalProperties: false
@@ -1805,7 +2297,7 @@ paths:
       x-read-only: false
   /accounts.register:
     post:
-      description: "Only when self-registration is open; otherwise not_found. Creates no org: create one with orgs.create, or accept an invitation."
+      description: "Only when self-registration is open; otherwise not_found. Creates no organization: create one with orgs.create, or accept an invitation."
       operationId: accounts.register
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -1904,6 +2396,98 @@ paths:
                 type: object
           description: unavailable
       summary: Create an account and sign in.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /accounts.update:
+    post:
+      operationId: accounts.update
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAccountIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Change the signed-in account's display name.
       x-destructive: true
       x-idempotent: false
       x-read-only: false
@@ -2024,7 +2608,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: Build the local search catalog from context sources
       x-destructive: true
       x-idempotent: true
@@ -2160,7 +2744,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: "Run a query: its rows, and the SQL that produced them"
       x-destructive: false
       x-idempotent: true
@@ -2285,7 +2869,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: Compile a query to SQL, without running it
       x-destructive: false
       x-idempotent: true
@@ -2437,7 +3021,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: "Export a query's whole result as a file: a link to download it"
       x-destructive: false
       x-idempotent: false
@@ -2560,7 +3144,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: "Validate a query: its diagnostics, without running it"
       x-destructive: false
       x-idempotent: true
@@ -2683,7 +3267,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: Search the local catalog
       x-destructive: false
       x-idempotent: true
@@ -2813,7 +3397,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: "Show the repo's datasets, or one dataset: their models, fields and metrics"
       x-destructive: false
       x-idempotent: true
@@ -2935,7 +3519,7 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: Validate the AML repo, optionally scoped to file globs
       x-destructive: false
       x-idempotent: true
@@ -3055,14 +3639,14 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
+              description: The organization the request acts in, by its slug.
       summary: Print the anfra version
       x-destructive: false
       x-idempotent: true
       x-read-only: true
   /data_sources.create:
     post:
-      description: The connection is kept sealed, and never returned. A name the org already has is refused.
+      description: The connection is kept sealed, and its secrets never returned. A name the organization already has is refused, as is a type data_sources.types does not list, or a connection missing a field its type requires.
       operationId: data_sources.create
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -3176,8 +3760,8 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: "Add a data source to the org: a name its models refer to, and the connection to the warehouse."
+              description: The organization the request acts in, by its slug.
+      summary: "Add a data source to the organization: a name its models refer to, and the connection to the warehouse."
       x-destructive: true
       x-idempotent: false
       x-read-only: false
@@ -3287,14 +3871,124 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: Remove a data source from the org.
+              description: The organization the request acts in, by its slug.
+      summary: Remove a data source from the organization.
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+  /data_sources.get:
+    post:
+      description: "For a form that changes the connection: it shows these, and the secrets listed as saved, which data_sources.update keeps unless they are given."
+      operationId: data_sources.get
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetDataSourceOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: A data source, with the fields of its connection that are not secret, and its settings.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
   /data_sources.list:
     post:
-      description: "Connections are never returned, by this op or any other. For whoever may query data sources directly (admins, today): which warehouses an org connects to goes with being able to query them."
+      description: "Connections are not returned: data_sources.get gives one's fields that are not secret. For whoever may query data sources directly (admins, today): which warehouses an organization connects to goes with being able to query them."
       operationId: data_sources.list
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -3398,8 +4092,8 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: The org's data sources, by name and type.
+              description: The organization the request acts in, by its slug.
+      summary: The organization's data sources, by name and type.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -3519,14 +4213,125 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: "Check that the server can connect to a data source: one the org has, by name, or one not yet added, by type and connection."
+              description: The organization the request acts in, by its slug.
+      summary: "Check that the server can connect to a data source: one the organization has, by name, or one not yet added, by type and connection."
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /data_sources.types:
+    post:
+      description: A type not listed (duckdb, which reads files on the server's disk) is refused by data_sources.create, .update and .test, though a data source of it added before stays listed, and may be removed.
+      operationId: data_sources.types
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTypesOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: The database types the organization may add data sources of, with each one's connection fields and settings.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
   /data_sources.update:
     post:
-      description: A connection given replaces the old one whole; what is not given is kept.
+      description: "What is not given is kept. A connection given keeps the saved one's secrets it leaves out, and removes those given as null, while the type stays and it changes only fields marked keeps_secrets. A change that could send the secrets somewhere new (a host, a key the type does not list) refuses each saved secret left out, as reenter: give it again, or null to remove it. With a new type, it replaces the old one whole, and its settings too unless they are given. Settings given replace the saved ones whole."
       operationId: data_sources.update
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -3641,14 +4446,456 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: Change a data source's type or connection.
+              description: The organization the request acts in, by its slug.
+      summary: Change a data source's type, connection or settings.
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+  /email_codes.send:
+    post:
+      description: The answer is the same whether or not the address has an account. The code works once, for ten minutes, with the challenge returned here; a new one replaces it. One code a minute, five an hour, per address. Signed in, a code to the account's own address verifies it (email_codes.verify), even where codes are not a sign-in method.
+      operationId: email_codes.send
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendCodeIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendCodeOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "410":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyCodeExpired"
+                required:
+                  - error
+                type: object
+          description: code_expired
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Email a six-digit sign-in code.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /email_codes.verify:
+    post:
+      description: "Creates the account when the address has none and registration is open, or an invitation for it is sent along. Five wrong guesses end the code: code_expired."
+      operationId: email_codes.verify
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyCodeIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodeVerified"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyRegistrationClosed"
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: registration_closed, forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyAccountNotLinked"
+                required:
+                  - error
+                type: object
+          description: account_not_linked
+        "410":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyCodeExpired"
+                required:
+                  - error
+                type: object
+          description: code_expired
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Sign in with an emailed code.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /identities.delete:
+    post:
+      description: Refused (validation_failed) when it is the last way in this installation honours.
+      operationId: identities.delete
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Remove a way into the signed-in account.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+  /identities.list:
+    post:
+      description: Its password and linked Google and GitHub identities, and whether an email code works for it. Link a provider at /auth/<provider>/start.
+      operationId: identities.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentitiesOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: How the signed-in account can be signed in to.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
   /invitations.accept:
     post:
-      description: "Signed in, send only the token: the account joins the org. Signed out, also send an email and a password: a new account is created, joined and signed in. An address that already has an account is account_exists — sign in, then accept."
+      description: "Signed in, send only the token: the account joins the organization if it has the invited address (invitation_email_mismatch otherwise), verified where the installation sends email (email_unverified otherwise: verify it with an email code). Signed out, also send the invited address and a password: a new account is created and signed in, and joins unless it must verify its address first (verify_email). An address that already has an account is account_exists — sign in, then accept."
       operationId: invitations.accept
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -3680,6 +4927,17 @@ paths:
                   - error
                 type: object
           description: invalid_request
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyEmailUnverified"
+                required:
+                  - error
+                type: object
+          description: email_unverified
         "404":
           content:
             application/json:
@@ -3697,11 +4955,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyAccountExists"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyAccountExists"
+                      - $ref: "#/components/schemas/ErrorBodyInvitationEmailMismatch"
                 required:
                   - error
                 type: object
-          description: account_exists
+          description: account_exists, invitation_email_mismatch
         "412":
           content:
             application/json:
@@ -3763,7 +5023,7 @@ paths:
       x-read-only: false
   /invitations.create:
     post:
-      description: "Returns a single-use link, valid for seven days. Pass it to the invitee yourself: it is shown once, and only its hash is kept."
+      description: Returns a single-use link, valid for seven days, which only an account with the invited address can accept. It is emailed when the installation has a mailer; pass it on yourself otherwise. It is shown once, and only its hash is kept.
       operationId: invitations.create
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -3877,11 +5137,121 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: Invite someone to the org, with a role.
+              description: The organization the request acts in, by its slug.
+      summary: Invite someone to the organization, with a role.
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+  /invitations.list:
+    post:
+      operationId: invitations.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: The organization's invitations not yet accepted or expired.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
   /invitations.lookup:
     post:
       operationId: invitations.lookup
@@ -3970,14 +5340,14 @@ paths:
                   - error
                 type: object
           description: unavailable
-      summary: Which org an invitation link joins, and with what role.
+      summary: Which organization an invitation link joins, and with what role.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
-  /orgs.create:
+  /invitations.revoke:
     post:
-      description: Anyone signed in may create an org, and becomes its admin.
-      operationId: orgs.create
+      description: "For an invitation sent to the wrong address: revoke it, then invite the right one."
+      operationId: invitations.revoke
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
           in: header
@@ -3988,14 +5358,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateOrgIn"
+              $ref: "#/components/schemas/InvitationIn"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrgView"
+                additionalProperties: false
+                type: object
           description: OK
         "400":
           content:
@@ -4019,6 +5390,28 @@ paths:
                   - error
                 type: object
           description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
         "412":
           content:
             application/json:
@@ -4030,17 +5423,6 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
-        "422":
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
-                required:
-                  - error
-                type: object
-          description: validation_failed
         "500":
           content:
             application/json:
@@ -4063,13 +5445,134 @@ paths:
                   - error
                 type: object
           description: unavailable
-      summary: Create an org, as its admin.
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Withdraw an invitation, so its link admits nobody.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /orgs.create:
+    post:
+      description: "Anyone signed in may create an organization, and becomes its admin. An installation may cap how many organizations one account creates: forbidden past it."
+      operationId: orgs.create
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrgIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedOrg"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Create an organization, as its admin.
       x-destructive: true
       x-idempotent: false
       x-read-only: false
   /orgs.list:
     post:
-      description: Call an org's ops below its address, /api/o/{slug}/, to act in it.
+      description: Most recently opened first (orgs.visit), then the earliest joined. Call an organization's ops below its address, /api/o/{slug}/, to act in it.
       operationId: orgs.list
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -4146,10 +5649,261 @@ paths:
                   - error
                 type: object
           description: unavailable
-      summary: The orgs the signed-in account belongs to, with its role in each.
+      summary: The organizations the signed-in account belongs to, with its role in each.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+  /orgs.visit:
+    post:
+      description: "The web app calls it when it opens an organization, so the next sign-in lands there. CLI and MCP use do not call it: where the browser lands follows the browser."
+      operationId: orgs.visit
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Record that the caller opened this organization.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /passwords.set:
+    post:
+      description: Send a code first (email_codes.send). An account with the address gets the password and every other session ends; with none, one is created where sign-ups are allowed. An account whose address was never verified is refused (account_not_linked).
+      operationId: passwords.set
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPasswordIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodeVerified"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyRegistrationClosed"
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: registration_closed, forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyAccountNotLinked"
+                required:
+                  - error
+                type: object
+          description: account_not_linked
+        "410":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyCodeExpired"
+                required:
+                  - error
+                type: object
+          description: code_expired
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Set a password with an emailed code, and sign in.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
   /repos.create_blobs:
     post:
       description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless.
@@ -4266,8 +6020,8 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: Upload file contents to the org's repo, for a publish to name by blob id.
+              description: The organization the request acts in, by its slug.
+      summary: Upload file contents to the organization's repo, for a publish to name by blob id.
       x-destructive: true
       x-idempotent: true
       x-read-only: false
@@ -4387,8 +6141,8 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: "Which of the given blob ids the org's repo does not have yet: the content to upload before publishing."
+              description: The organization the request acts in, by its slug.
+      summary: "Which of the given blob ids the organization's repo does not have yet: the content to upload before publishing."
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -4521,8 +6275,8 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: Publish files as the whole of the org's repo, once they pass validation.
+              description: The organization the request acts in, by its slug.
+      summary: Publish files as the whole of the organization's repo, once they pass validation.
       x-destructive: true
       x-idempotent: true
       x-read-only: false
@@ -4632,14 +6386,14 @@ paths:
           variables:
             org:
               default: my-org
-              description: The org the request acts in, by its slug.
-      summary: The published revision of the org's repo, who published it and when, and the limits for publishing.
+              description: The organization the request acts in, by its slug.
+      summary: The published revision of the organization's repo, who published it and when, and the limits for publishing.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
   /sessions.create:
     post:
-      description: Starts a session; over HTTP it is set as a cookie. A wrong password and an unknown address are the same invalid_credentials, by design.
+      description: Starts a session; over HTTP it is set as a cookie. A wrong password and an unknown address are the same invalid_credentials, by design. not_found where passwords are not a sign-in method.
       operationId: sessions.create
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -4682,6 +6436,17 @@ paths:
                   - error
                 type: object
           description: invalid_credentials
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
         "412":
           content:
             application/json:
@@ -4802,9 +6567,92 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+  /sessions.delete_all:
+    post:
+      description: Ends every session the account holds, on every device, this one included.
+      operationId: sessions.delete_all
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignedOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: Sign out everywhere.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
   /sessions.get:
     post:
-      description: Answers unauthenticated when signed out. The account's orgs come from orgs.list.
+      description: Answers unauthenticated when signed out. The account's organizations come from orgs.list.
       operationId: sessions.get
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -4887,7 +6735,7 @@ paths:
       x-read-only: true
   /setup.complete:
     post:
-      description: "Needs the setup token from the server's log. The account becomes the installation's admin and the org's, and is signed in. Afterwards, setup is closed: not_found."
+      description: "Needs the setup token from the server's log. The account becomes the installation's admin and the organization's, and is signed in. Afterwards, setup is closed: not_found."
       operationId: setup.complete
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -4985,7 +6833,7 @@ paths:
                   - error
                 type: object
           description: unavailable
-      summary: "Set up the installation: its first account and org."
+      summary: "Set up the installation: its first account and organization."
       x-destructive: true
       x-idempotent: false
       x-read-only: false
@@ -5060,6 +6908,78 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+  /sign_in_methods.list:
+    post:
+      description: The sign-in page shows exactly these. Signing in and signing up are the same flow.
+      operationId: sign_in_methods.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInOptions"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      summary: The sign-in methods this installation offers.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
 servers:
   - url: /api
-x-anfra-compat: 5
+x-anfra-compat: 6

@@ -47,6 +47,9 @@ const (
 	CodeBlobsMissing = "blobs_missing"
 	// CodeForbidden: the caller lacks the permission the op needs.
 	CodeForbidden = "forbidden"
+	// CodeInvalidRequest: an input the op's schema refuses; its details are
+	// apperr.Violations.
+	CodeInvalidRequest = "invalid_request"
 )
 
 // MissingBlobs are the details of blobs_missing.
@@ -143,6 +146,7 @@ type CreateDataSourceIn struct {
 	Name       string         `json:"name"`
 	Type       string         `json:"type"`
 	Connection map[string]any `json:"connection"`
+	Settings   map[string]any `json:"settings,omitempty"`
 }
 
 // TestDataSourceIn is a data source to check: one not yet added, by type and
@@ -151,6 +155,7 @@ type TestDataSourceIn struct {
 	Name       string         `json:"name,omitempty"`
 	Type       string         `json:"type,omitempty"`
 	Connection map[string]any `json:"connection,omitempty"`
+	Settings   map[string]any `json:"settings,omitempty"`
 }
 
 // TestDataSourceOut is a check's outcome.

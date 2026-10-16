@@ -24,6 +24,9 @@ const dataSourcesTemplate = `# The data sources this repo's models query, by nam
 #
 # data_sources.yml holds credentials, so it is git-ignored; this repo commits
 # data_sources.yml.example instead, without them.
+#
+# settings, optional, are how the query engine connects and queries: timeouts,
+# requiring SSL and the like. Without them, the engine's defaults.
 data_sources:
   warehouse:
     type: postgresql
@@ -33,6 +36,9 @@ data_sources:
       user: analyst
       password: change-me
       dbname: analytics
+    # settings:
+    #   statement_timeout_ms: 300000
+    #   require_ssl: true
 `
 
 // contextSourcesTemplate points anfra ingest at the repo's own AML, for
