@@ -1,3 +1,8 @@
+## [0.10.1](https://github.com/holistics/anfra/compare/v0.10.0...v0.10.1) (2026-10-16)
+
+### Features
+
+* disable AQL v2 compiler ([94d1bf2](https://github.com/holistics/anfra/commit/94d1bf265d50843c747aa164e6422c18b2ec66e7))
 ## [0.10.0](https://github.com/holistics/anfra/compare/v0.9.1...v0.10.0) (2026-10-16)
 
 ### Features
