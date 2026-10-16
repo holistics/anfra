@@ -13,12 +13,18 @@
     "noEmit": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@holistics/anfra-sdk/*": [
+        "./src/*/index.ts"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts",
     "ambient.d.ts",
     "vitest.config.ts",
-    "tsup.config.ts"
+    "tsup.config.ts",
+    "examples/**/*.ts"
   ]
 }
