@@ -276,9 +276,12 @@ type Pagination struct {
 }
 
 // CompileOptions are the compile options anfra sets. TimezoneRegion is an IANA
-// zone, for relative dates and date truncation.
+// zone, for relative dates and date truncation. UseV2Compiler picks the AQL v2
+// pipeline for compiling and type-checking; anfra-node defaults it to true, so
+// it is always sent.
 type CompileOptions struct {
 	TimezoneRegion string `json:"timezoneRegion,omitempty"`
+	UseV2Compiler  bool   `json:"useV2Compiler"`
 }
 
 type CompileToSQLResult struct {

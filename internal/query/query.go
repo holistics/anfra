@@ -76,6 +76,9 @@ func CompileRequest(ctx context.Context, src Source, dataset, aql string) (anfra
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: anfranode.CompileDataSources(dialects),
+		// The AQL v2 compiler is off: anfra-node compiles and type-checks with
+		// the legacy one.
+		Options: &anfranode.CompileOptions{UseV2Compiler: false},
 	}, nil
 }
 
@@ -103,7 +106,7 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 	}
 	req.Input, req.Pagination = run.Input, run.Pagination
 	if run.Timezone != "" {
-		req.Options = &anfranode.CompileOptions{TimezoneRegion: run.Timezone}
+		req.Options.TimezoneRegion = run.Timezone
 	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err == nil {
