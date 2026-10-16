@@ -1,167 +1,270 @@
-# Data App plugins
+# SDK plugins
 
-> Status: built: the host runtime (`web/sdk/src/host/runtime.ts`, `plugin.ts`), the frame's kernel (`web/sdk/src/app/bootstrap.ts`, `kernel.ts`, `layer.ts`), the bridge (`web/sdk/src/common/bridge.ts`, `endpoint.ts`) and anfra's plugins (`web/sdk/src/plugins`). It replaced a hard-coded bridge, the `Backend` mount option and `Anfra.features`. Streamed calls come next; the AI agent plugin after them.
+> Status: built. Streamed calls come next, then the AI agent plugin. How to write one: [usage/sdk-plugins.md](../usage/sdk-plugins.md). Where the code is: [Where it lives](#where-it-lives).
 
-Everything a Data App reaches beyond its own page is a **plugin**: running a query, an export, lineage, a rendering, the inspect panel's highlight and pick. A host chooses the plugins its Data Apps get, and the same mechanism carries anfra's own features and the ones a host or a later release adds, such as an AI agent a reader prompts from the app, or a view of the rows under a chart.
+Everything a Data App reaches beyond its own page comes from an SDK plugin: running a query, an export, lineage, a rendering, the inspect panel. The name says SDK because the engine and appserve may get plugins of their own later.
 
-Before this design, each feature was a case in one `switch` on the host, a method on `Backend`, a branch in the frame's bootstrap and a flag in `features`. Adding one meant editing all four, a host could change a feature only by wrapping `Backend`, and features leaned on each other's internals (inspect patched `createApp` to see apps appear; rendering knew the id of inspect's overlay to leave it out).
+The host installs plugins, and a definition can't bring its own. A plugin has up to two halves: a host half in the trusted host page, and a frame half in the sandboxed frame beside the definition. The halves talk in calls (a request and an answer) and events (a notice), named `<plugin>.<name>`. Every call to the host goes through one pipeline, where middleware can watch or change it.
+
+```mermaid
+flowchart LR
+  subgraph frame["Frame: sandboxed, untrusted"]
+    def["Definition"]
+    fh["Frame halves"]
+    kernel["Kernel"]
+    layer["Plugin layer"]
+  end
+  subgraph host["Host page: trusted"]
+    app["Host's own code"]
+    pipe["Pipeline"]
+    hh["Host halves"]
+  end
+  api["Core API"]
+
+  def --> kernel
+  def -->|"query.export(), Anfra.render()"| fh
+  fh --> kernel
+  fh -->|"draws in"| layer
+  kernel <-->|"bridge: calls and events"| pipe
+  app -->|"mounted.call"| pipe
+  pipe -->|"frame-callable? then middleware"| hh
+  hh -->|"a plugin's own calls"| pipe
+  hh --> api
+```
+
+## Words used here
+
+| Word | Means |
+|---|---|
+| SDK plugin (plugin, here) | A named feature a host installs on its Data Apps: a host half, a frame half, or both. |
+| Host half | The plugin's code in the host page. It answers the plugin's calls. Trusted with everything the page has. |
+| Frame half | The plugin's code in the frame: the API it adds for the author, the calls it answers for the host, the UI it draws. Trusted by nothing. |
+| Kernel | What every frame runs, plugin or not: the bridge, the app model (`App`, `Query`, controls, structure) and `Anfra`. |
+| Host runtime | One per host page (`createHost`): the installed plugins and middleware, and the frames mounted into it. |
+| Plugin call | A request a plugin answers, `<plugin>.<name>`. The frame, the host or a plugin makes it. |
+| Event | A notice nobody answers, `<plugin>.<name>`, either way across the bridge. |
+| Pipeline | The one path every call to a host half takes: the frame-callable check, then middleware, then the handler. |
+| Middleware | Code around calls, chosen by name, that can watch, change, answer or refuse them. |
+| Origin | Who started a call: the frame or the host, however many plugins it passed through. |
+| Plugin layer | Where frame halves draw: a layer above the definition's page, never in it. |
+
 
 ## What a plugin is
 
-A plugin has a name, a version, the plugins it requires, and up to two halves:
-
 | Half | Runs in | Does |
 |---|---|---|
-| **host half** | the host page, trusted | Answers the plugin's calls: reaches the core API, saves a file, keeps state across frames. |
-| **frame half** | the frame, beside the definition | Adds the plugin's API for the author (`query.export()`), answers the calls the host makes into the frame, draws UI in the plugin layer. |
+| Host half | the host page | Answers the plugin's calls: reaches the core API, saves a file, keeps state across frames. Declares the events it accepts from a frame. |
+| Frame half | the frame | Adds API for the author (`query.export()`), answers the calls the host makes into the frame, draws in the plugin layer. |
 
-Either half may be absent: `core` has no frame half worth the name, a theming plugin might have no host half.
+Either half may be missing: `core` has no frame half, and a theming plugin might have no host half.
 
-**The host installs plugins; a definition cannot bring its own.** A definition is untrusted ([security.md](security.md)) and carries no SDK version ([data-apps.md](data-apps.md#why-one-html-file)); letting it name plugins would mean negotiating versions and deciding what a definition may load. anfra's own features are plugins built through the same API a host uses for its own, so that API is held to what anfra itself needs.
+The host installs plugins, and a definition can't bring its own. A definition is untrusted ([security.md](security.md)) and carries no SDK version ([data-apps.md](data-apps.md#why-one-html-file)), so letting it pick plugins would mean deciding what a definition may load and negotiating versions.
 
-## The kernel
+anfra's own features are plugins too, built with the same API a host uses. That holds the API to what anfra itself needs.
 
-What is not a plugin:
+## What isn't a plugin: the kernel
 
-- **The plumbing**: the bridge envelope, call ids and cancellation, the sandbox, provisioning, and the plugin runtime itself.
-- **The app model**: `App`, `Query`, controls, cross-filter selection, structure. No Data App exists without them, so making them optional would buy nothing.
+The kernel is the plumbing (the bridge, ids and cancelling, the sandbox, provisioning, the plugin runtime) and the app model (`App`, `Query`, controls, cross-filters, structure, `locate()`). No Data App exists without the app model, so it stays out of the plugins.
 
-Every call that crosses the bridge is a plugin's, including running a query. anfra's features are five plugins (`web/sdk/src/plugins`):
+Every call that crosses the bridge is a plugin's, including running a query. anfra ships five plugins:
 
-| Plugin | Calls (who may make them) | Events | API |
+| Plugin | Calls | Events from the frame | Adds for the author |
 |---|---|---|---|
-| `core` | `core.submitQuery`, `core.fieldSuggestions` (frame) | | none: the app model is its frame side. Required. |
-| `export` | `export.query` (frame): runs the export, saves the file from the host page | | `query.export()` |
-| `lineage` | `lineage.trace` (frame) | | `Anfra.lineage()` |
-| `render` | `render.save` (frame): byte check, rate limit; `render.draw`, answered by the frame half (host) | | `Anfra.render()`; the renderer is its frame body |
-| `inspect` | `inspect.watch`, `.highlight`, `.locate`, `.pick` (host), each sent on to the frame as an event | `inspect.snapshot`, `inspect.picked` (frame) | none |
+| `core` | `core.submitQuery`, `core.fieldSuggestions` (frame may call) | | nothing: the app model is its frame side. Required. |
+| `export` | `export.query` (frame may call): makes the file, saves it from the host page | | `query.export()` |
+| `lineage` | `lineage.trace` (frame may call) | | `Anfra.lineage()` |
+| `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host) | | `Anfra.render()`. The renderer is its body. |
+| `inspect` | `inspect.watch`, `.highlight`, `.locate`, `.pick` (host only), each passed to the frame as an event | `inspect.snapshot`, `inspect.picked` | nothing |
 
-The structure, the overlay and `query.locate()` / `control.locate()` stay the kernel's: they are the app model's own parts, and `inspect` draws with them rather than owning them.
+`core` is required, and the host always names it: `corePlugin(coreApiBackend(api, { datasets }))`. The app model runs its queries by calling `core.submitQuery` through the pipeline like any other caller, so a host swaps or wraps queries the way it would any plugin's calls, with another `core` or with middleware. The SDK has no default `core` because it can't know where a host's core API is.
 
-**`core` is required.** The app model runs its queries by calling `core.submitQuery`, by name, through the same pipeline as any caller: the kernel declares `core` as a requirement, as a plugin would. To point queries at another server, or answer them with fixtures in a test, a host installs another plugin named `core`, or puts middleware around it. This replaces the `Backend` mount option. A host always names it (`corePlugin(coreApiBackend(api, { datasets }))`): the SDK can't know where the host's core API is, and a host runtime without `core` refuses to start.
+## How the pieces talk
 
-## Calls and events
+### Mounting a Data App
 
-Two primitives cross between frame, host and plugins, both named `<plugin>.<name>`:
+```mermaid
+sequenceDiagram
+  participant App as Host's code
+  participant RT as Host runtime
+  participant HH as Host halves
+  participant F as Frame
+  App->>RT: createHost({ plugins, middleware })
+  RT->>RT: check names and requires, index calls and events
+  App->>RT: host.mount({ container, definition, datasets, user })
+  RT->>HH: plugin.host.mount(mountContext)
+  RT->>F: srcdoc = definition + provision data + kernel + every frame setup
+  F->>F: kernel boots, then each setup runs (adds Anfra.x, query.x)
+  F->>F: Anfra installed, then the definition's scripts run
+  F-->>RT: anfra:ready
+  RT->>HH: onReady listeners (e.g. inspect resends watch)
+```
 
-- A **plugin call** is a request a plugin answers: once, or as a stream ending in a final value or an error. The caller may cancel it while it runs. The frame calls host halves (`core.submitQuery`); the host calls frame halves (`render.draw`, `inspect.highlight`); a host half calls another plugin's calls.
-- A **bridge event** is a notice nobody answers, in either direction: the frame's inspect snapshot, a node picked.
+The bridge is served before the document loads, so no call is missed. The kernel and the setups run inside one function, so none of them is left on the frame's window. A setup that throws is logged and skipped; the rest run.
 
-Events are not calls nobody waits on: "the snapshot changed" is not a request, and making it one would muddle cancellation and errors.
+### The frame makes a call
 
-### Who may call
+```mermaid
+sequenceDiagram
+  participant D as Definition
+  participant FH as export frame half
+  participant P as Host pipeline
+  participant M as Middleware
+  participant HH as export host half
+  participant A as Core API
+  D->>FH: query.export()
+  FH->>P: call export.query (built from the query's applied state)
+  P->>P: may the frame call it? No: refused here, nothing runs
+  P->>M: each matching middleware, outermost first
+  M->>HH: handler(request, { caller: frame, origin: frame, signal })
+  HH->>A: core.query.export
+  A-->>HH: link
+  HH->>HH: save the file from the host page
+  HH-->>FH: result (or an error, see below)
+  FH-->>D: { url, rowCount, … }
+```
 
-**A call is host-only unless its plugin opts it in to the frame.** Whatever the frame can call, the definition can call, since frame halves share its realm; a call meant for the host (one that spends the host's credentials, say) must not be reachable by forgetting to guard it. A frame call to a host-only call is refused before any middleware or handler runs.
+Cancelling: the frame aborts its signal, the bridge sends `anfra:cancel`, and the handler's `signal` aborts. Nothing answers a cancelled call.
 
-**Every call carries who made it, and who started it.** `caller` is who made it: the frame (and which mount), the host, or a named plugin's host half. `chain` is every hop that led to it, outermost first, and `origin` its start, the frame or the host. A query an agent plugin runs for the frame's prompt has the agent as its `caller` and the frame as its `origin`: a platform's quota counts it by `origin`, an audit log names the agent by `caller`. Without the chain, a frame-callable plugin call would launder what the frame started into the plugin's own calls.
+### The host makes a call into the frame
 
-**A plugin may hold its call to what the frame may call** (`call(name, request, { asOrigin: true })`): started by the frame, it is refused unless the frame could make it itself. It is for a handler that forwards a call, or a request, the frame chose, so the plugin can't be made the frame's deputy for a host-only call. It is not the default: an agent plugin's own calls (the one spending the host's model key) are the plugin's to make, whoever asked.
+A call whose name no host half answers goes to the frame, where a frame half answers it. `render.draw` from appserve's toolbar:
 
-**A frame's event reaches the host only if a plugin declared it** (`host.events`), and only as that plugin's check passed it: what the check returns is what listeners get, and nothing (`undefined`, or a check that throws) drops the event. An event's payload is the definition's to make up, as a call's request is, so the plugin that owns the event is where its shape is checked, once, rather than in each host's listener. `inspect` passes a snapshot or a pick only while the host watches, and only of its shape.
+```mermaid
+sequenceDiagram
+  participant App as Host's code
+  participant RT as Host runtime
+  participant FH as render frame half
+  participant HH as render host half
+  App->>RT: mounted.call('render.draw', { format: 'png' })
+  RT->>FH: no host half answers it: send it to the frame
+  FH->>FH: wait for running queries to settle
+  FH->>RT: anfra.body (first time only: the renderer)
+  RT-->>FH: the renderer's code, through the pipeline like any call
+  FH->>FH: draw the page (never the plugin layer)
+  FH->>HH: render.save(blob, filename)
+  HH->>HH: check it is a PNG or PDF, rate limit, save
+  HH-->>FH: saved
+  FH-->>App: { filename, width, height, omitted }
+```
 
-**What crosses back to the frame when a call fails** is the SDK's error class and message (`ValidationError`, `QueryError`, `PermissionError`, `TransportError`), which were written for an author to read. Any other error, from a bug, a middleware or a library, crosses as a plain `QueryError` with no message of its own, since its message may hold what the frame must not see: a URL, an id, a server's error. A handler or middleware that wants the frame to read why throws one of the SDK's classes.
+The host treats what the frame answers as untrusted: the definition shares the frame half's realm.
 
-The kernel's own call, a plugin's frame body (`anfra.body`), is a call like any other: frame-callable, through the middleware.
+### A plugin makes a call for the frame
 
-## The host side
+A host half calls other plugins through the same pipeline, so middleware sees those calls too. The call keeps who started it:
 
-One **host runtime** per page holds the installed plugins and the middleware, and frames are mounted into it. Each host half gets a per-mount context when a frame mounts, disposed when it unmounts: per-frame state (a rate limit on saving files) lives there, state shared across frames (a cache) on the plugin. Middleware is registered once and sees every frame on the page.
+```mermaid
+sequenceDiagram
+  participant FH as agent frame half
+  participant P as Host pipeline
+  participant AG as agent host half
+  participant Q as Quota middleware
+  participant C as core host half
+  FH->>P: agent.prompt
+  P->>AG: caller: frame
+  AG->>P: context.call('core.submitQuery', …)
+  P->>Q: caller: agent · chain: [frame, agent] · origin: frame
+  Q->>Q: count it against the frame, by origin
+  Q->>C: next()
+  C-->>AG: rows
+```
 
-### One pipeline
+### The frame sends an event
 
-Every call is dispatched by name through one pipeline, whether the frame made it or another plugin's host half. That is how plugins use each other: an agent plugin runs a query by calling `core.submitQuery`, as the frame does. There are no services, no objects one plugin hands another.
+```mermaid
+sequenceDiagram
+  participant FH as inspect frame half
+  participant RT as Host runtime
+  participant HH as inspect host half
+  participant App as Host's code
+  FH->>RT: event inspect.snapshot
+  RT->>RT: declared by a plugin? No: dropped
+  RT->>HH: events.snapshot(payload): watched, and of a snapshot's shape?
+  HH-->>RT: the checked snapshot, or undefined to drop it
+  RT->>App: mounted.on('inspect.snapshot') listeners
+```
+
+## The rules
+
+### Who may call what
+
+A call is host-only unless its plugin lets the frame make it (`frame: true`). The pipeline refuses a frame call to a host-only call before any middleware or handler runs. Whatever the frame can call, the definition can call too, since frame halves share its realm, so a call meant for the host (one that spends the host's credentials, say) only becomes reachable when its plugin opens it on purpose.
+
+Every call carries who made it (`caller`) and who started it (`origin`, with every hop between in `chain`). A query an agent plugin runs for the reader's prompt has the agent as its caller and the frame as its origin. A quota that counts calls made by the frame would miss that query; one that counts by origin catches it.
+
+A plugin that forwards a call name or request the frame chose makes the call with `{ asOrigin: true }`. The pipeline then refuses it if the frame couldn't make it itself, so the plugin can't be used as the frame's deputy for a host-only call. This is opt-in because a plugin's own calls, such as the one that spends the host's model key, are its to make whoever asked.
+
+### What crosses back
+
+When a call fails, the frame gets the error's class and message only for the SDK's classes (`ValidationError`, `QueryError`, `PermissionError`, `TransportError`), whose messages are written for an author. Any other error arrives as `QueryError: The call failed.`, because a message from a bug, a middleware or a library may hold a URL, an id or a server's error.
+
+A frame's event reaches the host only if a plugin declared it in `host.events`, and only in the form that plugin's check returns. The definition makes up an event's payload just as it makes up a call's request, and the plugin that owns the event checks its shape once, so each host's listeners don't have to.
 
 ### Middleware
 
-Middleware is code the host, or a plugin's host half, puts around calls chosen by name (`*`, `core.*`, `core.submitQuery`). Like Koa's, each layer gets the call and `next`; it may change the call, answer it in place of the plugin (a cache), refuse it, or change the answer. For a streamed call it may wrap the stream itself, item by item, not only its start. Cancellation passes through every layer.
+Middleware wraps calls chosen by name (`*`, `core.*`, `core.submitQuery`). Each layer gets the request, the call's context and `next`, and may change the request, answer instead of the plugin, refuse the call, or change the answer.
 
-Its order is declared, not taken from registration order: every system surveyed for this design (Rollup, Vite, webpack's Tapable, Fastify) ended up adding explicit ordering when array position stopped being enough. Each call keeps a trace of the layers it went through, for debugging.
+Its order comes from `stage`, then name. Registration order would be simpler, but every system surveyed for this design (Rollup, Vite, Tapable, Fastify) ended up adding explicit ordering once array position stopped being enough. Each call keeps a trace of the layers it passed through, for debugging.
 
-**A plugin's middleware is as powerful as the host's**: it sees and may change every call on the page, its own plugin's or not, and so does a host half, which runs with everything the host page has (its session, its API client). Installing a plugin is trusting it with the whole page. A plugin's frame half is the other way round: it runs beside the definition, trusted by nothing.
+Middleware serves the page: logging, a request id, a cache, masking, a platform checking quota before a call leaves the page. Enforcement belongs on the platform's server.
 
-What middleware is for: logging (what appserve's and the reference host's inspectors show), adding a request id, a cache, masking, a platform checking quota or permission before a call leaves the page. It is not where anything is enforced: a platform enforces on its server, which the host half's requests reach.
+A plugin's middleware sees every call on the page, and its host half has everything the page has, so installing a plugin trusts it with the whole page. Its frame half runs beside the definition and is trusted by nothing.
 
 ### State
 
-The SDK persists nothing. A host runtime lives as long as its page; a refresh starts again. A plugin that needs state to outlive the page, such as an agent's conversations, takes a store from the host as configuration, through an interface the plugin defines: a platform backs it with its own server, appserve with the browser or nothing. Who a reader is and where their data lives is the platform's ([data-apps.md](data-apps.md#what-is-cores-and-what-is-a-platforms)).
+The SDK persists nothing, and a host runtime lives as long as its page. A plugin whose state must outlive the page takes a store from the host, through an interface the plugin defines, because who the reader is and where their data lives is the platform's business ([data-apps.md](data-apps.md#what-is-cores-and-what-is-a-platforms)).
 
 ## The frame side
 
-### Setup and body
+A frame half goes into an opaque-origin frame, so it is script source, in two parts:
 
-A frame half reaches an opaque-origin frame as script source, so it is built to strings, as the app runtime is. It has two parts:
+- The setup is inlined into the frame's document and runs before the definition, in install order. It adds the plugin's API and answers the host's calls. Running first is what puts `Anfra.lineage` in place before the definition's first script.
+- The body is optional and is fetched on first use with the kernel's call `anfra.body`, so frames that never use the plugin never carry it. The renderer is a body.
 
-- **The setup**, inlined into the provisioned document, runs after the kernel and before the definition, in install order. It registers the plugin's API, its lifecycle subscriptions and the calls the host may make into the frame. It is small. The kernel and every setup run inside one function (`composeFrameScript`), so none of them is left on the frame's window; a setup that throws is logged and skipped, and the rest run.
-- **The body**, optional, is fetched with the kernel's own call, `anfra.body`, on first use. Frames that never use the plugin never carry it. The renderer is the first body.
+A setup gets the kernel (`FrameKernel`): the SDK and its apps, the error classes, the overlay and the page's structure, its calls and events, its place in the plugin layer, and its body. It hears of each app the definition creates through `onApp`, and of each change through the app's own `subscribe`. Plugins can't define hooks of their own in the frame, since the definition loads after them and can patch anything in that realm.
 
-The setup is what lets the definition find `Anfra.lineage` the moment its first script runs.
+Frame halves don't depend on each other; what they share comes from the kernel. That keeps install order safe and the frame free of a dependency graph.
 
-### What a frame half sees
+A frame half adds API only under its own name: `Anfra.<plugin>`, `query.<plugin>`, `control.<plugin>`. Two plugins can't collide, and someone reading a definition can tell which plugin a call needs.
 
-A setup gets the **kernel** (`FrameKernel`, `web/sdk/src/app/kernel.ts`), one per plugin: the SDK instance and its apps, the error classes, the overlay and the page's structure, the plugin's calls and events, its place in the plugin layer, its body. It hears of each app the definition creates (`onApp`), and of each change through the app's own `subscribe`. These are the kernel's, not hooks plugins define: a hook in the frame could enforce nothing, since the definition, loaded after, can patch anything in its realm.
+A plugin that isn't installed adds nothing. Its members are missing, where a stub would reject, because the kernel knows no plugin by name and couldn't stub one written after it. A definition checks with `Anfra.plugins.has(name)`, or checks the member itself.
 
-**Frame halves don't depend on each other.** What they share is the kernel's app model and structure. That keeps install order safe and the frame free of a dependency graph.
-
-### API for the author
-
-A frame half adds API only under its own name: `Anfra.<plugin>` (`kernel.provide`), `query.<plugin>` and `control.<plugin>` (`kernel.provideOnQuery`, `provideOnControl`, made the first time each entity's is read). Two plugins cannot collide, and a reader of a definition can tell which plugin a call needs. What a plugin adds to queries and controls is kept on the SDK instance and put on each entity as its app creates it, never on a shared prototype. Their types come from one registry: see [Types](#types).
-
-**A plugin that is not installed adds nothing.** Its members are absent, not stubs that reject: the kernel knows no plugin by name, so it could not stub one written after it. A definition that uses an optional plugin checks first:
-
-```js
-if (Anfra.plugins.has('export')) {
-  button.onclick = () => query.export({ format: 'csv' })
-}
-```
-
-`Anfra.plugins` lists the installed plugins and their versions. It replaces `Anfra.features`.
+Plugins draw only in the plugin layer, which sits above the definition's page, with each plugin in its own shadow root. They never touch the definition's markup, since the author owns the page. The shadow roots keep styles from crossing in either direction, and a rendering leaves the whole layer out, which is how a picture never shows inspect's overlay. UI that doesn't need the page's layout, such as a chat panel, belongs in the host's own page.
 
 ### Types
 
-The members plugins add are dynamic, but an author writing TypeScript still sees them, typed and optional, as they are at runtime. Types only matter while writing: nothing here changes what runs.
+One registry, `AnfraPlugins`, maps each plugin's name to what it adds (`anfra`, `query`, `control`). `Sdk`, `Query` and `Control` take their plugin members from it, each optional, as at runtime. A plugin outside the SDK adds its entry by module augmentation ([usage](../usage/sdk-plugins.md#5-types)).
 
-**One registry, `AnfraPlugins`** (`web/sdk/src/app/pluginTypes.ts`), maps each plugin's name to what it adds where: `anfra` for `Anfra.<plugin>`, `query` for `query.<plugin>`, `control` for `control.<plugin>`. `Sdk`, `Query` and `Control` take their plugin members from it: each optional and named after its plugin, so the types say what the runtime does, a member is there only where its plugin is. anfra's own plugins are in it. A plugin outside the SDK adds its entry from the declarations its package ships, by module augmentation:
+Checking the member narrows it: `if (Anfra.render)` and `query.export?.()` type-check. `Anfra.plugins.has` completes plugin names but narrows nothing, since a check on one object can't make another object's member present.
 
-```ts
-declare module '@holistics/anfra-sdk/app' {
-  interface AnfraPlugins {
-    notes: { anfra: { add: (text: string) => Promise<void> }, query: (text: string) => void };
-  }
-}
-```
-
-and `Anfra.notes` and `query.notes` are typed wherever that file is in the author's project, beside `@holistics/anfra-sdk/ambient`. One entry per plugin keeps the name it registers under and the names of its members from drifting apart, as they would if each plugin declared its members on `Sdk` and `Query` by hand.
-
-**Checking the member narrows it.** `if (Anfra.render) Anfra.render(…)` and `query.export?.()` type-check under `strict`, and are right at runtime too. `Anfra.plugins.has(name)` completes the names in the registry and takes any other, but narrows nothing: a check on one object can't make another's member present, and a query's members would stay optional anyway. So `has` is for deciding what to offer (a button, a menu item), and the member's own check is for calling it. No accessor (`Anfra.plugins.get('export')`) is added for this: the member check already does it, with nothing new to learn.
-
-**Later, if wanted:**
-
-- **A host declaring what it installs.** A host that always installs `export` could ship declarations marking it present (`interface AnfraInstalled { export: true }`), so its members become required. A definition relying on that is type-safe only on hosts that install them, which is the trade-off `has` already makes at runtime. Additive to the registry.
-- **Where TypeScript is compiled.** A definition is one HTML file of plain scripts, so TypeScript needs a build step, the author's or the host's. That touches "nothing to build or deploy" ([data-apps.md](data-apps.md#why-one-html-file)) and is a decision of its own. The types above serve either.
-
-### The plugin layer
-
-The SDK supplies data and state; the author owns the page. Plugins draw only in the **plugin layer**, a layer the runtime owns above the definition's page: inspect's overlay, a modal showing a query's rows. Each plugin draws in its own shadow root, so the author's styles don't reach it and its styles don't reach the page. Plugins never insert anything into the definition's markup. A rendering never draws the plugin layer, which is how rendering leaves inspect's overlay out without knowing it.
-
-UI that doesn't need the page's geometry (a chat panel, a settings form) belongs in the host's own page, drawn by the host with what the plugin's host half provides.
+Two things could come later. A host could declare the plugins it always installs, so their members become required. And someone has to decide where TypeScript gets compiled, since a definition is plain scripts; that touches "nothing to build" ([data-apps.md](data-apps.md#why-one-html-file)) and needs its own decision.
 
 ## Packaging
 
-anfra's plugins are `@holistics/anfra-sdk/plugins` (`corePlugin`, `exportPlugin`, …), released with the kernel: a host always carries the frame halves it was built with, as it carries the app runtime ([data-apps.md](data-apps.md#the-pieces)), so frame and host never disagree. Each is a plugin object:
+anfra's plugins are `@holistics/anfra-sdk/plugins`, released with the kernel. A host carries the frame halves it was built with, as it carries the kernel, so the frame and the host always match.
 
-```ts
-{ name, version, requires, host: { calls, middleware, mount }, frame: { setup, body? } }   // setup and body: script source
-```
+A plugin outside the SDK is the same object, `{ name, version, requires, host, frame }`, made with `definePlugin` and built with `buildFrameHalf` (`@holistics/anfra-sdk/build`), which refuses a frame half that bundles the API client or the host's code. It is tested with `@holistics/anfra-sdk/testing`. All of it is in the [usage guide](../usage/sdk-plugins.md).
 
-Their frame halves are built by the SDK's build (`web/sdk/tsup.config.ts`): `src/plugins/<name>/frame.ts` as an IIFE leaving its exports in `__anfraPlugin`, `body.ts` in `__anfraBody`. `definePlugin` (`@holistics/anfra-sdk/host`) checks a plugin's names; a plugin outside the SDK builds its frame half the same way (the SDK README says how). That shape is the contract for plugins outside the SDK. A first-party plugin that outgrows the SDK's release pace can move to a package of its own without changing it.
+## Where it lives
+
+| What | Where (`web/sdk/src/`) |
+|---|---|
+| Host runtime: install, pipeline, middleware, mounting | `host/runtime.ts`, `host/plugin.ts` |
+| The bridge, both sides | `common/bridge.ts`, `common/endpoint.ts` |
+| The frame's kernel: bootstrap, the kernel plugins get, the layer | `app/bootstrap.ts`, `app/kernel.ts`, `app/layer.ts`, `app/extensions.ts` |
+| Types registry | `app/pluginTypes.ts` |
+| anfra's plugins | `plugins/<name>/index.ts` (host half), `frame.ts` (setup), `body.ts` |
+| How a frame half is built: the SDK's own, and anyone's | `tsup.config.ts`, `build/index.ts` |
+| Testing helpers | `testing/` |
+| A worked example | `web/sdk/examples/notes/` |
 
 ## What was decided against
 
-- **Services** (cordis, Koishi; Fastify's decorators): plugins handing each other objects. Every use of another plugin would bypass middleware, so a platform's quota would miss the queries an agent runs; and services bring a dependency graph and lifecycle a host that installs its plugins once doesn't need.
-- **Plugin-defined hooks** (Tapable, Rollup's hooks): extension points through which plugins change each other's behaviour. Middleware covers the host; in the frame a hook enforces nothing. The one need for fan-out (many plugins contributing to one, such as tools for an agent) is an extension point a plugin owns, decided with the agent plugin.
-- **Hot reload**: plugins are installed when a page loads.
-- **Scoping a plugin's middleware to its own calls**: a plugin is trusted with the page anyway (its host half could make any call itself), so a scope would read as a boundary it isn't. A host that installs a plugin it trusts less wraps it, or doesn't install it.
-- **Plugins adding to the definition's markup** (a "view data" button on every block): the definition is everything the author wrote. If wanted, an attribute the author writes opts a block in.
-- **Definitions declaring the plugins they need**, refused at mount when one is missing: additive, if hosts want it.
+- Services (cordis, Koishi, Fastify's decorators), where plugins hand each other objects. Every use of another plugin would bypass middleware, and a platform's quota would miss the queries an agent runs.
+- Plugin-defined hooks (Tapable, Rollup). Middleware covers the host, and in the frame a hook enforces nothing. Fan-out, such as many plugins adding tools to an agent, will get an extension point the agent plugin owns, decided with that plugin.
+- Hot reload. Plugins are installed when a page loads.
+- Scoping a plugin's middleware to its own calls. A plugin's host half could make any call itself, so a scope would look like a boundary without being one. A host that trusts a plugin less shouldn't install it.
+- Plugins adding to the definition's markup, such as a "view data" button on every block. The page is the author's; if that's wanted, an attribute the author writes can opt a block in.
+- Definitions declaring the plugins they need, refused at mount when one is missing. It can be added if hosts want it.
 
-The trade-off: whatever cannot cross a call, such as a live object or a hook into each render, cannot be shared between plugins.
+What these choices cost: anything that can't cross a call, such as a live object or a hook into each render, can't be shared between plugins.
