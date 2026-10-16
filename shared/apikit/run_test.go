@@ -211,7 +211,7 @@ func TestAnIdleStreamIsPinged(t *testing.T) {
 
 // A mounted op that returns a Run streams through the host's admission.
 func TestAMountedRunStreams(t *testing.T) {
-	lib := apikit.NewRegistry(apikit.RegistryConfig[team]{Namespace: libNS})
+	lib := apikit.NewRegistry(apikit.RegistryConfig[team, team]{Namespace: libNS})
 	lib.Group("core", "The library's commands.")
 	apikit.Register(lib, apikit.Admission[team, team]{Admit: func(_ context.Context, t team) (team, error) { return t, nil }},
 		&apikit.Def[team, countIn, countRun]{Name: "core.count", Summary: "Count.", HTTP: true,
@@ -234,6 +234,95 @@ func TestAMountedRunStreams(t *testing.T) {
 	err = o.InvokeStream(context.Background(), runtime(), request{}, []byte(`{"n":2}`), func(any) error { return nil })
 	if !errors.Is(err, noEntry) {
 		t.Errorf("not admitted: %v", err)
+	}
+}
+
+// countLibrary is a library registry holding core.count.
+func countLibrary() *apikit.Registry[team, team] {
+	lib := apikit.NewRegistry(apikit.RegistryConfig[team, team]{Namespace: libNS})
+	lib.Group("core", "The library's commands.")
+	apikit.Register(lib, apikit.Admission[team, team]{Admit: func(_ context.Context, t team) (team, error) { return t, nil }},
+		&apikit.Def[team, countIn, countRun]{Name: "core.count", Summary: "Count.", HTTP: true, Errors: []apperr.AnyCode{notAllow},
+			Handle: func(ctx context.Context, _ team, in countIn) (countRun, error) {
+				return count("core.count", 0).Handle(ctx, "", in)
+			}})
+	return lib
+}
+
+// recorder is an executor that keeps a record of runs: each submitted, for
+// whom, its ID on the stream's start; and how each ended. It refuses a caller
+// named "full", as a full queue would.
+type recorder struct{ log []string }
+
+func (e *recorder) Submit(_ context.Context, caller string, s apikit.Submission) (apikit.Execution, error) {
+	if caller == "full" {
+		return apikit.Execution{}, apperr.New(apperr.InvalidRequest, "The queue is full.")
+	}
+	e.log = append(e.log, "submitted "+s.Op.Name+" for "+caller)
+	end := func(err error) {
+		outcome := "succeeded"
+		if err != nil {
+			outcome = code(err)
+		}
+		e.log = append(e.log, "ended: "+outcome)
+	}
+	return apikit.Execution{ID: "run_1", Work: apikit.Work{
+		Page: func(ctx context.Context) (any, error) {
+			page, err := s.Work.Page(ctx)
+			end(err)
+			return page, err
+		},
+		Stream: func(ctx context.Context, emit func(any) error) error {
+			err := s.Work.Stream(ctx, emit)
+			end(err)
+			return err
+		},
+	}}, nil
+}
+
+// A registry's executor is submitted each run of its ops, own and mounted, for
+// the registry's caller — not a call the op refuses — before anything is sent:
+// its ID goes on the stream's start, and its execution is what is run, in a
+// page as in a stream. What it refuses is an ordinary error, before the
+// stream starts.
+func TestARegistrysExecutorExecutesItsRuns(t *testing.T) {
+	exec := &recorder{}
+	host := apikit.NewRegistry(apikit.RegistryConfig[request, string]{Namespace: hostNS, Executor: exec})
+	host.Group("a", "Letters.")
+	host.Group("core", "Mounted.")
+	apikit.Register(host, admission, count("a.count", 0))
+	apikit.Mount(host, countLibrary(), "core.count", mounting(new([]string)))
+	h := httpkit.Wrap(adapter().Handler(runtime(), host), httpkit.Config{Codes: codes})
+
+	for _, path := range []string{"/api/a.count", "/api/core.count"} {
+		w := do(h, http.MethodPost, path, "ann", `{"n":1}`, "Accept", apikit.NDJSON)
+		if events := lines(t, w.Body.String()); events[0]["type"] != "start" || events[0]["id"] != "run_1" {
+			t.Errorf("%s: start = %v, want the run's ID", path, events[0])
+		}
+	}
+	do(h, http.MethodPost, "/api/core.count", "ann", `{"n":3,"fail_at":2}`, "Accept", apikit.NDJSON)
+	do(h, http.MethodPost, "/api/core.count", "ann", `{"n":1}`)
+	do(h, http.MethodPost, "/api/core.count", "ann", `{"n":-1}`, "Accept", apikit.NDJSON) // refused by the op: no run
+	want := "submitted a.count for ann|ended: succeeded|submitted core.count for ann|ended: succeeded|" +
+		"submitted core.count for ann|ended: not_allowed|submitted core.count for ann|ended: succeeded"
+	if got := strings.Join(exec.log, "|"); got != want {
+		t.Errorf("the executor saw %q, want %q", got, want)
+	}
+	w := do(h, http.MethodPost, "/api/core.count", "full", `{"n":1}`, "Accept", apikit.NDJSON)
+	if w.Code != 400 || !strings.Contains(w.Body.String(), "The queue is full.") {
+		t.Errorf("refused by the executor: %d %s", w.Code, w.Body)
+	}
+}
+
+// Without an executor, a run is executed as it is, now: its stream starts with
+// no ID.
+func TestWithoutAnExecutorARunIsExecutedInline(t *testing.T) {
+	plain := newRegistry()
+	plain.Group("core", "Mounted.")
+	apikit.Mount(plain, countLibrary(), "core.count", mounting(new([]string)))
+	w := do(httpkit.Wrap(adapter().Handler(runtime(), plain), httpkit.Config{Codes: codes}), http.MethodPost, "/api/core.count", "ann", `{"n":1}`, "Accept", apikit.NDJSON)
+	if events := lines(t, w.Body.String()); events[0]["type"] != "start" || events[0]["id"] != nil || events[len(events)-1]["status"] != "succeeded" {
+		t.Errorf("events = %v, want a start with no ID, and the run to succeed", events)
 	}
 }
 
@@ -303,22 +392,22 @@ func TestRegisterChecksTheEventTypes(t *testing.T) {
 	type taken struct {
 		Type string `json:"type" enum:"rows,end"`
 	}
-	register := func(def func(reg *apikit.Registry[request])) func() {
+	register := func(def func(reg *apikit.Registry[request, string])) func() {
 		return func() { def(newRegistry()) }
 	}
-	mustPanic(t, `string field "type"`, register(func(reg *apikit.Registry[request]) {
+	mustPanic(t, `string field "type"`, register(func(reg *apikit.Registry[request, string]) {
 		apikit.Register(reg, admission, &apikit.Def[string, struct{}, apikit.Run[countPage, untyped]]{Name: "a.x", Summary: "x",
 			Handle: func(context.Context, string, struct{}) (apikit.Run[countPage, untyped], error) {
 				return apikit.Run[countPage, untyped]{}, nil
 			}})
 	}))
-	mustPanic(t, `string field "type"`, register(func(reg *apikit.Registry[request]) {
+	mustPanic(t, `string field "type"`, register(func(reg *apikit.Registry[request, string]) {
 		apikit.Register(reg, admission, &apikit.Def[string, struct{}, apikit.Run[countPage, noEnum]]{Name: "a.x", Summary: "x",
 			Handle: func(context.Context, string, struct{}) (apikit.Run[countPage, noEnum], error) {
 				return apikit.Run[countPage, noEnum]{}, nil
 			}})
 	}))
-	mustPanic(t, `"end" is reserved by apikit`, register(func(reg *apikit.Registry[request]) {
+	mustPanic(t, `"end" is reserved by apikit`, register(func(reg *apikit.Registry[request, string]) {
 		apikit.Register(reg, admission, &apikit.Def[string, struct{}, apikit.Run[countPage, taken]]{Name: "a.x", Summary: "x",
 			Handle: func(context.Context, string, struct{}) (apikit.Run[countPage, taken], error) {
 				return apikit.Run[countPage, taken]{}, nil

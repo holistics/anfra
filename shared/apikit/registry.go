@@ -13,39 +13,56 @@ import (
 	"github.com/holistics/anfra/shared/apikit/internal/decode"
 )
 
-// Registry is the set of ops one server serves, all admitted from the same
-// per-request R. The composition root makes one and passes it to each module,
-// which registers its ops with Register.
-type Registry[R any] struct {
-	ns     apperr.Namespace
-	params func(R) []any
-	ops    []Op[R]
-	byName map[string]Op[R]
-	groups map[string]string // group name → its one-line summary
+// Registry is the set of ops one server serves: called with the same Call
+// (what its transports pass for each call), and admitted into the same Caller
+// (whom a call is for). The composition root makes one and passes it to each
+// module, which registers its ops with Register.
+type Registry[Call, Caller any] struct {
+	ns       apperr.Namespace
+	params   func(Call) []any
+	executor Executor[Caller]
+	ops      []Op[Call]
+	byName   map[string]Op[Call]
+	groups   map[string]string // group name → its one-line summary
 }
 
 // RegistryConfig is what a registry needs of its host.
-type RegistryConfig[R any] struct {
+type RegistryConfig[Call, Caller any] struct {
 	// Namespace is the host's: each op's private step is op.<name> in it.
 	Namespace apperr.Namespace
-	// StepParams are an op step's parameters for a request — who called, in
-	// which org — for its log entry and span. Nil: none.
-	StepParams func(r R) []any
+	// StepParams are an op step's parameters for a call — who called, in which
+	// org — for its log entry and span. Nil: none.
+	StepParams func(call Call) []any
+	// Executor executes the runs of the registry's ops, mounted ones included.
+	// Nil: each run is executed now, in its call.
+	Executor Executor[Caller]
 }
 
 // NewRegistry returns an empty registry.
-func NewRegistry[R any](c RegistryConfig[R]) *Registry[R] {
+func NewRegistry[Call, Caller any](c RegistryConfig[Call, Caller]) *Registry[Call, Caller] {
 	if c.Namespace.String() == "" {
 		panic("apikit: a registry needs its host's namespace")
 	}
-	return &Registry[R]{ns: c.Namespace, params: c.StepParams, byName: map[string]Op[R]{}, groups: map[string]string{}}
+	return &Registry[Call, Caller]{ns: c.Namespace, params: c.StepParams, executor: c.Executor,
+		byName: map[string]Op[Call]{}, groups: map[string]string{}}
+}
+
+// OpSet is a registry's ops as its transports serve them, whatever its Caller:
+// what HTTP, MCP and Discovery take, and Mount mounts from.
+type OpSet[Call any] interface {
+	// Ops are the ops, in registration order.
+	Ops() []Op[Call]
+	// Lookup is the op named name.
+	Lookup(name string) (Op[Call], bool)
+	// GroupSummary is a declared group's one-line summary; "" for none.
+	GroupSummary(group string) string
 }
 
 // Group declares a group of ops — the first segment of their names — with its
 // one-line summary: the index level of discovery. An op is registered only into
 // a declared group, so the index never shows a blank. Declaring a group twice
 // panics.
-func (r *Registry[R]) Group(name, summary string) {
+func (r *Registry[Call, Caller]) Group(name, summary string) {
 	switch _, dup := r.groups[name]; {
 	case dup:
 		panic(fmt.Sprintf("group %q: declared twice", name))
@@ -63,7 +80,7 @@ func GroupOf(op string) string {
 
 // add holds o; a name the registry already holds panics. It is unexported so
 // that Register, which checks the declaration, is the only way in.
-func (r *Registry[R]) add(o Op[R]) {
+func (r *Registry[Call, Caller]) add(o Op[Call]) {
 	n := o.Meta().Name
 	if _, dup := r.byName[n]; dup {
 		panic(fmt.Sprintf("op %q: registered twice", n))
@@ -76,13 +93,16 @@ func (r *Registry[R]) add(o Op[R]) {
 }
 
 // Ops returns the registered ops, in registration order.
-func (r *Registry[R]) Ops() []Op[R] { return r.ops }
+func (r *Registry[Call, Caller]) Ops() []Op[Call] { return r.ops }
 
 // Lookup returns the op named n.
-func (r *Registry[R]) Lookup(n string) (Op[R], bool) {
+func (r *Registry[Call, Caller]) Lookup(n string) (Op[Call], bool) {
 	o, ok := r.byName[n]
 	return o, ok
 }
+
+// GroupSummary is the group's summary, as declared (Group); "" for none.
+func (r *Registry[Call, Caller]) GroupSummary(group string) string { return r.groups[group] }
 
 // Runtime is what Invoke needs beyond the op: one per server.
 type Runtime struct {

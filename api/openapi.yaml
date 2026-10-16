@@ -1359,6 +1359,9 @@ components:
     StreamStart:
       additionalProperties: false
       properties:
+        id:
+          description: the run's id, on a host that keeps a record of runs
+          type: string
         type:
           enum:
             - start

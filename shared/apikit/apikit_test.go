@@ -68,8 +68,8 @@ func greet(name string) *apikit.Def[string, greetIn, greetOut] {
 
 // newRegistry is the host's registry, its groups declared — all but core, which
 // a mounted library describes.
-func newRegistry() *apikit.Registry[request] {
-	reg := apikit.NewRegistry(apikit.RegistryConfig[request]{
+func newRegistry() *apikit.Registry[request, string] {
+	reg := apikit.NewRegistry(apikit.RegistryConfig[request, string]{
 		Namespace:  hostNS,
 		StepParams: func(r request) []any { return []any{"user", r.user} },
 	})
@@ -255,7 +255,7 @@ func adapter() apikit.HTTP[request] {
 
 // registry serves greetings.create at /api, and teams.greet below /api/t/{team};
 // the team joins the user's name, so the handler shows it was read.
-func registry() *apikit.Registry[request] {
+func registry() *apikit.Registry[request, string] {
 	reg := newRegistry()
 	apikit.Register(reg, admission, greet("greetings.create"))
 	apikit.Register(reg, admission, greet("teams.greet"))

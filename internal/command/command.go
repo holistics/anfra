@@ -94,7 +94,7 @@ type Command interface {
 	// from a server. A command that judges nothing answers true.
 	Valid(out any) (bool, error)
 	// Register serves the command as its op in reg.
-	Register(reg *apikit.Registry[CommandContext])
+	Register(reg *apikit.Registry[CommandContext, CommandContext])
 }
 
 // Define registers nothing: it checks d and returns it as a Command, for the
@@ -174,7 +174,7 @@ func (c *command[In, Out]) Valid(out any) (bool, error) {
 
 // Register serves the command as the op core.<Name>: its In validated against
 // its schema, its unset defaults applied, Check, then Run.
-func (c *command[In, Out]) Register(reg *apikit.Registry[CommandContext]) {
+func (c *command[In, Out]) Register(reg *apikit.Registry[CommandContext, CommandContext]) {
 	// The codes that mean the host built the invocation wrong are not the core
 	// API's: a host that states the caller's data permissions, as every host
 	// must, and refuses what they cannot apply, never answers with them

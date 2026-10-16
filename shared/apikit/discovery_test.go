@@ -17,7 +17,7 @@ import (
 
 // discoverable is a registry where bob may not see teams.greet, and greetings.hidden
 // is served over neither HTTP nor MCP.
-func discoverable() *apikit.Registry[request] {
+func discoverable() *apikit.Registry[request, string] {
 	reg := newRegistry()
 	g := greet("greetings.create")
 	g.MCP = true

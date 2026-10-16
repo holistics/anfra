@@ -16,8 +16,8 @@ import (
 
 type team string
 
-func library() *apikit.Registry[team] {
-	reg := apikit.NewRegistry(apikit.RegistryConfig[team]{Namespace: libNS})
+func library() *apikit.Registry[team, team] {
+	reg := apikit.NewRegistry(apikit.RegistryConfig[team, team]{Namespace: libNS})
 	reg.Group("core", "The library's commands.")
 	adm := apikit.Admission[team, team]{Admit: func(_ context.Context, t team) (team, error) { return t, nil }}
 	apikit.Register(reg, adm, &apikit.Def[team, greetIn, greetOut]{
@@ -52,10 +52,6 @@ func mounting(bound *[]string) apikit.Mounting[request, string, team] {
 			*bound = append(*bound, user)
 			return team("team of " + user), nil
 		},
-		Overlay: func(m apikit.Meta) apikit.Meta {
-			m.Doc += " Here, only for teams."
-			return m
-		},
 	}
 }
 
@@ -63,7 +59,7 @@ func TestMount(t *testing.T) {
 	lib := library()
 	var bound []string
 	reg := newRegistry()
-	apikit.Mount(reg, lib, "core.greet", mounting(&bound))
+	apikit.Mount(reg, lib, "core.greet", mounting(&bound), apikit.AppendDoc("Here, only for teams."))
 	o, ok := reg.Lookup("core.greet")
 	if !ok {
 		t.Fatal("the mounted op is not in the host's registry")
@@ -71,8 +67,8 @@ func TestMount(t *testing.T) {
 	inner, _ := lib.Lookup("core.greet")
 	rt := runtime()
 
-	if m := o.Meta(); m.Doc != "The library's doc. Here, only for teams." || m.Errors[0] != notAllow || !m.HTTP {
-		t.Errorf("meta = %+v: want the library's, with the overlay's doc", m)
+	if m := o.Meta(); m.Doc != "The library's doc.\n\nHere, only for teams." || m.Errors[0] != notAllow || !m.HTTP {
+		t.Errorf("meta = %+v: want the library's, with the host's doc after it", m)
 	}
 	if o.InSchema(rt).Ref != inner.InSchema(rt).Ref || o.OutType() != inner.OutType() {
 		t.Error("the mounted op's schemas are not the library's")
@@ -105,13 +101,11 @@ func TestMount(t *testing.T) {
 	}
 }
 
-// An overlay's shorter timeout bounds the mounted op, as the host names it.
+// The host's shorter timeout bounds the mounted op, as the host names it.
 func TestMountTimeout(t *testing.T) {
 	var bound []string
 	reg := newRegistry()
-	m := mounting(&bound)
-	m.Overlay = func(meta apikit.Meta) apikit.Meta { meta.Timeout = 10 * time.Millisecond; return meta }
-	apikit.Mount(reg, library(), "core.wait", m)
+	apikit.Mount(reg, library(), "core.wait", mounting(&bound), apikit.WithTimeout(10*time.Millisecond))
 	o, _ := reg.Lookup("core.wait")
 	if _, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, nil); code(err) != "too_slow" {
 		t.Errorf("got %v, want the host's timeout code", err)
@@ -122,9 +116,6 @@ func TestMountRefusesMistakes(t *testing.T) {
 	var bound []string
 	lib := library()
 	mustPanic(t, "not in the registry", func() { apikit.Mount(newRegistry(), lib, "core.nope", mounting(&bound)) })
-	renamed := mounting(&bound)
-	renamed.Overlay = func(m apikit.Meta) apikit.Meta { m.Name = "core.other"; return m }
-	mustPanic(t, "may not rename", func() { apikit.Mount(newRegistry(), lib, "core.greet", renamed) })
 	noBind := mounting(&bound)
 	noBind.Bind = nil
 	mustPanic(t, "Admit and Bind", func() { apikit.Mount(newRegistry(), lib, "core.greet", noBind) })

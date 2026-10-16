@@ -11,8 +11,9 @@ import (
 )
 
 // Run is the output of an op that answers as it works: what its handler returns
-// instead of a finished value, when the work is long or its result large. It
-// does its work when a transport reads it, in the form that transport takes:
+// instead of a finished value, when the work is long or its result large. Its
+// work is done when it is executed — by its registry's executor — in the form
+// its transport takes:
 //
 //   - Page: the work, then one answer — what a JSON client, MCP and the CLI get.
 //     It is the op's output as discovery and OpenAPI describe it.
@@ -66,9 +67,79 @@ func (e Events[Event]) Status(phase string) error {
 	return e.emit(StreamStatus{Type: "status", Phase: phase})
 }
 
-// StreamStart is a stream's first event: the op has accepted the request.
+// StreamStart is a stream's first event: the op has accepted the request, and
+// its executor the run. ID is the run's, when the executor keeps a record of
+// runs: to come back to it.
 type StreamStart struct {
 	Type string `json:"type" enum:"start"`
+	ID   string `json:"id,omitempty" doc:"the run's id, on a host that keeps a record of runs"`
+}
+
+// Executor executes a registry's runs: when and where each runs, and what is
+// kept of it. The registry's (RegistryConfig.Executor) executes the runs of
+// its ops, mounted ones included; with none, each run is executed now, in its
+// call.
+type Executor[Caller any] interface {
+	// Submit takes a run an op has accepted, for caller, before anything of it
+	// is sent. It may refuse it: the call is answered that error, as any
+	// before the run. Otherwise it answers the run's Execution; nothing of the
+	// run is done until the Execution's Page or Stream is called.
+	Submit(ctx context.Context, caller Caller, s Submission) (Execution, error)
+}
+
+// Submission is a run handed to the executor: of which op, and its work.
+type Submission struct {
+	// Op is the op, as the registry serving it declares it: for a mounted op,
+	// the mounting registry's declaration, its Ext the host's.
+	Op   Meta
+	Work Work
+}
+
+// Work is a Run's work, its types erased: executed as a page, or as a stream.
+type Work struct {
+	Page   func(ctx context.Context) (any, error)
+	Stream func(ctx context.Context, emit func(any) error) error
+}
+
+// Execution is a run as its executor executes it: its id, and the same Page
+// and Stream as the run's work — the run's own, or the executor's around them.
+// ID is sent on the stream's start; "" for an executor that keeps no record.
+type Execution struct {
+	ID string
+	Work
+}
+
+// submitter hands a run's work to an executor, for the caller it was admitted
+// as: the registry's own, or — for a mounted op — the mounting registry's,
+// which the mount puts in the context (withSubmitter).
+type submitter func(ctx context.Context, work Work) (Execution, error)
+
+type submitterKey struct{}
+
+// withSubmitter is ctx carrying the outermost mount's submitter: a mounted op's
+// runs are its host's, for its host's caller. A mount within a mount leaves
+// the outer one's.
+func withSubmitter(ctx context.Context, s submitter) context.Context {
+	if _, ok := ctx.Value(submitterKey{}).(submitter); ok {
+		return ctx
+	}
+	return context.WithValue(ctx, submitterKey{}, s)
+}
+
+func submitterFrom(ctx context.Context) (submitter, bool) {
+	s, ok := ctx.Value(submitterKey{}).(submitter)
+	return s, ok
+}
+
+// submitTo is executor's submitter for caller and op; with no executor, each
+// run is executed as it is, now.
+func submitTo[Caller any](executor Executor[Caller], caller Caller, op Meta) submitter {
+	return func(ctx context.Context, work Work) (Execution, error) {
+		if executor == nil {
+			return Execution{Work: work}, nil
+		}
+		return executor.Submit(ctx, caller, Submission{Op: op, Work: work})
+	}
 }
 
 // StreamStatus is the run's phase, as the op reports it.
@@ -103,8 +174,7 @@ var reservedEvents = map[string]reflect.Type{
 type run interface {
 	pageType() reflect.Type
 	eventType() reflect.Type
-	page(ctx context.Context) (any, error)
-	stream(ctx context.Context, emit func(any) error) error
+	work() Work
 }
 
 var runType = reflect.TypeFor[run]()
@@ -112,10 +182,11 @@ var runType = reflect.TypeFor[run]()
 func (r Run[Page, Event]) pageType() reflect.Type  { return reflect.TypeFor[Page]() }
 func (r Run[Page, Event]) eventType() reflect.Type { return reflect.TypeFor[Event]() }
 
-func (r Run[Page, Event]) page(ctx context.Context) (any, error) { return r.Page(ctx) }
-
-func (r Run[Page, Event]) stream(ctx context.Context, emit func(any) error) error {
-	return r.Stream(ctx, Events[Event]{emit: emit})
+func (r Run[Page, Event]) work() Work {
+	return Work{
+		Page:   func(ctx context.Context) (any, error) { return r.Page(ctx) },
+		Stream: func(ctx context.Context, emit func(any) error) error { return r.Stream(ctx, Events[Event]{emit: emit}) },
+	}
 }
 
 // OutputType is what an op whose handler returns out answers: a Run's page, or

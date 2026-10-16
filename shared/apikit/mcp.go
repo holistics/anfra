@@ -24,16 +24,16 @@ import (
 // built from the request that opens it, through Request and Visible. Named
 // tools keep a client's per-tool approval and the read-only hints; one generic
 // "run" tool would make approval all-or-nothing.
-type MCP[R any] struct {
+type MCP[Call any] struct {
 	// Name and Version name the server to clients.
 	Name, Version string
 	// Codes are what the server serves: a failed tool's body is its code's.
 	Codes httpkit.Codes
 	// Request reads what the session's ops are admitted from, from the request
 	// that opens it: its credential. Required.
-	Request func(r *http.Request) (R, error)
+	Request func(r *http.Request) (Call, error)
 	// Visible reports which ops the caller may call (HTTP.Visible). Nil: every op.
-	Visible func(ctx context.Context, r R, ops []Meta) ([]bool, error)
+	Visible func(ctx context.Context, r Call, ops []Meta) ([]bool, error)
 	// Errors are the codes the host adds to an op (HTTP.Errors), for
 	// describe_operation.
 	Errors func(m Meta) []apperr.Code
@@ -41,7 +41,7 @@ type MCP[R any] struct {
 
 // Handler is the MCP endpoint, to mount at /mcp behind the same middleware and
 // guards as the HTTP API.
-func (m MCP[R]) Handler(rt *Runtime, reg *Registry[R]) http.Handler {
+func (m MCP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 	if m.Request == nil {
 		panic("apikit: MCP.Request is required")
 	}
@@ -60,8 +60,8 @@ func (m MCP[R]) Handler(rt *Runtime, reg *Registry[R]) http.Handler {
 
 // server is the MCP server for one session: the ops its caller may call, and
 // discovery over them.
-func (m MCP[R]) server(ctx context.Context, rt *Runtime, reg *Registry[R], req R) (*mcp.Server, error) {
-	d := Discovery[R]{Visible: m.Visible, Errors: m.Errors, Codes: m.Codes}
+func (m MCP[Call]) server(ctx context.Context, rt *Runtime, reg OpSet[Call], req Call) (*mcp.Server, error) {
+	d := Discovery[Call]{Visible: m.Visible, Errors: m.Errors, Codes: m.Codes}
 	served := func(meta Meta) bool { return meta.MCP }
 	ops, err := d.visible(ctx, reg, req, served)
 	if err != nil {
@@ -105,7 +105,7 @@ func (m MCP[R]) server(ctx context.Context, rt *Runtime, reg *Registry[R], req R
 
 // discoveryTools are list_operations and describe_operation: the index or a
 // group, and an op's usage, as HTTP's /ops serves them.
-func (m MCP[R]) discoveryTools(s *mcp.Server, rt *Runtime, reg *Registry[R], req R, d Discovery[R], served func(Meta) bool) {
+func (m MCP[Call]) discoveryTools(s *mcp.Server, rt *Runtime, reg OpSet[Call], req Call, d Discovery[Call], served func(Meta) bool) {
 	object := func(props map[string]any, required ...string) map[string]any {
 		schema := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
 		if len(required) > 0 {
@@ -168,13 +168,13 @@ func args(call *mcp.CallToolRequest, into any) error {
 	return nil
 }
 
-func (m MCP[R]) failed(ctx context.Context, err error) (*mcp.CallToolResult, error) {
+func (m MCP[Call]) failed(ctx context.Context, err error) (*mcp.CallToolResult, error) {
 	return m.result(apperr.Envelope{Error: m.Codes.Render(err, requestid.From(ctx))}, true)
 }
 
 // result is v as a tool's result: its JSON as text, for any client, and as
 // structured content, for one that reads it.
-func (m MCP[R]) result(v any, isError bool) (*mcp.CallToolResult, error) {
+func (m MCP[Call]) result(v any, isError bool) (*mcp.CallToolResult, error) {
 	b, err := jsonkit.Marshal(v)
 	if err != nil {
 		return nil, err

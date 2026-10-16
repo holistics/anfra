@@ -28,4 +28,12 @@ Why anfra is the way it is: read these before changing the parts they cover.
 
 How to run and build on anfra: embedding the engine, running the Docker image, configuring a setup. See [usage/](usage/README.md).
 
+## Dev
+
+Conventions for writing anfra's code.
+
+| Doc | Covers |
+|---|---|
+| [method naming](dev/method-naming.md) | Methods as messages: whose act a name is, hooks versus methods, one name for one action across layers. |
+
 For working on anfra itself, see [DEVELOPMENT.md](../DEVELOPMENT.md).

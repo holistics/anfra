@@ -29,7 +29,7 @@ import (
 // server it is served from: /api, or its base. So an op has the same path on
 // every host, whatever base one serves it under, and a client takes the base
 // once, when it is built.
-type HTTP[R any] struct {
+type HTTP[Call any] struct {
 	// Codes are what the server serves, with their statuses: an op's error
 	// responses, and every error's rendering.
 	Codes httpkit.Codes
@@ -41,7 +41,7 @@ type HTTP[R any] struct {
 	// Request reads what the op is admitted from: the request's credential, and
 	// the base's path values (r.PathValue). It may write to w — clearing a cookie
 	// that no longer resolves, say. Required.
-	Request func(w http.ResponseWriter, r *http.Request) (R, error)
+	Request func(w http.ResponseWriter, r *http.Request) (Call, error)
 	// Base is where an op is served below /api, or nil for /api itself.
 	Base func(m Meta) *Base
 	// Guard returns the check an op's requests pass before the body is read — a
@@ -59,7 +59,7 @@ type HTTP[R any] struct {
 	Errors func(m Meta) []apperr.Code
 	// Visible reports which ops the caller may call, for discovery (Discovery).
 	// Nil: every op.
-	Visible func(ctx context.Context, r R, ops []Meta) ([]bool, error)
+	Visible func(ctx context.Context, r Call, ops []Meta) ([]bool, error)
 }
 
 // Base is a path below /api that ops are served under, with variables:
@@ -78,7 +78,7 @@ const root = "/api"
 // is a JSON not_found, not whatever is mounted beside it: an API typo that
 // answers 200 with HTML is much harder to diagnose than one that says so. It has
 // no middleware: wrap it in httpkit.Wrap, which renders errors with h.Codes.
-func (h HTTP[R]) Handler(rt *Runtime, reg *Registry[R]) http.Handler {
+func (h HTTP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 	if h.Request == nil {
 		// A transport that cannot tell who is asking would admit everyone alike;
 		// refusing to start is the only safe answer.
@@ -94,12 +94,12 @@ func (h HTTP[R]) Handler(rt *Runtime, reg *Registry[R]) http.Handler {
 // Spec is the OpenAPI document for reg's HTTP ops, in YAML, built without a
 // server: what the server publishes, for a committed snapshot and generated
 // clients.
-func (h HTTP[R]) Spec(rt *Runtime, reg *Registry[R]) ([]byte, error) {
+func (h HTTP[Call]) Spec(rt *Runtime, reg OpSet[Call]) ([]byte, error) {
 	api, _ := h.api(rt, reg)
 	return api.OpenAPI().YAML()
 }
 
-func (h HTTP[R]) api(rt *Runtime, reg *Registry[R]) (huma.API, *http.ServeMux) {
+func (h HTTP[Call]) api(rt *Runtime, reg OpSet[Call]) (huma.API, *http.ServeMux) {
 	mux := http.NewServeMux()
 	cfg := huma.DefaultConfig(h.Title, h.Version)
 	cfg.OpenAPI.Components.Schemas = rt.Schemas // validated and published alike
@@ -125,7 +125,7 @@ func (h HTTP[R]) api(rt *Runtime, reg *Registry[R]) (huma.API, *http.ServeMux) {
 }
 
 // server is the path an op is served below: /api, or its base.
-func (h HTTP[R]) server(m Meta) string {
+func (h HTTP[Call]) server(m Meta) string {
 	if h.Base != nil {
 		if b := h.Base(m); b != nil {
 			return root + b.Path
@@ -137,10 +137,10 @@ func (h HTTP[R]) server(m Meta) string {
 // discover serves discovery for the ops served below server — the index at
 // GET <server>/ops, a group at GET <server>/ops?group=<name>, an op's usage at
 // GET <server>/ops/<name> — each showing only what the caller may call.
-func (h HTTP[R]) discover(mux *http.ServeMux, rt *Runtime, reg *Registry[R], server string) {
-	d := Discovery[R]{Visible: h.Visible, Errors: h.Errors, Codes: h.Codes}
+func (h HTTP[Call]) discover(mux *http.ServeMux, rt *Runtime, reg OpSet[Call], server string) {
+	d := Discovery[Call]{Visible: h.Visible, Errors: h.Errors, Codes: h.Codes}
 	here := func(m Meta) bool { return m.HTTP && h.server(m) == server }
-	serve := func(route string, answer func(ctx context.Context, req R, r *http.Request) (any, error)) {
+	serve := func(route string, answer func(ctx context.Context, req Call, r *http.Request) (any, error)) {
 		mux.HandleFunc(http.MethodGet+" "+route, func(w http.ResponseWriter, r *http.Request) {
 			httpkit.Routed(r.Context(), "ops", route)
 			req, err := h.Request(w, r)
@@ -156,13 +156,13 @@ func (h HTTP[R]) discover(mux *http.ServeMux, rt *Runtime, reg *Registry[R], ser
 			httpkit.WriteJSON(w, http.StatusOK, out)
 		})
 	}
-	serve(server+"/ops", func(ctx context.Context, req R, r *http.Request) (any, error) {
+	serve(server+"/ops", func(ctx context.Context, req Call, r *http.Request) (any, error) {
 		if group := r.URL.Query().Get("group"); group != "" {
 			return d.Group(ctx, reg, req, here, group)
 		}
 		return d.Index(ctx, reg, req, here)
 	})
-	serve(server+"/ops/{name}", func(ctx context.Context, req R, r *http.Request) (any, error) {
+	serve(server+"/ops/{name}", func(ctx context.Context, req Call, r *http.Request) (any, error) {
 		return d.Usage(ctx, rt, reg, req, here, r.PathValue("name"))
 	})
 }
@@ -170,7 +170,7 @@ func (h HTTP[R]) discover(mux *http.ServeMux, rt *Runtime, reg *Registry[R], ser
 // register serves o at POST <server>/<name>, and refuses other methods there
 // with the error body rather than the standard library's plain text. The route
 // is the router's; huma only documents it.
-func (h HTTP[R]) register(api huma.API, mux *http.ServeMux, rt *Runtime, o Op[R]) {
+func (h HTTP[Call]) register(api huma.API, mux *http.ServeMux, rt *Runtime, o Op[Call]) {
 	m := o.Meta()
 	server := root
 	var base *Base
@@ -197,7 +197,7 @@ func (h HTTP[R]) register(api huma.API, mux *http.ServeMux, rt *Runtime, o Op[R]
 
 // serve runs one request through the op layer. route is its pattern, with the
 // base's variables unfilled, so a span name and a metric label stay one per op.
-func (h HTTP[R]) serve(w http.ResponseWriter, r *http.Request, rt *Runtime, route string, guard func(http.ResponseWriter, *http.Request) error, o Op[R]) {
+func (h HTTP[Call]) serve(w http.ResponseWriter, r *http.Request, rt *Runtime, route string, guard func(http.ResponseWriter, *http.Request) error, o Op[Call]) {
 	httpkit.Routed(r.Context(), o.Meta().Name, route)
 
 	if guard != nil {
@@ -244,7 +244,7 @@ func (h HTTP[R]) serve(w http.ResponseWriter, r *http.Request, rt *Runtime, rout
 // operation is o's OpenAPI operation: POST /<name> below its server, its input
 // schema as the request body, its output's as the 200 response, and one error
 // response per status among the codes it can return, all the same envelope.
-func (h HTTP[R]) operation(rt *Runtime, o Op[R], base *Base) *huma.Operation {
+func (h HTTP[Call]) operation(rt *Runtime, o Op[Call], base *Base) *huma.Operation {
 	m := o.Meta()
 	operation := &huma.Operation{
 		OperationID: m.Name,
@@ -339,7 +339,7 @@ func streamSchema(rt *Runtime, op string, events []reflect.Type) *huma.Schema {
 // the registry on first use: the error envelope's body with code, scope and
 // status fixed to the code's own, and details typed by the code's details type.
 // A code with no details has none in its schema.
-func (h HTTP[R]) errorBodyRef(reg huma.Registry, c apperr.Code) string {
+func (h HTTP[Call]) errorBodyRef(reg huma.Registry, c apperr.Code) string {
 	name := "ErrorBody" + pascal(c.String())
 	ref := "#/components/schemas/" + name
 	if _, ok := reg.Map()[name]; ok {
