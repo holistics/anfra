@@ -64,7 +64,7 @@ inv := engine.Invocation{
 - anfra-node must read revisions from the git service (`ANFRA_GIT_URL`); it refuses a path then.
 - A managed repo has no `data_sources.yml`, so the platform supplies its data sources on the invocation, as an `engine.DataSources`. The engine asks for no more than a command needs:
   - `Dialects`: every data source's name and type, to compile (`query compile`, `query validate`, `show`, and `query` before it runs). Metadata, no connection; return the data sources the caller may compile against.
-  - `Connection(name)`: one data source, connection included, only to run a query, for the data source it targets. The one place to retrieve a connection and authorize its use; answer `engine.ErrUnknownDataSource` for a name you have no data source by.
+  - `Connection(name)`: one data source, connection included (and its `Settings` for canal-query, if any), only to run a query, for the data source it targets. The one place to retrieve a connection and authorize its use; answer `engine.ErrUnknownDataSource` for a name you have no data source by.
   - `validate` asks for neither. Without them, the commands that compile refuse.
   - A platform that already holds them all can pass an `engine.DataSourceSet`.
 - `ingest`, `search` and `lineage` work on a managed repo as on a directory: anfra-node reads its context sources (`.anfra/context_sources.yml`) at the revision.

@@ -85,8 +85,9 @@ type (
 	// catalog) refuses a managed repo, rather than reading an empty path.
 	Repo = repo.Repo
 
-	// DataSource is one data source: its name, its type (the SQL dialect), and
-	// its connection, which never leaves the host.
+	// DataSource is one data source: its name, its type (the SQL dialect), its
+	// connection, which never leaves the host, and its settings for the query
+	// engine (timeouts, SSL and the like; none for the defaults).
 	DataSource = datasource.DataSource
 	// Dialect is a data source as compiling needs it: its name and type, no
 	// connection.

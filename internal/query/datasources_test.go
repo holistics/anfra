@@ -66,6 +66,18 @@ func TestRunningAsksForOneConnection(t *testing.T) {
 	}
 }
 
+// A query runs with its data source's connection and settings.
+func TestRunsWithTheDataSourcesSettings(t *testing.T) {
+	ds := datasource.DataSource{Name: "w", DBType: "postgresql", Connection: map[string]any{"host": "h"}, Settings: map[string]any{"require_ssl": true}}
+	st, err := on(ds, canalquery.Statement{SQL: "select 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.DBConfig["host"] != "h" || st.DBSetting["require_ssl"] != true {
+		t.Errorf("statement = %+v", st)
+	}
+}
+
 // A data source the repo does not have is named in the refusal; a host's own
 // refusal (an authorization failure, say) reaches the caller as it is.
 func TestConnectionRefusals(t *testing.T) {

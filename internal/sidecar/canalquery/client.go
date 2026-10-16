@@ -88,12 +88,14 @@ func (c *Client) WaitReady(ctx context.Context) error {
 }
 
 // Statement is a query for canal-query to run: SQL in the dialect of DBType, on
-// the data source DBConfig connects to (passed to canal as it is), answering at
-// most TruncateRows rows (negative: all of them).
+// the data source DBConfig connects to, with DBSetting's options (both passed to
+// canal as they are; no DBSetting is canal's defaults), answering at most
+// TruncateRows rows (negative: all of them).
 type Statement struct {
 	SQL          string
 	DBType       string
 	DBConfig     map[string]any
+	DBSetting    map[string]any
 	TruncateRows int
 }
 
@@ -287,17 +289,40 @@ func (c *Client) Execute(ctx context.Context, st Statement) (*Result, error) {
 	return result, nil
 }
 
+// poolFor is the pool_options st is sent with: the client's, except that an
+// in-memory DuckDB is never pooled. Each of its connections is a database of
+// its own, so a pooled one would carry one query's tables into another's, and
+// canal-query refuses it.
+func (c *Client) poolFor(st Statement) map[string]any {
+	if st.DBType == "duckdb" && duckdbInMemory(st.DBConfig) {
+		return map[string]any{"enabled": false}
+	}
+	return c.pool
+}
+
+// duckdbInMemory reports whether a DuckDB dbconfig opens an in-memory database,
+// as canal-query decides it (DuckdbConnector.isInMemory): no path, ":memory:",
+// or a path that is only options ("?...", ":memory:?...").
+func duckdbInMemory(dbconfig map[string]any) bool {
+	path, _ := dbconfig["path"].(string)
+	return path == "" || path == ":memory:" || strings.HasPrefix(path, ":memory:?") || strings.HasPrefix(path, "?")
+}
+
 // Stream runs st and hands its result to h as canal-query streams it, holding
 // none of it. The stream is checked as it goes: a header before any row, rows
 // that are JSON arrays, and a trailer at its end. A query's error comes in the
 // trailer, which may come with no header before it.
 func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
+	dbsetting := st.DBSetting
+	if dbsetting == nil {
+		dbsetting = map[string]any{} // canal-query requires one
+	}
 	body, err := jsonkit.Marshal(queryRequest{
 		SQL:                   st.SQL,
 		Dbtype:                st.DBType,
 		Dbconfig:              st.DBConfig,
-		Dbsetting:             map[string]any{},
-		PoolOptions:           c.pool,
+		Dbsetting:             dbsetting,
+		PoolOptions:           c.poolFor(st),
 		TenantID:              1,
 		Job:                   queryJob{ID: -1, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
 		SkipCache:             true,

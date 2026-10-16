@@ -28,6 +28,9 @@ import (
 // Never changed: a data source the org has, though it differs from this one;
 // separate connections per environment are the point of keeping them out of the
 // repo. A type that differs is said, since the two compile to different SQL.
+//
+// Never offered: a DuckDB one (localOnly), whose database is a file on this
+// machine; it is said instead, with what to do.
 func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, errOut io.Writer, ask Prompt) error {
 	local, err := localDataSources(dir)
 	if err != nil {
@@ -52,6 +55,7 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 	}
 
 	var missing []datasource.DataSource
+	var skipped []string
 	for _, name := range slices.Sorted(maps.Keys(local)) {
 		l := local[name]
 		if r, ok := byName[name]; ok {
@@ -60,10 +64,15 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 			}
 			continue
 		}
+		if localOnly[l.DBType] {
+			fmt.Fprintf(errOut, "Warning: data source %s is %s, a file on this machine, which the org's server cannot read: not creating it there. "+
+				"Load its data into a warehouse the server reaches, and add that to the org as %s.\n", name, l.DBType, name)
+			skipped = append(skipped, name)
+			continue
+		}
 		missing = append(missing, l)
 	}
 
-	var skipped []string
 	for i, d := range missing {
 		if !create {
 			yes, asked := Confirm(ask, fmt.Sprintf("Data source %s is not available on the org yet. Would you like to create it? "+
@@ -102,11 +111,21 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 	return nil
 }
 
+// localOnly is the types whose database is on this machine, which an org's
+// server never reads: anfra-cloud refuses them, as reading files on its own disk.
+var localOnly = map[string]bool{"duckdb": true}
+
 // createDataSource checks the server can reach d, then creates it, or, when it
 // cannot, asks whether to create it anyway; created is false for one skipped. An
-// error is the server's (forbidden, for one who may not add data sources).
+// error is the server's (forbidden, for one who may not add data sources). A
+// server too old to take data sources' settings gets d without them, saying so.
 func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, errOut io.Writer, ask Prompt) (created bool, err error) {
-	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
+	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection, Settings: d.Settings})
+	if len(d.Settings) > 0 && cloudapi.Unknown(err, "settings") {
+		fmt.Fprintf(errOut, "Data source %s's settings are not sent: the org's server takes none, so it runs with the defaults.\n", d.Name)
+		d.Settings = nil
+		check, err = c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
+	}
 	if err != nil {
 		return false, err
 	}
@@ -121,7 +140,7 @@ func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.Data
 			return false, nil
 		}
 	}
-	if _, err := c.CreateDataSource(ctx, cloudapi.CreateDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection}); err != nil {
+	if _, err := c.CreateDataSource(ctx, cloudapi.CreateDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection, Settings: d.Settings}); err != nil {
 		if cloudapi.IsForbidden(err) {
 			return false, err
 		}

@@ -23,10 +23,14 @@ const FileName = "data_sources.yml"
 // DataSource describes one data source. Name/DBType are what the sidecar needs
 // to compile SQL (dialect). Connection holds the host-side connection config
 // (passed to canal-query as dbconfig) and is never serialized to the sidecar.
+// Settings are how canal-query connects and queries (timeouts, SSL, the
+// type's own options), passed to it as dbsetting; none leaves each at canal's
+// default.
 type DataSource struct {
 	Name       string         `json:"name"`
 	DBType     string         `json:"dbtype"`
 	Connection map[string]any `json:"-"`
+	Settings   map[string]any `json:"-"`
 }
 
 // first-cut schema (connection keys map straight to canal's dbconfig):
@@ -40,10 +44,14 @@ type DataSource struct {
 //	      user: anfra
 //	      password: anfra
 //	      dbname: anfra
+//	    settings:
+//	      statement_timeout_ms: 60000
+//	      require_ssl: true
 type fileSchema struct {
 	DataSources map[string]struct {
 		Type       string         `yaml:"type"`
 		Connection map[string]any `yaml:"connection"`
+		Settings   map[string]any `yaml:"settings"`
 	} `yaml:"data_sources"`
 }
 
@@ -120,7 +128,7 @@ func Load(configDir string) (Set, error) {
 		if ds.Type == "" {
 			return nil, fmt.Errorf("data source %q in %s is missing `type`", name, path)
 		}
-		out[name] = DataSource{Name: name, DBType: ds.Type, Connection: ds.Connection}
+		out[name] = DataSource{Name: name, DBType: ds.Type, Connection: ds.Connection, Settings: ds.Settings}
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("%s has no data sources", path)

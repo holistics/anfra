@@ -54,7 +54,7 @@ anfra-node listens on a Unix socket in the temp dir, `anfra-<pid>.sock` (`intern
 
 ## One-shot and warm
 
-A CLI command spawns only the sidecars it declares it needs (`Needs`), and stops them when it is done. `anfra serve` starts both and keeps them for its lifetime; CLI commands in that repo are forwarded to it rather than spawning their own ([architecture.md](architecture.md)). A warm canal-query gets connection pooling (`Config.EnablePooling`, set by `serve` and by the engine's `Connect`): database connections are reused across requests, which matters most for a remote warehouse, where opening a connection can cost more than the query.
+A CLI command spawns only the sidecars it declares it needs (`Needs`), and stops them when it is done. `anfra serve` starts both and keeps them for its lifetime; CLI commands in that repo are forwarded to it rather than spawning their own ([architecture.md](architecture.md)). A warm canal-query gets connection pooling (`Config.EnablePooling`, set by `serve` and by the engine's `Connect`): database connections are reused across requests, which matters most for a remote warehouse, where opening a connection can cost more than the query. An in-memory DuckDB (no `path`, or `:memory:`) is never pooled (`poolFor` in `internal/sidecar/canalquery/client.go`): each of its connections is a database of its own, so a pooled one would carry one query's tables into the next, and canal-query refuses it.
 
 ## anfra-node's compile cache
 
@@ -67,9 +67,9 @@ Clearing the cache (`aml.clear_cache`) clears both.
 
 ## What canal-query is given
 
-anfra reads `.anfra/data_sources.yml` itself (`internal/datasource`). For each query it sends canal-query the data source's `type` as `dbtype` and its `connection` map, unchanged, as `dbconfig` (`internal/sidecar/canalquery/client.go`). Credentials never reach anfra-node, which only gets each source's name and type, to pick the SQL dialect.
+anfra reads `.anfra/data_sources.yml` itself (`internal/datasource`). For each query it sends canal-query the data source's `type` as `dbtype`, its `connection` map, unchanged, as `dbconfig`, and its `settings` map, unchanged, as `dbsetting` (`internal/sidecar/canalquery/client.go`). Credentials never reach anfra-node, which only gets each source's name and type, to pick the SQL dialect.
 
-canal-query also takes a `dbsetting`, which anfra always sends empty. The options canal-query keeps there (requiring and verifying SSL, Snowflake OAuth, the Trino driver, timeouts) therefore stay at their defaults, and the matching keys in a `connection` (`ssl_root_cert` and the like) have no effect. Passing them through is open work.
+`dbsetting` holds the options canal-query keeps apart from the connection: timeouts (`connect_timeout_ms`, `statement_timeout_ms`), requiring and verifying SSL (`require_ssl`, `verify_ssl`), and each type's own (BigQuery's `maximum_bytes_billed`, Snowflake's `oauth_passthrough`, Presto's `use_trino_driver`, MySQL's `sql_modes`, ...). A data source without `settings` sends it empty, which leaves each at canal-query's default. anfra checks none of it: canal-query ignores a key it does not know, and refuses a value of the wrong type when the query runs.
 
 ## Telemetry and logs
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -72,6 +73,24 @@ func Missing(err error) (oids []string, ok bool) {
 		return nil, false
 	}
 	return d.OIDs, true
+}
+
+// Unknown reports the server refusing field of the input as one its op does not
+// take: a server older than this client, for a field added since.
+func Unknown(err error, field string) bool {
+	e, isServers := errors.AsType[*Error](err)
+	if !isServers || e.Response.Code != CodeInvalidRequest {
+		return false
+	}
+	raw, err := jsonkit.Marshal(e.Response.Details)
+	if err != nil {
+		return false
+	}
+	var d apperr.Violations
+	if jsonkit.Unmarshal(raw, &d) != nil {
+		return false
+	}
+	return slices.ContainsFunc(d.Violations, func(v apperr.Violation) bool { return v.Field == field && v.Code == "unknown" })
 }
 
 // Status is the org's published revision, and the server's limits.
