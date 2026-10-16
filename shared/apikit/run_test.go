@@ -539,3 +539,21 @@ func codeOrNone(err error) string {
 	}
 	return code(err)
 }
+
+// A client gone before the stream's start still has its execution executed,
+// cancelled: the executor sees the end of every run it took.
+func TestAnExecutionIsExecutedWhenItsClientLeftBeforeItsStart(t *testing.T) {
+	exec := &recorder{}
+	host := apikit.NewRegistry(apikit.RegistryConfig[request, string]{Namespace: hostNS, Executor: exec})
+	host.Group("a", "Letters.")
+	apikit.Register(host, admission, count("a.count", 0))
+	o, _ := host.Lookup("a.count")
+	gone := errors.New("the client is gone")
+	err := o.InvokeStream(context.Background(), runtime(), request{user: "ann"}, []byte(`{"n":1}`), func(any) error { return gone })
+	if !errors.Is(err, gone) {
+		t.Fatalf("err = %v, want the failed start's", err)
+	}
+	if got := strings.Join(exec.log, "|"); !strings.HasPrefix(got, "submitted a.count for ann|ended: ") {
+		t.Errorf("the executor saw %q, want the run submitted and ended", got)
+	}
+}

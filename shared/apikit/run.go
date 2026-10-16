@@ -107,6 +107,9 @@ type Work struct {
 // Execution is a run as its executor executes it: its id, and the same Page
 // and Stream as the run's work — the run's own, or the executor's around them.
 // ID is sent on the stream's start; "" for an executor that keeps no record.
+// Every Execution Submit answers is executed exactly once, by its Page or its
+// Stream — with a cancelled context when its client left before it began — so
+// an executor always sees the end of what it took.
 type Execution struct {
 	ID string
 	Work

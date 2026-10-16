@@ -159,6 +159,12 @@ func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, rt *Runt
 	// The stream starts: what fails from here on ends it rather than answering
 	// an error.
 	if err := emit(StreamStart{Type: "start", ID: exec.ID}); err != nil {
+		// Its client is gone before the run began. The execution is executed
+		// still — every execution is, once — but cancelled, so it ends at once,
+		// and its executor sees the end of what it took.
+		gone, cancel := context.WithCancelCause(ctx)
+		cancel(err)
+		_ = exec.Stream(gone, emit)
 		return nil, err
 	}
 	return nil, exec.Stream(ctx, emit)
