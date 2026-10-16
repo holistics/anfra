@@ -7,6 +7,8 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: /^anfra-sdk:.*$/, replacement: new URL('./src/host/frameScript.none.ts', import.meta.url).pathname },
+      // The examples import the SDK by its package names, as a plugin's own code does.
+      { find: /^@holistics\/anfra-sdk\/(.*)$/, replacement: `${new URL('./src/', import.meta.url).pathname}$1/index.ts` },
     ],
   },
   test: {
