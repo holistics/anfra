@@ -2,7 +2,6 @@ package apikit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -69,8 +68,9 @@ func AppendDoc(doc string) MountOption {
 	}
 }
 
-// WithTimeout bounds the op on this host; the op's own still applies inside
-// it. Zero: the op's own.
+// WithTimeout bounds the op on this host, as the op's own timeout does — its
+// handler, and its run from when the run starts — when it is the tighter.
+// Zero: the op's own.
 func WithTimeout(d time.Duration) MountOption {
 	return func(m *Meta) {
 		if d > 0 {
@@ -188,16 +188,29 @@ func (o *mounted[Call, Caller, BoundCall, In]) invoke(ctx context.Context, rt *R
 	if err != nil {
 		return nil, err
 	}
-	// A run the mounted op returns is the host's, for its caller.
+	// A run the mounted op returns is the host's, for its caller; and the
+	// host's timeout, where it set one, bounds the mounted op's own work as the
+	// op's does: its handler, and its run from when it starts.
 	ctx = withSubmitter(ctx, submitTo(o.executor, caller, o.meta))
-	if o.meta.Timeout == 0 || o.meta.Timeout == o.inner.Meta().Timeout {
-		return o.inner.invokePrepared(ctx, rt, bound, in, emit)
+	if o.meta.Timeout != 0 {
+		ctx = withHostTimeout(ctx, o.meta.Timeout)
 	}
-	bounded, cancel := context.WithTimeout(ctx, o.meta.Timeout)
-	defer cancel()
-	out, err := o.inner.invokePrepared(bounded, rt, bound, in, emit)
-	if err != nil && rt.Timeout != nil && errors.Is(bounded.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-		return out, rt.Timeout(err)
+	return o.inner.invokePrepared(ctx, rt, bound, in, emit)
+}
+
+type hostTimeoutKey struct{}
+
+// withHostTimeout is ctx carrying a mount's timeout, for the mounted op to
+// bound its work by when it is the tighter; within mounts within mounts, the
+// tightest.
+func withHostTimeout(ctx context.Context, d time.Duration) context.Context {
+	if outer, ok := hostTimeoutFrom(ctx); ok && outer <= d {
+		return ctx
 	}
-	return out, err
+	return context.WithValue(ctx, hostTimeoutKey{}, d)
+}
+
+func hostTimeoutFrom(ctx context.Context) (time.Duration, bool) {
+	d, ok := ctx.Value(hostTimeoutKey{}).(time.Duration)
+	return d, ok
 }

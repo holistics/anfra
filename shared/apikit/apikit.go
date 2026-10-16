@@ -58,7 +58,8 @@ type Def[Caller, In, Out any] struct {
 	Idempotent     bool
 	NonDestructive bool
 
-	// Timeout bounds the op; zero means DefaultTimeout.
+	// Timeout bounds the op's own work — its handler, and a Run's work from
+	// when it starts (Run) — zero means DefaultTimeout.
 	Timeout time.Duration
 
 	HTTP bool // served at POST /api/<Name>

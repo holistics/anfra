@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -21,8 +22,10 @@ import (
 //     result in batches — for a client that follows it (HTTP, Accept:
 //     application/x-ndjson).
 //
-// The op's timeout covers the handler and the reading alike, and the op's step
-// spans both: the work runs inside the op, only later than its handler.
+// The op's timeout bounds the handler, and the work from when it starts —
+// when its executor calls Page or Stream — not what the executor does before
+// (waiting for capacity, say). The op's step spans both: the work runs inside
+// the op, only later than its handler.
 //
 // Neither is called more than once, nor both. A handler builds a Run from
 // closures over its input; the handler itself checks the input and returns
@@ -186,6 +189,20 @@ func (r Run[Page, Event]) work() Work {
 	return Work{
 		Page:   func(ctx context.Context) (any, error) { return r.Page(ctx) },
 		Stream: func(ctx context.Context, emit func(any) error) error { return r.Stream(ctx, Events[Event]{emit: emit}) },
+	}
+}
+
+// within is w with its deadline starting when it is called: timeout, then,
+// for whichever form runs, its expiry named by the host (Runtime.Timeout).
+func (w Work) within(rt *Runtime, timeout time.Duration) Work {
+	return Work{
+		Page: func(ctx context.Context) (any, error) { return withTimeout(ctx, rt, timeout, w.Page) },
+		Stream: func(ctx context.Context, emit func(any) error) error {
+			_, err := withTimeout(ctx, rt, timeout, func(ctx context.Context) (struct{}, error) {
+				return struct{}{}, w.Stream(ctx, emit)
+			})
+			return err
+		},
 	}
 }
 
