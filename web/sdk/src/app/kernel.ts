@@ -1,7 +1,7 @@
 /**
  * The kernel, as a plugin's frame half sees it: the app model, the bridge under the plugin's name,
  * a place in the plugin layer, and the ways to add API for the author. One per plugin, made by the
- * bootstrap before the definition runs (docs/designs/plugins.md).
+ * bootstrap before the definition runs (docs/designs/sdk-plugins.md).
  */
 import {
   DataAppError, PermissionError, QueryError, TransportError, ValidationError,

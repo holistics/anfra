@@ -1,7 +1,7 @@
 /**
  * The bridge: the postMessage protocol between a Data App's frame (`app`'s bootstrap) and the
  * page hosting it (`host`). The frame has an opaque origin and no access to the API: everything it
- * reaches crosses here, as a plugin's calls and events (docs/designs/plugins.md).
+ * reaches crosses here, as a plugin's calls and events (docs/designs/sdk-plugins.md).
  *
  * Both sides speak the same messages. A call is answered by its `id`, which each side counts on
  * its own: a result answers a call the other side made.

@@ -58,6 +58,8 @@ export default defineConfig((options) => ({
     host: 'src/host/index.ts',
     api: 'src/api/index.ts',
     plugins: 'src/plugins/index.ts',
+    testing: 'src/testing/index.ts',
+    build: 'src/build/index.ts',
   },
   format: ['esm'],
   dts: true,
@@ -65,5 +67,7 @@ export default defineConfig((options) => ({
   // appserve dev server, reading the SDK from dist/, would fail to resolve it meanwhile.
   clean: !options.watch,
   target: 'es2020',
+  // `build` loads esbuild only when it runs, from the plugin author's own install.
+  external: ['esbuild'],
   esbuildPlugins: [scripts],
 }));
