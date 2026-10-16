@@ -30,6 +30,14 @@
       "types": "./dist/plugins.d.ts",
       "import": "./dist/plugins.js"
     },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./build": {
+      "types": "./dist/build.d.ts",
+      "import": "./dist/build.js"
+    },
     "./ambient": {
       "types": "./dist/ambient.d.ts"
     }
@@ -64,5 +72,13 @@
   },
   "dependencies": {
     "openapi-fetch": "^0.17.0"
+  },
+  "peerDependencies": {
+    "esbuild": ">=0.20"
+  },
+  "peerDependenciesMeta": {
+    "esbuild": {
+      "optional": true
+    }
   }
 }

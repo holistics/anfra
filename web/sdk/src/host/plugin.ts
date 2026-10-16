@@ -1,6 +1,6 @@
 /**
  * What a plugin is, the host's side: a name, a version, the plugins it needs, a host half that
- * answers its calls, and the frame half's code. See docs/designs/plugins.md.
+ * answers its calls, and the frame half's code. See docs/designs/sdk-plugins.md.
  */
 
 /** Who made a call. Middleware and handlers can tell the definition's calls from a plugin's. */
@@ -114,7 +114,7 @@ export interface HostHalf {
   mount?: (mount: MountContext) => void | (() => void);
 }
 
-/** A frame half: code the host provisions into the frame, as script source (docs/designs/plugins.md). */
+/** A frame half: code the host provisions into the frame, as script source (docs/designs/sdk-plugins.md). */
 export interface FrameHalf {
   /** Runs before the definition, once per document: registers the plugin's API. */
   setup: string;
