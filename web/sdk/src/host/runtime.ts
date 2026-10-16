@@ -1,7 +1,7 @@
 /**
  * The host runtime: the plugins a page installed, the middleware around their calls, and the
  * frames mounted into it. One per page; every call, from a frame or from a plugin, is dispatched
- * through its one pipeline (docs/designs/plugins.md).
+ * through its one pipeline (docs/designs/sdk-plugins.md).
  */
 import { PermissionError, TransportError, ValidationError } from '../common/errors';
 import type { BridgeMessage, PluginInfo, Provision } from '../common/bridge';

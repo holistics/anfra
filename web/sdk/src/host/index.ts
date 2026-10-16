@@ -3,7 +3,7 @@
  * plugins a page installed and the middleware around their calls; it provisions each frame (the
  * definition, with the SDK, its data and the plugins' frame halves ahead of it), mounts it
  * sandboxed, and answers its calls. anfra's own plugins are at `@holistics/anfra-sdk/plugins/*`.
- * See docs/designs/plugins.md.
+ * See docs/designs/sdk-plugins.md.
  */
 export {
   createHost, type Host, type HostOptions, type MountOptions, type MountedDataApp,

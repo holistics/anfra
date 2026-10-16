@@ -1,7 +1,7 @@
 /**
  * The types of what plugins add to a Data App's frame: one registry, `AnfraPlugins`, from which the
  * members of `Anfra`, a query and a control are derived, each optional, since a plugin adds its
- * API only where its host installed it (docs/designs/plugins.md, Types). Types only: nothing here
+ * API only where its host installed it (docs/designs/sdk-plugins.md, Types). Types only: nothing here
  * runs.
  */
 import type {
