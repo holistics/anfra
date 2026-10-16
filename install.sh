@@ -213,34 +213,42 @@ elif [ -n "$updated" ]; then
 fi
 echo "${bold}Next steps${reset}"
 echo
-echo "  1. Install the Anfra skills. Claude Code, Codex, and Cursor need them"
-echo "     to set up projects, model data, and build apps with Anfra:"
+echo "  ${green}1${reset}  ${bold}Install the agent skills${reset}"
+echo "     ${dim}Claude Code, Codex and Cursor need them to set up projects,${reset}"
+echo "     ${dim}model data and build apps with Anfra.${reset}"
 echo
-echo "       ${bold}anfra skills install${reset}"
+echo "       \$ ${bold}anfra skills install${reset}"
 echo
-echo "  2. Create a project:"
+echo "  ${green}2${reset}  ${bold}Create a project${reset}"
 echo
-echo "       ${bold}anfra init my-project${reset}"
-echo "       ${bold}cd my-project${reset}"
+echo "       \$ ${bold}anfra init my-project${reset}"
+echo "       \$ ${bold}cd my-project${reset}"
 echo
-echo "  3. Connect your warehouse. Fill in your credentials in this file:"
+echo "  ${green}3${reset}  ${bold}Connect your warehouse${reset}"
+echo "     Fill in your credentials in ${bold}.anfra/data_sources.yml${reset}"
+echo "     ${dim}Supported warehouses: https://docs.anfra.ai/docs/self-hosted/data-sources${reset}"
 echo
-echo "       ${bold}.anfra/data_sources.yml${reset}"
+echo "  ${green}4${reset}  ${bold}Build an app${reset}"
+echo "     Open the project in your coding agent and ask:"
 echo
-echo "     Supported warehouses and their connection fields are listed at"
-echo "     https://docs.anfra.ai/docs/self-hosted/data-sources"
+echo "       ${bold}\"Use the build-data-app skill. Look at my orders data and build${reset}"
+echo "       ${bold}a revenue overview: monthly trend and revenue by region.${reset}"
+echo "       ${bold}Clicking a region should filter the trend.\"${reset}"
 echo
-echo "  4. Open the project in your coding agent and ask for an app, for example:"
+echo "  ${green}5${reset}  ${bold}See it running${reset}"
 echo
-echo "       ${bold}Use the build-data-app skill. Look at my orders data and build a revenue${reset}"
-echo "       ${bold}overview: monthly trend and revenue by region. Clicking a region should${reset}"
-echo "       ${bold}filter the trend.${reset}"
+echo "       \$ ${bold}anfra serve${reset}"
 echo
-echo "     Then run ${bold}anfra serve${reset} and open http://127.0.0.1:7878/ to see it."
+echo "     Then open http://127.0.0.1:7878/"
+echo "     ${dim}Apps reload as you or the agent edit them.${reset}"
 echo
-echo "Tip: your coding agent can do steps 2 and 3 for you. Open an empty folder"
-echo "in it and ask:"
+echo "${dim}──────────────────────────────────────────────────────────────${reset}"
+echo "  ${green}»${reset}  ${bold}Shortcut${reset}"
+echo "     Your coding agent can do steps 2 and 3 for you. Open an"
+echo "     empty folder in it and ask:"
 echo
-echo "       ${bold}Use the setup-repo skill to set up Anfra and connect my warehouse.${reset}"
+echo "       ${bold}\"Use the setup-repo skill to set up Anfra and connect my warehouse.\"${reset}"
 echo
-echo "Docs: https://docs.anfra.ai"
+echo "${dim}──────────────────────────────────────────────────────────────${reset}"
+echo "${bold}Docs${reset}      https://docs.anfra.ai"
+echo "${bold}Feedback${reset}  https://github.com/holistics/anfra/discussions"
