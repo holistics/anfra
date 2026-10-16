@@ -3,7 +3,14 @@ declare module 'anfra-sdk:frame-script' {
   export default frameScript;
 }
 
-declare module 'anfra-sdk:renderer' {
-  const renderer: string;
-  export default renderer;
+/** A plugin's frame setup (`src/plugins/<name>/frame.ts`), as script source. */
+declare module 'anfra-sdk:setup/*' {
+  const setup: string;
+  export default setup;
+}
+
+/** A plugin's frame body (`src/plugins/<name>/body.ts`), as script source. */
+declare module 'anfra-sdk:body/*' {
+  const body: string;
+  export default body;
 }

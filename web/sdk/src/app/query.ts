@@ -2,9 +2,8 @@ import { Observable } from './observable';
 import { ValidationError, type DataAppError } from '../common/errors';
 import type { DatasetIndex } from './validation';
 import type { AppContext } from './internal';
+import type { PluginMembers } from './pluginTypes';
 import type {
-  ExportOptions,
-  ExportResult,
   QueryDeclaration,
   QueryResult,
   QuerySort,
@@ -174,20 +173,6 @@ export class Query extends Observable {
   }
 
   /**
-   * Exports this query's whole result as a file, and has the host save it for the reader.
-   *
-   * Every row, not only the pages loaded, with what the result on screen was last run with: the
-   * mapped controls, the selection, the sort, the timezone. A control the reader changed but has
-   * not applied is not in it. Resolves once the file is made and its download has started, with
-   * its link and row count; rejects with a `DataAppError` naming this query, and changes nothing on
-   * the query either way. Show the button when `Anfra.features.export` and
-   * `Anfra.user.permissions.canExportData` are both true.
-   */
-  export (options: ExportOptions = {}): Promise<ExportResult> {
-    return this.app.exportQuery(this, options);
-  }
-
-  /**
    * Cross-filters this query's targets by the rows the reader picked.
    *
    * Replaces whatever was selected, here or in another query: an app holds one selection at a time.
@@ -273,3 +258,7 @@ export class Query extends Observable {
     return this.declaration;
   }
 }
+
+/** What the installed plugins add to every query (`AnfraPlugins`): each member is there only where its plugin is. */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- plugins' members, on the class they are added to
+export interface Query extends PluginMembers<'query'> {}

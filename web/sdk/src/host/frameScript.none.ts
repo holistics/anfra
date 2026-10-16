@@ -1,2 +1,3 @@
-// What `anfra-sdk:frame-script` and `anfra-sdk:renderer` are outside the build (tests): none.
+// What the build's virtual modules (`anfra-sdk:frame-script`, a plugin's setup or body) are outside
+// the build (tests): none.
 export default '';

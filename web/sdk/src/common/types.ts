@@ -82,27 +82,9 @@ export interface User {
  * condition still reaches the server, which ignores it and answers at the declared grain. Every
  * request succeeds and the grain silently never changes.
  */
+/** Server-side capabilities the app model must know of, which a host may turn off. */
 export interface SdkFeatures {
   dateDrill?: boolean;
-  /**
-   * Whether the host can export a query's result (`query.export()`): its Backend has
-   * `exportQuery`. `mountDataApp` says so for every frame; `createSdk` reads it off the Backend
-   * when the host does not. An author shows an export button when this and
-   * `user.permissions.canExportData` are both true.
-   */
-  export?: boolean;
-  /**
-   * Whether `Anfra.render()` can save a rendering here: the host turned it on
-   * (`mountDataApp({ render: true })`). An author shows a render button when this and
-   * `user.permissions.canExportData` are both true.
-   */
-  render?: boolean;
-  /**
-   * Whether `Anfra.lineage()` can trace fields here: the host's Backend has `lineage`.
-   * `mountDataApp` says so for every frame; `createSdk` reads it off the Backend when the host
-   * does not.
-   */
-  lineage?: boolean;
 }
 
 export interface SdkEnvironment {
@@ -112,8 +94,8 @@ export interface SdkEnvironment {
   backend: Backend;
   /** Absent means the host did not say, and nothing is blocked; only an explicit `false` throws. */
   features?: SdkFeatures;
-  /** Draws and saves a rendering: given by the frame bootstrap, which can reach the page and the host. */
-  render?: (request: RenderRequest) => Promise<Rendering>;
+  /** The plugins the host installed (`Anfra.plugins`). None unless given. */
+  plugins?: readonly { name: string, version: string }[];
 }
 
 /* ----------------------------------------------------------------
@@ -769,12 +751,12 @@ export interface Backend {
   fieldSuggestions (request: FieldSuggestionsRequest, signal: AbortSignal): Promise<ConditionValue[]>;
   /**
    * Export a query's whole result as a file, and answer its link once the file is ready. Optional:
-   * a host that cannot export leaves it out, and `query.export()` rejects with a `TransportError`.
+   * the `export` plugin needs it.
    */
   exportQuery? (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult>;
   /**
-   * Trace fields through the catalog: what each is built from. Optional: a host that cannot leaves
-   * it out, and `Anfra.lineage()` rejects with a `TransportError`.
+   * Trace fields through the catalog: what each is built from. Optional: the `lineage` plugin
+   * needs it.
    */
   lineage? (request: BackendLineageRequest, signal: AbortSignal): Promise<LineageResult>;
 }
