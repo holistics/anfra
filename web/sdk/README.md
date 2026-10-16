@@ -23,6 +23,8 @@ The package root exports nothing; each entrypoint is for a different side of a D
 | `@holistics/anfra-sdk/app` | a Data App definition, in its frame | the **app runtime** (`createApp`, queries, controls, cross-filters, results and state), and the **frame bootstrap** that provisions it from its host |
 | `@holistics/anfra-sdk/host` | the page hosting a Data App | the **host runtime**: the plugins and middleware a page installs, provisioning each frame, mounting it sandboxed, and answering its calls over the **bridge**; `definePlugin` for a plugin of your own |
 | `@holistics/anfra-sdk/plugins` | the page hosting a Data App | anfra's own **plugins**: `core` (queries), `export`, `lineage`, `render`, `inspect` |
+| `@holistics/anfra-sdk/build` | a plugin's build, in Node | `buildFrameHalf`: a plugin's frame half as the script a host provisions |
+| `@holistics/anfra-sdk/testing` | a plugin's tests | `testFrame`: a frame half run on the real kernel against a stand-in host |
 | `@holistics/anfra-sdk/api` | the host's page, scripts, tests | a client for the core API, generated from anfra's spec, and a **Backend** over it |
 | `@holistics/anfra-sdk/common` | all of the above | the contract they share: types, error classes, the bridge's messages |
 
@@ -170,50 +172,11 @@ is refused if the frame couldn't make it itself.
 
 ### A plugin of your own
 
-```ts
-import { definePlugin } from '@holistics/anfra-sdk/host';
-
-const notes = definePlugin({
-  name: 'notes',
-  version: '1.0.0',
-  requires: ['core'],                                    // installing it without them fails
-  host: {
-    calls: {
-      add: { frame: true, handler: (note, call) => save(note, call.signal) },   // frame: true, or the frame can't call it
-    },
-    events: {
-      changed: (payload) => (typeof payload === 'string' ? payload : undefined),  // a frame's event, checked; undefined drops it
-    },
-  },
-  frame: { setup },                                      // script source; see below
-});
-```
-
-A plugin's host half runs with everything the host page has, and its middleware sees every call on
-the page: installing a plugin is trusting it with the page. Treat what the frame sends (a call's
-request, an event's payload) as untrusted, and throw one of the SDK's error classes for a failure
-the frame should read: any other error reaches it only as "The call failed."
-
-A frame half is script source, since it is provisioned into an opaque-origin frame. Write it as a
-module whose default export takes the kernel (`FrameKernel` from `@holistics/anfra-sdk/app`), and
-build it as an IIFE that leaves its exports in `__anfraPlugin` (esbuild: `format: 'iife'`,
-`globalName: '__anfraPlugin'`). It runs once, before the definition: it adds the plugin's API with
-`kernel.provide` (`Anfra.notes`) or `kernel.provideOnQuery` (`query.notes`), makes calls with
-`kernel.call`, answers the host's with `kernel.handle`, and draws only in `kernel.layer()`, its own
-shadow root above the page.
-
-Ship its types as an entry in the SDK's plugin registry, so a TypeScript author sees `Anfra.notes`
-and `query.notes` (optional, as at runtime):
-
-```ts
-declare module '@holistics/anfra-sdk/app' {
-  interface AnfraPlugins {
-    notes: { anfra: NotesApi, query: QueryNotesApi };   // anfra: Anfra.notes; query, control: on each one
-  }
-}
-```
-
-See [docs/designs/plugins.md](../../docs/designs/plugins.md).
+A plugin adds a feature to the Data Apps on your host, such as a call from the frame to your
+server. Make one with `definePlugin`, build its frame half with `@holistics/anfra-sdk/build`, and
+test it with `@holistics/anfra-sdk/testing`. The guide, with a worked example, is
+[docs/usage/sdk-plugins.md](../../docs/usage/sdk-plugins.md); the design is
+[docs/designs/sdk-plugins.md](../../docs/designs/sdk-plugins.md).
 
 ## The boundary
 
@@ -228,7 +191,7 @@ A Data App definition can come from any author, often an agent, which may not th
 From the repository root, after `pnpm install`:
 
 ```sh
-pnpm build:sdk     # dist/{common,app,host,plugins,api}.js, with the frame script built into host and the plugins' into plugins
+pnpm build:sdk     # dist/{common,app,host,plugins,api,build,testing}.js, with the frame script built into host and the plugins' into plugins
 pnpm dev:sdk       # the same, rebuilt on change
 pnpm test:sdk      # vitest
 ```

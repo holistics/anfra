@@ -1,6 +1,6 @@
 # Data Apps
 
-A **Data App** is an interactive analysis over a repo's datasets: something a reader opens and an author (often an agent) develops. Its **definition** is one HTML file under the repo's `apps/`, which declares its queries (in AQL, today), with controls and cross-filters, and renders their results with its own HTML, CSS and JavaScript. anfra supplies data and state; the author owns the page, and what anfra draws (an inspect overlay, a plugin's modal) stays in a layer above it. Every feature a Data App reaches beyond its page, running a query included, is a plugin its host installs ([plugins.md](plugins.md)).
+A **Data App** is an interactive analysis over a repo's datasets: something a reader opens and an author (often an agent) develops. Its **definition** is one HTML file under the repo's `apps/`, which declares its queries (in AQL, today), with controls and cross-filters, and renders their results with its own HTML, CSS and JavaScript. anfra supplies data and state; the author owns the page, and what anfra draws (an inspect overlay, a plugin's modal) stays in a layer above it. Every feature a Data App reaches beyond its page, running a query included, is a plugin its host installs ([sdk-plugins.md](sdk-plugins.md)).
 
 This doc is the design: how a definition becomes a running page, where each concern lives, and the boundaries that keep author code from reaching more than it should. The trust model behind those boundaries is [security.md](security.md); what belongs in core at all is [philosophy.md](philosophy.md).
 
@@ -19,7 +19,7 @@ A definition can come from many authors, people and agents, and an agent busy bu
 | Data App definition | the repo's `apps/**/*.html` | The author's part: one HTML file that declares its queries, controls and cross-filters through the `Anfra` global, and renders the results with its own HTML, CSS and JavaScript. It runs in the frame. |
 | `@holistics/anfra-sdk/common` | `web/sdk/src/common` | The contract the others share: types (`Backend`, its requests and results, `DatasetDescriptor`, `User`), the error classes, the bridge's messages. No DOM, no network: all of it can end up in a frame. |
 | `@holistics/anfra-sdk/app` | `web/sdk/src/app` | What runs in the frame: the **app runtime** (`createApp`, queries, controls, cross-filters, results, state), given a `Backend` and implementing none, and the **frame bootstrap** (the kernel), which provisions it from the host, runs the plugins' frame setups and installs `Anfra`. |
-| `@holistics/anfra-sdk/host` | `web/sdk/src/host` | What hosts a Data App, in the page around it: the **host runtime**, which holds the page's plugins and middleware, provisions each frame's document, mounts it sandboxed, and answers its calls over the bridge ([plugins.md](plugins.md)). |
+| `@holistics/anfra-sdk/host` | `web/sdk/src/host` | What hosts a Data App, in the page around it: the **host runtime**, which holds the page's plugins and middleware, provisions each frame's document, mounts it sandboxed, and answers its calls over the bridge ([sdk-plugins.md](sdk-plugins.md)). |
 | `@holistics/anfra-sdk/plugins` | `web/sdk/src/plugins` | anfra's own plugins: `core` (queries and suggestions), `export`, `lineage`, `render`, `inspect`. |
 | `@holistics/anfra-sdk/api` | `web/sdk/src/api` | The core API for the code around a Data App (the page hosting it, scripts, tests): a client generated from `api/openapi.yaml`, `coreApiBackend` (a `Backend` as core ops), `loadDatasets` (what a Data App is provisioned with). |
 | appserve backend | `internal/appserve` | `anfra serve`'s Data App routes: the pages, the Data App tree, the files under `apps/`, the reader, live reload. Reaches no data. |
@@ -75,7 +75,7 @@ Steps 2 and 3: before the definition's first script runs, the frame is given eve
 
 - **Datasets: one `core.show` of the repo.** It answers every dataset in full: models, fields, metrics, as AQL can query them (`internal/command/show`, from anfra-node's `aml.show`). `toDescriptor` maps each to the SDK's `DatasetDescriptor`, named by its fqn. A dataset that can't be shown in full comes in outline with a diagnostic saying why; `loadDatasets` leaves it out rather than failing the rest, and reports the diagnostics, so a Data App that doesn't use it still runs. Diagnostics also report the repo's files that don't compile and a data source the repo doesn't configure.
 - **The reader** (`User`): the platform's to say. On `anfra serve` it is the local user, with every permission and the machine's time zone (`internal/appserve/reader.go`). The permissions are rendering hints only; every query is authorised again by whoever answers it.
-- **The plugins the host installed**, by name and version: what it can do beyond queries. A definition reads them as `Anfra.plugins`, and finds each one's API under its name (`query.export`, `Anfra.render`, `Anfra.lineage`) only where it is installed ([plugins.md](plugins.md)).
+- **The plugins the host installed**, by name and version: what it can do beyond queries. A definition reads them as `Anfra.plugins`, and finds each one's API under its name (`query.export`, `Anfra.render`, `Anfra.lineage`) only where it is installed ([sdk-plugins.md](sdk-plugins.md)).
 - **The base URL and the host's origin**, from step 3.
 
 `core.show`'s shape is an object's interface, not its implementation: what a caller needs to write a query or read its result (names, labels, types, roles, AQL definitions), never SQL, tables or data sources. It is read from the compiler today. Moving it onto the semantic catalog, so one part of the system reads the repo's objects, changes where the answer comes from, not what it means.
@@ -86,7 +86,7 @@ Steps 3 to 5: the definition runs sandboxed, and the bridge is its one way out.
 
 The frame is `sandbox="allow-scripts"` with its document as `srcdoc`, so it has an **opaque origin**. Its own requests to the API are cross-origin, which `anfra serve` refuses, and carry no credentials on a platform that has them. Storage, forms, popups and navigation are unavailable to it. A definition reaches data only through the bridge.
 
-The bridge (`common/bridge.ts`, `common/endpoint.ts`; each side runs one endpoint) is a small postMessage protocol, the same both ways, carrying the plugins' calls and events ([plugins.md](plugins.md)):
+The bridge (`common/bridge.ts`, `common/endpoint.ts`; each side runs one endpoint) is a small postMessage protocol, the same both ways, carrying the plugins' calls and events ([sdk-plugins.md](sdk-plugins.md)):
 
 - `anfra:call` with a plugin's call name (`core.submitQuery`) and an id, answered by `anfra:result`, ok or with an error by its SDK class name; `anfra:cancel` aborts one. Either side calls: the frame `core.submitQuery`, the host `render.draw`.
 - `anfra:event`, a plugin's notice nobody answers: the host's `inspect.watch` and `inspect.highlight`, the frame's `inspect.snapshot` and `inspect.picked`.
