@@ -271,7 +271,7 @@ func Describe() []CommandSpec { return app.Describe() }
 // the caller it admitted; the ops' names, schemas, handlers and codes are
 // anfra core's, so a client of the core API meets the same contract on every
 // host. Each call returns a new registry.
-func Ops() *apikit.Registry[Invocation] { return app.NewRegistry() }
+func Ops() *apikit.Registry[Invocation, Invocation] { return app.NewRegistry() }
 
 // Commands returns the names of every registered command, in registry order.
 //

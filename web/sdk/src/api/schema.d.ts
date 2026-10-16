@@ -884,6 +884,8 @@ export interface components {
             type: "ping";
         };
         StreamStart: {
+            /** @description the run's id, on a host that keeps a record of runs */
+            id?: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}

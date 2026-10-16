@@ -55,6 +55,80 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 - **Its own codes and statuses**: either translating the engine's or importing them.
 - **Everything around the results**: users, sharing, hosting, history, a UI. That is the platform's product; see [philosophy.md](philosophy.md) for where core stops.
 
+### Serving the engine's ops: directly, or mounted
+
+A platform serves the engine's ops (`Ops()`) in one of two ways. `anfra serve` serves them directly. A platform with callers of its own mounts them (`apikit.Mount`), as an in-process gateway: it admits, authorizes and binds; the op runs as it is. Three types take part, on two sides of the boundary (`Mounting`'s type parameters):
+
+| Type | Is | A platform host, for example | The engine |
+|---|---|---|---|
+| **Call** | what an op is called with, per call | its credential: a session, the org's slug | its `Invocation` |
+| **Caller** | the call, admitted | its user, org, role | the same `Invocation` |
+| **BoundCall** | what `Bind` makes of the platform's caller: the engine's own Call | — | an `Invocation`, built by the platform |
+
+**Mounted**, by a platform host with users, orgs and roles of its own:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant T as transport (apikit.HTTP)
+    participant M as mounted (the platform's op, by apikit.Mount)
+    participant A as op (apikit: the engine op's call)
+    participant H as query (the command: Def.Handle, its Run)
+    participant X as executor (the platform registry's)
+
+    C->>T: POST core.query, with the platform's credential
+    T->>T: transport.Request(w, r) gives the Call
+    T->>M: mounted.InvokeStream(call, raw input, emit), or mounted.Invoke(call, raw input)
+    M->>M: mounting.Admit(call) gives the platform's Caller
+    M->>M: mounting.Authorize(call, caller, raw input)
+    M->>M: mounting.Bind(caller) gives the BoundCall (an Invocation)
+    M->>A: op.InvokeStream(boundCall, raw input, emit)
+    A->>A: admission.Admit(boundCall), the engine's own, gives the invocation, then decode the input
+    A->>H: def.Handle(invocation, input): defaults, Check, then the command's Run
+    H-->>A: run, with run.Page and run.Stream, nothing done yet
+    A->>X: executor.Submit(the platform's Caller, submission: the op, the run's work)
+    X-->>A: execution, with its ID, execution.Page and execution.Stream
+    A-->>C: emit(start, with the ID)
+    A->>X: execution.Stream(emit), or execution.Page()
+    X->>H: run.Stream(emit), or run.Page(): compile, canal-query
+    H-->>C: emit(event), through the transport's writer, as the run produces them
+    H-->>X: returns: the page, or the run's error
+    X-->>A: returns
+    A-->>T: returns (through the mount)
+    T-->>C: the page, or emit(end)
+    Note over T,X: A refusal at any step up to executor.Submit's answer, its own included, is an ordinary error response.<br/>After start, a failure ends the stream: emit(end, failed).
+```
+
+**Directly**, by `anfra serve`:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant T as transport (anfra serve's apikit.HTTP)
+    participant A as op (apikit: the engine op's call)
+    participant H as query (the command: Def.Handle, its Run)
+
+    C->>T: POST core.query
+    T->>T: transport.Request(w, r) builds the Invocation: local repo, clients, TenantID local, DataPerms Unrestricted
+    T->>A: op.InvokeStream(invocation, raw input, emit), or op.Invoke(invocation, raw input)
+    A->>A: admission.Admit(invocation), the engine's own, then decode the input
+    A->>H: def.Handle(invocation, input): defaults, Check, then the command's Run
+    H-->>A: run, with run.Page and run.Stream, nothing done yet
+    A-->>C: emit(start)
+    A->>H: run.Stream(emit), or run.Page(): no executor, so now, in the call
+    H-->>C: emit(event), through the transport's writer, as the run produces them
+    H-->>A: returns: the page, or the run's error
+    A-->>T: returns
+    T-->>C: the page, or emit(end)
+    Note over T,H: No mount: no Authorize, no Bind. No executor: the run is executed in the call, and start carries no ID.
+```
+
+- **The engine's registry and admission are the same either way.** Only where the invocation comes from differs: `anfra serve`'s transport builds it from the request; a mounting platform builds it after admitting and authorizing its caller (`Bind`).
+- **Only BoundCall crosses the boundary.** The platform's Call and Caller never reach the engine, which takes the invocation as trusted and makes no access decision.
+- **The Run comes back across**, and is executed by the platform's registry's executor (`RegistryConfig.Executor`), for the platform's caller: its page taken, or its stream followed. With no executor, it is executed now, in the call.
+
 ## Keeping the contract
 
 Changes to anfra core are judged by their effect on platforms:

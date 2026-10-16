@@ -40,7 +40,7 @@ func wantsStream(r *http.Request) bool {
 // stream serves an op that returns a Run as NDJSON: its events, each flushed as
 // it is emitted, then end. The status is sent with the first event, start, so an
 // error before it is an ordinary error response; after it, end says it failed.
-func (h HTTP[R]) stream(w http.ResponseWriter, r *http.Request, rt *Runtime, req R, raw []byte, o Op[R]) {
+func (h HTTP[Call]) stream(w http.ResponseWriter, r *http.Request, rt *Runtime, req Call, raw []byte, o Op[Call]) {
 	ew := &eventWriter{w: w, rc: http.NewResponseController(w), last: time.Now()}
 	stop := ew.pinging()
 	err := o.InvokeStream(r.Context(), rt, req, raw, ew.write)

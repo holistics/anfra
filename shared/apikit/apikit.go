@@ -32,9 +32,9 @@ import (
 const DefaultTimeout = 30 * time.Second
 
 // Def declares one operation: what it takes, what it answers, and how it runs.
-// C is the call context its handler receives — the caller, as the host's
+// Caller is the call context its handler receives — the caller, as the host's
 // Admission resolves it.
-type Def[C, In, Out any] struct {
+type Def[Caller, In, Out any] struct {
 	// Name is the op's name: dotted, group then verb ("invitations.create"). It
 	// routes the op (POST /api/<Name>), names its MCP tool, and groups it for
 	// discovery.
@@ -75,19 +75,19 @@ type Def[C, In, Out any] struct {
 
 	// Handle is glue: it maps In to a service call and the result to Out, with no
 	// branching on domain state.
-	Handle func(ctx context.Context, c C, in In) (Out, error)
+	Handle func(ctx context.Context, c Caller, in In) (Out, error)
 }
 
 // Admission is how a host turns a request into the call context a handler
-// receives. R is what the host's transports pass for each request — its
-// credential; C is what its handlers take.
-type Admission[R, C any] struct {
-	// Admit resolves the request into C, or refuses it. It runs before the input
+// receives. Call is what the host's transports pass for each request — its
+// credential; Caller is what its handlers take.
+type Admission[Call, Caller any] struct {
+	// Admit resolves the request into Caller, or refuses it. It runs before the input
 	// is read, so a caller who may not call the op cannot probe its validation.
-	Admit func(ctx context.Context, r R) (C, error)
+	Admit func(ctx context.Context, r Call) (Caller, error)
 	// Authorize checks what the admitted caller may do with this input: a
 	// permission derived from it, say. in is the op's In. Nil: admission is all.
-	Authorize func(ctx context.Context, r R, c C, in any) error
+	Authorize func(ctx context.Context, r Call, c Caller, in any) error
 }
 
 // ExactlyOne is the schema of a group of fields of which exactly one must be
@@ -111,7 +111,7 @@ type Meta struct {
 
 // Op is a registered op, its types hidden: what a Registry holds and transports
 // iterate. Only Register makes one.
-type Op[R any] interface {
+type Op[Call any] interface {
 	Meta() Meta
 	// InSchema is the input's schema, as Invoke validates it: transports publish
 	// it, so what is validated and what is published are the same.
@@ -124,11 +124,11 @@ type Op[R any] interface {
 	EventTypes() []reflect.Type
 	// Invoke runs the op on raw JSON input, for the request r. An op that
 	// returns a Run answers its page.
-	Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (any, error)
+	Invoke(ctx context.Context, rt *Runtime, r Call, raw []byte) (any, error)
 	// InvokeStream runs an op that returns a Run, emitting its events. An error
 	// returned before the first event is the op refusing, as Invoke's would be;
 	// after it, the run failing.
-	InvokeStream(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(event any) error) error
+	InvokeStream(ctx context.Context, rt *Runtime, r Call, raw []byte, emit func(event any) error) error
 }
 
 // name is a dotted op name: a group, then a verb, each lowercase snake_case.
@@ -142,7 +142,7 @@ var name = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`)
 // The op is a copy of d, taken now, so a later change to d does not change the
 // running op. Ext is copied as a value; a host keeps it free of anything it
 // would mutate.
-func Register[R, C, In, Out any](reg *Registry[R], adm Admission[R, C], d *Def[C, In, Out]) {
+func Register[Call, Caller, In, Out any](reg *Registry[Call, Caller], adm Admission[Call, Caller], d *Def[Caller, In, Out]) {
 	switch {
 	case !name.MatchString(d.Name):
 		panic(fmt.Sprintf("op %q: a name is dotted lowercase snake_case, group then verb", d.Name))
@@ -169,20 +169,22 @@ func Register[R, C, In, Out any](reg *Registry[R], adm Admission[R, C], d *Def[C
 	frozen := *d
 	frozen.Errors = slices.Clone(d.Errors)
 	frozen.Events = slices.Clone(d.Events)
-	reg.add(&registered[R, C, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params, events: events})
+	reg.add(&registered[Call, Caller, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params, events: events, executor: reg.executor})
 }
 
 // registered is a registered op: the frozen copy of its declaration, its
 // admission, and its private step.
-type registered[R, C, In, Out any] struct {
-	decl   *Def[C, In, Out]
-	adm    Admission[R, C]
+type registered[Call, Caller, In, Out any] struct {
+	decl   *Def[Caller, In, Out]
+	adm    Admission[Call, Caller]
 	step   appstep.Def
-	params func(R) []any
+	params func(Call) []any
 	events []reflect.Type
+	// executor is the registry's, for the op's runs (nil: each run now).
+	executor Executor[Caller]
 }
 
-func (o *registered[R, C, In, Out]) Meta() Meta {
+func (o *registered[Call, Caller, In, Out]) Meta() Meta {
 	codes := make([]apperr.Code, len(o.decl.Errors))
 	for i, c := range o.decl.Errors {
 		codes[i] = c.Code()
@@ -200,12 +202,12 @@ func (o *registered[R, C, In, Out]) Meta() Meta {
 }
 
 // InSchema is a reference to In's schema in rt.Schemas, reflected from In.
-func (o *registered[R, C, In, Out]) InSchema(rt *Runtime) *huma.Schema {
+func (o *registered[Call, Caller, In, Out]) InSchema(rt *Runtime) *huma.Schema {
 	return rt.Schema(reflect.TypeFor[In]())
 }
 
-func (o *registered[R, C, In, Out]) OutType() reflect.Type {
+func (o *registered[Call, Caller, In, Out]) OutType() reflect.Type {
 	return OutputType(reflect.TypeFor[Out]())
 }
 
-func (o *registered[R, C, In, Out]) EventTypes() []reflect.Type { return o.events }
+func (o *registered[Call, Caller, In, Out]) EventTypes() []reflect.Type { return o.events }

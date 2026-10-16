@@ -17,10 +17,10 @@ import (
 // line), a group (its ops, each in one line), and an op's usage (its doc,
 // schemas and codes). Every level shows only what the caller may call, as the
 // host's Visible says. HTTP and MCP serve the same levels.
-type Discovery[R any] struct {
+type Discovery[Call any] struct {
 	// Visible reports which of ops the caller of r may call: the host's
 	// admission and fixed permissions, short of the input. Nil: every op.
-	Visible func(ctx context.Context, r R, ops []Meta) ([]bool, error)
+	Visible func(ctx context.Context, r Call, ops []Meta) ([]bool, error)
 	// Errors are the codes the host adds to an op (HTTP.Errors), and Codes how
 	// it serves them: an op's usage lists both with its own.
 	Errors func(m Meta) []apperr.Code
@@ -81,7 +81,7 @@ type ErrorEntry struct {
 
 // Index is the groups whose ops, among those include admits, the caller may
 // call, in the order their first op was registered.
-func (d Discovery[R]) Index(ctx context.Context, reg *Registry[R], r R, include func(Meta) bool) (Index, error) {
+func (d Discovery[Call]) Index(ctx context.Context, reg OpSet[Call], r Call, include func(Meta) bool) (Index, error) {
 	ops, err := d.visible(ctx, reg, r, include)
 	if err != nil {
 		return Index{}, err
@@ -90,19 +90,19 @@ func (d Discovery[R]) Index(ctx context.Context, reg *Registry[R], r R, include 
 	for _, o := range ops {
 		g := GroupOf(o.Meta().Name)
 		if !slices.ContainsFunc(idx.Groups, func(e GroupEntry) bool { return e.Name == g }) {
-			idx.Groups = append(idx.Groups, GroupEntry{Name: g, Summary: reg.groups[g]})
+			idx.Groups = append(idx.Groups, GroupEntry{Name: g, Summary: reg.GroupSummary(g)})
 		}
 	}
 	return idx, nil
 }
 
 // Group is group's ops the caller may call; not_found for a group with none.
-func (d Discovery[R]) Group(ctx context.Context, reg *Registry[R], r R, include func(Meta) bool, group string) (GroupListing, error) {
+func (d Discovery[Call]) Group(ctx context.Context, reg OpSet[Call], r Call, include func(Meta) bool, group string) (GroupListing, error) {
 	ops, err := d.visible(ctx, reg, r, include)
 	if err != nil {
 		return GroupListing{}, err
 	}
-	g := GroupListing{Name: group, Summary: reg.groups[group], Ops: []OpEntry{}}
+	g := GroupListing{Name: group, Summary: reg.GroupSummary(group), Ops: []OpEntry{}}
 	for _, o := range ops {
 		if m := o.Meta(); GroupOf(m.Name) == group {
 			g.Ops = append(g.Ops, OpEntry{Name: m.Name, Summary: m.Summary, ReadOnly: m.ReadOnly, Idempotent: m.Idempotent, Destructive: m.Destructive})
@@ -116,12 +116,12 @@ func (d Discovery[R]) Group(ctx context.Context, reg *Registry[R], r R, include 
 
 // Usage is the op named name, for a caller who may call it; not_found
 // otherwise, alike, so discovery does not reveal an op the caller cannot see.
-func (d Discovery[R]) Usage(ctx context.Context, rt *Runtime, reg *Registry[R], r R, include func(Meta) bool, name string) (Usage, error) {
+func (d Discovery[Call]) Usage(ctx context.Context, rt *Runtime, reg OpSet[Call], r Call, include func(Meta) bool, name string) (Usage, error) {
 	ops, err := d.visible(ctx, reg, r, include)
 	if err != nil {
 		return Usage{}, err
 	}
-	i := slices.IndexFunc(ops, func(o Op[R]) bool { return o.Meta().Name == name })
+	i := slices.IndexFunc(ops, func(o Op[Call]) bool { return o.Meta().Name == name })
 	if i < 0 {
 		return Usage{}, apperr.New(apperr.NotFound, fmt.Sprintf("No operation %q.", name))
 	}
@@ -152,7 +152,7 @@ func (d Discovery[R]) Usage(ctx context.Context, rt *Runtime, reg *Registry[R], 
 
 // codes are the public codes an op can fail with: apikit's, the host's, its
 // own, as served, each once.
-func (d Discovery[R]) codes(m Meta) []apperr.Code {
+func (d Discovery[Call]) codes(m Meta) []apperr.Code {
 	codes := []apperr.Code{apperr.InvalidRequest.Code(), apperr.InternalServerError}
 	if d.Errors != nil {
 		codes = append(codes, d.Errors(m)...)
@@ -170,8 +170,8 @@ func (d Discovery[R]) codes(m Meta) []apperr.Code {
 }
 
 // visible are reg's ops that include admits and the caller may call.
-func (d Discovery[R]) visible(ctx context.Context, reg *Registry[R], r R, include func(Meta) bool) ([]Op[R], error) {
-	var ops []Op[R]
+func (d Discovery[Call]) visible(ctx context.Context, reg OpSet[Call], r Call, include func(Meta) bool) ([]Op[Call], error) {
+	var ops []Op[Call]
 	var metas []Meta
 	for _, o := range reg.Ops() {
 		if m := o.Meta(); include == nil || include(m) {
@@ -186,7 +186,7 @@ func (d Discovery[R]) visible(ctx context.Context, reg *Registry[R], r R, includ
 	if err != nil {
 		return nil, err
 	}
-	var out []Op[R]
+	var out []Op[Call]
 	for i, o := range ops {
 		if seen[i] {
 			out = append(out, o)

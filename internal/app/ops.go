@@ -16,8 +16,8 @@ import (
 // NewRegistry is every command as an op, core.<command>, admitted from the
 // command.CommandContext a host passes with each request: `anfra serve` passes its own,
 // the one-shot CLI one over the sidecars it spawned.
-func NewRegistry() *apikit.Registry[command.CommandContext] {
-	reg := apikit.NewRegistry(apikit.RegistryConfig[command.CommandContext]{Namespace: errcode.NS})
+func NewRegistry() *apikit.Registry[command.CommandContext, command.CommandContext] {
+	reg := apikit.NewRegistry(apikit.RegistryConfig[command.CommandContext, command.CommandContext]{Namespace: errcode.NS})
 	reg.Group("core", "anfra core's commands: query a dataset of the semantic layer, compile or validate a query, "+
 		"validate the repo, and build its catalog, search it and trace lineage through it.")
 	for _, c := range Commands {
@@ -36,7 +36,7 @@ func NewRuntime() *apikit.Runtime {
 
 // dispatch is the registry and runtime Invoke runs ops with, built from the
 // command list once — again only if the list is replaced, which tests do.
-func dispatch() (*apikit.Registry[command.CommandContext], *apikit.Runtime) {
+func dispatch() (*apikit.Registry[command.CommandContext, command.CommandContext], *apikit.Runtime) {
 	built.mu.Lock()
 	defer built.mu.Unlock()
 	if built.reg == nil || len(built.from) != len(Commands) || (len(Commands) > 0 && &built.from[0] != &Commands[0]) {
@@ -48,7 +48,7 @@ func dispatch() (*apikit.Registry[command.CommandContext], *apikit.Runtime) {
 var built struct {
 	mu   sync.Mutex
 	from []command.Command
-	reg  *apikit.Registry[command.CommandContext]
+	reg  *apikit.Registry[command.CommandContext, command.CommandContext]
 	rt   *apikit.Runtime
 }
 

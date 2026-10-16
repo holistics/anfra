@@ -21,13 +21,13 @@ import (
 // in an org), send valid input, hold the permissions. Admission comes before
 // decoding, so a caller who may not call the op cannot probe its validation;
 // only authorization needs the input, since it may be derived from it.
-func (o *registered[R, C, In, Out]) Invoke(ctx context.Context, rt *Runtime, r R, raw []byte) (any, error) {
+func (o *registered[Call, Caller, In, Out]) Invoke(ctx context.Context, rt *Runtime, r Call, raw []byte) (any, error) {
 	return o.invoke(ctx, rt, r, raw, nil)
 }
 
 // InvokeStream is Invoke for an op that returns a Run, emitting its events
 // rather than answering its page.
-func (o *registered[R, C, In, Out]) InvokeStream(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(any) error) error {
+func (o *registered[Call, Caller, In, Out]) InvokeStream(ctx context.Context, rt *Runtime, r Call, raw []byte, emit func(any) error) error {
 	if o.events == nil {
 		return fmt.Errorf("op %q does not stream: it returns no Run", o.decl.Name)
 	}
@@ -36,7 +36,7 @@ func (o *registered[R, C, In, Out]) InvokeStream(ctx context.Context, rt *Runtim
 }
 
 // invoke runs the op; with emit, streaming its Run.
-func (o *registered[R, C, In, Out]) invoke(ctx context.Context, rt *Runtime, r R, raw []byte, emit func(any) error) (_ any, err error) {
+func (o *registered[Call, Caller, In, Out]) invoke(ctx context.Context, rt *Runtime, r Call, raw []byte, emit func(any) error) (_ any, err error) {
 	var params []any
 	if o.params != nil {
 		params = o.params(r)
@@ -60,7 +60,7 @@ func (o *registered[R, C, In, Out]) invoke(ctx context.Context, rt *Runtime, r R
 	if emit != nil && rt.Strict {
 		emit = o.checkedEmit(rt, emit)
 	}
-	out, err := o.handle(ctx, rt, c, in, emit)
+	out, err := o.withTimeout(ctx, rt, c, in, emit)
 	if err != nil {
 		if rt.Strict {
 			o.checkDeclared(rt, err)
@@ -75,25 +75,30 @@ func (o *registered[R, C, In, Out]) invoke(ctx context.Context, rt *Runtime, r R
 	return out, nil
 }
 
-// handle runs the handler within the op's timeout — and, when it returns a Run,
-// reads the run within the same timeout: its page, or with emit its stream.
-// Running out of it is the host's to name (Runtime.Timeout) — unless the
-// caller's own context ended first, which is the caller going away.
-func (o *registered[R, C, In, Out]) handle(parent context.Context, rt *Runtime, c C, in In, emit func(any) error) (any, error) {
+// withTimeout answers the call within the op's timeout: the handler, and when
+// it returns a Run, the run's execution, within the same timeout. Running out
+// of it is the host's to name (Runtime.Timeout) — unless the caller's own
+// context ended first, which is the caller going away.
+func (o *registered[Call, Caller, In, Out]) withTimeout(parent context.Context, rt *Runtime, c Caller, in In, emit func(any) error) (any, error) {
 	timeout := o.decl.Timeout
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	out, err := o.read(ctx, c, in, emit)
+	out, err := o.answer(ctx, c, in, emit)
 	if err != nil && rt.Timeout != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && parent.Err() == nil {
 		return out, rt.Timeout(err)
 	}
 	return out, err
 }
 
-func (o *registered[R, C, In, Out]) read(ctx context.Context, c C, in In, emit func(any) error) (any, error) {
+// answer is the op's answer: its handler's output; or, when the handler returns
+// a Run, the run submitted to its executor and executed in the form asked — a
+// stream, with emit, which starts once the executor has taken the run; or a
+// page. A mounted op's run is its host's: submitted to the mounting registry's
+// executor, for its caller.
+func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, c Caller, in In, emit func(any) error) (any, error) {
 	out, err := o.decl.Handle(ctx, c, in)
 	if err != nil {
 		return nil, err
@@ -102,20 +107,28 @@ func (o *registered[R, C, In, Out]) read(ctx context.Context, c C, in In, emit f
 	if !ok {
 		return out, nil
 	}
-	if emit != nil {
-		// The op has accepted the request: the stream starts, and what fails from
-		// here on ends it rather than answering an error.
-		if err := emit(StreamStart{Type: "start"}); err != nil {
-			return nil, err
-		}
-		return nil, r.stream(ctx, emit)
+	submit, mounted := submitterFrom(ctx)
+	if !mounted {
+		submit = submitTo(o.executor, c, o.Meta())
 	}
-	return r.page(ctx)
+	exec, err := submit(ctx, r.work())
+	if err != nil {
+		return nil, err // refused: an ordinary error, nothing sent yet
+	}
+	if emit == nil {
+		return exec.Page(ctx)
+	}
+	// The stream starts: what fails from here on ends it rather than answering
+	// an error.
+	if err := emit(StreamStart{Type: "start", ID: exec.ID}); err != nil {
+		return nil, err
+	}
+	return nil, exec.Stream(ctx, emit)
 }
 
 // checkedEmit is emit checking each of the op's own events against its event
 // schema, as strict mode checks an output.
-func (o *registered[R, C, In, Out]) checkedEmit(rt *Runtime, emit func(any) error) func(any) error {
+func (o *registered[Call, Caller, In, Out]) checkedEmit(rt *Runtime, emit func(any) error) func(any) error {
 	return func(e any) error {
 		t := reflect.TypeOf(e)
 		if !slices.Contains(o.events, t) {
@@ -134,7 +147,7 @@ func (o *registered[R, C, In, Out]) checkedEmit(rt *Runtime, emit func(any) erro
 // implied are the public codes apikit itself produces, which no op declares.
 var implied = []apperr.Code{apperr.InternalServerError, apperr.InvalidRequest.Code()}
 
-func (o *registered[R, C, In, Out]) checkDeclared(rt *Runtime, err error) {
+func (o *registered[Call, Caller, In, Out]) checkDeclared(rt *Runtime, err error) {
 	pub := apperr.From(err).Code.Public()
 	if slices.Contains(implied, pub) || slices.Contains(rt.Implied, pub) {
 		return
