@@ -22,10 +22,15 @@ type Process struct {
 
 // ProcSpec is how to spawn a sidecar.
 type ProcSpec struct {
-	Name      string
-	Path      string
-	Args      []string
-	ExtraEnv  []string
+	Name string
+	Path string
+	Args []string
+	// ExtraEnv is what the supervisor sets, over anything inherited or
+	// forwarded (childEnv).
+	ExtraEnv []string
+	// EnvPrefix forwards <EnvPrefix><NAME>=value from anfra's environment as
+	// NAME=value, to this sidecar only: e.g. ANFRA_CANAL_QUERY_ENV_.
+	EnvPrefix string
 	Stdout    io.Writer // child stdout sink; defaults to io.Discard
 	Stderr    io.Writer // child stderr sink (the log stream); defaults to os.Stderr
 	Logger    *slog.Logger
@@ -53,7 +58,7 @@ func StartProcess(spec ProcSpec) (*Process, error) {
 	cmd := exec.Command(spec.Path, spec.Args...) //nolint:gosec // G204: spawns our own bundled/configured sidecar, not untrusted input
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	cmd.Env = append(os.Environ(), spec.ExtraEnv...)
+	cmd.Env = childEnv(os.Environ(), spec.EnvPrefix, spec.ExtraEnv)
 
 	var stdin *os.File
 	if spec.PipeStdin {

@@ -29,6 +29,25 @@ Which sidecar releases a release embeds is pinned in `manifest.yml`, alongside a
 
 **Known gap:** a sidecar that exits is not restarted. Every later call that needs it fails with `sidecar_unavailable` until anfra restarts.
 
+## Environment
+
+A spawned sidecar runs with anfra's environment, less the names anfra owns, plus what its supervisor sets (`internal/sidecar/env.go`). The variables a sidecar reads fall into four kinds:
+
+| Kind | Examples | How it gets them |
+|---|---|---|
+| **What it needs to run** on the machine | `HOME`, `PATH`, `TMPDIR`, the dynamic loader's (`LD_LIBRARY_PATH`, `NIX_LD`) | Inherited. |
+| **Its own settings,** which a runner sets for one process | `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` | Not inherited: from the sidecar's prefix, `ANFRA_CANAL_QUERY_ENV_<NAME>` or `ANFRA_NODE_ENV_<NAME>`, as `<NAME>`. |
+| **Shared with anfra** | `OTEL_EXPORTER_OTLP_*`, `LOG_LEVEL`, `TZ`, `LANG`, proxies, `SSL_CERT_FILE` | Inherited. |
+| **A driver's conveniences,** not anfra's to support | `AWS_*`, `GOOGLE_APPLICATION_CREDENTIALS`, `KRB5_CONFIG`, `DATABRICKS_*` | Inherited, until a data source's settings or a setting of the second kind replaces them. |
+
+Inheriting by default is deliberate. The first kind cannot be listed reliably: it is read by the sidecars' libraries and the C code they load, differs by host, and changes with each sidecar release, so a list that misses one breaks the sidecar on the hosts that need it, and no test on anfra's CI hosts would show it. The names anfra owns, it can list: its own (`ANFRA_*`, which also keeps its secrets, such as `ANFRA_GITHUB_TOKEN`, out of the sidecars) and the second kind, which are the ones that collide. Set for anfra, they would also land on a sidecar: two pprof servers on one address, three processes' traces under one service name, anfra's memory limit on each process. A sidecar's supervisor sets the variables it must control (canal-query's `PORT`, `ANFRA_REPO_ID`) over both.
+
+A sidecar setting that is a generic name, read by the sidecar's own code, belongs to the second kind: a new one, in a sidecar release, is added to `stripped` with the pin bump.
+
+A sidecar anfra does not spawn (`ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL`) gets its environment from its own deployment.
+
+> Open: canal-query loads a `.env` from its working directory, which is anfra's, usually the repo's. Values already set win, but a repo's `.env` can add others. Running it from a folder of its own needs anfra to resolve the paths in a `connection` (a DuckDB file's) first, which are relative to that directory today.
+
 ## Sockets and ports
 
 anfra-node listens on a Unix socket in the temp dir, `anfra-<pid>.sock` (`internal/sidecar/anfranode/anfranode.go`): per anfra process, so several repos' servers do not collide, and in the temp dir because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. canal-query listens on a free loopback port chosen at spawn (`internal/sidecar/canalquery/canalquery.go`).

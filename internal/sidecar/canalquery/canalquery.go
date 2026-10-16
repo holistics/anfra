@@ -14,6 +14,11 @@ import (
 // Name is the sidecar's name, in its logs, its errors and its binary's.
 const Name = "canal-query"
 
+// EnvPrefix sets canal-query's own settings from anfra's environment, for the
+// one anfra spawns: ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061 is its
+// PPROF_ADDR (sidecar.ProcSpec.EnvPrefix).
+const EnvPrefix = "ANFRA_CANAL_QUERY_ENV_"
+
 // Sidecar supervises a host-spawned canal-query and exposes a Client pointed at
 // it. Consumers talk to the client (which also works against an external
 // canal-query).
@@ -64,6 +69,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 			"ENABLE_DUCKDB_CONNECTOR=1", // duckdb connector on by default under anfra
 			"ANFRA_REPO_ID=" + c.cfg.RepoID,
 		},
+		EnvPrefix: EnvPrefix,
 		Stdout:    c.cfg.StdoutWriter,
 		Stderr:    c.cfg.StderrWriter,
 		Logger:    c.cfg.Logger,
