@@ -39,10 +39,16 @@ type Def[In, Out any] struct {
 	// Needs declares the sidecars the command needs for in (so the one-shot CLI
 	// knows what to spawn; under `serve` they are all warm regardless). Nil: none.
 	Needs func(in In) Sidecars
+	// Normalize is the input as the command reads it, its args' spelling
+	// aside: a name trimmed, say. It runs with defaults applied, before Check, and
+	// what it answers is what a host authorizes on and Run gets. It reads nothing
+	// but the input. Nil: the input as decoded.
+	Normalize func(in In) In
 	// Check refuses an input its schema accepts but the command cannot run: a
 	// rule between args, which the schema does not state. It runs before Run,
 	// with defaults applied, and a refused input needs no sidecar, so the
-	// one-shot CLI spawns none for it. Nil: the schema is all.
+	// one-shot CLI spawns none for it. It reads nothing but the input: it runs
+	// before a host authorizes the call. Nil: the schema is all.
 	Check func(in In) error
 	Run   func(ctx context.Context, cc CommandContext, in In) (Out, error)
 	// Valid reports whether an answer is valid. Set for a command whose job is
@@ -148,11 +154,26 @@ func (c *command[In, Out]) Needs(input []byte) Sidecars {
 	if len(input) > 0 && jsonkit.Unmarshal(input, &in) != nil {
 		return Sidecars{}
 	}
-	applyDefaults(c.args, &in)
-	if c.def.Check != nil && c.def.Check(in) != nil {
+	in, err := c.prepare(in)
+	if err != nil {
 		return Sidecars{}
 	}
 	return c.def.Needs(in)
+}
+
+// prepare is in as the command runs it: its unset defaults applied, then
+// Normalize, then Check. The op's Prepare.
+func (c *command[In, Out]) prepare(in In) (In, error) {
+	applyDefaults(c.args, &in)
+	if c.def.Normalize != nil {
+		in = c.def.Normalize(in)
+	}
+	if c.def.Check != nil {
+		if err := c.def.Check(in); err != nil {
+			return in, err
+		}
+	}
+	return in, nil
 }
 
 func (c *command[In, Out]) Valid(out any) (bool, error) {
@@ -173,7 +194,8 @@ func (c *command[In, Out]) Valid(out any) (bool, error) {
 }
 
 // Register serves the command as the op core.<Name>: its In validated against
-// its schema, its unset defaults applied, Check, then Run.
+// its schema, then prepared (its unset defaults applied, Normalize, Check) —
+// what a host authorizes on — then Run.
 func (c *command[In, Out]) Register(reg *apikit.Registry[CommandContext, CommandContext]) {
 	// The codes that mean the host built the invocation wrong are not the core
 	// API's: a host that states the caller's data permissions, as every host
@@ -188,15 +210,7 @@ func (c *command[In, Out]) Register(reg *apikit.Registry[CommandContext, Command
 	apikit.Register(reg, admission, &apikit.Def[CommandContext, In, Out]{
 		Name: OpName(c.def.Name), Summary: c.def.Short, Doc: c.def.Long, Errors: errs,
 		ReadOnly: c.def.ReadOnly, Idempotent: c.def.Idempotent, NonDestructive: c.def.NonDestructive, Timeout: c.def.Timeout, HTTP: true, MCP: true, Events: c.def.Events,
-		Handle: func(ctx context.Context, cc CommandContext, in In) (Out, error) {
-			applyDefaults(c.args, &in)
-			if c.def.Check != nil {
-				if err := c.def.Check(in); err != nil {
-					var zero Out
-					return zero, err
-				}
-			}
-			return c.def.Run(ctx, cc, in)
-		},
+		Prepare: c.prepare,
+		Handle:  c.def.Run,
 	})
 }

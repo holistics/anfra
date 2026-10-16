@@ -247,6 +247,11 @@ type QueryTransforms struct {
 	DateDrills []QueryDateDrill `json:"dateDrills,omitempty" doc:"date fields redrawn at another grain, their columns' names kept"`
 }
 
+// IsZero reports transforms that change nothing: none of each.
+func (t QueryTransforms) IsZero() bool {
+	return len(t.Filters) == 0 && len(t.Conditions) == 0 && len(t.Sorts) == 0 && len(t.DateDrills) == 0
+}
+
 type QueryFilter struct {
 	Field       string `json:"field" doc:"model.field for a dataset field, or the name of a dataset metric"`
 	Operator    string `json:"operator" doc:"the operator, such as is, contains, between, last"`

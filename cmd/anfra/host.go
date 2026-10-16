@@ -29,7 +29,7 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 		Exports:   exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
 		Repo:      h.repo.Repo(),
 		TenantID:  LocalTenant,
-		DataPerms: dataperm.Unrestricted(),
+		DataPerms: dataperm.Ungoverned(),
 		// anfra core serves the directory it was pointed at: the local repo is the
 		// point, not a mistake.
 		AllowLocalRepo: true,

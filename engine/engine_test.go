@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/shared/apikit"
+
 	"github.com/holistics/anfra/engine"
 )
 
@@ -61,25 +63,25 @@ func TestDispatchRefusesUndecidedPermissions(t *testing.T) {
 	}
 }
 
-func TestUnrestrictedLetsACommandRun(t *testing.T) {
+func TestUngovernedLetsACommandRun(t *testing.T) {
 	res, err := engine.Dispatch(context.Background(),
-		engine.Invocation{DataPerms: engine.Unrestricted()},
+		engine.Invocation{DataPerms: engine.Ungoverned()},
 		engine.Request{Command: "version"})
 	if err != nil {
-		t.Fatalf("version under Unrestricted: %v", err)
+		t.Fatalf("version under Ungoverned: %v", err)
 	}
 	if res.Status != engine.StatusOK {
 		t.Errorf("status = %q, want %q", res.Status, engine.StatusOK)
 	}
 }
 
-func TestRestrictedLetsACommandRun(t *testing.T) {
+func TestGovernedLetsACommandRun(t *testing.T) {
 	inv := engine.Invocation{
-		DataPerms:   engine.Restricted(engine.Attributes{"region": "APAC"}),
+		DataPerms:   engine.Governed(engine.Attributes{"region": "APAC"}),
 		Attribution: engine.Attribution{"tenant": "acme", "user": "u-1"},
 	}
 	if _, err := engine.Dispatch(context.Background(), inv, engine.Request{Command: "version"}); err != nil {
-		t.Fatalf("version under Restricted: %v", err)
+		t.Fatalf("version under Governed: %v", err)
 	}
 }
 
@@ -126,6 +128,23 @@ func TestDescribeMatchesCommands(t *testing.T) {
 	for i, s := range specs {
 		if s.Name != names[i] || s.Short == "" || len(s.ErrorCodes) == 0 {
 			t.Errorf("spec %d: %+v", i, s)
+		}
+	}
+}
+
+// Every ref names an op that takes its input, so a host mounting by it gets the
+// op it typed its authorization for.
+func TestRefsNameTheirOps(t *testing.T) {
+	ops := engine.Ops()
+	for name, err := range map[string]error{
+		"QueryOp":         apikit.CheckRef(ops, engine.QueryOp),
+		"QueryCompileOp":  apikit.CheckRef(ops, engine.QueryCompileOp),
+		"QueryValidateOp": apikit.CheckRef(ops, engine.QueryValidateOp),
+		"QueryExportOp":   apikit.CheckRef(ops, engine.QueryExportOp),
+		"ShowOp":          apikit.CheckRef(ops, engine.ShowOp),
+	} {
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
 }

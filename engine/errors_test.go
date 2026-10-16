@@ -13,7 +13,7 @@ import (
 // Dispatch's refusals are classified: a host can tell a caller's mistake from
 // its own and from an outage without reading messages.
 func TestDispatchErrorsAreClassified(t *testing.T) {
-	unrestricted := engine.Invocation{DataPerms: engine.Unrestricted()}
+	ungoverned := engine.Invocation{DataPerms: engine.Ungoverned()}
 	for _, tc := range []struct {
 		name       string
 		inv        engine.Invocation
@@ -22,21 +22,21 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 		violations apperr.Violations
 	}{
 		{"undecided permissions", engine.Invocation{}, engine.Request{Command: "version"}, engine.DataPermsMissing, apperr.Violations{}},
-		{"an unknown command", unrestricted, engine.Request{Command: "no-such-command"}, engine.UnknownCommand, apperr.Violations{}},
-		{"an unknown arg", unrestricted, engine.Request{Command: "version", Args: map[string]any{"bogus": true}},
+		{"an unknown command", ungoverned, engine.Request{Command: "no-such-command"}, engine.UnknownCommand, apperr.Violations{}},
+		{"an unknown arg", ungoverned, engine.Request{Command: "version", Args: map[string]any{"bogus": true}},
 			apperr.InvalidRequest, apperr.Violate(apperr.Violation{Field: "bogus", Code: "unknown",
 				Message: "Not a field of this input. Field names are snake_case and case-sensitive."})},
-		{"missing args", unrestricted, engine.Request{Command: "query.compile", Args: map[string]any{}},
+		{"missing args", ungoverned, engine.Request{Command: "query.compile", Args: map[string]any{}},
 			apperr.InvalidRequest, apperr.Violate(apperr.Violation{Field: "query", Code: "required", Message: "Required."})},
-		{"no target", unrestricted, engine.Request{Command: "query.compile", Args: map[string]any{"query": "select 1", "lang": "sql"}},
+		{"no target", ungoverned, engine.Request{Command: "query.compile", Args: map[string]any{"query": "select 1", "lang": "sql"}},
 			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"})},
-		{"an unsupported input", unrestricted,
+		{"an unsupported input", ungoverned,
 			engine.Request{Command: "query", Args: map[string]any{"query": "x", "data_source": "w"}},
 			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "unsupported", Message: "an AQL query runs against a dataset"})},
-		{"SQL for a restricted caller", engine.Invocation{DataPerms: engine.Restricted(nil)},
+		{"SQL for a governed caller", engine.Invocation{DataPerms: engine.Governed(nil)},
 			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "data_source": "w"}},
 			engine.DataPermsUnenforceable, apperr.Violations{}},
-		{"no sidecars to run on", unrestricted, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "query": "x"}},
+		{"no sidecars to run on", ungoverned, engine.Request{Command: "query", Args: map[string]any{"dataset": "d", "query": "x"}},
 			engine.SidecarUnavailable, apperr.Violations{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

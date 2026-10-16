@@ -9,7 +9,7 @@ import (
 )
 
 // HostMistakes are the codes that mean the host built an invocation wrong: no
-// data permissions stated, restrictions on a query that cannot apply them, or a
+// data permissions stated, a governed caller's query that cannot be governed, or a
 // local repo the host did not allow. They are not part of the core API: no op
 // declares them, and a host that hits one has a bug of its own.
 var HostMistakes = []apperr.Code{errcode.DataPermsMissing, errcode.DataPermsUnenforceable, errcode.LocalRepoNotAllowed}
@@ -40,7 +40,7 @@ var admission = apikit.Admission[CommandContext, CommandContext]{
 // nobody decided.
 func ErrDataPermsMissing() error {
 	return apperr.New(errcode.DataPermsMissing, "no data permissions supplied: every invocation must "+
-		"state what the caller may see (dataperm.Unrestricted() when nothing is restricted)")
+		"state what the caller may see (dataperm.Ungoverned() when nothing governs their queries)")
 }
 
 // NoInput is the input of a command that takes no args.

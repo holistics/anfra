@@ -44,6 +44,8 @@ import (
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/command"
+	querycmd "github.com/holistics/anfra/internal/command/query"
+	"github.com/holistics/anfra/internal/command/show"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
@@ -100,19 +102,28 @@ type (
 	// and its use authorized. Required for a managed repo, which has no
 	// data_sources.yml, for the commands that compile or run a query.
 	DataSources = datasource.DataSources
+	// DataPermMode is how the SQL a connection carries reads the data, as the
+	// engine states it when it asks DataSources.Connection: governed, compiled
+	// from a dataset with the invocation's DataPerms in it; or ungoverned, as
+	// written. A host may refuse a mode it did not grant the call on that data
+	// source — a second gate, behind its authorization and DataPerms, which must
+	// be right on their own.
+	DataPermMode = datasource.DataPermMode
 	// DataSourceSet is DataSources held in memory, by name: for a host that
 	// already holds them all.
 	DataSourceSet = datasource.Set
 
-	// Attributes are caller attributes that data restrictions are evaluated
+	// Attributes are caller attributes that the repo's data rules are evaluated
 	// against — a region, a department, an email. They are decision-bearing: the
 	// compiler reads them, and changing one changes which rows come back.
 	Attributes = dataperm.Attributes
 
-	// DataPerms is what a caller may see, for one invocation. It cannot be built
-	// with a struct literal: use Unrestricted or Restricted, so that "nothing is
-	// restricted" is something a host states rather than something it defaults
-	// into by leaving a field blank.
+	// DataPerms is how a caller's queries may read the data, for one
+	// invocation: governed, through the semantic layer with the repo's rules
+	// applied; or ungoverned, raw SQL included. It cannot be built with a struct
+	// literal: use Governed or Ungoverned, so that "ungoverned" is something a
+	// host states rather than something it defaults into by leaving a field
+	// blank.
 	DataPerms = dataperm.Set
 
 	// Attribution names the caller of one invocation for logs, spans and audit
@@ -165,9 +176,9 @@ var (
 	UnknownCommand = errcode.UnknownCommand
 	// DataPermsMissing: the Invocation's DataPerms were never decided.
 	DataPermsMissing = errcode.DataPermsMissing
-	// DataPermsUnenforceable: the Invocation's DataPerms are Restricted, and the
-	// query cannot apply restrictions (raw SQL). A host that authorized the
-	// caller on the data source states Unrestricted.
+	// DataPermsUnenforceable: the Invocation's DataPerms are Governed, and the
+	// query cannot be governed (raw SQL). A host that authorized the caller on
+	// the data source states Ungoverned.
 	DataPermsUnenforceable = errcode.DataPermsUnenforceable
 	// SidecarUnavailable: a sidecar the command needs did not respond, or is
 	// not connected.
@@ -205,14 +216,16 @@ var Namespace = errcode.NS
 // by an anfra core upgrade.
 func ErrorCodes() []apperr.Code { return apperr.Codes(errcode.NS) }
 
-// Unrestricted states that no data restrictions apply to this caller. It is an
-// answer, not a default: Dispatch refuses an Invocation whose DataPerms nobody
-// set, so a host that has not thought about permissions cannot accidentally get
-// unrestricted access.
-func Unrestricted() DataPerms { return dataperm.Unrestricted() }
+// Ungoverned states that this caller's queries may read the data as written:
+// raw SQL runs, and no rule applies. It is an answer, not a default: Dispatch
+// refuses an Invocation whose DataPerms nobody set, so a host that has not
+// thought about permissions cannot accidentally get ungoverned access.
+func Ungoverned() DataPerms { return dataperm.Ungoverned() }
 
-// Restricted carries the attributes of a caller whose access depends on them.
-func Restricted(attrs Attributes) DataPerms { return dataperm.Restricted(attrs) }
+// Governed states that this caller's queries reach the data only through the
+// semantic layer, with the repo's rules evaluated against attrs: raw SQL is
+// refused, even with no attributes.
+func Governed(attrs Attributes) DataPerms { return dataperm.Governed(attrs) }
 
 // OpenRepo resolves an AML repo directory to its identity and state layout. It
 // creates no directories and does not validate the contents. A command on it is
@@ -265,12 +278,44 @@ const (
 // are copies.
 func Describe() []CommandSpec { return app.Describe() }
 
+// The modes a connection is asked for in (DataPermMode).
+const (
+	DataPermModeGoverned   = datasource.DataPermModeGoverned
+	DataPermModeUngoverned = datasource.DataPermModeUngoverned
+)
+
+// The input types of the ops a host authorizes on, as Ops' handlers receive
+// them: decoded, then prepared — defaults applied, normalized and checked — so
+// a host derives its permissions from the input the op runs on.
+type (
+	// QueryInput is core.query.validate's input, and the query and its
+	// target, in the others'.
+	QueryInput = querycmd.QueryInput
+	// QueryRunInput is core.query's and core.query.compile's input.
+	QueryRunInput = querycmd.QueryRunInput
+	// QueryExportInput is core.query.export's input.
+	QueryExportInput = querycmd.ExportInput
+	// ShowInput is core.show's input.
+	ShowInput = show.ShowInput
+)
+
+// Refs to the ops a host authorizes on, with their input types: what a host
+// mounts them by (apikit.Mount), so that a derivation for another type does
+// not compile.
+var (
+	QueryOp         = apikit.OpRef[QueryRunInput]{Name: "core.query"}
+	QueryCompileOp  = apikit.OpRef[QueryRunInput]{Name: "core.query.compile"}
+	QueryValidateOp = apikit.OpRef[QueryInput]{Name: "core.query.validate"}
+	QueryExportOp   = apikit.OpRef[QueryExportInput]{Name: "core.query.export"}
+	ShowOp          = apikit.OpRef[ShowInput]{Name: "core.show"}
+)
+
 // Ops is every command as an apikit op, core.<command>, admitted from an
 // Invocation: the core API, for a host to serve as it is. A host mounts each op
-// it serves (apikit.Mount) under its own admission, building the Invocation for
-// the caller it admitted; the ops' names, schemas, handlers and codes are
-// anfra core's, so a client of the core API meets the same contract on every
-// host. Each call returns a new registry.
+// it serves (apikit.Mount, by its ref above or apikit.Untyped) under its own
+// admission, building the Invocation for the caller it admitted; the ops'
+// names, schemas, handlers and codes are anfra core's, so a client of the core
+// API meets the same contract on every host. Each call returns a new registry.
 func Ops() *apikit.Registry[Invocation, Invocation] { return app.NewRegistry() }
 
 // Commands returns the names of every registered command, in registry order.

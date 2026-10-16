@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -19,6 +21,7 @@ type spySources struct {
 	err         error
 	dialects    int
 	connections []string
+	modes       []datasource.DataPermMode
 }
 
 func (s *spySources) Dialects(ctx context.Context) ([]datasource.Dialect, error) {
@@ -26,12 +29,13 @@ func (s *spySources) Dialects(ctx context.Context) ([]datasource.Dialect, error)
 	return s.set.Dialects(ctx)
 }
 
-func (s *spySources) Connection(ctx context.Context, name string) (datasource.DataSource, error) {
+func (s *spySources) Connection(ctx context.Context, name string, mode datasource.DataPermMode) (datasource.DataSource, error) {
 	s.connections = append(s.connections, name)
+	s.modes = append(s.modes, mode)
 	if s.err != nil {
 		return datasource.DataSource{}, s.err
 	}
-	return s.set.Connection(ctx, name)
+	return s.set.Connection(ctx, name, mode)
 }
 
 var warehouse = datasource.Set{
@@ -63,6 +67,31 @@ func TestRunningAsksForOneConnection(t *testing.T) {
 	_ = Stream(context.Background(), canal, spy, compiled, Unbounded, canalquery.Handler{Row: func(canalquery.Row) error { return nil }})
 	if spy.dialects != 0 || len(spy.connections) != 1 || spy.connections[0] != "warehouse" {
 		t.Errorf("running asked for %d dialects and connections %v; want the warehouse connection only", spy.dialects, spy.connections)
+	}
+	if spy.modes[0] != datasource.DataPermModeGoverned {
+		t.Errorf("a compiled query's connection was asked for as %v, want governed", spy.modes[0])
+	}
+}
+
+// SQL as written is connected in the ungoverned mode, and only for an
+// ungoverned caller: a governed one is refused before any connection is asked
+// for.
+func TestUngovernedSQL(t *testing.T) {
+	spy := &spySources{set: warehouse}
+	if _, err := ConnectUngoverned(context.Background(), dataperm.Governed(nil), spy, "warehouse", "select 1"); !errors.Is(err, errcode.DataPermsUnenforceable) {
+		t.Errorf("a governed caller: %v, want data_perms_unenforceable", err)
+	}
+	if len(spy.connections) != 0 {
+		t.Errorf("a governed caller's SQL asked for connections %v", spy.connections)
+	}
+	if _, err := ConnectUngoverned(context.Background(), dataperm.Ungoverned(), spy, "warehouse", "select 1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(spy.modes) != 1 || spy.modes[0] != datasource.DataPermModeUngoverned {
+		t.Errorf("SQL as written was connected as %v, want ungoverned", spy.modes)
+	}
+	if _, err := ConnectUngoverned(context.Background(), dataperm.Ungoverned(), spy, "gone", "select 1"); !errors.Is(err, datasource.ErrUnknown) {
+		t.Errorf("an unknown data source: %v, want ErrUnknown", err)
 	}
 }
 

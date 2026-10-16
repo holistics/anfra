@@ -73,6 +73,14 @@ type Def[Caller, In, Out any] struct {
 	// transports: who may call it, its rate limit. apikit never reads it.
 	Ext any
 
+	// Prepare readies the decoded input for authorization and the handler: what
+	// the schema publishes but validation does not apply (defaults), and the
+	// rules between fields that it does not state. Authorization and the handler
+	// see the input it answers. It reads nothing but the input — no store, no
+	// repo — since it runs before authorization: a caller refused there must
+	// learn nothing from it. Nil: the input as decoded.
+	Prepare func(in In) (In, error)
+
 	// Handle is glue: it maps In to a service call and the result to Out, with no
 	// branching on domain state.
 	Handle func(ctx context.Context, c Caller, in In) (Out, error)
@@ -86,7 +94,8 @@ type Admission[Call, Caller any] struct {
 	// is read, so a caller who may not call the op cannot probe its validation.
 	Admit func(ctx context.Context, r Call) (Caller, error)
 	// Authorize checks what the admitted caller may do with this input: a
-	// permission derived from it, say. in is the op's In. Nil: admission is all.
+	// permission derived from it, say. in is the op's In, as Def.Prepare answers
+	// it. Nil: admission is all.
 	Authorize func(ctx context.Context, r Call, c Caller, in any) error
 }
 

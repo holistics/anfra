@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/command"
-	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -91,9 +90,9 @@ const (
 type queryRun struct {
 	cc command.CommandContext
 	in QueryRunInput
-	// ds is a SQL query's data source; src and aql an AQL query's, its limit:
-	// directive taken out into limit.
-	ds    datasource.DataSource
+	// sql is a SQL query, on its data source; src and aql an AQL query's, its
+	// limit: directive taken out into limit.
+	sql   query.UngovernedSQL
 	src   query.Source
 	aql   string
 	limit int
@@ -105,14 +104,14 @@ type queryRun struct {
 func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRunInput) (QueryRun, error) {
 	q := queryRun{cc: cc, in: in, limit: query.NoLimit}
 	if in.Lang == "sql" {
-		ds, err := in.dataSource(ctx, cc)
+		sql, err := in.ungoverned(ctx, cc)
 		if err != nil {
 			return QueryRun{}, err
 		}
 		if err := command.RequireSidecars(cc, command.Sidecars{CanalQuery: true}); err != nil {
 			return QueryRun{}, err
 		}
-		q.ds = ds
+		q.sql = sql
 	} else {
 		aql, limit, err := in.aql()
 		if err != nil {
@@ -219,7 +218,7 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (Timings, e
 			return Timings{}, err
 		}
 		t.requested()
-		err := query.StreamSQL(ctx, canal, q.ds, q.in.Query, bounds, canalquery.Handler{
+		err := q.sql.Stream(ctx, canal, bounds, canalquery.Handler{
 			Progress: t.progress,
 			Header:   func(h canalquery.Header) error { return s.header(describeColumns(h, nil), h.Fields) },
 			Row:      s.row,

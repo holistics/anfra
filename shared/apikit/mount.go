@@ -9,31 +9,47 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
-	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-// Args is an op's input as the client sent it: a JSON object, by field name,
-// before it is validated. What a mounting host authorizes from.
-type Args = map[string]any
+// OpRef names an op with its input type: what a host mounts an op by, so that
+// its authorization reads the op's input, typed, and a derivation for another
+// type does not compile. A registry whose ops hosts mount exports one per op
+// they authorize on; Mount checks, at startup, that the op named takes In.
+type OpRef[In any] struct{ Name string }
+
+// Untyped refers to the op named name with its input untyped: for a host whose
+// authorization does not read the input.
+func Untyped(name string) OpRef[any] { return OpRef[any]{Name: name} }
+
+// CheckRef reports whether ref names an op of set that takes ref's input: for
+// a registry to test the refs it exports.
+func CheckRef[Call, In any](set OpSet[Call], ref OpRef[In]) error {
+	_, err := preparableOf(set, ref)
+	return err
+}
 
 // Mounting is how a host serves another registry's op as it is — its name,
 // schemas, handler and codes unchanged — under its own admission. Call is what
 // the host's transports pass; Caller is the host's caller; BoundCall is what
 // the mounted op is called with: its own registry's Call (the engine's
-// Invocation, say).
+// Invocation, say); In is the op's input, as its OpRef says.
 //
-// A call runs Admit, then Authorize, then Bind, then the mounted op, which
-// validates its input and runs. A run it returns is the host's: submitted to
-// the host's registry's executor, for the host's caller.
-type Mounting[Call, Caller, BoundCall any] struct {
-	// Admit resolves the call into the host's caller, or refuses it. Required.
+// A call runs Admit; then the op's decoding and preparation (Def.Prepare);
+// then Authorize, on the prepared input; then Bind, with the caller Authorize
+// answered; then the mounted op, on the same input, decoded once. A run it
+// returns is the host's: submitted to the host's registry's executor, for the
+// host's caller.
+type Mounting[Call, Caller, BoundCall, In any] struct {
+	// Admit resolves the call into the host's caller, or refuses it. It runs
+	// before the input is read. Required.
 	Admit func(ctx context.Context, call Call) (Caller, error)
-	// Authorize checks what the caller may do with this input, as the client
-	// sent it. Nil: admission is all.
-	Authorize func(ctx context.Context, call Call, caller Caller, input Args) error
+	// Authorize checks what the caller may do with the input, as the op
+	// prepared it, and answers the caller Bind gets: narrowed to what it was
+	// authorized for, say. It must not change in. Nil: admission is all, and
+	// Bind gets the caller Admit answered.
+	Authorize func(ctx context.Context, call Call, caller Caller, in In) (Caller, error)
 	// Bind builds what the mounted op is called with, for this caller.
 	// Required.
 	Bind func(ctx context.Context, caller Caller) (BoundCall, error)
@@ -67,63 +83,87 @@ func WithTimeout(d time.Duration) MountOption {
 // transports and executor.
 func WithExt(ext any) MountOption { return func(m *Meta) { m.Ext = ext } }
 
-// Mount serves from's op named name in into, with m and opts. It panics, as
-// Register does, on an op from does not hold, a name into already holds, or a
-// malformed m.
-func Mount[Call, Caller, BoundCall any](into *Registry[Call, Caller], from OpSet[BoundCall], name string, m Mounting[Call, Caller, BoundCall], opts ...MountOption) {
-	inner, ok := from.Lookup(name)
+// Mount serves from's op that ref names in into, with m and opts. It panics, as
+// Register does, on an op from does not hold, one that does not take ref's
+// input, a name into already holds, or a malformed m.
+func Mount[Call, Caller, BoundCall, In any](into *Registry[Call, Caller], from OpSet[BoundCall], ref OpRef[In], m Mounting[Call, Caller, BoundCall, In], opts ...MountOption) {
+	inner, err := preparableOf(from, ref)
 	switch {
-	case !ok:
-		panic(fmt.Sprintf("op %q: not in the registry to mount from", name))
+	case err != nil:
+		panic(err.Error())
 	case m.Admit == nil || m.Bind == nil:
-		panic(fmt.Sprintf("op %q: a mounting needs Admit and Bind", name))
+		panic(fmt.Sprintf("op %q: a mounting needs Admit and Bind", ref.Name))
 	}
 	meta := inner.Meta()
 	for _, opt := range opts {
 		opt(&meta)
 	}
-	if group := GroupOf(name); into.groups[group] == "" {
+	if group := GroupOf(ref.Name); into.groups[group] == "" {
 		// The mounted op's group, as its registry describes it, unless the host
 		// describes it itself.
 		into.groups[group] = from.GroupSummary(group)
 	}
-	into.add(&mounted[Call, Caller, BoundCall]{inner: inner, m: m, meta: meta, step: stepFor(into.ns, name), params: into.params, executor: into.executor})
+	into.add(&mounted[Call, Caller, BoundCall, In]{inner: inner, m: m, meta: meta, step: stepFor(into.ns, ref.Name), params: into.params, executor: into.executor})
 }
 
-type mounted[Call, Caller, BoundCall any] struct {
-	inner    Op[BoundCall]
-	m        Mounting[Call, Caller, BoundCall]
+// preparable is an op whose input can be prepared apart from running it, which
+// Mount needs to authorize on the prepared input: every op Register makes.
+type preparable[Call any] interface {
+	Op[Call]
+	inType() reflect.Type
+	prepareAny(rt *Runtime, raw []byte) (any, error)
+	invokePrepared(ctx context.Context, rt *Runtime, call Call, in any, emit func(any) error) (any, error)
+}
+
+// preparableOf is the op of set that ref names, checked to take ref's input
+// (any input, for an untyped ref).
+func preparableOf[Call, In any](set OpSet[Call], ref OpRef[In]) (preparable[Call], error) {
+	o, ok := set.Lookup(ref.Name)
+	if !ok {
+		return nil, fmt.Errorf("op %q: not in the registry to mount from", ref.Name)
+	}
+	p, ok := o.(preparable[Call])
+	if !ok {
+		return nil, fmt.Errorf("op %q: not a registered op (a mounted one cannot be mounted again)", ref.Name)
+	}
+	if want := reflect.TypeFor[In](); want.Kind() != reflect.Interface && p.inType() != want {
+		return nil, fmt.Errorf("op %q: takes %v, not %v", ref.Name, p.inType(), want)
+	}
+	return p, nil
+}
+
+type mounted[Call, Caller, BoundCall, In any] struct {
+	inner    preparable[BoundCall]
+	m        Mounting[Call, Caller, BoundCall, In]
 	meta     Meta
 	step     appstep.Def
 	params   func(Call) []any
 	executor Executor[Caller]
 }
 
-func (o *mounted[Call, Caller, BoundCall]) Meta() Meta { return o.meta }
-func (o *mounted[Call, Caller, BoundCall]) InSchema(rt *Runtime) *huma.Schema {
+func (o *mounted[Call, Caller, BoundCall, In]) Meta() Meta { return o.meta }
+func (o *mounted[Call, Caller, BoundCall, In]) InSchema(rt *Runtime) *huma.Schema {
 	return o.inner.InSchema(rt)
 }
-func (o *mounted[Call, Caller, BoundCall]) OutType() reflect.Type      { return o.inner.OutType() }
-func (o *mounted[Call, Caller, BoundCall]) EventTypes() []reflect.Type { return o.inner.EventTypes() }
+func (o *mounted[Call, Caller, BoundCall, In]) OutType() reflect.Type { return o.inner.OutType() }
+func (o *mounted[Call, Caller, BoundCall, In]) EventTypes() []reflect.Type {
+	return o.inner.EventTypes()
+}
 
 // Invoke runs the host's steps, then the mounted op, within the host's timeout
 // when it set one (the op's own still applies inside it). Every call is the
 // host's private step for the op, around the mounted op's own.
-func (o *mounted[Call, Caller, BoundCall]) Invoke(ctx context.Context, rt *Runtime, call Call, raw []byte) (any, error) {
-	return o.invoke(ctx, rt, call, raw, func(ctx context.Context, bound BoundCall) (any, error) {
-		return o.inner.Invoke(ctx, rt, bound, raw)
-	})
+func (o *mounted[Call, Caller, BoundCall, In]) Invoke(ctx context.Context, rt *Runtime, call Call, raw []byte) (any, error) {
+	return o.invoke(ctx, rt, call, raw, nil)
 }
 
 // InvokeStream is Invoke, streaming the mounted op's Run.
-func (o *mounted[Call, Caller, BoundCall]) InvokeStream(ctx context.Context, rt *Runtime, call Call, raw []byte, emit func(any) error) error {
-	_, err := o.invoke(ctx, rt, call, raw, func(ctx context.Context, bound BoundCall) (any, error) {
-		return nil, o.inner.InvokeStream(ctx, rt, bound, raw, emit)
-	})
+func (o *mounted[Call, Caller, BoundCall, In]) InvokeStream(ctx context.Context, rt *Runtime, call Call, raw []byte, emit func(any) error) error {
+	_, err := o.invoke(ctx, rt, call, raw, emit)
 	return err
 }
 
-func (o *mounted[Call, Caller, BoundCall]) invoke(ctx context.Context, rt *Runtime, call Call, raw []byte, inner func(context.Context, BoundCall) (any, error)) (_ any, err error) {
+func (o *mounted[Call, Caller, BoundCall, In]) invoke(ctx context.Context, rt *Runtime, call Call, raw []byte, emit func(any) error) (_ any, err error) {
 	var params []any
 	if o.params != nil {
 		params = o.params(call)
@@ -135,12 +175,12 @@ func (o *mounted[Call, Caller, BoundCall]) invoke(ctx context.Context, rt *Runti
 	if err != nil {
 		return nil, err
 	}
+	in, err := o.inner.prepareAny(rt, raw)
+	if err != nil {
+		return nil, err
+	}
 	if o.m.Authorize != nil {
-		input, err := argsOf(raw)
-		if err != nil {
-			return nil, err
-		}
-		if err := o.m.Authorize(ctx, call, caller, input); err != nil {
+		if caller, err = o.m.Authorize(ctx, call, caller, in.(In)); err != nil {
 			return nil, err
 		}
 	}
@@ -151,31 +191,13 @@ func (o *mounted[Call, Caller, BoundCall]) invoke(ctx context.Context, rt *Runti
 	// A run the mounted op returns is the host's, for its caller.
 	ctx = withSubmitter(ctx, submitTo(o.executor, caller, o.meta))
 	if o.meta.Timeout == 0 || o.meta.Timeout == o.inner.Meta().Timeout {
-		return inner(ctx, bound)
+		return o.inner.invokePrepared(ctx, rt, bound, in, emit)
 	}
 	bounded, cancel := context.WithTimeout(ctx, o.meta.Timeout)
 	defer cancel()
-	out, err := inner(bounded, bound)
+	out, err := o.inner.invokePrepared(bounded, rt, bound, in, emit)
 	if err != nil && rt.Timeout != nil && errors.Is(bounded.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 		return out, rt.Timeout(err)
 	}
 	return out, err
-}
-
-// argsOf is a body as the object the client sent, for authorization: an empty
-// body is an empty object, as decoding has it; anything but an object is no
-// args, and the op's validation says what is wrong with it.
-func argsOf(raw []byte) (Args, error) {
-	if len(raw) == 0 {
-		return Args{}, nil
-	}
-	var parsed any
-	if err := jsonkit.Unmarshal(raw, &parsed); err != nil {
-		return nil, apperr.Encapsulate(err, apperr.InvalidRequest, "The body is not valid JSON.")
-	}
-	args, _ := parsed.(map[string]any)
-	if args == nil {
-		args = Args{}
-	}
-	return args, nil
 }

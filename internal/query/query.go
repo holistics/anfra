@@ -256,20 +256,14 @@ func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.Da
 }
 
 // dataSourceOf is the data source a compiled query runs on, connection included:
-// the one its dataset targets, and only that one is asked for.
+// the one its dataset targets, and only that one is asked for, in the governed
+// mode: what runs on it is the compiler's.
 func dataSourceOf(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (datasource.DataSource, error) {
-	ds, err := sources.Connection(ctx, compiled.DataSource.Name)
+	ds, err := connect(ctx, sources, compiled.DataSource.Name, datasource.DataPermModeGoverned)
 	if errors.Is(err, datasource.ErrUnknown) {
 		return datasource.DataSource{}, fmt.Errorf("data source %q is not defined among the repo's data sources", compiled.DataSource.Name)
 	}
 	return ds, err
-}
-
-// StreamSQL runs sql on ds as it is: the caller wrote it in the data source's
-// dialect, with its own LIMIT. Nothing is compiled into it — no restriction
-// applies. bounds are as for Stream.
-func StreamSQL(ctx context.Context, canal *canalquery.Client, ds datasource.DataSource, sql string, bounds ResultBounds, h canalquery.Handler) error {
-	return stream(ctx, canal, ds, canalquery.Statement{SQL: sql, DBType: ds.DBType}, bounds, h)
 }
 
 // stream fetches st's rows within bounds: canal is asked for no more than

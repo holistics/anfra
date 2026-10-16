@@ -81,13 +81,13 @@ func TestRefusalStopsTheCommandBody(t *testing.T) {
 	}
 }
 
-// Stating that nothing is restricted is a decision, and it lets the command run.
-func TestUnrestrictedIsADecision(t *testing.T) {
+// Stating that queries are ungoverned is a decision, and it lets the command run.
+func TestUngovernedIsADecision(t *testing.T) {
 	ran := withProbe(t)
 
-	res, err := dispatchProbe(command.CommandContext{DataPerms: dataperm.Unrestricted()})
+	res, err := dispatchProbe(command.CommandContext{DataPerms: dataperm.Ungoverned()})
 	if err != nil {
-		t.Fatalf("expected the command to run under Unrestricted, got: %v", err)
+		t.Fatalf("expected the command to run under Ungoverned, got: %v", err)
 	}
 	if !*ran {
 		t.Error("the command body did not run")
@@ -98,12 +98,12 @@ func TestUnrestrictedIsADecision(t *testing.T) {
 }
 
 // So is carrying real attributes.
-func TestRestrictedIsADecision(t *testing.T) {
+func TestGovernedIsADecision(t *testing.T) {
 	ran := withProbe(t)
 
-	perms := dataperm.Restricted(dataperm.Attributes{"region": "APAC"})
+	perms := dataperm.Governed(dataperm.Attributes{"region": "APAC"})
 	if _, err := dispatchProbe(command.CommandContext{DataPerms: perms}); err != nil {
-		t.Fatalf("expected the command to run under Restricted, got: %v", err)
+		t.Fatalf("expected the command to run under Governed, got: %v", err)
 	}
 	if !*ran {
 		t.Error("the command body did not run")

@@ -53,7 +53,7 @@ func lineageContext(node *anfranode.Client) command.CommandContext {
 		Clients:        command.Clients{Node: node, CanalQuery: canalquery.NewClient("http://127.0.0.1:9000/", false)},
 		Repo:           repo.Local{Dir: "/repo", ID: "repo-1", ConfigDir: "/repo/.anfra"}.Repo(),
 		AllowLocalRepo: true,
-		DataPerms:      dataperm.Unrestricted(),
+		DataPerms:      dataperm.Ungoverned(),
 	}
 }
 

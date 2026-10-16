@@ -28,12 +28,17 @@ var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 	Idempotent: true,
 	Timeout:    2 * time.Minute,
 	Needs:      func(ShowInput) command.Sidecars { return command.Sidecars{Node: true} },
+	// A blank fqn is none: the repo.
+	Normalize: func(in ShowInput) ShowInput {
+		in.Fqn = strings.TrimSpace(in.Fqn)
+		return in
+	},
 	Run: func(ctx context.Context, cc command.CommandContext, in ShowInput) (anfranode.ShowResult, error) {
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return anfranode.ShowResult{}, err
 		}
 		// The type is the fqn's: with no fqn, the repo, whatever the type defaulted to.
-		fqn, typ := strings.TrimSpace(in.Fqn), ""
+		fqn, typ := in.Fqn, ""
 		if fqn != "" {
 			typ = in.Type
 		}

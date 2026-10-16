@@ -19,8 +19,9 @@ import (
 //
 // The order is the order a client would fix things in: be admitted (signed in,
 // in an org), send valid input, hold the permissions. Admission comes before
-// decoding, so a caller who may not call the op cannot probe its validation;
-// only authorization needs the input, since it may be derived from it.
+// the input is read, so a caller who may not call the op cannot probe its
+// validation; authorization comes after it is prepared (Def.Prepare), since it
+// may be derived from it.
 func (o *registered[Call, Caller, In, Out]) Invoke(ctx context.Context, rt *Runtime, r Call, raw []byte) (any, error) {
 	return o.invoke(ctx, rt, r, raw, nil)
 }
@@ -48,10 +49,52 @@ func (o *registered[Call, Caller, In, Out]) invoke(ctx context.Context, rt *Runt
 	if err != nil {
 		return nil, err
 	}
-	in, err := decode.InputTo[In](rt.Schemas, o.InSchema(rt), raw)
+	in, err := o.prepare(rt, raw)
 	if err != nil {
 		return nil, err
 	}
+	return o.run(ctx, rt, r, c, in, emit)
+}
+
+// invokePrepared runs the op on an input prepare answered, for a host that
+// mounts it (Mount): the op's own admission, authorization and handler, with
+// nothing decoded again. With emit, streaming its Run.
+func (o *registered[Call, Caller, In, Out]) invokePrepared(ctx context.Context, rt *Runtime, r Call, in any, emit func(any) error) (_ any, err error) {
+	if emit != nil && o.events == nil {
+		return nil, fmt.Errorf("op %q does not stream: it returns no Run", o.decl.Name)
+	}
+	var params []any
+	if o.params != nil {
+		params = o.params(r)
+	}
+	ctx, span := apptracing.Start(ctx, o.step, params...)
+	defer span.End(&err)
+
+	c, err := o.adm.Admit(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	return o.run(ctx, rt, r, c, in.(In), emit)
+}
+
+func (o *registered[Call, Caller, In, Out]) inType() reflect.Type { return reflect.TypeFor[In]() }
+
+func (o *registered[Call, Caller, In, Out]) prepareAny(rt *Runtime, raw []byte) (any, error) {
+	return o.prepare(rt, raw)
+}
+
+// prepare is raw decoded and validated against In's schema, then prepared
+// (Def.Prepare): the input authorization and the handler see.
+func (o *registered[Call, Caller, In, Out]) prepare(rt *Runtime, raw []byte) (In, error) {
+	in, err := decode.InputTo[In](rt.Schemas, o.InSchema(rt), raw)
+	if err != nil || o.decl.Prepare == nil {
+		return in, err
+	}
+	return o.decl.Prepare(in)
+}
+
+// run authorizes the admitted caller c on the prepared input, then answers it.
+func (o *registered[Call, Caller, In, Out]) run(ctx context.Context, rt *Runtime, r Call, c Caller, in In, emit func(any) error) (any, error) {
 	if o.adm.Authorize != nil {
 		if err := o.adm.Authorize(ctx, r, c, in); err != nil {
 			return nil, err
