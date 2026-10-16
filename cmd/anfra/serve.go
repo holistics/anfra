@@ -104,6 +104,11 @@ func runServe(ctx context.Context, opts serveOptions) error {
 				"hint", "anfra serve has no authentication: anyone who reaches this address can query your data sources")
 			fmt.Fprintf(os.Stderr, "warning: %s is not a loopback address; anfra serve has no authentication\n", ln.Addr())
 		}
+		stopPprof, err := startPprof(h.cfg.Logger)
+		if err != nil {
+			return err
+		}
+		defer stopPprof()
 
 		// Warm sidecars live for the server's lifetime, so enable canal-query
 		// connection pooling: DB connections are reused across requests.

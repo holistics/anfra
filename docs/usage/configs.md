@@ -45,6 +45,7 @@ See [designs/sidecars.md](../designs/sidecars.md).
 |---|---|
 | `ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL` | Use sidecars something else runs (a compose or Kubernetes deployment) instead of spawning them: their base URLs, e.g. `http://anfra-node:8080`. Default: unset, and anfra spawns its own. |
 | `ANFRA_NODE_BIN`, `ANFRA_CANAL_QUERY_BIN` | The sidecar binaries, as absolute paths, for a build that embeds none (a build from source). Releases embed them, and ignore these. |
+| `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_NODE_ENV_<NAME>` | Set `<NAME>` in the canal-query or anfra-node that anfra spawns, and in no other process: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061` serves canal-query's pprof there. The sidecars inherit anfra's environment otherwise, except anfra's own `ANFRA_*` and the settings each process has its own of, which they get only this way: `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` ([designs/sidecars.md](../designs/sidecars.md#environment)). Values anfra sets for a sidecar, such as canal-query's `PORT`, cannot be changed. |
 
 #### Running anfra-node (the sidecar, not anfra) yourself
 
@@ -87,9 +88,15 @@ anfra exports traces over OTLP/HTTP when an endpoint is set, through the standar
 |---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | The collector's base URL, e.g. `http://localhost:4318`. anfra also points anfra-node at it. |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | The traces endpoint alone, a full URL ending in `/v1/traces`, instead of the base URL. |
-| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Label the traces, in OpenTelemetry's format (`key=value,key=value` for the attributes). Default service name: `anfra`. |
+| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Label anfra's traces, in OpenTelemetry's format (`key=value,key=value` for the attributes). Default service name: `anfra`. The sidecars don't inherit them; set theirs with `ANFRA_CANAL_QUERY_ENV_` or `ANFRA_NODE_ENV_` (above). |
 | `OTEL_SDK_DISABLED` | `true` exports nothing, whatever else is set. |
 | `H_OTEL_ENABLED`, `H_OTEL_INTERNAL_EXPORTER_URL` | anfra-node's own tracing settings (`1`; a base URL). anfra sets them from the endpoint above, unless they are set already. |
+
+### Profiling
+
+| Variable | Effect |
+|---|---|
+| `ANFRA_PPROF_ADDR` | Under `anfra serve`, serve Go's profiling endpoints for anfra (`/debug/pprof/`, for `go tool pprof`) at this address, e.g. `localhost:6060`, apart from the server. An address it cannot listen on fails the start. Keep it on loopback: they show anfra's memory, with no authentication. Default: unset, not served. canal-query has its own: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR`, at another address. |
 
 ### Updates
 

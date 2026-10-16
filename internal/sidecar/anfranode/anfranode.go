@@ -15,6 +15,11 @@ import (
 // Name is the sidecar's name, in its logs, its errors and its binary's.
 const Name = "anfra-node"
 
+// EnvPrefix sets anfra-node's own settings from anfra's environment, for the
+// one anfra spawns: ANFRA_NODE_ENV_NODE_OPTIONS=--max-old-space-size=4096 is
+// its NODE_OPTIONS (sidecar.ProcSpec.EnvPrefix).
+const EnvPrefix = "ANFRA_NODE_ENV_"
+
 // Sidecar supervises a host-spawned anfra-node. It owns the process lifecycle
 // and exposes a Client pointed at it; callers do their RPC through Client()
 // (which also works against external sidecars, so consumers don't depend on
@@ -67,6 +72,7 @@ func (a *Sidecar) Start(ctx context.Context) error {
 		Path:      binPath,
 		Args:      []string{"--socket=" + a.socketPath},
 		ExtraEnv:  env,
+		EnvPrefix: EnvPrefix,
 		Stdout:    a.cfg.StdoutWriter,
 		Stderr:    a.cfg.StderrWriter,
 		Logger:    a.cfg.Logger,
