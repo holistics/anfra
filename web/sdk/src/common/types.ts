@@ -366,6 +366,12 @@ export interface QueryResult {
     /** Present only for a query that declares a `pageSize`. */
     pageSize?: number;
     numRows: number;
+    /**
+     * For a query that declares a `pageSize`: whether rows may follow this page, as its backend
+     * knows it. Absent when the backend does not say; `query.hasMore` then takes a full page to
+     * mean more may follow.
+     */
+    hasMore?: boolean;
   };
   debug?: QueryDebug;
 }
@@ -672,6 +678,8 @@ export interface BackendQueryResult {
     page?: number;
     pageSize?: number;
     numRows?: number;
+    /** For a paged query: whether rows may follow this page. Omit it when not known. */
+    hasMore?: boolean;
   };
   debug?: QueryDebug;
 }
