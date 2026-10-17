@@ -1,6 +1,6 @@
 # Developing anfra
 
-For working on anfra itself. How it's designed is in [docs/designs](docs/designs/); start with the [philosophy](docs/designs/philosophy.md) and the [architecture](docs/designs/architecture.md). Conventions for writing its code are in [docs/dev](docs/dev/), such as [method naming](docs/dev/method-naming.md).
+For working on anfra itself. How it's designed is in [docs/designs](docs/designs/); start with the [philosophy](docs/designs/philosophy.md) and the [architecture](docs/designs/architecture.md). Conventions for writing its code are in [docs/dev](docs/dev/), such as [method naming](docs/dev/method-naming.md) and [error mapping](docs/dev/error-mapping.md).
 
 ## Prerequisites
 
