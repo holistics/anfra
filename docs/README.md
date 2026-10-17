@@ -34,5 +34,6 @@ Conventions for writing anfra's code.
 | Doc | Covers |
 |---|---|
 | [method naming](dev/method-naming.md) | Methods as messages: whose act a name is, hooks versus methods, one name for one action across layers. |
+| [error mapping](dev/error-mapping.md) | One function per operation boundary deciding which error its caller sees: nil and the unmapped passing through, called at every exit. |
 
 For working on anfra itself, see [DEVELOPMENT.md](../DEVELOPMENT.md).
