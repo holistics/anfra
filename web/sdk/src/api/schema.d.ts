@@ -660,6 +660,7 @@ export interface components {
             has_more: boolean;
             result: components["schemas"]["QueryRows"];
             sql: string;
+            /** @description the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again */
             timings: components["schemas"]["Timings"];
         };
         QueryRows: {
@@ -714,6 +715,7 @@ export interface components {
             has_more: boolean;
             /** Format: int64 */
             row_count: number;
+            /** @description the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again */
             timings: components["schemas"]["Timings"];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -911,7 +913,7 @@ export interface components {
              * @description when it started, in ms since the run started
              */
             start_ms: number;
-            /** @description compiling_query; canal-query's steps by its names (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again */
+            /** @description the step's name, as what ran names it; a child step as <parent>.<child>, within its parent */
             step: string;
         };
         Timings: {
@@ -920,7 +922,7 @@ export interface components {
              * @description when the run ended, in ms since it started: its total time, and where its last steps end
              */
             end_ms: number;
-            /** @description each step as it started, in order; a step run again, after a retry, is here again */
+            /** @description each step as it started, in order; a step run again is here again */
             steps: components["schemas"]["TimedStep"][];
         };
         UpdateInfo: {

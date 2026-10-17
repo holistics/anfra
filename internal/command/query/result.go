@@ -17,7 +17,7 @@ type QueryResult struct {
 	Columns []Column  `json:"columns" doc:"one per field of result, in order"`
 	Result  QueryRows `json:"result"`
 	HasMore bool      `json:"has_more" doc:"there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"`
-	Timings Timings   `json:"timings"`
+	Timings Timings   `json:"timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
 }
 
 type QueryRows struct {

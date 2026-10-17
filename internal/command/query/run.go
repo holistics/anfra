@@ -9,6 +9,7 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
@@ -66,7 +67,7 @@ type QuerySummary struct {
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
 	BytesScanned *int64  `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
-	Timings      Timings `json:"timings"`
+	Timings      Timings `json:"timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
 }
 
 func (QueryCompiled) queryEvent()  {}
@@ -139,21 +140,13 @@ type sink struct {
 	row       func(canalquery.Row) error
 }
 
-// Timings are when each step of a run started, in order, in milliseconds since
-// the run started; and when it ended. They are what is known, not what is
-// derived from it: a step ends where the next step at its level or above starts
-// (a child step, "executing_query.poll_query", is within its parent), or at
-// EndMs — canal-query's rule for its steps, which it reports only the starts of.
-type Timings struct {
-	Steps []TimedStep `json:"steps" doc:"each step as it started, in order; a step run again, after a retry, is here again"`
-	EndMs int64       `json:"end_ms" doc:"when the run ended, in ms since it started: its total time, and where its last steps end"`
-}
-
-// TimedStep is when a step of the run started.
-type TimedStep struct {
-	Step    string `json:"step" doc:"compiling_query; canal-query's steps by its names (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
-	StartMs int64  `json:"start_ms" doc:"when it started, in ms since the run started"`
-}
+// Timings and TimedStep are a run's timeline, command's (CommandContext's
+// observers report them too), named here as the query's answer has always
+// named them. A query's steps are documented on its answer's fields.
+type (
+	Timings   = command.Timings
+	TimedStep = command.TimedStep
+)
 
 // tracker follows a run: the phase it is in, for the stream's status, and its
 // timeline, for Timings. canal-query's times count from when it started
@@ -208,22 +201,27 @@ func (t *tracker) timings() Timings { return Timings{Steps: t.steps, EndMs: t.si
 
 // execute compiles the query, when it is AQL, and runs it, its result truncated
 // at truncate rows (query.NoLimit: none) and failing past the host's maximum;
-// and answers its timings.
-func (q queryRun) execute(ctx context.Context, truncate int, s sink) (Timings, error) {
+// and answers its timings. The invocation's query observer is told of it as it
+// goes (observation).
+func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings, err error) {
 	canal := q.cc.Clients.CanalQuery
 	bounds := query.Bounded(truncate, q.cc.QueryLimits)
 	t := newTracker(s)
+	o := observe(q.cc, t)
+	defer func() { o.finished(ctx, err) }()
+	handler := func(columns []anfranode.ExploreColumn) canalquery.Handler {
+		return o.handler(ctx, canalquery.Handler{
+			Header: func(h canalquery.Header) error { return s.header(describeColumns(h, columns), h.Fields) },
+			Row:    s.row,
+		})
+	}
 	if q.in.Lang == "sql" {
 		if err := s.compiled(q.in.Query, ""); err != nil {
 			return Timings{}, err
 		}
+		o.compiled(ctx, q.in.DataSource, "", q.in.Query)
 		t.requested()
-		err := q.sql.Stream(ctx, canal, bounds, canalquery.Handler{
-			Progress: t.progress,
-			Header:   func(h canalquery.Header) error { return s.header(describeColumns(h, nil), h.Fields) },
-			Row:      s.row,
-		})
-		if err != nil {
+		if err := q.sql.Stream(ctx, canal, bounds, handler(nil)); err != nil {
 			return Timings{}, asQueryFailed(err)
 		}
 		return t.timings(), nil
@@ -238,16 +236,64 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (Timings, e
 	if err := s.compiled(compiled.SQL, compiled.AQL); err != nil {
 		return Timings{}, err
 	}
+	o.compiled(ctx, compiled.DataSource.Name, q.in.Dataset, compiled.SQL)
 	t.requested()
-	err = query.Stream(ctx, canal, q.src.DataSources, compiled, bounds, canalquery.Handler{
-		Progress: t.progress,
-		Header:   func(h canalquery.Header) error { return s.header(describeColumns(h, compiled.Columns), h.Fields) },
-		Row:      s.row,
-	})
-	if err != nil {
+	if err := query.Stream(ctx, canal, q.src.DataSources, compiled, bounds, handler(compiled.Columns)); err != nil {
 		return Timings{}, asQueryFailed(err)
 	}
 	return t.timings(), nil
+}
+
+// observation is a query as the invocation's observer is told of it: once
+// compiled, its warehouse id when the warehouse gives it, and its end — however
+// it ends, but only after it was compiled.
+type observation struct {
+	obs     command.QueryObserver
+	id      command.QueryID
+	t       *tracker
+	sent    bool
+	rows    int
+	scanned *int64
+}
+
+func observe(cc command.CommandContext, t *tracker) *observation {
+	return &observation{obs: cc.QueryObserver(), id: command.NewQueryID(), t: t}
+}
+
+// compiled tells the observer the query is about to be sent.
+func (o *observation) compiled(ctx context.Context, dataSource, dataset, sql string) {
+	o.obs.QueryCompiled(ctx, command.CompiledQuery{ID: o.id, DataSource: dataSource, Dataset: dataset, SQL: sql})
+	o.sent = true
+}
+
+// handler is h with canal-query's progress followed: its steps timed by the
+// observation's tracker (which reports the run's phases to its sink), and the
+// warehouse's id and bytes scanned told to the observer; and the rows read
+// counted.
+func (o *observation) handler(ctx context.Context, h canalquery.Handler) canalquery.Handler {
+	row := h.Row
+	h.Progress = func(p canalquery.Progress) error {
+		switch {
+		case p.Kind == "dw_query_id":
+			o.obs.QueryOnWarehouse(ctx, o.id, p.DwQueryID)
+		case p.Kind == "dw_bytes_processed" && p.DwBytesProcessed != nil:
+			n := *p.DwBytesProcessed
+			o.scanned = &n
+		}
+		return o.t.progress(p)
+	}
+	h.Row = func(r canalquery.Row) error {
+		o.rows++
+		return row(r)
+	}
+	return h
+}
+
+// finished tells the observer how the query ended, when it was told of it.
+func (o *observation) finished(ctx context.Context, err error) {
+	if o.sent {
+		o.obs.QueryFinished(ctx, o.id, command.FinishedQuery{Rows: o.rows, BytesScanned: o.scanned, Timings: o.t.timings(), Err: err})
+	}
 }
 
 // asQueryFailed is err as query_failed, with canal's message, when it is

@@ -90,12 +90,18 @@ type Executor[Caller any] interface {
 	Submit(ctx context.Context, caller Caller, s Submission) (Execution, error)
 }
 
-// Submission is a run handed to the executor: of which op, and its work.
+// Submission is a run handed to the executor: of which op, on what input, and
+// its work.
 type Submission struct {
 	// Op is the op, as the registry serving it declares it: for a mounted op,
 	// the mounting registry's declaration, its Ext the host's.
-	Op   Meta
-	Work Work
+	Op Meta
+	// Input is the op's input as its handler received it: decoded, validated
+	// and prepared (Def.Prepare) — the value the run runs on, of the op's In:
+	// for a mounted op, the mounted op's. For an executor that keeps it, to
+	// record what was asked, or to run it again.
+	Input any
+	Work  Work
 }
 
 // Work is a Run's work, its types erased: executed as a page, or as a stream.
@@ -118,7 +124,7 @@ type Execution struct {
 // submitter hands a run's work to an executor, for the caller it was admitted
 // as: the registry's own, or — for a mounted op — the mounting registry's,
 // which the mount puts in the context (withSubmitter).
-type submitter func(ctx context.Context, work Work) (Execution, error)
+type submitter func(ctx context.Context, input any, work Work) (Execution, error)
 
 type submitterKey struct{}
 
@@ -140,11 +146,11 @@ func submitterFrom(ctx context.Context) (submitter, bool) {
 // submitTo is executor's submitter for caller and op; with no executor, each
 // run is executed as it is, now.
 func submitTo[Caller any](executor Executor[Caller], caller Caller, op Meta) submitter {
-	return func(ctx context.Context, work Work) (Execution, error) {
+	return func(ctx context.Context, input any, work Work) (Execution, error) {
 		if executor == nil {
 			return Execution{Work: work}, nil
 		}
-		return executor.Submit(ctx, caller, Submission{Op: op, Work: work})
+		return executor.Submit(ctx, caller, Submission{Op: op, Input: input, Work: work})
 	}
 }
 
