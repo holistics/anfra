@@ -81,7 +81,11 @@ function toResult (query: Query, data: BackendQueryResult): QueryResult {
     meta: {
       // Only a paged query has a page to report.
       ...(pageSize !== undefined
-        ? { page: data.meta?.page ?? query.page, pageSize: data.meta?.pageSize ?? pageSize }
+        ? {
+            page: data.meta?.page ?? query.page,
+            pageSize: data.meta?.pageSize ?? pageSize,
+            ...(data.meta?.hasMore !== undefined ? { hasMore: data.meta.hasMore } : {}),
+          }
         : {}),
       numRows: data.meta?.numRows ?? rows.length,
     },

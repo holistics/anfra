@@ -144,7 +144,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         columns: toColumns(data.columns),
         values,
         meta: {
-          ...(request.pageSize !== undefined ? { page: request.page ?? 1, pageSize: request.pageSize } : {}),
+          ...(request.pageSize !== undefined ? { page: request.page ?? 1, pageSize: request.pageSize, hasMore: data.has_more } : {}),
           numRows: values.length,
         },
         debug: {

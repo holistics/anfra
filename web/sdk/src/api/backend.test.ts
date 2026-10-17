@@ -27,13 +27,13 @@ const ok = (body: unknown): Answer => ({ status: 200, body });
 const streamed = (...events: unknown[]): Answer => ({ events: events.map((e) => JSON.stringify(e) + '\n').join('') });
 
 /** A query's page, streamed as the server streams it: its SQL, its header, its rows, its summary. */
-function asStream (page: { sql: string, aql?: string, columns: unknown[], result: { fields: string[], records: unknown[][] } }): Answer {
+function asStream (page: { sql: string, aql?: string, columns: unknown[], result: { fields: string[], records: unknown[][] } }, hasMore = false): Answer {
   return streamed(
     { type: 'start' },
     { type: 'compiled', sql: page.sql, ...(page.aql ? { aql: page.aql } : {}) },
     { type: 'header', columns: page.columns, fields: page.result.fields },
     ...(page.result.records.length ? [{ type: 'rows', records: page.result.records }] : []),
-    { type: 'summary', row_count: page.result.records.length, has_more: false, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }, { step: 'executing_query', start_ms: 40 }], end_ms: 95 } },
+    { type: 'summary', row_count: page.result.records.length, has_more: hasMore, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }, { step: 'executing_query', start_ms: 40 }], end_ms: 95 } },
     { type: 'end', status: 'succeeded' },
   );
 }
@@ -72,7 +72,7 @@ it("names exactly the semantic types the API answers", () => {
 
 describe('coreApiBackend', () => {
   it('runs a query as core.query, streamed, the Query Input passed through, and answers it the way the SDK takes it', async () => {
-    const { client, sent } = api(asStream(answered));
+    const { client, sent } = api(asStream(answered, true));
     const result = await coreApiBackend(client).submitQuery(request, signal);
     expect(sent).toEqual([{
       url: 'http://host/api/core.query',
@@ -82,7 +82,7 @@ describe('coreApiBackend', () => {
     expect(result).toMatchObject({
       columns: answered.columns,
       values: [['paid'], ['open']],
-      meta: { page: 2, pageSize: 10, numRows: 2 },
+      meta: { page: 2, pageSize: 10, numRows: 2, hasMore: true },
       debug: {
         executedAql: 'explore { … }', executedSql: 'select 1', fromCache: false,
         timings: { steps: [{ step: 'compiling_query', startMs: 0 }, { step: 'executing_query', startMs: 40 }], endMs: 95 },

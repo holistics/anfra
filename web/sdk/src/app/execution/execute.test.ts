@@ -367,6 +367,16 @@ describe('paging', () => {
     expect(query.hasMore).toBe(false);
   });
 
+  it('takes the backend at its word on whether a page is the last', async () => {
+    const { sdk } = build({ ...twoRows, meta: { page: 1, pageSize: 2, numRows: 2, hasMore: false } });
+    const app = sdk.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
+
+    await app.execute();
+    // A full page, but the backend knows nothing follows it: no empty page fetched to find out.
+    expect(query.hasMore).toBe(false);
+  });
+
   it('has no more pages for a query that declares no page size, and says so on fetchMore', async () => {
     const { stub, sdk } = build(twoRows);
     const app = sdk.createApp();

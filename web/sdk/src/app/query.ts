@@ -108,9 +108,13 @@ export class Query extends Observable {
     this.notify();
   }
 
+  /**
+   * Whether another page may follow: as the backend said of the last page, or, when it did not
+   * say, whether that page came back full.
+   */
   get hasMore (): boolean {
     if (!this._result || this.pageSize === undefined) return false;
-    return this.lastPageRows >= this.pageSize;
+    return this._result.meta.hasMore ?? this.lastPageRows >= this.pageSize;
   }
 
   /**
