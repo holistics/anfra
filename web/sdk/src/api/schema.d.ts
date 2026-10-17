@@ -895,6 +895,11 @@ export interface components {
         StreamStatus: {
             phase: string;
             /**
+             * Format: int64
+             * @description while queued: how many runs are ahead of this one, 0 being next; absent otherwise
+             */
+            position?: number;
+            /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
