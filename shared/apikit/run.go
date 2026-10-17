@@ -148,10 +148,15 @@ func submitTo[Caller any](executor Executor[Caller], caller Caller, op Meta) sub
 	}
 }
 
-// StreamStatus is the run's phase, as the op reports it.
+// StreamStatus is the run's phase, as the op reports it — or, before the run
+// starts, as its executor does: "queued", while it waits for capacity, with its
+// place in line when the executor knows it.
 type StreamStatus struct {
 	Type  string `json:"type" enum:"status"`
 	Phase string `json:"phase"`
+	// Position is, while queued, how many runs are ahead of this one: 0 is next.
+	// Absent for any other phase, and when the executor does not say.
+	Position *int `json:"position,omitempty" doc:"while queued: how many runs are ahead of this one, 0 being next; absent otherwise"`
 }
 
 // StreamEnd is a stream's last event: how the run ended. Error is set when it

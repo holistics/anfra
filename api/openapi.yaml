@@ -1374,6 +1374,10 @@ components:
       properties:
         phase:
           type: string
+        position:
+          description: "while queued: how many runs are ahead of this one, 0 being next; absent otherwise"
+          format: int64
+          type: integer
         type:
           enum:
             - status
