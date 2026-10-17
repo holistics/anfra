@@ -154,6 +154,26 @@ type (
 	Export = command.Export
 	// ExportLink is an export's answer: where to download its file, until when.
 	ExportLink = command.ExportLink
+
+	// Observers are who the engine tells of what a command does as it does it,
+	// one per capability, set on an Invocation as Observers; each nil when
+	// nobody listens. A host that records them sets the ones it records.
+	Observers = command.Observers
+	// QueryObserver is told of each query a command runs on a warehouse:
+	// compiled, on the warehouse, finished.
+	QueryObserver = command.QueryObserver
+	// QueryID matches a query's calls to its QueryObserver.
+	QueryID = command.QueryID
+	// CompiledQuery is a query as it is sent to its data source.
+	CompiledQuery = command.CompiledQuery
+	// FinishedQuery is how a query ended: its rows, bytes scanned, timings
+	// and error.
+	FinishedQuery = command.FinishedQuery
+	// Timings are a run's timeline: when each of its steps started, and when it
+	// ended. A query's are its FinishedQuery's.
+	Timings = command.Timings
+	// TimedStep is when one step of a run started.
+	TimedStep = command.TimedStep
 )
 
 const (

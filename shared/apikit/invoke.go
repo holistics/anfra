@@ -149,7 +149,7 @@ func (o *registered[Call, Caller, In, Out]) answer(ctx context.Context, rt *Runt
 	if !mounted {
 		submit = submitTo(o.executor, c, o.Meta())
 	}
-	exec, err := submit(ctx, r.work().within(rt, timeout))
+	exec, err := submit(ctx, in, r.work().within(rt, timeout))
 	if err != nil {
 		return nil, err // refused: an ordinary error, nothing sent yet
 	}

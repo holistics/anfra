@@ -63,6 +63,9 @@ type CommandContext struct {
 	// with query.ResultTooLarge rather than being cut short. An export, which
 	// streams to a file, is not bound by them. Zero: the defaults.
 	QueryLimits query.Limits
+	// Observers are told of what the command does as it does it — each query it
+	// runs on a warehouse — for a host that records it. Zero: nobody is.
+	Observers Observers
 	// Attribution names the caller for logs and audit. Never read by a command,
 	// and never by the query layer — see internal/attribution.
 	Attribution attribution.Fields

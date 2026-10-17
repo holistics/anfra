@@ -106,12 +106,17 @@ type streamFunc func(h canalquery.Handler) error
 // runExport decides what runs before any file exists, so a query that is
 // refused, or does not compile, fails as it would in query; then writes the
 // rows as they arrive.
-func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (command.ExportLink, error) {
+func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (_ command.ExportLink, err error) {
 	var (
 		name      string
 		described []anfranode.ExploreColumn
 		run       streamFunc
 	)
+	// Told to the invocation's query observer as a query run is (execute); its
+	// timings kept by a tracker that streams nothing.
+	t := newTracker(quiet)
+	o := observe(cc, t)
+	defer func() { o.finished(ctx, err) }()
 	if in.Lang == "sql" {
 		sql, err := in.ungoverned(ctx, cc)
 		if err != nil {
@@ -124,8 +129,10 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 			return command.ExportLink{}, err
 		}
 		name = in.DataSource
+		o.compiled(ctx, in.DataSource, "", in.Query)
 		run = func(h canalquery.Handler) error {
-			return sql.Stream(ctx, cc.Clients.CanalQuery, query.Unbounded, h)
+			t.requested()
+			return sql.Stream(ctx, cc.Clients.CanalQuery, query.Unbounded, o.handler(ctx, h))
 		}
 	} else {
 		aql, limit, err := in.aql()
@@ -142,13 +149,16 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 		if err != nil {
 			return command.ExportLink{}, err
 		}
+		_ = t.begin("compiling_query", 0)
 		compiled, err := compileAQL(ctx, cc, src, in.Dataset, aql, in.runInput().run())
 		if err != nil {
 			return command.ExportLink{}, err
 		}
 		name, described = in.Dataset, compiled.Columns
+		o.compiled(ctx, compiled.DataSource.Name, in.Dataset, compiled.SQL)
 		run = func(h canalquery.Handler) error {
-			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.ResultBounds{Truncate: limit}, h)
+			t.requested()
+			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.ResultBounds{Truncate: limit}, o.handler(ctx, h))
 		}
 	}
 	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, run)
@@ -296,4 +306,12 @@ func safeFilename(name string) string {
 		return "export"
 	}
 	return safe
+}
+
+// quiet is a sink that streams nothing: an export's tracker keeps its timings
+// for its query observer, and tells no one its phases.
+var quiet = sink{
+	status:    func(string) error { return nil },
+	warehouse: func(string) error { return nil },
+	scanned:   func(int64) {},
 }

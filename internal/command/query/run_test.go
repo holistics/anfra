@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/query"
@@ -38,6 +40,25 @@ var progressLines = []string{
 // answers rows rows of one column; or, with failure, fails with it after its
 // progress. What it was sent is kept.
 func sqlRun(t *testing.T, rows int, limits query.Limits, failure ...string) (QueryRun, *map[string]any) {
+	t.Helper()
+	return sqlRunObserved(t, rows, limits, nil, failure...)
+}
+
+// sqlRunObserved is sqlRun, its invocation's queries told to obs.
+func sqlRunObserved(t *testing.T, rows int, limits query.Limits, obs command.QueryObserver, failure ...string) (QueryRun, *map[string]any) {
+	t.Helper()
+	cc, sent := canalContext(t, rows, limits, obs, failure...)
+	run, err := newQueryRun(context.Background(), cc, QueryRunInput{QueryInput: QueryInput{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return run, sent
+}
+
+// canalContext is an invocation on a canal-query that reports progressLines,
+// then answers rows rows of one column, or fails with failure; its queries told
+// to obs. What canal-query was sent is kept.
+func canalContext(t *testing.T, rows int, limits query.Limits, obs command.QueryObserver, failure ...string) (command.CommandContext, *map[string]any) {
 	t.Helper()
 	var sent map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,12 +92,9 @@ func sqlRun(t *testing.T, rows int, limits query.Limits, failure ...string) (Que
 		Clients:     command.Clients{CanalQuery: canalquery.NewClient(srv.URL, false).ForTenant("org_1")},
 		DataSources: datasource.Set{"warehouse": {Name: "warehouse", DBType: "postgresql", Connection: map[string]any{"password": "secret"}}},
 		QueryLimits: limits,
+		Observers:   command.Observers{Queries: obs},
 	}
-	run, err := newQueryRun(context.Background(), cc, QueryRunInput{QueryInput: QueryInput{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return run, &sent
+	return cc, &sent
 }
 
 // served is the code a client is answered with for err: its outermost, as
@@ -242,4 +260,78 @@ func TestTimings(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("page", r.Timings)
+}
+
+// told keeps what a query observer is told, in order.
+type told struct{ calls []string }
+
+// QueryCompiled notes whether the id is a UUIDv7, which a host may key its
+// record by.
+func (o *told) QueryCompiled(_ context.Context, q command.CompiledQuery) {
+	id, err := uuid.Parse(string(q.ID))
+	o.calls = append(o.calls, fmt.Sprintf("compiled %t on %s: %s", err == nil && id.Version() == 7, q.DataSource, q.SQL))
+}
+
+func (o *told) QueryOnWarehouse(_ context.Context, id command.QueryID, wh string) {
+	o.calls = append(o.calls, fmt.Sprintf("on the warehouse %t as %s", id != "", wh))
+}
+
+func (o *told) QueryFinished(_ context.Context, id command.QueryID, f command.FinishedQuery) {
+	scanned := int64(-1)
+	if f.BytesScanned != nil {
+		scanned = *f.BytesScanned
+	}
+	code := ""
+	if f.Err != nil {
+		code = served(f.Err)
+	}
+	o.calls = append(o.calls, fmt.Sprintf("finished %t: %d rows, %d bytes, %d steps, %s", id != "",
+		f.Rows, scanned, len(f.Timings.Steps), code))
+}
+
+// The invocation's query observer is told of a query as it runs — compiled,
+// on the warehouse, finished — in a page and a stream alike; and of a failed
+// one too, with its timings and the error its caller is answered.
+func TestTheQueryObserverIsToldOfAQuery(t *testing.T) {
+	want := []string{
+		"compiled true on warehouse: select id from t",
+		"on the warehouse true as job_42",
+		"finished true: 3 rows, 2048 bytes, 8 steps, ",
+	}
+	for _, form := range []string{"page", "stream"} {
+		obs := &told{}
+		run, _ := sqlRunObserved(t, 3, query.Limits{}, obs)
+		var err error
+		if form == "page" {
+			_, err = run.Page(context.Background())
+		} else {
+			_, _, err = streamed(t, run)
+		}
+		if err != nil || strings.Join(obs.calls, "|") != strings.Join(want, "|") {
+			t.Errorf("%s: told %q, %v; want %q", form, obs.calls, err, want)
+		}
+	}
+
+	obs := &told{}
+	run, _ := sqlRunObserved(t, 3, query.Limits{}, obs, `{"message":"relation t does not exist","scope":"User"}`)
+	if _, err := run.Page(context.Background()); err == nil {
+		t.Fatal("a failing query succeeded")
+	}
+	if last := obs.calls[len(obs.calls)-1]; last != "finished true: 0 rows, 2048 bytes, 8 steps, query_failed" {
+		t.Errorf("a failed query: told %q", obs.calls)
+	}
+}
+
+// An export's query is told to the observer as a query run's is.
+func TestTheQueryObserverIsToldOfAnExport(t *testing.T) {
+	obs := &told{}
+	cc, _ := canalContext(t, 3, query.Limits{}, obs)
+	cc.Exports = &memStore{}
+	if _, err := runExport(context.Background(), cc, ExportInput{QueryInput: QueryInput{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}}); err != nil {
+		t.Fatal(err)
+	}
+	want := "compiled true on warehouse: select id from t|on the warehouse true as job_42|finished true: 3 rows, 2048 bytes, 8 steps, "
+	if got := strings.Join(obs.calls, "|"); got != want {
+		t.Errorf("told %q, want %q", got, want)
+	}
 }

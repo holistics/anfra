@@ -557,3 +557,38 @@ func TestAnExecutionIsExecutedWhenItsClientLeftBeforeItsStart(t *testing.T) {
 		t.Errorf("the executor saw %q, want the run submitted and ended", got)
 	}
 }
+
+// inputs is an executor that keeps each submission's input, and executes the
+// run as it is.
+type inputs struct{ got []any }
+
+func (e *inputs) Submit(_ context.Context, _ string, s apikit.Submission) (apikit.Execution, error) {
+	e.got = append(e.got, s.Input)
+	return apikit.Execution{Work: s.Work}, nil
+}
+
+// The executor is handed the op's input as its handler received it — decoded
+// into the op's input type, its defaults applied — for an own op and a mounted
+// one alike: the mounted op's.
+func TestTheExecutorIsHandedTheInput(t *testing.T) {
+	exec := &inputs{}
+	host := apikit.NewRegistry(apikit.RegistryConfig[request, string]{Namespace: hostNS, Executor: exec})
+	host.Group("a", "Letters.")
+	host.Group("core", "Mounted.")
+	apikit.Register(host, admission, count("a.count", 0))
+	apikit.Mount(host, countLibrary(), apikit.Untyped("core.count"), untyped(new([]string)))
+	for _, name := range []string{"a.count", "core.count"} {
+		o, _ := host.Lookup(name)
+		if _, err := o.Invoke(context.Background(), runtime(), request{user: "ann"}, []byte(`{"n":2}`)); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	for i, got := range exec.got {
+		if in, ok := got.(countIn); !ok || in.N != 2 {
+			t.Errorf("submission %d's input = %#v, want the decoded countIn", i, got)
+		}
+	}
+	if len(exec.got) != 2 {
+		t.Errorf("%d submissions, want 2", len(exec.got))
+	}
+}

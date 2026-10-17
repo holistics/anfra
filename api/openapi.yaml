@@ -896,6 +896,7 @@ components:
           type: string
         timings:
           $ref: "#/components/schemas/Timings"
+          description: "the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"
       required:
         - sql
         - columns
@@ -991,6 +992,7 @@ components:
           type: integer
         timings:
           $ref: "#/components/schemas/Timings"
+          description: "the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"
         type:
           enum:
             - summary
@@ -1394,7 +1396,7 @@ components:
           format: int64
           type: integer
         step:
-          description: compiling_query; canal-query's steps by its names (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again
+          description: the step's name, as what ran names it; a child step as <parent>.<child>, within its parent
           type: string
       required:
         - step
@@ -1408,7 +1410,7 @@ components:
           format: int64
           type: integer
         steps:
-          description: each step as it started, in order; a step run again, after a retry, is here again
+          description: each step as it started, in order; a step run again is here again
           items:
             $ref: "#/components/schemas/TimedStep"
           type: array
