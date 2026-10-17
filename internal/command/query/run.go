@@ -219,7 +219,7 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 		if err := s.compiled(q.in.Query, ""); err != nil {
 			return Timings{}, err
 		}
-		o.compiled(ctx, q.in.DataSource, "", q.in.Query)
+		o.compiled(ctx, q.in.DataSource, "", "", q.in.Query)
 		t.requested()
 		if err := q.sql.Stream(ctx, canal, bounds, handler(nil)); err != nil {
 			return Timings{}, asQueryFailed(err)
@@ -236,7 +236,7 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 	if err := s.compiled(compiled.SQL, compiled.AQL); err != nil {
 		return Timings{}, err
 	}
-	o.compiled(ctx, compiled.DataSource.Name, q.in.Dataset, compiled.SQL)
+	o.compiled(ctx, compiled.DataSource.Name, q.in.Dataset, compiled.AQL, compiled.SQL)
 	t.requested()
 	if err := query.Stream(ctx, canal, q.src.DataSources, compiled, bounds, handler(compiled.Columns)); err != nil {
 		return Timings{}, asQueryFailed(err)
@@ -260,9 +260,10 @@ func observe(cc command.CommandContext, t *tracker) *observation {
 	return &observation{obs: cc.QueryObserver(), id: command.NewQueryID(), t: t}
 }
 
-// compiled tells the observer the query is about to be sent.
-func (o *observation) compiled(ctx context.Context, dataSource, dataset, sql string) {
-	o.obs.QueryCompiled(ctx, command.CompiledQuery{ID: o.id, DataSource: dataSource, Dataset: dataset, SQL: sql})
+// compiled tells the observer the query is about to be sent: from aql, for
+// AQL; sql as written, for SQL.
+func (o *observation) compiled(ctx context.Context, dataSource, dataset, aql, sql string) {
+	o.obs.QueryCompiled(ctx, command.CompiledQuery{ID: o.id, DataSource: dataSource, Dataset: dataset, AQL: aql, SQL: sql})
 	o.sent = true
 }
 

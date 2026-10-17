@@ -129,7 +129,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 			return command.ExportLink{}, err
 		}
 		name = in.DataSource
-		o.compiled(ctx, in.DataSource, "", in.Query)
+		o.compiled(ctx, in.DataSource, "", "", in.Query)
 		run = func(h canalquery.Handler) error {
 			t.requested()
 			return sql.Stream(ctx, cc.Clients.CanalQuery, query.Unbounded, o.handler(ctx, h))
@@ -155,7 +155,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (
 			return command.ExportLink{}, err
 		}
 		name, described = in.Dataset, compiled.Columns
-		o.compiled(ctx, compiled.DataSource.Name, in.Dataset, compiled.SQL)
+		o.compiled(ctx, compiled.DataSource.Name, in.Dataset, compiled.AQL, compiled.SQL)
 		run = func(h canalquery.Handler) error {
 			t.requested()
 			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.ResultBounds{Truncate: limit}, o.handler(ctx, h))
