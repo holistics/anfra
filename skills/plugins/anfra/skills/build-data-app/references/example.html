@@ -1,59 +1,196 @@
 <!doctype html>
 <!--
-  A complete Data App: a region filter, a date grain switch, a bar chart that cross-filters a
-  trend line. Dataset `ecommerce` and the `orders` / `users` fields are placeholders: replace them
-  with names from `anfra show`.
+  A complete Data App: a region multi-select, a date range, a date grain switch, a bar chart that
+  cross-filters a trend line. Dataset `ecommerce` and the `orders` / `users` fields are placeholders:
+  replace them with names from `anfra show`.
+
+  Two layers, change one without the other:
+  - Design layer: the Basecoat links, the <style> block (anfra tokens from DESIGN.md mapped onto
+    Basecoat's variables), the markup classes, and chartTheme().
+  - SDK wiring: everything in the last <script> that touches `app`, a query, a filter or a drill.
+  This is the default look. Only replace it if the user asked for another design.
 -->
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sales Overview</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.2.5/index.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat.cdn.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/js/all.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"></script>
   <style>
-    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #1f2933; }
-    .controls { display: flex; gap: 12px; align-items: end; margin-bottom: 16px; }
-    .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+    /* anfra tokens (DESIGN.md) on Basecoat's variables. Light is from DESIGN.md; the dark values
+       are derived from it, since DESIGN.md only lists the light theme. */
+    :root {
+      --background: oklch(0.955 0.007 88.6);          /* paper: the page */
+      --foreground: oklch(0.201 0.022 301.1);         /* ink */
+      --card: oklch(1 0 0);                           /* white: panels */
+      --card-foreground: oklch(0.201 0.022 301.1);
+      --popover: oklch(1 0 0);
+      --popover-foreground: oklch(0.201 0.022 301.1);
+      --primary: oklch(0.565 0.194 300.3);            /* the one violet */
+      --primary-foreground: oklch(1 0 0);
+      --secondary: oklch(0.973 0.005 95.1);           /* sunken paper */
+      --secondary-foreground: oklch(0.392 0.021 304.3);
+      --muted: oklch(0.973 0.005 95.1);
+      --muted-foreground: oklch(0.485 0.022 306.3);
+      --accent: oklch(0.946 0.027 304.8);             /* violet wash: hover, selected */
+      --accent-foreground: oklch(0.201 0.022 301.1);
+      --border: oklch(0.201 0.022 301.1 / 0.12);
+      --input: oklch(0.201 0.022 301.1 / 0.22);
+      --ring: oklch(0.565 0.194 300.3);
+      --radius: 0.625rem;
+      /* ECharts cannot parse oklch, so chart colors are hex. Violet first, fixed order. */
+      --chart-text: #5b5560;
+      --chart-grid: #e7e4e0;
+      --chart-cat-1: #7c4dce; --chart-cat-2: #1f9aa6; --chart-cat-3: #d9972b; --chart-cat-4: #d4527a;
+      --chart-cat-5: #3d7bd9; --chart-cat-6: #3f9d6b; --chart-cat-7: #dd7a3c; --chart-cat-8: #7d7785;
+    }
+    .dark {
+      --background: oklch(0.17 0.015 301);
+      --foreground: oklch(0.961 0.007 304.2);
+      --card: oklch(0.215 0.017 301);
+      --card-foreground: oklch(0.961 0.007 304.2);
+      --popover: oklch(0.245 0.018 301);
+      --popover-foreground: oklch(0.961 0.007 304.2);
+      --primary: oklch(0.7 0.16 300);
+      --primary-foreground: oklch(0.17 0.015 301);
+      --secondary: oklch(0.26 0.018 301);
+      --secondary-foreground: oklch(0.86 0.01 304);
+      --muted: oklch(0.26 0.018 301);
+      --muted-foreground: oklch(0.72 0.02 304);
+      --accent: oklch(0.32 0.05 301);
+      --accent-foreground: oklch(0.961 0.007 304.2);
+      --border: oklch(1 0 0 / 0.1);
+      --input: oklch(1 0 0 / 0.16);
+      --ring: oklch(0.7 0.16 300);
+      --chart-text: #b4aebb;
+      --chart-grid: #38333d;
+      --chart-cat-1: #a98af0; --chart-cat-2: #4cc3cf; --chart-cat-3: #f0b252; --chart-cat-4: #f07ea0;
+      --chart-cat-5: #7aa8f2; --chart-cat-6: #6cc496; --chart-cat-7: #f59a63; --chart-cat-8: #a39dab;
+    }
+
+    /* Three sizes only (20, 14, 12px), one control height (32px), tabular numerals. */
+    body {
+      font: 14px/20px "Inter Variable", Inter, system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+      background: var(--background); color: var(--foreground);
+      margin: 0; padding: 24px; max-width: 1280px; margin-inline: auto;
+    }
+    h1 { font-size: 20px; line-height: 28px; font-weight: 600; margin: 0; text-wrap: balance; }
+    .caption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+    .header { margin-bottom: 16px; }
+    .btn, .input { height: 32px; font-size: 14px; }
+    .card { border-radius: 14px; box-shadow: none; position: relative; }
+    .card > header { padding-bottom: 0; }
+    .card h2 { font-size: 14px; line-height: 20px; font-weight: 600; }
+
+    /* Filter bar: one row, wraps on narrow screens. */
+    .filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 12px 16px;
+               margin-bottom: 16px; }
+    .field-group { display: flex; flex-direction: column; gap: 8px; }
+    .field-group > label { font-weight: 500; }
+    .date-range { display: flex; align-items: center; gap: 8px; }
+    .date-range .input { width: 9.5rem; }
+    .presets { display: flex; gap: 4px; }
+    .spacer { flex: 1; }
+
     .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
-    .panel { border: 1px solid #d9dee4; border-radius: 8px; padding: 12px; position: relative; }
-    .panel h2 { font-size: 14px; margin: 0 0 8px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
     .chart { height: 320px; }
-    .status { position: absolute; inset: 40px 12px 12px; display: none; align-items: center;
-              justify-content: center; background: rgb(255 255 255 / 0.8); text-align: center; }
+    .status { position: absolute; inset: 56px 16px 16px; display: none; align-items: center;
+              justify-content: center; background: color-mix(in oklab, var(--card) 85%, transparent); }
     .status.visible { display: flex; }
-    .status.error { color: #b42318; }
+    .status > * { width: 100%; }
+    .status .skeleton { height: 100%; border-radius: 10px; }
+    .status .empty { text-align: center; color: var(--muted-foreground); }
   </style>
 </head>
 <body>
-  <h1 id="title"></h1>
+  <div class="header">
+    <h1>Sales overview</h1>
+    <div class="caption" id="user"></div>
+  </div>
 
-  <div class="controls" data-anfra-container="controls" data-anfra-label="Controls">
-    <label data-anfra-block="region-picker" data-anfra-label="Region" data-anfra-control="region">Region
-      <select id="region-select" multiple size="4"></select>
-    </label>
-    <label data-anfra-block="grain-picker" data-anfra-label="Grain" data-anfra-control="grain">Grain
-      <select id="grain-select">
-        <option value="week">Week</option>
-        <option value="month" selected>Month</option>
-        <option value="quarter">Quarter</option>
-      </select>
-    </label>
-    <button id="clear-selection" type="button">Clear selection</button>
+  <div class="card filters" data-anfra-container="controls" data-anfra-label="Controls">
+    <div class="field-group" data-anfra-block="region-picker" data-anfra-label="Region" data-anfra-control="region">
+      <label for="region-input">Region</label>
+      <!-- Basecoat multi-select combobox: options are added once loadOptions() resolves -->
+      <div id="region-combobox" class="combobox" style="width: 260px" data-auto-highlight="true">
+        <input id="region-input" type="text" role="combobox" placeholder="All regions" autocomplete="off"
+               autocorrect="off" spellcheck="false" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="region-listbox">
+        <div id="region-popover" data-popover aria-hidden="true">
+          <div role="listbox" id="region-listbox" aria-orientation="vertical" aria-multiselectable="true"
+               data-empty="No regions found."></div>
+        </div>
+        <input type="hidden" name="region" value="[]">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label for="date-from">Order date</label>
+      <div class="date-range">
+        <input id="date-from" class="input" type="date" aria-label="From">
+        <span class="caption">to</span>
+        <input id="date-to" class="input" type="date" aria-label="To">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <span class="caption">Quick range</span>
+      <div class="presets">
+        <button class="btn" data-variant="outline" type="button" data-days="30">30d</button>
+        <button class="btn" data-variant="outline" type="button" data-days="90">90d</button>
+        <button class="btn" data-variant="outline" type="button" data-days="ytd">YTD</button>
+        <button class="btn" data-variant="ghost" type="button" data-days="all">All</button>
+      </div>
+    </div>
+
+    <div class="field-group" data-anfra-block="grain-picker" data-anfra-label="Grain" data-anfra-control="grain">
+      <span class="caption">Grain</span>
+      <div class="button-group" id="grain-group" role="group" aria-label="Date grain">
+        <button class="btn" data-variant="outline" type="button" data-grain="week">Week</button>
+        <button class="btn" data-variant="secondary" type="button" data-grain="month" aria-pressed="true">Month</button>
+        <button class="btn" data-variant="outline" type="button" data-grain="quarter">Quarter</button>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="clear-selection" class="btn" data-variant="ghost" type="button">Clear selection</button>
   </div>
 
   <div class="grid" data-anfra-container="charts" data-anfra-label="Charts">
-    <section class="panel" data-anfra-block="by-region" data-anfra-label="Revenue by region">
-      <h2>Revenue by region</h2>
-      <div id="by-region" class="chart" data-anfra-query="byRegion"></div>
+    <section class="card" data-anfra-block="by-region" data-anfra-label="Revenue by region">
+      <header><h2>Revenue by region</h2></header>
+      <section><div id="by-region" class="chart" data-anfra-query="byRegion"></div></section>
       <div id="by-region-status" class="status"></div>
     </section>
-    <section class="panel" data-anfra-block="trend" data-anfra-label="Revenue over time">
-      <h2>Revenue over time</h2>
-      <div id="trend" class="chart" data-anfra-query="trend"></div>
+    <section class="card" data-anfra-block="trend" data-anfra-label="Revenue over time">
+      <header><h2>Revenue over time</h2></header>
+      <section><div id="trend" class="chart" data-anfra-query="trend"></div></section>
       <div id="trend-status" class="status"></div>
     </section>
   </div>
 
   <script>
+    // ---- Design layer: follow the OS light/dark setting (no storage: the frame is sandboxed). ----
+    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = () => document.documentElement.classList.toggle('dark', darkQuery.matches);
+    applyTheme();
+
+    function chartTheme () {
+      const css = getComputedStyle(document.documentElement);
+      const get = (name) => css.getPropertyValue(name).trim();
+      return {
+        text: get('--chart-text'),
+        grid: get('--chart-grid'),
+        cat: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => get(`--chart-cat-${n}`)),
+      };
+    }
+
+    // ---- SDK wiring ----
     const app = Anfra.createApp({ title: 'Sales Overview' });
 
     const byRegion = app.createQuery('byRegion', {
@@ -79,31 +216,43 @@
     });
 
     const region = app.createFilter('region', { dataset: 'ecommerce', field: 'users.region' });
+    const dates = app.createFilter('dates', { dataset: 'ecommerce', field: 'orders.created_at' });
     const grain = app.createDateDrill('grain', { default: 'month' });
 
     app.mapControl(region, byRegion, { field: 'users.region' });
     app.mapControl(region, trend, { field: 'users.region' });
+    app.mapControl(dates, byRegion, { field: 'orders.created_at' });
+    app.mapControl(dates, trend, { field: 'orders.created_at' });
     app.mapControl(grain, trend, { field: 'orders.created_at' });
     app.mapCrossFilter(byRegion, trend);
 
-    document.getElementById('title').textContent = `Hi ${Anfra.user.name}`;
+    document.getElementById('user').textContent = `Signed in as ${Anfra.user.name}`;
 
     const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const moneyShort = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
     const byRegionChart = echarts.init(document.getElementById('by-region'));
     const trendChart = echarts.init(document.getElementById('trend'));
     const logged = new Set();
 
+    // The four states of a query: loading, error, no rows, success (status stays hidden).
     function renderStatus (query, elementId) {
       const el = document.getElementById(elementId);
-      el.classList.remove('error');
-      let text = '';
-      if (query.state === 'executing') text = 'Loading…';
-      else if (query.state === 'error') {
-        text = `Couldn't load: ${query.error.message}`;
-        el.classList.add('error');
-      } else if (query.state === 'success' && query.result.rows.length === 0) text = 'No data';
-      el.textContent = text;
-      el.classList.toggle('visible', text !== '');
+      el.replaceChildren();
+      if (query.state === 'executing') {
+        el.append(Object.assign(document.createElement('div'), { className: 'skeleton' }));
+      } else if (query.state === 'error') {
+        const alert = Object.assign(document.createElement('div'), { className: 'alert' });
+        alert.dataset.variant = 'destructive';
+        const title = document.createElement('h2');
+        title.textContent = "Couldn't load this chart";
+        const detail = document.createElement('section');
+        detail.textContent = query.error.message;
+        alert.append(title, detail);
+        el.append(alert);
+      } else if (query.state === 'success' && query.result.rows.length === 0) {
+        el.append(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'No sales for these filters' }));
+      }
+      el.classList.toggle('visible', el.childElementCount > 0);
     }
 
     function logFirstResult (query) {
@@ -113,11 +262,20 @@
         'executed AQL', query.result.debug?.executedAql);
     }
 
+    function axisStyle (theme) {
+      return {
+        axisLabel: { color: theme.text },
+        axisLine: { lineStyle: { color: theme.grid } },
+        splitLine: { lineStyle: { color: theme.grid } },
+      };
+    }
+
     function render () {
       renderStatus(byRegion, 'by-region-status');
       renderStatus(trend, 'trend-status');
       logFirstResult(byRegion);
       logFirstResult(trend);
+      const theme = chartTheme();
 
       if (byRegion.result) {
         const rows = byRegion.result.rows;
@@ -125,54 +283,119 @@
         // A plain setOption merges into the series the chart has: a click only restyles the bars.
         // Rebuilding the series (replaceMerge) would replay the entry animation on every click.
         byRegionChart.setOption({
+          textStyle: { color: theme.text },
+          grid: { left: 8, right: 8, top: 16, bottom: 8, containLabel: true },
           tooltip: { valueFormatter: (v) => money.format(v) },
-          xAxis: { type: 'category', data: rows.map((row) => row.region) },
-          yAxis: { type: 'value', axisLabel: { formatter: (v) => money.format(v) } },
+          xAxis: { type: 'category', data: rows.map((row) => row.region), ...axisStyle(theme) },
+          yAxis: { type: 'value', axisLabel: { color: theme.text, formatter: (v) => moneyShort.format(v) }, splitLine: axisStyle(theme).splitLine },
           series: [{
             type: 'bar',
+            itemStyle: { color: theme.cat[0], borderRadius: [4, 4, 0, 0] },
             data: rows.map((row) => ({
               value: Number(row.revenue), // numbers arrive as strings; a chart needs numbers
               itemStyle: { opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
             })),
           }],
-        });
+        }, true);
       }
 
       if (trend.result) {
         const rows = trend.result.rows;
         trendChart.setOption({
+          textStyle: { color: theme.text },
+          grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
           tooltip: { trigger: 'axis', valueFormatter: (v) => money.format(v) },
-          xAxis: { type: 'category', data: rows.map((row) => String(row.period).slice(0, 10)) },
-          yAxis: { type: 'value', axisLabel: { formatter: (v) => money.format(v) } },
-          series: [{ type: 'line', smooth: true, data: rows.map((row) => Number(row.revenue)) }],
-        });
+          xAxis: { type: 'category', data: rows.map((row) => String(row.period).slice(0, 10)), ...axisStyle(theme) },
+          yAxis: { type: 'value', axisLabel: { color: theme.text, formatter: (v) => moneyShort.format(v) }, splitLine: axisStyle(theme).splitLine },
+          series: [{
+            type: 'line', smooth: true, showSymbol: false,
+            lineStyle: { color: theme.cat[0], width: 2 },
+            itemStyle: { color: theme.cat[0] },
+            areaStyle: { color: theme.cat[0], opacity: 0.08 },
+            data: rows.map((row) => row.revenue),
+          }],
+        }, true);
       }
     }
 
     app.subscribe(render);
+    darkQuery.addEventListener('change', () => { applyTheme(); render(); });
 
     byRegionChart.on('click', (params) => {
       byRegion.select([byRegion.result.rows[params.dataIndex]]);
       app.execute();
     });
 
-    document.getElementById('clear-selection').addEventListener('click', () => {
-      app.clearSelection();
-      app.execute();
-    });
-
-    const regionSelect = document.getElementById('region-select');
-    region.loadOptions().then((options) => {
-      regionSelect.replaceChildren(...options.map((value) => new Option(String(value), String(value))));
+    // Region multi-select. The combobox element is its own instance: refresh(), clear(), setValue().
+    // Basecoat's deferred script initializes it on DOMContentLoaded, so wait for that before refresh().
+    const regionBox = document.getElementById('region-combobox');
+    const regionList = document.getElementById('region-listbox');
+    const domReady = document.readyState === 'loading'
+      ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve))
+      : Promise.resolve();
+    Promise.all([region.loadOptions(), domReady]).then(([options]) => {
+      regionList.replaceChildren(...options.map((value) => {
+        const option = document.createElement('div');
+        option.setAttribute('role', 'option');
+        option.dataset.value = String(value);
+        option.textContent = String(value);
+        return option;
+      }));
+      regionBox.refresh();
     }).catch((err) => console.error('Could not load region options', err));
-    regionSelect.addEventListener('change', () => {
-      const values = [...regionSelect.selectedOptions].map((option) => option.value);
+    regionBox.addEventListener('change', (event) => {
+      const values = Array.isArray(event.detail.value) ? event.detail.value : [];
       region.setCondition({ operator: 'is', values });
       app.execute();
     });
 
-    document.getElementById('grain-select').addEventListener('change', (event) => {
-      grain.setGrain(event.target.value);
+    // Date range: two date inputs plus presets. Empty means no filter.
+    const fromInput = document.getElementById('date-from');
+    const toInput = document.getElementById('date-to');
+    function applyDateRange () {
+      if (fromInput.value && toInput.value) {
+        dates.setCondition({ operator: 'between', values: [fromInput.value, toInput.value] });
+      } else {
+        dates.setCondition({ operator: 'is', values: [] });
+      }
+      app.execute();
+    }
+    const isoDay = (date) => date.toISOString().slice(0, 10);
+    fromInput.addEventListener('change', applyDateRange);
+    toInput.addEventListener('change', applyDateRange);
+    document.querySelectorAll('[data-days]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const today = new Date();
+        const kind = button.dataset.days;
+        if (kind === 'all') {
+          fromInput.value = '';
+          toInput.value = '';
+        } else {
+          const from = kind === 'ytd'
+            ? new Date(Date.UTC(today.getUTCFullYear(), 0, 1))
+            : new Date(today.getTime() - Number(kind) * 86400000);
+          fromInput.value = isoDay(from);
+          toInput.value = isoDay(today);
+        }
+        applyDateRange();
+      });
+    });
+
+    // Grain: a segmented control. The pressed button is the secondary variant.
+    document.querySelectorAll('[data-grain]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('[data-grain]').forEach((other) => {
+          const on = other === button;
+          other.dataset.variant = on ? 'secondary' : 'outline';
+          other.setAttribute('aria-pressed', String(on));
+        });
+        grain.setGrain(button.dataset.grain);
+        app.execute();
+      });
+    });
+
+    document.getElementById('clear-selection').addEventListener('click', () => {
+      app.clearSelection();
       app.execute();
     });
 
