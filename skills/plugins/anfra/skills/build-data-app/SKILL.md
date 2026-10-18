@@ -15,8 +15,10 @@ References, read when a step needs them:
   before writing any code; do not invent APIs.**
 - [references/downloads.md](references/downloads.md): exporting a query's data and pictures of
   the app, with their button. Read it only when the agreed design lists a download.
-- [references/example.html](references/example.html): a complete app. Start a new file from its
-  skeleton, or from the closest app already in `apps/`.
+- [references/example.html](references/example.html): a complete app in the default look. Start a
+  new file from its skeleton, or from the closest app already in `apps/`.
+- [references/DESIGN.md](references/DESIGN.md): the anfra app design guide (colors, type,
+  spacing, chart palette) behind the default look. Read it when you build in the default look.
 
 ## 1. Learn the datasets
 
@@ -39,6 +41,10 @@ Restate the request as one result the user can check ("revenue for the last full
 the week before, with a country picker"). Ask only what changes the numbers: what a business word
 means, which date counts, what to exclude, each with your recommended answer.
 
+Also ask which look the user wants, unless they already said: the **default anfra style**
+(recommended), **something creative** (you choose the palette and layout), or **their own design**
+(a brand, colors or a reference to follow). See [Look and feel](#look-and-feel).
+
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
 `createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
 each query renders (chart or table; default ECharts 6 from jsDelivr, as in the example), and which
@@ -60,6 +66,33 @@ a definitions panel beside a chart. An app that only shows numbers needs none.
 When it is in, add to the declaration list which fields the app traces, when (on load, or when the
 reader picks a field or clicks a chart), and how the diagram is drawn (see
 [references/api.md](references/api.md#lineage)).
+
+## Look and feel
+
+An app must look finished without the user asking: native controls, default buttons and unstyled
+text are not acceptable. What counts as finished depends on the look the user chose.
+
+- **Their own design:** follow it, and skip the defaults below.
+- **Creative:** pick your own palette, type and layout, and keep the basics: readable contrast,
+  tabular numerals, light and dark (`prefers-color-scheme`), styled loading, empty and error
+  states.
+- **Default anfra style:** start from [references/example.html](references/example.html), which
+  applies the tokens in [references/DESIGN.md](references/DESIGN.md) to
+  [Basecoat UI](https://basecoatui.com), a plain HTML/CSS component library. Use its tokens as
+  CSS variables, its three text sizes (20, 14, 12px), 32px controls, one violet primary action and
+  the chart palette (violet first). Ignore what only fits the anfra web app itself: Tailwind class
+  names, the sidebar, the sign-in sheet, the logo. Load Inter from the CDN with a `system-ui`
+  fallback.
+
+In every look:
+
+- **A single HTML file uses Basecoat** (pinned CDN CSS and JS, as in the example). Use shadcn
+  (`shadcn-vue` for Vue) only when the app is written in React or Vue.
+- **Filters are Basecoat comboboxes**, with `aria-multiselectable="true"` for several values. Never
+  a native `<select multiple>`. Basecoat has no date picker: use two styled `<input type="date">`
+  and preset buttons, as in the example.
+- Charts: if a `dataviz` skill is available, follow it. Give ECharts hex colors: it cannot parse
+  `oklch`.
 
 ## 3. Write and check the queries
 
@@ -97,12 +130,14 @@ anfra lineage --targets '[{"parent":"<dataset fqn>","child":"<metric>"}]'
 One `.html` file in `apps/` (subfolders group apps in the list), with a `<title>` the list shows.
 `apps/sales/overview.html` opens at `/apps/sales/overview`. Follow the example's skeleton: declare
 everything, `subscribe` a render function, `execute()`, then wire controls and clicks to set state
-and `execute()` again.
+and `execute()` again. Keep its two layers apart: the look (styles, markup, chart theme) and the
+SDK wiring.
 
 The frame is a **sandbox** (`allow-scripts` only, opaque origin). Write for it:
 
 - Data comes only from the SDK. Don't call anfra's API yourself: the frame cannot reach it.
-- `localStorage`, `sessionStorage` and cookies throw: keep state in variables.
+- `localStorage`, `sessionStorage` and cookies throw: keep state in variables. This includes
+  Basecoat's theme switcher, which stores the mode: follow `prefers-color-scheme` instead.
 - Forms, popups and navigation are blocked: use buttons and `change` listeners, never `<form>`.
 - Load libraries from a CDN, with pinned versions. Files next to the app in `apps/` (images,
   scripts) load by relative path.
