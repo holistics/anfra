@@ -101,7 +101,7 @@ codes := httpkit.Codes{
 	Imported: engine.ErrorCodes(), // serve the engine's codes as yours
 	Status: map[apperr.Code]int{
 		engine.QueryInvalid.Code():           http.StatusUnprocessableEntity,
-		engine.QueryFailed.Code():            http.StatusBadGateway,
+		engine.QueryFailed.Code():            http.StatusUnprocessableEntity,
 		engine.SidecarUnavailable.Code():     http.StatusServiceUnavailable,
 		engine.UnknownCommand.Code():         http.StatusNotFound,
 		engine.DataPermsMissing.Code():       http.StatusInternalServerError,

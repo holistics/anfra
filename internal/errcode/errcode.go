@@ -20,17 +20,17 @@ var (
 	UnknownCommand     = apperr.DefinePublicCode(NS, "unknown_command", apperr.Client, "No such command.")
 	DataPermsMissing   = apperr.DefinePublicCode(NS, "data_perms_missing", apperr.Client, "No data permissions were decided.")
 	SidecarUnavailable = apperr.DefinePublicCode(NS, "sidecar_unavailable", apperr.Server, "A sidecar is unavailable.")
-	// QueryFailed: canal-query could not run a query on its data source — the
-	// data source unreachable, the credentials refused, the database rejecting
-	// the query, or canal itself failing. canal-query scopes the first three all
-	// "User" and does not say which, so they are not classified further yet.
+	// QueryFailed: the data source did not run the query — the database
+	// rejecting it, or the data source unreachable, or its credentials refused:
+	// what canal-query scopes "User", without saying which. Each is the user's to
+	// fix, the query or the data source, never the server's; so user scope, with
+	// the data source's own message. canal-query failing itself ("Server"), or
+	// refusing a request the engine built wrong ("Client"), is the server's, and
+	// is no query_failed: an internal error.
 	//
-	// TODO: classify by canal's scope, re-decided here, never copied: "User"
-	// splits into a query the database rejects (the caller's: query_invalid)
-	// and a data source it cannot reach or log in to (not the caller's);
-	// "Server" is a dependency failing; "Client" is a request the engine built
-	// wrong — its own bug, and already left unclassified.
-	QueryFailed = apperr.DefinePublicCode(NS, "query_failed", apperr.Server, "The query failed to run on its data source.")
+	// TODO: when canal-query says which of its "User" cases it is, a query the
+	// database rejects becomes query_invalid's, and this the data source's.
+	QueryFailed = apperr.DefinePublicCode(NS, "query_failed", apperr.User, "The query failed to run on its data source.")
 	// DataPermsUnenforceable: the caller's data permissions are governed, and
 	// the query cannot be — raw SQL, which no rule is compiled into. A host that
 	// decided the caller may run it states that with Ungoverned.

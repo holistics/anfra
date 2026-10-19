@@ -151,7 +151,7 @@ describe('coreApiBackend', () => {
   it.each([
     ['an invalid query, as its diagnostics', fail(422, { code: 'query_invalid', scope: 'user', message: 'The query is invalid.', details: { valid: false, diagnostics: [{ message: 'No field x.', line: 1, column: 9 }] } }), QueryError, 'line 1:9: No field x.'],
     ['an input entry refused, as its violation', fail(422, { code: 'validation_failed', scope: 'user', message: 'Some of the input is not valid.', details: { violations: [{ field: 'input.filters[0].field', message: 'Unknown field.' }] } }), QueryError, 'input.filters[0].field: Unknown field.'],
-    ['a data source failing', fail(502, { code: 'query_failed', scope: 'server', message: 'connection refused' }), QueryError, 'connection refused'],
+    ['a data source failing', fail(422, { code: 'query_failed', scope: 'user', message: 'connection refused' }), QueryError, 'connection refused'],
     ['a caller who may not see it', fail(403, { code: 'forbidden', scope: 'user', message: 'Not yours.' }), PermissionError, 'Not yours.'],
     ['a sidecar down', fail(503, { code: 'sidecar_unavailable', scope: 'server', message: 'anfra-node is not responding.' }), TransportError, 'anfra-node is not responding.'],
     ['a code this SDK does not know, by its scope', fail(500, { code: 'something_new', scope: 'server', message: 'Broke.' }), TransportError, 'Broke.'],

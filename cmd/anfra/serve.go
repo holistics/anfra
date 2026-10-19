@@ -381,8 +381,9 @@ var codes = httpkit.Codes{
 		// A result over the maximum: the caller narrows the query.
 		query.ResultTooLarge.Code(): http.StatusUnprocessableEntity,
 		query.PageTooLarge.Code():   http.StatusUnprocessableEntity,
-		// A data source failing to run a query is an upstream's failure.
-		errcode.QueryFailed:        http.StatusBadGateway,
+		// The data source not running a query: the query or the data source is
+		// the user's to fix (canal-query's own failures are internal errors).
+		errcode.QueryFailed:        http.StatusUnprocessableEntity,
 		errcode.SidecarUnavailable: http.StatusServiceUnavailable,
 		// Unreachable here, since this server states its own context; kept so
 		// every code has a status.

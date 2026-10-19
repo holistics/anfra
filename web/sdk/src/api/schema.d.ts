@@ -434,9 +434,9 @@ export interface components {
             message: string;
             request_id: string;
             /** @constant */
-            scope: "server";
+            scope: "user";
             /** @constant */
-            status: 502;
+            status: 422;
         };
         /** @description The query is invalid. */
         ErrorBodyQueryInvalid: {
@@ -1134,14 +1134,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description validation_failed, query_invalid, result_too_large, page_too_large */
+            /** @description validation_failed, query_invalid, query_failed, result_too_large, page_too_large */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"] | components["schemas"]["ErrorBodyResultTooLarge"] | components["schemas"]["ErrorBodyPageTooLarge"];
+                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"] | components["schemas"]["ErrorBodyQueryFailed"] | components["schemas"]["ErrorBodyResultTooLarge"] | components["schemas"]["ErrorBodyPageTooLarge"];
                     };
                 };
             };
@@ -1153,17 +1153,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         error: components["schemas"]["ErrorBodyInternalServerError"];
-                    };
-                };
-            };
-            /** @description query_failed */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        error: components["schemas"]["ErrorBodyQueryFailed"];
                     };
                 };
             };
@@ -1281,14 +1270,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description validation_failed, query_invalid */
+            /** @description validation_failed, query_invalid, query_failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"];
+                        error: components["schemas"]["ErrorBodyValidationFailed"] | components["schemas"]["ErrorBodyQueryInvalid"] | components["schemas"]["ErrorBodyQueryFailed"];
                     };
                 };
             };
@@ -1311,17 +1300,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         error: components["schemas"]["ErrorBodyExportsUnavailable"];
-                    };
-                };
-            };
-            /** @description query_failed */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        error: components["schemas"]["ErrorBodyQueryFailed"];
                     };
                 };
             };

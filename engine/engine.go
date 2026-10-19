@@ -205,9 +205,10 @@ var (
 	SidecarUnavailable = errcode.SidecarUnavailable
 	// QueryInvalid: a query that cannot run or compile, with its diagnostics.
 	QueryInvalid = query.QueryInvalid
-	// QueryFailed: the data source could not run the query — unreachable,
-	// credentials refused, or the database rejecting it. Not classified further
-	// yet.
+	// QueryFailed: the data source did not run the query — the database
+	// rejecting it, the data source unreachable, or its credentials refused —
+	// with its own message. User scope: the query or the data source is the
+	// user's to fix. Which of these it is is not told apart yet.
 	QueryFailed = errcode.QueryFailed
 	// ExportsUnavailable: an export, on an Invocation with no Exports store.
 	ExportsUnavailable = errcode.ExportsUnavailable
