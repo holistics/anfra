@@ -1,3 +1,30 @@
+## [0.11.1](https://github.com/holistics/anfra/compare/v0.11.0...v0.11.1) (2026-10-19)
+
+### ⚠ BREAKING CHANGES
+
+* **engine:** revamp to authorize on typed input
+* refactor and introduce executor
+
+### Features
+
+* add query result row cap ([cbfda62](https://github.com/holistics/anfra/commit/cbfda62db26af98485c8606dba0aafb582b0ae4a))
+* let host provide the run timeout ([7044896](https://github.com/holistics/anfra/commit/7044896a3e45cd98ec10067e40cb09fcc2404f17))
+* pass tenant id to canal-query ([621f23d](https://github.com/holistics/anfra/commit/621f23d50a43205783b21320fbee3860419939a1))
+* report compiled AQL for observer ([2682f41](https://github.com/holistics/anfra/commit/2682f411a65581278e4032e9dd72203b29525c59))
+* report query run to observers ([e1e2f06](https://github.com/holistics/anfra/commit/e1e2f06d7eb6c62d70b34c21b0e1aedbb885a980))
+* stream query result ([8ab3da0](https://github.com/holistics/anfra/commit/8ab3da06a5e406718a9ab824c135e8c0bf3c05cd))
+* streaming query ([6c9be5d](https://github.com/holistics/anfra/commit/6c9be5df447846162d81a3a384b4b33f031871a3))
+
+### Bug Fixes
+
+* only show query_failed (422) when error scope is 'User' ([e3f8146](https://github.com/holistics/anfra/commit/e3f814628cde360979efa56cc72e1c7e4f75b70e))
+* **sdk.app:** keep Anfra.features as a deprecated view of the installed plugins ([d4760c5](https://github.com/holistics/anfra/commit/d4760c509dc3b04ed8384c588d965cc96d36eaf2))
+* **shared:** execute every execution, even when the client left before start ([814e429](https://github.com/holistics/anfra/commit/814e42931ba4009591db73b253b57cd84cd79692))
+
+### Miscellaneous Chores
+
+* **engine:** revamp to authorize on typed input ([10f5e1a](https://github.com/holistics/anfra/commit/10f5e1a3c103b8a9b059c1489c253d4e7c17f5bb))
+* refactor and introduce executor ([3f59172](https://github.com/holistics/anfra/commit/3f5917290968463d302816464a85a3aff5438eef))
 ## [0.11.0](https://github.com/holistics/anfra/compare/v0.10.2...v0.11.0) (2026-10-19)
 
 ### ⚠ BREAKING CHANGES
