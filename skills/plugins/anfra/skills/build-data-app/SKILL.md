@@ -95,6 +95,12 @@ In every look:
 - **Filters are Basecoat comboboxes**, with `aria-multiselectable="true"` for several values. Never
   a native `<select multiple>`. Basecoat has no date picker: use two styled `<input type="date">`
   and preset buttons, as in the example.
+- **Basecoat `.card` is a flex column that clips overflow.** A filter bar built as `class="card
+  filters"` with only `display: flex; flex-wrap: wrap` keeps the column direction, so
+  `align-items: end` pushes every control to the right edge, and the clipped overflow cuts off a
+  combobox's dropdown at the card's bottom edge. Override both on the bar: `flex-direction: row;
+  align-items: flex-end; overflow: visible` (as `.card.filters` does in the example). Check
+  the filter bar in a browser with a dropdown open before handing over.
 - Charts: if a `dataviz` skill is available, follow it. Give ECharts hex colors: it cannot parse
   `oklch`.
 

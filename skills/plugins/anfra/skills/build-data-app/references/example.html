@@ -87,8 +87,10 @@
     .card h2 { font-size: 14px; line-height: 20px; font-weight: 600; }
 
     /* Filter bar: one row, wraps on narrow screens. */
-    .filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 12px 16px;
-               margin-bottom: 16px; }
+    /* Basecoat's .card is a clipped column: make the bar a row and let combobox dropdowns overflow. */
+    .card.filters { flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+                    justify-content: flex-start; padding: 12px 16px; margin-bottom: 16px;
+                    overflow: visible; }
     .field-group { display: flex; flex-direction: column; gap: 8px; }
     .field-group > label { font-weight: 500; }
     .date-range { display: flex; align-items: center; gap: 8px; }
@@ -129,7 +131,7 @@
       </div>
     </div>
 
-    <div class="field-group">
+    <div class="field-group" data-anfra-block="date-picker" data-anfra-label="Order date" data-anfra-control="dates">
       <label for="date-from">Order date</label>
       <div class="date-range">
         <input id="date-from" class="input" type="date" aria-label="From">
@@ -296,7 +298,7 @@
               itemStyle: { opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
             })),
           }],
-        }, true);
+        });
       }
 
       if (trend.result) {
@@ -314,7 +316,7 @@
             areaStyle: { color: theme.cat[0], opacity: 0.08 },
             data: rows.map((row) => row.revenue),
           }],
-        }, true);
+        });
       }
     }
 
