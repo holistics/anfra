@@ -51,6 +51,10 @@ Everything beyond queries comes from a **plugin** the host installed, which adds
 own name (`query.export`, `Anfra.render`, `Anfra.lineage`). Where the host didn't install it, the
 member isn't there: check `Anfra.plugins.has(name)` before using an optional one.
 
+Data Apps written before plugins read `Anfra.features.export` (`.render`, `.lineage`). It still
+answers, from the installed plugins, but it is deprecated and warns in the console: replace it with
+`Anfra.plugins.has('export')`. It goes in the next breaking release.
+
 A reader can download a query's whole result, with the inputs its result on screen was run with
 (the `export` plugin):
 

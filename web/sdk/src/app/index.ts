@@ -6,7 +6,7 @@
  * See docs/designs/data-apps.md, at the repository root, for the design.
  */
 export {
-  createSdk, Sdk, InstalledPlugins, VERSION,
+  createSdk, Sdk, InstalledPlugins, VERSION, type DeprecatedFeatures,
 } from './sdk';
 export { installSandbox, SANDBOX_GLOBAL } from './sandbox';
 export { App } from './app';
