@@ -1,3 +1,10 @@
+## [0.4.0](https://github.com/holistics/anfra-skills/compare/anfra-v0.3.2...anfra-v0.4.0) (2026-10-19)
+
+### Features
+
+* describe the plugin system and give each built-in plugin its own reference ([f1c8cc8](https://github.com/holistics/anfra-skills/commit/f1c8cc8b0537704be523a9aa24df56016ade98a7))
+* teach Anfra.plugins in place of Anfra.features ([20aa602](https://github.com/holistics/anfra-skills/commit/20aa602cbef12bd6a5ecb44b9df7d399945e0f79))
+
 ## [0.3.1](https://github.com/holistics/anfra-skills/compare/anfra-v0.3.0...anfra-v0.3.1) (2026-10-13)
 
 ### Features
