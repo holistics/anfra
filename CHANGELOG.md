@@ -1,3 +1,24 @@
+## [0.11.0](https://github.com/holistics/anfra/compare/v0.10.2...v0.11.0) (2026-10-19)
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** mountDataApp and serveBridge are replaced by
+createHost(...).mount(...), and the Backend option by corePlugin.
+Anfra.features is removed: a plugin's API is absent where it is not
+installed, so check Anfra.plugins.has(name). The bridge's messages
+changed.
+
+### Features
+
+* **appserve:** mount data apps through the plugin host runtime ([269d305](https://github.com/holistics/anfra/commit/269d305e504d6baea0288c3138acbac3432c2545))
+* **sdk.host:** carry who started each call, and let a plugin call as its origin ([07813ed](https://github.com/holistics/anfra/commit/07813ed07d9f7977f5d11eb0955c725b7c5b8386))
+* **sdk:** add build and testing entrypoints for plugin authors ([11b2e9e](https://github.com/holistics/anfra/commit/11b2e9e68b49905c259fd5af3943692699f6faf2))
+* **sdk:** build data app features as plugins on a host runtime ([39caea2](https://github.com/holistics/anfra/commit/39caea2f5b0d47aaedb60d9d13d25b07cf23b574))
+* **sdk:** type plugin members from one augmentable registry ([19e848d](https://github.com/holistics/anfra/commit/19e848db064146bf7b2fc51585e171eeb6b36c99))
+
+### Bug Fixes
+
+* **sdk.host:** check what crosses from the frame, and every plugin ([183a773](https://github.com/holistics/anfra/commit/183a773e95798680ee545d46022ce2d953bf98a3))
 ## [0.10.2](https://github.com/holistics/anfra/compare/v0.10.1...v0.10.2) (2026-10-16)
 
 ### Bug Fixes
