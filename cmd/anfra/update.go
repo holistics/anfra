@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"time"
 
 	"github.com/holistics/anfra/internal/envflag"
 
@@ -83,7 +82,7 @@ func newUpdateCheckCmd() *cobra.Command {
 }
 
 // commands for which the after-the-command notice is suppressed: they do their
-// own checking (serve announces updates while it runs, see watchUpdates) or are
+// own checking (serve announces updates while it runs, see checkUpdates) or are
 // internal.
 var noNotifyCommands = map[string]bool{"update": true, "__update-check": true, "serve": true}
 
@@ -102,24 +101,21 @@ func knownUpdate() *command.UpdateInfo {
 	return &command.UpdateInfo{Latest: r.Version, Available: r.IsNewer()}
 }
 
-// watchUpdates announces a newer release while serve runs: at startup and then
-// daily, so a server left up for days still hears of one. It runs off the
-// request path and announces each version once. Never auto-updates: the running
-// server would keep the old version anyway. Silent on any error (offline, rate
-// limited).
-func watchUpdates(ctx context.Context, logger *slog.Logger) {
+// checkUpdates announces a newer release while serve runs: at startup and then
+// once the cache Check reads has gone stale, daily, so a server left up for days
+// still hears of one. It is a periodic routine's run, checked hourly: a fresh
+// cache costs a read. It runs off the request path and announces each version
+// once. Never auto-updates: the running server would keep the old version
+// anyway. Silent on any error (offline, rate limited).
+func checkUpdates(logger *slog.Logger) func(context.Context) error {
 	announced := ""
-	for {
+	return func(ctx context.Context) error {
 		if r, err := update.Check(ctx); err == nil && r.IsNewer() && r.Version != announced {
 			announced = r.Version
 			logger.Info("serve.update_available", "latest", r.Version, "current", meta.Version)
 			fmt.Fprintln(os.Stderr, update.Notice(r))
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(update.CheckEvery):
-		}
+		return nil
 	}
 }
 

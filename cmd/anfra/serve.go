@@ -31,6 +31,7 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
+	"github.com/holistics/anfra/shared/routine"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -132,7 +133,13 @@ func runServe(ctx context.Context, opts serveOptions) error {
 
 		ctx, stop := context.WithCancel(ctx)
 		defer stop()
-		go h.exportFiles.SweepEvery(ctx, exportLinkLife/6) // a server outlives many links
+		routines := routine.NewGroup("serve", h.cfg.Logger)
+		// The export files sweep themselves once, at the first export: enough for a
+		// CLI run, but a server outlives many links, so it sweeps again as they expire.
+		routines.Every("serve.export_sweep", exportLinkLife/6, func(context.Context) error {
+			h.exportFiles.Sweep(time.Now())
+			return nil
+		})
 		var apps *appserve.Server
 		if !opts.noApps {
 			apps = appserve.New(appserve.Options{
@@ -149,7 +156,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 			exportFiles: h.exportFiles, siteURL: opts.siteURL, serveMCP: !opts.noMCP, apps: apps,
 		})
 		if opts.idle > 0 {
-			handler = stopWhenIdle(ctx, handler, opts.idle, stop)
+			handler = stopWhenIdle(routines, handler, opts.idle, stop)
 		}
 		srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 		if apps != nil {
@@ -184,8 +191,16 @@ func runServe(ctx context.Context, opts serveOptions) error {
 			fmt.Printf("  MCP        %s/mcp\n", info.URL)
 		}
 		if !updateNotifyDisabled() {
-			go watchUpdates(ctx, h.cfg.Logger)
+			routines.Every("serve.update_check", time.Hour, checkUpdates(h.cfg.Logger), routine.Immediately())
 		}
+		routines.Start(ctx)
+		defer func() {
+			// Stop the routines before the deferred closes above: the export sweep
+			// must have returned before the export files are closed.
+			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_ = routines.Stop(stopCtx)
+		}()
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
@@ -436,26 +451,17 @@ func guard(next http.Handler, addr net.Addr) http.Handler {
 }
 
 // stopWhenIdle calls stop once no request has started or been in flight for
-// idle.
-func stopWhenIdle(ctx context.Context, next http.Handler, idle time.Duration, stop func()) http.Handler {
+// idle, checking on a routine of g.
+func stopWhenIdle(g *routine.Group, next http.Handler, idle time.Duration, stop func()) http.Handler {
 	var inFlight atomic.Int64
 	var last atomic.Int64
 	last.Store(time.Now().UnixNano())
-	go func() {
-		t := time.NewTicker(min(idle/4, time.Minute))
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case now := <-t.C:
-				if inFlight.Load() == 0 && now.Sub(time.Unix(0, last.Load())) >= idle {
-					stop()
-					return
-				}
-			}
+	g.Every("serve.idle", min(idle/4, time.Minute), func(context.Context) error {
+		if inFlight.Load() == 0 && time.Since(time.Unix(0, last.Load())) >= idle {
+			stop()
 		}
-	}()
+		return nil
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		inFlight.Add(1)
 		defer func() {
