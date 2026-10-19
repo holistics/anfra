@@ -40,6 +40,9 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 		// What a repo is, for anything handling one outside the engine (anfra-cloud,
 		// receiving a publish): which files make it up, and how content is named.
 		"shared/repoformat": true,
+		// How a server runs its background routines, anfra's and an embedding
+		// platform's alike (docs/designs/background-routines.md).
+		"shared/routine": true,
 	}
 
 	root, err := filepath.Abs("..")
@@ -85,7 +88,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,repoformat,requestid} are meant to be. Move it under internal/, "+
+				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,repoformat,requestid,routine} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}

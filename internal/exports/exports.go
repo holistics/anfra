@@ -102,21 +102,6 @@ func (fs *Files) Sweep(now time.Time) {
 	}
 }
 
-// SweepEvery sweeps every interval until ctx ends: a server's, which outlives
-// many links.
-func (fs *Files) SweepEvery(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case now := <-t.C:
-			fs.Sweep(now)
-		}
-	}
-}
-
 // Store is the command.ExportStore of exports written to Files, linked where
 // they are served: below ServedAt, its token then its name, when a server
 // serves them (Open; the name is for a client that saves a file under a link's

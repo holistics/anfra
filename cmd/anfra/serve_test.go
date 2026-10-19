@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/jsonkit"
+	"github.com/holistics/anfra/shared/routine"
 )
 
 var serverAddr = &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 7878}
@@ -168,11 +170,13 @@ func TestListen(t *testing.T) {
 }
 
 func TestStopWhenIdle(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	g := routine.NewGroup("test", slog.New(slog.DiscardHandler))
+	defer g.Stop(context.Background()) //nolint:errcheck // a test's cleanup
 	stopped := make(chan struct{})
-	h := stopWhenIdle(ctx, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }),
-		40*time.Millisecond, func() { close(stopped) })
+	var once sync.Once
+	h := stopWhenIdle(g, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }),
+		40*time.Millisecond, func() { once.Do(func() { close(stopped) }) })
+	g.Start(context.Background())
 	do(h, http.MethodGet, "/", "")
 	select {
 	case <-stopped:
