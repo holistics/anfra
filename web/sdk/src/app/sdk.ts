@@ -34,6 +34,22 @@ export class InstalledPlugins {
   }
 }
 
+/**
+ * What `Anfra.features` says: the kernel's gates, and whether each of anfra's optional plugins is
+ * installed.
+ *
+ * @deprecated Check `Anfra.plugins.has(name)` instead. Kept so Data Apps written before plugins keep
+ * working; removed in the next breaking release.
+ */
+export interface DeprecatedFeatures extends SdkFeatures {
+  /** `Anfra.plugins.has('export')`. */
+  readonly export: boolean;
+  /** `Anfra.plugins.has('render')`. */
+  readonly render: boolean;
+  /** `Anfra.plugins.has('lineage')`. */
+  readonly lineage: boolean;
+}
+
 /** The package's version: anfra's own, as each release publishes the SDK with it. */
 export const VERSION: string = version;
 
@@ -74,7 +90,10 @@ export class Sdk {
    */
   readonly plugins: InstalledPlugins;
 
-  private readonly features: Readonly<SdkFeatures>;
+  /** The kernel's gates (`dateDrill`), as the environment gave them. */
+  private readonly gates: Readonly<SdkFeatures>;
+
+  private deprecatedFeatures?: Readonly<DeprecatedFeatures>;
 
   /** @internal What plugins add to each query and control, by plugin name (the kernel's `provideOn*`). */
   readonly extensions: EntityExtensions<Query, Control> = { query: new Map(), control: new Map() };
@@ -112,12 +131,34 @@ export class Sdk {
       ]),
     );
     this.backend = environment.backend;
-    this.features = Object.freeze({ ...environment.features });
+    this.gates = Object.freeze({ ...environment.features });
     this.plugins = new InstalledPlugins(environment.plugins ?? []);
   }
 
+  /**
+   * Whether the host offers each of anfra's optional plugins, from before there were plugins. The
+   * first read warns once, in the console.
+   *
+   * @deprecated Check `Anfra.plugins.has(name)` instead: `Anfra.plugins.has('export')` for
+   * `Anfra.features.export`. Kept so Data Apps written before plugins keep working; removed in the
+   * next breaking release.
+   */
+  get features (): Readonly<DeprecatedFeatures> {
+    if (!this.deprecatedFeatures) {
+      console.warn("anfra: Anfra.features is deprecated and will be removed. Check Anfra.plugins.has('export'), "
+        + "Anfra.plugins.has('render') or Anfra.plugins.has('lineage') instead.");
+      this.deprecatedFeatures = Object.freeze({
+        ...this.gates,
+        export: this.plugins.has('export'),
+        render: this.plugins.has('render'),
+        lineage: this.plugins.has('lineage'),
+      });
+    }
+    return this.deprecatedFeatures;
+  }
+
   createApp (declaration: AppDeclaration = {}): App {
-    const app = new App(declaration, this.indices, this.backend, this.features, this.extensions);
+    const app = new App(declaration, this.indices, this.backend, this.gates, this.extensions);
     app.index = this._apps.length;
     this._apps.push(app);
     return app;
