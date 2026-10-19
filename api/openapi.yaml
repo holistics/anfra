@@ -459,10 +459,10 @@ components:
         request_id:
           type: string
         scope:
-          const: server
+          const: user
           type: string
         status:
-          const: 502
+          const: 422
           type: integer
       required:
         - code
@@ -1700,12 +1700,13 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyValidationFailed"
                       - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                      - $ref: "#/components/schemas/ErrorBodyQueryFailed"
                       - $ref: "#/components/schemas/ErrorBodyResultTooLarge"
                       - $ref: "#/components/schemas/ErrorBodyPageTooLarge"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid, result_too_large, page_too_large
+          description: validation_failed, query_invalid, query_failed, result_too_large, page_too_large
         "500":
           content:
             application/json:
@@ -1717,17 +1718,6 @@ paths:
                   - error
                 type: object
           description: internal_server_error
-        "502":
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    $ref: "#/components/schemas/ErrorBodyQueryFailed"
-                required:
-                  - error
-                type: object
-          description: query_failed
         "503":
           content:
             application/json:
@@ -1849,10 +1839,11 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyValidationFailed"
                       - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                      - $ref: "#/components/schemas/ErrorBodyQueryFailed"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid
+          description: validation_failed, query_invalid, query_failed
         "500":
           content:
             application/json:
@@ -1875,17 +1866,6 @@ paths:
                   - error
                 type: object
           description: exports_unavailable
-        "502":
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    $ref: "#/components/schemas/ErrorBodyQueryFailed"
-                required:
-                  - error
-                type: object
-          description: query_failed
         "503":
           content:
             application/json:

@@ -297,18 +297,19 @@ func (o *observation) finished(ctx context.Context, err error) {
 	}
 }
 
-// asQueryFailed is err as query_failed, with canal's message, when it is
-// canal-query failing to run the query — the data source's failure. A
-// client-scope error from canal is a request the engine built wrong — the
-// engine's bug, not the data source's — and stays unclassified, as does
-// anything else; an error with a code already, such as result_too_large,
-// passes as it is.
+// asQueryFailed is err as query_failed, with canal's message, when it is the
+// data source not running the query — what canal-query scopes "User": the
+// query rejected, the data source unreachable or refusing its credentials.
+// canal-query's other failures are the server's — its own ("Server"), or a
+// request the engine built wrong ("Client") — and stay unclassified, an
+// internal error, as does anything else; an error with a code already, such
+// as result_too_large, passes as it is.
 func asQueryFailed(err error) error {
 	if _, formal := err.(*apperr.Error); formal {
 		return err
 	}
 	e, ok := errors.AsType[*canalquery.Error](err)
-	if !ok || e.Scope == "Client" {
+	if !ok || e.Scope != "User" {
 		return err
 	}
 	return apperr.Encapsulate(err, errcode.QueryFailed, e.Message)
