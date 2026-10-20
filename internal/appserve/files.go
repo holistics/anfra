@@ -1,12 +1,12 @@
 package appserve
 
 import (
-	"html"
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/holistics/anfra/shared/repoformat"
 )
 
 // Entry is one node of the Data App tree: a Data App definition, or a folder of them.
@@ -18,17 +18,10 @@ type Entry struct {
 	Children []Entry `json:"children,omitempty"`
 }
 
-var titleRe = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
-
-// labelOf is a definition's <title>, or its file name.
-func labelOf(file string) string {
-	raw, _ := os.ReadFile(file) //nolint:gosec // G304: a file Catalog found under apps/
-	if m := titleRe.FindSubmatch(raw); m != nil {
-		if title := strings.Join(strings.Fields(string(m[1])), " "); title != "" {
-			return html.UnescapeString(title)
-		}
-	}
-	return filepath.Base(file)
+// labelOf is what the tree calls a definition, as every host does (repoformat.AppLabel).
+func labelOf(root, rel string) string {
+	raw, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel))) //nolint:gosec // G304: a file Catalog found under apps/
+	return repoformat.AppLabel(rel, raw)
 }
 
 func scan(root, rel string) []Entry {
@@ -49,7 +42,7 @@ func scan(root, rel string) []Entry {
 				folders = append(folders, Entry{Kind: "folder", Path: childRel, Name: d.Name(), Children: children})
 			}
 		case d.Type().IsRegular() && strings.HasSuffix(strings.ToLower(d.Name()), ".html"):
-			apps = append(apps, Entry{Kind: "app", Path: childRel, Label: labelOf(filepath.Join(root, filepath.FromSlash(childRel)))})
+			apps = append(apps, Entry{Kind: "app", Path: childRel, Label: labelOf(root, childRel)})
 		}
 	}
 	// Folders first, then Data Apps, each alphabetical (ReadDir sorts), as a file tree reads.
