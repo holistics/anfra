@@ -34,8 +34,11 @@ func canonicalCredentialOrg(org cloudapi.Org) (cloudapi.Org, error) {
 	return parsed, nil
 }
 
+// ErrAuthenticationRequired means the selected organization needs a new login.
+var ErrAuthenticationRequired = errors.New("authentication required")
+
 func loginRequired(org cloudapi.Org) error {
-	return fmt.Errorf("authentication required; run anfra auth login %s", org.String())
+	return fmt.Errorf("%w; run anfra auth login %s", ErrAuthenticationRequired, org.String())
 }
 
 // StoredLogins is local inventory only, not proof of a usable remote grant.

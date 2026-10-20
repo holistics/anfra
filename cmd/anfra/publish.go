@@ -33,6 +33,8 @@ func newPublishCmd() *cobra.Command {
 			"Where to: the org's address on its server, https://<server>/o/<org>, kept in .anfra/config.yml\n" +
 			"(org.url) and committed, so everyone publishes to the same org. --set-org sets it, and publishes there.\n" +
 			"Without a destination, an interactive terminal offers stored logins or new authentication.\n" +
+			"If the destination needs authentication, log in or choose another org here. Changing\n" +
+			"the destination requires confirmation before updating .anfra/config.yml.\n" +
 			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n" +
 			"--yes skips overwrite confirmation only. --dry-run never authenticates or writes configuration.",
 		Args: cobra.NoArgs,
@@ -40,9 +42,11 @@ func newPublishCmd() *cobra.Command {
 			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
 			ask := publish.Prompt(func(string, ...string) (int, bool) { return 0, false })
 			var selectOrg func(context.Context) (cloudapi.Org, error)
+			var recoverOrg func(context.Context, cloudapi.Org, error) (cloudapi.Org, error)
 			if terminal.interactive {
 				ask = stdinPrompt(terminal.in, terminal.out)
 				selectOrg = terminal.selectPublishOrg
+				recoverOrg = terminal.recoverPublishOrg
 			}
 			return publish.Run(cmd.Context(), ".", o, publish.Env{
 				Out:        cmd.OutOrStdout(),
@@ -51,6 +55,7 @@ func newPublishCmd() *cobra.Command {
 				Validate:   validateHere,
 				Credential: (cliauth.Manager{}).Authorize,
 				SelectOrg:  selectOrg,
+				RecoverOrg: recoverOrg,
 				UserAgent:  "anfra/" + meta.Version,
 			})
 		},

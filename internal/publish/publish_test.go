@@ -597,3 +597,83 @@ func TestConfiguredPublishNeverSubstitutesStoredOrg(t *testing.T) {
 		t.Fatal("configured destination changed")
 	}
 }
+
+func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
+	for _, scenario := range []string{"same org", "switch org", "cancel", "credentials still missing", "dry run"} {
+		t.Run(scenario, func(t *testing.T) {
+			dir := t.TempDir()
+			linked, _ := cloudapi.ParseOrg("https://cloud.example.com/o/acme")
+			selected := linked
+			if scenario == "switch org" || scenario == "credentials still missing" {
+				selected, _ = cloudapi.ParseOrg("https://cloud.example.com/o/beta")
+			}
+			original := "# keep\norg:\n  url: " + linked.String() + "\nother: untouched\n"
+			write(t, dir, map[string]string{"a.aml": "a", ".anfra/config.yml": original})
+			env, _, _ := testEnv(never(t))
+			missing := errors.New("authentication required")
+			validated := errors.New("validation reached")
+			loaded, recovered := 0, false
+			env.Credential = func(_ context.Context, org cloudapi.Org) (func(*http.Request) error, error) {
+				before, err := os.ReadFile(repoconfig.Path(dir))
+				if err != nil || string(before) != original {
+					t.Fatal("destination changed before authentication succeeded")
+				}
+				loaded++
+				if loaded == 1 || scenario == "credentials still missing" {
+					return nil, missing
+				}
+				if org != selected {
+					t.Fatalf("loaded credentials for %v instead of %v", org, selected)
+				}
+				return func(*http.Request) error { return nil }, nil
+			}
+			env.RecoverOrg = func(_ context.Context, org cloudapi.Org, cause error) (cloudapi.Org, error) {
+				if org != linked || cause != missing {
+					t.Fatalf("recovery context: %v, %v", org, cause)
+				}
+				recovered = true
+				if scenario == "cancel" {
+					return cloudapi.Org{}, context.Canceled
+				}
+				return selected, nil
+			}
+			env.Validate = func(context.Context, io.Writer) error {
+				org, _, err := readOrg(dir)
+				if err != nil || org != selected {
+					t.Fatal("validation began before selected destination was saved")
+				}
+				return validated
+			}
+			err := Run(context.Background(), dir, Options{Yes: true, DryRun: scenario == "dry run"}, env)
+			switch scenario {
+			case "dry run":
+				if err != nil || recovered || loaded != 0 {
+					t.Fatalf("dry run authenticated: %v", err)
+				}
+			case "cancel":
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("cancellation: %v", err)
+				}
+			case "credentials still missing":
+				if !errors.Is(err, missing) {
+					t.Fatalf("credential failure: %v", err)
+				}
+			default:
+				if !errors.Is(err, validated) || !recovered {
+					t.Fatalf("recovered publish did not reach validation: %v", err)
+				}
+			}
+			after, readErr := os.ReadFile(repoconfig.Path(dir))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if scenario == "switch org" {
+				if !strings.Contains(string(after), selected.String()) || !strings.Contains(string(after), "# keep") || !strings.Contains(string(after), "other: untouched") {
+					t.Fatalf("destination or unrelated config lost: %s", after)
+				}
+			} else if string(after) != original {
+				t.Fatalf("destination changed unexpectedly: %s", after)
+			}
+		})
+	}
+}

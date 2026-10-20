@@ -16,7 +16,6 @@ import (
 	"github.com/holistics/anfra/internal/cliauth"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
-	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -42,7 +41,7 @@ func newAuthCmd() *cobra.Command {
 				address = args[0]
 			} else {
 				var err error
-				address, err = t.loginAddress(cmd.Context())
+				address, err = t.loginAddress(cmd.Context(), "Authenticate with an organization")
 				if err != nil {
 					return err
 				}
@@ -67,10 +66,11 @@ func newAuthCmd() *cobra.Command {
 	})
 	auth.AddCommand(&cobra.Command{
 		Use: "logout [<org URL>]", Short: "Sign out of an organization",
+		Long: "Choose a saved organization to sign out of, or supply its URL.\n\nThis manages authentication on this machine and ignores the repo's linked\norganization. An organization URL is required without an interactive terminal.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t := terminalFor(cmd)
-			org, err := logoutOrg(cmd.Context(), ".", args, t)
+			org, err := logoutOrg(cmd.Context(), args, t)
 			if err != nil {
 				return err
 			}
@@ -175,7 +175,7 @@ func loginChoices(orgs []cliauth.StoredLogin) []cliui.OrgChoice {
 	return choices
 }
 
-func (t *authTerminal) loginAddress(ctx context.Context) (string, error) {
+func (t *authTerminal) loginAddress(ctx context.Context, title string) (string, error) {
 	if !t.interactive {
 		return "", errors.New("provide an organization URL: anfra auth login https://<server>/o/<org>")
 	}
@@ -183,7 +183,7 @@ func (t *authTerminal) loginAddress(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, address, err := cliui.PickOrg(ctx, t.in, t.out, "Authenticate with an organization", nil, origin, true)
+	_, address, err := cliui.PickOrg(ctx, t.in, t.out, title, nil, origin, true)
 	return address, err
 }
 
@@ -249,16 +249,9 @@ func (t *authTerminal) pickStored(ctx context.Context, orgs []cliauth.StoredLogi
 	return orgs[index].Org, nil
 }
 
-func logoutOrg(ctx context.Context, dir string, args []string, terminal *authTerminal) (cloudapi.Org, error) {
+func logoutOrg(ctx context.Context, args []string, terminal *authTerminal) (cloudapi.Org, error) {
 	if len(args) != 0 {
 		return cloudapi.ParseOrg(args[0])
-	}
-	config, err := repoconfig.Read(dir)
-	if err != nil {
-		return cloudapi.Org{}, err
-	}
-	if config.Org.URL != "" {
-		return cloudapi.ParseOrg(config.Org.URL)
 	}
 	if !terminal.interactive {
 		return cloudapi.Org{}, errors.New("provide an organization URL: anfra auth logout https://<server>/o/<org>")
@@ -268,7 +261,7 @@ func logoutOrg(ctx context.Context, dir string, args []string, terminal *authTer
 		return cloudapi.Org{}, err
 	}
 	if len(orgs) == 0 {
-		return cloudapi.Org{}, errors.New("no saved authentication to sign out of; run anfra auth status to check this repo's publish destination")
+		return cloudapi.Org{}, errors.New("no saved authentication to sign out of")
 	}
 	return terminal.pickStored(ctx, orgs)
 }
@@ -278,16 +271,20 @@ func (t *authTerminal) selectPublishOrg(ctx context.Context) (cloudapi.Org, erro
 	if err != nil {
 		return cloudapi.Org{}, err
 	}
-	choices := loginChoices(orgs)
-	choices = append(choices, cliui.OrgChoice{Name: "Authenticate with another organization"})
-	index, _, err := cliui.PickOrg(ctx, t.in, t.out, "Choose where to publish", choices, "", false)
-	if err != nil {
-		return cloudapi.Org{}, err
+	title := "This repo isn't linked to an organization yet.\nAuthenticate to publish."
+	if len(orgs) > 0 {
+		choices := loginChoices(orgs)
+		choices = append(choices, cliui.OrgChoice{Name: "Authenticate with another organization"})
+		index, _, err := cliui.PickOrg(ctx, t.in, t.out, "Choose where to publish", choices, "", false)
+		if err != nil {
+			return cloudapi.Org{}, err
+		}
+		if index < len(orgs) {
+			return orgs[index].Org, nil
+		}
+		title = "Authenticate with an organization"
 	}
-	if index < len(orgs) {
-		return orgs[index].Org, nil
-	}
-	address, err := t.loginAddress(ctx)
+	address, err := t.loginAddress(ctx, title)
 	if err != nil {
 		return cloudapi.Org{}, err
 	}
@@ -297,4 +294,64 @@ func (t *authTerminal) selectPublishOrg(ctx context.Context) (cloudapi.Org, erro
 	}
 	_, _, err = cliui.PickOrg(ctx, t.in, t.out, "Use this organization for publishing?", []cliui.OrgChoice{{Name: org.Slug, URL: org.String()}}, "", false)
 	return org, err
+}
+
+func (t *authTerminal) recoverPublishOrg(ctx context.Context, linked cloudapi.Org, cause error) (cloudapi.Org, error) {
+	if !errors.Is(cause, cliauth.ErrAuthenticationRequired) {
+		return cloudapi.Org{}, cause
+	}
+	orgs, err := (cliauth.Manager{}).StoredLogins(ctx)
+	if err != nil {
+		return cloudapi.Org{}, err
+	}
+	choices := []cliui.OrgChoice{{Name: "Authenticate with " + linked.Slug, URL: linked.String()}}
+	alternatives := make([]cliauth.StoredLogin, 0, len(orgs))
+	for _, login := range orgs {
+		if login.Org == linked {
+			continue
+		}
+		alternatives = append(alternatives, login)
+	}
+	choices = append(choices, cliui.OrgChoice{Name: "Switch to another organization"})
+	title := fmt.Sprintf("This repo publishes to %s.\nYou're not authenticated with this organization.", linked.String())
+	index, _, err := cliui.PickOrg(ctx, t.in, t.out, title, choices, "", false)
+	if err != nil {
+		return cloudapi.Org{}, err
+	}
+	var selected cloudapi.Org
+	if index == 0 {
+		selected, err = t.loginOrg(ctx, linked.String())
+	} else {
+		storedIndex := len(alternatives)
+		if len(alternatives) > 0 {
+			choices = append(loginChoices(alternatives), cliui.OrgChoice{Name: "Authenticate with a different organization"})
+			storedIndex, _, err = cliui.PickOrg(ctx, t.in, t.out, "Choose an organization to publish to", choices, "", false)
+			if err != nil {
+				return cloudapi.Org{}, err
+			}
+		}
+		if storedIndex < len(alternatives) {
+			selected = alternatives[storedIndex].Org
+		} else {
+			var address string
+			address, err = t.loginAddress(ctx, "Authenticate with an organization")
+			if err == nil {
+				selected, err = t.loginOrg(ctx, address)
+			}
+		}
+	}
+	if err != nil {
+		return cloudapi.Org{}, err
+	}
+	if selected != linked {
+		title = fmt.Sprintf("Change this repo's publish destination from %s to %s?\nThis updates org.url in .anfra/config.yml.", linked.String(), selected.String())
+		index, _, err = cliui.PickOrg(ctx, t.in, t.out, title, []cliui.OrgChoice{{Name: "Cancel"}, {Name: "Change destination and publish"}}, "", false)
+		if err != nil {
+			return cloudapi.Org{}, err
+		}
+		if index == 0 {
+			return cloudapi.Org{}, context.Canceled
+		}
+	}
+	return selected, nil
 }

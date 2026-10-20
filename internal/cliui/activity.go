@@ -64,9 +64,11 @@ func RunActivity(ctx context.Context, in io.Reader, out io.Writer, initial strin
 	styles := NewTerminalStyles(out)
 	s.Style = styles.Accent
 	m := &activityModel{spinner: s, label: SafeText(initial), width: 80, cancel: cancel, run: run, progress: progress, complete: workCtx.Done(), styles: styles}
-	opts := append(terminalOptions(in, out), tea.WithContext(ctx))
+	opts, finishOutput := terminalOptions(in, out)
+	opts = append(opts, tea.WithContext(ctx))
 	program = tea.NewProgram(m, opts...)
 	_, uiErr := program.Run()
+	uiErr = errors.Join(uiErr, finishOutput())
 	cancel()
 	mu.Lock()
 	stopped = true

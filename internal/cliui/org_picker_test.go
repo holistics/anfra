@@ -12,6 +12,7 @@ func TestPickOrgKeepsAuthenticationAfterOrganizations(t *testing.T) {
 	orgs := []OrgChoice{
 		{Name: "Zulu", URL: "https://bi.example.com/o/zulu"},
 		{Name: "Tango", URL: "https://bi.example.com/o/tango"},
+		{Name: "Switch to another organization"},
 		{Name: "Authenticate with another organization"},
 	}
 	for _, tc := range []struct {
@@ -21,7 +22,8 @@ func TestPickOrgKeepsAuthenticationAfterOrganizations(t *testing.T) {
 	}{
 		{name: "first organization", keys: "\r", index: 1},
 		{name: "second organization", keys: "\x1b[B\r", index: 0},
-		{name: "authentication last", keys: "\x1b[B\x1b[B\r", index: 2},
+		{name: "switch before authentication", keys: "\x1b[B\x1b[B\r", index: 2},
+		{name: "authentication last", keys: "\x1b[B\x1b[B\x1b[B\r", index: 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

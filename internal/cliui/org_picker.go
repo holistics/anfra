@@ -102,6 +102,9 @@ func PickOrg(ctx context.Context, in io.Reader, out io.Writer, title string, org
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i].(orgItem), items[j].(orgItem)
+		if a.url == "" && b.url == "" {
+			return false // Keep actions in the caller's order.
+		}
 		if (a.url == "") != (b.url == "") {
 			return a.url != ""
 		}
@@ -139,8 +142,10 @@ func PickOrg(ctx context.Context, in io.Reader, out io.Writer, title string, org
 	}
 	m := &orgPicker{choices: l, input: t, title: strings.Join(titleLines, "\n"), width: 80, height: 20, index: -1, editing: len(items) == 1 && items[0].(orgItem).input, styles: styles}
 	m.resize()
-	opts := append(terminalOptions(in, out), tea.WithContext(ctx))
+	opts, finishOutput := terminalOptions(in, out)
+	opts = append(opts, tea.WithContext(ctx))
 	_, err := tea.NewProgram(m, opts...).Run()
+	err = errors.Join(err, finishOutput())
 	if err != nil {
 		if ctx.Err() != nil {
 			return -1, "", ctx.Err()

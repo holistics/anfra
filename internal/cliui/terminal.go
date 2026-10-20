@@ -69,10 +69,15 @@ func SafeText(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-func terminalOptions(in io.Reader, out io.Writer) []tea.ProgramOption {
-	opts := []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(out)}
+func terminalOptions(in io.Reader, out io.Writer) ([]tea.ProgramOption, func() error) {
+	filtered := &terminalQueryWriter{out: out}
+	var writer io.Writer = filtered
+	if file, ok := out.(terminalOutputFile); ok {
+		writer = terminalQueryFileWriter{terminalQueryWriter: filtered, file: file}
+	}
+	opts := []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(writer)}
 	if _, present := os.LookupEnv("NO_COLOR"); present {
 		opts = append(opts, tea.WithColorProfile(colorprofile.ASCII))
 	}
-	return opts
+	return opts, filtered.flush
 }
