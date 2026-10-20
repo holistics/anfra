@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/cliauth"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -139,7 +140,7 @@ func TestAuthStatusExplainsDamagedCredentials(t *testing.T) {
 	}
 }
 
-func TestLoginServerAndLogoutDestination(t *testing.T) {
+func TestLoginServerAndExplicitLogout(t *testing.T) {
 	t.Setenv("ANFRA_CLOUD_URL", "https://runtime.example.com")
 	origin, hint, err := loginServer("https://BI.example.com:443/o/acme")
 	if err != nil || origin != "https://bi.example.com" || hint != "acme" {
@@ -152,17 +153,60 @@ func TestLoginServerAndLogoutDestination(t *testing.T) {
 	if err := repoconfig.SetString(repoconfig.Path(dir), "org", "url", "https://bi.example.com/o/repo"); err != nil {
 		t.Fatal(err)
 	}
+	t.Chdir(dir)
 	terminal := newAuthTerminal(strings.NewReader(""), &bytes.Buffer{})
-	org, err := logoutOrg(context.Background(), dir, nil, terminal)
-	if err != nil || org.Slug != "repo" {
-		t.Fatalf("%v %v", org, err)
+	if _, err := logoutOrg(context.Background(), nil, terminal); err == nil || !strings.Contains(err.Error(), "anfra auth logout https://<server>/o/<org>") {
+		t.Fatalf("noninteractive logout used repo destination: %v", err)
 	}
-	org, err = logoutOrg(context.Background(), dir, []string{"https://other.example.com/o/explicit"}, terminal)
+	org, err := logoutOrg(context.Background(), []string{"https://other.example.com/o/explicit"}, terminal)
 	if err != nil || org.Slug != "explicit" {
 		t.Fatalf("%v %v", org, err)
 	}
-	if _, err := logoutOrg(context.Background(), t.TempDir(), nil, terminal); err == nil || !strings.Contains(err.Error(), "anfra auth logout https://<server>/o/<org>") {
-		t.Fatal(err)
+}
+
+func TestLogoutUsesGlobalAuthenticationOnly(t *testing.T) {
+	for _, config := range []string{"org:\n  url: https://bi.example.com/o/repo\n", "org: ["} {
+		t.Run(config, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, ".anfra"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(repoconfig.Path(dir), []byte(config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(dir)
+			for _, tc := range []struct {
+				name      string
+				addresses []string
+				keys      string
+				want      string
+				wantError string
+			}{
+				{name: "none", wantError: "no saved authentication to sign out of"},
+				{name: "one still asks", addresses: []string{"https://bi.example.com/o/repo"}, keys: "\x03", wantError: context.Canceled.Error()},
+				{name: "choose another", addresses: []string{"https://bi.example.com/o/repo", "https://bi.example.com/o/other"}, keys: "\r", want: "https://bi.example.com/o/other"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					seedLoginInventory(t, tc.addresses...)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					terminal := newAuthTerminal(strings.NewReader(tc.keys), io.Discard)
+					terminal.interactive = true
+					org, err := logoutOrg(ctx, nil, terminal)
+					if tc.wantError != "" {
+						if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+							t.Fatalf("logout error = %v; want %q", err, tc.wantError)
+						}
+					} else if err != nil || org.String() != tc.want {
+						t.Fatalf("logout org = %v, %v; want %s", org, err, tc.want)
+					}
+					got, err := os.ReadFile(repoconfig.Path(dir))
+					if err != nil || string(got) != config {
+						t.Fatalf("logout changed repo config: %q, %v", got, err)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -258,7 +302,7 @@ func TestLoginOffersOnlyCloudAndURLEntry(t *testing.T) {
 			var output bytes.Buffer
 			terminal := newAuthTerminal(strings.NewReader(tc.keys), &output)
 			terminal.interactive = true
-			address, err := terminal.loginAddress(ctx)
+			address, err := terminal.loginAddress(ctx, "Authenticate with an organization")
 			if err != nil || address != tc.want {
 				t.Fatalf("login address = %q, %v; want %q", address, err, tc.want)
 			}
@@ -266,6 +310,32 @@ func TestLoginOffersOnlyCloudAndURLEntry(t *testing.T) {
 				t.Fatal("login displayed a saved authentication")
 			}
 		})
+	}
+}
+
+func TestFirstPublishWithoutLoginsShowsAuthenticationImmediately(t *testing.T) {
+	seedLoginInventory(t)
+	t.Setenv("ANFRA_CLOUD_URL", "https://cloud.example.com")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var output bytes.Buffer
+	terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;100t"), &output)
+	terminal.interactive = true
+	if _, err := terminal.selectPublishOrg(ctx); err != context.DeadlineExceeded {
+		t.Fatalf("cancel publish selection: %v", err)
+	}
+	for _, want := range []string{
+		"This repo isn't linked to an organization yet.",
+		"Authenticate to publish.",
+		"https://cloud.example.com",
+		"Enter your organization URL",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("missing %q in first publish screen: %s", want, &output)
+		}
+	}
+	if strings.Contains(output.String(), "Authenticate with another organization") {
+		t.Fatalf("unnecessary organization selection: %s", &output)
 	}
 }
 
@@ -509,5 +579,129 @@ func TestAuthStatusRepoBoundariesAndJSON(t *testing.T) {
 	var empty bytes.Buffer
 	if err := printAuthStatus(context.Background(), root, &empty, true, false); err != nil || empty.String() != "{\"orgs\":[],\"repo_org_url\":null,\"remote_checked\":false}" {
 		t.Fatalf("%s %v", &empty, err)
+	}
+}
+
+func TestPublishRecoveryPreservesCredentialErrors(t *testing.T) {
+	terminal := newAuthTerminal(strings.NewReader(""), io.Discard)
+	terminal.interactive = true
+	linked, _ := cloudapi.ParseOrg("https://cloud.example.com/o/acme")
+	cause := fmt.Errorf("cannot read credentials")
+	if _, err := terminal.recoverPublishOrg(context.Background(), linked, cause); err != cause {
+		t.Fatalf("credential error replaced: %v", err)
+	}
+}
+
+func TestPublishRecoveryOffersLinkedAndOtherOrganizations(t *testing.T) {
+	for _, addresses := range [][]string{nil, {"https://cloud.example.com/o/acme"}, {"https://cloud.example.com/o/beta"}, {"https://cloud.example.com/o/acme", "https://cloud.example.com/o/beta", "https://cloud.example.com/o/gamma"}} {
+		t.Run(strings.Join(addresses, "+"), func(t *testing.T) {
+			seedLoginInventory(t, addresses...)
+			linked, _ := cloudapi.ParseOrg("https://cloud.example.com/o/acme")
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			var output bytes.Buffer
+			terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;120t"), &output)
+			terminal.interactive = true
+			_, cause := (cliauth.Manager{}).Authorize(ctx, linked)
+			if cause == nil {
+				t.Fatal("missing authentication accepted")
+			}
+			if _, err := terminal.recoverPublishOrg(ctx, linked, cause); err != context.DeadlineExceeded {
+				t.Fatalf("recovery: %v", err)
+			}
+			for _, want := range []string{"This repo publishes to " + linked.String(), "You're not authenticated with this organization.", "> Authenticate with acme", "Switch to another organization"} {
+				if !strings.Contains(output.String(), want) {
+					t.Fatalf("missing %q in recovery screen: %s", want, &output)
+				}
+			}
+			if strings.Contains(output.String(), "Authenticate with a different organization") {
+				t.Fatalf("new authentication displayed in top-level menu: %s", &output)
+			}
+			for _, address := range addresses {
+				if address != linked.String() {
+					if strings.Contains(output.String(), address) {
+						t.Fatalf("saved org displayed in top-level menu: %s", &output)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPublishRecoverySwitchOrganization(t *testing.T) {
+	for _, action := range []string{"cancel", "confirm", "authenticate", "authenticate without saved alternatives"} {
+		t.Run(action, func(t *testing.T) {
+			seedLoginInventory(t, "https://cloud.example.com/o/acme", "https://cloud.example.com/o/alpha", "https://cloud.example.com/o/beta")
+			if action == "authenticate without saved alternatives" {
+				seedLoginInventory(t, "https://cloud.example.com/o/acme")
+			}
+			t.Setenv("ANFRA_CLOUD_URL", "https://cloud.example.com")
+			linked, _ := cloudapi.ParseOrg("https://cloud.example.com/o/acme")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			input, keys, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer input.Close()
+			defer keys.Close()
+			frames, screen := io.Pipe()
+			defer frames.Close()
+			defer screen.Close()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_, _ = io.WriteString(keys, "\x1b[8;24;160t")
+				var rendered strings.Builder
+				stage := 0
+				buf := make([]byte, 4096)
+				for {
+					n, err := frames.Read(buf)
+					if err != nil {
+						return
+					}
+					rendered.Write(buf[:n])
+					if stage > 0 && strings.Contains(string(buf[:n]), "\x1b[?25l") {
+						_, _ = io.WriteString(keys, "\x1b[8;24;160t")
+					}
+					switch {
+					case stage == 0 && strings.Contains(rendered.String(), "Switch to another organization"):
+						stage++
+						_, _ = io.WriteString(keys, "\x1b[B\r")
+					case stage == 1 && strings.Contains(rendered.String(), "Choose an organization to publish to"):
+						stage++
+						answer := "\x1b[B\r"
+						if action == "authenticate" {
+							answer = "\x1b[B\x1b[B\r"
+						}
+						_, _ = io.WriteString(keys, answer)
+					case (stage == 1 || stage == 2) && strings.Contains(rendered.String(), "Authenticate with an organization") && strings.Contains(rendered.String(), "Enter your organization URL"):
+						stage = 3
+						_, _ = io.WriteString(keys, "\x03")
+					case stage == 2 && strings.Contains(rendered.String(), "This updates org.url in .anfra/config.yml."):
+						stage++
+						answer := "\r"
+						if action == "confirm" {
+							answer = "\x1b[B\r"
+						}
+						_, _ = io.WriteString(keys, answer)
+					}
+				}
+			}()
+			var output bytes.Buffer
+			terminal := newAuthTerminal(input, io.MultiWriter(&output, screen))
+			terminal.interactive = true
+			selected, err := terminal.recoverPublishOrg(ctx, linked, cliauth.ErrAuthenticationRequired)
+			_ = screen.Close()
+			_ = keys.Close()
+			<-done
+			if action == "confirm" {
+				if err != nil || selected.String() != "https://cloud.example.com/o/beta" {
+					t.Fatalf("confirmed destination = %v, %v; screen: %s", selected, err, &output)
+				}
+			} else if err != context.Canceled {
+				t.Fatalf("default did not cancel: %v; screen: %s", err, &output)
+			}
+		})
 	}
 }

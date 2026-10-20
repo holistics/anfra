@@ -54,6 +54,10 @@ type Env struct {
 	Credential func(context.Context, cloudapi.Org) (func(*http.Request) error, error)
 	// SelectOrg explicitly selects a first destination; nil means no interactive terminal.
 	SelectOrg func(context.Context) (cloudapi.Org, error)
+	// RecoverOrg offers interactive recovery after credential loading fails.
+	// It must return the original error when recovery does not apply, and confirm
+	// any destination change before returning a different organization.
+	RecoverOrg func(context.Context, cloudapi.Org, error) (cloudapi.Org, error)
 	// UserAgent names the CLI and its version, for the server.
 	UserAgent string
 }
@@ -108,10 +112,24 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		}
 	}
 	authorize, err := env.Credential(ctx, org)
+	destinationChanged := false
+	if err != nil && configured && env.RecoverOrg != nil {
+		recovered, recoverErr := env.RecoverOrg(ctx, org, err)
+		if recoverErr != nil {
+			return recoverErr
+		}
+		recovered, err = cloudapi.ParseOrg(recovered.String())
+		if err != nil {
+			return err
+		}
+		destinationChanged = recovered != org
+		org = recovered
+		authorize, err = env.Credential(ctx, org)
+	}
 	if err != nil {
 		return err
 	}
-	if !configured || o.SetOrg != "" {
+	if !configured || o.SetOrg != "" || destinationChanged {
 		if err := setOrg(dir, org); err != nil {
 			return err
 		}
