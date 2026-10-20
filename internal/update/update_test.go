@@ -6,6 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/meta"
 )
 
@@ -108,16 +112,29 @@ func TestBanner(t *testing.T) {
 
 	r := &Release{Version: "0.11.0"}
 	want := "▲ Update available  0.9.1 → 0.11.0\n  Run `anfra update` to install."
-	if got := Banner(r, false); got != want {
+	if got := Banner(r, cliui.TerminalStyles{}); got != want {
 		t.Errorf("Banner(plain) = %q, want %q", got, want)
 	}
-	if got := Banner(r, true); !strings.Contains(got, "\033[") || !strings.Contains(got, "0.11.0") {
-		t.Errorf("Banner(color) = %q, want escape codes and the new version", got)
+	styled := cliui.TerminalStyles{
+		Heading: lipgloss.NewStyle().Bold(true),
+		Muted:   lipgloss.NewStyle().Faint(true),
+		Success: lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(2)),
+		Warning: lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3)),
+		Code:    lipgloss.NewStyle().Bold(true),
 	}
-	if got := Banner(&Release{Version: "0.9.1"}, true); got != "" {
+	got := Banner(r, styled)
+	if !strings.Contains(got, "\033[") || ansi.Strip(got) != want {
+		t.Errorf("Banner(styled) = %q, want escape codes around %q", got, want)
+	}
+	// The version comes from GitHub or a cache file on disk: escapes and line
+	// breaks in it must not reach the terminal.
+	if got := Banner(&Release{Version: "0.11.0\033[2J\nforged"}, cliui.TerminalStyles{}); strings.Contains(got, "\033") || strings.Contains(got, "forged") {
+		t.Errorf("Banner(hostile version) = %q, want escapes and line breaks removed", got)
+	}
+	if got := Banner(&Release{Version: "0.9.1"}, styled); got != "" {
 		t.Errorf("Banner(current release) = %q, want empty", got)
 	}
-	if got := Banner(nil, true); got != "" {
+	if got := Banner(nil, styled); got != "" {
 		t.Errorf("Banner(nil) = %q, want empty", got)
 	}
 }
