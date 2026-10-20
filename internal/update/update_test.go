@@ -100,3 +100,24 @@ func TestAssetName(t *testing.T) {
 		t.Fatal("assetName returned empty name with no error")
 	}
 }
+
+func TestBanner(t *testing.T) {
+	orig := meta.Version
+	t.Cleanup(func() { meta.Version = orig })
+	meta.Version = "0.9.1"
+
+	r := &Release{Version: "0.11.0"}
+	want := "▲ Update available  0.9.1 → 0.11.0\n  Run `anfra update` to install."
+	if got := Banner(r, false); got != want {
+		t.Errorf("Banner(plain) = %q, want %q", got, want)
+	}
+	if got := Banner(r, true); !strings.Contains(got, "\033[") || !strings.Contains(got, "0.11.0") {
+		t.Errorf("Banner(color) = %q, want escape codes and the new version", got)
+	}
+	if got := Banner(&Release{Version: "0.9.1"}, true); got != "" {
+		t.Errorf("Banner(current release) = %q, want empty", got)
+	}
+	if got := Banner(nil, true); got != "" {
+		t.Errorf("Banner(nil) = %q, want empty", got)
+	}
+}

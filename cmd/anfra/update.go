@@ -150,7 +150,8 @@ func maybeNotifyUpdate(invoked string) {
 	// runs there (at most daily), so what an agent reads through `anfra version` and
 	// the skills' session hook stays current. CI spawns nothing.
 	if stderrIsInteractive() && notice != "" {
-		fmt.Fprintln(os.Stderr, "\n"+notice)
+		color := os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+		fmt.Fprintln(os.Stderr, "\n"+update.Banner(update.Cached(), color)+"\n")
 	}
 	if update.Stale() && os.Getenv("CI") == "" {
 		spawnDetached("__update-check")
