@@ -105,27 +105,6 @@ func TestExpiry(t *testing.T) {
 	}
 }
 
-// A server sweeps on a ticker, until it stops.
-func TestSweepEvery(t *testing.T) {
-	fs := newFiles(t, time.Millisecond)
-	u, _ := url.Parse(finish(t, Store{Files: fs}, "x\n"))
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { fs.SweepEvery(ctx, 5*time.Millisecond); close(done) }()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := os.Stat(u.Path); os.IsNotExist(err) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("no sweep removed the expired export")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
-	<-done
-}
-
 // The folder is the user's own, so one user's never keeps another's out.
 func TestDirIsPerUser(t *testing.T) {
 	if uid := os.Getuid(); uid >= 0 && !strings.HasSuffix(Dir(), "anfra-exports-"+strconv.Itoa(uid)) {

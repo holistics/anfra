@@ -21,6 +21,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, appserve. |
 | [SDK plugins](designs/sdk-plugins.md) | Everything a Data App reaches is a plugin the host installs: how host, frame and plugins talk, middleware, the plugin layer. |
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
+| [background routines](designs/background-routines.md) | Work a server runs beside its requests: its kinds, the rules, panics, and the `shared/routine` helper. |
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
 

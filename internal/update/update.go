@@ -363,10 +363,6 @@ func Check(ctx context.Context) (*Release, error) {
 	return r, nil
 }
 
-// CheckEvery is how often a long-running process should call Check: once the
-// cache it reads has gone stale.
-const CheckEvery = checkTTL
-
 // Notice is the one-line "update available" message for r, or "" when r is not
 // newer than the running version.
 func Notice(r *Release) string {
