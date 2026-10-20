@@ -1,12 +1,16 @@
 // Package repoformat is what an anfra repo is, as anything handling one outside
-// the engine needs it: which files make up a repo (Publishable), and how a file's
+// the engine needs it: which files make up a repo (Publishable), which of them
+// are Data Apps and what they are called (DataApp, AppLabel), and how a file's
 // content is named (BlobID). anfra core owns it, as it owns the repo format;
-// anfra-cloud imports it, so a server and the CLI agree on both.
+// anfra-cloud imports it, so a server, the CLI and every host agree on them.
 package repoformat
 
 import (
 	"crypto/sha1" //nolint:gosec // G505: git names blobs by SHA-1; BlobID computes such names, nothing secret
 	"encoding/hex"
+	"html"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -41,6 +45,27 @@ func Publishable(path string) bool {
 		}
 	}
 	return parts[0] == AppsDir && len(parts) > 1 || strings.HasSuffix(strings.ToLower(path), ".aml")
+}
+
+// DataApp reports whether a file is a Data App definition: an .html file under
+// AppsDir that a publish carries. The other files there are what definitions
+// refer to (an image, a script). path is as Publishable takes it.
+func DataApp(path string) bool {
+	return strings.HasPrefix(path, AppsDir+"/") && strings.HasSuffix(strings.ToLower(path), ".html") && Publishable(path)
+}
+
+var titleRe = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+
+// AppLabel is what a host calls a Data App: its definition's <title>, with
+// whitespace collapsed and entities decoded, or else its file name. p is the
+// definition's slash-separated path, content its HTML.
+func AppLabel(p string, content []byte) string {
+	if m := titleRe.FindSubmatch(content); m != nil {
+		if title := strings.Join(strings.Fields(string(m[1])), " "); title != "" {
+			return html.UnescapeString(title)
+		}
+	}
+	return path.Base(p)
 }
 
 // BlobID is content's git blob id: SHA-1 over "blob <size>\0" and the content,

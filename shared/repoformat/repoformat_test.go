@@ -56,3 +56,35 @@ func TestPublishable(t *testing.T) {
 		}
 	}
 }
+
+// A Data App is an .html file under apps/ that a publish carries; what it refers to is not one.
+func TestDataApp(t *testing.T) {
+	for path, want := range map[string]bool{
+		"apps/sales.html":            true,
+		"apps/team/Overview.HTML":    true,
+		"apps/dash/logo.png":         false,
+		"apps/.hidden/private.html":  false,
+		"apps/x/node_modules/a.html": false,
+		"index.html":                 false,
+		"models/apps/x.html":         false,
+		"apps":                       false,
+	} {
+		if got := repoformat.DataApp(path); got != want {
+			t.Errorf("DataApp(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+// A Data App is called by its <title>, tidied, or else by its file name.
+func TestAppLabel(t *testing.T) {
+	for _, c := range []struct{ path, html, want string }{
+		{"apps/sales.html", "<html><head><title> Sales &amp;\n  Returns </title></head></html>", "Sales & Returns"},
+		{"apps/team/overview.html", `<TITLE lang="en">Team</TITLE>`, "Team"},
+		{"apps/untitled.html", "<html></html>", "untitled.html"},
+		{"apps/blank.html", "<title>   </title>", "blank.html"},
+	} {
+		if got := repoformat.AppLabel(c.path, []byte(c.html)); got != c.want {
+			t.Errorf("AppLabel(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+}
