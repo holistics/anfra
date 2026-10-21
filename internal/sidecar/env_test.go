@@ -7,7 +7,7 @@ import (
 
 // A sidecar inherits the machine's environment but not anfra's own names or
 // the per-process ones; its prefix sets those for it alone, and what its
-// supervisor sets wins over both.
+// supervisor sets wins over both, except its defaults, which the prefix changes.
 func TestChildEnv(t *testing.T) {
 	environ := []string{
 		"HOME=/home/me",
@@ -22,12 +22,17 @@ func TestChildEnv(t *testing.T) {
 		"ANFRA_CANAL_QUERY_ENV_PORT=1",                          // the supervisor's own: ignored
 		"ANFRA_CANAL_QUERY_ENV_=x",                              // no name
 		"ANFRA_NODE_ENV_NODE_OPTIONS=--max-old-space-size=4096", // another sidecar's
+		"ANFRA_CANAL_QUERY_ENV_ANFRA_CACHE_SIZE=0",              // over the supervisor's default
 	}
-	got := childEnv(environ, "ANFRA_CANAL_QUERY_ENV_", []string{"PORT=4000", "ANFRA_REPO_ID=r"})
+	got := childEnv(environ, "ANFRA_CANAL_QUERY_ENV_",
+		[]string{"ANFRA_CACHE_SIZE=1", "ANFRA_POOL_SIZE=2"},
+		[]string{"PORT=4000", "ANFRA_REPO_ID=r"})
 	want := []string{
 		"HOME=/home/me",
 		"AWS_PROFILE=warehouse",
 		"OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318",
+		"ANFRA_CACHE_SIZE=0",
+		"ANFRA_POOL_SIZE=2",
 		"PPROF_ADDR=localhost:6061",
 		"PORT=4000",
 		"ANFRA_REPO_ID=r",
@@ -37,7 +42,7 @@ func TestChildEnv(t *testing.T) {
 	}
 
 	// Without a prefix, nothing is forwarded.
-	got = childEnv(environ, "", nil)
+	got = childEnv(environ, "", nil, nil)
 	want = []string{"HOME=/home/me", "AWS_PROFILE=prod", "OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318"}
 	if !slices.Equal(got, want) {
 		t.Errorf("childEnv without a prefix:\n got %q\nwant %q", got, want)

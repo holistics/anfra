@@ -1,6 +1,9 @@
 package sidecar
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // A spawned sidecar inherits anfra's environment, so whatever it needs from the
 // machine (HOME, PATH, the dynamic loader's variables, a driver's credentials)
@@ -27,10 +30,11 @@ var stripped = map[string]bool{
 }
 
 // childEnv is the environment a sidecar is spawned with, from environ (anfra's,
-// as os.Environ gives it): what it inherits, then each <prefix><NAME>=value as
+// as os.Environ gives it): what it inherits, then defaults, the values its
+// supervisor sets that the prefix may change, then each <prefix><NAME>=value as
 // NAME=value, then fixed, the values its supervisor sets, which nothing
 // overrides. A name appears once, with the last value given for it.
-func childEnv(environ []string, prefix string, fixed []string) []string {
+func childEnv(environ []string, prefix string, defaults, fixed []string) []string {
 	var inherited, forwarded []string
 	for _, kv := range environ {
 		name, value, _ := strings.Cut(kv, "=")
@@ -44,7 +48,7 @@ func childEnv(environ []string, prefix string, fixed []string) []string {
 			inherited = append(inherited, kv)
 		}
 	}
-	return lastWins(append(append(inherited, forwarded...), fixed...))
+	return lastWins(slices.Concat(inherited, defaults, forwarded, fixed))
 }
 
 // lastWins keeps each name's last entry, in the place of its first.

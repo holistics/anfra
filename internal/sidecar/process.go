@@ -28,6 +28,9 @@ type ProcSpec struct {
 	// ExtraEnv is what the supervisor sets, over anything inherited or
 	// forwarded (childEnv).
 	ExtraEnv []string
+	// DefaultEnv is what the supervisor sets unless anfra's environment sets it
+	// for this sidecar, through EnvPrefix.
+	DefaultEnv []string
 	// EnvPrefix forwards <EnvPrefix><NAME>=value from anfra's environment as
 	// NAME=value, to this sidecar only: e.g. ANFRA_CANAL_QUERY_ENV_.
 	EnvPrefix string
@@ -58,7 +61,7 @@ func StartProcess(spec ProcSpec) (*Process, error) {
 	cmd := exec.Command(spec.Path, spec.Args...) //nolint:gosec // G204: spawns our own bundled/configured sidecar, not untrusted input
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	cmd.Env = childEnv(os.Environ(), spec.EnvPrefix, spec.ExtraEnv)
+	cmd.Env = childEnv(os.Environ(), spec.EnvPrefix, spec.DefaultEnv, spec.ExtraEnv)
 
 	var stdin *os.File
 	if spec.PipeStdin {
