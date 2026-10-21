@@ -73,6 +73,9 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query compile, invalid", valid, clients, Request{Command: "query.compile", Args: q("nosuch | select(x.y)")}, "", query.QueryInvalid},
 		{"query validate, valid", valid, clients, Request{Command: "query.validate", Args: q("products | select(products.id)")}, ok, nil},
 		{"query validate, invalid", valid, clients, Request{Command: "query.validate", Args: q("nosuch | select(x.y)")}, invalid, nil},
+		{"query, a dataset that is not there", valid, clients, Request{Command: "query", Args: map[string]any{"dataset": "nosuch", "query": "products | select(products.id)"}}, "", apperr.ValidationFailed},
+		{"query compile, a dataset that is not there", valid, clients, Request{Command: "query.compile", Args: map[string]any{"dataset": "nosuch", "query": "products | select(products.id)"}}, "", apperr.ValidationFailed},
+		{"query validate, a dataset that is not there", valid, clients, Request{Command: "query.validate", Args: map[string]any{"dataset": "nosuch", "query": "products | select(products.id)"}}, "", apperr.ValidationFailed},
 		{"query, SQL", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select id, name from products order by id"}}, ok, nil},
 		{"query, SQL the database refuses", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select nosuch from products"}}, "", errcode.QueryFailed},
 		{"query, SQL on a data source it cannot reach", valid, clients, Request{Command: "query", Args: map[string]any{"lang": "sql", "data_source": "unreachable", "query": "select 1"}}, "", errcode.QueryFailed},
@@ -122,6 +125,30 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		lines := strings.Split(strings.TrimSpace(string(b)), "\n")
 		if lines[0] != "name" || len(lines)-1 != link.RowCount || link.RowCount == 0 || link.Filename != "ecommerce.csv" {
 			t.Errorf("link %+v, file:\n%s", link, b)
+		}
+	})
+
+	// anfra-node's refusal of what the caller gave lands on the arg at fault, and
+	// a query that does not compile carries its diagnostics, without a second
+	// round trip to find them.
+	t.Run("query, refusals, on the arg at fault", func(t *testing.T) {
+		cc := command.CommandContext{Clients: clients, TenantID: "local", Repo: valid, AllowLocalRepo: true, DataPerms: dataperm.Ungoverned()}
+		for _, tc := range []struct {
+			args  map[string]any
+			field string
+		}{
+			{map[string]any{"dataset": "nosuch", "query": "products | select(products.id)"}, "dataset"},
+			{shaped(map[string]any{"input": map[string]any{"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}}), "input.filters[0].field"},
+		} {
+			_, err := Dispatch(ctx, cc, Request{Command: "query", Args: tc.args})
+			v, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
+			if len(v.Violations) != 1 || v.Violations[0].Field != tc.field || strings.HasPrefix(v.Violations[0].Message, tc.field) {
+				t.Errorf("%v: got %v, want one violation on %s, its message not prefixed with it", tc.args, err, tc.field)
+			}
+		}
+		_, err := Dispatch(ctx, cc, Request{Command: "query", Args: q("nosuch | select(x.y)")})
+		if d, _ := apperr.DetailsOf(err, query.QueryInvalid); d.Valid || len(d.Diagnostics) == 0 {
+			t.Errorf("an invalid query: got %v, want its diagnostics", err)
 		}
 	})
 

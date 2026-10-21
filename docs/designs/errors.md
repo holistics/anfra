@@ -92,7 +92,7 @@ Naming the field is what makes a failure fixable in one step, by a person or by 
 
 ### Worked example: `anfra show`
 
-anfra-node refuses an fqn it found nothing at as an RPC error with a path. The show command turns that into a violation of the argument at fault (`internal/command/show/show.go`):
+anfra-node refuses a param it cannot use as a public error: JSON-RPC's `-32602`, with `data: {code, path?, details?}`, `path` naming the param ([anfra-node's errors design](https://github.com/holistics/holistics-core/blob/master/apps/anfra-node/docs/designs/errors.md)). Anything else it answers is its own failure, and stays unclassified. The show command turns a refused fqn into a violation of the argument at fault (`internal/command/show/show.go`):
 
 ```go
 res, err := aml.Show(ctx, cc.Clients.Node, cc.Repo, typ, fqn)
@@ -101,16 +101,18 @@ if v, ok := refused(err); ok {
 }
 ```
 
-where `refused` reads the RPC error's path (`fqn` or `type`) into an `apperr.Violation{Field: path, Code: "invalid", Message: …}`. So the sidecar's refusal reaches every caller as the same `validation_failed` with a violation on `fqn`:
+where `refused` reads the public error's path (`fqn` or `type`) into an `apperr.Violation{Field: path, Code: "invalid", Message: …}`. So the sidecar's refusal reaches every caller as the same `validation_failed` with a violation on `fqn`:
 
 ```json
 {"error": {"code": "validation_failed", "scope": "user", "status": 422,
-  "message": "No dataset \"nosuch\" in the repo.",
-  "details": {"violations": [{"field": "fqn", "code": "invalid", "message": "No dataset \"nosuch\" in the repo."}]},
+  "message": "There's no dataset \"nosuch\" in the repo.",
+  "details": {"violations": [{"field": "fqn", "code": "invalid", "message": "There's no dataset \"nosuch\" in the repo."}]},
   "request_id": "req_…"}}
 ```
 
-and the CLI prints it as `Error: fqn: no dataset "nosuch" in the repo`, then ``Run `anfra show --help` for usage.`` Any other sidecar failure is left as it came, so it renders as unclassified, our failure.
+and the CLI prints it as `Error: fqn: there's no dataset "nosuch" in the repo`, then ``Run `anfra show --help` for usage.``
+
+The query commands do the same with `anfranode.Violation` and a map of anfra-node's params to their args (`datasetFqn` to `dataset`, `input.…` to `input.…`, `internal/command/query/compile.go`): `anfra query -d nosuch …` prints `Error: --dataset: there's no dataset "nosuch" in the repo`. A param they do not map is one the engine built, so its refusal is our failure. A query that does not compile is refused with its diagnostics (`query_invalid`), which `query.Compile` answers as anfra's `query_invalid`. Any other sidecar failure is left as it came, so it renders as unclassified, our failure.
 
 ## Steps: context written once
 

@@ -95,7 +95,7 @@ var Validate = command.Define(command.Def[QueryInput, query.QueryValidation]{
 		if err != nil {
 			return query.QueryValidation{}, err
 		}
-		return query.Check(ctx, cc.Clients.Node, src, in.Dataset, aql)
+		return checkAQL(ctx, cc, src, in.Dataset, aql)
 	},
 	Valid: func(r query.QueryValidation) bool { return r.Valid },
 })

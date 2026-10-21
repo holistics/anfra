@@ -2,7 +2,9 @@ package anfranode
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -153,5 +155,36 @@ func TestUnreachable(t *testing.T) {
 	cancel()
 	if _, err := node.Ping(ctx); errors.Is(err, errcode.SidecarUnavailable) || !errors.Is(err, context.Canceled) {
 		t.Errorf("canceled: %v, want the cancellation, unclassified", err)
+	}
+}
+
+// A public error is -32602 with a code: its details decode for that code only,
+// and nothing else anfra-node answers is one.
+func TestPublicErrors(t *testing.T) {
+	invalid := &RPCError{Code: RPCInvalidParams, Message: "No.", Data: jsontext.Value(`{"code":"query_invalid","details":{"diagnostics":[{"message":"No.","severity":"error","line":1,"column":3}]}}`)}
+	wrapped := fmt.Errorf("compile: %w", invalid)
+
+	if !IsPublic(wrapped) {
+		t.Error("IsPublic: a wrapped query_invalid is public")
+	}
+	d, ok := DetailsOf[QueryDiagnostics](wrapped, QueryInvalid)
+	if !ok || len(d.Diagnostics) != 1 || d.Diagnostics[0].Message != "No." || *d.Diagnostics[0].Line != 1 {
+		t.Errorf("DetailsOf: got %+v (%v)", d, ok)
+	}
+	if _, ok := DetailsOf[QueryDiagnostics](wrapped, InvalidInput); ok {
+		t.Error("DetailsOf: decoded the details of another code")
+	}
+	if _, ok := invalid.Path(); ok {
+		t.Error("Path: query_invalid refuses no param")
+	}
+
+	for _, e := range []error{
+		&RPCError{Code: -32603, Message: "boom"},
+		&RPCError{Code: RPCInvalidParams, Message: "bad", Data: jsontext.Value(`{"path":"datasetFqn"}`)},
+		errors.New("boom"),
+	} {
+		if IsPublic(e) {
+			t.Errorf("IsPublic(%v): want false", e)
+		}
 	}
 }

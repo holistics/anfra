@@ -13,7 +13,7 @@ import (
 // stays as it is.
 func TestRefused(t *testing.T) {
 	refusal := func(path, msg string) error {
-		data, _ := jsonkit.Marshal(map[string]string{"path": path})
+		data, _ := jsonkit.Marshal(map[string]string{"code": anfranode.InvalidInput, "path": path})
 		return &anfranode.RPCError{Method: "aml.show", Code: anfranode.RPCInvalidParams, Message: msg, Data: data}
 	}
 	for _, tc := range []struct {

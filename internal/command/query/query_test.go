@@ -65,12 +65,12 @@ func jsonHas(raw []byte, key string) bool {
 	return ok
 }
 
-// anfra-node refuses a Query Input entry or a page as invalid params, with the
-// path of what is wrong: it is the arg at fault's violation, in the API's names.
+// anfra-node refuses a dataset, a Query Input entry or a page as a public error,
+// with the param at fault: it is the arg at fault's violation, in the API's names.
 // Anything else stays as it is.
 func TestRunViolation(t *testing.T) {
 	refusal := func(path, msg string) error {
-		data, _ := jsonkit.Marshal(map[string]string{"path": path})
+		data, _ := jsonkit.Marshal(map[string]string{"code": anfranode.InvalidInput, "path": path})
 		return &anfranode.RPCError{Method: "aql.compile_to_sql", Code: anfranode.RPCInvalidParams, Message: msg, Data: data}
 	}
 	for _, tc := range []struct {
@@ -78,16 +78,21 @@ func TestRunViolation(t *testing.T) {
 		err  error
 		want *apperr.Violation
 	}{
-		{"a filter entry", refusal("filters[2].operator", "filters[2].operator: Unknown operator \"nearly\"."),
+		{"a dataset that cannot be used", fmt.Errorf("compile: %w", refusal("datasetFqn", `There's no dataset "x" in the repo.`)),
+			&apperr.Violation{Field: "dataset", Code: "invalid", Message: `There's no dataset "x" in the repo.`}},
+		{"a filter entry", refusal("input.filters[2].operator", "Unknown operator \"nearly\"."),
 			&apperr.Violation{Field: "input.filters[2].operator", Code: "invalid", Message: "Unknown operator \"nearly\"."}},
-		{"a date drill", refusal("dateDrills[0].grain", "dateDrills[0].grain: Unknown grain."),
+		{"a date drill", refusal("input.dateDrills[0].grain", "Unknown grain."),
 			&apperr.Violation{Field: "input.dateDrills[0].grain", Code: "invalid", Message: "Unknown grain."}},
-		{"the input as a whole", refusal("", "Query Input can only be applied to a query with exactly one `explore { }` block."),
+		{"the input as a whole", refusal("input", "Query Input can only be applied to a query with exactly one `explore { }` block."),
 			&apperr.Violation{Field: "input", Code: "invalid", Message: "Query Input can only be applied to a query with exactly one `explore { }` block."}},
 		{"paging a pivot", refusal("pagination", "Pagination for pivot queries isn't supported yet."),
 			&apperr.Violation{Field: "page_size", Code: "unsupported", Message: "Pagination for pivot queries isn't supported yet."}},
-		{"invalid params with no path", &anfranode.RPCError{Code: anfranode.RPCInvalidParams, Message: `Dataset "x" not found`}, nil},
-		{"another RPC error", &anfranode.RPCError{Code: -32603, Message: "boom", Data: jsontext.Value(`{"path":"filters[0]"}`)}, nil},
+		{"a param the engine builds", refusal("options.weekStartDay", `Invalid weekStartDay "x".`), nil},
+		{"a param that only shares a prefix", refusal("inputs", "bad"), nil},
+		{"a public error with no path", &anfranode.RPCError{Code: anfranode.RPCInvalidParams, Message: "bad", Data: jsontext.Value(`{"code":"invalid_input"}`)}, nil},
+		{"invalid params with no code", &anfranode.RPCError{Code: anfranode.RPCInvalidParams, Message: "bad", Data: jsontext.Value(`{"path":"datasetFqn"}`)}, nil},
+		{"another RPC error", &anfranode.RPCError{Code: -32603, Message: "boom"}, nil},
 		{"not an RPC error", errors.New("boom"), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
