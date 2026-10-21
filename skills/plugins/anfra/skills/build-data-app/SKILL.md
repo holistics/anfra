@@ -1,13 +1,13 @@
 ---
 name: build-data-app
-description: Build or change an Anfra Data App — one HTML file in the repo's `apps/` that queries datasets, and can trace fields' lineage, through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
+description: Build or change an Anfra Data App — one self-contained HTML file in the repo's `apps/` that queries datasets, and can trace fields' lineage, through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
 ---
 
 # Building a Data App
 
-A **Data App** is one HTML file under the repo's `apps/`. `anfra serve` lists it by its
-`<title>` and runs it in a sandboxed frame where the SDK is already on the global `Anfra`. The SDK
-supplies data and state; every pixel is yours.
+A **Data App** is one self-contained HTML file under the repo's `apps/`. `anfra serve` lists it by
+its `<title>` and runs it in a sandboxed frame where the SDK is already on the global `Anfra`. The
+SDK supplies data and state; every pixel is yours.
 
 References, read when a step needs them:
 
@@ -137,7 +137,8 @@ anfra lineage --targets '[{"parent":"<dataset fqn>","child":"<metric>"}]'
 
 ## 4. Write the file
 
-One `.html` file in `apps/` (subfolders group apps in the list), with a `<title>` the list shows.
+One self-contained `.html` file in `apps/` (subfolders group apps in the list), with a `<title>`
+the list shows.
 `apps/sales/overview.html` opens at `/apps/sales/overview`. Follow the example's skeleton: declare
 everything, `subscribe` a render function, `execute()`, then wire controls and clicks to set state
 and `execute()` again. Keep its two layers apart: the look (styles, markup, chart theme) and the
@@ -149,8 +150,11 @@ The frame is a **sandbox** (`allow-scripts` only, opaque origin). Write for it:
 - `localStorage`, `sessionStorage` and cookies throw: keep state in variables. This includes
   Basecoat's theme switcher, which stores the mode: follow `prefers-color-scheme` instead.
 - Forms, popups and navigation are blocked: use buttons and `change` listeners, never `<form>`.
-- Load libraries from a CDN, with pinned versions. Files next to the app in `apps/` (images,
-  scripts) load by relative path.
+- **The app is its one HTML file: nothing it loads may be a file of the repo.** No relative `src`
+  or `href` (`./chart.js`, `logo.png`, `../shared/app.css`). Put your own scripts and styles
+  inline (`<script>`, `<style>`), images inline as SVG or a `data:` URI, and libraries and fonts
+  on a CDN by absolute `https://` URL with a pinned version. Never split an app into several files or make one app load another's, and never add
+  anything but `.html` apps under `apps/`.
 - Every query is an `explore { }`: controls, cross-filters, sorting and date drills only apply to
   one.
 - Mark the page's structure in the HTML, as [references/api.md](references/api.md#structure)
@@ -183,6 +187,9 @@ the real row keys, value types and the AQL that ran. Put on the page the definit
 any rounding a reader needs to trust a number.
 
 ## 5. Run and check it
+
+First check the file loads nothing by relative path: every `src`, `href` and CSS `url()` is
+`https://`, `data:` or a `#` fragment.
 
 ```sh
 anfra status               # is a server already running for this repo, and where?
