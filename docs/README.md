@@ -23,6 +23,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
 | [background routines](designs/background-routines.md) | Work a server runs beside its requests: its kinds, the rules, panics, and the `shared/routine` helper. |
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |
+| [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
 
 ## Usage

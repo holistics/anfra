@@ -61,6 +61,12 @@ type Env struct {
 	RecoverOrg func(context.Context, cloudapi.Org, error) (cloudapi.Org, error)
 	// UserAgent names the CLI and its version, for the server.
 	UserAgent string
+	// MotherDuck is the person's MotherDuck account, to copy a DuckDB data source
+	// to; nil offers no copy.
+	MotherDuck MotherDuck
+	// Input asks for a line of text, as Ask asks a question; nil with no
+	// terminal.
+	Input Input
 }
 
 // Run publishes the repo at dir: PUBLISH.md's flow, from file selection to the
@@ -146,7 +152,7 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	if err := env.Validate(ctx, env.ErrOut); err != nil {
 		return err
 	}
-	if err := offerDataSourcesToOrg(ctx, client, dir, o.CreateDataSources, p, ask); err != nil {
+	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
 		return err
 	}
 
@@ -186,6 +192,9 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 			yes, ok := Confirm(ask, "Confirm publishing a new version?")
 			if !ok {
 				return errors.New("not published: there is no one to confirm it here; pass --yes to publish")
+			}
+			if err := ctx.Err(); err != nil {
+				return err
 			}
 			if !yes {
 				return errors.New("not published")

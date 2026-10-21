@@ -30,11 +30,20 @@ import (
 // repo. A type that differs is said, since the two compile to different SQL.
 //
 // Never offered: a DuckDB one (localOnly), whose database is a file on this
-// machine; it is said instead, with what to do.
-func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, p *cliui.Printer, ask Prompt) error {
+// machine. At a terminal, copying the file to the person's MotherDuck account is
+// offered instead, and the org given a data source on the copy (mdCopy); else
+// what to do is said.
+//
+// m is the org, its client and the terminal, as copying needs them too.
+func offerDataSourcesToOrg(ctx context.Context, m *mdCopy, dir string, create bool) error {
+	c, p := m.c, m.p
 	p.Section("Data sources")
 	defer p.Section("")
-	ask = asking(p, ask)
+	m.ask = asking(p, m.ask)
+	if m.input != nil {
+		m.input = inputting(p, m.input)
+	}
+	ask := m.ask
 	local, err := localDataSources(dir)
 	if err != nil {
 		p.Warn("Not checking the org's data sources: %v", err)
@@ -57,29 +66,30 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 		byName[d.Name] = d
 	}
 
-	var missing []datasource.DataSource
+	var missing, files []datasource.DataSource
 	var skipped []string
 	for _, name := range slices.Sorted(maps.Keys(local)) {
 		l := local[name]
 		if r, ok := byName[name]; ok {
-			if r.Type != l.DBType {
+			if r.Type != l.DBType && !sameSQL[[2]string{l.DBType, r.Type}] {
 				p.Warn("Data source %s is %s here and %s on the org: the org's models compile to %s's SQL.", name, l.DBType, r.Type, r.Type)
 			}
 			continue
 		}
 		if localOnly[l.DBType] {
-			p.Warn("Data source %s is %s, a file on this machine the org's server cannot read: not creating it there.", name, l.DBType)
-			p.Note("Load its data into a warehouse the server reaches, and add that to the org as %s.", name)
-			skipped = append(skipped, name)
+			files = append(files, l)
 			continue
 		}
 		missing = append(missing, l)
 	}
 
 	for i, d := range missing {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if !create {
-			yes, asked := Confirm(ask, fmt.Sprintf("Data source %s is not on the org yet. Create it? "+
-				"Its connection, credentials included, is sent to the server.", d.Name))
+			yes, asked := Confirm(ask, fmt.Sprintf("Data source %s (%s) is not on the org yet. Create it? "+
+				"Its connection, credentials included, is sent to the server.", d.Name, d.DBType))
 			if !asked {
 				for _, rest := range missing[i:] {
 					skipped = append(skipped, rest.Name)
@@ -108,15 +118,55 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 			skipped = append(skipped, d.Name)
 		}
 	}
+	copied, err := offerCopies(ctx, m, dir, files)
+	if err != nil {
+		return err
+	}
+	for _, d := range files {
+		if !slices.Contains(copied, d.Name) {
+			skipped = append(skipped, d.Name)
+		}
+	}
 	if len(skipped) > 0 {
 		p.Warn("Queries on the models using %s fail until the org has them.", strings.Join(skipped, ", "))
 	}
 	return nil
 }
 
+// offerCopies offers to copy each DuckDB file of sources to MotherDuck, once per
+// file, and answers the data sources then created on the org. One whose file is
+// not here is said, with what to do.
+func offerCopies(ctx context.Context, m *mdCopy, dir string, sources []datasource.DataSource) (copied []string, err error) {
+	files, rest := duckdbFiles(dir, sources)
+	for _, d := range rest {
+		m.p.Warn("Data source %s (%s) uses a local file that the org's server can't read, so it won't be created on the org.", d.Name, d.DBType)
+		m.p.Note("To use it on the org, load its data into a warehouse the server can reach, and add that to the org as %s.", d.Name)
+	}
+	defer m.finish(ctx)
+	for i, f := range files {
+		if err := ctx.Err(); err != nil {
+			return copied, err
+		}
+		created, err := m.offer(ctx, f, len(files)-i-1)
+		copied = append(copied, created...)
+		if cloudapi.IsForbidden(err) {
+			m.p.Warn("Only an org admin can add data sources. The uploaded database is in your MotherDuck account for an admin to add.")
+			return copied, nil
+		}
+		if err != nil {
+			return copied, err
+		}
+	}
+	return copied, nil
+}
+
 // localOnly is the types whose database is on this machine, which an org's
 // server never reads: anfra-cloud refuses them, as reading files on its own disk.
 var localOnly = map[string]bool{"duckdb": true}
+
+// sameSQL is the pairs of types, here and on the org, that compile to the same
+// SQL: a DuckDB file here, copied to MotherDuck there.
+var sameSQL = map[[2]string]bool{{"duckdb", "motherduck"}: true}
 
 // createDataSource checks the server can reach d, then creates it, or, when it
 // cannot, asks whether to create it anyway; created is false for one skipped. An
@@ -125,7 +175,7 @@ var localOnly = map[string]bool{"duckdb": true}
 func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, p *cliui.Printer, ask Prompt) (created bool, err error) {
 	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection, Settings: d.Settings})
 	if len(d.Settings) > 0 && cloudapi.Unknown(err, "settings") {
-		p.Warn("Data source %s's settings are not sent: the org's server takes none, so it runs with the defaults.", d.Name)
+		p.Warn("The settings of data source %s (%s) are not sent: the org's server takes none, so it runs with the defaults.", d.Name, d.DBType)
 		d.Settings = nil
 		check, err = c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
 	}
@@ -133,9 +183,9 @@ func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.Data
 		return false, err
 	}
 	if !check.OK {
-		p.Fail("Data source %s is not reachable from the org's server:", d.Name)
+		p.Fail("Data source %s (%s) is not reachable from the org's server:", d.Name, d.DBType)
 		p.Detail(check.Message)
-		choice, asked := ask(fmt.Sprintf("Create %s anyway?", d.Name), "create anyway", "skip")
+		choice, asked := ask(fmt.Sprintf("Create %s anyway?", d.Name), "create it anyway", "skip creating this data source")
 		if !asked {
 			p.Note("Skipping it: there is no terminal to choose.")
 			return false, nil
@@ -148,7 +198,7 @@ func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.Data
 		if cloudapi.IsForbidden(err) {
 			return false, err
 		}
-		p.Fail("Data source %s was not created: %v", d.Name, err)
+		p.Fail("Data source %s (%s) was not created: %v", d.Name, d.DBType, err)
 		return false, nil
 	}
 	p.Success("Created data source %s (%s) on the org.", d.Name, d.DBType)

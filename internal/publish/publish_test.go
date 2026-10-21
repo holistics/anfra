@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
@@ -328,17 +329,19 @@ type script struct {
 	t       *testing.T
 	answers []string
 	asked   []string
+	choices [][]string // each question's
 }
 
 func (s *script) ask(question string, choices ...string) (int, bool) {
 	s.t.Helper()
 	s.asked = append(s.asked, question)
+	s.choices = append(s.choices, choices)
 	if len(s.answers) == 0 {
 		s.t.Fatalf("asked %q, with no answer left", question)
 	}
 	answer := s.answers[0]
 	s.answers = s.answers[1:]
-	i := slices.Index(choices, answer)
+	i := slices.IndexFunc(choices, func(c string) bool { return c == answer || cliui.ChoiceName(c) == answer })
 	if i < 0 {
 		s.t.Fatalf("asked %q with %v; the answer %q is not among them", question, choices, answer)
 	}
