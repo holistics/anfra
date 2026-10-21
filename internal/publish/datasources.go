@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
@@ -31,10 +31,13 @@ import (
 //
 // Never offered: a DuckDB one (localOnly), whose database is a file on this
 // machine; it is said instead, with what to do.
-func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, errOut io.Writer, ask Prompt) error {
+func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, create bool, p *cliui.Printer, ask Prompt) error {
+	p.Section("Data sources")
+	defer p.Section("")
+	ask = asking(p, ask)
 	local, err := localDataSources(dir)
 	if err != nil {
-		fmt.Fprintf(errOut, "Not checking the org's data sources: %v\n", err)
+		p.Warn("Not checking the org's data sources: %v", err)
 		return nil
 	}
 	if len(local) == 0 {
@@ -42,8 +45,8 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 	}
 	have, err := c.ListDataSources(ctx)
 	if cloudapi.IsForbidden(err) {
-		fmt.Fprintf(errOut, "Not checking the org's data sources: listing them needs permission to query data sources. "+
-			"An org admin can check it has %s.\n", strings.Join(slices.Sorted(maps.Keys(local)), ", "))
+		p.Warn("Not checking the org's data sources: listing them needs permission to query data sources. "+
+			"An org admin can check it has %s.", strings.Join(slices.Sorted(maps.Keys(local)), ", "))
 		return nil
 	}
 	if err != nil {
@@ -60,13 +63,13 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 		l := local[name]
 		if r, ok := byName[name]; ok {
 			if r.Type != l.DBType {
-				fmt.Fprintf(errOut, "Data source %s is %s here and %s on the org: the org's models compile to %s's SQL.\n", name, l.DBType, r.Type, r.Type)
+				p.Warn("Data source %s is %s here and %s on the org: the org's models compile to %s's SQL.", name, l.DBType, r.Type, r.Type)
 			}
 			continue
 		}
 		if localOnly[l.DBType] {
-			fmt.Fprintf(errOut, "Warning: data source %s is %s, a file on this machine, which the org's server cannot read: not creating it there. "+
-				"Load its data into a warehouse the server reaches, and add that to the org as %s.\n", name, l.DBType, name)
+			p.Warn("Data source %s is %s, a file on this machine the org's server cannot read: not creating it there.", name, l.DBType)
+			p.Note("Load its data into a warehouse the server reaches, and add that to the org as %s.", name)
 			skipped = append(skipped, name)
 			continue
 		}
@@ -75,13 +78,13 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 
 	for i, d := range missing {
 		if !create {
-			yes, asked := Confirm(ask, fmt.Sprintf("Data source %s is not available on the org yet. Would you like to create it? "+
-				"This would send its connection, credentials included, to the server.", d.Name))
+			yes, asked := Confirm(ask, fmt.Sprintf("Data source %s is not on the org yet. Create it? "+
+				"Its connection, credentials included, is sent to the server.", d.Name))
 			if !asked {
 				for _, rest := range missing[i:] {
 					skipped = append(skipped, rest.Name)
 				}
-				fmt.Fprintln(errOut, "Not creating data sources without a terminal to ask: --create-data-sources does.")
+				p.Warn("Not creating data sources without a terminal to ask: --create-data-sources does.")
 				break
 			}
 			if !yes {
@@ -89,13 +92,13 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 				continue
 			}
 		}
-		created, err := createDataSource(ctx, c, d, errOut, ask)
+		created, err := createDataSource(ctx, c, d, p, ask)
 		if cloudapi.IsForbidden(err) {
 			names := make([]string, 0, len(missing)-i)
 			for _, rest := range missing[i:] {
 				names = append(names, rest.Name)
 			}
-			fmt.Fprintf(errOut, "Only an org admin can add data sources: ask one to add %s.\n", strings.Join(names, ", "))
+			p.Warn("Only an org admin can add data sources: ask one to add %s.", strings.Join(names, ", "))
 			return nil
 		}
 		if err != nil {
@@ -106,7 +109,7 @@ func offerDataSourcesToOrg(ctx context.Context, c *cloudapi.Client, dir string, 
 		}
 	}
 	if len(skipped) > 0 {
-		fmt.Fprintf(errOut, "Queries on the models using %s fail until the org has them.\n", strings.Join(skipped, ", "))
+		p.Warn("Queries on the models using %s fail until the org has them.", strings.Join(skipped, ", "))
 	}
 	return nil
 }
@@ -119,10 +122,10 @@ var localOnly = map[string]bool{"duckdb": true}
 // cannot, asks whether to create it anyway; created is false for one skipped. An
 // error is the server's (forbidden, for one who may not add data sources). A
 // server too old to take data sources' settings gets d without them, saying so.
-func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, errOut io.Writer, ask Prompt) (created bool, err error) {
+func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, p *cliui.Printer, ask Prompt) (created bool, err error) {
 	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection, Settings: d.Settings})
 	if len(d.Settings) > 0 && cloudapi.Unknown(err, "settings") {
-		fmt.Fprintf(errOut, "Data source %s's settings are not sent: the org's server takes none, so it runs with the defaults.\n", d.Name)
+		p.Warn("Data source %s's settings are not sent: the org's server takes none, so it runs with the defaults.", d.Name)
 		d.Settings = nil
 		check, err = c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
 	}
@@ -130,10 +133,11 @@ func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.Data
 		return false, err
 	}
 	if !check.OK {
-		fmt.Fprintf(errOut, "Data source %s is not reachable from the org's server: %s\n", d.Name, check.Message)
-		choice, asked := ask("What would you like to do with it?", "create anyway", "skip")
+		p.Fail("Data source %s is not reachable from the org's server:", d.Name)
+		p.Detail(check.Message)
+		choice, asked := ask(fmt.Sprintf("Create %s anyway?", d.Name), "create anyway", "skip")
 		if !asked {
-			fmt.Fprintf(errOut, "Skipping it: there is no terminal to choose.\n")
+			p.Note("Skipping it: there is no terminal to choose.")
 			return false, nil
 		}
 		if choice != 0 {
@@ -144,10 +148,10 @@ func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.Data
 		if cloudapi.IsForbidden(err) {
 			return false, err
 		}
-		fmt.Fprintf(errOut, "Data source %s was not created: %v\n", d.Name, err)
+		p.Fail("Data source %s was not created: %v", d.Name, err)
 		return false, nil
 	}
-	fmt.Fprintf(errOut, "Created data source %s (%s) on the org.\n", d.Name, d.DBType)
+	p.Success("Created data source %s (%s) on the org.", d.Name, d.DBType)
 	return true, nil
 }
 

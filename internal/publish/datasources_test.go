@@ -44,14 +44,14 @@ func TestPublishOffersMissingDataSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		"Data source dev is not available on the org yet. Would you like to create it? This would send its connection, credentials included, to the server.",
-		"What would you like to do with it?",
-		"Data source warehouse is not available on the org yet. Would you like to create it? This would send its connection, credentials included, to the server.",
+		"Data source dev is not on the org yet. Create it? Its connection, credentials included, is sent to the server.",
+		"Create dev anyway?",
+		"Data source warehouse is not on the org yet. Create it? Its connection, credentials included, is sent to the server.",
 	}
 	if !slices.Equal(ask.asked, want) {
 		t.Errorf("asked %q\nwant  %q", ask.asked, want)
 	}
-	if !strings.Contains(errOut, "Data source dev is not reachable from the org's server: connection refused") {
+	if !strings.Contains(errOut, "✗ Data source dev is not reachable from the org's server:\n    connection refused: 127.0.0.1:5432\n") {
 		t.Errorf("the failed check is not said: %q", errOut)
 	}
 	if _, ok := s.created["dev"]; ok {
@@ -117,7 +117,7 @@ func TestPublishWarnsAboutDuckDB(t *testing.T) {
 		if len(ask.asked) != 0 || s.tested != 0 || len(s.created) != 0 {
 			t.Errorf("create=%v: asked %q, tested %d, created %v; want none of it", create, ask.asked, s.tested, s.created)
 		}
-		if !strings.Contains(errOut, "Warning: data source local is duckdb, a file on this machine") ||
+		if !strings.Contains(errOut, "! Data source local is duckdb, a file on this machine") ||
 			!strings.Contains(errOut, "Queries on the models using local fail until the org has them") {
 			t.Errorf("create=%v: said %q", create, errOut)
 		}

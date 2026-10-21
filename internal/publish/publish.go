@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/repoformat"
@@ -65,7 +66,8 @@ type Env struct {
 // Run publishes the repo at dir: PUBLISH.md's flow, from file selection to the
 // server's answer. Progress goes to env.ErrOut; the outcome to env.Out.
 func Run(ctx context.Context, dir string, o Options, env Env) error {
-	out, errOut, ask := env.Out, env.ErrOut, env.Ask
+	ask := env.Ask
+	p, result := cliui.NewPrinter(env.ErrOut), cliui.NewPrinter(env.Out)
 	org, configured, err := readOrg(dir)
 	if o.SetOrg != "" {
 		org, err = cloudapi.ParseOrg(o.SetOrg)
@@ -79,18 +81,21 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		return err
 	}
 	selected := fmt.Sprintf("%d files of the repo", len(files))
-	if leftOut > 0 {
-		selected += fmt.Sprintf(" (%d other files in this folder are not part of it: a publish carries .aml files and Data Apps under %s/)", leftOut, repoformat.AppsDir)
+	noteLeftOut := func() {
+		if leftOut > 0 {
+			p.Note("%d other files in this folder are not part of the repo: a publish carries .aml files and Data Apps under %s/.", leftOut, repoformat.AppsDir)
+		}
 	}
 	if o.DryRun {
 		for _, f := range files {
-			fmt.Fprintln(out, f)
+			fmt.Fprintln(env.Out, f)
 		}
 		if configured {
-			fmt.Fprintf(errOut, "Would publish %s to %s.\n", selected, org)
+			p.Step("Would publish %s to %s.", selected, org)
 		} else {
-			fmt.Fprintf(errOut, "Would publish %s (no org configured).\n", selected)
+			p.Step("Would publish %s (no org configured).", selected)
 		}
+		noteLeftOut()
 		return nil
 	}
 	if len(files) == 0 {
@@ -133,15 +138,15 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		if err := setOrg(dir, org); err != nil {
 			return err
 		}
-		fmt.Fprintf(errOut, "This repo publishes to %s (%s).\n", org, repoconfig.Hint("org", "url"))
+		p.Success("This repo publishes to %s (%s).", org, repoconfig.Hint("org", "url"))
 	}
 	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: authorize, UserAgent: env.UserAgent})
 
-	fmt.Fprintln(errOut, "Validating…")
-	if err := env.Validate(ctx, errOut); err != nil {
+	p.Step("Validating…")
+	if err := env.Validate(ctx, env.ErrOut); err != nil {
 		return err
 	}
-	if err := offerDataSourcesToOrg(ctx, client, dir, o.CreateDataSources, errOut, ask); err != nil {
+	if err := offerDataSourcesToOrg(ctx, client, dir, o.CreateDataSources, p, ask); err != nil {
 		return err
 	}
 
@@ -174,7 +179,8 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	if status.PublishedBy != nil && state.last(org) != status.Revision {
 		// TODO(OAUTH.md): "you" for the signed-in user's own publishes, once the
 		// CLI knows who it is.
-		fmt.Fprintf(errOut, "This repo was last published by %s on %s.\n",
+		p.Gap()
+		p.Warn("This repo was last published by %s on %s: publishing replaces that version.",
 			who(status.PublishedBy), status.PublishedAt.Local().Format(time.DateTime))
 		if !o.Yes {
 			yes, ok := Confirm(ask, "Confirm publishing a new version?")
@@ -195,7 +201,8 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	if err != nil {
 		return err
 	}
-	up := uploader{client: client, dir: dir, byOID: byOID, sizes: sizes, limits: limits, progress: errOut}
+	p.Gap()
+	up := uploader{client: client, dir: dir, byOID: byOID, sizes: sizes, limits: limits, progress: p}
 	if err := up.upload(ctx, missing); err != nil {
 		return err
 	}
@@ -204,7 +211,8 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	for _, f := range files {
 		in.Files = append(in.Files, cloudapi.File{Path: f, OID: oids[f]})
 	}
-	fmt.Fprintf(errOut, "Publishing %s to %s…\n", selected, org)
+	p.Step("Publishing %s to %s…", selected, org)
+	noteLeftOut()
 	res, err := client.Publish(ctx, in)
 	if again, ok := cloudapi.Missing(err); ok {
 		// Uploaded, then collected before this publish named it: once more.
@@ -218,12 +226,14 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	}
 	state.record(org, res.Revision)
 	if !res.Changed {
-		_, err = fmt.Fprintf(out, "Nothing changed: %s is already published.\n", res.Revision)
-		return err
+		p.Gap()
+		result.Success("Nothing changed: %s is already published.", res.Revision)
+		return nil
 	}
-	fmt.Fprintf(out, "Published %s.\n", res.Revision)
+	p.Gap()
+	result.Success("Published %s.", res.Revision)
 	if r := res.Replaced; r != nil {
-		fmt.Fprintf(out, "It replaced %s, published by %s on %s.\n", r.Revision, who(r.PublishedBy), r.PublishedAt.Local().Format(time.DateTime))
+		result.Note("It replaced %s, published by %s on %s.", r.Revision, who(r.PublishedBy), r.PublishedAt.Local().Format(time.DateTime))
 	}
 	return nil
 }
@@ -249,7 +259,7 @@ type uploader struct {
 	byOID    map[string]string // blob id → a file holding it
 	sizes    map[string]int    // file → its size
 	limits   cloudapi.Limits
-	progress io.Writer
+	progress *cliui.Printer
 }
 
 // upload uploads the blobs oids, reading each from a file holding it, in calls
@@ -263,7 +273,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 	for _, oid := range oids {
 		total += u.sizes[byOID[oid]]
 	}
-	fmt.Fprintf(u.progress, "Uploading %d files (%s)…\n", len(oids), byteSize(total))
+	u.progress.Step("Uploading %d files (%s)…", len(oids), byteSize(total))
 	var batch [][]byte
 	var batchOIDs []string
 	size := 0

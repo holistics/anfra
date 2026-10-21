@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/cliauth"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/publish"
@@ -84,11 +84,7 @@ func stdinPrompt(in io.Reader, out io.Writer) publish.Prompt {
 			lines = bufio.NewReader(in)
 		}
 		fallback := len(choices) - 1
-		labels := make([]string, len(choices))
-		for i, c := range choices {
-			labels[i] = "[" + c[:1] + "]" + c[1:]
-		}
-		fmt.Fprintf(out, "%s %s (default: %s) ", question, strings.Join(labels, " / "), choices[fallback])
+		cliui.NewPrinter(out).Question(question, choices...)
 		line, _ := lines.ReadString('\n')
 		answer := strings.ToLower(strings.TrimSpace(line))
 		for i, c := range choices {
