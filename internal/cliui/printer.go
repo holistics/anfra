@@ -87,20 +87,46 @@ func (p *Printer) Detail(text string) {
 }
 
 // Question writes a question with its choices, the last the default, leaving the
-// cursor after it for the answer.
+// cursor after it for the answer. A choice can say what it does after its name,
+// following a comma or a colon ("no, skip it"); the question then lists its
+// choices one to a line, and names the default by its name alone.
 func (p *Printer) Question(question string, choices ...string) {
 	p.Open()
 	labels := make([]string, len(choices))
+	listed := false
 	for i, c := range choices {
 		labels[i] = p.Styles.Accent.Render("["+c[:1]+"]") + c[1:]
+		listed = listed || ChoiceName(c) != c
 	}
-	text := p.Styles.Heading.Render(question) + " " +
-		strings.Join(labels, " / ") + " " + p.Styles.Muted.Render("(default: "+choices[len(choices)-1]+")")
+	def := p.Styles.Muted.Render("(default: " + ChoiceName(choices[len(choices)-1]) + ")")
+	mark := p.Styles.Code.Render("?") + " "
+	if !listed {
+		p.ask(mark, p.Styles.Heading.Render(question)+" "+strings.Join(labels, " / ")+" "+def)
+		return
+	}
+	p.write(mark, noStyle, p.Styles.Heading.Render(question))
+	for _, l := range labels {
+		p.write("    ", noStyle, l)
+	}
+	p.ask("  ", def)
+}
+
+// ChoiceName is a choice's name: what is before a comma or a colon, which says
+// what it does ("no" of "no, skip it"). Typing the name chooses it.
+func ChoiceName(choice string) string {
+	if i := strings.IndexAny(choice, ",:"); i > 0 {
+		return choice[:i]
+	}
+	return choice
+}
+
+// ask writes text after mark, wrapped under itself, leaving the cursor after it
+// for the answer.
+func (p *Printer) ask(mark, text string) {
 	lines := p.wrap(text, 2)
 	for i, l := range lines {
-		mark := "  "
-		if i == 0 {
-			mark = p.Styles.Code.Render("?") + " "
+		if i > 0 {
+			mark = "  "
 		}
 		if i < len(lines)-1 {
 			fmt.Fprintln(p.w, mark+l)
@@ -108,6 +134,14 @@ func (p *Printer) Question(question string, choices ...string) {
 			fmt.Fprint(p.w, mark+l+" ")
 		}
 	}
+	p.wrote = true
+}
+
+// Input writes a question that takes a line of text, leaving the cursor after
+// it for the answer.
+func (p *Printer) Input(question string) {
+	p.Open()
+	fmt.Fprint(p.w, p.Styles.Code.Render("?")+" "+p.Styles.Heading.Render(question)+" ")
 	p.wrote = true
 }
 

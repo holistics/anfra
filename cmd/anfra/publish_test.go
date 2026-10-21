@@ -716,3 +716,41 @@ func TestAppWarnings(t *testing.T) {
 		t.Errorf("appWarnings wrote %q, want %q", got, want)
 	}
 }
+
+// A question answers what is typed, in order, read ahead or not; Ctrl-C, which
+// cancels the context, ends one unanswered with its default (the safe answer),
+// though nothing is typed, and every one after it too.
+func TestStdinPromptAnswersAndStopsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	in, typed := io.Pipe()
+	defer func() { _ = typed.Close() }()
+	var out bytes.Buffer
+	ask, input := stdinQuestions(ctx, in, &out)
+	go func() { _, _ = io.WriteString(typed, "y\nn\n  my token  \n") }()
+	if choice, ok := ask("First?", "yes", "no"); choice != 0 || !ok {
+		t.Errorf("first: %d, %v", choice, ok)
+	}
+	if choice, ok := ask("Second?", "yes", "no"); choice != 1 || !ok {
+		t.Errorf("second: %d, %v", choice, ok)
+	}
+	if answer, ok := input("Name:"); answer != "my token" || !ok {
+		t.Errorf("input: %q, %v", answer, ok)
+	}
+
+	answered := make(chan int)
+	go func() { choice, _ := ask("Third?", "continue", "skip"); answered <- choice }()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	select {
+	case choice := <-answered:
+		if choice != 1 {
+			t.Errorf("interrupted: %d, want the default", choice)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Ctrl-C did not end the question")
+	}
+	if choice, _ := ask("Fourth?", "continue", "skip"); choice != 1 || strings.Contains(out.String(), "Fourth?") {
+		t.Errorf("after Ctrl-C: %d, asked %q", choice, out.String())
+	}
+}

@@ -38,20 +38,20 @@ func TestPublishOffersMissingDataSources(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
 
-	ask := &script{t: t, answers: []string{"yes", "skip", "yes"}} // dev: create, then skip once unreachable; warehouse: create
+	ask := &script{t: t, answers: []string{"yes", "skip creating this data source", "yes"}} // dev: create, then skip once unreachable; warehouse: create
 	_, errOut, err := run(t, dir, Options{SetOrg: url}, ask.ask)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
-		"Data source dev is not on the org yet. Create it? Its connection, credentials included, is sent to the server.",
+		"Data source dev (postgresql) is not on the org yet. Create it? Its connection, credentials included, is sent to the server.",
 		"Create dev anyway?",
-		"Data source warehouse is not on the org yet. Create it? Its connection, credentials included, is sent to the server.",
+		"Data source warehouse (postgresql) is not on the org yet. Create it? Its connection, credentials included, is sent to the server.",
 	}
 	if !slices.Equal(ask.asked, want) {
 		t.Errorf("asked %q\nwant  %q", ask.asked, want)
 	}
-	if !strings.Contains(errOut, "✗ Data source dev is not reachable from the org's server:\n    connection refused: 127.0.0.1:5432\n") {
+	if !strings.Contains(errOut, "✗ Data source dev (postgresql) is not reachable from the org's server:\n    connection refused: 127.0.0.1:5432\n") {
 		t.Errorf("the failed check is not said: %q", errOut)
 	}
 	if _, ok := s.created["dev"]; ok {
@@ -91,7 +91,7 @@ func TestPublishToAServerWithoutSettings(t *testing.T) {
 	if _, ok := s.created["warehouse"]; !ok || s.settings["warehouse"] != nil {
 		t.Errorf("warehouse: created %v, settings %v; want created without them", s.created["warehouse"], s.settings["warehouse"])
 	}
-	if strings.Count(errOut, "Data source warehouse's settings are not sent") != 1 {
+	if strings.Count(errOut, "The settings of data source warehouse (postgresql) are not sent") != 1 {
 		t.Errorf("the unsent settings are not said once: %q", errOut)
 	}
 }
@@ -117,7 +117,7 @@ func TestPublishWarnsAboutDuckDB(t *testing.T) {
 		if len(ask.asked) != 0 || s.tested != 0 || len(s.created) != 0 {
 			t.Errorf("create=%v: asked %q, tested %d, created %v; want none of it", create, ask.asked, s.tested, s.created)
 		}
-		if !strings.Contains(errOut, "! Data source local is duckdb, a file on this machine") ||
+		if !strings.Contains(errOut, "! Data source local (duckdb) uses a local file") ||
 			!strings.Contains(errOut, "Queries on the models using local fail until the org has them") {
 			t.Errorf("create=%v: said %q", create, errOut)
 		}
@@ -130,7 +130,7 @@ func TestPublishCreatesAnUnreachableDataSourceWhenChosen(t *testing.T) {
 	s.unreachable = map[string]string{"dev": "connection refused"}
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
-	ask := &script{t: t, answers: []string{"yes", "create anyway", "no", "no"}} // dev, events, warehouse
+	ask := &script{t: t, answers: []string{"yes", "create it anyway", "no", "no"}} // dev, events, warehouse
 	if _, _, err := run(t, dir, Options{SetOrg: url}, ask.ask); err != nil {
 		t.Fatal(err)
 	}

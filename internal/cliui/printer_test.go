@@ -38,3 +38,17 @@ func TestPrinterWrapsUnderText(t *testing.T) {
 		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
 	}
 }
+
+// Choices that say what they do are listed one to a line, and the default is
+// named by its name alone.
+func TestPrinterListsChoicesThatSayWhatTheyDo(t *testing.T) {
+	var b bytes.Buffer
+	NewPrinter(&b).Question("Upload it?", "yes", "quit: switch first", "no, skip it")
+	want := "? Upload it?\n    [y]es\n    [q]uit: switch first\n    [n]o, skip it\n  (default: no) "
+	if b.String() != want {
+		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
+	}
+	if ChoiceName("no, skip it") != "no" || ChoiceName("quit: x") != "quit" || ChoiceName("yes") != "yes" {
+		t.Error("ChoiceName")
+	}
+}
