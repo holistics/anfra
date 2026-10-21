@@ -17,6 +17,7 @@ const props = defineProps<{
   picking: boolean,
   datasets: Record<string, DatasetDescriptor>,
   reader: User,
+  allowOrigins: string[],
 }>();
 const emit = defineEmits<{
   load: [],
@@ -28,16 +29,20 @@ const emit = defineEmits<{
 const container = ref<HTMLElement>();
 let mounted: MountedDataApp | undefined;
 
-// The page's host runtime: every plugin anfra has, over the core API. Made again when the datasets
-// are (a semantic layer change), since the Backend resolves fields against them.
-let host: { datasets: Record<string, DatasetDescriptor>, runtime: Host } | undefined;
-function hostFor (datasets: Record<string, DatasetDescriptor>): Host {
-  if (host?.datasets !== datasets) {
+// The page's host runtime: every plugin anfra has, over the core API, under the repo's allowed
+// origins. Made again when the datasets are (a semantic layer change), since the Backend resolves
+// fields against them, or the origins are.
+let host: { datasets: Record<string, DatasetDescriptor>, origins: string, runtime: Host } | undefined;
+function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: string[]): Host {
+  const origins = allowOrigins.join(' ');
+  if (host?.datasets !== datasets || host.origins !== origins) {
     const backend = coreApiBackend(api, { datasets });
     host = {
       datasets,
+      origins,
       runtime: createHost({
         plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin()],
+        allowOrigins,
       }),
     };
   }
@@ -48,12 +53,11 @@ function hostFor (datasets: Record<string, DatasetDescriptor>): Host {
 // as it is now, and provisioned with the datasets as they are now.
 onMounted(async () => {
   try {
-    const { html, baseHref } = await definition(props.path);
+    const html = await definition(props.path);
     if (!container.value) return;
-    mounted = hostFor(props.datasets).mount({
+    mounted = hostFor(props.datasets, props.allowOrigins).mount({
       container: container.value,
       definition: html,
-      baseHref,
       datasets: props.datasets,
       user: props.reader,
       title: 'Data App',

@@ -20,8 +20,8 @@ function escapeAttribute (value: string): string {
 }
 
 export interface ProvisionOptions {
-  /** Where the definition's relative URLs resolve: the directory it was read from. */
-  baseHref: string;
+  /** The frame's content policy (`contentPolicy`), set before anything of the definition's. */
+  contentPolicy: string;
   provision: Provision;
   /** The frame script (`@holistics/anfra-sdk/app`'s kernel, as `__anfraKernel`), run before any of the definition's own. */
   frameScript: string;
@@ -54,26 +54,33 @@ export function composeFrameScript (frameScript: string, setups: readonly { name
 }
 
 const charsetRe = /<meta[^>]*charset[^>]*>/i;
-const headRe = /<head[^>]*>/i;
+const headRe = /<head(?:\s[^>]*)?>/i;
+// What may come before the policy without being parsed first: whitespace, comments and the
+// doctype, which only those may precede (anything else would put the frame in quirks mode).
+const preambleRe = /^(?:\s|<!--[\s\S]*?-->)*<!doctype[^>]*>/i;
 
 /**
- * A Data App's frame document: its definition, with its base URL, the provision data and the frame
- * script (the kernel and the plugins' setups) added at the top of its <head> (after <meta charset> when there is one, so the encoding is
- * still declared first), so `Anfra` exists before the definition's first script runs. The
- * definition itself never mentions the SDK.
+ * A Data App's frame document: its definition, with its content policy as the first element the
+ * parser meets, so it governs every script, style and fetch of the definition's, even one written
+ * ahead of its `<meta charset>`; then the provision data and the frame script (the kernel and the
+ * plugins' setups) at the top of its <head> (after <meta charset> when there is one, so the
+ * encoding is still declared first), so `Anfra` exists before the definition's first script runs.
+ * The definition itself never mentions the SDK.
  */
 export function provisionDocument (definition: string, options: ProvisionOptions): string {
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(options.contentPolicy)}">`;
   const injected = [
-    `<base href="${escapeAttribute(options.baseHref)}">`,
     `<script type="application/json" id="${PROVISION_ELEMENT_ID}">${scriptJSON(options.provision)}</script>`,
     `<script>${scriptCode(composeFrameScript(options.frameScript, options.setups))}</script>`,
   ].join('\n');
+  const preamble = preambleRe.exec(definition)?.[0] ?? '';
+  const rest = definition.slice(preamble.length);
   for (const re of [charsetRe, headRe]) {
-    const match = re.exec(definition);
+    const match = re.exec(rest);
     if (match) {
       const at = match.index + match[0].length;
-      return `${definition.slice(0, at)}\n${injected}\n${definition.slice(at)}`;
+      return `${preamble}${policy}\n${rest.slice(0, at)}\n${injected}\n${rest.slice(at)}`;
     }
   }
-  return `${injected}\n${definition}`;
+  return `${preamble}${policy}\n${injected}\n${rest}`;
 }

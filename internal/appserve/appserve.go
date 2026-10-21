@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -86,7 +87,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/appserve/apps":
 		writeJSON(w, Catalog(s.opts.RepoDir))
 	case p == "/appserve/context":
-		writeJSON(w, Context{Repo: RepoInfo{Name: filepath.Base(s.opts.RepoDir)}, Reader: LocalReader(), Watch: s.opts.Watch})
+		s.context(w)
 	case p == "/appserve/events" && s.opts.Watch:
 		s.listening() //nolint:contextcheck // the watcher outlives this request: it runs while any stream is open
 		defer s.unlistening()
@@ -98,15 +99,44 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Context is what the frontend starts from: the repo, who reads it, and whether it live-reloads.
+// Context is what the frontend starts from: the repo, who reads it, whether it live-reloads, the
+// origins its Data Apps may load from beyond the SDK's own (.anfra/config.yml apps.allow_origins),
+// and the problems reading those settings, which the frontend shows with the repo's others.
 type Context struct {
-	Repo   RepoInfo `json:"repo"`
-	Reader Reader   `json:"reader"`
-	Watch  bool     `json:"watch"`
+	Repo         RepoInfo  `json:"repo"`
+	Reader       Reader    `json:"reader"`
+	Watch        bool      `json:"watch"`
+	AllowOrigins []string  `json:"allowOrigins"`
+	Problems     []Problem `json:"problems"`
+}
+
+// Problem is one problem with the repo's settings, as the frontend's problems banner shows it.
+type Problem struct {
+	Message string `json:"message"`
 }
 
 type RepoInfo struct {
 	Name string `json:"name"`
+}
+
+// context reads the repo's settings on every request, so an edit to them applies at the next load.
+// Settings it cannot use are a problem, and leave the Data Apps the SDK's own origins only.
+func (s *Server) context(w http.ResponseWriter) {
+	ctx := Context{
+		Repo: RepoInfo{Name: filepath.Base(s.opts.RepoDir)}, Reader: LocalReader(), Watch: s.opts.Watch,
+		AllowOrigins: []string{}, Problems: []Problem{},
+	}
+	conf, err := repoconfig.Read(s.opts.RepoDir)
+	if err == nil {
+		var origins []string
+		if origins, err = conf.AllowedOrigins(); err == nil && origins != nil {
+			ctx.AllowOrigins = origins
+		}
+	}
+	if err != nil {
+		ctx.Problems = append(ctx.Problems, Problem{Message: err.Error()})
+	}
+	writeJSON(w, ctx)
 }
 
 func writeJSON(w http.ResponseWriter, body any) {

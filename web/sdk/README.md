@@ -128,12 +128,12 @@ const host = createHost({                                // one per page
     renderPlugin(),                                      // Anfra.render(): the host saves PNGs and PDFs the frame makes
     inspectPlugin(),                                     // what an inspect panel needs
   ],
+  allowOrigins: ['https://cdn.acme.com'],                // optional: more origins apps may load from
 });
 
 const mounted = host.mount({
   container: document.querySelector('#data-app')!,
   definition: await (await fetch('/appserve/files/sales/overview.html')).text(),
-  baseHref: '/appserve/files/sales/',                    // where its relative URLs resolve
   datasets,
   user,
 });
@@ -142,6 +142,12 @@ mounted.on('inspect.snapshot', ({ apps, structure }) => …);
 await mounted.call('inspect.watch', true);               // start the snapshots
 mounted.unmount();                                       // when done
 ```
+
+A frame runs under a content policy the host puts first in its document: scripts, styles and fonts
+only from a few CDNs (cdnjs, jsDelivr, esm.sh, unpkg, Google Fonts) and the host's `allowOrigins`,
+images from any `https://` server, and no network beyond those origins: data reaches the app over
+the bridge only. A definition is one self-contained file; nothing beside it is served. See
+`contentPolicy` and docs/designs/security.md.
 
 `host.mount` puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`, with
 the frame's kernel, the provisioned data and each plugin's frame setup ahead of it. Every call the
