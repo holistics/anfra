@@ -21,7 +21,9 @@
 //
 // Before it, `anfra publish` may add the data sources the repo uses and the org
 // lacks (data_sources.list, data_sources.test, data_sources.create), when the
-// person agrees: a connection is never sent unasked.
+// person agrees: a connection is never sent unasked. It also reads the origins the
+// org's Data Apps may load from (app_origins.list), to say which of the repo's
+// own the org does not allow.
 package cloudapi
 
 import "time"
@@ -35,6 +37,7 @@ const (
 	OpListDataSources  = "data_sources.list"
 	OpCreateDataSource = "data_sources.create"
 	OpTestDataSource   = "data_sources.test"
+	OpListAppOrigins   = "app_origins.list"
 )
 
 // The error codes the CLI tells apart.
@@ -139,6 +142,12 @@ type DataSource struct {
 // ListDataSourcesOut is the org's data sources.
 type ListDataSourcesOut struct {
 	DataSources []DataSource `json:"data_sources"`
+}
+
+// AppOriginsOut is the origins the org's Data Apps may load from beyond the SDK's
+// own: each https://<host>[:<port>].
+type AppOriginsOut struct {
+	Origins []string `json:"origins"`
 }
 
 // CreateDataSourceIn is a new data source.

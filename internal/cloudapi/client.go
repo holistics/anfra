@@ -139,6 +139,12 @@ func (c *Client) TestDataSource(ctx context.Context, in TestDataSourceIn) (TestD
 	return call[TestDataSourceOut](ctx, c, OpTestDataSource, in)
 }
 
+// ListAppOrigins is the origins the org's Data Apps may load from beyond the SDK's own.
+func (c *Client) ListAppOrigins(ctx context.Context) ([]string, error) {
+	out, err := call[AppOriginsOut](ctx, c, OpListAppOrigins, struct{}{})
+	return out.Origins, err
+}
+
 // call posts in to op and decodes its answer, ignoring members it does not know:
 // a server may answer with more than this client was built for.
 func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, error) {

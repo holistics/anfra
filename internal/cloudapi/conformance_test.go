@@ -36,6 +36,7 @@ func TestConformsToTheServersContract(t *testing.T) {
 		{cloudapi.OpListDataSources, empty{}, cloudapi.ListDataSourcesOut{}, []string{cloudapi.CodeForbidden}},
 		{cloudapi.OpCreateDataSource, cloudapi.CreateDataSourceIn{}, cloudapi.DataSource{}, []string{cloudapi.CodeForbidden}},
 		{cloudapi.OpTestDataSource, cloudapi.TestDataSourceIn{}, cloudapi.TestDataSourceOut{}, []string{cloudapi.CodeForbidden}},
+		{cloudapi.OpListAppOrigins, empty{}, cloudapi.AppOriginsOut{}, nil},
 	} {
 		t.Run(c.op, func(t *testing.T) {
 			op, ok := spec.ops[c.op]
