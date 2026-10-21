@@ -10,6 +10,7 @@ import (
 
 	"github.com/holistics/anfra/internal/envflag"
 
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
@@ -135,7 +136,8 @@ func maybeNotifyUpdate(invoked string) {
 	if updateNotifyDisabled() || noNotifyCommands[invoked] {
 		return
 	}
-	notice := update.CachedNotice()
+	cached := update.Cached()
+	notice := update.Notice(cached)
 
 	// Opt-in auto-update is explicit, so it runs regardless of interactivity
 	// (e.g. a service that set ANFRA_AUTO_UPDATE=1).
@@ -150,7 +152,7 @@ func maybeNotifyUpdate(invoked string) {
 	// runs there (at most daily), so what an agent reads through `anfra version` and
 	// the skills' session hook stays current. CI spawns nothing.
 	if stderrIsInteractive() && notice != "" {
-		fmt.Fprintln(os.Stderr, "\n"+notice)
+		fmt.Fprintln(os.Stderr, "\n"+update.Banner(cached, cliui.NewTerminalStyles(os.Stderr))+"\n")
 	}
 	if update.Stale() && os.Getenv("CI") == "" {
 		spawnDetached("__update-check")
