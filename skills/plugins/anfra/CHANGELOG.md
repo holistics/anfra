@@ -1,3 +1,10 @@
+## [0.4.3](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.2...anfra-v0.4.3) (2026-10-21)
+
+### Features
+
+* **plugins.anfra:** load Data App libraries from jsDelivr and cdnjs only, ES modules by +esm ([45c9ac3](https://github.com/holistics/anfra-skills/commit/45c9ac3156e3639b2f7998851cea11764b27b914))
+* **plugins.anfra:** teach Data Apps' content policy and SRI hashes ([061aaf0](https://github.com/holistics/anfra-skills/commit/061aaf0126d05f418655e47db07b61e2edc6132e))
+
 ## [0.4.2](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.1...anfra-v0.4.2) (2026-10-21)
 
 ### Bug Fixes
