@@ -705,3 +705,14 @@ func TestPublishRecoverySwitchOrganization(t *testing.T) {
 		})
 	}
 }
+
+func TestAppWarnings(t *testing.T) {
+	var out strings.Builder
+	appWarnings([]byte(`{"valid":true,"reports":[
+		{"validator":"data_app","filePath":"apps/a.html","severity":"warning","message":"line 3: \"x.png\" is a file beside the app"},
+		{"validator":"unused_field","filePath":"models/m.aml","severity":"warning","message":"unused"}
+	]}`), &out)
+	if got, want := out.String(), "! apps/a.html, line 3: \"x.png\" is a file beside the app\n"; got != want {
+		t.Errorf("appWarnings wrote %q, want %q", got, want)
+	}
+}
