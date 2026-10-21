@@ -56,8 +56,13 @@ export function composeFrameScript (frameScript: string, setups: readonly { name
 const charsetRe = /<meta[^>]*charset[^>]*>/i;
 const headRe = /<head(?:\s[^>]*)?>/i;
 // What may come before the policy without being parsed first: whitespace, comments and the
-// doctype, which only those may precede (anything else would put the frame in quirks mode).
-const preambleRe = /^(?:\s|<!--[\s\S]*?-->)*<!doctype[^>]*>/i;
+// doctype, which only those may precede (anything else would put the frame in quirks mode), then
+// an opening <html> and <head> with nothing between them, so the policy goes inside them and both
+// keep their attributes. Anything else (a <script> ahead of <head>, no <head> at all) and the
+// policy goes before it: the parser then opens <html> and <head> itself, merges a later <html>'s
+// attributes and drops a later <head>'s, which is the price of no script running ahead of it.
+const gap = '(?:\\s|<!--[\\s\\S]*?-->)*';
+const preambleRe = new RegExp(`^${gap}(?:<!doctype[^>]*>${gap})?(?:<html(?:\\s[^>]*)?>${gap})?(?:<head(?:\\s[^>]*)?>)?`, 'i');
 
 /**
  * A Data App's frame document: its definition, with its content policy as the first element the

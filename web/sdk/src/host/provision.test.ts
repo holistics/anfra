@@ -17,15 +17,32 @@ describe('provisionDocument', () => {
   });
 
   it('goes after <head> without a charset, and first without a <head>', () => {
-    expect(provisionDocument('<head lang="en"><script>a()</script></head>', options)).toMatch(/^<meta [^>]*>\n<head lang="en">\n<script type="application\/json"/);
+    expect(provisionDocument('<head lang="en"><script>a()</script></head>', options)).toMatch(/^<head lang="en"><meta [^>]*>\n<script type="application\/json"/);
     expect(provisionDocument('<header>h</header><script>a()</script>', options)).toMatch(/^<meta [^>]*>\n<script type="application\/json"/);
   });
 
-  it('puts the policy first, before anything of the definition but its doctype', () => {
-    const doc = provisionDocument('<!-- c -->\n<!DOCTYPE html><html><head><script>early()</script><meta charset="utf-8"></head></html>', options);
-    expect(doc.startsWith(`<!-- c -->\n<!DOCTYPE html>${POLICY}\n<html>`)).toBe(true);
-    expect(doc.indexOf(POLICY)).toBeLessThan(doc.indexOf('early()'));
+  it('puts the policy first, before anything of the definition but its doctype, <html> and <head>', () => {
+    const doc = provisionDocument('<!-- c -->\n<!DOCTYPE html>\n<html lang="en"><head><script>early()</script><meta charset="utf-8"></head></html>', options);
+    expect(doc.startsWith(`<!-- c -->\n<!DOCTYPE html>\n<html lang="en"><head>${POLICY}\n<script>early()`)).toBe(true);
     expect(provisionDocument('<!doctype html><p>x</p>', options).startsWith(`<!doctype html>${POLICY}\n<script`)).toBe(true);
+    // Something ahead of <head>: the policy goes before it, so nothing runs ahead of the policy.
+    expect(provisionDocument('<html><script>early()</script><head></head></html>', options).startsWith(`<html>${POLICY}\n<script>early()`)).toBe(true);
+  });
+
+  it('keeps the definition\'s <html> and <head> attributes, the policy the first element parsed', () => {
+    const parse = (definition: string) => new DOMParser().parseFromString(provisionDocument(definition, options), 'text/html');
+    for (const definition of [
+      '<!doctype html><html lang="en" class="dark"><head data-x="1"><script>early()</script><meta charset="utf-8"></head><body></body></html>',
+      '<html lang="en" class="dark">\n  <!-- the app -->\n  <head data-x="1">\n<title>T</title></head></html>',
+    ]) {
+      const doc = parse(definition);
+      expect(doc.documentElement.getAttribute('lang')).toBe('en');
+      expect(doc.documentElement.className).toBe('dark');
+      expect(doc.head.getAttribute('data-x')).toBe('1');
+      expect(doc.head.firstElementChild?.getAttribute('http-equiv')).toBe('Content-Security-Policy');
+    }
+    // An <html> after the policy still lends its attributes to the root.
+    expect(parse('<script>early()</script><html lang="en"><body></body></html>').documentElement.getAttribute('lang')).toBe('en');
   });
 
   it('puts no base in the document', () => {
