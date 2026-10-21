@@ -43,6 +43,57 @@ components:
       required:
         - verify_email
       type: object
+    AppEntry:
+      additionalProperties: false
+      properties:
+        app:
+          $ref: "#/components/schemas/AppRef"
+          description: An app's reference, for apps.get.
+        children:
+          description: A folder's folders, then its apps, each by name.
+          items:
+            $ref: "#/components/schemas/AppEntry"
+          type: array
+        icon:
+          description: "An app's icon: a lucide icon's name."
+          type: string
+        kind:
+          enum:
+            - folder
+            - app
+          type: string
+        name:
+          description: A folder's name; an app's <title>, else its file name.
+          type: string
+        path:
+          description: Under apps/, slash-separated.
+          type: string
+      required:
+        - kind
+        - name
+        - path
+      type: object
+    AppOriginsOut:
+      additionalProperties: false
+      properties:
+        origins:
+          description: Each https://host[:port], in the order set; empty when none are.
+          items:
+            type: string
+          type: array
+      required:
+        - origins
+      type: object
+    AppRef:
+      additionalProperties: false
+      properties:
+        repo:
+          description: "A Data App in the organization's repo: its path under apps/, with its .html (sales/dashboard.html)."
+          minLength: 1
+          type: string
+      required:
+        - repo
+      type: object
     CancelOut:
       additionalProperties: false
       properties:
@@ -1412,6 +1463,34 @@ components:
       required:
         - required_scopes
       type: object
+    GetAppIn:
+      additionalProperties: false
+      properties:
+        app:
+          $ref: "#/components/schemas/AppRef"
+      required:
+        - app
+      type: object
+    GetAppOut:
+      additionalProperties: false
+      properties:
+        app:
+          $ref: "#/components/schemas/AppRef"
+        definition:
+          description: "The Data App definition: its HTML, as written. Author code: run it only in a sandboxed frame, through a host."
+          type: string
+        name:
+          description: Its <title>, else its file name.
+          type: string
+        revision:
+          description: The revision read.
+          type: string
+      required:
+        - app
+        - name
+        - revision
+        - definition
+      type: object
     GetDataSourceOut:
       additionalProperties: false
       properties:
@@ -1837,6 +1916,21 @@ components:
         - parent
         - child
       type: object
+    ListAppsOut:
+      additionalProperties: false
+      properties:
+        apps:
+          description: "The tree under apps/: folders first, then apps, each by name."
+          items:
+            $ref: "#/components/schemas/AppEntry"
+          type: array
+        revision:
+          description: "The revision read: repos.status's, when it is still the published one."
+          type: string
+      required:
+        - revision
+        - apps
+      type: object
     ListDataSourcesOut:
       additionalProperties: false
       properties:
@@ -1922,6 +2016,16 @@ components:
           type: array
       required:
         - oids
+      type: object
+    ListSDKPluginsOut:
+      additionalProperties: false
+      properties:
+        plugins:
+          items:
+            $ref: "#/components/schemas/SDKPluginView"
+          type: array
+      required:
+        - plugins
       type: object
     ListTypesOut:
       additionalProperties: false
@@ -2717,6 +2821,32 @@ components:
       required:
         - retry_after_seconds
       type: object
+    SDKPluginView:
+      additionalProperties: false
+      properties:
+        description:
+          description: What apps get from it.
+          type: string
+        enabled:
+          type: boolean
+        label:
+          type: string
+        name:
+          description: "As the Data App SDK installs it: core, inspect, lineage, render, export."
+          type: string
+        note:
+          description: "What to know beyond what it does: that its calls fail for now, say."
+          type: string
+        required:
+          description: "Always on: it cannot be turned off."
+          type: boolean
+      required:
+        - name
+        - label
+        - description
+        - required
+        - enabled
+      type: object
     SearchInput:
       additionalProperties: false
       properties:
@@ -3212,6 +3342,17 @@ components:
       required:
         - display_name
       type: object
+    UpdateAppOriginsIn:
+      additionalProperties: false
+      properties:
+        origins:
+          description: Every origin to allow, each https://host[:port] with nothing after it; at most 20. Empty allows none beyond the SDK's own.
+          items:
+            type: string
+          type: array
+      required:
+        - origins
+      type: object
     UpdateIn:
       additionalProperties: false
       properties:
@@ -3242,6 +3383,26 @@ components:
       required:
         - latest
         - available
+      type: object
+    UpdateSDKPluginIn:
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        plugin:
+          description: The plugin's name, as sdk_plugins.list answers it.
+          type: string
+      required:
+        - plugin
+        - enabled
+      type: object
+    UpdateSDKPluginOut:
+      additionalProperties: false
+      properties:
+        plugin:
+          $ref: "#/components/schemas/SDKPluginView"
+      required:
+        - plugin
       type: object
     UserView:
       additionalProperties: false
@@ -3716,6 +3877,495 @@ paths:
       x-destructive: true
       x-idempotent: false
       x-read-only: false
+      security:
+        - sessionCookie: []
+  /app_origins.list:
+    post:
+      description: "A host adds them to every Data App's content policy: scripts, styles, fonts and images may load from them, and fetches reach them. Every member may read it, as every member opens the apps; anfra publish reads it to warn about an origin a repo uses and the organization does not allow."
+      operationId: app_origins.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppOriginsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+          headers:
+            WWW-Authenticate:
+              description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
+              schema:
+                type: string
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: The origins the organization's Data Apps may load from, beyond the SDK's own CDNs.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
+      x-anfra-required-scopes:
+        - all
+  /app_origins.update:
+    post:
+      description: Replaces the list, for every member, from their next page load. Each origin is one more server whose code runs beside readers' query results. An entry that is not an https origin, or more than 20, is validation_failed, naming the entry.
+      operationId: app_origins.update
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppOriginsIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppOriginsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Set the origins the organization's Data Apps may load from.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /apps.get:
+    post:
+      description: "Name it by the app reference apps.list answers. The definition is the author's HTML: run it only sandboxed, as the Data App SDK's host does."
+      operationId: apps.get
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetAppIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetAppOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: One Data App's definition, at the published revision, to run in a host.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+  /apps.list:
+    post:
+      description: Open one with apps.get, by its app reference. Compare revision with repos.status's to learn that a publish has changed them.
+      operationId: apps.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAppsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: The organization's Data Apps you may open, as a tree of folders, at the published revision.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
       security:
         - sessionCookie: []
   /core.ingest:
@@ -9227,6 +9877,252 @@ paths:
         - oauthBearer: []
       x-anfra-required-scopes:
         - all
+  /sdk_plugins.list:
+    post:
+      description: A host installs core and every plugin enabled here on the organization's Data Apps; a Data App sees the others as absent. Every member may read it, as every member opens the apps.
+      operationId: sdk_plugins.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSDKPluginsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Every SDK plugin, and whether the organization's Data Apps get it.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+  /sdk_plugins.update:
+    post:
+      description: "It applies to every member, from their next page load. A required plugin (core) cannot be turned off: validation_failed."
+      operationId: sdk_plugins.update
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSDKPluginIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSDKPluginOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                required:
+                  - error
+                type: object
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Turn an SDK plugin on or off for the organization's Data Apps.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
   /sessions.create:
     post:
       description: Starts a session; over HTTP it is set as a cookie. A wrong password and an unknown address are the same invalid_credentials, by design. not_found where passwords are not a sign-in method.
