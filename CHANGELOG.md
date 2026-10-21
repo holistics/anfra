@@ -1,3 +1,10 @@
+## [0.13.1](https://github.com/holistics/anfra/compare/v0.13.0...v0.13.1) (2026-10-21)
+
+### Features
+
+* **cli:** read an org's allowed Data App origins from anfra Cloud ([efe50a0](https://github.com/holistics/anfra/commit/efe50a0f1bcbd67de53552f13462ef7c325a75b5))
+* **cli:** warn on publish of Data App origins the org does not allow ([032966f](https://github.com/holistics/anfra/commit/032966f1e7a38f2c95a150e8ffb37cbb3a184148))
+* **sdk.host:** load Data App libraries from jsDelivr and cdnjs only ([2667bc0](https://github.com/holistics/anfra/commit/2667bc0d9f188f74efbf9f28c21ff271ce9dc8c5))
 ## [0.13.0](https://github.com/holistics/anfra/compare/v0.12.0...v0.13.0) (2026-10-21)
 
 ### Features
