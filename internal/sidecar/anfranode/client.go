@@ -14,6 +14,7 @@ import (
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -129,13 +130,31 @@ type rpcResponse struct {
 	} `json:"error"`
 }
 
-// RPCInvalidParams is the JSON-RPC code anfra-node answers a request it
-// refuses as invalid input with (its InvalidInputError).
+// RPCInvalidParams is the JSON-RPC code anfra-node answers a public error with:
+// a refusal it classified, with data {code, path?, details?}. Anything else it
+// answers is its own failure, -32603 with no data. See anfra-node's
+// docs/designs/errors.md.
 const RPCInvalidParams = -32602
 
+// The codes of anfra-node's public errors (their data.code).
+const (
+	// InvalidInput: a param is missing, malformed, or names something that
+	// cannot be used (a dataset that is not there, does not compile, or is on a
+	// data source the request lacks). Its path names the param.
+	InvalidInput = "invalid_input"
+	// QueryInvalid: the query does not compile against the dataset. Its details
+	// are QueryDiagnostics.
+	QueryInvalid = "query_invalid"
+)
+
+// QueryDiagnostics is the details of a QueryInvalid error: the query's own
+// errors, as aql.validate answers them.
+type QueryDiagnostics struct {
+	Diagnostics []AQLDiagnostic `json:"diagnostics"`
+}
+
 // RPCError is an error anfra-node answered a call with. Data is the error's
-// JSON-RPC data, when it carries one: for invalid input, the {path} of what is
-// wrong, e.g. a Query Input entry.
+// JSON-RPC data, when it carries one: a public error's {code, path?, details?}.
 type RPCError struct {
 	Method  string
 	Code    int
@@ -147,17 +166,85 @@ func (e *RPCError) Error() string {
 	return fmt.Sprintf("rpc %s error %d: %s", e.Method, e.Code, e.Message)
 }
 
-// Path is where invalid input is wrong, from the error's data, e.g. a Query
-// Input entry's "filters[2].operator"; "" for the input as a whole. ok is false
-// when the error does not say: not invalid input, or no path in its data.
-func (e *RPCError) Path() (path string, ok bool) {
-	var d struct {
-		Path *string `json:"path"`
+// publicData is a public error's data: which kind, the param refused, and the
+// facts for the kind.
+type publicData struct {
+	Code    string         `json:"code"`
+	Path    *string        `json:"path"`
+	Details jsontext.Value `json:"details"`
+}
+
+func (e *RPCError) public() (publicData, bool) {
+	var d publicData
+	if e.Code != RPCInvalidParams || jsonkit.Unmarshal(e.Data, &d) != nil || d.Code == "" {
+		return publicData{}, false
 	}
-	if e.Code != RPCInvalidParams || jsonkit.Unmarshal(e.Data, &d) != nil || d.Path == nil {
+	return d, true
+}
+
+// Path is the param a public error refuses, from the params' root: "fqn",
+// "datasetFqn", a Query Input entry's "input.filters[2].operator", "input" for
+// the Query Input as a whole. ok is false when the error is not public, or
+// refuses no single param.
+func (e *RPCError) Path() (path string, ok bool) {
+	d, ok := e.public()
+	if !ok || d.Path == nil {
 		return "", false
 	}
 	return *d.Path, true
+}
+
+// IsPublic reports whether err is, or wraps, a public error of anfra-node's: a
+// refusal it classified, rather than its own failure.
+func IsPublic(err error) bool {
+	e, ok := errors.AsType[*RPCError](err)
+	if !ok {
+		return false
+	}
+	_, ok = e.public()
+	return ok
+}
+
+// DetailsOf is the details of err when it is, or wraps, anfra-node's public
+// error with code, decoded as T.
+func DetailsOf[T any](err error, code string) (T, bool) {
+	var details T
+	e, ok := errors.AsType[*RPCError](err)
+	if !ok {
+		return details, false
+	}
+	d, ok := e.public()
+	if !ok || d.Code != code || jsonkit.Unmarshal(d.Details, &details) != nil {
+		return details, false
+	}
+	return details, true
+}
+
+// ArgMap names the arg of a command each of anfra-node's params is, for the
+// params its caller gave: {"datasetFqn": "dataset"}. A param not in it is one
+// the engine built itself, so anfra-node refusing it is the engine's bug.
+type ArgMap map[string]string
+
+// Violation is err, when it is, or wraps, anfra-node's public error refusing a
+// param in args, as the violation of that arg. A param maps by prefix, so with
+// {"input": "input"}, "input.filters[2].operator" is the arg
+// "input.filters[2].operator".
+func Violation(err error, args ArgMap) (apperr.Violation, bool) {
+	e, ok := errors.AsType[*RPCError](err)
+	if !ok {
+		return apperr.Violation{}, false
+	}
+	path, ok := e.Path()
+	if !ok {
+		return apperr.Violation{}, false
+	}
+	for param, arg := range args {
+		rest, found := strings.CutPrefix(path, param)
+		if found && (rest == "" || rest[0] == '.' || rest[0] == '[') {
+			return apperr.Violation{Field: arg + rest, Code: "invalid", Message: e.Message}, true
+		}
+	}
+	return apperr.Violation{}, false
 }
 
 // Call invokes a JSON-RPC method and unmarshals the result into out (if non-nil).
@@ -182,12 +269,8 @@ func (c *Client) Call(ctx context.Context, method string, params any, out any) e
 		return fmt.Errorf("decode %s response: %w", method, err)
 	}
 	if rpcResp.Error != nil {
-		// TODO: classify anfra-node's errors. They reach a host unclassified, so as
-		// internal_server_error: an unknown dataset or data source, or a model that
-		// does not compile, is the caller's, not an outage. anfra-node should
-		// return a stable error code per kind (in rpcResp.Error.Code or its data),
-		// mapped here to engine codes — not.found-like and invalid-input-like ones,
-		// with the AML location where there is one — and added to errcode.
+		// Left as anfra-node answered it: what a public error means is the
+		// command's to say (Violation, DetailsOf); anything else is unclassified.
 		return &RPCError{Method: method, Code: rpcResp.Error.Code, Message: rpcResp.Error.Message, Data: rpcResp.Error.Data}
 	}
 	if out != nil && rpcResp.Result != nil {

@@ -2,8 +2,6 @@ package query
 
 import (
 	"context"
-	"errors"
-	"strings"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/query"
@@ -31,25 +29,31 @@ func compileAQL(ctx context.Context, cc command.CommandContext, src query.Source
 	return compiled, err
 }
 
-// runViolation is anfra-node's refusal of what shapes a run, as the violation of
-// the arg at fault: a Query Input entry, under input (its path is the same in the
-// API, which passes the Query Input through), or the paging of a query that
-// cannot be paged.
+// runArgs are the args of a query command anfra-node's compile params are. A
+// Query Input entry's path is the same under input in the API, which passes the
+// Query Input through.
+var runArgs = anfranode.ArgMap{"datasetFqn": "dataset", "input": "input", "pagination": "page_size"}
+
+// runViolation is anfra-node's refusal of what the caller gave a run, as the
+// violation of the arg at fault: a dataset that cannot be used, a Query Input
+// entry, or the paging of a query that cannot be paged.
 func runViolation(err error) (apperr.Violation, bool) {
-	e, ok := errors.AsType[*anfranode.RPCError](err)
-	if !ok {
-		return apperr.Violation{}, false
+	v, ok := anfranode.Violation(err, runArgs)
+	if ok && v.Field == "page_size" {
+		v.Code = "unsupported"
 	}
-	path, ok := e.Path()
-	if !ok {
-		return apperr.Violation{}, false
+	return v, ok
+}
+
+// datasetArgs are the args of query validate anfra-node's params are.
+var datasetArgs = anfranode.ArgMap{"datasetFqn": "dataset"}
+
+// checkAQL type-checks a query (see query.Check) against src, with anfra-node's
+// refusal of the dataset as the violation of the dataset arg.
+func checkAQL(ctx context.Context, cc command.CommandContext, src query.Source, dataset, aql string) (query.QueryValidation, error) {
+	res, err := query.Check(ctx, cc.Clients.Node, src, dataset, aql)
+	if v, ok := anfranode.Violation(err, datasetArgs); ok {
+		return query.QueryValidation{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 	}
-	msg := strings.TrimPrefix(e.Message, path+": ")
-	switch path {
-	case "pagination":
-		return apperr.Violation{Field: "page_size", Code: "unsupported", Message: msg}, true
-	case "":
-		return apperr.Violation{Field: "input", Code: "invalid", Message: msg}, true
-	}
-	return apperr.Violation{Field: "input." + path, Code: "invalid", Message: msg}, true
+	return res, err
 }

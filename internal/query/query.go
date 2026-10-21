@@ -211,10 +211,10 @@ type Run struct {
 // Compile compiles an AQL query against a dataset into SQL plus the data source
 // it targets (dialect + execution routing), without executing. Shared by
 // --generate and the run path so both fail identically on a bad query: with
-// QueryInvalid and its diagnostics when the query does not compile. A failure
-// that is not the query's (an unknown dataset, a missing data source, the run's
-// shaping refused) is not diagnostic-shaped, and is returned as it is. The
-// result's AQL is the query with run's Query Input applied.
+// QueryInvalid and its diagnostics when the query does not compile. Any other
+// refusal (a dataset that cannot be used, the run's shaping) is returned as it
+// is, for the command to place on its arg (anfranode.Violation). The result's
+// AQL is the query with run's Query Input applied.
 func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, aql string, run Run) (anfranode.CompileToSQLResult, error) {
 	req, err := CompileRequest(ctx, src, dataset, aql)
 	if err != nil {
@@ -229,15 +229,8 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 		return res, nil
 	}
 	err = fmt.Errorf("compile AQL for dataset %q: %w", dataset, err)
-	// anfra-node refusing what shapes the run (a Query Input entry, a page) is
-	// not the query's fault: the caller says which arg is wrong.
-	if e, ok := errors.AsType[*anfranode.RPCError](err); ok {
-		if _, ok := e.Path(); ok {
-			return anfranode.CompileToSQLResult{}, err
-		}
-	}
-	if diags, verr := Check(ctx, node, src, dataset, aql); verr == nil && !diags.Valid {
-		return anfranode.CompileToSQLResult{}, apperr.EncapsulateWith(err, QueryInvalid, "", diags)
+	if d, ok := anfranode.DetailsOf[anfranode.QueryDiagnostics](err, anfranode.QueryInvalid); ok {
+		return anfranode.CompileToSQLResult{}, apperr.EncapsulateWith(err, QueryInvalid, "", QueryValidation{Valid: false, Diagnostics: d.Diagnostics})
 	}
 	return anfranode.CompileToSQLResult{}, err
 }
