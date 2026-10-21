@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/holistics/anfra/internal/envflag"
 
@@ -86,29 +85,7 @@ func showReleaseNotes(ctx context.Context, from, to string) {
 		fmt.Printf("See what changed: %s\n", update.ReleasesURL)
 		return
 	}
-	s := cliui.NewTerminalStyles(os.Stdout)
-	for _, n := range notes[:min(len(notes), maxNotes)] {
-		fmt.Printf("\n%s  %s\n", s.Heading.Render("What's new in anfra "+n.Version), s.Muted.Render(n.URL))
-		for _, l := range n.Changelog {
-			// The notes come from GitHub: print them as text, never as escapes.
-			text := cliui.SafeText(l.Text)
-			switch {
-			case !l.Heading:
-				fmt.Printf("    • %s\n", text)
-			case strings.Contains(strings.ToLower(text), "breaking"):
-				fmt.Printf("  %s\n", s.Warning.Render(text))
-			default:
-				fmt.Printf("  %s\n", s.Accent.Render(text))
-			}
-		}
-	}
-	if more := len(notes) - maxNotes; more > 0 {
-		noun := "releases"
-		if more == 1 {
-			noun = "release"
-		}
-		fmt.Printf("\nAnd %d earlier %s: %s\n", more, noun, update.ReleasesURL)
-	}
+	update.RenderNotes(os.Stdout, notes, maxNotes, cliui.NewTerminalStyles(os.Stdout), cliui.Width(os.Stdout))
 }
 
 // newUpdateCheckCmd is a hidden command run detached in the background to

@@ -3,11 +3,14 @@ package update
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/shared/jsonkit"
 	"golang.org/x/mod/semver"
 )
@@ -24,9 +27,11 @@ type Notes struct {
 	Changelog []Line
 }
 
-// Line is a line of a changelog: a section's heading ("Features"), or a change.
+// Line is a line of a changelog: a section's heading ("Features"), or a change
+// and, when it names one, the part of anfra it touches, its scope ("cli").
 type Line struct {
 	Heading bool
+	Scope   string
 	Text    string
 }
 
@@ -80,11 +85,14 @@ func notesBetween(rels []ghRelease, from, to string) []Notes {
 // commitLink is the link to a change's commit at the end of its changelog line.
 var commitLink = regexp.MustCompile(`\s*\(\[[0-9a-f]+\]\([^)]*\)\)`)
 
+// scopePrefix is a change's bullet and its bold scope, as in "* **cli:** ...".
+var scopePrefix = regexp.MustCompile(`^([*-] )\*\*([^*]+):\*\* `)
+
 // changelog reads the "## Changelog" section of a release's notes, as
 // scripts/release-notes.sh writes it, into plain lines: its "###" headings, and
-// a line per change, without the commit's link and with the lines a long
-// change wraps onto joined back. The pull requests and the rest that follow
-// the section are left out.
+// a line per change with its scope apart, without the commit's link and with
+// the lines a long change wraps onto joined back. The pull requests and the
+// rest that follow the section are left out.
 func changelog(body string) []Line {
 	var out []Line
 	in := false
@@ -100,12 +108,17 @@ func changelog(body string) []Line {
 		if !in || l == "" {
 			continue
 		}
-		l = strings.ReplaceAll(commitLink.ReplaceAllString(l, ""), "**", "")
+		l = commitLink.ReplaceAllString(l, "")
+		var scope string
+		if m := scopePrefix.FindStringSubmatch(l); m != nil {
+			scope, l = m[2], m[1]+l[len(m[0]):]
+		}
+		l = strings.ReplaceAll(l, "**", "")
 		switch {
 		case strings.HasPrefix(l, "### "):
 			out = append(out, Line{Heading: true, Text: strings.TrimPrefix(l, "### ")})
 		case strings.HasPrefix(l, "* "), strings.HasPrefix(l, "- "):
-			out = append(out, Line{Text: l[2:]})
+			out = append(out, Line{Scope: scope, Text: l[2:]})
 		case len(out) > 0 && !out[len(out)-1].Heading:
 			out[len(out)-1].Text += " " + l
 		default:
@@ -113,4 +126,52 @@ func changelog(body string) []Line {
 		}
 	}
 	return out
+}
+
+// RenderNotes writes what the newest limit releases in notes changed, then a
+// link to the rest: per release, a heading and its page, then its changelog's
+// sections, a change per line wrapped under its text to width (0 doesn't wrap).
+// The zero styles write plain text. The notes come from GitHub: they are written
+// as text, never as escapes.
+func RenderNotes(w io.Writer, notes []Notes, limit int, s cliui.TerminalStyles, width int) {
+	for _, n := range notes[:min(len(notes), limit)] {
+		fmt.Fprintf(w, "\n%s %s\n%s\n", s.Heading.Render("What's new in anfra"),
+			s.Success.Inherit(s.Heading).Render(cliui.SafeText(n.Version)), s.Muted.Render(n.URL))
+		for _, l := range n.Changelog {
+			text := cliui.SafeText(l.Text)
+			switch {
+			case !l.Heading:
+				if l.Scope != "" {
+					text = s.Accent.Render(cliui.SafeText(l.Scope)+":") + " " + text
+				}
+				writeWrapped(w, "    "+s.Muted.Render("•")+" ", text, width)
+			case strings.Contains(strings.ToLower(text), "breaking"):
+				fmt.Fprintf(w, "\n  %s\n", s.Warning.Inherit(s.Heading).Render(text))
+			default:
+				fmt.Fprintf(w, "\n  %s\n", s.Heading.Render(text))
+			}
+		}
+	}
+	if more := len(notes) - limit; more > 0 {
+		noun := "releases"
+		if more == 1 {
+			noun = "release"
+		}
+		fmt.Fprintf(w, "\n%s\n", s.Muted.Render(fmt.Sprintf("And %d earlier %s: %s", more, noun, ReleasesURL)))
+	}
+}
+
+// writeWrapped writes text after mark, wrapped to width under the text rather
+// than the mark; 0 doesn't wrap.
+func writeWrapped(w io.Writer, mark, text string, width int) {
+	indent := ansi.StringWidth(mark)
+	if width > indent+20 {
+		text = ansi.Wrap(text, width-indent, "")
+	}
+	for i, l := range strings.Split(text, "\n") {
+		if i > 0 {
+			mark = strings.Repeat(" ", indent)
+		}
+		fmt.Fprintln(w, mark+l)
+	}
 }
