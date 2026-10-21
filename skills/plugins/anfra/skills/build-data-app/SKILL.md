@@ -150,9 +150,11 @@ for it:
 - **Data comes only from the SDK.** The frame has no network of its own: `fetch`, XHR, WebSocket
   and `sendBeacon` are blocked but to the CDNs below. Never call anfra's API or any other service
   from the app.
-- **Libraries, styles and fonts only from cdnjs.cloudflare.com, cdn.jsdelivr.net, esm.sh,
-  unpkg.com and Google Fonts** (fonts.googleapis.com, fonts.gstatic.com), each by its `https://`
-  URL with a pinned version. A script, style or font from anywhere else is blocked. Images may come
+- **Libraries, styles and fonts only from cdn.jsdelivr.net, cdnjs.cloudflare.com and Google
+  Fonts** (fonts.googleapis.com, fonts.gstatic.com), each by its `https://` URL with a pinned
+  version. A script, style or font from anywhere else is blocked, esm.sh and unpkg.com included:
+  load an npm package from jsDelivr (`/npm/<pkg>@<version>/<file>`), and an ES module from its
+  `+esm` build (`https://cdn.jsdelivr.net/npm/<pkg>@<version>/+esm`). Images may come
   from any `https://` server. When the user needs another origin (their own CDN), add it to the
   repo's `.anfra/config.yml` under `apps.allow_origins` (`[https://cdn.acme.com]`, an origin with
   nothing after it), and tell them anfra Cloud keeps its own list, which an Admin edits in the
