@@ -1,3 +1,8 @@
+## [0.13.0](https://github.com/holistics/anfra/compare/v0.12.0...v0.13.0) (2026-10-21)
+
+### Features
+
+* **cli:** support uploading duckdb to motherduck during publish ([00e8e4a](https://github.com/holistics/anfra/commit/00e8e4a2a4441dbf1429c07cc0929ed2b3f708df))
 ## [0.12.0](https://github.com/holistics/anfra/compare/v0.11.1...v0.12.0) (2026-10-21)
 
 ### ⚠ BREAKING CHANGES
