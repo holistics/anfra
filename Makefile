@@ -29,12 +29,12 @@ JS_DEPS := pnpm install
 # dev server reads it from web/sdk/dist/, which the SDK's watcher only fills once it has built.
 SDK_ONCE := @test -f web/sdk/dist/api.js || pnpm build:sdk
 
-# The sidecars make dev and make test-sidecars run, unless .env.local names your own: the releases
-# manifest.yml pins, which scripts/sidecars.sh downloads into .sidecars/. It also checks, before
-# either starts, that each sidecar is the pinned version.
+# The sidecars make dev and make test-sidecars run, and make build embeds, unless .env.local names
+# your own: the releases manifest.yml pins, which scripts/sidecars.sh downloads into .sidecars/. It
+# also checks, before any of them starts, that each sidecar is the pinned version.
 SIDECARS := $(CURDIR)/.sidecars
-dev dev-tmux test-sidecars: ANFRA_NODE_BIN := $(or $(ANFRA_NODE_BIN),$(SIDECARS)/anfra-node)
-dev dev-tmux test-sidecars: ANFRA_CANAL_QUERY_BIN := $(or $(ANFRA_CANAL_QUERY_BIN),$(SIDECARS)/canal-query)
+dev dev-tmux test-sidecars build: ANFRA_NODE_BIN := $(or $(ANFRA_NODE_BIN),$(SIDECARS)/anfra-node)
+dev dev-tmux test-sidecars build: ANFRA_CANAL_QUERY_BIN := $(or $(ANFRA_CANAL_QUERY_BIN),$(SIDECARS)/canal-query)
 
 # Where make dev's Vite dev server serves the Data App frontend from source; anfra serve redirects
 # its pages there. Override it in .env.local.
@@ -68,10 +68,15 @@ dev-tmux: ## The same, under overmind in tmux: restart or attach to each process
 	$(SDK_ONCE)
 	$(TOOL) overmind start -f Procfile.dev
 
-build: ## Build the Data App frontend, then anfra with it, into bin/, as a release is
+# The sidecars are embedded whatever ANFRA_<NAME>_URL says, so the check must not leave them alone.
+build: ## Build the Data App frontend, then anfra with it and the sidecars, into bin/, as a release is
+	ANFRA_NODE_URL= ANFRA_CANAL_QUERY_URL= scripts/sidecars.sh check
 	pnpm build:web
+	mkdir -p internal/sidecar/anfranode/assets internal/sidecar/canalquery/assets
+	cp "$$ANFRA_NODE_BIN" internal/sidecar/anfranode/assets/anfra-node
+	cp "$$ANFRA_CANAL_QUERY_BIN" internal/sidecar/canalquery/assets/canal-query
 	@cloud_url="$$(go run ./scripts/cloud-url)" && \
-		go build $(BUILD_FLAGS) -o bin/ ./cmd/anfra
+		go build -tags embed_sidecar $(BUILD_FLAGS) -o bin/ ./cmd/anfra
 
 # Air rebuilds Go without rebuilding the frontend.
 build-dev:

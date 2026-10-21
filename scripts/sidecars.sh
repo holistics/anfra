@@ -102,6 +102,12 @@ for s in "${sidecars[@]}"; do
   bin_var="ANFRA_${env}_BIN" url_var="ANFRA_${env}_URL"
   bin=${!bin_var:-} url=${!url_var:-}
   [ -z "$url" ] || { echo "$name: $url_var is set, so anfra dials it: left alone"; continue; }
+  # A relative path is the repo root's (where make runs this), made absolute so that one naming
+  # .sidecars/<name> is not taken for your own. Its folder may not exist yet: left as it is.
+  case $bin in
+  '' | /*) ;;
+  *) if bin_dir=$(cd "$(dirname "$bin")" 2>/dev/null && pwd); then bin=$bin_dir/$(basename "$bin"); fi ;;
+  esac
   own=
   [ -z "$bin" ] || [ "$bin" = "$dir/$name" ] || own=1
   bin=${bin:-$dir/$name}
