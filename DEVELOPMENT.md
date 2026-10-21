@@ -28,7 +28,7 @@ make sidecars   # download the pinned releases, replacing the ones there; after 
 
 It needs [gh](https://cli.github.com), logged in (`gh auth login`) as an account that can read holistics/holistics-core and holistics/canal, whose releases are private.
 
-`make dev` and `make test-sidecars` run `scripts/sidecars.sh check` first: it downloads a sidecar `.sidecars/` lacks, and fails when one is not the pinned version (each says its version with `--version`), with how to fix it. It never replaces one on its own: `make sidecars` does.
+`make dev`, `make test-sidecars` and `make build` run `scripts/sidecars.sh check` first: it downloads a sidecar `.sidecars/` lacks, and fails when one is not the pinned version (each says its version with `--version`), with how to fix it. It never replaces one on its own: `make sidecars` does.
 
 To run your own build of a sidecar instead, set, in `.env.local`, an absolute path to it. The check holds it to the pin too; `ANFRA_SIDECAR_SKIP_VERSION_CHECK=1` runs one whose version is not the pin on purpose.
 
@@ -49,7 +49,7 @@ make dev-tmux   # the same under overmind, in tmux: restart or attach to each pr
 To run a command against a repo yourself, build and call it from the repo's folder:
 
 ```sh
-make build                           # bin/anfra, with the frontend built in, as a release is
+make build                           # bin/anfra, with the frontend and the sidecars built in, as a release is
 cd <repo> && <path to>/bin/anfra show
 ```
 
