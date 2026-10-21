@@ -151,6 +151,7 @@ type server struct {
 	forbidCreate bool
 	unreachable  map[string]string // a data source's check failing, with this reason
 	tested       int               // data_sources.test calls
+	origins      []string          // the org's allowed origins; nil: a server without app_origins.list
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +216,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		replaced := &cloudapi.Replaced{Revision: rev(), PublishedBy: s.by}
 		s.deployed, s.revision, s.by = in.Files, s.revision+1, &cloudapi.Person{ID: "u1", Email: "ada@example.com"}
 		reply(cloudapi.PublishOut{Revision: rev(), Changed: true, Replaced: replaced})
+	case cloudapi.OpListAppOrigins:
+		if s.origins == nil { // a server from before allowed origins
+			http.NotFound(w, r)
+			return
+		}
+		reply(cloudapi.AppOriginsOut{Origins: s.origins})
 	case cloudapi.OpListDataSources:
 		if s.forbidList {
 			refuse(w, http.StatusForbidden, "forbidden")

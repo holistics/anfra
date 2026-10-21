@@ -155,6 +155,7 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
 		return err
 	}
+	warnOfOriginsOrgLacks(ctx, client, p, dir)
 
 	oids := make(map[string]string, len(files)) // path → blob id
 	sizes := make(map[string]int, len(files))
