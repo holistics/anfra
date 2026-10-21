@@ -25,11 +25,21 @@ Tracing follows the same line: a caller's `traceparent` is continued only when t
 
 A Data App definition is HTML and JavaScript from any author, often an agent, which may not think of security while building an analysis. So anfra guards it for its author, keeping it away from everything but the two calls it needs (see [data-apps.md](data-apps.md)):
 
-- **A sandboxed frame.** The host (`web/sdk/src/host/mount.ts`) puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`. The frame has an opaque origin: no cookies, no storage, no same-origin access to the page around it, and its own requests to the API are cross-origin, so the guard refuses them.
+- **A sandboxed frame.** The host (`web/sdk/src/host/runtime.ts`) puts the definition in an iframe with `sandbox="allow-scripts"`, as its `srcdoc`. The frame has an opaque origin: no cookies, no storage, no same-origin access to the page around it, and its own requests to the API are cross-origin, so the guard refuses them.
+- **A content policy.** The definition's own requests are its author's code reaching the network, beside the bridge, with the reader's query results in hand. So the host puts a `Content-Security-Policy` `<meta>` first in the frame's document, ahead of anything of the definition's but its doctype (`provisionDocument`, `contentPolicy` in `web/sdk/src/host/policy.ts`): scripts only from cdnjs, jsDelivr, esm.sh and unpkg; styles from those and Google Fonts; fonts from those and Google's font host; images from any `https://` server, `data:` and `blob:`; fetches only to the origins styles and fonts come from (the render plugin fetches what it embeds in a picture); no frames, form targets or `<base>`. A host adds origins with `createHost({ allowOrigins })`, each an `https://` origin and nothing after it (`checkOrigin`, `repoformat.CheckOrigin` in Go), added to every list but the images'; `anfra serve` takes the repo's `.anfra/config.yml` `apps.allow_origins`. A definition's own policy can only narrow it: every policy in force applies.
 - **A narrow bridge.** The frame reaches data only by postMessage. The host answers only messages from that frame's window, and only the calls its plugins let a frame make, such as `core.submitQuery`, `core.fieldSuggestions` and `lineage.trace`; every other call is refused before it runs (`web/sdk/src/host/runtime.ts`, [sdk-plugins.md](sdk-plugins.md)). Nothing else of the API is reachable. The frame script itself carries no API client, which a test on the built bundle holds (`web/sdk/src/app/bundle.test.ts`).
 - **Provisioned data is escaped.** The datasets and reader are written into the frame document as JSON that cannot close its `<script>` element, and the base URL as an escaped attribute (`web/sdk/src/host/provision.ts`).
 - **Files are served inert.** `/appserve/files/…` serves a Data App's files with `Content-Security-Policy: sandbox allow-scripts` and `nosniff` (`internal/appserve/files.go`), so opening a definition's URL directly does not run it with the server's origin. Pages (`/`, `/apps/…`) send `frame-ancestors 'none'`, so no other site can frame them.
 - **Only files under `apps/`.** A requested path is resolved through symlinks, `apps/` included, and must stay under `apps/`; dot-files and dot-directories are refused (`appFile` in `internal/appserve/files.go`). A Data App cannot read the repo's `.anfra/data_sources.yml` through the file route.
+
+The policy is a `<meta>` on a `srcdoc` frame, not a header on a frame loaded from a URL as Holistics' Data Apps do (`DataAppSandboxController` and its ADR in the Holistics repo). A `srcdoc` frame inherits its host page's policy as well as carrying its own, and both apply, so **a host page's own policy must never restrict scripts, styles or connections** (no `script-src`, `style-src`, `connect-src` or `default-src`), or every Data App breaks. Holistics' page uses `strict-dynamic`, which is why it framed a URL; appserve's pages send only `frame-ancestors`. A URL-served frame needs a route of its own on every host and a fixed bootstrap document; the meta keeps the SDK the one place the policy lives, for every host, at the cost of that rule.
+
+The policy closes the convenient routes to the network, not every route, as Holistics' ADR says of its own:
+
+- `img-src https:` is a channel out: a URL can carry data to any server. The render plugin and charts drawn to a canvas need images from anywhere.
+- `'unsafe-eval'` and `'unsafe-inline'` are allowed, since the definition is itself inline code and libraries use eval. `script-src` limits where code comes from, a supply-chain control, not what it does.
+- A compromised CDN library runs beside the reader's results. `anfra validate` and `anfra publish` warn about a CDN script or stylesheet without an `integrity` hash (`repoformat.CheckApp`), which a browser checks before running it.
+- Fetches reach the CDNs and a host's added origins. They add no destination `img-src` does not already reach.
 
 Under a dev frontend (`ANFRA_APPSERVE_DEV_URL`, maintainers only), pages redirect to the configured dev server, and only the request's path and query are carried over: its scheme and host come from the configuration (`internal/appserve/frontend.go`).
 
@@ -57,6 +67,7 @@ These are the operator's or the platform's to handle:
 
 - Who may reach `anfra serve`, once it is exposed beyond loopback.
 - Who may see which datasets and rows: anfra has one user. Per-viewer permissions are a platform's.
+- Data a Data App sends out through an image's URL, or to an origin a host or the repo allows (above).
 - The confidentiality of the machine and its files: anyone who can read the repo can read its credentials file.
 - What a Data App does with the data it is legitimately given. Its frame can still load from and send to the internet (that is how it loads its chart library from a CDN), so a malicious definition could send its query results elsewhere. The sandbox keeps it from anfra's API and from the page around it, not from the network: review a definition as you would any code you run.
 
