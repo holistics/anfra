@@ -114,20 +114,42 @@ func (c CLI) Login(ctx context.Context) error {
 	return cmd.Run()
 }
 
-// SessionToken is the signed-in user's token, for the REST API: a short-lived
-// one, which reads and writes everything of theirs. It is never shown, and no
+// Session is what an upload needs of the signed-in user's account, in one call,
+// since each call connects to MotherDuck anew, which takes seconds: their token,
+// for the REST API, a short-lived one which reads and writes everything of
+// theirs; and the names of their databases. The token is never shown, and no
 // error here carries the CLI's output, which would hold it.
-func (c CLI) SessionToken(ctx context.Context) (string, error) {
-	out, err := c.exec(ctx, "query", "PRAGMA PRINT_MD_TOKEN")
+func (c CLI) Session(ctx context.Context) (token string, databases []string, err error) {
+	out, err := c.exec(ctx, "query", "-o", "json",
+		"PRAGMA PRINT_MD_TOKEN; SELECT list(name ORDER BY name) AS names FROM md_information_schema.databases")
 	if err != nil {
-		return "", errors.New("the MotherDuck CLI did not give its token")
+		var failed QueryError
+		if jsonkit.Unmarshal(bytes.TrimSpace(out), &failed) == nil && failed.Message != "" && !strings.Contains(failed.Message, "motherduck_token") {
+			return "", nil, &failed
+		}
+		return "", nil, errors.New("the MotherDuck CLI did not give its token")
 	}
+	// The pragma prints a line of shell, then an empty JSON array; the
+	// SELECT, one JSON row.
+	var last string
 	for line := range strings.SplitSeq(string(out), "\n") {
-		if token, ok := strings.CutPrefix(strings.TrimSpace(line), "export motherduck_token="); ok && token != "" && !strings.ContainsAny(token, " \t'\"") {
-			return token, nil
+		line = strings.TrimSpace(line)
+		if t, ok := strings.CutPrefix(line, "export motherduck_token="); ok && t != "" && !strings.ContainsAny(t, " \t'\"") {
+			token = t
+		} else if strings.HasPrefix(line, "[") {
+			last = line
 		}
 	}
-	return "", errors.New("the MotherDuck CLI did not give its token")
+	if token == "" {
+		return "", nil, errors.New("the MotherDuck CLI did not give its token")
+	}
+	var rows []struct {
+		Names []string `json:"names"`
+	}
+	if err := jsonkit.Unmarshal([]byte(last), &rows); err != nil || len(rows) != 1 {
+		return "", nil, errors.New("the MotherDuck CLI did not list the account's databases")
+	}
+	return token, rows[0].Names, nil
 }
 
 // DatabaseExists reports whether the account has a database named name, in any

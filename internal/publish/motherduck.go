@@ -24,7 +24,7 @@ type MotherDuck interface {
 	Find(ctx context.Context) (version string, ok bool)
 	Status(ctx context.Context) (motherduck.Status, error)
 	Login(ctx context.Context) error
-	SessionToken(ctx context.Context) (string, error)
+	Session(ctx context.Context) (token string, databases []string, err error)
 	DatabaseExists(ctx context.Context, name string) (bool, error)
 	CreateDatabaseFrom(ctx context.Context, name, path string) error
 	CreateReadToken(ctx context.Context, session, username, name, description string) (motherduck.Token, error)
@@ -100,11 +100,16 @@ type mdCopy struct {
 	// seen is the account the CLI was signed in to when first looked at, which
 	// the first question names; status, once signed in, the one uploaded to; and
 	// fresh, that the person signed in to it in this publish, choosing it.
-	looked  bool
+	// looking is that first look, started ahead (lookAhead): done when closed.
+	looking chan struct{}
 	seen    *motherduck.Status
 	status  motherduck.Status
 	fresh   bool
 	session string // the person's own token, for the REST API only
+	// databases is the account's, by name in lower case, as listed in signing in
+	// and added to by each upload: one listing for the publish, since every call
+	// connects to MotherDuck anew, which takes seconds.
+	databases map[string]bool
 	// all is yes to every DuckDB data source still to come, to the account
 	// named when it was chosen.
 	all       bool
@@ -246,15 +251,34 @@ func (m *mdCopy) account(ctx context.Context) *motherduck.Status {
 	if m.ready {
 		return &m.status
 	}
-	if !m.looked {
-		m.looked = true
+	m.lookAhead(ctx)
+	if m.looking == nil {
+		return nil // no MotherDuck to look at
+	}
+	select {
+	case <-m.looking:
+	case <-ctx.Done():
+	}
+	return m.seen
+}
+
+// lookAhead starts looking up the account the CLI is signed in to, which takes
+// seconds, so it is done by when the first question needs it: started once
+// DuckDB data sources are found, while other questions are on screen. Nothing
+// else calls the CLI until it is done (account waits for it).
+func (m *mdCopy) lookAhead(ctx context.Context) {
+	if m.looking != nil || m.md == nil {
+		return
+	}
+	m.looking = make(chan struct{})
+	go func() {
+		defer close(m.looking)
 		if _, found := m.md.Find(ctx); found {
 			if s, err := m.md.Status(ctx); err == nil && s.Authenticated && s.User != "" {
 				m.seen = &s
 			}
 		}
-	}
-	return m.seen
+	}()
 }
 
 // signIn finds the CLI and the person signed in to it, once per publish,
@@ -271,6 +295,10 @@ func (m *mdCopy) signIn(ctx context.Context) (ok bool, err error) {
 	giveUp := func() (bool, error) {
 		m.gaveUp = true
 		return false, ctx.Err()
+	}
+	if m.seen != nil {
+		// Signed in when looked at, moments ago: not looked at again.
+		return m.listSession(ctx, *m.seen)
 	}
 	version, found := m.md.Find(ctx)
 	installed := found
@@ -309,15 +337,27 @@ func (m *mdCopy) signIn(ctx context.Context) (ok bool, err error) {
 		p.Fail("The MotherDuck CLI did not report who is signed in, so nothing will be uploaded.")
 		return giveUp()
 	}
-	if m.session, err = m.md.SessionToken(ctx); err != nil {
-		p.Fail("%v, so nothing will be uploaded.", err)
-		return giveUp()
-	}
-	m.status, m.ready = status, true
 	if m.fresh {
 		m.named = status.User // chosen in signing in: named as much as by a question
 		p.Success("Signed in to MotherDuck as %s.", account(status))
 	}
+	return m.listSession(ctx, status)
+}
+
+// listSession gets, for the account signed in to, the person's token and the
+// names of their databases, in one call.
+func (m *mdCopy) listSession(ctx context.Context, status motherduck.Status) (ok bool, err error) {
+	token, names, err := m.md.Session(ctx)
+	if err != nil {
+		m.p.Fail("%v, so nothing will be uploaded.", err)
+		m.gaveUp = true
+		return false, ctx.Err()
+	}
+	m.databases = make(map[string]bool, len(names))
+	for _, n := range names {
+		m.databases[strings.ToLower(n)] = true
+	}
+	m.session, m.status, m.ready = token, status, true
 	return true, nil
 }
 
@@ -334,11 +374,11 @@ func account(s motherduck.Status) string {
 // file's. Not ok, nothing was uploaded, or what was is said.
 func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool, err error) {
 	p := m.p
-	name, err = m.freeName(ctx, motherduck.DatabaseName(strings.TrimSuffix(filepath.Base(f.path), filepath.Ext(f.path))))
+	name, err = m.freeName(motherduck.DatabaseName(strings.TrimSuffix(filepath.Base(f.path), filepath.Ext(f.path))))
 	if err != nil {
 		p.Fail("Could not find a free database name in your MotherDuck account:")
 		p.Detail(err.Error())
-		return "", false, ctx.Err()
+		return "", false, nil
 	}
 	p.Step("Uploading %s to MotherDuck as database %s… (a large file takes a while)", f.shown, name)
 	err = m.md.CreateDatabaseFrom(ctx, name, f.path)
@@ -368,28 +408,28 @@ func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool
 		p.Fail("Could not upload %s:", f.shown)
 		p.Detail(err.Error())
 		if strings.Contains(err.Error(), "already exists") {
+			m.databases[name] = true
 			p.Note("Another database named %s was created in the meantime. It was not changed.", name) // not this upload's: never call it partial
 		} else if exists, xerr := m.md.DatabaseExists(ctx, name); xerr == nil && exists {
 			p.Warn("The database %s may be partly created in your MotherDuck account. anfra never deletes anything there, so drop it yourself if you don't need it.", name)
 		}
 		return "", false, nil
 	}
+	m.databases[name] = true
 	p.Success("Uploaded %s to MotherDuck as database %s.", f.shown, name)
 	return name, true, nil
 }
 
-// freeName is base, or base_2, base_3…, the first the account has no database of.
-func (m *mdCopy) freeName(ctx context.Context, base string) (string, error) {
+// freeName is base, or base_2, base_3…, the first the account has no database
+// of, as listed in signing in. One taken since fails the upload, which never
+// replaces it.
+func (m *mdCopy) freeName(base string) (string, error) {
 	for i := 1; i < 100; i++ {
 		name := base
 		if i > 1 {
 			name = fmt.Sprintf("%s_%d", base, i)
 		}
-		exists, err := m.md.DatabaseExists(ctx, name)
-		if err != nil {
-			return "", err
-		}
-		if !exists {
+		if !m.databases[name] {
 			if i > 1 {
 				m.p.Note("A database named %s already exists in your MotherDuck account, so this one will be named %s.", base, name)
 			}

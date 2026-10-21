@@ -27,8 +27,8 @@ func (a *Account) Status(ctx context.Context) (Status, error) { return a.CLI.Sta
 
 func (a *Account) Login(ctx context.Context) error { return a.CLI.Login(ctx) }
 
-func (a *Account) SessionToken(ctx context.Context) (string, error) {
-	return a.CLI.SessionToken(ctx)
+func (a *Account) Session(ctx context.Context) (token string, databases []string, err error) {
+	return a.CLI.Session(ctx)
 }
 
 func (a *Account) DatabaseExists(ctx context.Context, name string) (bool, error) {

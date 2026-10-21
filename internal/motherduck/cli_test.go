@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -93,15 +94,20 @@ func TestDatabaseName(t *testing.T) {
 	}
 }
 
-// The token is read from the pragma's one line; when it is not there, the error
-// does not carry what the CLI said, which may hold it.
-func TestSessionToken(t *testing.T) {
-	f := &fakeCLI{out: "export motherduck_token=eyJ.a.b\nSuccess\n-------\n"}
-	if got, err := f.cli().SessionToken(context.Background()); err != nil || got != "eyJ.a.b" {
-		t.Errorf("token %q, %v", got, err)
+// The token and the database names come in one call: the pragma's line of
+// shell, then the SELECT's row. When the token is not there, the error does not
+// carry what the CLI said, which may hold it.
+func TestSession(t *testing.T) {
+	f := &fakeCLI{out: "export motherduck_token=eyJ.a.b\n[]\n[{\"names\":[\"chinook\",\"ecommerce\"]}]\n"}
+	token, names, err := f.cli().Session(context.Background())
+	if err != nil || token != "eyJ.a.b" || !slices.Equal(names, []string{"chinook", "ecommerce"}) {
+		t.Errorf("token %q, names %v, %v", token, names, err)
+	}
+	if len(f.calls) != 1 {
+		t.Errorf("%d calls, want one", len(f.calls))
 	}
 	f = &fakeCLI{out: "motherduck_token=eyJ.secret.part", err: errors.New("exit status 1: eyJ.secret.part")}
-	if _, err := f.cli().SessionToken(context.Background()); err == nil || strings.Contains(err.Error(), "secret") {
+	if _, _, err := f.cli().Session(context.Background()); err == nil || strings.Contains(err.Error(), "secret") {
 		t.Errorf("err %v", err)
 	}
 }
