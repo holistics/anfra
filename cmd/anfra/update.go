@@ -67,7 +67,9 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	if err := update.Apply(ctx, rel, progress); err != nil {
 		return err
 	}
-	fmt.Printf("Updated anfra %s -> %s.\n", meta.Version, rel.Version)
+	s := cliui.NewTerminalStyles(os.Stdout)
+	fmt.Printf("%s Updated anfra %s → %s\n", s.Success.Render("✓"),
+		s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
 	showReleaseNotes(ctx, meta.Version, rel.Version)
 	return nil
 }
