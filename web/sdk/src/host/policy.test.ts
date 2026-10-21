@@ -7,7 +7,9 @@ describe('contentPolicy', () => {
   it('keeps the frame off the network but for the CDNs it loads from', () => {
     const policy = contentPolicy();
     expect(directive(policy, 'default-src')).toBe("default-src 'none'");
-    expect(directive(policy, 'script-src')).toContain('https://cdn.jsdelivr.net');
+    expect(directive(policy, 'script-src')).toBe(
+      "script-src https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline' 'unsafe-eval'",
+    );
     expect(directive(policy, 'connect-src')).toContain('https://fonts.gstatic.com');
     expect(directive(policy, 'connect-src')).not.toMatch(/https:(\s|$)|\*/);
     expect(directive(policy, 'base-uri')).toBe("base-uri 'none'");
