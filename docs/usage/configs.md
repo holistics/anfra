@@ -45,7 +45,7 @@ See [designs/sidecars.md](../designs/sidecars.md).
 |---|---|
 | `ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL` | Use sidecars something else runs (a compose or Kubernetes deployment) instead of spawning them: their base URLs, e.g. `http://anfra-node:8080`. Default: unset, and anfra spawns its own. |
 | `ANFRA_NODE_BIN`, `ANFRA_CANAL_QUERY_BIN` | The sidecar binaries, as absolute paths, for a build that embeds none (a build from source). Releases embed them, and ignore these. |
-| `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_NODE_ENV_<NAME>` | Set `<NAME>` in the canal-query or anfra-node that anfra spawns, and in no other process: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061` serves canal-query's pprof there. The sidecars inherit anfra's environment otherwise, except anfra's own `ANFRA_*` and the settings each process has its own of, which they get only this way: `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` ([designs/sidecars.md](../designs/sidecars.md#environment)). Values anfra sets for a sidecar, such as canal-query's `PORT`, cannot be changed. |
+| `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_NODE_ENV_<NAME>` | Set `<NAME>` in the canal-query or anfra-node that anfra spawns, and in no other process: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061` serves canal-query's pprof there. The sidecars inherit anfra's environment otherwise, except anfra's own `ANFRA_*` and the settings each process has its own of, which they get only this way: `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` ([designs/sidecars.md](../designs/sidecars.md#environment)). Values anfra sets for a sidecar, such as canal-query's `PORT`, cannot be changed, except anfra-node's `ANFRA_PROGRAM_MEMORY_SIZE` (below). |
 
 #### Running anfra-node (the sidecar, not anfra) yourself
 
@@ -56,7 +56,7 @@ A platform that runs **anfra-node** as a service, rather than letting anfra spaw
 | `--port`, or `ANFRA_PORT` | The port to listen on. One of this or a socket (`--socket`, `ANFRA_SOCKET`) is required. |
 | `ANFRA_HOST` | The address to listen on, with `--port` or `ANFRA_PORT`. Default: `0.0.0.0`. |
 | `ANFRA_COMPILE_CACHE_PATH` | Where compiled programs are cached on disk. Default: `~/.anfra/compile-cache`. anfra sets it per repo for the anfra-node it spawns. |
-| `ANFRA_PROGRAM_MEMORY_SIZE` | How many repos' compiled programs to keep in memory between requests: a whole number. Default: `0`, none. Size it to the repos one process serves and the memory it has; anfra sets `1` for the anfra-node it spawns, which serves one repo. |
+| `ANFRA_PROGRAM_MEMORY_SIZE` | How many repos' compiled programs to keep in memory between requests: a whole number. Default: `0`, none. Size it to the repos one process serves and the memory it has; anfra sets `1` for the anfra-node it spawns, which serves one repo; `ANFRA_NODE_ENV_ANFRA_PROGRAM_MEMORY_SIZE=0` turns that off. |
 | `LOG_LEVEL` | As below. |
 
 ### `anfra serve`
@@ -86,7 +86,8 @@ anfra exports traces over OTLP/HTTP when an endpoint is set, through the standar
 
 | Variable | Effect |
 |---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | The collector's base URL, e.g. `http://localhost:4318`. anfra also points anfra-node at it. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP, for anfra and anfra-node: the collector's base URL, e.g. `http://localhost:4318`. anfra points anfra-node at it. |
+| `ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC, for canal-query: the collector's gRPC receiver, e.g. `http://localhost:4317`. |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | The traces endpoint alone, a full URL ending in `/v1/traces`, instead of the base URL. |
 | `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Label anfra's traces, in OpenTelemetry's format (`key=value,key=value` for the attributes). Default service name: `anfra`. The sidecars don't inherit them; set theirs with `ANFRA_CANAL_QUERY_ENV_` or `ANFRA_NODE_ENV_` (above). |
 | `OTEL_SDK_DISABLED` | `true` exports nothing, whatever else is set. |

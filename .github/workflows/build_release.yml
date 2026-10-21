@@ -96,7 +96,11 @@ jobs:
           CANAL_TAG: ${{ steps.m.outputs.canal_tag }}
         run: |
           mkdir -p sidecars
-          gh release download -R holistics/holistics-core "$NODE_TAG"  -D sidecars -p 'anfra-node-*'
+          # The minified anfra-node per target, not the -unminified ones beside them,
+          # which are for development (scripts/sidecars.sh).
+          node_assets=()
+          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do node_assets+=(-p "anfra-node-$t"); done
+          gh release download -R holistics/holistics-core "$NODE_TAG"  -D sidecars "${node_assets[@]}"
           gh release download -R holistics/canal          "$CANAL_TAG" -D sidecars -p 'canal-query-*'
           ls -la sidecars
 

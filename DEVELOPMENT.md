@@ -20,7 +20,7 @@ The `Makefile`'s other tools (air, hivemind, overmind, golangci-lint) are pinned
 
 ### Sidecars
 
-anfra built from source embeds no sidecars, so it needs them from elsewhere. `manifest.yml` pins the release of each that anfra's own releases embed, and that is the one to develop and test against: `scripts/sidecars.sh` downloads it for your machine into `.sidecars/` (git-ignored), one copy of each.
+anfra built from source embeds no sidecars, so it needs them from elsewhere. `manifest.yml` pins the release of each that anfra's own releases embed, and that is the one to develop and test against: `scripts/sidecars.sh` downloads it for your machine into `.sidecars/` (git-ignored), one copy of each. anfra-node's is its unminified build, so its spans carry the source's function names (`_compile`, not `OA8`); a release from before anfra-node published one gives the minified build, which anfra's releases embed.
 
 ```sh
 make sidecars   # download the pinned releases, replacing the ones there; after a pin moves

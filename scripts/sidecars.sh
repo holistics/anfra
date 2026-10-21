@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The sidecars an anfra built from source runs with, checked against the releases manifest.yml
 # pins. Unless you bring your own, they are those releases, downloaded for this machine into
-# .sidecars/ (git-ignored): one copy each, replaced when a pin moves.
+# .sidecars/ (git-ignored): one copy each, replaced when a pin moves. anfra-node's is its unminified
+# build, whose spans carry the source's function names; a release from before it had one gives
+# the minified build.
 #
 #   scripts/sidecars.sh fetch   download the pinned releases into .sidecars/, replacing others
 #   scripts/sidecars.sh check   download what .sidecars/ lacks; fail if a sidecar in use is not
@@ -19,10 +21,11 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 dir="$PWD/.sidecars"
 
-# name, manifest key, GitHub repo, environment variables' infix
+# name, manifest key, GitHub repo, environment variables' infix, the suffix of the release asset
+# to prefer (- for none)
 sidecars=(
-  "anfra-node anfra_node holistics/holistics-core NODE"
-  "canal-query canal_query holistics/canal CANAL_QUERY"
+  "anfra-node anfra_node holistics/holistics-core NODE -unminified"
+  "canal-query canal_query holistics/canal CANAL_QUERY -"
 )
 
 usage() { sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//;p;}' "$0" >&2; exit 2; }
@@ -68,13 +71,18 @@ target() {
 }
 
 download() {
-  local name=$1 repo=$2 tag=$3 asset tmp
+  local name=$1 repo=$2 tag=$3 variant=$4 asset tmp
   command -v gh >/dev/null || { echo "downloading $name needs gh (https://cli.github.com), logged in as an account that can read $repo" >&2; exit 1; }
   asset="$name-$(target)"
+  [ "$variant" = - ] || asset+=$variant
   echo "Downloading $asset from $repo's release $tag ..."
   mkdir -p "$dir"
   tmp=$(mktemp -d "$dir/.download.XXXXXX")
-  if ! gh release download -R "$repo" "$tag" -p "$asset" -D "$tmp"; then
+  if [ "$variant" != - ] && ! gh release download -R "$repo" "$tag" -p "$asset" -D "$tmp" 2>/dev/null; then
+    asset="$name-$(target)"
+    echo "$tag has none: downloading $asset instead ..."
+  fi
+  if [ ! -e "$tmp/$asset" ] && ! gh release download -R "$repo" "$tag" -p "$asset" -D "$tmp"; then
     rm -rf "$tmp"
     echo "could not download $asset from $repo's release $tag: can the account gh is logged in as read $repo?" >&2
     exit 1
@@ -90,7 +98,7 @@ case "$mode" in fetch | check) ;; *) usage ;; esac
 
 failed=()
 for s in "${sidecars[@]}"; do
-  read -r name key repo env <<<"$s"
+  read -r name key repo env variant <<<"$s"
   bin_var="ANFRA_${env}_BIN" url_var="ANFRA_${env}_URL"
   bin=${!bin_var:-} url=${!url_var:-}
   [ -z "$url" ] || { echo "$name: $url_var is set, so anfra dials it: left alone"; continue; }
@@ -103,13 +111,13 @@ for s in "${sidecars[@]}"; do
   if [ "$mode" = fetch ]; then
     if [ -n "$own" ]; then echo "$name: $bin_var names your own, $bin: left alone"; continue; fi
     if [ -x "$bin" ] && [ "$(version_of "$bin")" = "$want" ]; then echo "$name: $want, as pinned"; continue; fi
-    download "$name" "$repo" "$tag"
+    download "$name" "$repo" "$tag" "$variant"
     continue
   fi
 
   if [ ! -e "$bin" ]; then
     [ -z "$own" ] || { failed+=("$name: $bin_var names $bin, which does not exist"); continue; }
-    download "$name" "$repo" "$tag"
+    download "$name" "$repo" "$tag" "$variant"
   fi
   [ "${ANFRA_SIDECAR_SKIP_VERSION_CHECK:-}" != 1 ] || continue
   have=$(version_of "$bin")

@@ -61,22 +61,24 @@ func (a *Sidecar) Start(ctx context.Context) error {
 	a.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("anfra-%d.sock", os.Getpid()))
 	_ = os.Remove(a.socketPath)
 
-	// It serves this one repo, so it keeps that repo's compiled program in
-	// memory between requests: anfra-node keeps none unless told how many.
-	env := []string{"ANFRA_REPO_ID=" + a.cfg.RepoID, "ANFRA_PROGRAM_MEMORY_SIZE=1"}
+	env := []string{"ANFRA_REPO_ID=" + a.cfg.RepoID}
 	if a.cfg.CompileCachePath != "" {
 		env = append(env, "ANFRA_COMPILE_CACHE_PATH="+a.cfg.CompileCachePath)
 	}
 	proc, err := sidecar.StartProcess(sidecar.ProcSpec{
-		Name:      Name,
-		Path:      binPath,
-		Args:      []string{"--socket=" + a.socketPath},
-		ExtraEnv:  env,
-		EnvPrefix: EnvPrefix,
-		Stdout:    a.cfg.StdoutWriter,
-		Stderr:    a.cfg.StderrWriter,
-		Logger:    a.cfg.Logger,
-		PipeStdin: true, // the Node sidecar uses stdin-EOF as a parent-death watchdog
+		Name:     Name,
+		Path:     binPath,
+		Args:     []string{"--socket=" + a.socketPath},
+		ExtraEnv: env,
+		// It serves this one repo, so it keeps that repo's compiled program in
+		// memory between requests: anfra-node keeps none unless told how many.
+		// ANFRA_NODE_ENV_ANFRA_PROGRAM_MEMORY_SIZE=0 turns that off.
+		DefaultEnv: []string{"ANFRA_PROGRAM_MEMORY_SIZE=1"},
+		EnvPrefix:  EnvPrefix,
+		Stdout:     a.cfg.StdoutWriter,
+		Stderr:     a.cfg.StderrWriter,
+		Logger:     a.cfg.Logger,
+		PipeStdin:  true, // the Node sidecar uses stdin-EOF as a parent-death watchdog
 	})
 	if err != nil {
 		return err
