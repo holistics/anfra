@@ -1,3 +1,40 @@
+## [0.12.0](https://github.com/holistics/anfra/compare/v0.11.1...v0.12.0) (2026-10-21)
+
+### ⚠ BREAKING CHANGES
+
+* **sdk.host:** MountOptions.baseHref is removed and no <base> is
+injected: a Data App is one self-contained file.
+
+### Features
+
+* bump anfra-node to 0.9.0 and improve its error handling ([b120367](https://github.com/holistics/anfra/commit/b120367c169bca1db74d0009c4d8e1b635a331f2))
+* **cli:** add durable oauth login and credential management ([88adbf1](https://github.com/holistics/anfra/commit/88adbf116edc877a8a1a6162bb6be24daa60f5fd))
+* **cli:** add interactive organization picker and auth progress ([bcf5a35](https://github.com/holistics/anfra/commit/bcf5a35efa402448c7921026922917a469d532ad))
+* **cli:** align cloud contract and canonical organization urls ([cfd35d6](https://github.com/holistics/anfra/commit/cfd35d6c40a2e2eaa4a49f93f354f118a9a54009))
+* **cli:** warn about Data App references a host cannot serve ([04e7f2b](https://github.com/holistics/anfra/commit/04e7f2baedeaa4ccfdee2bbd9eb15ff912122335))
+* **cli:** wire auth commands and bearer-authenticated publishing ([a04f0f2](https://github.com/holistics/anfra/commit/a04f0f2463820f9724a35427a30ac5dce8654373))
+* formalize background routines ([bcfecd4](https://github.com/holistics/anfra/commit/bcfecd4e1c3e6ba90bf12e6fd27c1cd317fbbca0))
+* improve publish cliui ([0c5cc97](https://github.com/holistics/anfra/commit/0c5cc97d068385e082792f1e7a191c9c4bb47c16))
+* **sdk.host:** run Data App frames under a content policy ([9654654](https://github.com/holistics/anfra/commit/96546542b82357460fde62d8be4bb530f46c029d))
+* **shared:** allow hosts to set error response headers ([2b3efcb](https://github.com/holistics/anfra/commit/2b3efcb77fcc2625db010cb4556434fd7a5bedc8))
+* **shared:** check Data App origins and definitions in repoformat ([3976499](https://github.com/holistics/anfra/commit/39764998eb893e62b0419a52b9eff8bac54ad5a7))
+* **shared:** expose optional oauth scope requirements in discovery ([804a645](https://github.com/holistics/anfra/commit/804a6457fa4b63ad23ea9ebd5f8449a25978ff67))
+* **shared:** name Data Apps in repoformat, for every host ([e53d725](https://github.com/holistics/anfra/commit/e53d725e8200ebcf29152c7e6f4b1f41b9e46c7e))
+
+### Bug Fixes
+
+* **cli:** streamline organization authentication and terminal cleanup ([eb4f148](https://github.com/holistics/anfra/commit/eb4f148dd81dddd7611a1b42e36cf6f7763adab2))
+* **sdk.host:** keep a definition's html and head attributes under the policy ([6b2d07d](https://github.com/holistics/anfra/commit/6b2d07d486e432a5e4304ff74a4f4d564e50576d))
+* **shared:** read a tag's attributes only when it has some ([5574eea](https://github.com/holistics/anfra/commit/5574eeacaed08556d8f8663eb15f564d4a4c035d))
+
+### Build
+
+* **cli:** validate and embed the optional default cloud url ([13e6cb7](https://github.com/holistics/anfra/commit/13e6cb72ab8ba3fc393e788044a0daaa75bd9a6d))
+
+### Security
+
+* bump brace-expansion and handlebars (W42) ([ea31570](https://github.com/holistics/anfra/commit/ea315706601d2ba8b32b04525a34934e9c4f0932))
+* bump tsup to 9 to clear esbuild 0.27.7 (W42) ([9838b7c](https://github.com/holistics/anfra/commit/9838b7ce8fc84ca455ee9b280d7ae0ea557228de))
 ## [0.11.1](https://github.com/holistics/anfra/compare/v0.11.0...v0.11.1) (2026-10-19)
 
 ### ⚠ BREAKING CHANGES
