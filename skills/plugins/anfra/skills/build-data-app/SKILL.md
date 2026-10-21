@@ -144,17 +144,34 @@ everything, `subscribe` a render function, `execute()`, then wire controls and c
 and `execute()` again. Keep its two layers apart: the look (styles, markup, chart theme) and the
 SDK wiring.
 
-The frame is a **sandbox** (`allow-scripts` only, opaque origin). Write for it:
+The frame is a **sandbox** (`allow-scripts` only, opaque origin) under a **content policy**. Write
+for it:
 
-- Data comes only from the SDK. Don't call anfra's API yourself: the frame cannot reach it.
+- **Data comes only from the SDK.** The frame has no network of its own: `fetch`, XHR, WebSocket
+  and `sendBeacon` are blocked but to the CDNs below. Never call anfra's API or any other service
+  from the app.
+- **Libraries, styles and fonts only from cdnjs.cloudflare.com, cdn.jsdelivr.net, esm.sh,
+  unpkg.com and Google Fonts** (fonts.googleapis.com, fonts.gstatic.com), each by its `https://`
+  URL with a pinned version. A script, style or font from anywhere else is blocked. Images may come
+  from any `https://` server. When the user needs another origin (their own CDN), add it to the
+  repo's `.anfra/config.yml` under `apps.allow_origins` (`[https://cdn.acme.com]`, an origin with
+  nothing after it), and tell them anfra Cloud keeps its own list, which an Admin edits in the
+  Organization's settings.
+- **Every CDN `<script src>` and stylesheet `<link>` carries its hash:** `integrity="sha384-…"
+  crossorigin="anonymous"`, as in the example, so a library changed at its CDN fails to load
+  rather than runs beside the reader's data. jsDelivr shows a file's hash on its page; otherwise
+  `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A` gives what follows `sha384-`.
+  Load fonts from `@fontsource` on jsDelivr, as the example does, rather than Google Fonts' CSS,
+  which differs per browser and so cannot be hashed.
 - `localStorage`, `sessionStorage` and cookies throw: keep state in variables. This includes
   Basecoat's theme switcher, which stores the mode: follow `prefers-color-scheme` instead.
-- Forms, popups and navigation are blocked: use buttons and `change` listeners, never `<form>`.
+- Forms, popups, navigation, `<iframe>` and `<base>` are blocked: use buttons and `change`
+  listeners, never `<form>`.
 - **The app is its one HTML file: nothing it loads may be a file of the repo.** No relative `src`
   or `href` (`./chart.js`, `logo.png`, `../shared/app.css`). Put your own scripts and styles
   inline (`<script>`, `<style>`), images inline as SVG or a `data:` URI, and libraries and fonts
-  on a CDN by absolute `https://` URL with a pinned version. Never split an app into several files or make one app load another's, and never add
-  anything but `.html` apps under `apps/`.
+  from a CDN as above. Never split an app into several files or make one app load another's, and
+  never add anything but `.html` apps under `apps/`.
 - Every query is an `explore { }`: controls, cross-filters, sorting and date drills only apply to
   one.
 - Mark the page's structure in the HTML, as [references/api.md](references/api.md#structure)
@@ -188,8 +205,9 @@ any rounding a reader needs to trust a number.
 
 ## 5. Run and check it
 
-First check the file loads nothing by relative path: every `src`, `href` and CSS `url()` is
-`https://`, `data:` or a `#` fragment.
+First run `anfra validate` and fix every `data_app` warning it reports: a file referenced beside
+the app (every `src`, `href` and CSS `url()` must be `https://`, `data:` or a `#` fragment), or a CDN
+script or stylesheet without `integrity`.
 
 ```sh
 anfra status               # is a server already running for this repo, and where?
