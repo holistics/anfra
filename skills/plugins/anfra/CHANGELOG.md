@@ -1,3 +1,9 @@
+## [0.4.2](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.1...anfra-v0.4.2) (2026-10-21)
+
+### Bug Fixes
+
+* **plugins.anfra:** require Data Apps to be one self-contained HTML file ([133e496](https://github.com/holistics/anfra-skills/commit/133e49667ce435092d6370efe25f671da80229e3))
+
 ## [0.4.0](https://github.com/holistics/anfra-skills/compare/anfra-v0.3.2...anfra-v0.4.0) (2026-10-19)
 
 ### Features
