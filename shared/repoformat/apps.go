@@ -102,10 +102,10 @@ func CheckApp(content []byte) []AppIssue {
 				inStyle = false
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
-			name, _ := z.TagName()
+			name, more := z.TagName()
 			tag := string(name)
 			attrs := map[string]string{}
-			for more := true; more; {
+			for more {
 				var k, v []byte
 				k, v, more = z.TagAttr()
 				attrs[string(k)] = string(v)
