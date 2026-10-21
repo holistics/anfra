@@ -16,6 +16,7 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/publish"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func newPublishCmd() *cobra.Command {
@@ -97,7 +98,8 @@ func stdinPrompt(in io.Reader, out io.Writer) publish.Prompt {
 }
 
 // validateHere runs validate on this repo before a publish, as `anfra validate`
-// does; files that fail are shown, and refuse the publish.
+// does; files that fail are shown, and refuse the publish. What in its Data Apps
+// will not work in a host is shown too, and refuses nothing.
 func validateHere(ctx context.Context, errOut io.Writer) error {
 	c, ok := app.Find("validate")
 	if !ok {
@@ -108,8 +110,31 @@ func validateHere(ctx context.Context, errOut io.Writer) error {
 		return err
 	}
 	if valid, err := c.Valid(body); err != nil || valid {
+		if err == nil {
+			appWarnings(body, errOut)
+		}
 		return err
 	}
 	_ = renderTo(body, "application/json", errOut)
 	return errors.New("the repo has errors: fix them and publish again")
+}
+
+// appWarnings shows validate's Data App warnings, one line each.
+func appWarnings(body []byte, errOut io.Writer) {
+	var res struct {
+		Reports []struct {
+			Validator string `json:"validator"`
+			FilePath  string `json:"filePath"`
+			Message   string `json:"message"`
+		} `json:"reports"`
+	}
+	if jsonkit.Unmarshal(body, &res) != nil {
+		return
+	}
+	p := cliui.NewPrinter(errOut)
+	for _, r := range res.Reports {
+		if r.Validator == "data_app" {
+			p.Warn("%s, %s", r.FilePath, r.Message)
+		}
+	}
 }
