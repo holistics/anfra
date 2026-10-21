@@ -1,3 +1,12 @@
+## [0.13.2](https://github.com/holistics/anfra/compare/v0.13.1...v0.13.2) (2026-10-21)
+
+### Bug Fixes
+
+* **engine:** fix engine version when being imported ([7ab0774](https://github.com/holistics/anfra/commit/7ab0774daabf4cb01ced5428f445d6d913c09c30))
+
+### Performance Improvements
+
+* **cli:** reduce motherduck cli calls ([af754e0](https://github.com/holistics/anfra/commit/af754e02c47a245aab65acd95ef9b32e6373f979))
 ## [0.13.1](https://github.com/holistics/anfra/compare/v0.13.0...v0.13.1) (2026-10-21)
 
 ### Features
