@@ -48,7 +48,7 @@ func NameTaken(err error) bool {
 
 // CreateReadToken makes the user a read-scaling token, which reads their
 // databases and writes none, and does not expire. session is the user's own
-// token (CLI.SessionToken), which authorizes it.
+// token (CLI.Session), which authorizes it.
 func (a API) CreateReadToken(ctx context.Context, session, username, name, description string) (Token, error) {
 	body, err := jsonkit.Marshal(map[string]any{"name": name, "description": description, "token_type": "read_scaling"})
 	if err != nil {

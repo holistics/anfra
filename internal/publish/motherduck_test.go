@@ -54,9 +54,13 @@ func (f *fakeMotherDuck) Login(context.Context) error {
 	return nil
 }
 
-func (f *fakeMotherDuck) SessionToken(context.Context) (string, error) {
+func (f *fakeMotherDuck) Session(context.Context) (string, []string, error) {
 	f.calls = append(f.calls, "session")
-	return "session-token", nil
+	names := make([]string, 0, len(f.databases))
+	for n := range f.databases {
+		names = append(names, n)
+	}
+	return "session-token", names, nil
 }
 
 func (f *fakeMotherDuck) DatabaseExists(_ context.Context, name string) (bool, error) {
@@ -163,6 +167,11 @@ func TestCopiesADuckDBFileToMotherDuck(t *testing.T) {
 	errOut, err := runWith(t, dir, Options{SetOrg: url}, ask.ask, md)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Each call connects to MotherDuck anew, which takes seconds: one look at
+	// the account, one for the token and the database names, one upload.
+	if !slices.Equal(md.calls, []string{"find", "status", "session", "token anfra acme", "create n_2"}) {
+		t.Errorf("calls %v", md.calls)
 	}
 	// One question: the upload, naming the account it goes to.
 	if len(ask.asked) != 1 || ask.asked[0] != "Upload link.duckdb (4 bytes) to your MotherDuck account ada (ada's), and give the anfra org read-only access to it?" {

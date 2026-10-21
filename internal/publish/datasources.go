@@ -83,6 +83,9 @@ func offerDataSourcesToOrg(ctx context.Context, m *mdCopy, dir string, create bo
 		missing = append(missing, l)
 	}
 
+	if len(files) > 0 {
+		m.lookAhead(ctx) // done by when the DuckDB ones are asked about
+	}
 	for i, d := range missing {
 		if err := ctx.Err(); err != nil {
 			return err
