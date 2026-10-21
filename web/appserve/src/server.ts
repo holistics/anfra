@@ -6,11 +6,16 @@ import type { CatalogEntry } from './catalog';
 
 export const api = coreClient('/api');
 
-/** What the frontend starts from: the repo, who reads it, and whether it live-reloads. */
+/**
+ * What the frontend starts from: the repo, who reads it, whether it live-reloads, the origins its
+ * Data Apps may load from beyond the SDK's own, and the problems reading those settings.
+ */
 export interface Context {
   repo: { name: string };
   reader: User;
   watch: boolean;
+  allowOrigins: string[];
+  problems: AmlProblem[];
 }
 
 async function json<T> (path: string): Promise<T> {
@@ -34,13 +39,12 @@ export async function datasets (): Promise<{ datasets: Record<string, DatasetDes
   };
 }
 
-/** A Data App definition, as written, and the base its relative URLs resolve against. */
-export async function definition (path: string): Promise<{ html: string, baseHref: string }> {
+/** A Data App definition, as written. */
+export async function definition (path: string): Promise<string> {
   const file = path.split('/').map(encodeURIComponent).join('/');
   const response = await fetch(`/appserve/files/${file}`);
   if (!response.ok) throw new Error(`Couldn't read ${path}: the server answered ${response.status}.`);
-  const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : '';
-  return { html: await response.text(), baseHref: `/appserve/files/${dir}` };
+  return response.text();
 }
 
 /** Whether the server and its sidecars answer: core.status's state. */

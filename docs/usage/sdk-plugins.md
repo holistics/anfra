@@ -188,7 +188,7 @@ import { notesPlugin } from '@acme/anfra-notes';
 const host = createHost({
   plugins: [corePlugin(backend), notesPlugin(myNotesStore)],
 });
-const mounted = host.mount({ container, definition, baseHref, datasets, user });
+const mounted = host.mount({ container, definition, datasets, user });
 mounted.on('notes.viewed', ({ about, count }) => analytics.track('notes viewed', { about, count }));
 ```
 

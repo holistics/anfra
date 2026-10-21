@@ -26,10 +26,12 @@ const revision = ref(0);
 const health = ref<server.Health | 'unknown'>('unknown');
 const amlProblems = ref<server.AmlProblem[]>([]);
 const datasetProblems = ref<server.AmlProblem[]>([]);
-const problems = computed(() => [...amlProblems.value, ...datasetProblems.value]);
+const contextProblems = ref<server.AmlProblem[]>([]);
+const problems = computed(() => [...contextProblems.value, ...amlProblems.value, ...datasetProblems.value]);
 const repoName = ref<string>();
 const reader = ref<User>();
 const watching = ref(false);
+const allowOrigins = ref<string[]>([]);
 // What each Data App is provisioned with; reloaded when the AML changes.
 const datasets = ref<Record<string, DatasetDescriptor>>();
 const frameError = ref<string>();
@@ -91,11 +93,13 @@ async function loadContext (): Promise<void> {
     repoName.value = ctx.repo.name;
     reader.value = ctx.reader;
     watching.value = ctx.watch;
+    allowOrigins.value = ctx.allowOrigins;
+    contextProblems.value = ctx.problems;
   } catch { /* the status says why */ }
 }
 
 async function refreshAll (): Promise<void> {
-  await Promise.all([loadCatalog(), loadProblems(), loadDatasets()]);
+  await Promise.all([loadCatalog(), loadProblems(), loadDatasets(), loadContext()]);
   revision.value += 1;
 }
 
@@ -562,6 +566,7 @@ onBeforeUnmount(() => {
           :picking="picking"
           :datasets="datasets"
           :reader="reader"
+          :allow-origins="allowOrigins"
           @load="loading = false"
           @inspect="onInspect"
           @pick="onPick"

@@ -48,7 +48,7 @@ function backend (overrides: Partial<Backend> = {}): Backend {
 function mount (...plugins: Plugin[]) {
   const host = createHost({ plugins: [corePlugin(backend()), ...plugins], frameScript: 'x' });
   mounted = host.mount({
-    container: document.body, definition: '', baseHref: '/', datasets: { sales: salesDataset }, user: testUser,
+    container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
   });
   vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { replies.push(message as BridgeMessage); });
   return mounted;

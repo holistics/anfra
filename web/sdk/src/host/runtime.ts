@@ -13,6 +13,7 @@ import type {
 import { checkPlugin } from './plugin';
 import { builtFrameScript } from './frameScript';
 import { provisionDocument } from './provision';
+import { contentPolicy } from './policy';
 
 /** The kernel's own call: a plugin's frame body, asked for on its first use. */
 export const BODY_CALL = 'anfra.body';
@@ -24,6 +25,12 @@ export interface HostOptions {
   middleware?: readonly Middleware[];
   /** The frame script; the one built into this package unless given (tests). */
   frameScript?: string;
+  /**
+   * Origins a Data App may load scripts, styles, fonts and images from, and fetch them from, beside
+   * the policy's own CDNs: each `https://<host>[:<port>]`, nothing after it. Never a way to the
+   * network at large (docs/designs/security.md).
+   */
+  allowOrigins?: readonly string[];
 }
 
 export interface MountOptions {
@@ -31,8 +38,6 @@ export interface MountOptions {
   container: HTMLElement;
   /** The Data App definition: its HTML, as its author wrote it. */
   definition: string;
-  /** Where the definition's relative URLs resolve. */
-  baseHref: string;
   datasets: Record<string, DatasetDescriptor>;
   user: User;
   title?: string;
@@ -109,6 +114,7 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
 export function createHost (options: HostOptions): Host {
   const plugins = [...options.plugins];
   const answers = install(plugins);
+  const policy = contentPolicy(options.allowOrigins);
   const middleware = [
     ...(options.middleware ?? []),
     ...plugins.flatMap((plugin) => plugin.host?.middleware ?? []),
@@ -254,7 +260,7 @@ export function createHost (options: HostOptions): Host {
         hostOrigin: win.location.origin,
       };
       frame.srcdoc = provisionDocument(mountOptions.definition, {
-        baseHref: mountOptions.baseHref,
+        contentPolicy: policy,
         provision,
         frameScript,
         setups: plugins.flatMap((plugin) => (plugin.frame ? [{ name: plugin.name, setup: plugin.frame.setup }] : [])),

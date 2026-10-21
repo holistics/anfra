@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/shared/repoformat"
 )
 
 // FileName is the settings file, in the repo's config folder.
@@ -27,6 +28,23 @@ type Config struct {
 		// its server. Never a credential.
 		URL string `yaml:"url"`
 	} `yaml:"org"`
+	Apps struct {
+		// AllowOrigins are the origins the repo's Data Apps may load from beyond
+		// the SDK's own CDNs, as `anfra serve` runs them. Never published: an org
+		// holds its own list (AllowedOrigins checks them).
+		AllowOrigins []string `yaml:"allow_origins"`
+	} `yaml:"apps"`
+}
+
+// AllowedOrigins is apps.allow_origins, each an origin a Data App's content
+// policy can take (repoformat.CheckOrigin), or an error naming the first that is not.
+func (c Config) AllowedOrigins() ([]string, error) {
+	for _, o := range c.Apps.AllowOrigins {
+		if err := repoformat.CheckOrigin(o); err != nil {
+			return nil, fmt.Errorf("apps.allow_origins in %s/%s: %w", repo.ConfigDirName, FileName, err)
+		}
+	}
+	return c.Apps.AllowOrigins, nil
 }
 
 // Path is the settings file of the repo at dir.

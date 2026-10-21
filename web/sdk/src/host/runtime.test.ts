@@ -40,7 +40,6 @@ function mount (plugins: Plugin[], middleware: Middleware[] = []) {
   mounted = host.mount({
     container: document.body,
     definition: '<head></head><body>hi</body>',
-    baseHref: '/appserve/files/',
     datasets: { sales: salesDataset },
     user: testUser,
   });
@@ -107,7 +106,7 @@ describe('mounting', () => {
   it('refuses to mount without its frame script', () => {
     const host = createHost({ plugins: [corePlugin(backend())] });
     expect(() => host.mount({
-      container: document.body, definition: '', baseHref: '/', datasets: {}, user: testUser,
+      container: document.body, definition: '', datasets: {}, user: testUser,
     })).toThrow(/built without its frame script/);
   });
 });

@@ -173,6 +173,37 @@ func TestContext(t *testing.T) {
 	if got.Repo.Name != filepath.Base(dir) || !got.Watch || got.Reader.Timezone != "Asia/Ho_Chi_Minh" || !got.Reader.Permissions.CanViewGeneratedSQL {
 		t.Errorf("context: %+v", got)
 	}
+	if got.AllowOrigins == nil || len(got.AllowOrigins) != 0 || got.Problems == nil || len(got.Problems) != 0 {
+		t.Errorf("context without settings: origins %v, problems %v; want both empty", got.AllowOrigins, got.Problems)
+	}
+}
+
+func TestContextAllowOrigins(t *testing.T) {
+	dir := repo(t)
+	conf := filepath.Join(dir, ".anfra", "config.yml")
+	read := func() Context {
+		t.Helper()
+		var got Context
+		if err := jsonkit.UnmarshalRead(get(New(Options{RepoDir: dir}), "/appserve/context").Body, &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	if err := os.WriteFile(conf, []byte("apps:\n  allow_origins: [https://cdn.acme.com]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); len(got.AllowOrigins) != 1 || got.AllowOrigins[0] != "https://cdn.acme.com" || len(got.Problems) != 0 {
+		t.Errorf("an allowed origin: origins %v, problems %v", got.AllowOrigins, got.Problems)
+	}
+
+	// Read again on each request; an origin the policy cannot take is a problem, and adds nothing.
+	if err := os.WriteFile(conf, []byte("apps:\n  allow_origins: [https://cdn.acme.com, 'https://*.acme.com']\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); len(got.AllowOrigins) != 0 || len(got.Problems) != 1 || !strings.Contains(got.Problems[0].Message, "apps.allow_origins") {
+		t.Errorf("a bad origin: origins %v, problems %v", got.AllowOrigins, got.Problems)
+	}
 }
 
 func TestUnknownRoutes(t *testing.T) {

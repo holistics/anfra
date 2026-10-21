@@ -13,3 +13,4 @@ export {
   type HandlerContext, type HandlerCallOptions, type CallOptions, type EventCheck, type Caller, type Middleware, type MountContext,
 } from './plugin';
 export { provisionDocument, composeFrameScript, type ProvisionOptions } from './provision';
+export { contentPolicy, checkOrigin, SCRIPT_ORIGINS } from './policy';
