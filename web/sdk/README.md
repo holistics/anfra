@@ -144,7 +144,7 @@ mounted.unmount();                                       // when done
 ```
 
 A frame runs under a content policy the host puts first in its document: scripts, styles and fonts
-only from a few CDNs (cdnjs, jsDelivr, esm.sh, unpkg, Google Fonts) and the host's `allowOrigins`,
+only from jsDelivr, cdnjs and Google Fonts and the host's `allowOrigins`,
 images from any `https://` server, and no network beyond those origins: data reaches the app over
 the bridge only. A definition is one self-contained file; nothing beside it is served. See
 `contentPolicy` and docs/designs/security.md.

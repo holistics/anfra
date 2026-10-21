@@ -5,12 +5,14 @@
  * server of its choosing (docs/designs/security.md).
  */
 
-/** Where an app may load scripts from, and styles and fonts beside them. */
+/**
+ * Where an app may load scripts from, and styles and fonts beside them: two CDNs, each one more
+ * server trusted to send the files an app asked for. jsDelivr serves npm as published (hashable),
+ * cdnjs a curated set. A host adds others with `allowOrigins`.
+ */
 export const SCRIPT_ORIGINS: readonly string[] = [
   'https://cdnjs.cloudflare.com',
   'https://cdn.jsdelivr.net',
-  'https://esm.sh',
-  'https://unpkg.com',
 ];
 
 const STYLE_ORIGINS = [...SCRIPT_ORIGINS, 'https://fonts.googleapis.com'];
