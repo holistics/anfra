@@ -40,8 +40,13 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
       });
     },
   });
+  // The host is the parent, or a window of the host's origin: a host that mounts into a nested
+  // document of its own posts from its page's window, and a browser names the window whose code
+  // posted, never the frame's parent. An opaque host's origin names no one.
+  const fromHost = (event: MessageEvent) => event.source === win.parent
+    || (!!provision.hostOrigin && provision.hostOrigin !== 'null' && event.origin === provision.hostOrigin);
   win.addEventListener('message', (event: MessageEvent) => {
-    if (event.source !== win.parent) return;
+    if (!fromHost(event)) return;
     endpoint.receive(event.data as BridgeMessage);
   });
 
