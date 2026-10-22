@@ -1,3 +1,8 @@
+## [0.13.3](https://github.com/holistics/anfra/compare/v0.13.2...v0.13.3) (2026-10-22)
+
+### Bug Fixes
+
+* **sdk.app:** take a host's messages from its origin, not only the parent ([9525df4](https://github.com/holistics/anfra/commit/9525df44ddb11efe587503c50308657b6291f331))
 ## [0.13.2](https://github.com/holistics/anfra/compare/v0.13.1...v0.13.2) (2026-10-21)
 
 ### Bug Fixes
