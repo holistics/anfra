@@ -20,17 +20,20 @@ import (
 // two tools of discovery, list_operations and describe_operation, the same
 // levels HTTP serves at /ops.
 //
-// Each session gets the tools its caller may call: the server for a session is
-// built from the request that opens it, through Request and Visible. Named
-// tools keep a client's per-tool approval and the read-only hints; one generic
-// "run" tool would make approval all-or-nothing.
+// Each session gets the tools its caller may call, through Request and Visible.
+// Stateless hosts rebuild these from every HTTP request, so credentials and
+// visibility are never captured across requests. Named tools keep a client's
+// per-tool approval and the read-only hints.
 type MCP[Call any] struct {
 	// Name and Version name the server to clients.
 	Name, Version string
+	// Stateless resolves the caller and tools for every HTTP request. No MCP
+	// session ID conveys authority. The default preserves stateful local serving.
+	Stateless bool
 	// Codes are what the server serves: a failed tool's body is its code's.
 	Codes httpkit.Codes
-	// Request reads what the session's ops are admitted from, from the request
-	// that opens it: its credential. Required.
+	// Request reads the caller's credential from each request in stateless mode,
+	// or the session-opening request otherwise. Required.
 	Request func(r *http.Request) (Call, error)
 	// Visible reports which ops the caller may call (HTTP.Visible). Nil: every op.
 	Visible func(ctx context.Context, r Call, ops []Meta) ([]bool, error)
@@ -44,6 +47,38 @@ type MCP[Call any] struct {
 func (m MCP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 	if m.Request == nil {
 		panic("apikit: MCP.Request is required")
+	}
+	if m.Stateless {
+		// Huma's schema registry is mutable during generation. Populate it
+		// before concurrent requests, including discovery of output/events.
+		for _, o := range reg.Ops() {
+			if !o.Meta().MCP {
+				continue
+			}
+			o.InSchema(rt)
+			rt.Schema(o.OutType())
+			for _, event := range o.EventTypes() {
+				rt.Schema(event)
+			}
+		}
+		type mcpServerContextKey struct{}
+		h := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+			return r.Context().Value(mcpServerContextKey{}).(*mcp.Server)
+		}, &mcp.StreamableHTTPOptions{Stateless: true})
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			req, err := m.Request(r)
+			if err != nil {
+				httpkit.WriteError(w, r, err)
+				return
+			}
+			s, err := m.server(r.Context(), rt, reg, req)
+			if err != nil {
+				httpkit.WriteError(w, r, err)
+				return
+			}
+			ctx := context.WithValue(r.Context(), mcpServerContextKey{}, s)
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		req, err := m.Request(r)
