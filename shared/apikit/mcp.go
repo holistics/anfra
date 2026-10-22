@@ -61,6 +61,10 @@ func (m MCP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 				rt.Schema(event)
 			}
 		}
+		type mcpServerContextKey struct{}
+		h := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+			return r.Context().Value(mcpServerContextKey{}).(*mcp.Server)
+		}, &mcp.StreamableHTTPOptions{Stateless: true})
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			req, err := m.Request(r)
 			if err != nil {
@@ -72,7 +76,8 @@ func (m MCP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 				httpkit.WriteError(w, r, err)
 				return
 			}
-			mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{Stateless: true}).ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), mcpServerContextKey{}, s)
+			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
