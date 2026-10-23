@@ -60,4 +60,6 @@ Build metadata leaves the version's order alone, and a release never carries any
 
 `anfra update` replaces the running binary with the latest release, and anfra notices newer ones in the background: a cached check at most daily, a notice on an interactive terminal, an announcement from `serve` (`internal/update`, `cmd/anfra/update.go`). `ANFRA_NO_UPDATE_NOTIFIER` turns the notices off; `ANFRA_AUTO_UPDATE` applies updates in the background instead.
 
+After an update, or with `--check` before one, `anfra update` prints what the new version brings: the changelog of each release since the running one, the skipped ones included, read from the releases' notes on GitHub (`internal/update/notes.go`). It shows the newest three and links to the rest. The notes are best-effort: when they can't be fetched, it prints a link to the releases instead, and the update still succeeds.
+
 None of this applies to a build from source: it was built on purpose, and a release would replace it with something else. It is never told of updates, and `anfra update` refuses to replace it.
