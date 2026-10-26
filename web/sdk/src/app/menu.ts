@@ -40,8 +40,10 @@ export interface PopoverInput {
   /** The side of the anchor it opens on: `right` unless given; another when that one has no room. */
   side?: PopoverSide;
   mount: (root: ShadowRoot) => void | (() => void);
-  /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its own close do. */
+  /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its close button do. */
   dismiss?: 'outside';
+  /** false: no close button, for content that draws its own (and calls `close`). */
+  closeButton?: boolean;
   onClose?: () => void;
 }
 
@@ -232,7 +234,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
         rect = () => ({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
       }
       return body.popover(root(), {
-        anchor: rect, side: input.side, mount: input.mount, dismiss: input.dismiss, onClose,
+        anchor: rect, side: input.side, mount: input.mount, dismiss: input.dismiss, closeButton: input.closeButton, onClose,
       });
     }),
   };
