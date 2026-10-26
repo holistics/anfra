@@ -17,6 +17,9 @@ export { OVERLAY_ID } from './overlay';
 export { Mapping, CrossFilter, type Edge } from './mapping';
 export { bootstrap, type PluginSetup } from './bootstrap';
 export { type FrameKernel } from './kernel';
+export {
+  type FrameMenuItem, type ModalInput, type PopoverInput, type Opened,
+} from './menu';
 export type {
   AnfraPlugins, PluginApi, PluginMembers, PluginName,
 } from './pluginTypes';

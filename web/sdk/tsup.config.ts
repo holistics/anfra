@@ -34,6 +34,8 @@ async function buildScript (entry: string, globalName: string) {
  *   `__anfraPlugin`), injected after the kernel.
  * - `anfra-sdk:body/<plugin>`: a plugin's frame body (`src/plugins/<plugin>/body.ts`, as
  *   `__anfraBody`), sent to a frame on its first use, so frames that never use it don't carry it.
+ * - `anfra-sdk:ui`: the kernel's own body (`src/app/ui/body.ts`): the menu, the modal and the
+ *   popover, sent on a frame's first use of one.
  */
 const scripts: Plugin = {
   name: 'anfra-sdk-scripts',
@@ -41,6 +43,7 @@ const scripts: Plugin = {
     b.onResolve({ filter: /^anfra-sdk:/ }, (args) => ({ path: args.path, namespace: 'anfra-sdk' }));
     b.onLoad({ filter: /.*/, namespace: 'anfra-sdk' }, (args) => {
       if (args.path === 'anfra-sdk:frame-script') return buildScript('src/app/frame.ts', '__anfraKernel');
+      if (args.path === 'anfra-sdk:ui') return buildScript('src/app/ui/body.ts', '__anfraBody');
       const match = /^anfra-sdk:(setup|body)\/([a-z][a-z0-9-]*)$/.exec(args.path);
       if (!match) throw new Error(`No such script: ${args.path}`);
       const [, kind, plugin] = match;

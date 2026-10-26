@@ -12,6 +12,7 @@ import {
 } from './validation';
 import { buildExportRequest, runQuery, type SubmitContext } from './execution/submitQuery';
 import { deriveSelection } from './selection';
+import { openRowsMenu } from './menu';
 import { applyExtensions, type EntityExtensions } from './extensions';
 import { markersFor } from './structure';
 import { overlayFor, scrollTo } from './overlay';
@@ -467,6 +468,22 @@ export class App extends Observable implements AppContext {
     });
 
     return byField;
+  }
+
+  menu (query: Query, event: Event, rows: readonly Row[], fields?: readonly string[]): boolean {
+    if (this._queries.get(query.name) !== query) {
+      throw new ValidationError(`Query '${query.name}' belongs to a different app.`, query.name);
+    }
+    const derived = deriveSelection(query, rows, fields, this.drillTransformations(query));
+    return openRowsMenu(event, {
+      kind: 'rows',
+      app: this.index,
+      query: query.name,
+      rows: [...rows],
+      fields: derived?.fields ? [...derived.fields] : [],
+      conditions: derived?.conditions ? [...derived.conditions] : [],
+      ...(derived?.expression ? { expression: derived.expression } : {}),
+    });
   }
 
   select (query: Query, rows: readonly Row[], fields?: readonly string[]): void {

@@ -12,6 +12,7 @@ import type { Backend, BackendQueryResult } from '../common/types';
 import type { App } from './app';
 import { Control } from './controls';
 import { installInspection } from './inspection';
+import { installContentUi } from './menu';
 import { themeLayer } from './layer';
 import { resolveTheme } from '../common/theme';
 import { eventShortcut, normalizeShortcut } from '../common/shortcut';
@@ -89,6 +90,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   // and its theme, for the plugin layer and `Anfra.theme`.
   const own = createKernel('anfra', shared, { Query, Control });
   installInspection(own);
+  shared.contentUi = installContentUi(own);
   own.on('theme', (theme: unknown) => {
     const resolved = resolveTheme(theme);
     themeLayer(win.document, resolved);
