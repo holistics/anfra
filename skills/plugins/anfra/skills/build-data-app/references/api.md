@@ -13,6 +13,17 @@ import, no setup, no await.
   Under `anfra serve` it is the machine's user, with every permission and the machine's time zone.
   The permissions are rendering hints only: the backend re-checks every query as this reader.
 - `Anfra.plugins`: the plugins the host installed. See [Plugins](#plugins).
+- `Anfra.theme`: the host's theme, `{ scheme, tokens, subscribe(listener) }`. `scheme` is `'light'`
+  or `'dark'`, `'light'` until the host says; `tokens` holds the host's colours and fonts by name
+  (`color-bg`, `color-fg`, `color-muted`, `color-border`, `color-accent`, `color-danger`, `radius`,
+  `font`, `font-mono`). Nothing is applied to the page: to follow the host's light or dark mode,
+  set it yourself and again on each change:
+
+  ```js
+  const follow = (theme) => { document.documentElement.dataset.theme = theme.scheme; };
+  follow(Anfra.theme);
+  Anfra.theme.subscribe(follow);
+  ```
 
 ## Plugins
 
