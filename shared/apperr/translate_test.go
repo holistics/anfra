@@ -149,7 +149,7 @@ func TestTranslateKeepsTheLibrarysError(t *testing.T) {
 	if ds, ok := apperr.DetailsOf(err, libQueryInvalid); !ok || len(ds) != 1 || ds[0].Line != 2 {
 		t.Errorf("DetailsOf beneath a translation = %v, %v", ds, ok)
 	}
-	want := "host.query_invalid: The query does not parse.: lib.compile(name=sales): lib.parse: lib.query_unparsed: The query does not parse."
+	want := "host.query_invalid: lib.compile(name=sales): lib.parse: lib.query_unparsed: The query does not parse."
 	if log := err.Error(); log != want {
 		t.Errorf("log =\n  %s\nwant\n  %s", log, want)
 	}
