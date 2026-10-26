@@ -2,27 +2,25 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { coreApiBackend } from '@holistics/anfra-sdk/api';
 import type {
-  DatasetDescriptor, InspectedApp, Rendering, RenderRequest, User,
+  DatasetDescriptor, Rendering, RenderRequest, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { createHost, type Host, type MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
   corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin,
 } from '@holistics/anfra-sdk/plugins';
-import type { InspectedStructure, LocateTarget } from './inspect';
 import { api, definition } from './server';
 
 const props = defineProps<{
   path: string,
-  inspecting: boolean,
-  picking: boolean,
   datasets: Record<string, DatasetDescriptor>,
   reader: User,
   allowOrigins: string[],
+  theme: ThemeInput,
 }>();
 const emit = defineEmits<{
   load: [],
-  inspect: [apps: InspectedApp[], structure: InspectedStructure],
-  pick: [node: string | null],
+  // The host runtime and this Data App's mount: the shell draws the plugins' commands and the panel on them.
+  mounted: [host: Host, mounted: MountedDataApp],
   error: [message: string],
 }>();
 
@@ -43,6 +41,7 @@ function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: str
       runtime: createHost({
         plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin()],
         allowOrigins,
+        theme: props.theme,
       }),
     };
   }
@@ -55,41 +54,30 @@ onMounted(async () => {
   try {
     const html = await definition(props.path);
     if (!container.value) return;
-    mounted = hostFor(props.datasets, props.allowOrigins).mount({
+    const runtime = hostFor(props.datasets, props.allowOrigins);
+    runtime.setTheme(props.theme);
+    mounted = runtime.mount({
       container: container.value,
       definition: html,
       datasets: props.datasets,
       user: props.reader,
       title: 'Data App',
     });
-    // The panel's state, as App.vue holds it for now: the snapshot while open, and a pick.
-    const panel = mounted.panel;
-    let picking = panel.picking;
-    panel.subscribe(() => {
-      if (panel.snapshot) emit('inspect', panel.snapshot.apps, panel.snapshot.structure);
-      if (picking && !panel.picking) emit('pick', panel.selection);
-      picking = panel.picking;
-    });
     mounted.frame.classList.add('data-app');
     mounted.frame.dataset.testid = 'data-app-frame';
     mounted.frame.addEventListener('load', () => emit('load'));
-    if (props.inspecting) panel.show();
-    if (props.picking) panel.pick(true);
+    emit('mounted', runtime, mounted);
   } catch (err) {
     emit('error', (err as Error).message);
   }
 });
 
-watch(() => props.inspecting, (open) => { if (open) mounted?.panel.show(); else mounted?.panel.hide(); });
-watch(() => props.picking, (on) => { if (mounted && mounted.panel.picking !== on) mounted.panel.pick(on); });
+watch(() => props.theme, (theme) => { host?.runtime.setTheme(theme); });
 
 onBeforeUnmount(() => mounted?.unmount());
 
-// The inspect panel and the toolbar reach the page through here: highlight a node, scroll to one,
-// or to an entity wherever it is drawn; and render the page or a node, which the frame saves.
+// The toolbar renders the page, which the frame saves.
 defineExpose({
-  highlight: (node: string | null) => { mounted?.panel.highlight(node); },
-  locate: (target: LocateTarget) => { mounted?.panel.locate(target); },
   render: (request: RenderRequest): Promise<Rendering> => (mounted
     ? mounted.call<Rendering>('render.draw', request)
     : Promise.reject(new Error('The Data App is not loaded yet.'))),
