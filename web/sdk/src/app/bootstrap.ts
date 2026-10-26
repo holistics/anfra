@@ -14,6 +14,7 @@ import { Control } from './controls';
 import { installInspection } from './inspection';
 import { themeLayer } from './layer';
 import { resolveTheme } from '../common/theme';
+import { eventShortcut, normalizeShortcut } from '../common/shortcut';
 import { createKernel, type FrameKernel, type KernelShared } from './kernel';
 import { Query } from './query';
 import { createSdk } from './sdk';
@@ -92,6 +93,22 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
     const resolved = resolveTheme(theme);
     themeLayer(win.document, resolved);
     instance.theme.set(resolved);
+  });
+  // The host's commands' shortcuts, forwarded while focus is in the frame. The page keeps a key it
+  // handled itself (preventDefault), and nothing listens until the host registers one.
+  let shortcuts = new Set<string>();
+  let listening = false;
+  own.on('shortcuts', (list: unknown) => {
+    shortcuts = new Set((Array.isArray(list) ? list : []).map(normalizeShortcut).filter((s): s is string => !!s));
+    if (listening || !shortcuts.size) return;
+    listening = true;
+    win.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return;
+      const shortcut = eventShortcut(event);
+      if (!shortcuts.has(shortcut)) return;
+      event.preventDefault();
+      own.emit('shortcut', shortcut);
+    });
   });
   for (const [name, setup] of setups) {
     if (typeof setup !== 'function') continue;

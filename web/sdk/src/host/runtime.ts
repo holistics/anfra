@@ -16,6 +16,7 @@ import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
+import { eventShortcut, normalizeShortcut } from '../common/shortcut';
 import {
   commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
@@ -80,6 +81,11 @@ export interface MountedDataApp {
   run: (id: string) => Promise<unknown>;
   /** Each time commands' state may have changed: a plugin said so, or the panel changed. */
   onCommandsChange: (listener: () => void) => () => void;
+  /**
+   * Run the command whose shortcut a key event on the host's own page makes, if any: whether one
+   * did. Keys pressed while focus is in the frame are forwarded and run without this.
+   */
+  handleKeydown: (event: KeyboardEvent) => boolean;
   /** Stop answering the frame, and remove it. */
   unmount: () => void;
 }
@@ -175,6 +181,10 @@ export function createHost (options: HostOptions): Host {
   let theme = resolveTheme(options.theme);
   const themeListeners = new Set<(next: Theme) => void>();
   const tabIds = tabs.map((tab) => tab.id);
+  const byShortcut = new Map(commands.flatMap((command) => {
+    const shortcut = normalizeShortcut(command.shortcut);
+    return shortcut ? [[shortcut, command.id] as const] : [];
+  }));
   let nextMount = 1;
 
   /**
@@ -283,6 +293,7 @@ export function createHost (options: HostOptions): Host {
           // The panel's own, from the kernel.
           if (name === 'anfra.snapshot') { panelState.snapshot(payload); return; }
           if (name === 'anfra.picked') { panelState.picked(payload); return; }
+          if (name === 'anfra.shortcut') { runShortcut(payload); return; }
           // Only what a plugin declared, as its check let it through: the frame is untrusted.
           const check = events.get(name);
           if (!check || !listeners.has(name)) return;
@@ -337,6 +348,13 @@ export function createHost (options: HostOptions): Host {
       const sendTheme = (next: Theme) => context.emit('anfra.theme', next);
       themeListeners.add(sendTheme);
       const stateContext = { mount: context, panel: panelState.panel };
+      /** Run the command a shortcut names, for a key in the frame or the host's page: whether one did. */
+      const runShortcut = (shortcut: unknown): boolean => {
+        const id = typeof shortcut === 'string' ? byShortcut.get(shortcut) : undefined;
+        if (!id) return false;
+        runCommand(id).catch(() => { /* a disabled command says why in its state, not here */ });
+        return true;
+      };
       const commandOf = (id: string) => {
         const command = commands.find((candidate) => candidate.id === id);
         if (!command) throw new Error(`No command '${id}' is installed.`);
@@ -348,6 +366,7 @@ export function createHost (options: HostOptions): Host {
         const message = event.data as BridgeMessage | undefined;
         if (message?.type === 'anfra:ready') {
           context.emit('anfra.theme', theme);
+          if (byShortcut.size) context.emit('anfra.shortcuts', [...byShortcut.keys()]);
           panelState.ready();
           readyListeners.forEach((listener) => listener());
           return;
@@ -374,6 +393,19 @@ export function createHost (options: HostOptions): Host {
         setups: plugins.flatMap((plugin) => (plugin.frame ? [{ name: plugin.name, setup: plugin.frame.setup }] : [])),
       });
 
+      /** Run a command for this frame, unless its state says it can't run. */
+      const runCommand = async (id: string): Promise<unknown> => {
+        const command = commandOf(id);
+        const { disabled } = commandState(command, stateContext);
+        if (disabled) throw new PermissionError(disabled);
+        if ('tab' in command.run) {
+          if (command.run.target !== undefined) panelState.panel.show(command.run.tab, command.run.target);
+          else panelState.panel.toggle(command.run.tab);
+          return null;
+        }
+        return call(command.run.call, command.run.request ?? null, callersOf(command.plugin), context);
+      };
+
       return {
         frame,
         call: (name, request, callOptions) => call(name, request, [{ kind: 'host' }], context, callOptions) as never,
@@ -381,18 +413,14 @@ export function createHost (options: HostOptions): Host {
         on: context.on,
         panel: panelState.panel,
         commandState: (id) => commandState(commandOf(id), stateContext),
-        async run (id) {
-          const command = commandOf(id);
-          const { disabled } = commandState(command, stateContext);
-          if (disabled) throw new PermissionError(disabled);
-          if ('tab' in command.run) {
-            if (command.run.target !== undefined) panelState.panel.show(command.run.tab, command.run.target);
-            else panelState.panel.toggle(command.run.tab);
-            return null;
-          }
-          return call(command.run.call, command.run.request ?? null, callersOf(command.plugin), context);
-        },
+        run: (id) => runCommand(id),
         onCommandsChange: (listener) => listen(commandListeners, listener),
+        handleKeydown (event) {
+          if (event.defaultPrevented || event.repeat) return false;
+          if (!runShortcut(eventShortcut(event))) return false;
+          event.preventDefault();
+          return true;
+        },
         unmount () {
           themeListeners.delete(sendTheme);
           commandListeners.clear();

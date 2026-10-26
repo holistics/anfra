@@ -83,4 +83,21 @@ describe('inspection, the frame\'s side of the panel', () => {
     const layer = document.querySelector<HTMLElement>('[data-anfra-layer]')!;
     expect(layer.style.getPropertyValue('--anfra-color-accent')).toBe('#ff0000');
   });
+
+  it('forwards the host\'s shortcuts while focus is in the frame, unless the page handled the key', async () => {
+    const f = frame();
+    f.emit('anfra.shortcuts', ['alt+shift+i']);
+    await flush();
+    const press = (handled: boolean) => {
+      const event = new KeyboardEvent('keydown', { code: 'KeyI', key: 'ˆ', altKey: true, shiftKey: true, cancelable: true });
+      if (handled) event.preventDefault();
+      window.dispatchEvent(event);
+      return event;
+    };
+    expect(press(false).defaultPrevented).toBe(true);
+    press(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX', key: 'x' }));
+    await flush();
+    expect(f.events.filter((e) => e.name === 'anfra.shortcut')).toEqual([{ name: 'anfra.shortcut', payload: 'alt+shift+i' }]);
+  });
 });
