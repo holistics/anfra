@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
+  allApps, filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from './catalog';
 
 const tree: CatalogEntry[] = [
@@ -50,4 +50,11 @@ describe('filterEntries', () => {
 it('lists the folders leading to a Data App', () => {
   expect(folderPaths('sales/deep/x.html')).toEqual(['sales', 'sales/deep']);
   expect(folderPaths('x.html')).toEqual([]);
+});
+
+it('lists every Data App in the tree, in its order', () => {
+  expect(allApps([
+    { kind: 'app', path: 'a.html', label: 'A' },
+    { kind: 'folder', path: 'f', name: 'f', children: [{ kind: 'app', path: 'f/b.html', label: 'B' }] },
+  ]).map((app) => app.label)).toEqual(['A', 'B']);
 });
