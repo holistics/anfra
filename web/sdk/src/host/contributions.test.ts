@@ -168,3 +168,45 @@ describe('the theme', () => {
     ]);
   });
 });
+
+describe('shortcuts', () => {
+  const plugin = () => definePlugin({
+    name: 'notes',
+    version: '1',
+    host: {
+      calls: { save: () => 'saved' },
+      commands: [{ id: 'save', title: 'Save', shortcut: 'Alt+Shift+S', run: { call: 'notes.save' } }],
+    },
+  });
+
+  it('tells a ready frame which to forward, and runs the command it forwards', async () => {
+    const save = vi.fn(() => 'saved');
+    const p = plugin();
+    p.host!.calls!.save = save;
+    const runtime = createHost({ plugins: [core(), p], frameScript: 'x' });
+    mounted = runtime.mount({
+      container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
+    });
+    const posted: { name?: string, payload?: unknown }[] = [];
+    vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { posted.push(message as never); });
+    const fromFrame = (data: unknown) => window.dispatchEvent(new MessageEvent('message', { data, source: mounted!.frame.contentWindow }));
+    fromFrame({ type: 'anfra:ready' });
+    expect(posted.find((message) => message.name === 'anfra.shortcuts')?.payload).toEqual(['alt+shift+s']);
+    fromFrame({ type: 'anfra:event', name: 'anfra.shortcut', payload: 'alt+shift+s' });
+    fromFrame({ type: 'anfra:event', name: 'anfra.shortcut', payload: 'alt+shift+x' });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches a key on the host\'s page by its physical key, and leaves a handled one alone', () => {
+    const { mounted: app } = host([plugin()]);
+    const key = (init: KeyboardEventInit) => new KeyboardEvent('keydown', { cancelable: true, ...init });
+    const event = key({ code: 'KeyS', key: 'Í', altKey: true, shiftKey: true });
+    expect(app.handleKeydown(event)).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(app.handleKeydown(key({ code: 'KeyS', key: 's', altKey: true }))).toBe(false);
+    const handled = key({ code: 'KeyS', key: 's', altKey: true, shiftKey: true });
+    handled.preventDefault();
+    expect(app.handleKeydown(handled)).toBe(false);
+  });
+});
