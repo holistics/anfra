@@ -9,7 +9,7 @@ import type { StructureNode } from '../common/types';
 import type { FrameKernel } from './kernel';
 import { layerRoot } from './layer';
 import { ATTR } from './structure';
-import type { Rect, UiBody } from './ui/body';
+import type { PopoverSide, Rect, UiBody } from './ui/body';
 
 /** An entry a plugin's frame half adds to the menu, for one kind of target. */
 export interface FrameMenuItem {
@@ -37,6 +37,8 @@ export interface ModalInput {
 export interface PopoverInput {
   /** A node (a target's, kept in view as the page scrolls), or a point in the viewport. */
   anchor: NodeTarget | { x: number, y: number };
+  /** The side of the anchor it opens on: `right` unless given; another when that one has no room. */
+  side?: PopoverSide;
   mount: (root: ShadowRoot) => void | (() => void);
   /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its own close do. */
   dismiss?: 'outside';
@@ -230,7 +232,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
         rect = () => ({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
       }
       return body.popover(root(), {
-        anchor: rect, mount: input.mount, dismiss: input.dismiss, onClose,
+        anchor: rect, side: input.side, mount: input.mount, dismiss: input.dismiss, onClose,
       });
     }),
   };

@@ -20,6 +20,7 @@ export { type FrameKernel } from './kernel';
 export {
   type FrameMenuItem, type ModalInput, type PopoverInput, type Opened,
 } from './menu';
+export { type PopoverSide } from './ui/body';
 export type {
   AnfraPlugins, PluginApi, PluginMembers, PluginName,
 } from './pluginTypes';
