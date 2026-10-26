@@ -26,6 +26,11 @@ export function findApp (entries: CatalogEntry[], urlPath: string): DataAppEntry
   return undefined;
 }
 
+/** Every Data App in the tree, depth first, in the tree's order. */
+export function allApps (entries: CatalogEntry[]): DataAppEntry[] {
+  return entries.flatMap((entry) => (entry.kind === 'app' ? [entry] : allApps(entry.children)));
+}
+
 const EXTENSION = /\.html$/i;
 
 /** The Data App URL of a Data App path: `sales/overview.html` -> `/apps/sales/overview`. */
