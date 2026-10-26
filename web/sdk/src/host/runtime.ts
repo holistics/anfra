@@ -14,6 +14,7 @@ import { checkPlugin } from './plugin';
 import { builtFrameScript } from './frameScript';
 import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
+import { createPanel, type Panel } from './panel';
 
 /** The kernel's own call: a plugin's frame body, asked for on its first use. */
 export const BODY_CALL = 'anfra.body';
@@ -54,6 +55,8 @@ export interface MountedDataApp {
   emit: (name: string, payload?: unknown) => void;
   /** Listen to the frame's events, by full name. Returns the function that stops listening. */
   on: (name: string, listener: (payload: any) => void) => () => void; // eslint-disable-line @typescript-eslint/no-explicit-any
+  /** This Data App's panel: the host's devtools over it, with the tabs plugins add. */
+  panel: Panel;
   /** Stop answering the frame, and remove it. */
   unmount: () => void;
 }
@@ -225,6 +228,9 @@ export function createHost (options: HostOptions): Host {
       endpoint = createEndpoint(post, {
         answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
         event: (name, payload) => {
+          // The panel's own, from the kernel.
+          if (name === 'anfra.snapshot') { panelState.snapshot(payload); return; }
+          if (name === 'anfra.picked') { panelState.picked(payload); return; }
           // Only what a plugin declared, as its check let it through: the frame is untrusted.
           const check = events.get(name);
           if (!check || !listeners.has(name)) return;
@@ -237,10 +243,13 @@ export function createHost (options: HostOptions): Host {
         },
       });
 
+      const panelState = createPanel(context, { tabs: () => [] });
+
       const onMessage = (event: MessageEvent) => {
         if (event.source !== frame.contentWindow) return;
         const message = event.data as BridgeMessage | undefined;
         if (message?.type === 'anfra:ready') {
+          panelState.ready();
           readyListeners.forEach((listener) => listener());
           return;
         }
@@ -271,7 +280,9 @@ export function createHost (options: HostOptions): Host {
         call: (name, request, callOptions) => call(name, request, [{ kind: 'host' }], context, callOptions) as never,
         emit: context.emit,
         on: context.on,
+        panel: panelState.panel,
         unmount () {
+          panelState.dispose();
           win.removeEventListener('message', onMessage);
           endpoint.close(new ValidationError('The Data App was unmounted before the call finished.'));
           disposers.forEach((dispose) => dispose());
