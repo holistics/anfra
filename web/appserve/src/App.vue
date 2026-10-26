@@ -211,8 +211,9 @@ function onAppMounted (host: Host, mounted: MountedDataApp): void {
 }
 const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? false));
 // The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones (such as
-// render's downloads) in the More menu. The palette has them all.
-const chromeCommands = computed(() => runtime.value?.commands ?? []);
+// render's downloads) in the More menu; the palette has them all. Not those for the menu on the
+// page (`target`), which the frame shows there.
+const chromeCommands = computed(() => runtime.value?.commands.filter((command) => !command.target) ?? []);
 const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow'));
 const overflowCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'overflow'));
 const moreOpen = ref(false);
