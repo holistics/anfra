@@ -163,6 +163,27 @@ Draw only in `layer()`. It is a shadow root, so the page's styles don't reach yo
 
 Put code too big to load in every frame, such as a renderer or a chart library, in a body: a module whose default export is what `kernel.body()` resolves to. Call `kernel.body()` when the code is first needed.
 
+### A menu entry, a modal, a popover
+
+UI about something on the page (a block, a point of a chart) goes in the menu the runtime draws there, rather than in the definition's markup:
+
+```ts
+kernel.menuItem({
+  id: 'add',
+  label: 'Add a note',
+  target: 'node', // a right-click on a marked block; 'rows' for the definition's query.menu
+  when: (target) => target.kind === 'node' && target.node.kind === 'block',
+  run: async (target) => {
+    await kernel.popover({
+      anchor: target,
+      mount: (root) => drawNoteForm(root, target),
+    });
+  },
+});
+```
+
+`kernel.modal({ title, size, mount })` and `kernel.popover({ anchor, mount, dismiss })` draw the frame around your content (`mount` gets its own shadow root, on the host's `--anfra-*` tokens) and close the other one open. `when` only decides what shows: the definition can call anything a frame half can, so anything that must hold is checked on the host, in the calls `run` makes.
+
 ### Build it
 
 A frame half reaches the frame as script source. Build it with `buildFrameHalf` (needs `esbuild` installed), and give the result to the plugin as `frame`:
