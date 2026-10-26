@@ -65,9 +65,10 @@ const STYLES = `
 .surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, #18181b); background: var(--anfra-color-bg, #fff);
   border: 1px solid var(--anfra-color-border, #e4e4e7); border-radius: var(--anfra-radius, 8px);
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%), 0 1px 3px rgb(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
-.menu { min-width: 180px; max-width: 320px; padding: 4px; }
+.menu { min-width: 180px; max-width: 320px; padding: 4px; outline: none; }
 .menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.menu button:hover:not([aria-disabled="true"]), .menu button:focus-visible { outline: none; background: color-mix(in srgb, var(--anfra-color-accent, #5b3df5) 14%, transparent); }
+/* One highlight, as a native menu has: the focused entry, which the pointer and the arrows both move. */
+.menu button:focus { outline: none; background: color-mix(in srgb, var(--anfra-color-accent, #5b3df5) 14%, transparent); }
 .menu button[aria-disabled="true"] { color: var(--anfra-color-muted, #71717a); cursor: default; }
 .menu .reason { display: block; font-size: 11px; color: var(--anfra-color-muted, #71717a); }
 .menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--anfra-color-border, #e4e4e7); }
@@ -197,15 +198,30 @@ function menu (root: ShadowRoot, options: MenuOptions): () => void {
   const { left, top } = place(win, rect, options.x, options.y, { left: options.x, top: options.y });
   list.style.left = `${left}px`;
   list.style.top = `${top}px`;
-  buttons.find((button) => !button.hasAttribute('aria-disabled'))?.focus();
+  // The menu has focus, so its keys work, with no entry highlighted until the pointer or an arrow
+  // picks one; a disabled entry never takes the highlight.
+  list.tabIndex = -1;
+  list.focus();
+  const enabled = buttons.filter((button) => !button.hasAttribute('aria-disabled'));
+  list.addEventListener('pointermove', (event) => {
+    const button = event.composedPath().find((target): target is HTMLButtonElement => buttons.includes(target as HTMLButtonElement));
+    if (button && enabled.includes(button)) {
+      if (root.activeElement !== button) button.focus();
+    } else if (root.activeElement !== list) {
+      list.focus();
+    }
+  });
+  list.addEventListener('pointerleave', () => list.focus());
 
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); close(); return; }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     event.preventDefault();
-    const at = buttons.indexOf(root.activeElement as HTMLButtonElement);
-    const next = buttons[(at + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length];
-    next?.focus();
+    if (!enabled.length) return;
+    const at = enabled.indexOf(root.activeElement as HTMLButtonElement);
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    const next = at === -1 ? (step === 1 ? 0 : enabled.length - 1) : (at + step + enabled.length) % enabled.length;
+    enabled[next].focus();
   };
   // A press outside the menu, a scroll, a resize or the window losing focus: the menu goes, as a
   // native one does.
