@@ -9,7 +9,43 @@ import type {
   AppDeclaration, Backend, DatasetDescriptor, SdkEnvironment, SdkFeatures, User,
 } from '../common/types';
 import type { PluginMembers, PluginName } from './pluginTypes';
+import { DEFAULT_TOKENS, type Theme, type ThemeScheme, type ThemeTokens } from '../common/theme';
 import { version } from '../../package.json';
+
+/**
+ * The host's theme, as `Anfra.theme`: its scheme and tokens, for a definition that wants to follow
+ * its host's light or dark mode. Nothing is applied to the page unasked: read them, or use the
+ * `--anfra-*` names in your own CSS after setting them yourself.
+ */
+export class HostTheme {
+  private current: Theme = { scheme: 'light', tokens: DEFAULT_TOKENS.light };
+
+  private readonly listeners = new Set<(theme: Theme) => void>();
+
+  /** `light` or `dark`; `light` until the host says. */
+  get scheme (): ThemeScheme {
+    return this.current.scheme;
+  }
+
+  /** Every token by name (`color-bg`, `font`): each is the CSS custom property `--anfra-<name>`. */
+  get tokens (): Readonly<ThemeTokens> {
+    return this.current.tokens;
+  }
+
+  /** Each time the host's theme changes. Returns the function that stops listening. */
+  subscribe (listener: (theme: Theme) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  /** @internal The kernel's, on the host's word. */
+  set (theme: Theme): void {
+    this.current = theme;
+    this.listeners.forEach((listener) => {
+      try { listener(theme); } catch { /* one listener must not stop the others */ }
+    });
+  }
+}
 
 /** The plugins a host installed, as `Anfra.plugins`. */
 export class InstalledPlugins {
@@ -89,6 +125,9 @@ export class Sdk {
    * before using an optional one.
    */
   readonly plugins: InstalledPlugins;
+
+  /** The host's theme: `light` or `dark`, and its tokens. */
+  readonly theme = new HostTheme();
 
   /** The kernel's gates (`dateDrill`), as the environment gave them. */
   private readonly gates: Readonly<SdkFeatures>;

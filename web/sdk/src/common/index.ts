@@ -8,6 +8,9 @@ export {
 } from './errors';
 export { FILTER_AGGREGATIONS } from './aggregations';
 export { PROVISION_ELEMENT_ID } from './bridge';
+export {
+  THEME_TOKENS, DEFAULT_TOKENS, resolveTheme, type Theme, type ThemeInput, type ThemeScheme, type ThemeToken, type ThemeTokens,
+} from './theme';
 export type {
   BridgeError, BridgeMessage, FrameMessage, HostMessage, PluginInfo, Provision,
 } from './bridge';

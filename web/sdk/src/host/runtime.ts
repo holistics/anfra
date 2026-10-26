@@ -15,6 +15,7 @@ import { builtFrameScript } from './frameScript';
 import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
+import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
 import {
   commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
@@ -46,6 +47,8 @@ export interface HostOptions {
    * can draw its own UI on them instead.
    */
   contributions?: (contribution: Contribution) => boolean;
+  /** The theme plugin UI follows: tabs, and frame halves in the plugin layer. Light defaults unless given. */
+  theme?: ThemeInput;
 }
 
 export interface MountOptions {
@@ -88,6 +91,10 @@ export interface Host {
   readonly commands: readonly Command[];
   /** Every tab for a mount's panel, in order, as the filter kept them. */
   readonly tabs: readonly Tab[];
+  /** The theme plugin UI follows now, every token resolved. */
+  readonly theme: Theme;
+  /** Change the theme: every tab and every mounted frame's plugin layer follow it. */
+  setTheme: (theme: ThemeInput) => void;
   /** Make a call as the host page, about no frame. */
   call: <T = unknown>(name: string, request?: unknown, options?: CallOptions) => Promise<T>;
   /**
@@ -165,6 +172,8 @@ export function createHost (options: HostOptions): Host {
     .map(([name, check]) => [`${plugin.name}.${name}`, check] as const)));
   const infos: PluginInfo[] = plugins.map(({ name, version }) => ({ name, version }));
   const { commands, tabs } = installContributions(plugins, options, options.contributions);
+  let theme = resolveTheme(options.theme);
+  const themeListeners = new Set<(next: Theme) => void>();
   const tabIds = tabs.map((tab) => tab.id);
   let nextMount = 1;
 
@@ -221,6 +230,13 @@ export function createHost (options: HostOptions): Host {
     plugins: infos,
     commands,
     tabs,
+    get theme () { return theme; },
+    setTheme (input) {
+      theme = resolveTheme(input);
+      themeListeners.forEach((listener) => {
+        try { listener(theme); } catch { /* one listener must not stop the others */ }
+      });
+    },
     call: (name, request, callOptions) => call(name, request, [{ kind: 'host' }], undefined, callOptions) as never,
     mount (mountOptions) {
       const frameScript = options.frameScript ?? builtFrameScript();
@@ -285,6 +301,9 @@ export function createHost (options: HostOptions): Host {
           const tab = tabs.find((candidate) => candidate.id === id);
           if (!tab) throw new Error(`No tab '${id}' is installed.`);
           const root = element.shadowRoot ?? element.attachShadow({ mode: 'open' });
+          applyTheme(element.style, theme);
+          const themed = (next: Theme) => applyTheme(element.style, next);
+          themeListeners.add(themed);
           let disposed = false;
           let cleanup: void | (() => void);
           const done = (result: void | (() => void)) => {
@@ -297,6 +316,7 @@ export function createHost (options: HostOptions): Host {
               panel,
               plugins: infos,
               document: doc,
+              get theme () { return theme; },
               call: (name, request, callOptions) => call(name, request, callersOf(tab.plugin), context, callOptions) as never,
             });
             if (result instanceof Promise) result.then(done, (err: unknown) => win.console?.error(`anfra: tab '${id}' failed to draw:`, err));
@@ -307,12 +327,15 @@ export function createHost (options: HostOptions): Host {
           return () => {
             if (disposed) return;
             disposed = true;
+            themeListeners.delete(themed);
             try { if (typeof cleanup === 'function') cleanup(); } catch { /* the tab is going anyway */ }
             root.replaceChildren();
           };
         },
       });
       panelState.panel.subscribe(commandsChanged);
+      const sendTheme = (next: Theme) => context.emit('anfra.theme', next);
+      themeListeners.add(sendTheme);
       const stateContext = { mount: context, panel: panelState.panel };
       const commandOf = (id: string) => {
         const command = commands.find((candidate) => candidate.id === id);
@@ -324,6 +347,7 @@ export function createHost (options: HostOptions): Host {
         if (event.source !== frame.contentWindow) return;
         const message = event.data as BridgeMessage | undefined;
         if (message?.type === 'anfra:ready') {
+          context.emit('anfra.theme', theme);
           panelState.ready();
           readyListeners.forEach((listener) => listener());
           return;
@@ -370,6 +394,7 @@ export function createHost (options: HostOptions): Host {
         },
         onCommandsChange: (listener) => listen(commandListeners, listener),
         unmount () {
+          themeListeners.delete(sendTheme);
           commandListeners.clear();
           panelState.dispose();
           win.removeEventListener('message', onMessage);
