@@ -99,15 +99,27 @@ export function renderPlugin (options: RenderPluginOptions = {}): Plugin {
             }
             state.saving = true;
             state.saves.push(now);
+            mount.commandsChanged();
             try {
               await saveBlob(mount.document, request);
             } finally {
               state.saving = false;
+              mount.commandsChanged();
             }
             return null;
           },
         },
       },
+      // The whole page as a picture, for the host's menus and palette. What a run answers (the
+      // rendering, with the images left blank) is the host's to tell the reader.
+      commands: (['png', 'pdf'] as const).map((format) => ({
+        id: format,
+        title: `Download as ${format.toUpperCase()}`,
+        icon: 'download',
+        placement: 'overflow' as const,
+        run: { call: 'render.draw', request: { format } },
+        state: ({ mount }: { mount: MountContext }) => (states.get(mount)?.saving ? { disabled: 'Saving a picture…' } : {}),
+      })),
     },
     frame: { setup, ...(renderer ? { body: renderer } : {}) },
   });
