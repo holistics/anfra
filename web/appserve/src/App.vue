@@ -8,7 +8,7 @@ import Icon from './Icon.vue';
 import PluginPanel from './PluginPanel.vue';
 import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
 import type {
-  DatasetDescriptor, RenderFormat, RenderRequest, ThemeInput, User,
+  DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
@@ -210,23 +210,21 @@ function onAppMounted (host: Host, mounted: MountedDataApp): void {
   panelVersion.value += 1;
 }
 const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? false));
-// The commands for the toolbar: a plugin's `overflow` ones stay out of it.
-const toolbarCommands = computed(() => runtime.value?.commands.filter((command) => command.placement !== 'overflow') ?? []);
+// The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones (such as
+// render's downloads) in the More menu. The palette has them all.
+const chromeCommands = computed(() => runtime.value?.commands ?? []);
+const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow'));
+const overflowCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'overflow'));
+const moreOpen = ref(false);
 function commandState (command: Command): { pressed?: boolean, disabled?: string } {
   void panelVersion.value;
   return app.value ? app.value.commandState(command.id) : { disabled: 'No Data App is open' };
 }
 const ICONS = ['inspect', 'download', 'table', 'copy', 'reload'] as const;
 const commandIcon = (command: Command) => (ICONS as readonly string[]).includes(command.icon ?? '') ? command.icon as typeof ICONS[number] : 'app';
-function runCommand (command: Command): void {
-  app.value?.run(command.id).catch((err: Error) => showToast(`Couldn't run ${command.title}: ${err.message}`, true));
-}
-const frame = ref<InstanceType<typeof DataAppFrame>>();
 
-// Renderings: the whole page from the toolbar, a node from the inspect panel. The frame saves the
-// file; a failure shows for a few seconds, out of the page's way.
-const downloadOpen = ref(false);
-const rendering = ref(false);
+// A command's failure shows for a few seconds, out of the page's way; so does what a rendering
+// left out, so a blank in the saved picture isn't a surprise.
 const toast = ref<{ text: string, error: boolean }>();
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function showToast (text: string, error: boolean): void {
@@ -234,24 +232,22 @@ function showToast (text: string, error: boolean): void {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.value = undefined; }, 8000);
 }
-async function render (request: RenderRequest): Promise<void> {
-  downloadOpen.value = false;
-  if (!frame.value || rendering.value) return;
-  rendering.value = true;
+async function runCommand (command: Command): Promise<void> {
+  moreOpen.value = false;
+  if (!app.value) return;
   try {
-    const { omitted } = await frame.value.render(request);
-    // Saved, but not all of it: say what is missing, so a blank isn't a surprise.
-    if (omitted.length) {
-      showToast(`Saved, with ${omitted.length === 1 ? 'an image' : `${omitted.length} images`} left blank: `
-        + `${omitted.join(', ')} ${omitted.length === 1 ? 'sends' : 'send'} no CORS headers.`, false);
+    const result = await app.value.run(command.id);
+    if ('call' in command.run && command.run.call === 'render.draw') {
+      const { omitted } = result as Rendering;
+      if (omitted.length) {
+        showToast(`Saved, with ${omitted.length === 1 ? 'an image' : `${omitted.length} images`} left blank: `
+          + `${omitted.join(', ')} ${omitted.length === 1 ? 'sends' : 'send'} no CORS headers.`, false);
+      }
     }
   } catch (err) {
-    showToast(`Couldn't render: ${(err as Error).message}`, true);
-  } finally {
-    rendering.value = false;
+    showToast(`Couldn't run ${command.title}: ${(err as Error).message}`, true);
   }
 }
-const renderPage = (format: RenderFormat) => render({ format });
 
 const WIDTH_KEY = 'anfra-appserve:inspect-width';
 const MIN_WIDTH = 280;
@@ -344,7 +340,7 @@ const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 const PALETTE_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 const paletteEntries = computed<PaletteEntry[]>(() => {
   const noApp = selected.value ? undefined : 'Open a Data App first';
-  const plugins = toolbarCommands.value.map((command) => {
+  const plugins = chromeCommands.value.map((command) => {
     const state = commandState(command);
     return {
       id: `command:${command.id}`, title: command.title, group: 'Data App', shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
@@ -353,8 +349,6 @@ const paletteEntries = computed<PaletteEntry[]>(() => {
   return [
     ...plugins,
     { id: 'reload', title: 'Reload Data App', group: 'Data App', disabled: noApp },
-    { id: 'png', title: 'Download as PNG', group: 'Data App', disabled: noApp ?? (rendering.value ? 'Rendering…' : undefined) },
-    { id: 'pdf', title: 'Download as PDF', group: 'Data App', disabled: noApp ?? (rendering.value ? 'Rendering…' : undefined) },
     { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View' },
     { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View' },
     ...allApps(entries.value).map((entry) => ({
@@ -365,13 +359,11 @@ const paletteEntries = computed<PaletteEntry[]>(() => {
 function runPaletteEntry (id: string): void {
   if (id.startsWith('command:')) {
     const command = runtime.value?.commands.find((candidate) => `command:${candidate.id}` === id);
-    if (command) runCommand(command);
+    if (command) void runCommand(command);
   } else if (id.startsWith('app:')) {
     select(id.slice('app:'.length));
   } else if (id === 'reload') {
     reload();
-  } else if (id === 'png' || id === 'pdf') {
-    void renderPage(id);
   } else if (id === 'sidebar') {
     sidebarOpen.value = !sidebarOpen.value;
   } else if (id === 'theme') {
@@ -409,6 +401,7 @@ function onSearchKeydown (event: KeyboardEvent): void {
 
 function onDocumentClick (event: MouseEvent): void {
   if (!(event.target as HTMLElement).closest('.problems')) problemsOpen.value = false;
+  if (!(event.target as HTMLElement).closest('.more')) moreOpen.value = false;
 }
 
 function onPopState (): void {
@@ -602,23 +595,32 @@ onBeforeUnmount(() => {
           >
             <Icon :name="commandIcon(command)" />
           </button>
-          <div class="download">
+          <div v-if="overflowCommands.length" class="more">
             <button
               type="button"
               class="icon-button"
-              aria-label="Download Data App"
-              title="Download as PNG or PDF"
-              data-testid="download"
-              :aria-expanded="downloadOpen"
-              :aria-busy="rendering"
-              :disabled="!selected || rendering"
-              @click="downloadOpen = !downloadOpen"
+              aria-label="More actions"
+              title="More actions"
+              data-testid="more"
+              :aria-expanded="moreOpen"
+              :disabled="!selected"
+              @click="moreOpen = !moreOpen"
             >
-              <Icon name="download" />
+              <Icon name="more" />
             </button>
-            <div v-if="downloadOpen" class="menu" role="menu" data-testid="download-menu">
-              <button type="button" role="menuitem" data-testid="download-page-png" @click="renderPage('png')">PNG image</button>
-              <button type="button" role="menuitem" data-testid="download-page-pdf" @click="renderPage('pdf')">PDF</button>
+            <div v-if="moreOpen" class="menu" role="menu" data-testid="more-menu">
+              <button
+                v-for="command in overflowCommands"
+                :key="command.id"
+                type="button"
+                role="menuitem"
+                :title="commandState(command).disabled"
+                :disabled="!!commandState(command).disabled"
+                :data-testid="`command-${command.id}`"
+                @click="runCommand(command)"
+              >
+                {{ command.title }}
+              </button>
             </div>
           </div>
           <button
@@ -640,7 +642,6 @@ onBeforeUnmount(() => {
         <p v-if="selected && frameError" class="notice error" role="alert" data-testid="frame-error">{{ frameError }}</p>
         <DataAppFrame
           v-else-if="selected && datasets && reader"
-          ref="frame"
           :key="`${selected.path}#${revision}`"
           :path="selected.path"
           :datasets="datasets"

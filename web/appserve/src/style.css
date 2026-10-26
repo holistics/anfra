@@ -359,8 +359,7 @@ code { font-size: 12px; color: var(--muted); }
 
 .popover .hint { display: block; color: var(--muted); }
 
-.download { position: relative; }
-.download .icon-button[aria-busy="true"] { cursor: progress; opacity: 0.6; }
+.more { position: relative; }
 .menu {
   position: absolute;
   top: 36px;
@@ -375,8 +374,9 @@ code { font-size: 12px; color: var(--muted); }
   background: var(--bg);
   box-shadow: var(--shadow);
 }
-.menu button { padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: inherit; text-align: left; }
+.menu button { padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: inherit; text-align: left; white-space: nowrap; }
 .menu button:hover { background: var(--hover); }
+.menu button:disabled { color: var(--muted); cursor: default; background: none; }
 
 .toast {
   position: fixed;
