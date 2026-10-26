@@ -122,6 +122,26 @@ describe('render', () => {
     type: 'anfra:call', id, name: 'render.save', request: { blob, filename },
   });
 
+  it('offers the page as a PNG and a PDF, each drawn by the frame for the host', async () => {
+    const app = mount(renderPlugin({ renderer: 'R' }));
+    const host = createHost({ plugins: [corePlugin(backend()), renderPlugin({ renderer: 'R' })], frameScript: 'x' });
+    expect(host.commands.map((command) => [command.id, command.title, command.placement])).toEqual([
+      ['render.png', 'Download as PNG', 'overflow'], ['render.pdf', 'Download as PDF', 'overflow'],
+    ]);
+    app.run('render.pdf').catch(() => {}); // the frame never answers: it is unmounted after
+    await answered(1);
+    expect(replies[0]).toMatchObject({ type: 'anfra:call', name: 'render.draw', request: { format: 'pdf' } });
+  });
+
+  it('shows its commands as disabled while a picture saves', async () => {
+    const app = mount(renderPlugin({ renderer: 'R' }));
+    const states: unknown[] = [];
+    app.onCommandsChange(() => states.push(app.commandState('render.png')));
+    save(1, png(), 'Sales.png');
+    await answered(1);
+    expect(states).toEqual([{ disabled: 'Saving a picture…' }, {}]);
+  });
+
   it('serves the renderer as its frame body, and saves the file the frame makes', async () => {
     mount(renderPlugin({ renderer: 'RENDERER' }));
     fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.body', request: { plugin: 'render' } });

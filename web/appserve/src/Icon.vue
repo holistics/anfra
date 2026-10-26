@@ -18,6 +18,7 @@ const PATHS = {
   check: 'M5 12l5 5 9-10',
   table: 'M4 5h16v14H4z M4 10h16 M4 15h16 M10 10v9',
   download: 'M12 4v11 M7 10l5 5 5-5 M5 20h14',
+  more: 'M6 12h.01 M12 12h.01 M18 12h.01',
   command: 'M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z',
 } as const;
 

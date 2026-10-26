@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { coreApiBackend } from '@holistics/anfra-sdk/api';
 import type {
-  DatasetDescriptor, Rendering, RenderRequest, ThemeInput, User,
+  DatasetDescriptor, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { createHost, type Host, type MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
@@ -76,12 +76,6 @@ watch(() => props.theme, (theme) => { host?.runtime.setTheme(theme); });
 
 onBeforeUnmount(() => mounted?.unmount());
 
-// The toolbar renders the page, which the frame saves.
-defineExpose({
-  render: (request: RenderRequest): Promise<Rendering> => (mounted
-    ? mounted.call<Rendering>('render.draw', request)
-    : Promise.reject(new Error('The Data App is not loaded yet.'))),
-});
 </script>
 
 <template>
