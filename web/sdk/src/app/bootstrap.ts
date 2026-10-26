@@ -12,6 +12,8 @@ import type { Backend, BackendQueryResult } from '../common/types';
 import type { App } from './app';
 import { Control } from './controls';
 import { installInspection } from './inspection';
+import { themeLayer } from './layer';
+import { resolveTheme } from '../common/theme';
 import { createKernel, type FrameKernel, type KernelShared } from './kernel';
 import { Query } from './query';
 import { createSdk } from './sdk';
@@ -82,8 +84,15 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   const shared: KernelShared = {
     window: win, sdk: instance, endpoint, handlers, listeners, appListeners,
   };
-  // The kernel's own part: what every host's panel needs of the frame, whatever plugins it installs.
-  installInspection(createKernel('anfra', shared, { Query, Control }));
+  // The kernel's own part, whatever plugins the host installs: what its panel needs of the frame,
+  // and its theme, for the plugin layer and `Anfra.theme`.
+  const own = createKernel('anfra', shared, { Query, Control });
+  installInspection(own);
+  own.on('theme', (theme: unknown) => {
+    const resolved = resolveTheme(theme);
+    themeLayer(win.document, resolved);
+    instance.theme.set(resolved);
+  });
   for (const [name, setup] of setups) {
     if (typeof setup !== 'function') continue;
     try {
