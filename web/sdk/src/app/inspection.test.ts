@@ -69,4 +69,18 @@ describe('inspection, the frame\'s side of the panel', () => {
 
     expect(f.events.filter((e) => e.name === 'anfra.picked').map((e) => e.payload)).toEqual([{ node: expect.any(String) }, { node: null }]);
   });
+
+  it('gives the plugin layer and Anfra.theme the host\'s theme', async () => {
+    const f = frame();
+    const heard: string[] = [];
+    f.anfra.theme.subscribe((theme: { scheme: string }) => heard.push(theme.scheme));
+    expect(f.anfra.theme.scheme).toBe('light');
+    f.emit('anfra.theme', { scheme: 'dark', tokens: { 'color-accent': '#ff0000' } });
+    await flush();
+    expect(f.anfra.theme.tokens['color-accent']).toBe('#ff0000');
+    expect(heard).toEqual(['dark']);
+    layerRoot(document, 'notes');
+    const layer = document.querySelector<HTMLElement>('[data-anfra-layer]')!;
+    expect(layer.style.getPropertyValue('--anfra-color-accent')).toBe('#ff0000');
+  });
 });

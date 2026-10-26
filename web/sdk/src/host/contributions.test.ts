@@ -132,3 +132,39 @@ describe('contributions', () => {
     expect(element.shadowRoot?.innerHTML).toBe('');
   });
 });
+
+describe('the theme', () => {
+  it('sets its tokens on a tab\'s element, and follows each change', () => {
+    const plugin = definePlugin({
+      name: 'notes',
+      version: '1',
+      host: { tabs: [{ id: 'list', title: 'Notes', mount: () => {} }] },
+    });
+    const { runtime, mounted: app } = host([plugin], { theme: { scheme: 'dark', tokens: { 'color-bg': '#101010' } } });
+    const element = document.createElement('div');
+    const unmount = app.panel.mountTab('notes.list', element);
+    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe('#101010');
+    expect(element.style.getPropertyValue('color-scheme')).toBe('dark');
+    runtime.setTheme({ scheme: 'light' });
+    expect(runtime.theme.scheme).toBe('light');
+    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe('#ffffff');
+    unmount();
+    runtime.setTheme({ scheme: 'dark' });
+    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe('#ffffff');
+  });
+
+  it('sends the frame its theme each time it is ready, and on each change', () => {
+    const runtime = createHost({ plugins: [core()], frameScript: 'x', theme: { scheme: 'dark' } });
+    mounted = runtime.mount({
+      container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
+    });
+    const posted: unknown[] = [];
+    vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { posted.push(message); });
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'anfra:ready' }, source: mounted.frame.contentWindow }));
+    runtime.setTheme({ scheme: 'light' });
+    expect(posted).toEqual([
+      { type: 'anfra:event', name: 'anfra.theme', payload: expect.objectContaining({ scheme: 'dark' }) },
+      { type: 'anfra:event', name: 'anfra.theme', payload: expect.objectContaining({ scheme: 'light' }) },
+    ]);
+  });
+});

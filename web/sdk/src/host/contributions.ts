@@ -7,6 +7,7 @@
 import type { PluginInfo } from '../common/bridge';
 import type { CallOptions, MountContext } from './plugin';
 import type { Panel } from './panel';
+import type { Theme } from '../common/theme';
 
 /** What running a command does: make a call, or open the panel at a tab (toggling it). */
 export type CommandRun =
@@ -59,6 +60,11 @@ export interface TabContext {
   readonly plugins: readonly PluginInfo[];
   /** The host page's document. */
   readonly document: Document;
+  /**
+   * The host's theme now. Its tokens are also set as `--anfra-*` custom properties on the tab's
+   * element, which its shadow root inherits, and follow each change: style with `var(--anfra-color-bg)`.
+   */
+  readonly theme: Theme;
   /** Make a call about this mount, through the pipeline, as the tab's plugin (or the host). */
   call: <T = unknown>(name: string, request?: unknown, options?: CallOptions) => Promise<T>;
 }

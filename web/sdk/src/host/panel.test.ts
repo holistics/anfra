@@ -25,7 +25,11 @@ function mount () {
   mounted = host.mount({
     container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
   });
-  vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { replies.push(message as BridgeMessage); });
+  // The panel's messages only: a ready frame is sent the theme too.
+  vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => {
+    const reply = message as BridgeMessage;
+    if (reply.type !== 'anfra:event' || reply.name !== 'anfra.theme') replies.push(reply);
+  });
   return mounted.panel;
 }
 

@@ -143,7 +143,7 @@ export interface Plugin {
 const NAME = /^[a-z][a-z0-9-]*$/;
 
 /** Names reserved for the kernel: its own calls, and members of `Anfra` and its entities. */
-export const RESERVED_NAMES: ReadonlySet<string> = new Set(['anfra', 'plugins']);
+export const RESERVED_NAMES: ReadonlySet<string> = new Set(['anfra', 'plugins', 'theme']);
 
 const MEMBER = /^[A-Za-z][A-Za-z0-9]*$/;
 
