@@ -11,6 +11,7 @@ import { TransportError } from '../common/errors';
 import type { Backend, BackendQueryResult } from '../common/types';
 import type { App } from './app';
 import { Control } from './controls';
+import { installInspection } from './inspection';
 import { createKernel, type FrameKernel, type KernelShared } from './kernel';
 import { Query } from './query';
 import { createSdk } from './sdk';
@@ -81,6 +82,8 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   const shared: KernelShared = {
     window: win, sdk: instance, endpoint, handlers, listeners, appListeners,
   };
+  // The kernel's own part: what every host's panel needs of the frame, whatever plugins it installs.
+  installInspection(createKernel('anfra', shared, { Query, Control }));
   for (const [name, setup] of setups) {
     if (typeof setup !== 'function') continue;
     try {

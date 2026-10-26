@@ -62,32 +62,34 @@ onMounted(async () => {
       user: props.reader,
       title: 'Data App',
     });
-    mounted.on('inspect.snapshot', ({ apps, structure }: { apps: InspectedApp[], structure: InspectedStructure }) => {
-      if (props.inspecting) emit('inspect', apps, structure);
-    });
-    mounted.on('inspect.picked', ({ node }: { node: string | null }) => {
-      if (props.inspecting) emit('pick', node);
+    // The panel's state, as App.vue holds it for now: the snapshot while open, and a pick.
+    const panel = mounted.panel;
+    let picking = panel.picking;
+    panel.subscribe(() => {
+      if (panel.snapshot) emit('inspect', panel.snapshot.apps, panel.snapshot.structure);
+      if (picking && !panel.picking) emit('pick', panel.selection);
+      picking = panel.picking;
     });
     mounted.frame.classList.add('data-app');
     mounted.frame.dataset.testid = 'data-app-frame';
     mounted.frame.addEventListener('load', () => emit('load'));
-    void mounted.call('inspect.watch', props.inspecting);
-    if (props.picking) void mounted.call('inspect.pick', true);
+    if (props.inspecting) panel.show();
+    if (props.picking) panel.pick(true);
   } catch (err) {
     emit('error', (err as Error).message);
   }
 });
 
-watch(() => props.inspecting, (open) => { void mounted?.call('inspect.watch', open); });
-watch(() => props.picking, (on) => { void mounted?.call('inspect.pick', on); });
+watch(() => props.inspecting, (open) => { if (open) mounted?.panel.show(); else mounted?.panel.hide(); });
+watch(() => props.picking, (on) => { if (mounted && mounted.panel.picking !== on) mounted.panel.pick(on); });
 
 onBeforeUnmount(() => mounted?.unmount());
 
 // The inspect panel and the toolbar reach the page through here: highlight a node, scroll to one,
 // or to an entity wherever it is drawn; and render the page or a node, which the frame saves.
 defineExpose({
-  highlight: (node: string | null) => { void mounted?.call('inspect.highlight', node); },
-  locate: (target: LocateTarget) => { void mounted?.call('inspect.locate', target); },
+  highlight: (node: string | null) => { mounted?.panel.highlight(node); },
+  locate: (target: LocateTarget) => { mounted?.panel.locate(target); },
   render: (request: RenderRequest): Promise<Rendering> => (mounted
     ? mounted.call<Rendering>('render.draw', request)
     : Promise.reject(new Error('The Data App is not loaded yet.'))),
