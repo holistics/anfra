@@ -37,9 +37,14 @@ export interface ModalOptions {
   onClose: () => void;
 }
 
+/** Which side of its anchor a popover opens on. */
+export type PopoverSide = 'right' | 'left' | 'bottom' | 'top';
+
 export interface PopoverOptions {
   /** Where it points, now: read again on each scroll and resize; undefined once the anchor is gone. */
   anchor: () => Rect | undefined;
+  /** The side it opens on when it fits there; else the opposite one, then any that fits. */
+  side?: PopoverSide;
   mount: (root: ShadowRoot) => void | (() => void);
   /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its own close do. */
   dismiss?: 'outside';
@@ -91,6 +96,34 @@ function place (win: Window, size: { width: number, height: number }, x: number,
   if (left + size.width > width - MARGIN) left = flipFrom ? flipFrom.left - size.width : width - MARGIN - size.width;
   if (top + size.height > height - MARGIN) top = flipFrom ? flipFrom.top - size.height : height - MARGIN - size.height;
   return { left: Math.max(MARGIN, left), top: Math.max(MARGIN, top) };
+}
+
+const OPPOSITE: Record<PopoverSide, PopoverSide> = {
+  right: 'left', left: 'right', bottom: 'top', top: 'bottom',
+};
+
+/**
+ * Where a box goes beside an anchor: on `side` if it fits there, else the opposite side, else
+ * whichever side does, else `side`; then shifted along the anchor to stay in the viewport.
+ */
+function beside (win: Window, size: { width: number, height: number }, anchor: Rect, side: PopoverSide): { left: number, top: number } {
+  const { width, height } = viewport(win);
+  const at = (where: PopoverSide) => {
+    if (where === 'right') return { left: anchor.x + anchor.width + GAP, top: anchor.y };
+    if (where === 'left') return { left: anchor.x - size.width - GAP, top: anchor.y };
+    if (where === 'bottom') return { left: anchor.x, top: anchor.y + anchor.height + GAP };
+    return { left: anchor.x, top: anchor.y - size.height - GAP };
+  };
+  const fits = (where: PopoverSide) => {
+    const { left, top } = at(where);
+    return where === 'right' || where === 'left'
+      ? left >= MARGIN && left + size.width <= width - MARGIN
+      : top >= MARGIN && top + size.height <= height - MARGIN;
+  };
+  const order: PopoverSide[] = [side, OPPOSITE[side], ...(['right', 'bottom', 'left', 'top'] as const).filter((where) => where !== side && where !== OPPOSITE[side])];
+  const { left, top } = at(order.find(fits) ?? side);
+  const clamp = (value: number, extent: number, room: number) => Math.max(MARGIN, Math.min(value, room - MARGIN - extent));
+  return { left: clamp(left, size.width, width), top: clamp(top, size.height, height) };
 }
 
 /** A part of the UI: its stylesheet and a container in the kernel's root, removed by the returned function. */
@@ -224,8 +257,11 @@ function modal (root: ShadowRoot, options: ModalOptions): () => void {
   const layer = root.host.parentElement;
   const inerted = [...doc.body.children].filter((element) => element !== layer && !element.hasAttribute('inert'));
   inerted.forEach((element) => element.setAttribute('inert', ''));
-  const overflow = doc.documentElement.style.overflow;
-  doc.documentElement.style.overflow = 'hidden';
+  // The page stops scrolling, and keeps its scrollbar's room so hiding the bar moves nothing.
+  const html = doc.documentElement;
+  const saved = { overflow: html.style.overflow, gutter: html.style.getPropertyValue('scrollbar-gutter') };
+  if (win.innerWidth > html.clientWidth) html.style.setProperty('scrollbar-gutter', 'stable');
+  html.style.overflow = 'hidden';
   const unmount = mountContent(win, options.mount, content.root);
   closeButton.focus();
 
@@ -240,7 +276,9 @@ function modal (root: ShadowRoot, options: ModalOptions): () => void {
     doc.removeEventListener('keydown', onKey, true);
     try { unmount(); } catch { /* it is going anyway */ }
     inerted.forEach((element) => element.removeAttribute('inert'));
-    doc.documentElement.style.overflow = overflow;
+    html.style.overflow = saved.overflow;
+    if (saved.gutter) html.style.setProperty('scrollbar-gutter', saved.gutter);
+    else html.style.removeProperty('scrollbar-gutter');
     remove();
     options.onClose();
   }
@@ -259,7 +297,7 @@ function popover (root: ShadowRoot, options: PopoverOptions): () => void {
   container.append(box);
   const unmount = mountContent(win, options.mount, content.root);
 
-  // Beside the anchor: below it, else above; shifted to stay in the viewport; following it as the
+  // Beside the anchor, on its side (right unless asked) or the next that fits; following it as the
   // page scrolls, at most once a frame.
   let pending = false;
   const position = () => {
@@ -267,7 +305,7 @@ function popover (root: ShadowRoot, options: PopoverOptions): () => void {
     const anchor = options.anchor();
     if (!anchor) { close(); return; }
     const size = box.getBoundingClientRect();
-    const { left, top } = place(win, size, anchor.x, anchor.y + anchor.height + GAP, { left: anchor.x + anchor.width, top: anchor.y - GAP });
+    const { left, top } = beside(win, size, anchor, options.side ?? 'right');
     box.style.left = `${left}px`;
     box.style.top = `${top}px`;
   };

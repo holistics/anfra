@@ -139,7 +139,10 @@ describe('the modal and the popover', () => {
     expect(dialog.querySelector<HTMLElement>('.content')!.shadowRoot!.innerHTML).toBe('<table></table>');
     expect(document.getElementById('outside')!.hasAttribute('inert')).toBe(true);
     expect(document.documentElement.style.overflow).toBe('hidden');
+    // The scrollbar's room stays, so the page doesn't shift.
+    expect(document.documentElement.style.getPropertyValue('scrollbar-gutter')).toBe('stable');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(document.documentElement.style.getPropertyValue('scrollbar-gutter')).toBe('');
     expect(onClose).toHaveBeenCalled();
     expect(menuRoot()!.querySelector('[role="dialog"]')).toBeNull();
     expect(document.getElementById('outside')!.hasAttribute('inert')).toBe(false);
@@ -166,5 +169,19 @@ describe('the modal and the popover', () => {
     await kernel.popover({ anchor: { x: 0, y: 0 }, mount: () => {}, dismiss: 'outside' });
     document.getElementById('outside')!.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
     expect(menuRoot()!.querySelector('.popover')).toBeNull();
+  });
+
+  it('opens a popover on its anchor\'s right, else on the side that has room', async () => {
+    let kernel!: FrameKernel;
+    frame((k) => { kernel = k; });
+    const box = () => menuRoot()!.querySelector<HTMLElement>('.popover')!.style;
+    // A point anchor: right of it by default, on the left when asked.
+    await kernel.popover({ anchor: { x: 100, y: 100 }, mount: () => {} });
+    expect([box().left, box().top]).toEqual(['106px', '100px']);
+    await kernel.popover({ anchor: { x: 100, y: 100 }, side: 'left', mount: () => {} });
+    expect(box().left).toBe('94px');
+    // No room on the right of the viewport's edge: the left instead.
+    await kernel.popover({ anchor: { x: window.innerWidth - 4, y: 100 }, mount: () => {} });
+    expect(box().left).toBe(`${window.innerWidth - 4 - 6}px`);
   });
 });
