@@ -9,6 +9,9 @@ export {
 export { FILTER_AGGREGATIONS } from './aggregations';
 export { PROVISION_ELEMENT_ID } from './bridge';
 export {
+  checkTarget, type MenuEntry, type MenuTarget, type MenuTargetKind, type NodeTarget, type RowsTarget, type TargetRect,
+} from './menu';
+export {
   THEME_TOKENS, DEFAULT_TOKENS, resolveTheme, type Theme, type ThemeInput, type ThemeScheme, type ThemeToken, type ThemeTokens,
 } from './theme';
 export type {

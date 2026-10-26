@@ -1,0 +1,305 @@
+/**
+ * The kernel's UI body: the menu, the modal and the popover plugins draw content UI with, in the
+ * plugin layer, on the host's `--anfra-*` tokens. Sent to a frame the first time it opens one
+ * (`anfra.body` for `anfra`), so a frame that never does carries none of it. The kernel hands it its
+ * shadow root, and keeps one open at a time.
+ */
+
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface MenuEntry {
+  id: string;
+  label: string;
+  /** Why it can't run: shown, and the entry can't be picked. */
+  disabled?: string;
+}
+
+export interface MenuOptions {
+  /** Where the pointer was, in the viewport. */
+  x: number;
+  y: number;
+  /** Entries in groups: a line between each. */
+  groups: MenuEntry[][];
+  onPick: (id: string) => void;
+  onClose: () => void;
+}
+
+export interface ModalOptions {
+  title: string;
+  size?: 'sm' | 'md' | 'lg' | 'full';
+  /** Draw the modal's content into its own shadow root; what it returns runs on close. */
+  mount: (root: ShadowRoot) => void | (() => void);
+  onClose: () => void;
+}
+
+export interface PopoverOptions {
+  /** Where it points, now: read again on each scroll and resize; undefined once the anchor is gone. */
+  anchor: () => Rect | undefined;
+  mount: (root: ShadowRoot) => void | (() => void);
+  /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its own close do. */
+  dismiss?: 'outside';
+  onClose: () => void;
+}
+
+export interface UiBody {
+  menu: (root: ShadowRoot, options: MenuOptions) => () => void;
+  modal: (root: ShadowRoot, options: ModalOptions) => () => void;
+  popover: (root: ShadowRoot, options: PopoverOptions) => () => void;
+}
+
+const STYLES = `
+:host { all: initial; }
+* { box-sizing: border-box; }
+.surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, #18181b); background: var(--anfra-color-bg, #fff);
+  border: 1px solid var(--anfra-color-border, #e4e4e7); border-radius: var(--anfra-radius, 8px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%), 0 1px 3px rgb(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
+.menu { min-width: 180px; max-width: 320px; padding: 4px; }
+.menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.menu button:hover:not([aria-disabled="true"]), .menu button:focus-visible { outline: none; background: color-mix(in srgb, var(--anfra-color-accent, #5b3df5) 14%, transparent); }
+.menu button[aria-disabled="true"] { color: var(--anfra-color-muted, #71717a); cursor: default; }
+.menu .reason { display: block; font-size: 11px; color: var(--anfra-color-muted, #71717a); }
+.menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--anfra-color-border, #e4e4e7); }
+.backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 40%); }
+.modal { display: flex; flex-direction: column; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); }
+.modal.sm { width: 360px; } .modal.md { width: 560px; } .modal.lg { width: 860px; }
+.modal.full { width: calc(100vw - 32px); height: calc(100vh - 32px); }
+.modal header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--anfra-color-border, #e4e4e7); }
+.modal h2 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted, #71717a); cursor: pointer; font: 18px/1 var(--anfra-font, system-ui, sans-serif); }
+.close:hover { color: var(--anfra-color-fg, #18181b); background: color-mix(in srgb, var(--anfra-color-fg, #18181b) 7%, transparent); }
+.content { flex: 1; min-height: 0; overflow: auto; }
+.popover { max-width: min(360px, calc(100vw - 16px)); }
+`;
+
+const GAP = 6;
+const MARGIN = 8;
+
+function viewport (win: Window): { width: number, height: number } {
+  return { width: win.innerWidth, height: win.innerHeight };
+}
+
+/** Keep a box of this size, wanted at (x, y), inside the viewport: flipped above or left of `flipFrom` when it would spill. */
+function place (win: Window, size: { width: number, height: number }, x: number, y: number, flipFrom?: { left: number, top: number }): { left: number, top: number } {
+  const { width, height } = viewport(win);
+  let left = x;
+  let top = y;
+  if (left + size.width > width - MARGIN) left = flipFrom ? flipFrom.left - size.width : width - MARGIN - size.width;
+  if (top + size.height > height - MARGIN) top = flipFrom ? flipFrom.top - size.height : height - MARGIN - size.height;
+  return { left: Math.max(MARGIN, left), top: Math.max(MARGIN, top) };
+}
+
+/** A part of the UI: its stylesheet and a container in the kernel's root, removed by the returned function. */
+function part (root: ShadowRoot): { container: HTMLElement, remove: () => void } {
+  const doc = root.ownerDocument;
+  const container = doc.createElement('div');
+  const style = doc.createElement('style');
+  style.textContent = STYLES;
+  container.append(style);
+  root.append(container);
+  return { container, remove: () => container.remove() };
+}
+
+/** An element with its own shadow root for a plugin's content, apart from the chrome's styles. */
+function contentRoot (doc: Document, className: string): { element: HTMLElement, root: ShadowRoot } {
+  const element = doc.createElement('div');
+  element.className = className;
+  return { element, root: element.attachShadow({ mode: 'open' }) };
+}
+
+/** Run a plugin's mount, keeping what it returns; a failure is logged, not thrown at the reader. */
+function mountContent (win: Window, mount: (root: ShadowRoot) => void | (() => void), root: ShadowRoot): () => void {
+  try {
+    const cleanup = mount(root);
+    return typeof cleanup === 'function' ? cleanup : () => {};
+  } catch (err) {
+    (win as Window & typeof globalThis).console?.error('anfra: a plugin failed to draw:', err);
+    return () => {};
+  }
+}
+
+function menu (root: ShadowRoot, options: MenuOptions): () => void {
+  const doc = root.ownerDocument;
+  const win = doc.defaultView!;
+  const { container, remove } = part(root);
+  const list = doc.createElement('div');
+  list.className = 'surface menu';
+  list.setAttribute('role', 'menu');
+  const buttons: HTMLButtonElement[] = [];
+  options.groups.filter((group) => group.length).forEach((group, index) => {
+    if (index > 0) list.append(doc.createElement('hr'));
+    for (const entry of group) {
+      const button = doc.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'menuitem');
+      button.dataset.item = entry.id;
+      button.textContent = entry.label;
+      if (entry.disabled) {
+        button.setAttribute('aria-disabled', 'true');
+        button.title = entry.disabled;
+        const reason = doc.createElement('span');
+        reason.className = 'reason';
+        reason.textContent = entry.disabled;
+        button.append(reason);
+      }
+      button.addEventListener('click', () => {
+        if (entry.disabled) return;
+        close();
+        options.onPick(entry.id);
+      });
+      buttons.push(button);
+      list.append(button);
+    }
+  });
+  container.append(list);
+  const rect = list.getBoundingClientRect();
+  const { left, top } = place(win, rect, options.x, options.y, { left: options.x, top: options.y });
+  list.style.left = `${left}px`;
+  list.style.top = `${top}px`;
+  buttons.find((button) => !button.hasAttribute('aria-disabled'))?.focus();
+
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const at = buttons.indexOf(root.activeElement as HTMLButtonElement);
+    const next = buttons[(at + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length];
+    next?.focus();
+  };
+  // A press outside the menu, a scroll, a resize or the window losing focus: the menu goes, as a
+  // native one does.
+  const onOutside = (event: Event) => { if (!event.composedPath().includes(list)) close(); };
+  const onAway = () => close();
+  const listeners: [EventTarget, string, EventListener, boolean][] = [
+    [doc, 'keydown', onKey as EventListener, true],
+    [doc, 'pointerdown', onOutside, true],
+    [win, 'scroll', onAway, true],
+    [win, 'resize', onAway, false],
+    [win, 'blur', onAway, false],
+  ];
+  listeners.forEach(([target, type, listener, capture]) => target.addEventListener(type, listener, capture));
+  let closed = false;
+  function close (): void {
+    if (closed) return;
+    closed = true;
+    listeners.forEach(([target, type, listener, capture]) => target.removeEventListener(type, listener, capture));
+    remove();
+    options.onClose();
+  }
+  return close;
+}
+
+function modal (root: ShadowRoot, options: ModalOptions): () => void {
+  const doc = root.ownerDocument;
+  const win = doc.defaultView!;
+  const { container, remove } = part(root);
+  const backdrop = doc.createElement('div');
+  backdrop.className = 'backdrop';
+  const dialog = doc.createElement('section');
+  dialog.className = `surface modal ${options.size ?? 'md'}`;
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  const header = doc.createElement('header');
+  const title = doc.createElement('h2');
+  title.id = 'anfra-modal-title';
+  title.textContent = options.title;
+  dialog.setAttribute('aria-labelledby', title.id);
+  const closeButton = doc.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'close';
+  closeButton.setAttribute('aria-label', 'Close');
+  closeButton.textContent = '×';
+  closeButton.addEventListener('click', () => close());
+  header.append(title, closeButton);
+  const content = contentRoot(doc, 'content');
+  dialog.append(header, content.element);
+  container.append(backdrop, dialog);
+
+  // The page under the modal can't be reached, by pointer, keyboard or scroll, while it is open:
+  // everything in the body but the plugin layer is inert, and the page doesn't scroll.
+  const layer = root.host.parentElement;
+  const inerted = [...doc.body.children].filter((element) => element !== layer && !element.hasAttribute('inert'));
+  inerted.forEach((element) => element.setAttribute('inert', ''));
+  const overflow = doc.documentElement.style.overflow;
+  doc.documentElement.style.overflow = 'hidden';
+  const unmount = mountContent(win, options.mount, content.root);
+  closeButton.focus();
+
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+  };
+  doc.addEventListener('keydown', onKey, true);
+  let closed = false;
+  function close (): void {
+    if (closed) return;
+    closed = true;
+    doc.removeEventListener('keydown', onKey, true);
+    try { unmount(); } catch { /* it is going anyway */ }
+    inerted.forEach((element) => element.removeAttribute('inert'));
+    doc.documentElement.style.overflow = overflow;
+    remove();
+    options.onClose();
+  }
+  return close;
+}
+
+function popover (root: ShadowRoot, options: PopoverOptions): () => void {
+  const doc = root.ownerDocument;
+  const win = doc.defaultView!;
+  const { container, remove } = part(root);
+  const box = doc.createElement('section');
+  box.className = 'surface popover';
+  box.setAttribute('role', 'dialog');
+  const content = contentRoot(doc, 'content');
+  box.append(content.element);
+  container.append(box);
+  const unmount = mountContent(win, options.mount, content.root);
+
+  // Beside the anchor: below it, else above; shifted to stay in the viewport; following it as the
+  // page scrolls, at most once a frame.
+  let pending = false;
+  const position = () => {
+    pending = false;
+    const anchor = options.anchor();
+    if (!anchor) { close(); return; }
+    const size = box.getBoundingClientRect();
+    const { left, top } = place(win, size, anchor.x, anchor.y + anchor.height + GAP, { left: anchor.x + anchor.width, top: anchor.y - GAP });
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+  };
+  const schedule = () => {
+    if (pending) return;
+    pending = true;
+    win.requestAnimationFrame(position);
+  };
+  position();
+
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+  };
+  const onOutside = (event: Event) => { if (!event.composedPath().includes(box)) close(); };
+  doc.addEventListener('keydown', onKey, true);
+  win.addEventListener('scroll', schedule, true);
+  win.addEventListener('resize', schedule);
+  if (options.dismiss === 'outside') doc.addEventListener('pointerdown', onOutside, true);
+  let closed = false;
+  function close (): void {
+    if (closed) return;
+    closed = true;
+    doc.removeEventListener('keydown', onKey, true);
+    win.removeEventListener('scroll', schedule, true);
+    win.removeEventListener('resize', schedule);
+    doc.removeEventListener('pointerdown', onOutside, true);
+    try { unmount(); } catch { /* it is going anyway */ }
+    remove();
+    options.onClose();
+  }
+  return close;
+}
+
+const body: UiBody = { menu, modal, popover };
+export default body;

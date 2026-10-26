@@ -8,6 +8,7 @@ import type { PluginInfo } from '../common/bridge';
 import type { CallOptions, MountContext } from './plugin';
 import type { Panel } from './panel';
 import type { Theme } from '../common/theme';
+import type { MenuTarget, MenuTargetKind } from '../common/menu';
 
 /** What running a command does: make a call, or open the panel at a tab (toggling it). */
 export type CommandRun =
@@ -43,11 +44,22 @@ export interface CommandContribution {
   shortcut?: string;
   run: CommandRun;
   /**
+   * Set, the command is for the menu on the page's content instead of the host's chrome: on a marked
+   * block (`node`) or on a query's rows (`rows`, from the definition's `query.menu`). It runs with
+   * that target: a call gets it as `target` in its request, a tab is opened with the node selected.
+   */
+  target?: MenuTargetKind;
+  /**
+   * For a command with a `target`: whether it applies to this one. The target comes from the frame
+   * and is checked only for its shape: decide on it, never trust it.
+   */
+  when?: (target: MenuTarget, context: CommandStateContext) => boolean;
+  /**
    * How it shows now, read again on each change the plugin signals (`MountContext.commandsChanged`)
    * and on each change to the panel. Unless given, a command that opens a tab is pressed while the
    * panel shows one of its plugin's tabs (or that tab, for the host's own).
    */
-  state?: (context: CommandStateContext) => CommandState;
+  state?: (context: CommandStateContext, target?: MenuTarget) => CommandState;
 }
 
 /** What a tab gets: its panel, its calls, and the page around it. */
@@ -140,10 +152,10 @@ export function installContributions (
 }
 
 /** How a command shows for a mount: its own `state`, or, for one that opens a tab, the panel's. */
-export function commandState (command: Command, context: CommandStateContext): CommandState {
+export function commandState (command: Command, context: CommandStateContext, target?: MenuTarget): CommandState {
   if (command.state) {
     try {
-      return command.state(context) ?? {};
+      return command.state(context, target) ?? {};
     } catch {
       return { disabled: 'This command failed to report its state.' };
     }

@@ -15,6 +15,7 @@ import { buildStructure, type BuiltStructure } from './structure';
 import { layerRoot } from './layer';
 import { overlayFor, type Overlay } from './overlay';
 import { addExtension } from './extensions';
+import type { ContentUi, FrameMenuItem, ModalInput, Opened, PopoverInput } from './menu';
 
 /** The kernel's own call: a plugin's frame body (answered by the host runtime). */
 export const BODY_CALL = 'anfra.body';
@@ -58,6 +59,16 @@ export interface FrameKernel {
   layer: () => ShadowRoot;
   /** The plugin's frame body, fetched and run on first use: what it exports. */
   body: <T = unknown>() => Promise<T>;
+  /**
+   * Add an entry to the menu on a marked block (`target: 'node'`) or on a query's rows
+   * (`target: 'rows'`, opened by the definition's `query.menu`). The menu shows only once an entry
+   * exists, from a plugin or the host.
+   */
+  menuItem: (item: FrameMenuItem) => void;
+  /** Open a modal over the page, drawn by the kernel; your content goes in its own shadow root. */
+  modal: (input: ModalInput) => Promise<Opened>;
+  /** Open a popover beside a node or a point, following it as the page scrolls. */
+  popover: (input: PopoverInput) => Promise<Opened>;
 }
 
 /** What every plugin's kernel shares: the frame, the SDK, and the bridge's two directions. */
@@ -71,6 +82,8 @@ export interface KernelShared {
   listeners: Map<string, Set<(payload: unknown) => void>>;
   /** Listeners for each app created. */
   appListeners: Set<(app: App) => void>;
+  /** The menu, the modal and the popover; set by the bootstrap once the kernel's own part is made. */
+  contentUi?: ContentUi;
 }
 
 /** Run a frame body's code and take what it exports (it assigns `__anfraBody`). */
@@ -120,6 +133,9 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
     provideOnQuery: (factory) => addExtension(sdk.extensions.query, entities.Query.prototype, 'query', plugin, factory),
     provideOnControl: (factory) => addExtension(sdk.extensions.control, entities.Control.prototype, 'control', plugin, factory),
     layer: () => layerRoot(win.document, plugin),
+    menuItem: (item) => shared.contentUi?.addItem(plugin, item),
+    modal: (input) => shared.contentUi!.modal(input),
+    popover: (input) => shared.contentUi!.popover(input),
     body<T> () {
       loading ??= endpoint.call<string>(BODY_CALL, { plugin })
         .then((code) => runBody(win, code))
