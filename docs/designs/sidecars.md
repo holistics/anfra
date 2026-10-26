@@ -75,4 +75,6 @@ anfra reads `.anfra/data_sources.yml` itself (`internal/datasource`). For each q
 
 **Traces.** When anfra exports traces ([configs](../usage/configs.md)), it also points anfra-node at the same collector, through the `H_OTEL_*` variables its tracing library reads (`internal/telemetry`), unless they are set already. Calls to the sidecars carry the trace (`traceparent`) through `Config.WrapTransport`, which the CLI and `serve` set to an otelhttp transport (`cmd/anfra/telemetry.go`); the engine's `WithTransport` lets an embedding platform do the same ([engine.md](engine.md)). So one trace runs from the command or request into anfra-node's own spans.
 
-**Logs.** Both sidecars' stderr goes into the repo's `anfra.log`, with anfra's own records (`internal/logging`). `ANFRA_LOG_STDERR` also copies that stream to anfra's stderr; `ANFRA_SIDECAR_STDOUT` passes the sidecars' stdout through instead of discarding it.
+**Logs.** Both sidecars' stderr goes into the repo's `anfra.log`, with anfra's own records (`internal/logging`). `anfra serve` also copies that stream to its stderr, as `ANFRA_LOG_STDERR` does for any command; `ANFRA_SIDECAR_STDOUT` passes the sidecars' stdout through instead of discarding it.
+
+**Failures.** A sidecar logs and traces its own failures, with their stacks. canal-query answers anfra their causes when `EXPOSE_ERROR_CAUSES=1`, which anfra sets on the one it spawns; anfra-node always does. anfra then decides which of its clients see them. See [errors.md](errors.md#sidecar-failures).

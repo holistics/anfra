@@ -13,7 +13,8 @@ import (
 	"os"
 )
 
-// The switches, each off by default.
+// The switches. Each is off by default, but LogStderr, which is on for
+// `anfra serve` (OnOr).
 const (
 	LogStderr        = "ANFRA_LOG_STDERR"
 	SidecarStdout    = "ANFRA_SIDECAR_STDOUT"
@@ -42,6 +43,16 @@ func On(name string) bool {
 	return err == nil && on
 }
 
+// OnOr reports whether the switch is on: 1, or def when it is unset or empty.
+// For a switch whose default depends on the command: 0 turns it off where it
+// defaults to on.
+func OnOr(name string, def bool) bool {
+	if os.Getenv(name) == "" {
+		return def
+	}
+	return On(name)
+}
+
 func parse(name string) (bool, error) {
 	switch v := os.Getenv(name); v {
 	case "", "0":
@@ -49,6 +60,16 @@ func parse(name string) (bool, error) {
 	case "1":
 		return true, nil
 	default:
-		return false, fmt.Errorf("%s must be 1 or 0, not %q", name, v)
+		return false, &InvalidError{Name: name, Value: v}
 	}
+}
+
+// InvalidError is a switch set to something other than 1 or 0.
+type InvalidError struct {
+	Name  string // the variable, ANFRA_LOG_STDERR
+	Value string // what it is set to
+}
+
+func (e *InvalidError) Error() string {
+	return fmt.Sprintf("%s must be 1 or 0, not %q", e.Name, e.Value)
 }

@@ -91,7 +91,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		return err
 	}
 	opts.siteURL = site
-	return withRepo(ctx, func(ctx context.Context, h hostContext) error {
+	return withRepo(ctx, true, func(ctx context.Context, h hostContext) error {
 		if f, ok := findServer(ctx, h.repo); ok {
 			return fmt.Errorf("anfra serve is already running for this repo, at %s", f.URL)
 		}
@@ -103,7 +103,6 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		if host, _, _ := net.SplitHostPort(ln.Addr().String()); !isLoopback(host) {
 			h.cfg.Logger.Warn("serve.exposed", "addr", ln.Addr().String(),
 				"hint", "anfra serve has no authentication: anyone who reaches this address can query your data sources")
-			fmt.Fprintf(os.Stderr, "warning: %s is not a loopback address; anfra serve has no authentication\n", ln.Addr())
 		}
 		stopPprof, err := startPprof(h.cfg.Logger)
 		if err != nil {
@@ -148,7 +147,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 				DevFrontendURL: os.Getenv("ANFRA_APPSERVE_DEV_URL"),
 			})
 			if !apps.FrontendBuilt() {
-				fmt.Fprintln(os.Stderr, "warning: this anfra was built without its Data App pages; /apps/ says how to build them")
+				h.cfg.Logger.Warn("serve.no_app_pages", "hint", "this anfra was built without its Data App pages; /apps/ says how to build them")
 			}
 		}
 		handler := serveHandler(serveConfig{

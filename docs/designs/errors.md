@@ -42,7 +42,19 @@ Agents are among the main callers of anfra, and an agent reads `message` to corr
 
 **Capture context first; present it later.** Every formal step records itself on any error leaving it, so the error says what was being done, layer by layer, without anyone writing it at the failure ([steps](#steps-context-written-once)). *What* was being done (`context`, short fragments made to be chained) is kept apart from *why* it failed (`message`, a sentence), so each client presents them its own way: one line, a heading, a breadcrumb.
 
-**Guard what isn't the reader's.** Causes can carry SQL, connection details, file paths and data. A formal error shows its message and public steps, and an encapsulated cause stays in the log; parameters a step declares sensitive are redacted even there. `anfra` shows causes by default, because on the user's own machine its user is the operator; an `anfra serve` serving others hides them with `ANFRA_HIDE_ERROR_CAUSES`, and a platform embedding the engine hides them by default ([security.md](security.md)). And every message is written to be safe for callers, whatever its code's visibility, since a translation at a boundary can carry it to one.
+**A failure is told apart from an answer.** A failure is output too, as structured as an answer, but never mixed into one: no result with an error string inside it, no partial answer followed by prose. A caller knows which it got before reading either: from the HTTP status, or MCP's error flag. At the CLI, the answer is alone on stdout and the failure goes to stderr, so a pipe never carries a failure as data. The CLI's exit code says only whether the command succeeded: non-zero for a failure, and for an invalid verdict, so `anfra validate` can stop a CI job. What went wrong is in the documents, not in the exit code. Then the failure itself is a document in one form everywhere (code, scope, message, details), so a program branches on the code, never on text. The CLI renders it as it renders an answer: the envelope as YAML, with no format of its own for errors. Showing causes changes what a person can read, never what a program can rely on: the same failure has the same code and details whether causes are shown or hidden.
+
+**Record every failure where it happens.** Every failure that is ours (server scope, or unclassified) is logged and traced by the process it happened in, whatever its caller is shown: anfra's own and each sidecar's. A sidecar logs its failure once, with its stack, where it answers it, and records it on its span ([sidecar failures](#sidecar-failures)); anfra logs it again where it ends, as the request's or the command's failure, with the whole chain. The trace id joins the two. Hiding a cause is about callers, never about the log: an operator who hides causes must still find them.
+
+**Guard what isn't the reader's.** Causes can carry SQL, connection details, file paths and data. A formal error always shows its message and public steps; what it encapsulates is shown only where allowed. Each process decides for its own caller, by who that caller is, and each default can be changed:
+
+- **The `anfra` binary** (the CLI and `anfra serve`) shows causes to its clients by default: on the user's own machine, the reader is the operator, who can fix it. An `anfra serve` serving others hides them with `ANFRA_HIDE_ERROR_CAUSES=1`.
+- **The engine** hides them from its platform's clients by default, which is safe for a platform serving other people. A platform whose callers are its operators may show them, with `apperr.DisableErrorEncapsulation`.
+- **A sidecar's** caller is its host, not the host's clients. Whether it sends its causes to its host is a setting of the sidecar's, set by whoever runs it ([sidecar failures](#sidecar-failures)). anfra is a host that can be trusted with them, so it turns the setting on for the sidecars it spawns, and a deployment running them for anfra does too. Whether a client then sees a sidecar's cause is anfra's decision, by the settings above, never the sidecar's: a sidecar knows neither its host's clients nor its host's settings.
+
+Where causes are shown, they are shown in `message`, so the envelope has the same fields either way. An error encapsulated without a message of its own shows its cause as its message. One with its own message keeps it: its author judged it complete for the reader, so its cause stays in the log, shown or hidden.
+
+Parameters a step declares sensitive are redacted even in the log ([security.md](security.md)). And every message is written to be safe for callers, whatever its code's visibility, since a translation at a boundary can carry it to one.
 
 **Point to the fix when you can.** A refused input names each argument at fault, as a violation on that field, so a caller can fix exactly that and retry ([violations](#violations-errors-an-agent-can-fix)). Being actionable is welcome, not required: a plain, accurate message beats a guessed remedy.
 
@@ -110,9 +122,9 @@ where `refused` reads the public error's path (`fqn` or `type`) into an `apperr.
   "request_id": "req_…"}}
 ```
 
-and the CLI prints it as `Error: fqn: there's no dataset "nosuch" in the repo`, then ``Run `anfra show --help` for usage.``
+and the CLI prints the same envelope as YAML on stderr, with the violation's `arg` (`fqn`, the positional) and a `help` that points to `anfra show --help`.
 
-The query commands do the same with `anfranode.Violation` and a map of anfra-node's params to their args (`datasetFqn` to `dataset`, `input.…` to `input.…`, `internal/command/query/compile.go`): `anfra query -d nosuch …` prints `Error: --dataset: there's no dataset "nosuch" in the repo`. A param they do not map is one the engine built, so its refusal is our failure. A query that does not compile is refused with its diagnostics (`query_invalid`), which `query.Compile` answers as anfra's `query_invalid`. Any other sidecar failure is left as it came, so it renders as unclassified, our failure.
+The query commands do the same with `anfranode.Violation` and a map of anfra-node's params to their args (`datasetFqn` to `dataset`, `input.…` to `input.…`, `internal/command/query/compile.go`): `anfra query -d nosuch …` fails with a violation on `dataset`, whose `arg` at the CLI is `--dataset`. A param they do not map is one the engine built, so its refusal is our failure. A query that does not compile is refused with its diagnostics (`query_invalid`), which `query.Compile` answers as anfra's `query_invalid`. Any other sidecar failure is left as it came, so it renders as unclassified, our failure.
 
 ## Steps: context written once
 
@@ -128,8 +140,26 @@ One error, rendered for each surface by the same pieces:
 
 - **HTTP** (`anfra serve`, any platform using `apikit`): `httpkit.WriteError` renders `{"error": {code, scope, status, context, message, details, request_id}}` (`apperr.Envelope`), with the status of its *served* code. A server declares what it serves (`httpkit.Codes`): the generic codes, its own namespaces, and any library codes it imports one by one, each with a status. `anfra serve`'s list is `codes` in `cmd/anfra/serve.go`. A code the server does not serve fails closed: it renders as `internal_server_error`, with the original kept for the log.
 - **MCP**: a failed tool call returns the same envelope as an error result (`shared/apikit/mcp.go`), so an agent reads the same code and violations over either transport.
-- **CLI**: `printError` (`cmd/anfra/errors.go`) prints the context and message on one line, the violations by argument, other details as YAML, then the cause. A call forwarded to a running server prints that server's envelope the same way.
-- **The log**: `httpkit` logs one line per request with the code, the scope and the whole chain (`err.Error()`, sensitive step parameters redacted). The level follows the scope: `user` is info, `client` warn, `server` error.
+- **CLI**: the envelope as a YAML document on stderr, as an answer is a YAML document on stdout, and a non-zero exit. What helps a person or an agent fix the call stays in the document as fields: each violation also names the flag or positional argument the user typed (`arg: --dataset`), and `help` points to the command's `--help`. Otherwise it is the envelope as HTTP and MCP serve it: a shown cause is in `message`, as it is there, not in a field of the CLI's own. A call forwarded to a running server prints that server's envelope the same way.
+
+  **stderr is a stream of YAML documents,** so a program reads it with any YAML library (`yaml.safe_load_all`, `yq`) rather than by cutting text. Everything anfra writes there is a document whose one top-level key says what it is: `warning` (a problem with the operator's own setup that did not stop the command, such as telemetry that could not start), each with a code and a message, and at most one `error`, the last. A program takes the `error` and can skip the warnings without knowing them. Two things stay out of the stream:
+  - **Notices for a person,** such as an available update, or that one is being installed, are printed only when stderr is a terminal, where no program reads it.
+  - **Log lines** (`ANFRA_LOG_STDERR=1`, JSON lines) are for debugging, not part of the contract: a program reading stderr leaves the setting off, which is the default for every command but `anfra serve`, whose errors are its HTTP answers, so nothing parses its stderr. Every record is in `anfra.log` either way.
+
+  ```yaml
+  error:
+    code: validation_failed
+    scope: user
+    message: There's no dataset "nosuch" in the repo.
+    details:
+      violations:
+        - field: dataset
+          arg: --dataset
+          code: invalid
+          message: There's no dataset "nosuch" in the repo.
+    help: Run `anfra query --help` for usage.
+  ```
+- **The log**: `httpkit` logs one line per request with the code, the scope and the whole chain (`err.Error()`, sensitive step parameters redacted). The level follows the scope: `user` is info, `client` warn, `server` error. A sidecar logs its own failures as well ([sidecar failures](#sidecar-failures)).
 - **The trace**: the span of each step it left, as above.
 - **The OpenAPI document**: each op lists the codes it can fail with, and the details type of each, so the contract is published, not only described.
 
@@ -137,11 +167,28 @@ One error, rendered for each surface by the same pieces:
 
 A library's codes are its own contract, not its platform's. Where a platform calls the engine, it decides what each engine error means *to its own clients*: it translates the engine's codes to its own (`apperr.Translate`, which re-decides the scope), serves some of them as they are (`httpkit.Codes.Imported`), and lets the rest fail closed. The engine never decides a platform's status codes or messages. See [engine.md](engine.md).
 
+## Sidecar failures
+
+A sidecar is part of anfra's server side, so its failures are anfra's to record and to classify ([sidecars.md](sidecars.md)). It answers one of two kinds:
+
+- **A refusal it classified**: anfra-node's public errors (`-32602` with `data.code`), and what canal-query scopes `User` (the data source refused the query, or could not be reached). The command or domain function translates it into anfra's code, as in [the worked example](#worked-example-anfra-show).
+- **Its own failure**: anything else. The sidecar logs it with its stack, records it on its span, and answers its host the failure's message and its cause chain, never its stack. anfra leaves it unclassified, so it is an `internal_server_error` whose text is the sidecar's cause: shown or hidden by anfra's setting, and in anfra's log either way.
+
+The cause travels apart from any text a host may make public. canal-query's `message` becomes `query_failed`'s message (`asQueryFailed` in `internal/command/query/run.go`), so its cause comes in a field of its own, `cause`, which `canalquery.Error` keeps out of `Message`. canal-query sends it only when `EXPOSE_ERROR_CAUSES=1`, because its other caller, the Holistics app, shows canal's messages to end users and is not set up to keep a cause from them. anfra sets it on the canal-query it spawns; a deployment that runs canal-query for anfra sets it too. anfra-node has one kind of caller, a host like anfra, so it needs no setting: it always answers its own failure as `-32603` with the failure's message.
+
 ## Adding an error
 
 1. **Reuse first.** A refused argument is `validation_failed` with a violation, through `command.InvalidArg` or `EncapsulateWith`. A missing thing is `not_found`. Our own failure needs no code at all: leave it unclassified, or `Encapsulate` it as `internal_server_error` with a diagnosis for the log.
 2. **Mint a public code** only when a client should act differently. Put it with its domain, or in `internal/errcode` if it is the engine's as a whole; give it the scope that is honestly responsible and a default message about the user's situation; give it typed details if a client needs data to act on, rather than text to parse.
 3. **Give it a status** in every server that serves it (`codes` in `cmd/anfra/serve.go` for `anfra serve`). An unserved code still answers, as `internal_server_error`.
 4. **Name the operation** it happens in as a step, if a caller would want to know where it failed.
+
+## Known gaps
+
+Where the code does not follow these rules yet:
+
+- **Some of the CLI's own commands write for a person on stderr.** The commands the API also serves follow the rule for stderr. `publish`, `auth`, `init`, `update` and `skills`, which ask questions and show progress, write lines for a person there (`internal/cliui`), and `publish` writes `validate`'s answer to stderr before it refuses a repo with errors (`cmd/anfra/publish.go`): those diagnostics belong in the error's details, as `query_invalid` carries a query's.
+- **Some messages written for the user are left unclassified.** A damaged credentials file fails with a plain error naming the file and the fix (`internal/cliauth/credential_store.go`), so with causes hidden it shows only the generic message. A failure in the user's own state is the user's: it should be a formal error with that message.
+- **OpenTelemetry's own messages are text lines on stderr.** Its SDK logs a problem it meets (an endpoint it cannot parse) through its own logger, before the repo's log exists, so a YAML parser refuses the stream there.
 
 Related: [commands-and-api.md](commands-and-api.md) (how ops are defined and published), [engine.md](engine.md) (the boundary platforms translate at), [security.md](security.md) (why causes are hidden by default).

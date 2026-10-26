@@ -27,6 +27,17 @@ func TestCanalError(t *testing.T) {
 	}
 }
 
+// A cause, when canal-query sends one, is the error's text, never its message.
+func TestCanalErrorCause(t *testing.T) {
+	e := canalError(map[string]any{"message": "run query: internal error", "scope": "Server", "type": "GenericError", "cause": "run query: nil pointer"})
+	if e.Message != "run query: internal error" {
+		t.Errorf("message %q, want canal's message", e.Message)
+	}
+	if want := "canal query error (Server, GenericError): run query: nil pointer"; e.Error() != want {
+		t.Errorf("Error() = %q, want %q", e.Error(), want)
+	}
+}
+
 const (
 	header = `{"__holistics_header__":true,"fields":["id","amount","attrs","flag"],"types":["int8","numeric","jsonb","bool"],` +
 		`"arrow_types":[{"type":"int","bit_width":64,"is_signed":true,"label":"int64"},` +

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
-	"text/tabwriter"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
@@ -28,81 +28,133 @@ type commandError struct {
 func (e *commandError) Error() string { return e.err.Error() }
 func (e *commandError) Unwrap() error { return e.err }
 
-// printError shows a failed command: what it was doing and why it failed, then
-// the error's details, then its cause when it has one. The args that were wrong
-// are listed by their flags; other details — an invalid query's diagnostics —
-// are YAML. Encapsulation is disabled in this binary (see main), so the message
-// is the real one.
+// printError shows a failed command as its error's envelope, the one HTTP and
+// MCP answer, as a YAML document: stderr is a stream of them (printWarning's,
+// then this one), so a program reads it with a YAML library. Two fields are the
+// CLI's own, for whoever fixes the call: each violation's arg, the flag or
+// positional the user typed, and help, the command's --help. A shown cause is
+// in message, as it is over HTTP (see main for when causes are shown).
 func printError(w io.Writer, err error) {
 	ce, _ := errors.AsType[*commandError](err)
 	if ce != nil {
 		err = ce.err
 	}
 	var resp apperr.Response
-	var cause error
 	if re, ok := errors.AsType[*remoteError](err); ok {
 		resp = re.resp
 	} else {
-		e := apperr.From(err)
-		resp = e.Response("")
-		cause = errors.Unwrap(e)
+		resp = apperr.From(err).Response("")
 	}
-	parts := make([]string, 0, len(resp.Context)+1)
-	for _, c := range resp.Context {
-		parts = append(parts, c.Text)
+	body, jerr := jsonkit.Marshal(resp)
+	var doc yaml.Node
+	if jerr == nil {
+		jerr = yaml.Unmarshal(body, &doc) // JSON is YAML: the wire's field order is kept
 	}
-	vs := violationsOf(resp.Details)
-	switch {
-	case ce == nil || len(vs) == 0:
-		parts = append(parts, resp.Message)
-		fmt.Fprintln(w, "Error:", strings.Join(parts, ": "))
-		if resp.Details != nil {
-			// Through JSON, so the details read as their wire form does.
-			if b, jerr := jsonkit.Marshal(resp.Details); jerr == nil {
-				_ = renderTo(b, "application/json", w)
-			}
-		}
-	case len(vs) == 1:
-		// The violation says it all: a domain rule's message is its violation's.
-		parts = append(parts, argName(ce.args, vs[0].Field), argMessage(ce.args, vs[0]))
-		fmt.Fprintln(w, "Error:", strings.Join(parts, ": "))
-		fmt.Fprintf(w, "Run `%s --help` for usage.\n", ce.path)
-	default:
-		parts = append(parts, "these arguments are not valid:")
-		fmt.Fprintln(w, "Error:", strings.Join(parts, ": "))
-		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		for _, v := range vs {
-			fmt.Fprintf(tw, "  %s\t%s\n", argName(ce.args, v.Field), argMessage(ce.args, v))
-		}
-		_ = tw.Flush()
-		fmt.Fprintf(w, "Run `%s --help` for usage.\n", ce.path)
+	if jerr != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		writeDoc(w, "error", map[string]string{"code": resp.Code, "message": resp.Message})
+		return
 	}
-	if cause != nil && !strings.Contains(resp.Message, cause.Error()) {
-		fmt.Fprintln(w, "Cause:", cause)
+	e := doc.Content[0]
+	blockStyle(e)
+	if v := mapValue(e, "request_id"); v != nil && v.Value == "" {
+		deleteKey(e, "request_id") // a command run here has none
+	}
+	if ce != nil && nameArgs(mapValue(e, "details"), ce.args) {
+		setKey(e, "help", fmt.Sprintf("Run `%s --help` for usage.", ce.path))
+	}
+	writeDoc(w, "error", e)
+}
+
+// printWarning shows a problem that did not stop the command, such as an
+// operator's setting that could not take effect, as a YAML document like
+// printError's.
+func printWarning(w io.Writer, code, message string) {
+	e := &yaml.Node{Kind: yaml.MappingNode}
+	setKey(e, "code", code)
+	setKey(e, "message", message)
+	writeDoc(w, "warning", e)
+}
+
+// writeDoc writes {key: v} as one document of a YAML stream.
+func writeDoc(w io.Writer, key string, v any) {
+	root := &yaml.Node{Kind: yaml.MappingNode}
+	value := &yaml.Node{}
+	if n, ok := v.(*yaml.Node); ok {
+		value = n
+	} else if err := value.Encode(v); err != nil {
+		return
+	}
+	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, value)
+	b, err := yaml.Marshal(root)
+	if err != nil {
+		return
+	}
+	_, _ = io.WriteString(w, "---\n")
+	_, _ = w.Write(b)
+}
+
+// blockStyle drops the JSON's style from n and beneath, its quotes and braces,
+// so the document reads as an answer's YAML does. A string that needs quotes
+// still gets them.
+func blockStyle(n *yaml.Node) {
+	n.Style = 0
+	for _, c := range n.Content {
+		blockStyle(c)
 	}
 }
 
-// violationsOf reads details as violations, through JSON: a remote error's are
-// decoded as any. None when they are another kind of detail.
-func violationsOf(details any) []apperr.Violation {
-	if details == nil {
+// nameArgs adds to each of details' violations the arg it is on, as the user
+// passes it, and reports whether there were any.
+func nameArgs(details *yaml.Node, args []command.Arg) bool {
+	if details == nil || details.Kind != yaml.MappingNode {
+		return false
+	}
+	vs := mapValue(details, "violations")
+	if vs == nil || vs.Kind != yaml.SequenceNode || len(vs.Content) == 0 {
+		return false
+	}
+	for _, v := range vs.Content {
+		field := mapValue(v, "field")
+		if v.Kind != yaml.MappingNode || field == nil {
+			return false
+		}
+		setKey(v, "arg", argName(args, field.Value))
+	}
+	return true
+}
+
+// mapValue is the value of key in mapping m, or nil.
+func mapValue(m *yaml.Node, key string) *yaml.Node {
+	if m == nil || m.Kind != yaml.MappingNode {
 		return nil
 	}
-	b, err := jsonkit.Marshal(details)
-	if err != nil {
-		return nil
-	}
-	var d apperr.Violations
-	if jsonkit.Unmarshal(b, &d) != nil {
-		return nil
-	}
-	vs := d.Violations
-	for _, v := range vs {
-		if v.Field == "" || v.Code == "" {
-			return nil
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return m.Content[i+1]
 		}
 	}
-	return vs
+	return nil
+}
+
+// setKey sets key in mapping m to the string value: in place, or after the
+// others.
+func setKey(m *yaml.Node, key, value string) {
+	if v := mapValue(m, key); v != nil {
+		v.SetString(value)
+		return
+	}
+	v := &yaml.Node{}
+	v.SetString(value)
+	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, v)
+}
+
+func deleteKey(m *yaml.Node, key string) {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			m.Content = append(m.Content[:i], m.Content[i+2:]...)
+			return
+		}
+	}
 }
 
 // argName is how the user passes the arg a violation is on: its flag, or the
@@ -116,29 +168,6 @@ func argName(args []command.Arg, field string) string {
 		return a.Name
 	}
 	return "--" + a.Flag()
-}
-
-// argMessage is the violation's message, saying how to pass a missing
-// positional, which has no flag to show.
-func argMessage(args []command.Arg, v apperr.Violation) string {
-	if a, ok := argOf(args, v.Field); ok && a.Positional && (v.Code == "required" || v.Code == "too_short") {
-		how := "pass it as an argument"
-		if a.Stdin {
-			how += ", or pipe it on stdin"
-		}
-		return "required: " + how
-	}
-	return clause(v.Message)
-}
-
-// clause is a message as the commands' own read after a flag: no first
-// capital (but an acronym's, "SQL") and no full stop, as a schema's has.
-func clause(s string) string {
-	s = strings.TrimSuffix(s, ".")
-	if len(s) > 1 && 'A' <= s[0] && s[0] <= 'Z' && 'a' <= s[1] && s[1] <= 'z' {
-		return string(s[0]+'a'-'A') + s[1:]
-	}
-	return s
 }
 
 func argOf(args []command.Arg, field string) (command.Arg, bool) {

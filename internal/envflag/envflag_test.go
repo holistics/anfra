@@ -11,6 +11,19 @@ func TestOn(t *testing.T) {
 	}
 }
 
+func TestOnOr(t *testing.T) {
+	for v, want := range map[string]bool{"": true, "0": false, "1": true} {
+		t.Setenv(LogStderr, v)
+		if got := OnOr(LogStderr, true); got != want {
+			t.Errorf("%s=%q: OnOr(true) = %v, want %v", LogStderr, v, got, want)
+		}
+	}
+	t.Setenv(LogStderr, "")
+	if OnOr(LogStderr, false) {
+		t.Errorf("%s unset: OnOr(false) = true", LogStderr)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	for _, name := range all {
 		t.Setenv(name, "")

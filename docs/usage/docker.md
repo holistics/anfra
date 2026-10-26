@@ -56,13 +56,7 @@ Another UID is not supported today. anfra's home is `anfra`'s, and canal-query l
 
 ## Logs
 
-anfra writes its log, with both sidecars', to `/home/anfra/.anfra/repos/<repo id>/logs/anfra.log` in the container. To see it in `docker logs`, set `ANFRA_LOG_STDERR=1`:
-
-```sh
-docker run -p 7878:7878 -v "$PWD:/repo" -e ANFRA_LOG_STDERR=1 ghcr.io/holistics/anfra
-```
-
-`LOG_LEVEL` sets the level. To keep state across container restarts (logs, compile caches), mount a volume at `/home/anfra/.anfra`.
+`anfra serve` writes its log, with both sidecars', to stderr, so it is in `docker logs`, and to `/home/anfra/.anfra/repos/<repo id>/logs/anfra.log` in the container. `ANFRA_LOG_STDERR=0` keeps it to the file. `LOG_LEVEL` sets the level. To keep state across container restarts (logs, compile caches), mount a volume at `/home/anfra/.anfra`.
 
 ## Telemetry
 

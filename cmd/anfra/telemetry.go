@@ -27,7 +27,7 @@ const flushTimeout = 2 * time.Second
 func startTelemetry(ctx context.Context) (flush func()) {
 	shutdown, err := telemetry.Setup(ctx, "anfra", meta.Version)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "anfra: telemetry is off: %v\n", err)
+		printWarning(os.Stderr, "telemetry_off", fmt.Sprintf("Telemetry is off: %v", err))
 		return func() {}
 	}
 	return func() {

@@ -71,14 +71,14 @@ A platform that runs **anfra-node** as a service, rather than letting anfra spaw
 | Variable | Effect |
 |---|---|
 | `LOG_LEVEL` | `debug`, `info`, `warn` or `error`, case-insensitive. Default: `info`, also for any other value. anfra-node inherits it. |
-| `ANFRA_LOG_STDERR` | `1`: also copy the log stream (anfra's records and the sidecars' stderr) to stderr. Default: only to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log`. |
+| `ANFRA_LOG_STDERR` | `1`: also copy the log stream (anfra's records and the sidecars' stderr) to stderr; `0`: don't. Default: on for `anfra serve`; for any other command, only to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log`. On a command, it is for debugging: a program that reads a command's stderr as YAML leaves it off. |
 | `ANFRA_SIDECAR_STDOUT` | `1`: pass the sidecars' stdout through. Default: discarded. |
 
 ### Errors
 
 | Variable | Effect |
 |---|---|
-| `ANFRA_HIDE_ERROR_CAUSES` | `1`: hide errors' causes from clients, showing only their message. Default: causes shown, since anfra's user is usually its operator. Set it when `anfra serve` serves other people: a cause can carry SQL, database errors and paths. A command run at the terminal still prints the cause there. |
+| `ANFRA_HIDE_ERROR_CAUSES` | `1`: hide errors' causes from clients, showing only their message. Default: causes shown, since anfra's user is usually its operator. Set it when `anfra serve` serves other people: a cause can carry SQL, database errors and paths. It hides them at the terminal too; every cause is still in `anfra.log`. |
 
 ### Telemetry
 
