@@ -46,8 +46,10 @@ export interface PopoverOptions {
   /** The side it opens on when it fits there; else the opposite one, then any that fits. */
   side?: PopoverSide;
   mount: (root: ShadowRoot) => void | (() => void);
-  /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its own close do. */
+  /** `outside`: a click anywhere else closes it. Unless asked, only Escape and its close button do. */
   dismiss?: 'outside';
+  /** false: no close button, for content that draws its own. */
+  closeButton?: boolean;
   onClose: () => void;
 }
 
@@ -78,7 +80,9 @@ const STYLES = `
 .close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted, #71717a); cursor: pointer; font: 18px/1 var(--anfra-font, system-ui, sans-serif); }
 .close:hover { color: var(--anfra-color-fg, #18181b); background: color-mix(in srgb, var(--anfra-color-fg, #18181b) 7%, transparent); }
 .content { flex: 1; min-height: 0; overflow: auto; }
-.popover { max-width: min(360px, calc(100vw - 16px)); }
+.popover { max-width: min(360px, calc(100vw - 16px)); outline: none; }
+.popover > .close { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; font-size: 16px; }
+.popover.closable > .content { padding-right: 26px; }
 `;
 
 const GAP = 6;
@@ -292,10 +296,24 @@ function popover (root: ShadowRoot, options: PopoverOptions): () => void {
   const box = doc.createElement('section');
   box.className = 'surface popover';
   box.setAttribute('role', 'dialog');
+  // Focusable, and focused, so Escape reaches it at once, whatever had focus before.
+  box.tabIndex = -1;
   const content = contentRoot(doc, 'content');
   box.append(content.element);
+  if (options.closeButton !== false) {
+    box.classList.add('closable');
+    const closeButton = doc.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'close';
+    closeButton.setAttribute('aria-label', 'Close');
+    closeButton.textContent = '×';
+    closeButton.addEventListener('click', () => close());
+    box.append(closeButton);
+  }
   container.append(box);
   const unmount = mountContent(win, options.mount, content.root);
+  // Unless the content took focus itself (a text field, say).
+  if (!content.root.activeElement) box.focus();
 
   // Beside the anchor, on its side (right unless asked) or the next that fits; following it as the
   // page scrolls, at most once a frame.
