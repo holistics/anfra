@@ -1,3 +1,9 @@
+## [0.13.4](https://github.com/holistics/anfra/compare/v0.13.3...v0.13.4) (2026-10-26)
+
+### Features
+
+* dedup nested error messages ([f620318](https://github.com/holistics/anfra/commit/f6203185fa6245f6e854c0e24406f8c5ab11e4ed))
+* expose and log internal errors (toggleable by env flag) ([e2755f7](https://github.com/holistics/anfra/commit/e2755f74c4b9beafc0e92e21bf749421471fba2f))
 ## [0.13.3](https://github.com/holistics/anfra/compare/v0.13.2...v0.13.3) (2026-10-22)
 
 ### Bug Fixes
