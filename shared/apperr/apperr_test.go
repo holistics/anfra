@@ -203,6 +203,15 @@ func TestCases(t *testing.T) {
 			log:     "apperr.not_found: No such tenant.: no rows in result set",
 		},
 		{
+			name: "a message taken from the inner error is not repeated in the log",
+			chain: func() error {
+				return apperr.Encapsulate(fmt.Errorf("query error: %w", errNoRows), apperr.NotFound, errNoRows.Error())
+			},
+			code:    apperr.NotFound,
+			message: "no rows in result set",
+			log:     "apperr.not_found: query error: no rows in result set",
+		},
+		{
 			name: "encapsulating with the default message",
 			chain: func() error {
 				return apperr.EncapsulateWith(errDial, unavailable, "", retryAfter{Seconds: 5})

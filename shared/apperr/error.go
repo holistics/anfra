@@ -113,7 +113,9 @@ func newError(inner error, c Code, msg string, details any) *Error {
 }
 
 // Error is the log form: the steps, outermost first, then the qualified code and message,
-// then the inner chain. Sensitive step parameters are redacted.
+// then the inner chain. Sensitive step parameters are redacted. A message the
+// inner chain already says, as when it was taken from the inner error, is not
+// repeated.
 func (e *Error) Error() string {
 	var b strings.Builder
 	for _, s := range e.Steps {
@@ -121,11 +123,17 @@ func (e *Error) Error() string {
 		b.WriteString(": ")
 	}
 	b.WriteString(e.Code.Qualified())
-	b.WriteString(": ")
-	b.WriteString(e.Message)
+	var inner string
+	if e.inner != nil {
+		inner = e.inner.Error()
+	}
+	if e.inner == nil || !strings.Contains(inner, e.Message) {
+		b.WriteString(": ")
+		b.WriteString(e.Message)
+	}
 	if e.inner != nil {
 		b.WriteString(": ")
-		b.WriteString(e.inner.Error())
+		b.WriteString(inner)
 	}
 	return b.String()
 }
