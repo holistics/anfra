@@ -168,7 +168,8 @@ for it:
   Load fonts from `@fontsource` on jsDelivr, as the example does, rather than Google Fonts' CSS,
   which differs per browser and so cannot be hashed.
 - `localStorage`, `sessionStorage` and cookies throw: keep state in variables. This includes
-  Basecoat's theme switcher, which stores the mode: follow `prefers-color-scheme` instead.
+  Basecoat's theme switcher, which stores the mode: follow `prefers-color-scheme`, or the host's
+  own mode with `Anfra.theme` ([references/api.md](references/api.md#environment)), instead.
 - Forms, popups, navigation, `<iframe>` and `<base>` are blocked: use buttons and `change`
   listeners, never `<form>`.
 - **The app is its one HTML file: nothing it loads may be a file of the repo.** No relative `src`
