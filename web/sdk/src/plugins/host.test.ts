@@ -10,7 +10,6 @@ import { corePlugin } from './core';
 import { exportPlugin } from './export';
 import { lineagePlugin } from './lineage';
 import { pictureFilename, renderPlugin } from './render';
-import { inspectPlugin } from './inspect';
 
 // jsdom's Blob has no arrayBuffer(), which every browser the SDK runs in has.
 if (!Blob.prototype.arrayBuffer) {
@@ -199,56 +198,5 @@ describe('render', () => {
     expect(pictureFilename('   ...  ', 'png')).toBe('Rendering.png');
     expect(pictureFilename(42, 'pdf')).toBe('Rendering.pdf');
     expect(pictureFilename('x'.repeat(300), 'png')).toHaveLength(204);
-  });
-});
-
-describe('inspect', () => {
-  it('tells the frame to watch, highlight, locate and pick, by the host\'s calls only', async () => {
-    mount(inspectPlugin());
-    await mounted!.call('inspect.watch', true);
-    await mounted!.call('inspect.highlight', '0.2');
-    await mounted!.call('inspect.locate', { app: 0, kind: 'query', name: 'revenue' });
-    await mounted!.call('inspect.pick', true);
-    fromFrame({ type: 'anfra:call', id: 1, name: 'inspect.watch', request: true });
-    await answered(5);
-    expect(replies).toEqual([
-      { type: 'anfra:event', name: 'inspect.watch', payload: true },
-      { type: 'anfra:event', name: 'inspect.highlight', payload: '0.2' },
-      { type: 'anfra:event', name: 'inspect.locate', payload: { app: 0, kind: 'query', name: 'revenue' } },
-      { type: 'anfra:event', name: 'inspect.pick', payload: true },
-      { type: 'anfra:result', id: 1, ok: false, error: { name: 'PermissionError', message: "'inspect.watch' can't be called from a Data App." } },
-    ]);
-  });
-
-  it('tells a reloaded frame to keep watching, and relays its snapshots', async () => {
-    mount(inspectPlugin());
-    const snapshots = vi.fn();
-    mounted!.on('inspect.snapshot', snapshots);
-    fromFrame({ type: 'anfra:ready' });
-    expect(replies).toEqual([]);
-    await mounted!.call('inspect.watch', true);
-    fromFrame({ type: 'anfra:ready' });
-    expect(replies).toHaveLength(2);
-    expect(replies[1]).toEqual({ type: 'anfra:event', name: 'inspect.watch', payload: true });
-    fromFrame({ type: 'anfra:event', name: 'inspect.snapshot', payload: { apps: [] } });
-    expect(snapshots).toHaveBeenCalledWith({ apps: [], structure: { nodes: [], usage: {} } });
-  });
-
-  it('relays only snapshots and picks of their shape, and only while watched', async () => {
-    mount(inspectPlugin());
-    const snapshots = vi.fn();
-    const picks = vi.fn();
-    mounted!.on('inspect.snapshot', snapshots);
-    mounted!.on('inspect.picked', picks);
-    fromFrame({ type: 'anfra:event', name: 'inspect.snapshot', payload: { apps: [] } });
-    fromFrame({ type: 'anfra:event', name: 'inspect.picked', payload: { node: '0' } });
-    await mounted!.call('inspect.watch', true);
-    for (const payload of [null, 'x', { apps: 'x' }, { apps: [1] }, { apps: [], structure: { nodes: {} } }]) {
-      fromFrame({ type: 'anfra:event', name: 'inspect.snapshot', payload });
-    }
-    for (const payload of [null, { node: 3 }, {}]) fromFrame({ type: 'anfra:event', name: 'inspect.picked', payload });
-    fromFrame({ type: 'anfra:event', name: 'inspect.picked', payload: { node: null } });
-    expect(snapshots).not.toHaveBeenCalled();
-    expect(picks.mock.calls).toEqual([[{ node: null }]]);
   });
 });

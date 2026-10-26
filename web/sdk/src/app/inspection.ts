@@ -1,12 +1,13 @@
 /**
- * `inspect`'s frame half: while the host watches, post a snapshot of every app, and of the page's
- * structure, on each change; highlight, locate and pick on the host's word. Nothing here runs for a
- * frame nobody inspects: no observer, no structure, no overlay.
+ * Inspection, the frame's side of the host's panel: while the host watches, post a snapshot of every
+ * app, and of the page's structure, on each change; highlight, locate and pick on the host's word.
+ * The kernel's own, under `anfra.*`, so every host's panel has it whatever plugins it installs.
+ * Nothing here runs for a frame nobody inspects: no observer, no structure, no overlay.
  */
-import type { FrameKernel } from '../../app/kernel';
-import { ATTR, describeNode, type BuiltStructure } from '../../app/structure';
-import { scrollTo } from '../../app/overlay';
-import type { LocateTarget, StructureNode } from '../../common/types';
+import type { FrameKernel } from './kernel';
+import { ATTR, describeNode, type BuiltStructure } from './structure';
+import { scrollTo } from './overlay';
+import type { LocateTarget, StructureNode } from '../common/types';
 import { startPick } from './pick';
 
 function findNode (nodes: StructureNode[], key: string): StructureNode | undefined {
@@ -18,7 +19,8 @@ function findNode (nodes: StructureNode[], key: string): StructureNode | undefin
   return undefined;
 }
 
-export default function setup (kernel: FrameKernel): void {
+/** Start answering the host's panel; `kernel` is the kernel's own, named `anfra`. */
+export function installInspection (kernel: FrameKernel): void {
   const win = kernel.window;
   const doc = win.document;
   let inspecting = false;

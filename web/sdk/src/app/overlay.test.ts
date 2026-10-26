@@ -2,7 +2,7 @@ import {
   afterEach, beforeEach, describe, expect, it, vi,
 } from 'vitest';
 import { FLASH_MS, OVERLAY_ID, overlayFor } from './overlay';
-import { startPick } from '../plugins/inspect/pick';
+import { startPick } from './pick';
 import { layerRoot } from './layer';
 
 const overlayRoot = () => layerRoot(document, 'anfra').getElementById(OVERLAY_ID) as HTMLElement;
