@@ -197,4 +197,26 @@ describe('the modal and the popover', () => {
     await kernel.popover({ anchor: { x: 0, y: 0 }, mount: () => {}, closeButton: false });
     expect(menuRoot()!.querySelector('.popover .close')).toBeNull();
   });
+
+  it('highlights nothing on open, then what the pointer or the arrows reach, skipping a disabled entry', async () => {
+    const f = frame((kernel) => {
+      kernel.menuItem({ id: 'a', label: 'A', target: 'node', run: () => {} });
+      kernel.menuItem({ id: 'b', label: 'B', target: 'node', run: () => {} });
+    }, { 'anfra.menu': () => [{ id: 'c', label: 'C', disabled: 'No' }] });
+    f.emit('anfra.menu', { kinds: ['node'] });
+    await flush();
+    rightClick('inside');
+    await settle();
+    const focused = () => (menuRoot()!.activeElement as HTMLElement | null)?.dataset.item?.split(':')[1] ?? null;
+    expect(focused()).toBeNull();
+    entries()[1].dispatchEvent(new Event('pointermove', { bubbles: true, composed: true }));
+    expect(focused()).toBe('notes.b');
+    const arrow = (key: string) => document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+    arrow('ArrowDown');
+    expect(focused()).toBe('notes.a');
+    arrow('ArrowUp');
+    expect(focused()).toBe('notes.b');
+    entries()[2].dispatchEvent(new Event('pointermove', { bubbles: true, composed: true }));
+    expect(focused()).toBeNull();
+  });
 });
