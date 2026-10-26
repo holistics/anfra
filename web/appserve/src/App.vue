@@ -6,12 +6,13 @@ import AppTree from './AppTree.vue';
 import DataAppFrame from './DataAppFrame.vue';
 import Icon from './Icon.vue';
 import PluginPanel from './PluginPanel.vue';
+import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
 import type {
   DatasetDescriptor, RenderFormat, RenderRequest, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
-  filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
+  allApps, filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from './catalog';
 import * as server from './server';
 
@@ -337,7 +338,54 @@ watch(selectedPath, () => {
   frameError.value = undefined;
 });
 
+// The command palette: the shell's own commands, the plugins', and every Data App to open.
+const paletteOpen = ref(false);
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+const PALETTE_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
+const paletteEntries = computed<PaletteEntry[]>(() => {
+  const noApp = selected.value ? undefined : 'Open a Data App first';
+  const plugins = toolbarCommands.value.map((command) => {
+    const state = commandState(command);
+    return {
+      id: `command:${command.id}`, title: command.title, group: 'Data App', shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
+    };
+  });
+  return [
+    ...plugins,
+    { id: 'reload', title: 'Reload Data App', group: 'Data App', disabled: noApp },
+    { id: 'png', title: 'Download as PNG', group: 'Data App', disabled: noApp ?? (rendering.value ? 'Rendering…' : undefined) },
+    { id: 'pdf', title: 'Download as PDF', group: 'Data App', disabled: noApp ?? (rendering.value ? 'Rendering…' : undefined) },
+    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View' },
+    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View' },
+    ...allApps(entries.value).map((entry) => ({
+      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', disabled: entry.path === selected.value?.path ? 'Open now' : undefined,
+    })),
+  ];
+});
+function runPaletteEntry (id: string): void {
+  if (id.startsWith('command:')) {
+    const command = runtime.value?.commands.find((candidate) => `command:${candidate.id}` === id);
+    if (command) runCommand(command);
+  } else if (id.startsWith('app:')) {
+    select(id.slice('app:'.length));
+  } else if (id === 'reload') {
+    reload();
+  } else if (id === 'png' || id === 'pdf') {
+    void renderPage(id);
+  } else if (id === 'sidebar') {
+    sidebarOpen.value = !sidebarOpen.value;
+  } else if (id === 'theme') {
+    toggleTheme();
+  }
+}
+
 function onKeydown (event: KeyboardEvent): void {
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    paletteOpen.value = !paletteOpen.value;
+    return;
+  }
+  if (paletteOpen.value) return;
   // The plugins' shortcuts first (Alt+Shift+I for Inspect); the frame forwards its own.
   if (app.value?.handleKeydown(event)) return;
   const target = event.target as HTMLElement | null;
@@ -530,6 +578,16 @@ onBeforeUnmount(() => {
             </section>
           </div>
           <button
+            type="button"
+            class="icon-button"
+            :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
+            :title="`Command palette (${PALETTE_SHORTCUT})`"
+            data-testid="palette-open"
+            @click="paletteOpen = true"
+          >
+            <Icon name="command" />
+          </button>
+          <button
             v-for="command in toolbarCommands"
             :key="command.id"
             type="button"
@@ -610,5 +668,6 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </main>
+    <CommandPalette v-if="paletteOpen" :entries="paletteEntries" @run="runPaletteEntry" @close="paletteOpen = false" />
   </div>
 </template>
