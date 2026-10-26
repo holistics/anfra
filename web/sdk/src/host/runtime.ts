@@ -11,7 +11,8 @@ import type {
   CallContext, CallDefinition, Caller, CallOptions, EventCheck, HandlerCallOptions, HandlerContext, Middleware, MountContext, Plugin,
 } from './plugin';
 import { checkPlugin } from './plugin';
-import { builtFrameScript } from './frameScript';
+import { builtFrameScript, builtUiBody } from './frameScript';
+import { checkTarget, type MenuEntry, type MenuTarget } from '../common/menu';
 import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
@@ -32,6 +33,8 @@ export interface HostOptions {
   middleware?: readonly Middleware[];
   /** The frame script; the one built into this package unless given (tests). */
   frameScript?: string;
+  /** The kernel's UI body, for the frame's menu, modal and popover; the one built in unless given (tests). */
+  uiBody?: string;
   /**
    * Origins a Data App may load scripts, styles, fonts and images from, and fetch them from, beside
    * the policy's own CDNs: each `https://<host>[:<port>]`, nothing after it. Never a way to the
@@ -77,7 +80,10 @@ export interface MountedDataApp {
   panel: Panel;
   /** How a command, by full id, shows for this Data App now. */
   commandState: (id: string) => CommandState;
-  /** Run a command, by full id, for this Data App. Refused while its state says it is disabled. */
+  /**
+   * Run a command, by full id, for this Data App. Refused while its state says it is disabled. A
+   * command for the page's content (`target`) runs from the frame's menu, with its target.
+   */
   run: (id: string) => Promise<unknown>;
   /** Each time commands' state may have changed: a plugin said so, or the panel changed. */
   onCommandsChange: (listener: () => void) => () => void;
@@ -160,6 +166,8 @@ export function createHost (options: HostOptions): Host {
     ...plugins.flatMap((plugin) => plugin.host?.middleware ?? []),
   ].sort((a, b) => (a.stage ?? 0) - (b.stage ?? 0) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const bodies = new Map(plugins.flatMap((plugin) => (plugin.frame?.body ? [[plugin.name, plugin.frame.body] as const] : [])));
+  const ui = options.uiBody ?? builtUiBody();
+  if (ui) bodies.set('anfra', ui);
   // The kernel's own call: a plugin's frame body. A call like any other, through the middleware.
   answers.set(BODY_CALL, {
     plugin: 'anfra',
@@ -173,6 +181,34 @@ export function createHost (options: HostOptions): Host {
       },
     },
   });
+  // The kernel's menu calls, answered for the mount the frame is: its host commands for a target,
+  // and running one the reader picked. Calls like any other, so middleware sees them.
+  const menus = new WeakMap<MountContext, { entries: (target: MenuTarget) => MenuEntry[], run: (id: string, target: MenuTarget) => Promise<unknown> }>();
+  const menuOf = (mount: MountContext | undefined) => {
+    const menu = mount && menus.get(mount);
+    if (!menu) throw new ValidationError('The menu is for a mounted Data App.');
+    return menu;
+  };
+  const targetOf = (request: unknown): MenuTarget => {
+    const target = checkTarget(request);
+    if (!target) throw new ValidationError('Not a menu target.');
+    return target;
+  };
+  answers.set('anfra.menu', {
+    plugin: 'anfra',
+    definition: { frame: true, handler: (request: unknown, { mount }) => menuOf(mount).entries(targetOf(request)) },
+  });
+  answers.set('anfra.run', {
+    plugin: 'anfra',
+    definition: {
+      frame: true,
+      handler: (request: unknown, { mount }) => {
+        const id = (request as { id?: unknown } | null)?.id;
+        if (typeof id !== 'string') throw new ValidationError('Name the command to run.');
+        return menuOf(mount).run(id, targetOf((request as { target?: unknown }).target));
+      },
+    },
+  });
   // The events a frame may send, by full name, each with its plugin's check.
   const events = new Map<string, EventCheck>(plugins.flatMap((plugin) => Object.entries(plugin.host?.events ?? {})
     .map(([name, check]) => [`${plugin.name}.${name}`, check] as const)));
@@ -181,6 +217,8 @@ export function createHost (options: HostOptions): Host {
   let theme = resolveTheme(options.theme);
   const themeListeners = new Set<(next: Theme) => void>();
   const tabIds = tabs.map((tab) => tab.id);
+  // Which kinds of target the host's own menu commands are for: the frame listens only when asked.
+  const menuKinds = [...new Set(commands.flatMap((command) => (command.target ? [command.target] : [])))];
   const byShortcut = new Map(commands.flatMap((command) => {
     const shortcut = normalizeShortcut(command.shortcut);
     return shortcut ? [[shortcut, command.id] as const] : [];
@@ -366,6 +404,7 @@ export function createHost (options: HostOptions): Host {
         const message = event.data as BridgeMessage | undefined;
         if (message?.type === 'anfra:ready') {
           context.emit('anfra.theme', theme);
+          if (menuKinds.length) context.emit('anfra.menu', { kinds: menuKinds });
           if (byShortcut.size) context.emit('anfra.shortcuts', [...byShortcut.keys()]);
           panelState.ready();
           readyListeners.forEach((listener) => listener());
@@ -393,18 +432,42 @@ export function createHost (options: HostOptions): Host {
         setups: plugins.flatMap((plugin) => (plugin.frame ? [{ name: plugin.name, setup: plugin.frame.setup }] : [])),
       });
 
-      /** Run a command for this frame, unless its state says it can't run. */
-      const runCommand = async (id: string): Promise<unknown> => {
+      /** Run a command for this frame, unless its state says it can't run; one for content, with its target. */
+      const runCommand = async (id: string, target?: MenuTarget, fromFrame = false): Promise<unknown> => {
         const command = commandOf(id);
-        const { disabled } = commandState(command, stateContext);
+        if (command.target && target?.kind !== command.target) throw new ValidationError(`'${id}' runs from the menu on the page, with a ${command.target} target.`);
+        const { disabled } = commandState(command, stateContext, target);
         if (disabled) throw new PermissionError(disabled);
         if ('tab' in command.run) {
-          if (command.run.target !== undefined) panelState.panel.show(command.run.tab, command.run.target);
+          const node = target ? (target.kind === 'node' ? target : target.node)?.node.key : undefined;
+          const selected = node ?? command.run.target;
+          if (selected !== undefined) panelState.panel.show(command.run.tab, selected);
           else panelState.panel.toggle(command.run.tab);
           return null;
         }
-        return call(command.run.call, command.run.request ?? null, callersOf(command.plugin), context);
+        const request = target ? { ...(command.run.request as object | undefined ?? {}), target } : command.run.request ?? null;
+        const callers: Caller[] = fromFrame ? [{ kind: 'frame' }, ...callersOf(command.plugin)] : callersOf(command.plugin);
+        return call(command.run.call, request, callers, context);
       };
+      menus.set(context, {
+        entries: (target) => menuFor(target),
+        // Picked in the frame: the command's call keeps the frame as its origin.
+        run: (id, target) => {
+          if (!commandOf(id).target) return Promise.reject(new PermissionError(`'${id}' isn't a menu command.`));
+          return runCommand(id, target, true);
+        },
+      });
+      /** The host's menu commands that apply to a target, as the frame's menu shows them. */
+      const menuFor = (target: MenuTarget): MenuEntry[] => commands.flatMap((command) => {
+        if (command.target !== target.kind) return [];
+        try {
+          if (command.when && !command.when(target, stateContext)) return [];
+        } catch {
+          return [];
+        }
+        const { disabled } = commandState(command, stateContext, target);
+        return [{ id: command.id, label: command.title, ...(disabled ? { disabled } : {}) }];
+      });
 
       return {
         frame,

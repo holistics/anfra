@@ -177,6 +177,17 @@ export class Query extends Observable {
   }
 
   /**
+   * Opens the menu on these rows of this query: the items plugins and the host offer for a point
+   * of data, such as "View underlying data". Call it from your chart's own right-click handler,
+   * with the event and the rows under the pointer, as for `select`; `fields` narrows the dimensions
+   * that take part. Whether a menu opens: when one does, the event's default (the browser's menu)
+   * is prevented, and when none would (no plugin offers one), nothing happens.
+   */
+  menu (event: Event, rows: Row | readonly Row[], options: { fields?: readonly string[] } = {}): boolean {
+    return this.app.menu(this, event, Array.isArray(rows) ? rows : [rows as Row], options.fields);
+  }
+
+  /**
    * Cross-filters this query's targets by the rows the reader picked.
    *
    * Replaces whatever was selected, here or in another query: an app holds one selection at a time.

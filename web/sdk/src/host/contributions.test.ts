@@ -210,3 +210,72 @@ describe('shortcuts', () => {
     expect(app.handleKeydown(handled)).toBe(false);
   });
 });
+
+describe('menu commands', () => {
+  const node = {
+    kind: 'node', node: { key: '0', kind: 'block', id: 'trend', problems: [], children: [] }, ancestors: [], rect: { x: 0, y: 0, width: 1, height: 1 },
+  };
+  const ask = (handler: CallHandler = vi.fn(() => 'asked')) => definePlugin({
+    name: 'ask',
+    version: '1',
+    host: {
+      calls: { ask: handler },
+      commands: [
+        { id: 'ask', title: 'Ask AI', target: 'node', run: { call: 'ask.ask', request: { tone: 'short' } } },
+        {
+          id: 'share', title: 'Share', target: 'node', run: { call: 'ask.ask' }, state: () => ({ disabled: 'Disabled by admin' }),
+        },
+        {
+          id: 'trends', title: 'Only trends', target: 'node', run: { call: 'ask.ask' }, when: (target) => target.kind === 'node' && target.node.id === 'other',
+        },
+      ],
+    },
+  });
+
+  function mountWith (plugin: Plugin) {
+    const runtime = createHost({ plugins: [core(), plugin], frameScript: 'x', uiBody: 'ui' });
+    mounted = runtime.mount({
+      container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
+    });
+    const posted: { type: string, name?: string, id?: number, payload?: unknown, ok?: boolean, result?: unknown, error?: unknown }[] = [];
+    vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { posted.push(message as never); });
+    const fromFrame = (data: unknown) => window.dispatchEvent(new MessageEvent('message', { data, source: mounted!.frame.contentWindow }));
+    return { posted, fromFrame };
+  }
+
+  it('tells a ready frame which targets it has commands for', () => {
+    const { posted, fromFrame } = mountWith(ask());
+    fromFrame({ type: 'anfra:ready' });
+    expect(posted).toContainEqual({ type: 'anfra:event', name: 'anfra.menu', payload: { kinds: ['node'] } });
+  });
+
+  it('answers the frame\'s menu for a target: what applies, and why one can\'t run', async () => {
+    const { posted, fromFrame } = mountWith(ask());
+    fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.menu', request: node });
+    fromFrame({ type: 'anfra:call', id: 2, name: 'anfra.menu', request: { kind: 'node', node: 'x' } });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(posted.find((m) => m.id === 1)?.result).toEqual([{ id: 'ask.ask', label: 'Ask AI' }, { id: 'ask.share', label: 'Share', disabled: 'Disabled by admin' }]);
+    expect(posted.find((m) => m.id === 2)).toMatchObject({ ok: false, error: { name: 'ValidationError' } });
+  });
+
+  it('runs the one the reader picked with its target, started by the frame, and refuses a disabled one', async () => {
+    const handler = vi.fn((_request: unknown, context: { chain: unknown }) => context.chain);
+    const { posted, fromFrame } = mountWith(ask(handler));
+    fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.run', request: { id: 'ask.ask', target: node } });
+    fromFrame({ type: 'anfra:call', id: 2, name: 'anfra.run', request: { id: 'ask.share', target: node } });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(handler).toHaveBeenCalledWith({ tone: 'short', target: node }, expect.anything());
+    expect(posted.find((m) => m.id === 1)?.result).toEqual([{ kind: 'frame' }, { kind: 'host' }, { kind: 'plugin', plugin: 'ask' }]);
+    expect(posted.find((m) => m.id === 2)).toMatchObject({ ok: false, error: { name: 'PermissionError', message: 'Disabled by admin' } });
+  });
+
+  it('runs only menu commands from the frame, and a menu command only with its target', async () => {
+    const { posted, fromFrame } = mountWith(notes());
+    fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.run', request: { id: 'notes.save', target: node } });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(posted.find((m) => m.id === 1)).toMatchObject({ ok: false, error: { name: 'PermissionError' } });
+    mounted!.unmount();
+    mountWith(ask());
+    await expect(mounted!.run('ask.ask')).rejects.toThrow('runs from the menu on the page');
+  });
+});
