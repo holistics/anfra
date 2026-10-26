@@ -15,6 +15,10 @@ import { builtFrameScript } from './frameScript';
 import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
+import {
+  commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
+  type TabContribution,
+} from './contributions';
 
 /** The kernel's own call: a plugin's frame body, asked for on its first use. */
 export const BODY_CALL = 'anfra.body';
@@ -32,6 +36,16 @@ export interface HostOptions {
    * network at large (docs/designs/security.md).
    */
   allowOrigins?: readonly string[];
+  /** The host's own commands, beside the plugins': ids as given, unique among all. */
+  commands?: readonly CommandContribution[];
+  /** The host's own tabs, beside the plugins': ids as given, unique among all. */
+  tabs?: readonly TabContribution[];
+  /**
+   * Which contributions, the plugins' and the host's own, the host shows: what it returns false for
+   * is left out everywhere (`host.commands`, `host.tabs`, the panel). A plugin's calls stay, so a host
+   * can draw its own UI on them instead.
+   */
+  contributions?: (contribution: Contribution) => boolean;
 }
 
 export interface MountOptions {
@@ -57,6 +71,12 @@ export interface MountedDataApp {
   on: (name: string, listener: (payload: any) => void) => () => void; // eslint-disable-line @typescript-eslint/no-explicit-any
   /** This Data App's panel: the host's devtools over it, with the tabs plugins add. */
   panel: Panel;
+  /** How a command, by full id, shows for this Data App now. */
+  commandState: (id: string) => CommandState;
+  /** Run a command, by full id, for this Data App. Refused while its state says it is disabled. */
+  run: (id: string) => Promise<unknown>;
+  /** Each time commands' state may have changed: a plugin said so, or the panel changed. */
+  onCommandsChange: (listener: () => void) => () => void;
   /** Stop answering the frame, and remove it. */
   unmount: () => void;
 }
@@ -64,6 +84,10 @@ export interface MountedDataApp {
 export interface Host {
   /** The installed plugins, in install order. */
   readonly plugins: readonly PluginInfo[];
+  /** Every command to show: the plugins', then the host's own, as the filter kept them. */
+  readonly commands: readonly Command[];
+  /** Every tab for a mount's panel, in order, as the filter kept them. */
+  readonly tabs: readonly Tab[];
   /** Make a call as the host page, about no frame. */
   call: <T = unknown>(name: string, request?: unknown, options?: CallOptions) => Promise<T>;
   /**
@@ -140,6 +164,8 @@ export function createHost (options: HostOptions): Host {
   const events = new Map<string, EventCheck>(plugins.flatMap((plugin) => Object.entries(plugin.host?.events ?? {})
     .map(([name, check]) => [`${plugin.name}.${name}`, check] as const)));
   const infos: PluginInfo[] = plugins.map(({ name, version }) => ({ name, version }));
+  const { commands, tabs } = installContributions(plugins, options, options.contributions);
+  const tabIds = tabs.map((tab) => tab.id);
   let nextMount = 1;
 
   /**
@@ -188,8 +214,13 @@ export function createHost (options: HostOptions): Host {
     return dispatch(name, request, callers, mount, signal, callOptions.asOrigin === true);
   }
 
+  /** Who a contribution's calls come from: the host, through its plugin if it has one. */
+  const callersOf = (plugin: string | undefined): Caller[] => (plugin ? [{ kind: 'host' }, { kind: 'plugin', plugin }] : [{ kind: 'host' }]);
+
   return {
     plugins: infos,
+    commands,
+    tabs,
     call: (name, request, callOptions) => call(name, request, [{ kind: 'host' }], undefined, callOptions) as never,
     mount (mountOptions) {
       const frameScript = options.frameScript ?? builtFrameScript();
@@ -204,6 +235,10 @@ export function createHost (options: HostOptions): Host {
 
       const listeners = new Map<string, Set<(payload: unknown) => void>>();
       const readyListeners = new Set<() => void>();
+      const commandListeners = new Set<() => void>();
+      const commandsChanged = () => commandListeners.forEach((listener) => {
+        try { listener(); } catch { /* one listener must not stop the others */ }
+      });
       const listen = <T>(set: Set<T>, listener: T) => {
         set.add(listener);
         return () => { set.delete(listener); };
@@ -224,6 +259,7 @@ export function createHost (options: HostOptions): Host {
           return listen(listeners.get(name)!, listener);
         },
         onReady: (listener) => listen(readyListeners, listener),
+        commandsChanged,
       };
       endpoint = createEndpoint(post, {
         answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
@@ -243,7 +279,46 @@ export function createHost (options: HostOptions): Host {
         },
       });
 
-      const panelState = createPanel(context, { tabs: () => [] });
+      const panelState = createPanel(context, {
+        tabs: () => tabIds,
+        mountTab (panel, id, element) {
+          const tab = tabs.find((candidate) => candidate.id === id);
+          if (!tab) throw new Error(`No tab '${id}' is installed.`);
+          const root = element.shadowRoot ?? element.attachShadow({ mode: 'open' });
+          let disposed = false;
+          let cleanup: void | (() => void);
+          const done = (result: void | (() => void)) => {
+            if (disposed) { if (typeof result === 'function') result(); return; }
+            cleanup = result;
+          };
+          try {
+            const result = tab.mount(root, {
+              tab: id,
+              panel,
+              plugins: infos,
+              document: doc,
+              call: (name, request, callOptions) => call(name, request, callersOf(tab.plugin), context, callOptions) as never,
+            });
+            if (result instanceof Promise) result.then(done, (err: unknown) => win.console?.error(`anfra: tab '${id}' failed to draw:`, err));
+            else done(result);
+          } catch (err) {
+            win.console?.error(`anfra: tab '${id}' failed to draw:`, err);
+          }
+          return () => {
+            if (disposed) return;
+            disposed = true;
+            try { if (typeof cleanup === 'function') cleanup(); } catch { /* the tab is going anyway */ }
+            root.replaceChildren();
+          };
+        },
+      });
+      panelState.panel.subscribe(commandsChanged);
+      const stateContext = { mount: context, panel: panelState.panel };
+      const commandOf = (id: string) => {
+        const command = commands.find((candidate) => candidate.id === id);
+        if (!command) throw new Error(`No command '${id}' is installed.`);
+        return command;
+      };
 
       const onMessage = (event: MessageEvent) => {
         if (event.source !== frame.contentWindow) return;
@@ -281,7 +356,21 @@ export function createHost (options: HostOptions): Host {
         emit: context.emit,
         on: context.on,
         panel: panelState.panel,
+        commandState: (id) => commandState(commandOf(id), stateContext),
+        async run (id) {
+          const command = commandOf(id);
+          const { disabled } = commandState(command, stateContext);
+          if (disabled) throw new PermissionError(disabled);
+          if ('tab' in command.run) {
+            if (command.run.target !== undefined) panelState.panel.show(command.run.tab, command.run.target);
+            else panelState.panel.toggle(command.run.tab);
+            return null;
+          }
+          return call(command.run.call, command.run.request ?? null, callersOf(command.plugin), context);
+        },
+        onCommandsChange: (listener) => listen(commandListeners, listener),
         unmount () {
+          commandListeners.clear();
           panelState.dispose();
           win.removeEventListener('message', onMessage);
           endpoint.close(new ValidationError('The Data App was unmounted before the call finished.'));

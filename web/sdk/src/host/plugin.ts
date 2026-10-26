@@ -1,3 +1,5 @@
+import type { CommandContribution, TabContribution } from './contributions';
+
 /**
  * What a plugin is, the host's side: a name, a version, the plugins it needs, a host half that
  * answers its calls, and the frame half's code. See docs/designs/sdk-plugins.md.
@@ -92,6 +94,8 @@ export interface MountContext {
   on: (name: string, listener: (payload: any) => void) => () => void; // eslint-disable-line @typescript-eslint/no-explicit-any
   /** Each time the frame's document (re)loads and its kernel runs. */
   onReady: (listener: () => void) => () => void;
+  /** Tell the host its commands' state changed for this frame, so it reads each `state` again. */
+  commandsChanged: () => void;
 }
 
 /**
@@ -112,6 +116,10 @@ export interface HostHalf {
   middleware?: readonly Middleware[];
   /** Each time a frame is mounted. What it returns runs when the frame is unmounted. */
   mount?: (mount: MountContext) => void | (() => void);
+  /** Commands for the host's action bar and command palette, ids under the plugin's name. */
+  commands?: readonly CommandContribution[];
+  /** Tabs for the mount's panel, ids under the plugin's name. */
+  tabs?: readonly TabContribution[];
 }
 
 /** A frame half: code the host provisions into the frame, as script source (docs/designs/sdk-plugins.md). */
