@@ -63,6 +63,11 @@ export interface Panel {
   pick: (on: boolean) => void;
   /** Each change to any of the above. Returns the function that stops listening. */
   subscribe: (listener: () => void) => () => void;
+  /**
+   * Draw a tab, by full id, into `element` (in its shadow root, made if it has none), where the host
+   * placed it in its chrome. Returns the function that takes the tab down again.
+   */
+  mountTab: (id: string, element: HTMLElement) => () => void;
 }
 
 /** The runtime's side of a panel: the panel, and what feeds it from the frame. */
@@ -77,7 +82,14 @@ export interface PanelState {
   dispose: () => void;
 }
 
-export function createPanel (mount: MountContext, options: { tabs: () => readonly string[] }): PanelState {
+export interface PanelOptions {
+  /** The installed tabs' ids, in order. */
+  tabs: () => readonly string[];
+  /** Draw a tab into an element; the runtime's, since a tab needs its contribution and its calls. */
+  mountTab: (panel: Panel, id: string, element: HTMLElement) => () => void;
+}
+
+export function createPanel (mount: MountContext, options: PanelOptions): PanelState {
   let open = false;
   let tab: string | undefined;
   let selection: string | null = null;
@@ -154,6 +166,7 @@ export function createPanel (mount: MountContext, options: { tabs: () => readonl
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
+    mountTab: (id, element) => options.mountTab(panel, id, element),
   };
 
   return {
