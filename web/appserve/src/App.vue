@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import {
-  computed, nextTick, onBeforeUnmount, onMounted, ref, watch,
+  computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch,
 } from 'vue';
 import AppTree from './AppTree.vue';
 import DataAppFrame from './DataAppFrame.vue';
 import Icon from './Icon.vue';
-import InspectPanel from './InspectPanel.vue';
+import PluginPanel from './PluginPanel.vue';
 import type {
-  DatasetDescriptor, RenderFormat, RenderRequest, User,
+  DatasetDescriptor, RenderFormat, RenderRequest, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
-import type { InspectedApp, InspectedStructure } from './inspect';
+import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
   filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from './catalog';
@@ -159,6 +159,25 @@ function storedTheme (): 'light' | 'dark' {
 }
 const theme = ref(storedTheme());
 watch(theme, (value) => { document.documentElement.dataset.theme = value; }, { immediate: true });
+// The plugins' UI follows the shell: its scheme, and its own colours as the SDK's tokens.
+const pluginTheme = computed<ThemeInput>(() => {
+  const scheme = theme.value;
+  const style = getComputedStyle(document.documentElement);
+  const read = (name: string) => style.getPropertyValue(name).trim() || undefined;
+  return {
+    scheme,
+    tokens: {
+      'color-bg': read('--bg'),
+      'color-fg': read('--text'),
+      'color-muted': read('--muted'),
+      'color-border': read('--border'),
+      'color-accent': read('--accent'),
+      'color-danger': read('--danger'),
+      radius: read('--radius'),
+      font: getComputedStyle(document.body).fontFamily || undefined,
+    },
+  };
+});
 function toggleTheme (): void {
   theme.value = theme.value === 'dark' ? 'light' : 'dark';
   try {
@@ -168,12 +187,39 @@ function toggleTheme (): void {
 
 const problemsOpen = ref(false);
 
-// The Inspect panel belongs to one Data App: it closes when another is picked, and survives Reload.
-const inspectOpen = ref(false);
-const inspected = ref<InspectedApp[]>();
-const structure = ref<InspectedStructure>();
-const selectedNode = ref<string>();
-const picking = ref(false);
+// The host runtime and the open Data App's mount, for the plugins' commands and its panel. The
+// panel belongs to one Data App: it closes when another is picked, and survives Reload.
+const runtime = shallowRef<Host>();
+const app = shallowRef<MountedDataApp>();
+// Bumped on each change to the panel or the commands' state, which live in the SDK.
+const panelVersion = ref(0);
+let keptPanel: { tab?: string } | undefined;
+let stopWatching: (() => void) | undefined;
+function onAppMounted (host: Host, mounted: MountedDataApp): void {
+  stopWatching?.();
+  runtime.value = host;
+  app.value = mounted;
+  const changed = () => {
+    panelVersion.value += 1;
+    keptPanel = mounted.panel.open ? { tab: mounted.panel.tab } : undefined;
+  };
+  const stops = [mounted.panel.subscribe(changed), mounted.onCommandsChange(changed)];
+  stopWatching = () => stops.forEach((stop) => stop());
+  if (keptPanel) mounted.panel.show(keptPanel.tab);
+  panelVersion.value += 1;
+}
+const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? false));
+// The commands for the toolbar: a plugin's `overflow` ones stay out of it.
+const toolbarCommands = computed(() => runtime.value?.commands.filter((command) => command.placement !== 'overflow') ?? []);
+function commandState (command: Command): { pressed?: boolean, disabled?: string } {
+  void panelVersion.value;
+  return app.value ? app.value.commandState(command.id) : { disabled: 'No Data App is open' };
+}
+const ICONS = ['inspect', 'download', 'table', 'copy', 'reload'] as const;
+const commandIcon = (command: Command) => (ICONS as readonly string[]).includes(command.icon ?? '') ? command.icon as typeof ICONS[number] : 'app';
+function runCommand (command: Command): void {
+  app.value?.run(command.id).catch((err: Error) => showToast(`Couldn't run ${command.title}: ${err.message}`, true));
+}
 const frame = ref<InstanceType<typeof DataAppFrame>>();
 
 // Renderings: the whole page from the toolbar, a node from the inspect panel. The frame saves the
@@ -206,31 +252,6 @@ async function render (request: RenderRequest): Promise<void> {
 }
 const renderPage = (format: RenderFormat) => render({ format });
 
-function onInspect (apps: InspectedApp[], shape: InspectedStructure): void {
-  inspected.value = apps;
-  structure.value = shape;
-}
-// A pick chooses the node and ends pick mode; Escape in the frame only ends it. Either way the
-// overlay the pick left on the page goes: it shows only while the reader hovers the tree.
-function onPick (node: string | null): void {
-  picking.value = false;
-  if (node !== null) selectedNode.value = node;
-  frame.value?.highlight(null);
-}
-// Choosing a node in the tree is the other way to end a pick: the reader has found what they
-// were pointing at.
-function onSelect (node: string | undefined): void {
-  selectedNode.value = node;
-  picking.value = false;
-}
-function onHighlight (node: string | null): void {
-  frame.value?.highlight(node);
-}
-watch(inspectOpen, (open) => {
-  if (open) return;
-  picking.value = false;
-  selectedNode.value = undefined;
-});
 const WIDTH_KEY = 'anfra-appserve:inspect-width';
 const MIN_WIDTH = 280;
 function loadWidth (): number {
@@ -309,17 +330,16 @@ const title = computed(() => selected.value?.label ?? selectedPath.value?.split(
 
 watch(() => (selected.value ? `${selected.value.path}#${revision.value}` : ''), (key) => {
   loading.value = key !== '';
-  inspected.value = undefined;
-  structure.value = undefined;
-  selectedNode.value = undefined;
-  picking.value = false;
 }, { immediate: true });
 watch(selectedPath, () => {
-  inspectOpen.value = false;
+  keptPanel = undefined;
+  app.value?.panel.hide();
   frameError.value = undefined;
 });
 
 function onKeydown (event: KeyboardEvent): void {
+  // The plugins' shortcuts first (Alt+Shift+I for Inspect); the frame forwards its own.
+  if (app.value?.handleKeydown(event)) return;
   const target = event.target as HTMLElement | null;
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
   if (event.key === '/' && !typing && !event.metaKey && !event.ctrlKey) {
@@ -329,7 +349,7 @@ function onKeydown (event: KeyboardEvent): void {
   }
   if (event.key === 'Escape') {
     problemsOpen.value = false;
-    inspectOpen.value = false;
+    app.value?.panel.hide();
   }
 }
 
@@ -389,6 +409,7 @@ onBeforeUnmount(() => {
   narrowQuery.removeEventListener('change', onNarrowChange);
   events?.close();
   clearInterval(healthTimer);
+  stopWatching?.();
 });
 </script>
 
@@ -509,17 +530,19 @@ onBeforeUnmount(() => {
             </section>
           </div>
           <button
+            v-for="command in toolbarCommands"
+            :key="command.id"
             type="button"
             class="icon-button"
-            :class="{ active: inspectOpen }"
-            aria-label="Inspect Data App"
-            title="Inspect Data App"
-            data-testid="inspect"
-            :aria-pressed="inspectOpen"
-            :disabled="!selected"
-            @click="inspectOpen = !inspectOpen"
+            :class="{ active: commandState(command).pressed }"
+            :aria-label="command.title"
+            :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${command.shortcut})` : command.title)"
+            :data-testid="`command-${command.id}`"
+            :aria-pressed="commandState(command).pressed ?? false"
+            :disabled="!selected || !!commandState(command).disabled"
+            @click="runCommand(command)"
           >
-            <Icon name="inspect" />
+            <Icon :name="commandIcon(command)" />
           </button>
           <div class="download">
             <button
@@ -562,14 +585,12 @@ onBeforeUnmount(() => {
           ref="frame"
           :key="`${selected.path}#${revision}`"
           :path="selected.path"
-          :inspecting="inspectOpen"
-          :picking="picking"
           :datasets="datasets"
           :reader="reader"
           :allow-origins="allowOrigins"
+          :theme="pluginTheme"
           @load="loading = false"
-          @inspect="onInspect"
-          @pick="onPick"
+          @mounted="onAppMounted"
           @error="frameError = $event"
         />
         <div v-else-if="selectedPath && loaded" class="empty-state" data-testid="not-found">
@@ -580,22 +601,11 @@ onBeforeUnmount(() => {
           <Icon name="app" />
           <p>Pick a Data App on the left.</p>
         </div>
-        <template v-if="inspectOpen && selected">
-          <div v-if="narrow" class="backdrop" @click="inspectOpen = false" />
+        <template v-if="panelOpen && selected && app && runtime">
+          <div v-if="narrow" class="backdrop" @click="app.panel.hide()" />
           <div class="inspect-dock" :style="{ width: `${inspectWidth}px` }">
             <div class="resize-handle" role="separator" aria-orientation="vertical" @pointerdown.prevent="startResize" />
-            <InspectPanel
-              :apps="inspected"
-              :structure="structure"
-              :selected-node="selectedNode"
-              :picking="picking"
-              @close="inspectOpen = false"
-              @highlight="onHighlight"
-              @locate="frame?.locate($event)"
-              @select="onSelect"
-              @pick="picking = $event"
-              @render="render"
-            />
+            <PluginPanel :panel="app.panel" :tabs="runtime.tabs" :version="panelVersion" />
           </div>
         </template>
       </div>
