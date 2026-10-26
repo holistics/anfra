@@ -12,5 +12,10 @@ export {
   definePlugin, type Plugin, type HostHalf, type FrameHalf, type CallDefinition, type CallHandler, type CallContext,
   type HandlerContext, type HandlerCallOptions, type CallOptions, type EventCheck, type Caller, type Middleware, type MountContext,
 } from './plugin';
+export {
+  type Command, type CommandContribution, type CommandRun, type CommandState, type CommandStateContext, type Contribution, type Tab,
+  type TabContribution, type TabContext,
+} from './contributions';
+export { type Panel, type Snapshot } from './panel';
 export { provisionDocument, composeFrameScript, type ProvisionOptions } from './provision';
 export { contentPolicy, checkOrigin, SCRIPT_ORIGINS } from './policy';
