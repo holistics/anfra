@@ -459,7 +459,7 @@ code { font-size: 12px; color: var(--muted); }
 .empty-state .icon { width: 40px; height: 40px; padding: 10px; border-radius: 10px; background: var(--shell); }
 .empty-state p { margin: 0; }
 
-/* Inspect panel */
+/* The panel */
 
 .inspect-dock {
   position: relative;
@@ -482,9 +482,10 @@ code { font-size: 12px; color: var(--muted); }
 
 .resize-handle:hover { background: var(--accent-bg); }
 
-.inspect { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+/* The panel's chrome; each tab draws itself, in its own shadow root. */
+.plugin-panel { display: flex; flex-direction: column; width: 100%; min-width: 0; }
 
-.inspect-header {
+.panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -494,127 +495,15 @@ code { font-size: 12px; color: var(--muted); }
   border-bottom: 1px solid var(--border);
 }
 
-.inspect-header h3 { margin: 0; font-size: 13px; font-weight: 600; }
-
-.inspect-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 16px; }
-.inspect-note { color: var(--muted); margin: 12px 0; }
-
-.inspect h4 { margin: 16px 0 0; font-size: 14px; }
-.inspect h5 {
-  margin: 16px 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.inspect dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
-.inspect dt { color: var(--muted); }
-.inspect dd { margin: 0; overflow-wrap: anywhere; }
-
-.inspect .card {
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.inspect .card header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-
-.pill {
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: var(--hover);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.pill.warn { background: var(--accent-bg); color: var(--accent); }
-.pill.success { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-.pill.error { background: var(--danger-bg); color: var(--danger); }
-
-.signature { margin-top: 8px; color: var(--muted); }
-.signature summary { cursor: pointer; }
-.signature code { display: block; margin-top: 4px; }
-
-.inspect code.wrap { overflow-wrap: anywhere; }
-.error-text { margin: 8px 0 0; color: var(--danger); }
-
-.code { margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-
-.code-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  background: var(--shell);
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.copy { border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--accent); font-size: 11px; }
-.copy:hover { background: var(--hover); }
-.locate { margin-left: auto; border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--accent); font-size: 11px; }
-.locate:hover:not(:disabled) { background: var(--hover); }
-.locate:disabled { color: var(--muted); cursor: default; }
-
-/* The inspect panel's tabs and its Structure tab */
-.inspect-tabs { display: flex; gap: 2px; }
-.inspect-tabs button {
+.panel-tabs { display: flex; gap: 2px; }
+.panel-tabs button {
   border: 0; border-radius: 6px; background: none; padding: 4px 10px;
-  color: var(--muted); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 13px; font-weight: 600;
 }
-.inspect-tabs button:hover { background: var(--hover); }
-.inspect-tabs button[aria-selected="true"] { color: var(--fg); background: var(--hover); }
-.toolbar { flex: none; display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
-.tool { border: 1px solid var(--border); border-radius: 6px; background: none; padding: 3px 10px; color: var(--fg); font-size: 12px; }
-.tool:hover:not(:disabled) { background: var(--hover); }
-.tool:disabled { color: var(--muted); }
-.tool[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
-.structure-tree { list-style: none; margin: 0; padding: 0; }
-.structure-tree .node {
-  display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px;
-  font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden;
-}
-.structure-tree .node:hover { background: var(--hover); }
-.structure-tree .node.selected { background: var(--accent-bg); }
-.structure-tree .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
-.structure-tree .label, .structure-tree .app { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-.structure-tree .node.problem .name { color: var(--danger); }
-.structure-tree .kind { padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.structure-tree .kind.container { background: color-mix(in srgb, #7c3aed 18%, transparent); color: #7c3aed; }
-.structure-tree .kind.block { background: color-mix(in srgb, #2563eb 18%, transparent); color: #2563eb; }
-.structure-tree .kind.query { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-.structure-tree .kind.control { background: color-mix(in srgb, #d97706 18%, transparent); color: #d97706; }
-.structure-tree .kind, .structure-tree .pill { flex: none; }
-/* The actions keep their place and sit in the row's height, so showing them moves nothing. */
-.structure-tree .actions { flex: none; display: flex; gap: 2px; margin: -4px 0 -4px auto; visibility: hidden; }
-.structure-tree .node:hover .actions, .structure-tree .node.selected .actions, .structure-tree .node:focus-within .actions { visibility: visible; }
-.row-action {
-  display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
-  border: 0; border-radius: 4px; background: none; color: var(--muted);
-}
-.row-action:hover { background: var(--hover); color: var(--accent); }
-.row-action .icon { width: 14px; height: 14px; }
-/* The Structure tab: the tree scrolls, the selected node's detail stays at the bottom. */
-.structure-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.detail { flex: none; max-height: 45%; overflow: auto; padding: 8px 14px 16px; border-top: 1px solid var(--border); }
-.detail h5 { margin-top: 4px; }
-.detail .card { margin-top: 16px; }
-.detail-actions { display: flex; gap: 6px; margin-top: 8px; }
-.detail-actions .icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
-.inspect .card.flash { animation: flash 1.5s ease-out; }
-@keyframes flash { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } }
-
-.code pre {
-  margin: 0;
-  max-height: 220px;
-  overflow: auto;
-  padding: 8px;
-  font: 12px/1.5 ui-monospace, monospace;
-}
+.panel-tabs button:hover { background: var(--hover); }
+.panel-tabs button[aria-selected="true"] { color: var(--text); background: var(--hover); }
+.panel-content { flex: 1; min-height: 0; }
+.panel-tab { height: 100%; }
 
 /* Narrow: the sidebar floats over the viewer instead of beside it. */
 
