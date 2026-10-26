@@ -14,7 +14,8 @@ The example throughout is a `notes` plugin. Readers leave notes on a query, the 
 | The host page to watch or change calls (logging, quota, a cache) | no plugin: middleware on `createHost` |
 | An API for the author (`Anfra.x`, `query.x`) | a frame half |
 | UI over the page tied to its layout (a panel by a block, a highlight) | a frame half, drawing in the plugin layer |
-| UI that doesn't need the page (a chat panel, settings) | the host's own UI, beside the frame; maybe a host half for its data |
+| A command for the host's action bar or palette, or a tab in its panel | contributions on the host half (`commands`, `tabs`): each host draws them its own way |
+| UI that doesn't need the page and isn't a command or a tab (a chat window, settings) | the host's own UI, beside the frame; maybe a host half for its data |
 | The host to ask the frame for something (draw, measure) | a frame half that answers the host's call |
 
 `notes` has both halves. Its host half reads and writes notes, and its frame half adds `Anfra.notes` and `query.notes` and draws the panel.
@@ -81,6 +82,27 @@ A frame's event reaches the host only if your plugin declares it in `events`, wi
 ### State
 
 `mount(mountContext)` runs when a frame is mounted, and may return a function to run when the frame is unmounted. Keep per-frame state in a `WeakMap` keyed by the mount context, as `render`'s rate limit does. Anything that must outlive the page goes in a store the host passes in, as `notes` does.
+
+### Commands and tabs
+
+A host half can add UI to the host page as data, which each host draws in its own chrome: commands for its action bar and palette, and tabs for the panel it shows beside each Data App. `notes` adds a tab that lists every note, and a command that opens it:
+
+```ts
+host: {
+  commands: [{ id: 'open', title: 'Notes', icon: 'note', shortcut: 'Alt+Shift+N', run: { tab: 'notes.list' } }],
+  tabs: [{
+    id: 'list',
+    title: 'Notes',
+    // Load what is heavy here: a host that never shows the tab never loads it.
+    mount: async (root, context) => (await import('./list-tab')).draw(root, context),
+  }],
+},
+```
+
+- A tab draws into `root`, a shadow root, with any framework or none, and returns what takes it down. `context.panel` has the frame's snapshot, the node selected (shared with every other tab), and highlight, locate and pick; `context.call` makes calls as the plugin.
+- Style it with the host's theme, `var(--anfra-color-bg)` and the rest (see [designs/sdk-plugins.md](../designs/sdk-plugins.md#plugin-ui)), so it looks right in every host.
+- A command runs a call (`run: { call: 'notes.export' }`) or opens a tab. Give it `state` when it can be on or off, or can't run: `{ disabled: 'Sign in to export notes' }` always says why. Call `mount.commandsChanged()` when that changes.
+- The host may leave any of it out (`createHost({ contributions })`), so nothing may depend on a contribution being shown: the calls stay either way.
 
 ### Middleware
 
