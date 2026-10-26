@@ -184,4 +184,17 @@ describe('the modal and the popover', () => {
     await kernel.popover({ anchor: { x: window.innerWidth - 4, y: 100 }, mount: () => {} });
     expect(box().left).toBe(`${window.innerWidth - 4 - 6}px`);
   });
+
+  it('closes a popover from its close button, which content with its own can leave out', async () => {
+    let kernel!: FrameKernel;
+    frame((k) => { kernel = k; });
+    const onClose = vi.fn();
+    await kernel.popover({ anchor: { x: 0, y: 0 }, mount: () => {}, onClose });
+    const box = menuRoot()!.querySelector<HTMLElement>('.popover')!;
+    expect(menuRoot()!.activeElement).toBe(box);
+    box.querySelector<HTMLButtonElement>('.close')!.click();
+    expect(onClose).toHaveBeenCalled();
+    await kernel.popover({ anchor: { x: 0, y: 0 }, mount: () => {}, closeButton: false });
+    expect(menuRoot()!.querySelector('.popover .close')).toBeNull();
+  });
 });

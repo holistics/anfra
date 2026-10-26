@@ -182,7 +182,7 @@ kernel.menuItem({
 });
 ```
 
-`kernel.modal({ title, size, mount })` and `kernel.popover({ anchor, side, mount, dismiss })` (`side` is where it opens, `right` unless given; another side when that one has no room) draw the frame around your content (`mount` gets its own shadow root, on the host's `--anfra-*` tokens) and close the other one open. `when` only decides what shows: the definition can call anything a frame half can, so anything that must hold is checked on the host, in the calls `run` makes.
+`kernel.modal({ title, size, mount })` and `kernel.popover({ anchor, side, mount, dismiss, closeButton })` (`side` is where it opens, `right` unless given, another side when that one has no room; it closes on Escape and its close button, and on a click outside with `dismiss: 'outside'`) draw the frame around your content (`mount` gets its own shadow root, on the host's `--anfra-*` tokens) and close the other one open. `when` only decides what shows: the definition can call anything a frame half can, so anything that must hold is checked on the host, in the calls `run` makes.
 
 ### Build it
 
