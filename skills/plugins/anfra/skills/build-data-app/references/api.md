@@ -308,6 +308,29 @@ chart.on('click', (p) => {
 - Both queries must use the same dataset. No self-edges.
 - Clear with `app.clearSelection(); app.execute();`.
 
+## The menu on the page
+
+The host and its plugins can offer a menu on the page's content, such as "View underlying data"
+on a chart's point. A right-click on a marked block (`data-anfra-block`) opens it with no code. For
+a chart's points, report the right-click yourself with the rows under the pointer, as for
+`select`:
+
+```js
+chart.on('contextmenu', (p) => {
+  byRegion.menu(p.event.event, byRegion.result.rows[p.dataIndex]); // the DOM event, and the row
+});
+```
+
+- `query.menu(event, rows, { fields })` returns whether a menu opened; when none would (nothing
+  is offered), it does nothing and the browser's own menu shows. Pass `result.rows` objects, as for
+  `select`; `fields` narrows the dimensions the same way.
+- Your own right-click handler wins: one that calls `event.preventDefault()` keeps the host's menu
+  away. Shift+right-click always gives the browser's menu.
+- `data-anfra-menu="off"` on a block keeps the menu off it, for a block that uses right-click
+  itself, such as a canvas the reader draws on.
+- The menu, and any modal it opens, draw over the page in the host's theme. Don't style or hide
+  them.
+
 ## Errors
 
 | Class | When | What to do |
