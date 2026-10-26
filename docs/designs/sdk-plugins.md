@@ -2,7 +2,7 @@
 
 > Status: built. Streamed calls come next, then the AI agent plugin. How to write one: [usage/sdk-plugins.md](../usage/sdk-plugins.md). Where the code is: [Where it lives](#where-it-lives).
 
-Everything a Data App reaches beyond its own page comes from an SDK plugin: running a query, an export, lineage, a rendering, the inspect panel. The name says SDK because the engine and appserve may get plugins of their own later.
+Everything a Data App reaches beyond its own page comes from an SDK plugin: running a query, an export, lineage, a rendering, the inspect panel's tabs. The name says SDK because the engine and appserve may get plugins of their own later.
 
 The host installs plugins, and a definition can't bring its own. A plugin has up to two halves: a host half in the trusted host page, and a frame half in the sandboxed frame beside the definition. The halves talk in calls (a request and an answer) and events (a notice), named `<plugin>.<name>`. Every call to the host goes through one pipeline, where middleware can watch or change it.
 
@@ -47,6 +47,8 @@ flowchart LR
 | Middleware | Code around calls, chosen by name, that can watch, change, answer or refuse them. |
 | Origin | Who started a call: the frame or the host, however many plugins it passed through. |
 | Plugin layer | Where frame halves draw: a layer above the definition's page, never in it. |
+| Contribution | UI a plugin, or the host, adds to the host page as data: a command or a tab. The host draws it. |
+| Panel | One per mounted Data App: the host's devtools over it, whose tabs plugins add. |
 
 
 ## What a plugin is
@@ -74,7 +76,7 @@ Every call that crosses the bridge is a plugin's, including running a query. anf
 | `export` | `export.query` (frame may call): makes the file, saves it from the host page | | `query.export()` |
 | `lineage` | `lineage.trace` (frame may call) | | `Anfra.lineage()` |
 | `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host) | | `Anfra.render()`. The renderer is its body. |
-| `inspect` | `inspect.watch`, `.highlight`, `.locate`, `.pick` (host only), each passed to the frame as an event | `inspect.snapshot`, `inspect.picked` | nothing |
+| `inspect` | none: the panel's Structure and Data tabs, and the Inspect command (`Alt+Shift+I`) | | nothing |
 
 `core` is required, and the host always names it: `corePlugin(coreApiBackend(api, { datasets }))`. The app model runs its queries by calling `core.submitQuery` through the pipeline like any other caller, so a host swaps or wraps queries the way it would any plugin's calls, with another `core` or with middleware. The SDK has no default `core` because it can't know where a host's core API is.
 
@@ -214,6 +216,23 @@ A plugin's middleware sees every call on the page, and its host half has everyth
 
 The SDK persists nothing, and a host runtime lives as long as its page. A plugin whose state must outlive the page takes a store from the host, through an interface the plugin defines, because who the reader is and where their data lives is the platform's business ([data-apps.md](data-apps.md#what-is-cores-and-what-is-a-platforms)).
 
+## Plugin UI
+
+A plugin's UI about the host goes in the host's own chrome, as **contributions**: data the host draws its own way, in Vue, React or anything else. The SDK ships no chrome. UI about the page's content (a highlight, a modal, a menu on a block) is drawn in the frame's plugin layer instead, since the gesture, the anchor and the app's state are all there.
+
+| Contribution | What it is | The host |
+|---|---|---|
+| Command | `{ id, title, icon?, placement?, shortcut?, run, state? }`: runs a call, or opens the panel at a tab. | Lists `host.commands` in its action bar or palette, shows `mounted.commandState(id)` (pressed, or disabled with a reason), and calls `mounted.run(id)`. |
+| Tab | `{ id, title, icon?, order?, mount(root, context) }`: a view in the panel. | Lists `host.tabs` in its panel's tab strip and calls `mounted.panel.mountTab(id, element)` for the open one. |
+
+A plugin's contributions are named under it (`inspect.toggle`); the host's own (`createHost({ commands, tabs })`) keep the id they are given. `createHost({ contributions })` is a filter: what it refuses is left out everywhere, while the plugin's calls stay, so a host can build its own UI on them instead.
+
+**The panel** belongs to the runtime, one per mount (`mounted.panel`): whether it is open, the tab it shows, the node selected (one, shared by every tab), the frame's snapshot while open, and pick mode. The frame's side of it (the snapshot, pick, highlight and locate) is the kernel's, under `anfra.*`, so a tab from any plugin has it without `inspect`. A tab draws into a shadow root in the host page, with any framework or none, and makes calls through its `context` as its plugin, so middleware sees them. It is loaded when first shown.
+
+**The theme** is a scheme and nine tokens (`--anfra-color-bg`, `-fg`, `-muted`, `-border`, `-accent`, `-danger`, `--anfra-radius`, `--anfra-font`, `--anfra-font-mono`). A host sets them once (`createHost({ theme })`, `host.setTheme`), mapped from its own design tokens. The runtime sets them on each tab's element and sends them to each frame (`anfra.theme`), where they go on the plugin layer and on `Anfra.theme`, which a definition may read. They are never applied to the definition's page.
+
+**Shortcuts**: a command's `shortcut` runs it from the host's page (`mounted.handleKeydown(event)`, from the host's own key handler) and from inside the frame, which forwards the combinations the host registered (`anfra.shortcuts`, `anfra.shortcut`). A key the page handled itself (`preventDefault`) is left to it.
+
 ## The frame side
 
 A frame half goes into an opaque-origin frame, so it is script source, in two parts:
@@ -253,7 +272,8 @@ A plugin outside the SDK is the same object, `{ name, version, requires, host, f
 | The bridge, both sides | `common/bridge.ts`, `common/endpoint.ts` |
 | The frame's kernel: bootstrap, the kernel plugins get, the layer | `app/bootstrap.ts`, `app/kernel.ts`, `app/layer.ts`, `app/extensions.ts` |
 | Types registry | `app/pluginTypes.ts` |
-| anfra's plugins | `plugins/<name>/index.ts` (host half), `frame.ts` (setup), `body.ts` |
+| anfra's plugins | `plugins/<name>/index.ts` (host half), `frame.ts` (setup), `body.ts`; `inspect`'s tabs in `plugins/inspect/tabs.ts` |
+| Contributions, the panel, the theme | `host/contributions.ts`, `host/panel.ts`, `common/theme.ts`, `common/shortcut.ts`; the frame's side in `app/inspection.ts` and `app/bootstrap.ts` |
 | How a frame half is built: the SDK's own, and anyone's | `tsup.config.ts`, `build/index.ts` |
 | Testing helpers | `testing/` |
 | A worked example | `web/sdk/examples/notes/` |
@@ -265,6 +285,8 @@ A plugin outside the SDK is the same object, `{ name, version, requires, host, f
 - Hot reload. Plugins are installed when a page loads.
 - Scoping a plugin's middleware to its own calls. A plugin's host half could make any call itself, so a scope would look like a boundary without being one. A host that trusts a plugin less shouldn't install it.
 - Plugins adding to the definition's markup, such as a "view data" button on every block. The page is the author's; if that's wanted, an attribute the author writes can opt a block in.
+- The host drawing UI about the page's content (a menu on a chart's point, a "view data" modal), as Power BI, Tableau and Looker do for their sandboxed visuals. Each of them is one host; anfra's plugins must work in hosts nobody here writes, with no work from them. Drawing in the frame needs no positioning across its edge and keeps the app's state where it is. The cost: such UI stays inside the frame's box.
+- The SDK shipping host chrome (a panel drawer, an action bar, a palette). Each is simple for a host to build from `host.commands`, `host.tabs` and `mounted.panel`, and every host would want its own look.
 - Definitions declaring the plugins they need, refused at mount when one is missing. It can be added if hosts want it.
 
 What these choices cost: anything that can't cross a call, such as a live object or a hook into each render, can't be shared between plugins.
