@@ -297,19 +297,29 @@ type streamObject struct {
 // which side it says is responsible. Scope "User" covers both a data source
 // canal cannot connect to (its config is the user's) and a query the database
 // refused, so it does not say whether the query was at fault.
+//
+// Cause is the failure's whole chain, which canal-query sends when
+// EXPOSE_ERROR_CAUSES is set, as anfra sets it on the one it spawns. It is for
+// the log and for Error, never for Message: a caller may show Message to its
+// clients (asQueryFailed does), and the cause names canal-query's internals.
 type Error struct {
 	Message string
 	Type    string
 	Scope   string
+	Cause   string
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("canal query error (%s, %s): %s", e.Scope, e.Type, e.Message)
+	text := e.Message
+	if e.Cause != "" {
+		text = e.Cause
+	}
+	return fmt.Sprintf("canal query error (%s, %s): %s", e.Scope, e.Type, text)
 }
 
 func canalError(m map[string]any) *Error {
 	str := func(k string) string { s, _ := m[k].(string); return s }
-	e := &Error{Message: str("message"), Type: str("type"), Scope: str("scope")}
+	e := &Error{Message: str("message"), Type: str("type"), Scope: str("scope"), Cause: str("cause")}
 	if e.Message == "" {
 		e.Message = fmt.Sprint(m)
 	}

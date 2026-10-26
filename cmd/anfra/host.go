@@ -10,6 +10,7 @@ import (
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
+	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/repo"
@@ -58,15 +59,16 @@ type hostContext struct {
 // withRepo resolves the repo and sets up host-aggregated logging, then runs fn
 // with the caller's (signal-cancelable) context and the host context. Sidecar
 // lifecycle is the command's choice (some need only anfra-node, query execution
-// also needs canal-query).
-func withRepo(ctx context.Context, fn func(ctx context.Context, h hostContext) error) error {
+// also needs canal-query). logStderr is whether the log also goes to stderr
+// when ANFRA_LOG_STDERR is unset: a server's does, a command's does not.
+func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, h hostContext) error) error {
 	repoDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repo dir: %w", err)
 	}
 	repo := repo.Resolve(repoDir)
 
-	lg, err := logging.Setup(repo.LogsDir(), repo.ID)
+	lg, err := logging.Setup(repo.LogsDir(), repo.ID, envflag.OnOr(envflag.LogStderr, logStderr))
 	if err != nil {
 		return fmt.Errorf("set up logging: %w", err)
 	}

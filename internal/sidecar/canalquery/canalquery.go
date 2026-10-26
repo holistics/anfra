@@ -68,6 +68,9 @@ func (c *Sidecar) Start(ctx context.Context) error {
 			"SKIP_HOLISTICS_DB=1",       // standalone: no monolith DB / job ops
 			"ENABLE_DUCKDB_CONNECTOR=1", // duckdb connector on by default under anfra
 			"ANFRA_REPO_ID=" + c.cfg.RepoID,
+			// Its failures' causes, for anfra to log, and to show its clients
+			// unless ANFRA_HIDE_ERROR_CAUSES. Never in their message.
+			"EXPOSE_ERROR_CAUSES=1",
 		},
 		EnvPrefix: EnvPrefix,
 		Stdout:    c.cfg.StdoutWriter,

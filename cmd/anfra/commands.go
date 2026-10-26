@@ -5,6 +5,7 @@ import (
 	"encoding/json/jsontext"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -340,23 +341,54 @@ func invoke(ctx context.Context, c command.Command, args map[string]any) ([]byte
 	}
 
 	var body []byte
-	err = withRepo(ctx, func(ctx context.Context, h hostContext) error {
-		clients, closeSidecars, err := startNeededSidecars(ctx, h, c, input)
-		if err != nil {
-			return err
-		}
-		defer closeSidecars()
+	err = withRepo(ctx, false, func(ctx context.Context, h hostContext) error {
+		err := func() error {
+			clients, closeSidecars, err := startNeededSidecars(ctx, h, c, input)
+			if err != nil {
+				return err
+			}
+			defer closeSidecars()
 
-		out, err := app.Invoke(ctx, h.commandContext(clients), c.Name(), input)
+			out, err := app.Invoke(ctx, h.commandContext(clients), c.Name(), input)
+			if err != nil {
+				return err
+			}
+			if body, err = jsonkit.Marshal(out); err != nil {
+				return fmt.Errorf("marshal result: %w", err)
+			}
+			return nil
+		}()
 		if err != nil {
-			return err
+			logFailure(ctx, h.cfg.Logger, c.Name(), err)
 		}
-		if body, err = jsonkit.Marshal(out); err != nil {
-			return fmt.Errorf("marshal result: %w", err)
-		}
-		return nil
+		return err
 	})
 	return body, err
+}
+
+// logFailure logs a command's failure, as httpkit logs a request's: its code, its
+// scope and its whole chain, at the scope's level. The terminal shows what the
+// error lets callers see; the log keeps the rest, whatever is shown.
+func logFailure(ctx context.Context, logger *slog.Logger, name string, err error) {
+	e := apperr.From(err)
+	pub := e.Code.Public()
+	level := slog.LevelInfo
+	switch pub.Scope() {
+	case apperr.Client:
+		level = slog.LevelWarn
+	case apperr.Server:
+		level = slog.LevelError
+	}
+	attrs := []slog.Attr{
+		slog.String("command", name),
+		slog.String("code", pub.String()),
+		slog.String("scope", string(pub.Scope())),
+	}
+	if e.Code != pub {
+		attrs = append(attrs, slog.String("internal_code", e.Code.Qualified()))
+	}
+	attrs = append(attrs, slog.String("error", err.Error()))
+	logger.LogAttrs(ctx, level, "command.failed", attrs...)
 }
 
 // delivery is how the CLI delivers an export: its file to stdout, or to output,

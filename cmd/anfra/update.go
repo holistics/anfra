@@ -112,8 +112,7 @@ func checkUpdates(logger *slog.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if r, err := update.Check(ctx); err == nil && r.IsNewer() && r.Version != announced {
 			announced = r.Version
-			logger.Info("serve.update_available", "latest", r.Version, "current", meta.Version)
-			fmt.Fprintln(os.Stderr, update.Notice(r))
+			logger.Info("serve.update_available", "latest", r.Version, "current", meta.Version, "notice", update.Notice(r))
 		}
 		return nil
 	}
@@ -138,9 +137,12 @@ func maybeNotifyUpdate(invoked string) {
 	notice := update.CachedNotice()
 
 	// Opt-in auto-update is explicit, so it runs regardless of interactivity
-	// (e.g. a service that set ANFRA_AUTO_UPDATE=1).
+	// (e.g. a service that set ANFRA_AUTO_UPDATE=1). Saying so is a notice like
+	// the one below: for a person at a terminal, not in a program's stderr.
 	if notice != "" && autoUpdateEnabled() {
-		fmt.Fprintln(os.Stderr, "\n"+notice+" (auto-updating in the background)")
+		if stderrIsInteractive() {
+			fmt.Fprintln(os.Stderr, "\n"+notice+" (auto-updating in the background)")
+		}
 		spawnDetached("update")
 		return
 	}

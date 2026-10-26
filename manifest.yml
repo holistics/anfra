@@ -7,4 +7,4 @@
 version: 0.13.3
 sidecars:
   anfra_node: anfra-node-v0.9.1 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
-  canal_query: query-v2.19.1 # holistics/canal release tag (build_and_release_binaries.yml)
+  canal_query: query-v2.21.0 # holistics/canal release tag (build_and_release_binaries.yml)

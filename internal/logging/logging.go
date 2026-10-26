@@ -18,7 +18,7 @@ import (
 // Logging is the host's logging setup:
 //   - Logger:       the host's own structured logger (writes to anfra.log).
 //   - StderrWriter: sink for forwarding sidecar stderr — the log stream, same
-//     destination as Logger (anfra.log; also host stderr if ANFRA_LOG_STDERR).
+//     destination as Logger (anfra.log; also host stderr when toStderr).
 //   - StdoutWriter: sink for forwarding sidecar stdout — discarded by default
 //     (banners / incidental noise), or host stdout if ANFRA_SIDECAR_STDOUT.
 type Logging struct {
@@ -54,10 +54,11 @@ func parseLevel(s string) slog.Level {
 // ({ts, level, msg, service, repo, pid}) matches the Node sidecar's. Level
 // comes from LOG_LEVEL (default info).
 //
-// By default logs go ONLY to the file, keeping the command's console output
-// clean (results on stdout, command errors via cobra). Set ANFRA_LOG_STDERR=1
-// to also stream logs to stderr (useful for `anfra serve` / debugging).
-func Setup(logsDir, repo string) (*Logging, error) {
+// With toStderr, the log stream also goes to stderr: what `anfra serve` does
+// unless ANFRA_LOG_STDERR=0, since a server's log is what its operator watches.
+// Without, it goes only to the file, keeping a command's stderr for its error
+// and warnings (ANFRA_LOG_STDERR=1 adds it, for debugging).
+func Setup(logsDir, repo string, toStderr bool) (*Logging, error) {
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -67,10 +68,10 @@ func Setup(logsDir, repo string) (*Logging, error) {
 		return nil, err
 	}
 
-	// Log stream (host records + sidecar stderr) → file only by default; also to
-	// the host's stderr when ANFRA_LOG_STDERR is set.
+	// Log stream (host records + sidecar stderr) → the file; also to the host's
+	// stderr when toStderr.
 	var stderrWriter io.Writer = f
-	if envflag.On(envflag.LogStderr) {
+	if toStderr {
 		stderrWriter = io.MultiWriter(f, os.Stderr)
 	}
 	// Sidecar stdout (banners / incidental output) → discarded by default; to the

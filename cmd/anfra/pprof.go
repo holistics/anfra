@@ -29,8 +29,8 @@ func startPprof(logger *slog.Logger) (stop func(), err error) {
 		return nil, fmt.Errorf("ANFRA_PPROF_ADDR: listen on %s: %w", addr, err)
 	}
 	if host, _, _ := net.SplitHostPort(ln.Addr().String()); !isLoopback(host) {
-		logger.Warn("pprof.exposed", "addr", ln.Addr().String())
-		fmt.Fprintf(os.Stderr, "warning: pprof at %s is not on a loopback address; anyone who reaches it can read anfra's memory\n", ln.Addr())
+		logger.Warn("pprof.exposed", "addr", ln.Addr().String(),
+			"hint", "pprof is not on a loopback address: anyone who reaches it can read anfra's memory")
 	}
 	srv := &http.Server{Handler: pprofHandler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(ln) }()

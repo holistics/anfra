@@ -99,7 +99,7 @@ Keeping state out of the repo means a repo never fills with generated files, and
 
 ## Logs and telemetry
 
-**Logs.** anfra writes structured JSON records to the repo's `anfra.log`, and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes (`internal/logging`). The terminal stays clean for command output; `ANFRA_LOG_STDERR` also copies the log to stderr. `LOG_LEVEL` sets the level.
+**Logs.** anfra writes structured JSON records to the repo's `anfra.log`, and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes (`internal/logging`). A command's terminal stays clean for its answer, its warnings and its error; `anfra serve` also copies the log to stderr, as a server's operator watches it there. `ANFRA_LOG_STDERR` changes either default (`0` or `1`). `LOG_LEVEL` sets the level.
 
 **Traces.** When an OTLP endpoint is configured, anfra installs OpenTelemetry (`internal/telemetry`). A CLI command is the root of its trace; the op, each call to a sidecar and, under `serve`, the HTTP request are spans under it. anfra passes its trace to anfra-node with each call (W3C `traceparent`), and points anfra-node's exporter at the same collector, so one trace runs from the CLI through anfra-node's compile (`cmd/anfra/telemetry.go`). A CLI call forwarded to `serve` carries its trace along, which the server continues when it listens on loopback.
 

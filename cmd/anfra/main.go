@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/holistics/anfra/internal/envflag"
@@ -25,7 +26,7 @@ func main() {
 	// anfra's switches are 1 or 0. Refuse any other value before anything reads
 	// one, so a typo stops the command instead of silently meaning the opposite.
 	if err := envflag.Validate(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err) // the user's setting, said as it is: not anfra's failure
+		printError(os.Stderr, settingRefused(err)) // the user's setting, said as it is: not anfra's failure
 		os.Exit(1)
 	}
 
@@ -67,6 +68,18 @@ func main() {
 	}
 	printError(os.Stderr, err)
 	os.Exit(1)
+}
+
+// settingRefused is an invalid switch as a violation of the variable that holds
+// it, as a refused arg is one of its flag.
+func settingRefused(err error) error {
+	e, ok := errors.AsType[*envflag.InvalidError](err)
+	if !ok {
+		return err
+	}
+	msg := "Must be 1 or 0, not " + strconv.Quote(e.Value) + "."
+	return apperr.NewWith(apperr.ValidationFailed, e.Error(),
+		apperr.Violate(apperr.Violation{Field: e.Name, Code: "invalid", Message: msg}))
 }
 
 func newRootCmd() *cobra.Command {

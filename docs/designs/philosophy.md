@@ -62,6 +62,7 @@ Choose each default so the most common setup needs no configuration, and make su
 - anfra keeps its state in `~/.anfra` by default, which suits an individual on their own machine. Containers and other deployments, with their own layouts and volumes, move it with `ANFRA_HOME`.
 - anfra runs its sidecars from its own binary, so one download is everything a user needs. A platform that runs them as services, scaled and monitored its own way, points anfra at them instead (`ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL`).
 - anfra listens on a loopback address, so a server on a laptop is reachable only from it, and moves to a free port when another repo's server is already running. Someone serving others chooses an address (`--addr`).
+- The CLI and `anfra serve` show an error's cause to whoever sees the error, since on a laptop that is the person who can fix it. Someone serving others hides causes (`ANFRA_HIDE_ERROR_CAUSES`). The engine starts from the other side: it hides them, which is safe for a platform, and a platform whose callers are its operators shows them ([errors.md](errors.md)).
 - anfra-node can keep compiled programs in memory, which makes a server answer much faster. But this is configurable and disabled by default, to prevent high costs in multi-repo, multi-tenant setups.
 
 A convenient default should cost nothing to those who don't use it: live reload is on, but watches the repo only while a Data App is open (`internal/appserve/watch.go`).
@@ -78,8 +79,8 @@ A convenient default should cost nothing to those who don't use it: live reload 
 Most callers of anfra are programs and coding agents. An interface they can use without guessing is one a person can use too.
 
 - **Typed inputs.** Every command's input is a schema (`internal/command/command.go`). The CLI's flags, the HTTP op and the MCP tool all come from it.
-- **Outputs a program can keep using.** An answer is a document, not prose to parse: JSON over HTTP and MCP, and the same document as YAML at the CLI (`search` alone prints a compact list), alone on stdout: logs go to the repo's log file, failures to stderr. So it can be piped into a script or a YAML or JSON tool, stored, compared with an earlier run, or handed to the next command or agent step, without scraping.
-- **Failures a program can act on.** A failure is as structured as an answer: a stable code to branch on, which side must act (the caller, or the server), a message to show, and typed details. A refused input names each argument at fault, as a violation on that field, so a caller can fix exactly that and retry ([errors.md](errors.md)). And what isn't a failure isn't reported as one: a command that judges something, such as whether a query is valid, answers its verdict as data (`Valid` in `internal/command/command.go`), so a caller can tell "the query is invalid, and here is why" from "the check could not run".
+- **Outputs a program can keep using.** An answer is a document, not prose to parse: JSON over HTTP and MCP, and the same document as YAML at the CLI (`search` alone prints a compact list), alone on stdout: logs go to the repo's log file, and failures and warnings to stderr, as YAML documents too. So it can be piped into a script or a YAML or JSON tool, stored, compared with an earlier run, or handed to the next command or agent step, without scraping.
+- **Failures a program can act on.** A failure is told apart from an answer, never mixed into one: by its HTTP status, or at the CLI by landing on stderr while an answer lands on stdout. It is as structured as an answer: a stable code to branch on, which side must act (the caller, or the server), a message to show, and typed details. A refused input names each argument at fault, as a violation on that field, so a caller can fix exactly that and retry ([errors.md](errors.md)). And what isn't a failure isn't reported as one: a command that judges something, such as whether a query is valid, answers its verdict as data (`Valid` in `internal/command/command.go`), so a caller can tell "the query is invalid, and here is why" from "the check could not run".
 - **Discovery.** A caller can learn what it may call without reading the source: `/api/ops`, the OpenAPI document (`/api/openapi.json`, `anfra openapi`), and each command's `--help`.
 - **Short feedback loops.** Check before running: `anfra validate` for the repo, `query validate` and `query compile` for a query, `anfra show` for what a dataset offers. An agent can iterate in seconds without touching the warehouse.
 
@@ -102,3 +103,7 @@ What a caller sees is what anfra promises; how it is produced may change. `core.
 ### Fail where the problem is
 
 Refuse early, in the process that can name the cause, with the input that caused it. A command's `Check` refuses an input the schema allows but the command cannot run, before any sidecar starts (`internal/command/command.go`). A missing data source fails with the name of the file to fix (`internal/datasource/datasource.go`). A telemetry problem never stops a command (`cmd/anfra/telemetry.go`).
+
+### Every failure leaves a record
+
+A failure that is ours is logged and traced in the process where it happened, a sidecar's included, whether or not its caller is shown the cause. What a caller sees is a choice made per deployment; what an operator can find is not ([errors.md](errors.md)).
