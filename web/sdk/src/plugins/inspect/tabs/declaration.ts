@@ -1,6 +1,6 @@
 /**
  * Declaration: how each app is put together. Its counts, the checks for mistakes the SDK reports
- * late or never, the declaration written back out as JS, and the wiring of controls and
+ * late or never, the declaration as its JSON, and the wiring of controls and
  * cross-filters to queries.
  */
 import type { InspectedApp } from '../../../common/types';
@@ -8,11 +8,11 @@ import type { TabContext } from '../../../host/contributions';
 import {
   type Check, type CheckLevel, controlMappings, crossFilters, wiringChecks,
 } from '../model/checks';
-import { declarationCode } from '../model/declaration';
+import { tokenize } from '../model/highlight';
 import type { InspectState } from '../state';
 import { stateOf } from '../state';
 import {
-  codeBlock, collapsible, drawTab, flash, h, icon, link, note, popover, type Children,
+  collapsible, copyIcon, drawTab, flash, h, icon, link, note, popover, type Children,
 } from '../view';
 
 const CSS = `
@@ -30,6 +30,13 @@ const CSS = `
 .check.info .mark { color: var(--anfra-color-muted); }
 .checks .flash { border-radius: 4px; }
 .declaration-code .code-text { max-height: 384px; }
+.tok-key { color: light-dark(#0f766e, #5eead4); }
+/* An AQL string, shown across its lines: the text stays the JSON, escapes and all, so a copy of
+   it is too; the line breaks and the indent under its key are generated, which a copy leaves out. */
+.json-nl { opacity: 0.45; }
+.json-br::after { content: "\\A" attr(data-indent); white-space: pre; }
+/* The indent every line of the AQL shares: kept in the text, so the copy is exact, but not shown. */
+.json-dedent { font-size: 0; }
 .wiring .collapsible-body { padding-left: 0; }
 .wiring td.cell { text-align: center; }
 .wiring .unmapped { color: var(--anfra-color-muted); opacity: 0.5; }
@@ -102,12 +109,57 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
   }
 
   function declaration (app: InspectedApp, index: number): Children {
-    const code = declarationCode(app);
+    const value = app.declaration;
+    const empty = !Object.keys(value.queries).length && !Object.keys(value.filters).length && !Object.keys(value.dateDrills).length;
     return [
-      h(doc, 'h5', {}, 'Declaration', hint('The app\'s queries, controls and mappings, as code reconstructed from what the Data App declared.')),
+      h(doc, 'h5', {}, 'Declaration', hint("What the Data App declared, as anfra reads it: its queries, controls and the mappings between them. A query's AQL shows across its lines, and copies as the JSON it is.")),
       h(doc, 'div', { class: 'declaration-code', 'data-testid': `declaration-${index}` },
-        codeBlock(doc, { js: { label: 'declaration', code: code || undefined, lang: 'js', empty: 'Nothing declared.' } }, 'js')),
+        empty
+          ? h(doc, 'div', { class: 'code' }, h(doc, 'p', { class: 'code-empty' }, 'Nothing declared.'))
+          : h(doc, 'div', { class: 'code' },
+            h(doc, 'div', { class: 'code-corner' }, copyIcon(doc, 'Copy the declaration', () => JSON.stringify(value, null, 2))),
+            h(doc, 'pre', { class: 'code-text scroll' }, h(doc, 'code', {}, json(value, '', undefined))))),
     ];
+  }
+
+  /**
+   * A value written as `JSON.stringify(value, null, 2)` writes it, as highlighted spans: the text
+   * is the same, character for character. `aql` strings are shown across their lines.
+   */
+  function json (value: unknown, indent: string, key: string | undefined): Children {
+    const data = (value as { toJSON?: () => unknown } | null)?.toJSON?.() ?? value;
+    if (typeof data === 'string') return key === 'aql' && data.includes('\n') ? aql(data, `${indent}  `) : h(doc, 'span', { class: 'tok-str' }, JSON.stringify(data));
+    if (typeof data === 'number' || typeof data === 'boolean' || data === null) {
+      return h(doc, 'span', { class: typeof data === 'number' ? 'tok-num' : 'tok-kw' }, JSON.stringify(data));
+    }
+    const inner = `${indent}  `;
+    if (Array.isArray(data)) {
+      if (!data.length) return '[]';
+      // As JSON.stringify does: a value it can't write is null in an array.
+      return ['[\n', data.map((item, i) => [inner, json(item === undefined || typeof item === 'function' ? null : item, inner, undefined), i < data.length - 1 ? ',\n' : '\n']), `${indent}]`];
+    }
+    const entries = Object.entries(data as Record<string, unknown>).filter(([, item]) => item !== undefined && typeof item !== 'function');
+    if (!entries.length) return '{}';
+    return ['{\n', entries.map(([name, item], i) => [
+      inner, h(doc, 'span', { class: 'tok-key' }, JSON.stringify(name)), ': ', json(item, inner, name), i < entries.length - 1 ? ',\n' : '\n',
+    ]), `${indent}}`];
+  }
+
+  /** An AQL string as JSON, highlighted as AQL, its lines shown under `indent` without the indent they share. */
+  function aql (text: string, indent: string): Children {
+    const lines = text.split('\n');
+    // As `dedent` reads it: the first line is usually trimmed already (`aql: \`explore {`).
+    const rest = lines.slice(1).filter((line) => line.trim());
+    const shared = rest.length ? Math.min(...rest.map((line) => line.length - line.trimStart().length)) : 0;
+    const escape = (part: string) => JSON.stringify(part).slice(1, -1);
+    return h(doc, 'span', { class: 'tok-str' }, '"', lines.map((line, i) => {
+      const cut = i === 0 ? 0 : Math.min(shared, line.length - line.trimStart().length);
+      return [
+        cut > 0 && h(doc, 'span', { class: 'json-dedent' }, escape(line.slice(0, cut))),
+        tokenize(line.slice(cut), 'aql').map((token) => (token.kind ? h(doc, 'span', { class: `tok-${token.kind}` }, escape(token.text)) : escape(token.text))),
+        i < lines.length - 1 && [h(doc, 'span', { class: 'json-nl' }, '\\n'), h(doc, 'span', { class: 'json-br', 'data-indent': indent })],
+      ];
+    }), '"');
   }
 
   /** Queries down, controls across: which control filters which query, and on what. */
