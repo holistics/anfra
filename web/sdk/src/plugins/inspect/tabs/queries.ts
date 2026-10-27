@@ -149,7 +149,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   const iconButton = (name: IconName, label: string, onclick: () => void, attributes: Record<string, string> = {}) => h(doc, 'button', {
     type: 'button',
     class: 'row-action',
-    title: label,
+    'data-tip': label,
     'aria-label': label,
     ...attributes,
     onclick: (event: Event) => {
@@ -231,7 +231,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
 
   /** One request: in a query, its time, how it ended and how long it took; on its own, a card like a query's row. */
   function requestRow (scope: string, { entry, shared }: Attributed, card: boolean): HTMLElement {
-    const dot = h(doc, 'span', { class: `dot ${entry.status}`, role: 'img', 'aria-label': `Status: ${entry.status}`, title: entry.status });
+    const dot = h(doc, 'span', { class: `dot ${entry.status}`, role: 'img', 'aria-label': `Status: ${entry.status}`, 'data-tip': entry.status });
     const summary = card
       ? h(doc, 'span', { class: 'entry' },
         h(doc, 'span', { class: 'line' },
@@ -243,7 +243,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         dot,
         h(doc, 'span', { class: 'time' }, formatTime(entry.at)),
         h(doc, 'span', { class: 'condition' }, summaryOf(entry)),
-        shared && h(doc, 'span', { class: 'pill', title: 'Another query declares the same dataset and AQL' }, 'shared'),
+        shared && h(doc, 'span', { class: 'pill', 'data-tip': 'Another query declares the same dataset and AQL' }, 'shared'),
         h(doc, 'span', { class: 'spacer' }),
         h(doc, 'span', { class: 'rows' }, entry.durationMs === undefined ? '…' : `${entry.durationMs} ms`));
     const details = collapsible(doc, `${scope}:request:${entry.id}`, summary, () => [
@@ -273,7 +273,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       columns.map((column) => {
         const unlabelled = !column.label || column.label === column.name;
         return collapsible(doc, `${key}:column:${column.name}`, [
-          h(doc, 'span', { class: 'name', title: columnKind(column) }, column.name),
+          h(doc, 'span', { class: 'name', 'data-tip': columnKind(column) }, column.name),
           column.adhoc && h(doc, 'span', { class: 'pill warn' }, 'ad hoc'),
           h(doc, 'span', { class: 'spacer' }),
           unlabelled ? h(doc, 'span', { class: 'pill warn' }, 'no label') : h(doc, 'span', { class: 'label' }, column.label),
@@ -296,7 +296,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       h(doc, 'div', { class: 'segments small', role: 'group', 'aria-label': 'Which filters' },
         h(doc, 'button', { type: 'button', 'aria-pressed': String(!all), 'data-testid': 'filters-active', onclick: () => all && toggle(allFilters, key) }, `Active (${active.length})`),
         h(doc, 'button', { type: 'button', 'aria-pressed': String(all), 'data-testid': 'filters-all', onclick: () => !all && toggle(allFilters, key) }, `All (${filters.length})`)),
-      shown.length === 0 ? h(doc, 'p', { class: 'muted' }, 'No active filters.') : h(doc, 'ul', { class: 'list filters', 'data-testid': 'filter-list' }, shown.map((input) => h(doc, 'li', { title: filterSource(input) },
+      shown.length === 0 ? h(doc, 'p', { class: 'muted' }, 'No active filters.') : h(doc, 'ul', { class: 'list filters', 'data-testid': 'filter-list' }, shown.map((input) => h(doc, 'li', { 'data-tip': filterSource(input) },
         h(doc, 'div', {},
           input.kind === 'declared' ? h(doc, 'span', { class: 'muted' }, 'query')
             : input.self ? h(doc, 'span', { class: 'muted' }, 'itself')
@@ -316,7 +316,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     const summary = h(doc, 'span', { class: 'entry' },
       h(doc, 'span', { class: 'line' },
         h(doc, 'span', { class: 'name' }, name),
-        h(doc, 'span', { class: 'rows', title: query.state === 'success' ? plural(query.rowCount, 'row') : 'No rows yet' },
+        h(doc, 'span', { class: 'rows', 'data-tip': query.state === 'success' ? plural(query.rowCount, 'row') : 'No rows yet' },
           query.state === 'success' ? query.rowCount.toLocaleString() : '—'),
         query.isDirty ? h(doc, 'span', { class: 'pill warn' }, 'dirty') : query.debug?.fromCache && h(doc, 'span', { class: 'pill' }, 'cache'),
         h(doc, 'span', { class: 'spacer' }),
@@ -380,10 +380,10 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       h(doc, 'span', { class: 'condition' }, control.condition.values?.length ? formatCondition(control.condition) : ''),
       control.isDirty && h(doc, 'span', { class: 'pill warn' }, 'unapplied'),
       h(doc, 'span', { class: 'spacer' }),
-      isChanged(app, name, control) && h(doc, 'span', { class: 'changed', role: 'img', 'aria-label': 'Changed from the default', title: 'Changed from the default value' }, 'M'),
+      isChanged(app, name, control) && h(doc, 'span', { class: 'changed', role: 'img', 'aria-label': 'Changed from the default', 'data-tip': 'Changed from the default value' }, 'M'),
       h(doc, 'span', {
         class: 'indicator targets',
-        title: targets.length ? `Applies to ${queriesText(targets.length)}\n${targets.map((t) => `${t.query} on ${t.field}`).join('\n')}` : 'Applies to no query',
+        'data-tip': targets.length ? `Applies to ${queriesText(targets.length)}\n${targets.map((t) => `${t.query} on ${t.field}`).join('\n')}` : 'Applies to no query',
       }, String(targets.length), icon(doc, 'query')));
     return entityRow(key, summary, () => fields(doc, [
       ['Kind', [control.kind === 'dateDrill' ? 'Date drill' : 'Filter',
