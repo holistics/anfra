@@ -49,6 +49,16 @@ describe('Declaration', () => {
     expect(harness.state.queries.open.has('control:0/month')).toBe(true);
   });
 
+  it('sets apart the entities a check names, and never a name inside a field', async () => {
+    const app = salesApp();
+    app.declaration.mappings.push({ kind: 'control', id: 'm2', from: { kind: 'dateDrill', name: 'month' }, to: { kind: 'query', name: 'revenue' }, field: 'orders.created_at' });
+    harness = await inspect({ tab: TAB, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(TAB);
+    const row = [...byTestId(root, 'checks')!.querySelectorAll('button.check')].find((check) => check.textContent!.includes('grain'))!;
+    expect(row.textContent).toBe("⚠month → revenue: orders.created_at isn't in the query's AQL, so the grain never changes.");
+    expect([...row.querySelectorAll('code.entity')].map((name) => name.textContent)).toEqual(['month', 'revenue']);
+  });
+
   it('says so when there is nothing to check', async () => {
     const app = salesApp();
     app.declaration = { ...app.declaration, dateDrills: {}, mappings: [...app.declaration.mappings, { kind: 'crossFilter', id: 'c2', from: { kind: 'query', name: 'revenue' }, to: { kind: 'query', name: 'orders' } }] };

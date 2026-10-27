@@ -25,6 +25,8 @@ const CSS = `
 .check:hover { background: var(--hover); }
 .check.info { color: var(--anfra-color-muted); }
 .check .mark { flex: none; width: 14px; text-align: center; font-weight: 600; }
+/* An entity a check names: its own colour even in a muted row, so it reads as a name. */
+.check .entity { padding: 0 4px; border-radius: 4px; background: var(--hover); color: var(--anfra-color-fg); font-size: 12px; font-weight: 600; }
 .check.info .mark { color: var(--anfra-color-muted); }
 .checks .flash { border-radius: 4px; }
 .declaration-code .code-text { max-height: 384px; }
@@ -63,7 +65,21 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
       items.map(([n, label, one]) => h(doc, 'span', { class: 'pill', 'data-testid': `count-${label}` }, `${n} ${n === 1 ? one : label}`)));
   }
 
-  function checks (list: Check[], index: number): Children {
+  /** The app's query and control names, longest first, so a longer name wins where one holds another. */
+  const entityNames = (app: InspectedApp) => {
+    const { queries, filters, dateDrills } = app.declaration;
+    return [...new Set([...Object.keys(queries), ...Object.keys(filters), ...Object.keys(dateDrills)])].sort((a, b) => b.length - a.length);
+  };
+
+  /** A check's message with each entity it names set apart, never a name inside a field (`orders` in `orders.region`). */
+  function named (message: string, names: string[]): Children {
+    if (!names.length) return message;
+    const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const pattern = new RegExp(`(?<![\\w.])(${escaped.join('|')})(?![\\w.])`, 'g');
+    return message.split(pattern).map((part, i) => (i % 2 ? h(doc, 'code', { class: 'entity' }, part) : part));
+  }
+
+  function checks (app: InspectedApp, list: Check[], index: number): Children {
     return [
       h(doc, 'h5', {}, 'Checks', hint('Static checks on the declaration for mistakes the SDK reports late or never, such as cross-filters across datasets or controls mapped to no query. Click a row to jump to it.')),
       list.length === 0
@@ -80,7 +96,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
               onclick: () => state.reveal(panel, { entity: check.about.entity, app: index, name: check.about.name }),
             },
             h(doc, 'span', { class: `mark ${tone}`, role: 'img', 'aria-label': label }, mark),
-            h(doc, 'span', {}, check.message)));
+            h(doc, 'span', {}, named(check.message, entityNames(app)))));
         })),
     ];
   }
@@ -132,7 +148,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
     return apps.map((app, index) => h(doc, 'section', { class: 'app-group', 'data-testid': `app-${index}` },
       apps.length > 1 && h(doc, 'p', { class: 'app-title' }, `App ${index + 1} · ${app.title || 'Untitled'}`),
       counts(app),
-      checks(wiringChecks(app), index),
+      checks(app, wiringChecks(app), index),
       declaration(app, index),
       matrix(app, index)));
   }, { also: [state.subscribe] });
