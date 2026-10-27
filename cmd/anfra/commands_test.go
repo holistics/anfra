@@ -46,60 +46,7 @@ func TestPresentExitsOneOnAnInvalidVerdict(t *testing.T) {
 	}
 }
 
-func TestPresentSearchRendersCompactResults(t *testing.T) {
-	body := []byte(`{
-		"results": [
-			{"display_name": "Orders", "source": "local_aml_repo", "type": "aml.model"},
-			{"display_name": "Revenue", "source": "local_aml_repo", "type": "aml.metric"}
-		],
-		"meta": {"total": 2},
-		"sql": "SELECT 1"
-	}`)
-	var out bytes.Buffer
-
-	if err := presentTo(registered(t, "search"), body, &out); err != nil {
-		t.Fatalf("presentTo returned error: %v", err)
-	}
-
-	want := "local_aml_repo | aml.model | Orders\nlocal_aml_repo | aml.metric | Revenue\n"
-	if out.String() != want {
-		t.Fatalf("output = %q, want %q", out.String(), want)
-	}
-}
-
-func TestPresentSearchRendersEmptyOutputForNoResults(t *testing.T) {
-	body := []byte(`{"results":[],"meta":{"total":0}}`)
-	var out bytes.Buffer
-
-	if err := presentTo(registered(t, "search"), body, &out); err != nil {
-		t.Fatalf("presentTo returned error: %v", err)
-	}
-
-	if out.String() != "" {
-		t.Fatalf("output = %q, want empty", out.String())
-	}
-}
-
-func TestPresentSearchRendersEmptyDisplayName(t *testing.T) {
-	body := []byte(`{
-		"results": [
-			{"display_name": null, "source": "warehouse", "type": "database.table"},
-			{"source": "warehouse", "type": "database.column"}
-		]
-	}`)
-	var out bytes.Buffer
-
-	if err := presentTo(registered(t, "search"), body, &out); err != nil {
-		t.Fatalf("presentTo returned error: %v", err)
-	}
-
-	want := "warehouse | database.table | \nwarehouse | database.column | \n"
-	if out.String() != want {
-		t.Fatalf("output = %q, want %q", out.String(), want)
-	}
-}
-
-func TestPresentNonSearchUsesYAML(t *testing.T) {
+func TestPresentUsesYAML(t *testing.T) {
 	body := []byte(`{"version":"1.2.3"}`)
 	var out bytes.Buffer
 
@@ -324,7 +271,7 @@ func TestDownload(t *testing.T) {
 func TestPresentationOf(t *testing.T) {
 	for name, want := range map[string]presentation{
 		"query.export": presentDownload,
-		"search":       presentSearchList,
+		"search":       presentYAML,
 		"query":        presentYAML,
 		"version":      presentYAML,
 	} {

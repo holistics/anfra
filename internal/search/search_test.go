@@ -35,10 +35,11 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result": map[string]any{
-				"results": []any{
+				"query": "type:aml.model orders",
+				"total": 1,
+				"entities": []any{
 					map[string]any{"entity_id": "aml.model:orders"},
 				},
-				"meta": map[string]any{"total": 1},
 			},
 		})
 	}))
@@ -71,9 +72,9 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 	if captured.Context != want {
 		t.Fatalf("context = %+v, want %+v", captured.Context, want)
 	}
-	results, _ := res["results"].([]any)
-	if len(results) != 1 {
-		t.Fatalf("results length = %d, want 1", len(results))
+	entities, _ := res["entities"].([]any)
+	if len(entities) != 1 {
+		t.Fatalf("entities length = %d, want 1", len(entities))
 	}
 }
 

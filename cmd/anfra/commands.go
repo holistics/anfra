@@ -402,19 +402,15 @@ type delivery struct {
 type presentation int
 
 const (
-	presentYAML       presentation = iota // its JSON, as YAML
-	presentSearchList                     // search's results, one per line
-	presentDownload                       // an export: its file (--output), or its link (--link)
+	presentYAML     presentation = iota // its JSON, as YAML
+	presentDownload                     // an export: its file (--output), or its link (--link)
 )
 
 // presentationOf is how the CLI shows c's answer, by what the answer is: the
 // one place that decides it, for the flags it takes and for how it is shown.
 func presentationOf(c command.Command) presentation {
-	switch c.Output() {
-	case reflect.TypeFor[command.ExportLink]():
+	if c.Output() == reflect.TypeFor[command.ExportLink]() {
 		return presentDownload
-	case reflect.TypeFor[anfranode.CatalogSearchResult]():
-		return presentSearchList
 	}
 	return presentYAML
 }
@@ -500,20 +496,14 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("the export's link %q is not one the CLI can download", link)
 }
 
-// present shows an answer as presentationOf says, and turns an invalid verdict
-// into a silent exit code 1: the answer says why.
+// present shows an answer as YAML, and turns an invalid verdict into a silent
+// exit code 1: the answer says why.
 func present(c command.Command, body []byte) error {
 	return presentTo(c, body, os.Stdout)
 }
 
 func presentTo(c command.Command, body []byte, out io.Writer) error {
-	var err error
-	if presentationOf(c) == presentSearchList {
-		err = renderSearchResults(body, out)
-	} else {
-		err = renderTo(body, "application/json", out)
-	}
-	if err != nil {
+	if err := renderTo(body, "application/json", out); err != nil {
 		return err
 	}
 	valid, err := c.Valid(body)
@@ -576,29 +566,6 @@ func renderTo(body []byte, contentType string, out io.Writer) error {
 	}
 	_, err = out.Write(b)
 	return err
-}
-
-func renderSearchResults(body []byte, out io.Writer) error {
-	var data struct {
-		Results []struct {
-			DisplayName *string `json:"display_name"`
-			Source      string  `json:"source"`
-			Type        string  `json:"type"`
-		} `json:"results"`
-	}
-	if err := jsonkit.Unmarshal(body, &data); err != nil {
-		return fmt.Errorf("decode search results: %w", err)
-	}
-	for _, result := range data.Results {
-		displayName := ""
-		if result.DisplayName != nil {
-			displayName = *result.DisplayName
-		}
-		if _, err := fmt.Fprintf(out, "%s | %s | %s\n", result.Source, result.Type, displayName); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func isJSONContentType(contentType string) bool {
