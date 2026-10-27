@@ -1,10 +1,14 @@
 <script setup lang="ts">
 // The panel's chrome: the plugins' tabs as a tab strip, and the open tab drawn by its plugin. What
 // each tab shows, and the panel's state (the tab, the node selected, pick mode), are the SDK's;
-// this only places them.
-import { onBeforeUnmount, ref, watch } from 'vue';
+// this only places them. Tabs that don't fit go behind a More tabs button, as in a browser's
+// devtools, the selected one always staying in the strip.
+import {
+  computed, nextTick, onBeforeUnmount, onMounted, ref, watch,
+} from 'vue';
 import type { Panel, Tab } from '@holistics/anfra-sdk/host';
 import Icon from './Icon.vue';
+import { fitTabs } from './tabFit';
 
 const props = defineProps<{
   panel: Panel,
@@ -35,24 +39,108 @@ function draw (): void {
 }
 
 watch([() => props.version, content], draw, { immediate: true, flush: 'post' });
-onBeforeUnmount(() => unmountTab?.());
+
+// The strip and a hidden copy of every tab in it, which gives each tab's width.
+const bar = ref<HTMLElement>();
+const measure = ref<HTMLElement>();
+const fit = ref<{ shown: string[], more: string[] }>({ shown: [], more: [] });
+const GAP = 2;
+const MORE = 30;
+function refit (): void {
+  if (!bar.value || !measure.value) return;
+  const buttons = [...measure.value.querySelectorAll<HTMLElement>('button')];
+  const widths = props.tabs.map((tab, i) => ({ id: tab.id, width: buttons[i]?.offsetWidth ?? 0 }));
+  fit.value = fitTabs(widths, bar.value.clientWidth, GAP, MORE, props.panel.tab);
+}
+const stripTabs = computed(() => props.tabs.filter((tab) => fit.value.shown.includes(tab.id) || !fit.value.shown.length));
+const moreTabs = computed(() => props.tabs.filter((tab) => fit.value.more.includes(tab.id)));
+const resize = new ResizeObserver(() => refit());
+onMounted(() => { if (bar.value) resize.observe(bar.value); });
+watch([() => props.version, () => props.tabs], () => { void nextTick(refit); }, { immediate: true });
+
+const moreOpen = ref(false);
+const menu = ref<HTMLElement>();
+const items = () => [...(menu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+async function toggleMore (): Promise<void> {
+  moreOpen.value = !moreOpen.value;
+  if (!moreOpen.value) return;
+  await nextTick();
+  items()[0]?.focus();
+}
+function choose (id: string): void {
+  moreOpen.value = false;
+  props.panel.show(id);
+}
+function onMenuKey (event: KeyboardEvent): void {
+  const list = items();
+  const at = list.indexOf(document.activeElement as HTMLElement);
+  if (event.key === 'Escape') moreOpen.value = false;
+  else if (event.key === 'ArrowDown') list[(at + 1) % list.length]?.focus();
+  else if (event.key === 'ArrowUp') list[(at - 1 + list.length) % list.length]?.focus();
+  else return;
+  event.preventDefault();
+}
+function onDocumentPointer (event: PointerEvent): void {
+  if (!(event.target as HTMLElement).closest('.panel-more')) moreOpen.value = false;
+}
+watch(moreOpen, (open) => {
+  if (open) document.addEventListener('pointerdown', onDocumentPointer, true);
+  else document.removeEventListener('pointerdown', onDocumentPointer, true);
+});
+
+onBeforeUnmount(() => {
+  unmountTab?.();
+  resize.disconnect();
+  document.removeEventListener('pointerdown', onDocumentPointer, true);
+});
 </script>
 
 <template>
   <aside class="plugin-panel" aria-label="Panel" data-testid="plugin-panel">
     <header class="panel-header">
-      <div class="panel-tabs" role="tablist">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          type="button"
-          role="tab"
-          :aria-selected="panel.tab === tab.id"
-          :data-testid="`tab-${tab.id}`"
-          @click="panel.show(tab.id)"
-        >
-          {{ tab.title }}
-        </button>
+      <div ref="bar" class="panel-tabbar">
+        <div class="panel-tabs" role="tablist">
+          <button
+            v-for="tab in stripTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            :aria-selected="panel.tab === tab.id"
+            :data-testid="`tab-${tab.id}`"
+            @click="panel.show(tab.id)"
+          >
+            {{ tab.title }}
+          </button>
+        </div>
+        <div v-if="moreTabs.length" class="more panel-more">
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="More tabs"
+            title="More tabs"
+            aria-haspopup="menu"
+            data-testid="more-tabs"
+            :aria-expanded="moreOpen"
+            @click="toggleMore"
+          >
+            <Icon name="overflow" />
+          </button>
+          <div v-if="moreOpen" ref="menu" class="menu" role="menu" data-testid="more-tabs-menu" @keydown="onMenuKey">
+            <button
+              v-for="tab in moreTabs"
+              :key="tab.id"
+              type="button"
+              role="menuitem"
+              :data-testid="`tab-${tab.id}`"
+              @click="choose(tab.id)"
+            >
+              {{ tab.title }}
+            </button>
+          </div>
+        </div>
+        <div ref="measure" class="panel-tabs panel-tabs-measure" aria-hidden="true">
+          <button v-for="tab in tabs" :key="tab.id" type="button" tabindex="-1">{{ tab.title }}</button>
+        </div>
       </div>
       <button type="button" class="icon-button" aria-label="Close panel" @click="panel.hide()">
         <Icon name="close" />
