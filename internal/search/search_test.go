@@ -56,7 +56,7 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 		anfranode.NewClientHTTP(node.URL),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
 		r,
-		"type:aml.model orders",
+		Request{Query: "type:aml.model orders", Limit: 20, Offset: 40},
 	)
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
@@ -64,6 +64,9 @@ func TestRunPassesQueryToRPC(t *testing.T) {
 
 	if captured.Query != "type:aml.model orders" {
 		t.Fatalf("query = %q, want type:aml.model orders", captured.Query)
+	}
+	if captured.Limit != 20 || captured.Offset != 40 {
+		t.Fatalf("limit, offset = %d, %d, want 20, 40", captured.Limit, captured.Offset)
 	}
 	want := anfranode.CatalogContext{
 		RepoRef:           anfranode.RepoRef{RepoID: "repo-123", RepoPath: repoDir},
@@ -83,7 +86,7 @@ func TestRunRequiresQuery(t *testing.T) {
 		anfranode.NewClientHTTP("http://127.0.0.1:9001"),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
 		repo.Repo{},
-		" ",
+		Request{Query: " "},
 	)
 	if err == nil || !strings.Contains(err.Error(), "search query is required") {
 		t.Fatalf("error = %v, want clear missing query error", err)

@@ -538,6 +538,8 @@ func (c *Client) IngestCatalog(ctx context.Context, req CatalogIngestRequest) er
 type CatalogSearchRequest struct {
 	Context CatalogContext `json:"context"`
 	Query   string         `json:"query"`
+	Limit   int            `json:"limit,omitzero"`
+	Offset  int            `json:"offset,omitzero"`
 }
 
 type CatalogSearchResult map[string]any
