@@ -74,7 +74,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
             h(doc, 'button', {
               type: 'button',
               class: `check ${check.level}`,
-              title: `Show ${check.about.name} in Queries`,
+              'data-tip': `Show ${check.about.name} in Queries`,
               'data-key': `check:${index}:${i}`,
               'data-testid': `check-${index}-${i}`,
               onclick: () => state.reveal(panel, { entity: check.about.entity, app: index, name: check.about.name }),
@@ -102,7 +102,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
     const mappings = controlMappings(app);
     const crosses = crossFilters(app);
     const entity = (kind: 'query' | 'control', name: string) => link(doc, name, () => state.reveal(panel, { entity: kind, app: index, name }), {
-      title: `Show ${name} in Queries`, 'data-testid': `wiring-${kind}-${name}`,
+      'data-tip': `Show ${name} in Queries`, 'data-testid': `wiring-${kind}-${name}`,
     });
     return collapsible(doc, `wiring:${index}`, ['Wiring', hint('Which controls and cross-filters feed which queries, as declared by the app.')], () => h(doc, 'div', { class: 'table-wrap', 'data-testid': `wiring-${index}` },
       h(doc, 'table', {},
@@ -118,7 +118,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
               const m = mappings.find((x) => x.from.name === control && x.to.name === query);
               return h(doc, 'td', { class: 'cell', 'data-testid': `wiring-cell-${query}-${control}` },
                 m
-                  ? h(doc, 'span', { class: 'mapped', title: `${m.field}${m.aggregation ? ` (${m.aggregation})` : ''}` }, '●')
+                  ? h(doc, 'span', { class: 'mapped', 'data-tip': `${m.field}${m.aggregation ? ` (${m.aggregation})` : ''}` }, '●')
                   : h(doc, 'span', { class: 'unmapped' }, '·'));
             }),
             h(doc, 'td', { class: 'muted', 'data-testid': `wiring-by-${query}` }, by.length ? by.join(', ') : '—'));

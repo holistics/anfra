@@ -78,8 +78,9 @@ export async function copyText (doc: Document, text: string): Promise<boolean> {
 /**
  * Draw a tab: the stylesheet, a `head` kept as it is (a search box keeps its focus and text), and
  * `draw`'s body again on each change to the panel or to what `also` watches. A redraw keeps the
- * scroll of `.body` and `.detail`, which `<details data-key>` are open, and the focus on a
- * `[data-key]` element, so a request settling under the reader moves nothing.
+ * scroll of `.body` and `.detail`, which `<details data-key>` are open, the focus on a
+ * `[data-key]` element and a tooltip shown on one, so a request settling under the reader moves
+ * nothing.
  */
 export function drawTab (
   root: ShadowRoot, context: TabContext, draw: () => Children,
@@ -88,15 +89,13 @@ export function drawTab (
   const doc = context.document;
   const body = h(doc, 'div', { class: options.split ? 'body split' : 'body' });
   root.append(h(doc, 'style', {}, STYLES), h(doc, 'div', { class: 'pane' }, options.head, body));
+  const tooltip = tooltips(root);
   const scrollers = () => [body, ...body.querySelectorAll<HTMLElement>('.detail, .scroll')];
   const redraw = () => {
     const scrolls = scrollers().map((element) => element.scrollTop);
     const focused = (root.activeElement as HTMLElement | null)?.closest?.<HTMLElement>('[data-key]')?.dataset.key;
     const focusInBody = !!root.activeElement && body.contains(root.activeElement);
-    kept = new Set([
-      ...[...body.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key!),
-      ...[...body.querySelectorAll<HTMLElement>('.pop-trigger[aria-expanded="true"][data-key]')].map((trigger) => trigger.dataset.key!),
-    ]);
+    kept = new Set([...body.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key!));
     try {
       replace(doc, body, draw());
     } finally {
@@ -104,16 +103,23 @@ export function drawTab (
     }
     scrollers().forEach((element, index) => { element.scrollTop = scrolls[index] ?? 0; });
     keepFlashes(body);
+    tooltip.redrawn();
     if (focusInBody && focused !== undefined) {
       [...body.querySelectorAll<HTMLElement>('[data-key]')].find((element) => element.dataset.key === focused)?.focus({ preventScroll: true });
     }
   };
   redraw();
   const stops = [context.panel.subscribe(redraw), ...(options.also ?? []).map((subscribe) => subscribe(redraw))];
-  return { redraw, dispose: () => stops.forEach((stop) => stop()) };
+  return {
+    redraw,
+    dispose: () => {
+      stops.forEach((stop) => stop());
+      tooltip.dispose();
+    },
+  };
 }
 
-/** While a tab redraws: the keys of the collapsibles and popovers open before it, which stay open. */
+/** While a tab redraws: the keys of the collapsibles open before it, which stay open. */
 let kept: Set<string> | undefined;
 
 /** A button whose label says "Copied" for a moment after it copies. */
@@ -130,7 +136,7 @@ export function copyButton (doc: Document, className: string, text: () => string
 
 /** A small icon button that copies, with its label as tooltip. */
 export function copyIcon (doc: Document, label: string, text: () => string, attributes: Record<string, string> = {}): HTMLElement {
-  return copyButton(doc, 'row-action', text, { idle: icon(doc, 'copy'), done: icon(doc, 'check') }, { title: label, 'aria-label': label, ...attributes });
+  return copyButton(doc, 'row-action', text, { idle: icon(doc, 'copy'), done: icon(doc, 'check') }, { 'data-tip': label, 'aria-label': label, ...attributes });
 }
 
 /** A link-styled button: the tabs' cross-links. */
@@ -169,65 +175,155 @@ export function collapsible (doc: Document, key: string, summary: Children, body
   return details;
 }
 
-/**
- * A button that shows `content` under it until clicked again, or until focus leaves, the panel
- * scrolls or the window resizes. Given a `data-key`, it stays open across a redraw. The box is a
- * manual popover, so it sits in the top layer where the browser has one, and no scrolling box or
- * panel edge clips it; it is placed against the viewport, flipped above or shifted left to fit.
- */
+/** Rich tooltips, by the element they are on; an element's `data-tip` is a plain one. */
+const tips = new WeakMap<Element, () => Children>();
+
+/** Give an element a tooltip of its own content, shown as `data-tip`'s is. */
+export function tip<T extends Element> (element: T, content: () => Children): T {
+  tips.set(element, content);
+  return element;
+}
+
+/** A button that shows `content` as its tooltip, on hover and focus as any other, and on a click or tap too. */
 export function popover (doc: Document, trigger: Children, content: () => Children, attributes: Attributes = {}): HTMLElement {
-  const win = doc.defaultView!;
-  const box = h(doc, 'span', { class: 'popover', role: 'tooltip', popover: 'manual', hidden: true });
-  const place = () => {
-    const anchor = button.getBoundingClientRect();
-    const size = box.getBoundingClientRect();
-    const room = { width: win.innerWidth, height: win.innerHeight };
-    const below = anchor.bottom + POP_GAP;
-    const top = below + size.height <= room.height - POP_MARGIN || anchor.top - POP_GAP - size.height < POP_MARGIN ? below : anchor.top - POP_GAP - size.height;
-    const left = Math.max(POP_MARGIN, Math.min(anchor.left, room.width - POP_MARGIN - size.width));
-    box.style.left = `${left}px`;
-    box.style.top = `${top}px`;
-  };
-  const away = () => set(false);
-  const set = (show: boolean) => {
-    if (show === !box.hidden) return;
-    const root = wrap.getRootNode();
-    // A scroll inside the tab's shadow root doesn't reach the document, so both are listened to.
-    for (const target of [win, root]) {
-      if (show) target.addEventListener('scroll', away, true);
-      else target.removeEventListener('scroll', away, true);
-    }
-    if (show) win.addEventListener('resize', away);
-    else win.removeEventListener('resize', away);
-    if (show) replace(doc, box, content());
-    box.hidden = !show;
-    if (show) box.showPopover?.();
-    else box.hidePopover?.();
-    button.setAttribute('aria-expanded', String(show));
-    if (show) place();
-  };
   const button = h(doc, 'button', {
     type: 'button',
     class: 'pop-trigger',
-    'aria-expanded': 'false',
     ...attributes,
     onclick: (event: Event) => {
       event.stopPropagation();
-      set(box.hidden);
+      controllers.get(button.getRootNode())?.toggle(button);
     },
   }, trigger);
-  const wrap = h(doc, 'span', { class: 'pop' }, button, box);
-  wrap.addEventListener('focusout', (event) => {
-    if (!wrap.contains((event as FocusEvent).relatedTarget as Node | null)) set(false);
-  });
-  const key = attributes['data-key'];
-  // Reopened once it is in the page, so it can be placed.
-  if (typeof key === 'string' && kept?.has(key)) queueMicrotask(() => { if (wrap.isConnected) set(true); });
-  return wrap;
+  return tip(button, content);
 }
 
-const POP_GAP = 4;
-const POP_MARGIN = 8;
+const TIP_DELAY = 300;
+/** Moving from one tooltip to the next within this long shows the next at once. */
+const TIP_WARM = 400;
+const TIP_GAP = 4;
+const TIP_MARGIN = 8;
+
+interface Tooltips {
+  toggle: (element: HTMLElement) => void;
+  /** After a redraw: follow the element shown on to its new self by `data-key`, or hide. */
+  redrawn: () => void;
+  dispose: () => void;
+}
+
+const controllers = new WeakMap<Node, Tooltips>();
+
+/**
+ * One tooltip for a tab: shown for the `[data-tip]` or `tip()` element under the pointer after a
+ * moment, or at once for one focused by keyboard; hidden when the pointer or focus leaves, on
+ * Escape, a press, a scroll or a resize. It is a manual popover, in the top layer where the browser
+ * has one, so no scrolling box or panel edge clips it, and placed under its element, or above it,
+ * inside the window.
+ */
+function tooltips (root: ShadowRoot): Tooltips {
+  const doc = root.ownerDocument;
+  const win = doc.defaultView!;
+  const box = h(doc, 'div', { class: 'tooltip', role: 'tooltip', id: 'anfra-tooltip', popover: 'manual', hidden: true });
+  root.append(box);
+  let anchor: HTMLElement | undefined;
+  /** The element waiting out the delay, and its timer. */
+  let pending: HTMLElement | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let hiddenAt = 0;
+
+  const target = (event: Event) => event.composedPath().find((node): node is HTMLElement => node instanceof win.HTMLElement && (node.hasAttribute('data-tip') || tips.has(node)));
+  const place = () => {
+    if (!anchor) return;
+    const at = anchor.getBoundingClientRect();
+    const size = box.getBoundingClientRect();
+    const below = at.bottom + TIP_GAP;
+    const above = at.top - TIP_GAP - size.height;
+    const fitsBelow = below + size.height <= win.innerHeight - TIP_MARGIN;
+    // Below, else above, else as far down as it stays in the window.
+    const top = fitsBelow ? below : above >= TIP_MARGIN ? above : Math.max(TIP_MARGIN, win.innerHeight - TIP_MARGIN - size.height);
+    box.style.left = `${Math.max(TIP_MARGIN, Math.min(at.left, win.innerWidth - TIP_MARGIN - size.width))}px`;
+    box.style.top = `${top}px`;
+  };
+  const show = (element: HTMLElement) => {
+    clearTimeout(timer);
+    pending = undefined;
+    const rich = tips.get(element);
+    const text = element.dataset.tip;
+    if (!rich && !text) return;
+    anchor?.removeAttribute('aria-describedby');
+    anchor = element;
+    replace(doc, box, rich ? rich() : text);
+    box.classList.toggle('rich', !!rich);
+    box.hidden = false;
+    if (!box.matches(':popover-open')) box.showPopover?.();
+    element.setAttribute('aria-describedby', box.id);
+    place();
+  };
+  const hide = () => {
+    clearTimeout(timer);
+    pending = undefined;
+    if (!anchor) return;
+    anchor.removeAttribute('aria-describedby');
+    anchor = undefined;
+    box.hidden = true;
+    box.hidePopover?.();
+    hiddenAt = Date.now();
+  };
+  const later = (element: HTMLElement) => {
+    clearTimeout(timer);
+    if (anchor || Date.now() - hiddenAt < TIP_WARM) {
+      show(element);
+      return;
+    }
+    pending = element;
+    timer = setTimeout(() => show(element), TIP_DELAY);
+  };
+
+  const listeners: [EventTarget, string, (event: Event) => void, boolean][] = [
+    [root, 'pointerover', (event) => {
+      const element = target(event);
+      if (element && element !== anchor && element !== pending) later(element);
+    }, false],
+    [root, 'pointerout', (event) => {
+      const current = anchor ?? pending;
+      const next = (event as PointerEvent).relatedTarget as Node | null;
+      if (current && !(next && current.contains(next))) hide();
+    }, false],
+    [root, 'focusin', (event) => {
+      const element = target(event);
+      if (element?.matches(':focus-visible')) later(element);
+    }, false],
+    [root, 'focusout', () => hide(), false],
+    [root, 'pointerdown', () => hide(), true],
+    [root, 'keydown', (event) => { if ((event as KeyboardEvent).key === 'Escape') hide(); }, false],
+    // A scroll inside the tab's shadow root doesn't reach the document, so both are listened to.
+    [root, 'scroll', () => hide(), true],
+    [win, 'scroll', () => hide(), true],
+    [win, 'resize', () => hide(), false],
+  ];
+  listeners.forEach(([on, name, listener, capture]) => on.addEventListener(name, listener, capture));
+  const controller: Tooltips = {
+    toggle: (element) => {
+      if (anchor === element) hide();
+      else show(element);
+    },
+    redrawn: () => {
+      if (!anchor || anchor.isConnected) return;
+      const key = anchor.dataset.key;
+      const next = key === undefined ? undefined : [...root.querySelectorAll<HTMLElement>('[data-key]')].find((element) => element.dataset.key === key);
+      if (next) show(next);
+      else hide();
+    },
+    dispose: () => {
+      hide();
+      listeners.forEach(([on, name, listener, capture]) => on.removeEventListener(name, listener, capture));
+      controllers.delete(root);
+      box.remove();
+    },
+  };
+  controllers.set(root, controller);
+  return controller;
+}
 
 /** The trust meter: one rising bar per level, filled up to the one reached. */
 export function trustBars (doc: Document, trust: Trust, size: 'sm' | 'md' | 'lg' = 'md'): HTMLElement {
@@ -241,12 +337,12 @@ export function trustBars (doc: Document, trust: Trust, size: 'sm' | 'md' | 'lg'
 /** A query's trust as small bars, with its level and name as tooltip. */
 export function trustIndicator (doc: Document, trust: Trust): HTMLElement {
   const label = `Level ${trust.level} · ${TRUST_LEVELS[trust.level].name}`;
-  return h(doc, 'span', { class: 'indicator trust', role: 'img', 'aria-label': `Trust level ${trust.level}`, title: label }, trustBars(doc, trust, 'sm'));
+  return h(doc, 'span', { class: 'indicator trust', role: 'img', 'aria-label': `Trust level ${trust.level}`, 'data-tip': label }, trustBars(doc, trust, 'sm'));
 }
 
 /** A dot for where a query stands: idle, executing, success or error. */
 export function stateDot (doc: Document, state: InspectedQuery['state']): HTMLElement {
-  return h(doc, 'span', { class: `dot ${state}`, role: 'img', 'aria-label': `State: ${state}`, title: state });
+  return h(doc, 'span', { class: `dot ${state}`, role: 'img', 'aria-label': `State: ${state}`, 'data-tip': state });
 }
 
 /** How many filters narrow a query now, each listed in the tooltip; an empty slot with none, so the icons after it stay in line. */
@@ -258,7 +354,7 @@ export function filterIndicator (doc: Document, active: readonly QueryInput[]): 
   });
   return h(doc, 'span', {
     class: 'indicator filters',
-    title: `${plural(active.length, 'filter')} applied\n${lines.join('\n')}`,
+    'data-tip': `${plural(active.length, 'filter')} applied\n${lines.join('\n')}`,
     'aria-label': `${plural(active.length, 'filter')} applied`,
   }, String(active.length), icon(doc, 'filter'));
 }
@@ -292,19 +388,22 @@ export function codeBlock<T extends string> (doc: Document, sources: Record<T, C
     replace(doc, block,
       tabs.length > 1
         ? h(doc, 'div', { class: 'code-head', role: 'tablist' },
-          tabs.map((t) => h(doc, 'button', {
-            type: 'button',
-            role: 'tab',
-            class: 'code-tab',
-            'aria-selected': String(t === shown),
-            disabled: !sources[t].code,
-            title: sources[t].code ? undefined : sources[t].empty,
-            onclick: () => {
-              shown = t;
-              onTab(t);
-              draw();
-            },
-          }, sources[t].label)),
+          tabs.map((t) => {
+            const button = h(doc, 'button', {
+              type: 'button',
+              role: 'tab',
+              class: 'code-tab',
+              'aria-selected': String(t === shown),
+              disabled: !sources[t].code,
+              onclick: () => {
+                shown = t;
+                onTab(t);
+                draw();
+              },
+            }, sources[t].label);
+            // A disabled button may get no pointer events, so what wraps it says why.
+            return sources[t].code ? button : h(doc, 'span', { class: 'code-tab-wrap', 'data-tip': sources[t].empty }, button);
+          }),
           h(doc, 'span', { class: 'spacer' }), copy)
         : copy && h(doc, 'div', { class: 'code-corner' }, copy),
       body);
@@ -449,15 +548,17 @@ code.wrap { overflow-wrap: anywhere; }
 .dot.executing, .dot.pending { background: var(--run); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 /* Popovers */
-.pop { position: relative; display: inline-flex; }
 .pop-trigger { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 4px; color: inherit; }
-.popover { position: fixed; inset: auto; margin: 0; z-index: 10; width: max-content; max-width: 280px; padding: 8px 10px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); font-size: 12px; font-weight: normal; text-transform: none; letter-spacing: normal; white-space: normal; }
+/* Plain tooltips are one line of text or a few, with their line breaks; rich ones lay out their own. */
+.tooltip { position: fixed; inset: auto; margin: 0; z-index: 10; width: max-content; max-width: 280px; padding: 5px 8px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); font: 12px/1.45 var(--anfra-font); white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; }
+.tooltip.rich { max-width: 340px; padding: 8px 10px; white-space: normal; }
 /* Code */
 .code { margin-top: 6px; border: 1px solid var(--anfra-color-border); border-radius: 6px; overflow: hidden; position: relative; }
 .code-head { display: flex; align-items: center; gap: 2px; padding: 0 4px; border-bottom: 1px solid var(--anfra-color-border); background: var(--subtle); }
 .code-tab { border: 0; border-bottom: 2px solid transparent; background: none; padding: 5px 6px; font-size: 11px; color: var(--anfra-color-muted); }
 .code-tab[aria-selected="true"] { color: var(--anfra-color-fg); border-bottom-color: var(--anfra-color-accent); }
 .code-tab:disabled { opacity: 0.5; }
+.code-tab-wrap { display: inline-flex; }
 .code-corner { position: absolute; top: 2px; right: 2px; }
 .code-text { margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px; font-size: 12px; line-height: 1.5; background: var(--subtle); }
 .code-empty { margin: 0; padding: 8px 10px; font-size: 12px; color: var(--anfra-color-muted); background: var(--subtle); }
