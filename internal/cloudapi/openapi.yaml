@@ -744,6 +744,34 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyCannotManageSelf:
+      additionalProperties: false
+      description: You cannot change your own role or suspend yourself here.
+      properties:
+        code:
+          const: cannot_manage_self
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyCodeExpired:
       additionalProperties: false
       description: This code has expired. Send a new one.
@@ -972,6 +1000,118 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyInvitationExists:
+      additionalProperties: false
+      description: An invitation already exists. Resend it from Invitations.
+      properties:
+        code:
+          const: invitation_exists
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyLastActiveAdmin:
+      additionalProperties: false
+      description: The organization must retain at least one active Admin.
+      properties:
+        code:
+          const: last_active_admin
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyMemberAlreadyExists:
+      additionalProperties: false
+      description: This person already belongs to this organization.
+      properties:
+        code:
+          const: member_already_exists
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyMemberSuspended:
+      additionalProperties: false
+      description: This person is suspended. Restore their access from Users.
+      properties:
+        code:
+          const: member_suspended
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyNotFound:
       additionalProperties: false
       description: Not found.
@@ -1080,6 +1220,36 @@ components:
           type: string
         status:
           const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyQuotaExceeded:
+      additionalProperties: false
+      description: Your organization has reached a limit. Remove something to make room, or ask for a higher limit.
+      properties:
+        code:
+          const: quota_exceeded
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/Quota"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 403
           type: integer
       required:
         - code
@@ -1612,6 +1782,30 @@ components:
           description: optional context source key to ingest
           type: string
       type: object
+    InvitationDirectoryOptions:
+      additionalProperties: false
+      properties:
+        limit:
+          format: int64
+          type: integer
+        offset:
+          format: int64
+          type: integer
+        role:
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+        search:
+          type: string
+        status:
+          enum:
+            - pending
+            - expired
+            - all
+          type: string
+      type: object
     InvitationIn:
       additionalProperties: false
       properties:
@@ -1623,6 +1817,9 @@ components:
     InvitationView:
       additionalProperties: false
       properties:
+        created_at:
+          format: date-time
+          type: string
         email:
           type: string
         expires_at:
@@ -1630,17 +1827,28 @@ components:
           type: string
         id:
           type: string
+        resend_available_at:
+          format: date-time
+          type: string
         role:
           enum:
             - admin
             - analyst
             - explorer
           type: string
+        status:
+          enum:
+            - pending
+            - expired
+          type: string
       required:
         - id
         - email
         - role
+        - created_at
         - expires_at
+        - status
+        - resend_available_at
       type: object
     InvitationsOut:
       additionalProperties: false
@@ -1649,8 +1857,12 @@ components:
           items:
             $ref: "#/components/schemas/InvitationView"
           type: array
+        total:
+          format: int64
+          type: integer
       required:
         - invitations
+        - total
       type: object
     InviteIn:
       additionalProperties: false
@@ -1680,6 +1892,8 @@ components:
         expires_at:
           format: date-time
           type: string
+        id:
+          type: string
         path:
           description: The invitation link, relative to the installation. Its secret is after '#'.
           type: string
@@ -1689,6 +1903,7 @@ components:
           description: The absolute link, when the installation's address is configured.
           type: string
       required:
+        - id
         - email
         - role
         - expires_at
@@ -1855,6 +2070,10 @@ components:
     Limits:
       additionalProperties: false
       properties:
+        file_bytes:
+          description: The largest file a publish may have, in bytes.
+          format: int64
+          type: integer
         files:
           description: The most files one publish may have, and the most blob ids one repos.list_missing_blobs call may name.
           format: int64
@@ -1864,13 +2083,14 @@ components:
           format: int64
           type: integer
         upload_bytes:
-          description: "The most content bytes one repos.create_blobs call may carry, before base64: also the largest file."
+          description: The most content bytes one repos.create_blobs call may carry, before base64.
           format: int64
           type: integer
       required:
         - files
         - upload_blobs
         - upload_bytes
+        - file_bytes
       type: object
     LineageInput:
       additionalProperties: false
@@ -2036,6 +2256,100 @@ components:
           type: array
       required:
         - types
+      type: object
+    Member:
+      additionalProperties: false
+      properties:
+        account_status:
+          type: string
+        display_name:
+          type: string
+        email:
+          type: string
+        id:
+          type: string
+        membership_status:
+          enum:
+            - active
+            - suspended
+          type: string
+        role:
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+        user_id:
+          type: string
+      required:
+        - id
+        - user_id
+        - display_name
+        - email
+        - role
+        - membership_status
+        - account_status
+      type: object
+    MemberIn:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+      required:
+        - id
+      type: object
+    MemberRoleIn:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        role:
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+      required:
+        - id
+        - role
+      type: object
+    MembersIn:
+      additionalProperties: false
+      properties:
+        limit:
+          format: int64
+          type: integer
+        offset:
+          format: int64
+          type: integer
+        role:
+          enum:
+            - admin
+            - analyst
+            - explorer
+          type: string
+        search:
+          type: string
+        status:
+          enum:
+            - active
+            - suspended
+            - all
+          type: string
+      type: object
+    MembersOut:
+      additionalProperties: false
+      properties:
+        members:
+          items:
+            $ref: "#/components/schemas/Member"
+          type: array
+        total:
+          format: int64
+          type: integer
+      required:
+        - members
+        - total
       type: object
     MissingBlobs:
       additionalProperties: false
@@ -2709,6 +3023,25 @@ components:
         - type
         - id
       type: object
+    Quota:
+      additionalProperties: false
+      properties:
+        max:
+          description: The quota, in the unit its name says.
+          format: int64
+          type: integer
+        quota:
+          description: "Which quota: repo_disk_bytes, say."
+          type: string
+        used:
+          description: How much the organization holds, in the same unit.
+          format: int64
+          type: integer
+      required:
+        - quota
+        - max
+        - used
+      type: object
     Replaced:
       additionalProperties: false
       properties:
@@ -2867,6 +3200,11 @@ components:
           type: string
         pending_token:
           description: "A provider sign-in waiting for a proved address, from the sign-in redirect's #pending=."
+          type: string
+        purpose:
+          description: Use password for email copy about setting a password. Omit for sign-in. This does not restrict how the code can be redeemed.
+          enum:
+            - password
           type: string
       required:
         - email
@@ -3130,6 +3468,9 @@ components:
         bot_check_site_key:
           description: The Turnstile site key to render before sending an email code; absent when none is needed.
           type: string
+        mailer_configured:
+          description: Whether invitations can be emailed. Delivery is reported separately for each invitation.
+          type: boolean
         methods:
           description: "The enabled sign-in methods, in display order: google, github, email_code, password."
           items:
@@ -3142,6 +3483,7 @@ components:
           description: Whether signing in with a new address creates an account.
           type: boolean
       required:
+        - mailer_configured
         - methods
         - registration_open
         - password_by_code
@@ -3607,6 +3949,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -3851,6 +4204,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -3936,11 +4300,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -3968,6 +4334,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -4061,11 +4438,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -4099,6 +4478,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -4189,11 +4579,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -4216,6 +4608,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -4307,11 +4710,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -4334,6 +4739,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -4423,11 +4839,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -4466,6 +4884,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -4563,11 +4992,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -4606,6 +5037,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -4730,11 +5172,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -4895,11 +5339,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -4940,6 +5386,17 @@ paths:
                   - error
                 type: object
           description: validation_failed, query_invalid
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5040,11 +5497,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5086,6 +5545,17 @@ paths:
                   - error
                 type: object
           description: validation_failed, query_invalid, query_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5192,11 +5662,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5235,6 +5707,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5330,11 +5813,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5373,6 +5858,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5475,11 +5971,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5518,6 +6016,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5612,11 +6121,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5655,6 +6166,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5749,11 +6271,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5792,6 +6316,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -5885,11 +6420,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -5928,6 +6465,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -6022,11 +6570,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -6054,6 +6604,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -6147,11 +6708,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -6174,6 +6737,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -6265,11 +6839,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -6297,6 +6873,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -6390,11 +6977,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -6433,6 +7022,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -6527,11 +7127,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -6554,6 +7156,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -6645,11 +7258,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -6688,6 +7303,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -7123,6 +7749,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -7254,7 +7891,7 @@ paths:
         - sessionCookie: []
   /invitations.accept:
     post:
-      description: "Signed in, send only the token: the account joins the organization if it has the invited address (invitation_email_mismatch otherwise), verified where the installation sends email (email_unverified otherwise: verify it with an email code). Signed out, also send the invited address and a password: a new account is created and signed in, and joins unless it must verify its address first (verify_email). An address that already has an account is account_exists — sign in, then accept."
+      description: "Signed in, send only the token: the account joins the organization if it has the invited address (invitation_email_mismatch otherwise), verified where the installation sends email (email_unverified otherwise: verify it with an email code). Signed out, also send the invited address and a password: a new account is created and signed in, and joins unless it must verify its address first (verify_email). An address that already has an account is account_exists — sign in, then accept. An organization with as many members as it may is quota_exceeded: an invitation holds no seat, so one of its Admins must make room first."
       operationId: invitations.accept
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -7311,10 +7948,11 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyForbidden"
                       - $ref: "#/components/schemas/ErrorBodyEmailUnverified"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden, email_unverified
+          description: forbidden, email_unverified, quota_exceeded
         "404":
           content:
             application/json:
@@ -7457,11 +8095,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -7478,6 +8118,20 @@ paths:
                   - error
                 type: object
           description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyMemberAlreadyExists"
+                      - $ref: "#/components/schemas/ErrorBodyMemberSuspended"
+                      - $ref: "#/components/schemas/ErrorBodyInvitationExists"
+                required:
+                  - error
+                type: object
+          description: member_already_exists, member_suspended, invitation_exists
         "412":
           content:
             application/json:
@@ -7500,6 +8154,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -7550,8 +8215,7 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: false
-              type: object
+              $ref: "#/components/schemas/InvitationDirectoryOptions"
         required: true
       responses:
         "200":
@@ -7593,11 +8257,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -7620,6 +8286,28 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -7648,7 +8336,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: The organization's invitations not yet accepted or expired.
+      summary: The organization's unaccepted invitations, with optional filters and pagination.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -7776,6 +8464,148 @@ paths:
       security:
         - {}
         - sessionCookie: []
+  /invitations.resend:
+    post:
+      operationId: invitations.resend
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyMemberAlreadyExists"
+                      - $ref: "#/components/schemas/ErrorBodyMemberSuspended"
+                required:
+                  - error
+                type: object
+          description: member_already_exists, member_suspended
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Replace an invitation's link and renew its seven-day lifetime.
+      x-destructive: true
+      x-idempotent: false
+      x-read-only: false
+      security:
+        - sessionCookie: []
   /invitations.revoke:
     post:
       description: "For an invitation sent to the wrong address: revoke it, then invite the right one."
@@ -7833,11 +8663,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -7860,6 +8692,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -7950,11 +8793,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -7977,6 +8822,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -8067,11 +8923,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -8094,6 +8952,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -8184,11 +9053,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -8211,6 +9082,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -8243,6 +9125,570 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+      security:
+        - sessionCookie: []
+  /members.list:
+    post:
+      operationId: members.list
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembersIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembersOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: List organization members with search, filters and pagination.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+  /members.restore:
+    post:
+      operationId: members.restore
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Restore a member's saved role and still-valid connected-app grants.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /members.set_role:
+    post:
+      operationId: members.set_role
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberRoleIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyCannotManageSelf"
+                      - $ref: "#/components/schemas/ErrorBodyLastActiveAdmin"
+                required:
+                  - error
+                type: object
+          description: cannot_manage_self, last_active_admin
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Change an organization member's role.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /members.suspend:
+    post:
+      operationId: members.suspend
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyCannotManageSelf"
+                      - $ref: "#/components/schemas/ErrorBodyLastActiveAdmin"
+                required:
+                  - error
+                type: object
+          description: cannot_manage_self, last_active_admin
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Suspend access to this organization, including connected apps.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
       security:
         - sessionCookie: []
   /oauth.approve:
@@ -8832,7 +10278,7 @@ paths:
         - sessionCookie: []
   /orgs.create:
     post:
-      description: "Anyone signed in may create an organization, and becomes its admin. An installation may cap how many organizations one account creates: forbidden past it."
+      description: "Anyone signed in may create an organization, and becomes its admin. An installation may cap how many organizations one account creates: quota_exceeded past it, with the cap and how many the account has created."
       operationId: orgs.create
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -8886,11 +10332,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "412":
           content:
             application/json:
@@ -9111,11 +10559,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -9138,6 +10588,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -9332,7 +10793,7 @@ paths:
         - sessionCookie: []
   /repos.create_blobs:
     post:
-      description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless.
+      description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless. An upload that would take the repo past the organization's storage quota, its history included, is refused with quota_exceeded.
       operationId: repos.create_blobs
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -9386,11 +10847,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -9429,6 +10892,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -9522,11 +10996,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -9565,6 +11041,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -9658,11 +11145,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -9714,6 +11203,17 @@ paths:
                   - error
                 type: object
           description: validation_failed, repo_invalid
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -9808,11 +11308,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -9840,6 +11342,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -9934,11 +11447,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -9961,6 +11476,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -10051,11 +11577,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyForbidden"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
                 required:
                   - error
                 type: object
-          description: forbidden
+          description: forbidden, quota_exceeded
         "404":
           content:
             application/json:
@@ -10089,6 +11617,17 @@ paths:
                   - error
                 type: object
           description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -10423,6 +11962,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -10891,4 +12441,4 @@ paths:
         - sessionCookie: []
 servers:
   - url: /api
-x-anfra-compat: 8
+x-anfra-compat: 9
