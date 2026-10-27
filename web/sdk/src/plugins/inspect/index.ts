@@ -1,5 +1,5 @@
 /**
- * `inspect`: the panel's Queries and Structure tabs, and the command
+ * `inspect`: the panel's Overview, Queries and Structure tabs, and the command
  * that opens them. What the tabs show (the frame's snapshot, pick, highlight and locate) is the
  * runtime's, on every mount's panel, so tabs from other plugins have it too. `inspect` adds a log of
  * the frame's calls, kept per mount by its middleware. The tabs load the first time a host shows one.
@@ -7,7 +7,7 @@
 import type { TabContribution } from '../../host/contributions';
 import { definePlugin, type Plugin } from '../../host/plugin';
 import { PLUGIN_VERSION } from '../version';
-import { QUERIES_TAB } from './model/types';
+import { OVERVIEW_TAB } from './model/types';
 import { dropState, stateOf } from './state';
 
 const tab = (id: string, title: string, icon: string, order: number, load: () => Promise<{ default: TabContribution['mount'] }>): TabContribution => ({
@@ -36,9 +36,10 @@ export function inspectPlugin (): Plugin {
         icon: 'inspect',
         placement: 'primary',
         shortcut: 'Alt+Shift+I',
-        run: { tab: QUERIES_TAB },
+        run: { tab: OVERVIEW_TAB },
       }],
       tabs: [
+        tab('overview', 'Overview', 'overview', 10, () => import('./tabs/overview')),
         tab('queries', 'Queries', 'query', 30, () => import('./tabs/queries')),
         tab('structure', 'Structure', 'tree', 40, () => import('./tabs/structure')),
       ],
