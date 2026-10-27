@@ -9,6 +9,7 @@ import type { TabContext } from '../../../host/contributions';
 import {
   attributeFor, countProblems, findNode, handleFor, plural,
 } from '../model/format';
+import { LINEAGE_TAB } from '../model/types';
 import { stateOf } from '../state';
 import {
   copyIcon, drawTab, fields, h, icon, link, note, replace,
@@ -35,6 +36,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
   const { panel } = context;
   const state = stateOf(context.mount);
   const canRender = context.plugins.some((plugin) => plugin.name === 'render');
+  const hasLineage = context.plugins.some((plugin) => plugin.name === 'lineage');
   // Collapsed nodes stay collapsed across snapshots, until the tab is taken down.
   const collapsed = new Set<string>();
   let status: string | undefined;
@@ -62,6 +64,8 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
   };
   const showInQueries = (node: StructureNode) => state.reveal(panel, { entity: node.kind as 'query' | 'control', app: node.app ?? 0, name: node.name ?? '' });
   const showData = (node: StructureNode) => state.reveal(panel, { table: node.name ?? '', app: node.app ?? 0 });
+  // Lineage follows the selection: it pins the first card it draws under the node.
+  const showInLineage = (node: StructureNode) => panel.show(LINEAGE_TAB, node.key);
   const select = (node: StructureNode) => {
     panel.select(node.key);
     panel.locate({ node: node.key });
@@ -124,6 +128,17 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
               showInQueries(node);
             },
           }, icon(doc, 'query')),
+          hasLineage && (node.kind === 'block' || declared(node)) && h(doc, 'button', {
+            type: 'button',
+            class: 'row-action',
+            'data-tip': 'Show in Lineage',
+            'aria-label': 'Show in Lineage',
+            'data-testid': 'show-in-lineage',
+            onclick: (event: Event) => {
+              event.stopPropagation();
+              showInLineage(node);
+            },
+          }, icon(doc, 'lineage')),
           canRender && renderable(node) && h(doc, 'button', {
             type: 'button',
             class: 'row-action',
@@ -155,6 +170,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
       h(doc, 'div', { class: 'detail-actions' },
         declared(node) && link(doc, [icon(doc, 'query'), 'Show in Queries'], () => showInQueries(node), { 'data-testid': 'detail-show-in-queries' }),
         query && link(doc, [icon(doc, 'table'), 'Show data'], () => showData(node), { 'data-testid': 'view-data' }),
+        hasLineage && link(doc, [icon(doc, 'lineage'), 'Show in Lineage'], () => showInLineage(node), { 'data-testid': 'detail-show-in-lineage' }),
         copyIcon(doc, 'Copy the attribute', () => attributeFor(node)),
         canRender && renderable(node) && (['png', 'pdf'] as const).map((format) => h(doc, 'button', {
           type: 'button', class: 'tool', 'data-testid': `download-${format}`, onclick: () => { void render(node, format); },
