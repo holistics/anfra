@@ -414,6 +414,8 @@ const LINEAGE_STYLES = `
 .focus-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
 .focus-chip { display: inline-flex; align-items: center; gap: 2px; min-width: 0; padding: 0 2px 0 8px; border-radius: 6px; background: color-mix(in srgb, #8b5cf6 16%, transparent); font-weight: 500; }
 .focus-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The legend's trigger is a popover's and a row action's: centred as a row action. */
+.pop-trigger.row-action { display: grid; place-items: center; }
 .legend-row + .legend-row { margin-top: 10px; }
 .legend-title { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .legend-row p { margin: 2px 0 0; color: var(--anfra-color-muted); }
