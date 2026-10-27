@@ -76,7 +76,7 @@ Every call that crosses the bridge is a plugin's, including running a query. anf
 | `export` | `export.query` (frame may call): makes the file, saves it from the host page | | `query.export()` |
 | `lineage` | `lineage.trace` (frame may call) | | `Anfra.lineage()` |
 | `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host) | | `Anfra.render()`. The renderer is its body. Commands: Download as PNG, as PDF (`overflow`). |
-| `inspect` | none: the panel's Structure and Data tabs, and the Inspect command (`Alt+Shift+I`) | | nothing |
+| `inspect` | none: the panel's Overview, Data, Queries, Structure and Declaration tabs, and the Inspect command (`Alt+Shift+I`); a middleware logs each mount's frame calls for them | | nothing |
 
 `core` is required, and the host always names it: `corePlugin(coreApiBackend(api, { datasets }))`. The app model runs its queries by calling `core.submitQuery` through the pipeline like any other caller, so a host swaps or wraps queries the way it would any plugin's calls, with another `core` or with middleware. The SDK has no default `core` because it can't know where a host's core API is.
 
@@ -227,7 +227,7 @@ A plugin's UI about the host goes in the host's own chrome, as **contributions**
 
 A plugin's contributions are named under it (`inspect.toggle`); the host's own (`createHost({ commands, tabs })`) keep the id they are given. `createHost({ contributions })` is a filter: what it refuses is left out everywhere, while the plugin's calls stay, so a host can build its own UI on them instead.
 
-**The panel** belongs to the runtime, one per mount (`mounted.panel`): whether it is open, the tab it shows, the node selected (one, shared by every tab), the frame's snapshot while open, and pick mode. The frame's side of it (the snapshot, pick, highlight and locate) is the kernel's, under `anfra.*`, so a tab from any plugin has it without `inspect`. A tab draws into a shadow root in the host page, with any framework or none, and makes calls through its `context` as its plugin, so middleware sees them. It is loaded when first shown.
+**The panel** belongs to the runtime, one per mount (`mounted.panel`): whether it is open, the tab it shows, the node selected (one, shared by every tab), the frame's snapshot while open, and pick mode. The frame's side of it (the snapshot, pick, highlight and locate) is the kernel's, under `anfra.*`, so a tab from any plugin has it without `inspect`. A tab draws into a shadow root in the host page, with any framework or none, and makes calls through its `context` as its plugin, so middleware sees them. Its `context.mount` is the mount's `MountContext`, with the reader and datasets the frame is provisioned with, which a plugin keys what it keeps about the frame by (`inspect` keeps the frame's request log there, filled by its middleware). It is loaded when first shown.
 
 **The theme** is a scheme and nine tokens (`--anfra-color-bg`, `-fg`, `-muted`, `-border`, `-accent`, `-danger`, `--anfra-radius`, `--anfra-font`, `--anfra-font-mono`). A host sets them once (`createHost({ theme })`, `host.setTheme`), mapped from its own design tokens. The runtime sets them on each tab's element and sends them to each frame (`anfra.theme`), where they go on the plugin layer and on `Anfra.theme`, which a definition may read. They are never applied to the definition's page.
 
@@ -276,7 +276,7 @@ A plugin outside the SDK is the same object, `{ name, version, requires, host, f
 | The bridge, both sides | `common/bridge.ts`, `common/endpoint.ts` |
 | The frame's kernel: bootstrap, the kernel plugins get, the layer | `app/bootstrap.ts`, `app/kernel.ts`, `app/layer.ts`, `app/extensions.ts` |
 | Types registry | `app/pluginTypes.ts` |
-| anfra's plugins | `plugins/<name>/index.ts` (host half), `frame.ts` (setup), `body.ts`; `inspect`'s tabs in `plugins/inspect/tabs.ts` |
+| anfra's plugins | `plugins/<name>/index.ts` (host half), `frame.ts` (setup), `body.ts`; `inspect`'s tabs in `plugins/inspect/tabs/`, what they derive in `plugins/inspect/model/` |
 | Contributions, the panel, the theme | `host/contributions.ts`, `host/panel.ts`, `common/theme.ts`, `common/shortcut.ts`; the frame's side in `app/inspection.ts` and `app/bootstrap.ts` |
 | How a frame half is built: the SDK's own, and anyone's | `tsup.config.ts`, `build/index.ts` |
 | Testing helpers | `testing/` |
