@@ -297,12 +297,13 @@ func stream(ctx context.Context, canal *canalquery.Client, ds datasource.DataSou
 }
 
 // on is st run on ds: with its connection, which data_sources.yml must give, and
-// its settings, if any.
+// its settings, if any; unpooled if ds is.
 func on(ds datasource.DataSource, st canalquery.Statement) (canalquery.Statement, error) {
 	if ds.Connection == nil {
 		return st, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
 	}
 	st.DBConfig = ds.Connection
 	st.DBSetting = ds.Settings
+	st.Unpooled = ds.Unpooled
 	return st, nil
 }
