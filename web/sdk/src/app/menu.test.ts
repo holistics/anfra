@@ -148,6 +148,33 @@ describe('the modal and the popover', () => {
     expect(document.getElementById('outside')!.hasAttribute('inert')).toBe(false);
   });
 
+  it('keeps what the page adds under an open modal inert too, until it closes', async () => {
+    let kernel!: FrameKernel;
+    frame((k) => { kernel = k; });
+    const close = await kernel.modal({ title: 'Rows', mount: () => {}, onClose: () => {} });
+    const toast = document.createElement('div');
+    document.body.append(toast);
+    await flush();
+    expect(toast.hasAttribute('inert')).toBe(true);
+    close.close();
+    expect(toast.hasAttribute('inert')).toBe(false);
+  });
+
+  it('puts what it draws in the top layer where the browser has popovers', async () => {
+    const shown = vi.fn();
+    (HTMLElement.prototype as { showPopover?: () => void }).showPopover = shown;
+    try {
+      let kernel!: FrameKernel;
+      frame((k) => { kernel = k; });
+      await kernel.modal({ title: 'Rows', mount: () => {}, onClose: () => {} });
+      const part = menuRoot()!.querySelector('[role="dialog"]')!.parentElement!;
+      expect(part.getAttribute('popover')).toBe('manual');
+      expect(shown).toHaveBeenCalledOnce();
+    } finally {
+      delete (HTMLElement.prototype as { showPopover?: () => void }).showPopover;
+    }
+  });
+
   it('keeps one open at a time: a modal closes a popover', async () => {
     let kernel!: FrameKernel;
     frame((k) => { kernel = k; });
