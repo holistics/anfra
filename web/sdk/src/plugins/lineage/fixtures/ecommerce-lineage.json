@@ -1,0 +1,470 @@
+{
+  "results": [
+    {
+      "target": { "parent": "ecommerce", "child": "revenue" },
+      "query": "needed_by:(fqn:ecommerce.revenue)",
+      "diagram": {
+        "version": 2,
+        "query": "needed_by:(fqn:ecommerce.revenue)",
+        "total": 9,
+        "matched": [
+          "aml.dataset:fd04b8c356e1",
+          "aml.dataset_dimension_alias:a785e94b4f0c",
+          "aml.dataset_dimension_alias:b093da8837ea",
+          "aml.dataset_model_alias:8fa66eeaeb36",
+          "aml.dataset_model_alias:b942b97dd8ed",
+          "aml.dimension:005849d225e6",
+          "aml.dimension:608a0d4f6d70",
+          "aml.model:5b3c308b3934",
+          "aml.model:dbdd35278efd"
+        ],
+        "schema": {
+          "edges": {
+            "contains": "A contains B: B is a child of A, listed in A.sections.",
+            "refers": "A refers B: A uses B. Data flows from B to A. Stored on A in A.links with type refers."
+          },
+          "types": {
+            "aml.dataset": { "top_level": true, "edges": { "contains": ["aml.metric"] } },
+            "aml.dimension": { "top_level": false, "edges": {} },
+            "aml.metric": { "top_level": false, "edges": { "refers": ["aml.dimension"] } },
+            "aml.model": { "top_level": true, "edges": { "contains": ["aml.dimension"] } }
+          }
+        },
+        "layers": [
+          {
+            "index": 0,
+            "types": ["aml.model"],
+            "card_ids": ["aml.model:dbdd35278efd", "aml.model:5b3c308b3934"]
+          },
+          { "index": 1, "types": ["aml.dataset"], "card_ids": ["aml.dataset:fd04b8c356e1"] }
+        ],
+        "cards": [
+          {
+            "id": "aml.model:dbdd35278efd",
+            "type": "aml.model",
+            "label": "Order Items",
+            "props": {
+              "data_source_name": "ecommerce_duckdb",
+              "file_path": "models/ecommerce/order_items.model.aml",
+              "fqn": "order_items",
+              "label": "Order Items",
+              "model_type": "table",
+              "name": "order_items",
+              "table_name": "public.order_items"
+            },
+            "sections": [
+              {
+                "type": "aml.dimension",
+                "nodes": [
+                  {
+                    "id": "aml.dimension:91d4458f46c2",
+                    "type": "aml.dimension",
+                    "label": "ID",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "order_items.id",
+                      "hidden": false,
+                      "label": "ID",
+                      "model_fqn": "order_items",
+                      "name": "id",
+                      "parent_fqn": "order_items",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:09c36753fbc3",
+                    "type": "aml.dimension",
+                    "label": "Order ID",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "order_items.order_id",
+                      "hidden": false,
+                      "label": "Order ID",
+                      "model_fqn": "order_items",
+                      "name": "order_id",
+                      "parent_fqn": "order_items",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:b90e337a17ca",
+                    "type": "aml.dimension",
+                    "label": "Product ID",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "order_items.product_id",
+                      "hidden": false,
+                      "label": "Product ID",
+                      "model_fqn": "order_items",
+                      "name": "product_id",
+                      "parent_fqn": "order_items",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:005849d225e6",
+                    "type": "aml.dimension",
+                    "label": "Quantity",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "order_items.quantity",
+                      "hidden": false,
+                      "label": "Quantity",
+                      "model_fqn": "order_items",
+                      "name": "quantity",
+                      "parent_fqn": "order_items",
+                      "parent_kind": "model"
+                    }
+                  }
+                ]
+              }
+            ],
+            "layer": 0
+          },
+          {
+            "id": "aml.model:5b3c308b3934",
+            "type": "aml.model",
+            "label": "Products",
+            "props": {
+              "data_source_name": "ecommerce_duckdb",
+              "file_path": "models/ecommerce/products.model.aml",
+              "fqn": "products",
+              "label": "Products",
+              "model_type": "table",
+              "name": "products",
+              "table_name": "public.products"
+            },
+            "sections": [
+              {
+                "type": "aml.dimension",
+                "nodes": [
+                  {
+                    "id": "aml.dimension:4e1b6c31690c",
+                    "type": "aml.dimension",
+                    "label": "Category",
+                    "props": {
+                      "data_type": "text",
+                      "fqn": "products.category",
+                      "hidden": false,
+                      "label": "Category",
+                      "model_fqn": "products",
+                      "name": "category",
+                      "parent_fqn": "products",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:e73fe5687d4b",
+                    "type": "aml.dimension",
+                    "label": "ID",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "products.id",
+                      "hidden": false,
+                      "label": "ID",
+                      "model_fqn": "products",
+                      "name": "id",
+                      "parent_fqn": "products",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:c18a63874e67",
+                    "type": "aml.dimension",
+                    "label": "Name",
+                    "props": {
+                      "data_type": "text",
+                      "fqn": "products.name",
+                      "hidden": false,
+                      "label": "Name",
+                      "model_fqn": "products",
+                      "name": "name",
+                      "parent_fqn": "products",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:608a0d4f6d70",
+                    "type": "aml.dimension",
+                    "label": "Price",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "products.price",
+                      "hidden": false,
+                      "label": "Price",
+                      "model_fqn": "products",
+                      "name": "price",
+                      "parent_fqn": "products",
+                      "parent_kind": "model"
+                    }
+                  }
+                ]
+              }
+            ],
+            "layer": 0
+          },
+          {
+            "id": "aml.dataset:fd04b8c356e1",
+            "type": "aml.dataset",
+            "label": "E-commerce",
+            "props": {
+              "data_source_name": "ecommerce_duckdb",
+              "description": "Customers, orders and the products they bought",
+              "file_path": "datasets/ecommerce.dataset.aml",
+              "fqn": "ecommerce",
+              "label": "E-commerce",
+              "name": "ecommerce"
+            },
+            "sections": [
+              {
+                "type": "aml.metric",
+                "nodes": [
+                  {
+                    "id": "aml.metric:33d2f85e21db",
+                    "type": "aml.metric",
+                    "label": "Order Count",
+                    "props": {
+                      "data_type": "number",
+                      "dataset_name": "ecommerce",
+                      "definition": "count(orders.id) ",
+                      "fqn": "ecommerce.order_count",
+                      "hidden": false,
+                      "label": "Order Count",
+                      "name": "order_count"
+                    }
+                  },
+                  {
+                    "id": "aml.metric:003c9e1d5e07",
+                    "type": "aml.metric",
+                    "label": "Revenue",
+                    "props": {
+                      "data_type": "number",
+                      "dataset_name": "ecommerce",
+                      "definition": "sum(order_items, order_items.quantity * products.price) ",
+                      "fqn": "ecommerce.revenue",
+                      "hidden": false,
+                      "label": "Revenue",
+                      "name": "revenue"
+                    },
+                    "links": [
+                      { "type": "refers", "to": "aml.dimension:005849d225e6" },
+                      { "type": "refers", "to": "aml.dimension:608a0d4f6d70" }
+                    ]
+                  },
+                  {
+                    "id": "aml.metric:259f99eda1aa",
+                    "type": "aml.metric",
+                    "label": "Units Sold",
+                    "props": {
+                      "data_type": "number",
+                      "dataset_name": "ecommerce",
+                      "definition": "sum(order_items.quantity) ",
+                      "fqn": "ecommerce.units_sold",
+                      "hidden": false,
+                      "label": "Units Sold",
+                      "name": "units_sold"
+                    }
+                  }
+                ]
+              }
+            ],
+            "layer": 1
+          }
+        ]
+      }
+    },
+    {
+      "target": { "parent": "ecommerce", "child": "order_count" },
+      "query": "needed_by:(fqn:ecommerce.order_count)",
+      "diagram": {
+        "version": 2,
+        "query": "needed_by:(fqn:ecommerce.order_count)",
+        "total": 5,
+        "matched": [
+          "aml.dataset:fd04b8c356e1",
+          "aml.dataset_dimension_alias:3b9f81046349",
+          "aml.dataset_model_alias:0c6c74df82c4",
+          "aml.dimension:76b86836bbed",
+          "aml.model:7966f52d4bdb"
+        ],
+        "schema": {
+          "edges": {
+            "contains": "A contains B: B is a child of A, listed in A.sections.",
+            "refers": "A refers B: A uses B. Data flows from B to A. Stored on A in A.links with type refers."
+          },
+          "types": {
+            "aml.dataset": { "top_level": true, "edges": { "contains": ["aml.metric"] } },
+            "aml.dimension": { "top_level": false, "edges": {} },
+            "aml.metric": { "top_level": false, "edges": { "refers": ["aml.dimension"] } },
+            "aml.model": { "top_level": true, "edges": { "contains": ["aml.dimension"] } }
+          }
+        },
+        "layers": [
+          { "index": 0, "types": ["aml.model"], "card_ids": ["aml.model:7966f52d4bdb"] },
+          { "index": 1, "types": ["aml.dataset"], "card_ids": ["aml.dataset:fd04b8c356e1"] }
+        ],
+        "cards": [
+          {
+            "id": "aml.model:7966f52d4bdb",
+            "type": "aml.model",
+            "label": "Orders",
+            "props": {
+              "data_source_name": "ecommerce_duckdb",
+              "file_path": "models/ecommerce/orders.model.aml",
+              "fqn": "orders",
+              "label": "Orders",
+              "model_type": "table",
+              "name": "orders",
+              "table_name": "public.orders"
+            },
+            "sections": [
+              {
+                "type": "aml.dimension",
+                "nodes": [
+                  {
+                    "id": "aml.dimension:068c0c03f7d3",
+                    "type": "aml.dimension",
+                    "label": "Customer ID",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "orders.customer_id",
+                      "hidden": false,
+                      "label": "Customer ID",
+                      "model_fqn": "orders",
+                      "name": "customer_id",
+                      "parent_fqn": "orders",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:76b86836bbed",
+                    "type": "aml.dimension",
+                    "label": "ID",
+                    "props": {
+                      "data_type": "number",
+                      "fqn": "orders.id",
+                      "hidden": false,
+                      "label": "ID",
+                      "model_fqn": "orders",
+                      "name": "id",
+                      "parent_fqn": "orders",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:92288e517409",
+                    "type": "aml.dimension",
+                    "label": "Ordered At",
+                    "props": {
+                      "data_type": "date",
+                      "fqn": "orders.ordered_at",
+                      "hidden": false,
+                      "label": "Ordered At",
+                      "model_fqn": "orders",
+                      "name": "ordered_at",
+                      "parent_fqn": "orders",
+                      "parent_kind": "model"
+                    }
+                  },
+                  {
+                    "id": "aml.dimension:fb4dff95fad6",
+                    "type": "aml.dimension",
+                    "label": "Status",
+                    "props": {
+                      "data_type": "text",
+                      "fqn": "orders.status",
+                      "hidden": false,
+                      "label": "Status",
+                      "model_fqn": "orders",
+                      "name": "status",
+                      "parent_fqn": "orders",
+                      "parent_kind": "model"
+                    }
+                  }
+                ]
+              }
+            ],
+            "layer": 0
+          },
+          {
+            "id": "aml.dataset:fd04b8c356e1",
+            "type": "aml.dataset",
+            "label": "E-commerce",
+            "props": {
+              "data_source_name": "ecommerce_duckdb",
+              "description": "Customers, orders and the products they bought",
+              "file_path": "datasets/ecommerce.dataset.aml",
+              "fqn": "ecommerce",
+              "label": "E-commerce",
+              "name": "ecommerce"
+            },
+            "sections": [
+              {
+                "type": "aml.metric",
+                "nodes": [
+                  {
+                    "id": "aml.metric:33d2f85e21db",
+                    "type": "aml.metric",
+                    "label": "Order Count",
+                    "props": {
+                      "data_type": "number",
+                      "dataset_name": "ecommerce",
+                      "definition": "count(orders.id) ",
+                      "fqn": "ecommerce.order_count",
+                      "hidden": false,
+                      "label": "Order Count",
+                      "name": "order_count"
+                    },
+                    "links": [{ "type": "refers", "to": "aml.dimension:76b86836bbed" }]
+                  },
+                  {
+                    "id": "aml.metric:003c9e1d5e07",
+                    "type": "aml.metric",
+                    "label": "Revenue",
+                    "props": {
+                      "data_type": "number",
+                      "dataset_name": "ecommerce",
+                      "definition": "sum(order_items, order_items.quantity * products.price) ",
+                      "fqn": "ecommerce.revenue",
+                      "hidden": false,
+                      "label": "Revenue",
+                      "name": "revenue"
+                    }
+                  },
+                  {
+                    "id": "aml.metric:259f99eda1aa",
+                    "type": "aml.metric",
+                    "label": "Units Sold",
+                    "props": {
+                      "data_type": "number",
+                      "dataset_name": "ecommerce",
+                      "definition": "sum(order_items.quantity) ",
+                      "fqn": "ecommerce.units_sold",
+                      "hidden": false,
+                      "label": "Units Sold",
+                      "name": "units_sold"
+                    }
+                  }
+                ]
+              }
+            ],
+            "layer": 1
+          }
+        ]
+      }
+    },
+    {
+      "target": { "parent": "orders", "child": "status" },
+      "query": "needed_by:(fqn:orders.status)",
+      "diagram": {
+        "version": 2,
+        "query": "needed_by:(fqn:orders.status)",
+        "total": 0,
+        "matched": [],
+        "schema": { "edges": {}, "types": {} },
+        "layers": [],
+        "cards": []
+      }
+    }
+  ]
+}
