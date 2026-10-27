@@ -4,12 +4,16 @@
 import { computed } from 'vue';
 import {
   FRAME_SIZES, arrange, bounds, isShape, update,
-  type Arrow, type BoardObject, type Frame, type Note, type Section, type Shape,
+  type Arrow, type BoardObject, type Frame, type Note, type Section as SectionShape, type Shape,
 } from '../../model/index.ts';
 import { duplicateSelection, wrapSelection } from '../commands.ts';
 import { scenarioOptions, useStore } from '../context.ts';
-import Icon from './Icon.vue';
-import Select from './Select.vue';
+import Button from '../ui/Button.vue';
+import Field from '../ui/Field.vue';
+import PropRow from '../ui/PropRow.vue';
+import Section from '../ui/Section.vue';
+import Segmented from '../ui/Segmented.vue';
+import Select from '../ui/Select.vue';
 import ElementPanel from './ElementPanel.vue';
 
 const store = useStore();
@@ -36,6 +40,26 @@ const wrap = () => wrapSelection(store);
 const copyShapes = () => duplicateSelection(store);
 
 const frameOf = (o: BoardObject | undefined) => (o?.kind === 'frame' ? (o as Frame) : undefined);
+const SIZES = FRAME_SIZES.map((s, i) => ({ value: i, label: s.name, title: `${s.width} × ${s.height}` }));
+const sizeOf = (f: Frame) => FRAME_SIZES.findIndex((s) => s.width === f.width && s.height === f.height);
+const setSize = (i: number) => set<Frame>({ width: FRAME_SIZES[i].width, height: FRAME_SIZES[i].height });
+const routes = computed(() => [...state.settings.prototypes, ...state.settings.routes]);
+
+const SHORTCUTS: [string, string[] | string][] = [
+  ['Every command', ['⌘K']],
+  ['More on what you click', ['Right-click']],
+  ['Select, pan, use the app', ['V', 'H', 'P']],
+  ['Comment', ['C']],
+  ['Frame, section, note, arrow', ['F', 'S', 'N', 'A']],
+  ['Pan', 'Space or scroll'],
+  ['Zoom', '⌘ scroll'],
+  ['Fit, zoom to selection', ['⇧1', '⇧2']],
+  ['Edit text', 'Double-click'],
+  ['Duplicate, delete', ['⌘D', '⌫']],
+  ['Tidy up the flow', ['⌃⌥T']],
+  ['Undo, redo', ['⌘Z', '⇧⌘Z']],
+  ['Playing: next, back, stop', ['1', '←', 'Esc']],
+];
 const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas ${location.origin}${state.settings.mcp}`);
 </script>
 
@@ -46,170 +70,96 @@ const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas 
 
     <!-- A frame -->
     <template v-else-if="frameOf(one)">
-      <div class="ac-section">
-        <div class="ac-section-head">
-          <Icon name="frame" class="ac-inspector-icon" />
-          <span class="ac-heading">Frame</span>
-          <span class="ac-spacer" />
-          <button class="ac-btn ghost" type="button" title="Play the flow from this frame" @click="store.play(one!.id)"><Icon name="play" /> Play</button>
+      <Section title="Frame" icon="frame">
+        <template #actions>
+          <Button variant="ghost" icon="play" tip="Play the flow from this frame" @click="store.play(one!.id)">Play</Button>
+        </template>
+        <div class="ac-props">
+          <PropRow label="Name">
+            <Field :value="frameOf(one)!.name" aria-label="Name" @change="set<Frame>({ name: str($event) })" />
+          </PropRow>
+          <PropRow label="Route">
+            <Field :value="frameOf(one)!.route" mono list="ac-routes-inspector" aria-label="Route" @change="set<Frame>({ route: str($event) })" />
+          </PropRow>
+          <PropRow label="Scenario">
+            <Select :model-value="frameOf(one)!.scenario ?? 'default'" :options="options" label="Scenario" :min-width="264" @update:model-value="(v) => set<Frame>({ scenario: v })" />
+          </PropRow>
         </div>
-        <label class="ac-stack"><span class="ac-label">Name</span><input class="ac-field" :value="frameOf(one)!.name" @change="set<Frame>({ name: str($event) })" /></label>
-        <label class="ac-stack">
-          <span class="ac-label">Route</span>
-          <input class="ac-field mono" :value="frameOf(one)!.route" list="ac-routes-inspector" @change="set<Frame>({ route: str($event) })" />
-          <datalist id="ac-routes-inspector"><option v-for="r in [...state.settings.prototypes, ...state.settings.routes]" :key="r" :value="r" /></datalist>
-        </label>
-        <div v-if="state.routes[one!.id] && state.routes[one!.id] !== frameOf(one)!.route" class="ac-moved">
+        <datalist id="ac-routes-inspector"><option v-for="r in routes" :key="r" :value="r" /></datalist>
+        <div v-if="state.routes[one!.id] && state.routes[one!.id] !== frameOf(one)!.route" class="ac-callout">
           <p class="ac-caption">Now at <span class="ac-mono">{{ state.routes[one!.id] }}</span></p>
-          <button class="ac-btn" type="button" @click="set<Frame>({ route: state.routes[one!.id] })">Keep this route</button>
+          <Button @click="set<Frame>({ route: state.routes[one!.id] })">Keep this route</Button>
         </div>
-        <div class="ac-stack">
-          <span class="ac-label" :id="`ac-scenario-${one!.id}`">Scenario</span>
-          <Select
-            :model-value="frameOf(one)!.scenario ?? 'default'"
-            :options="options"
-            label="Scenario"
-            :min-width="264"
-            @update:model-value="(v) => set<Frame>({ scenario: v })"
-          />
-        </div>
-      </div>
-      <div class="ac-section">
-        <p class="ac-heading">Size</p>
-        <div class="ac-seg fill" role="group" aria-label="Size">
-          <button
-            v-for="s in FRAME_SIZES"
-            :key="s.name"
-            type="button"
-            :aria-pressed="frameOf(one)!.width === s.width && frameOf(one)!.height === s.height"
-            :title="`${s.width} × ${s.height}`"
-            @click="set<Frame>({ width: s.width, height: s.height })"
-          >
-            {{ s.name }}
-          </button>
-        </div>
+      </Section>
+      <Section title="Size">
+        <Segmented :model-value="sizeOf(frameOf(one)!)" :options="SIZES" label="Size" fill @update:model-value="(i) => setSize(Number(i))" />
         <div class="ac-pair">
-          <label class="ac-affix"><span>W</span><input class="ac-field" type="number" aria-label="Width" :value="frameOf(one)!.width" @change="set<Frame>({ width: num($event) })" /></label>
-          <label class="ac-affix"><span>H</span><input class="ac-field" type="number" aria-label="Height" :value="frameOf(one)!.height" @change="set<Frame>({ height: num($event) })" /></label>
+          <Field prefix="W" type="number" aria-label="Width" :value="frameOf(one)!.width" @change="set<Frame>({ width: num($event) })" />
+          <Field prefix="H" type="number" aria-label="Height" :value="frameOf(one)!.height" @change="set<Frame>({ height: num($event) })" />
         </div>
-      </div>
+      </Section>
     </template>
 
     <!-- A section, note or arrow -->
-    <div v-else-if="one?.kind === 'section'" class="ac-section">
-      <div class="ac-section-head"><Icon name="section" class="ac-inspector-icon" /><span class="ac-heading">Section</span></div>
-      <label class="ac-stack"><span class="ac-label">Name</span><input class="ac-field" :value="(one as Section).name" @change="set<Section>({ name: str($event) })" /></label>
+    <Section v-else-if="one?.kind === 'section'" title="Section" icon="section">
+      <div class="ac-props">
+        <PropRow label="Name">
+          <Field :value="(one as SectionShape).name" aria-label="Name" @change="set<SectionShape>({ name: str($event) })" />
+        </PropRow>
+      </div>
       <p class="ac-caption">Moving a section moves what lies inside it</p>
-    </div>
-    <div v-else-if="one?.kind === 'note'" class="ac-section">
-      <div class="ac-section-head"><Icon name="note" class="ac-inspector-icon" /><span class="ac-heading">Note</span></div>
-      <textarea class="ac-field" rows="6" aria-label="Note" :value="(one as Note).text" @change="set<Note>({ text: str($event) })" />
-    </div>
-    <div v-else-if="one?.kind === 'arrow'" class="ac-section">
-      <div class="ac-section-head"><Icon name="arrow" class="ac-inspector-icon" /><span class="ac-heading">Arrow</span></div>
-      <label class="ac-stack"><span class="ac-label">Label</span><input class="ac-field" :value="(one as Arrow).label ?? ''" placeholder="What the person does, like Invite" @change="set<Arrow>({ label: str($event) || undefined })" /></label>
-      <p class="ac-caption">The label names this way on when the flow is played</p>
-    </div>
+    </Section>
+    <Section v-else-if="one?.kind === 'note'" title="Note" icon="note">
+      <Field :rows="6" aria-label="Note" :value="(one as Note).text" @change="set<Note>({ text: str($event) })" />
+    </Section>
+    <Section v-else-if="one?.kind === 'arrow'" title="Arrow" icon="arrow">
+      <div class="ac-props">
+        <PropRow label="Label">
+          <Field :value="(one as Arrow).label ?? ''" placeholder="Invite, Save" aria-label="Label" @change="set<Arrow>({ label: str($event) || undefined })" />
+        </PropRow>
+      </div>
+      <p class="ac-caption">What the person does to go this way. It names the way on when the flow is played</p>
+    </Section>
 
     <!-- Several -->
-    <div v-else-if="shapesSelected.length > 1" class="ac-section">
-      <p class="ac-heading"><span class="ac-num">{{ shapesSelected.length }}</span> selected</p>
-      <div class="ac-row ac-row-tight">
-        <button class="ac-btn icon" type="button" title="Align left edges" aria-label="Align left edges" @click="board && store.commit(arrange(board, state.selection, 'left'))"><Icon name="alignLeft" /></button>
-        <button class="ac-btn icon" type="button" title="Align top edges" aria-label="Align top edges" @click="board && store.commit(arrange(board, state.selection, 'top'))"><Icon name="alignTop" /></button>
-        <button class="ac-btn icon" type="button" title="Lay out in a row" aria-label="Lay out in a row" @click="board && store.commit(arrange(board, state.selection, 'row'))"><Icon name="row" /></button>
-        <button class="ac-btn icon" type="button" title="Lay out in a column" aria-label="Lay out in a column" @click="board && store.commit(arrange(board, state.selection, 'column'))"><Icon name="column" /></button>
+    <Section v-else-if="shapesSelected.length > 1" :title="`${shapesSelected.length} selected`">
+      <div class="ac-row tight">
+        <Button icon="alignLeft" label="Align left edges" @click="board && store.commit(arrange(board, state.selection, 'left'))" />
+        <Button icon="alignTop" label="Align top edges" @click="board && store.commit(arrange(board, state.selection, 'top'))" />
+        <Button icon="row" label="Lay out in a row" @click="board && store.commit(arrange(board, state.selection, 'row'))" />
+        <Button icon="column" label="Lay out in a column" @click="board && store.commit(arrange(board, state.selection, 'column'))" />
       </div>
-      <button class="ac-btn ac-fit" type="button" @click="wrap"><Icon name="section" /> Put in a section</button>
-    </div>
+      <div class="ac-row">
+        <Button icon="section" @click="wrap">Put in a section</Button>
+      </div>
+    </Section>
 
     <!-- Nothing -->
     <template v-else>
-      <div class="ac-section">
-        <div class="ac-section-head"><Icon name="plug" class="ac-inspector-icon" /><span class="ac-heading">Connect Claude</span></div>
+      <Section title="Connect Claude" icon="plug">
         <p class="ac-caption">Claude reads the comments, changes the code they point at, and resolves them. Run this once in the repo:</p>
-        <div class="ac-command">
-          <pre class="ac-snippet ac-mono">{{ mcpCommand }}</pre>
-          <button class="ac-btn ghost icon" type="button" title="Copy the command" aria-label="Copy the command" @click="store.copy(mcpCommand, 'Command copied')"><Icon name="copy" /></button>
+        <div class="ac-snippet">
+          <pre>{{ mcpCommand }}</pre>
+          <Button variant="ghost" icon="copy" label="Copy the command" @click="store.copy(mcpCommand, 'Command copied')" />
         </div>
         <p class="ac-caption">Then ask Claude to handle the open feedback on the canvas. Or copy the comments as Markdown and paste them anywhere</p>
-      </div>
-      <div class="ac-section">
-        <p class="ac-heading">Shortcuts</p>
-        <dl class="ac-keys">
-          <div><dt>Every command</dt><dd><kbd class="ac-kbd">⌘K</kbd></dd></div>
-          <div><dt>More on what you click</dt><dd><kbd class="ac-kbd">Right-click</kbd></dd></div>
-          <div><dt>Select, pan, use the app</dt><dd><kbd class="ac-kbd">V</kbd><kbd class="ac-kbd">H</kbd><kbd class="ac-kbd">P</kbd></dd></div>
-          <div><dt>Comment</dt><dd><kbd class="ac-kbd">C</kbd></dd></div>
-          <div><dt>Frame, section, note, arrow</dt><dd><kbd class="ac-kbd">F</kbd><kbd class="ac-kbd">S</kbd><kbd class="ac-kbd">N</kbd><kbd class="ac-kbd">A</kbd></dd></div>
-          <div><dt>Pan</dt><dd><kbd class="ac-kbd">Space</kbd> or scroll</dd></div>
-          <div><dt>Zoom</dt><dd><kbd class="ac-kbd">⌘</kbd> scroll</dd></div>
-          <div><dt>Fit, zoom to selection</dt><dd><kbd class="ac-kbd">⇧1</kbd><kbd class="ac-kbd">⇧2</kbd></dd></div>
-          <div><dt>Edit text</dt><dd>Double-click</dd></div>
-          <div><dt>Duplicate, delete</dt><dd><kbd class="ac-kbd">⌘D</kbd><kbd class="ac-kbd">⌫</kbd></dd></div>
-          <div><dt>Tidy up the flow</dt><dd><kbd class="ac-kbd">⌃⌥T</kbd></dd></div>
-          <div><dt>Undo, redo</dt><dd><kbd class="ac-kbd">⌘Z</kbd><kbd class="ac-kbd">⇧⌘Z</kbd></dd></div>
-          <div><dt>Playing: next, back, stop</dt><dd><kbd class="ac-kbd">1</kbd><kbd class="ac-kbd">←</kbd><kbd class="ac-kbd">Esc</kbd></dd></div>
+      </Section>
+      <Section title="Shortcuts">
+        <dl class="ac-dl">
+          <div v-for="[what, keys] in SHORTCUTS" :key="what">
+            <dt>{{ what }}</dt>
+            <dd v-if="typeof keys === 'string'">{{ keys }}</dd>
+            <dd v-else><kbd v-for="k in keys" :key="k" class="ac-kbd">{{ k }}</kbd></dd>
+          </div>
         </dl>
-      </div>
+      </Section>
     </template>
 
-    <div v-if="shapesSelected.length && !picked" class="ac-section">
+    <Section v-if="shapesSelected.length && !picked">
       <div class="ac-row">
-        <button class="ac-btn" type="button" @click="copyShapes"><Icon name="copy" /> Duplicate</button>
-        <button class="ac-btn" type="button" @click="store.removeSelection()"><Icon name="trash" /> Delete</button>
+        <Button icon="copy" @click="copyShapes">Duplicate</Button>
+        <Button icon="trash" @click="store.removeSelection()">Delete</Button>
       </div>
-    </div>
+    </Section>
   </aside>
 </template>
-
-<style>
-.ac-inspector-icon { flex-shrink: 0; color: var(--ac-icon-weak); }
-.ac-source {
-  display: grid;
-  grid-template-columns: minmax(0, auto) 14px;
-  align-items: center;
-  column-gap: 6px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ac-violet-text);
-  text-align: left;
-  cursor: pointer;
-}
-.ac-source-file { font-size: 14px; line-height: 20px; }
-.ac-source > svg { color: var(--ac-violet-icon); }
-.ac-source-dir { grid-column: 1 / -1; direction: rtl; text-align: left; color: var(--ac-ink-muted); }
-@media (hover: hover) and (pointer: fine) {
-  .ac-source:hover > .ac-source-file { text-decoration: underline; text-underline-offset: 3px; }
-}
-.ac-snippet {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--ac-sunken);
-  box-shadow: inset 0 0 0 1px var(--ac-line-weak);
-  color: var(--ac-ink-weak);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 160px;
-  overflow: auto;
-}
-.ac-command { position: relative; }
-.ac-command > .ac-snippet { padding-right: 40px; }
-.ac-command > .ac-btn { position: absolute; top: 0; right: 0; }
-.ac-moved { display: grid; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--ac-sunken); }
-.ac-moved > .ac-btn { justify-self: start; }
-.ac-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.ac-row-tight { gap: 4px; }
-.ac-fit { justify-self: start; }
-.ac-props { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
-.ac-props dt { color: var(--ac-ink-muted); font-size: 12px; line-height: 20px; }
-.ac-props dd { margin: 0; text-align: right; overflow-wrap: anywhere; line-height: 20px; font-variant-numeric: tabular-nums; }
-.ac-keys { display: grid; gap: 8px; margin: 0; }
-.ac-keys > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 20px; }
-.ac-keys dt { color: var(--ac-ink-weak); font-size: 12px; line-height: 16px; }
-.ac-keys dd { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; margin: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; }
-</style>

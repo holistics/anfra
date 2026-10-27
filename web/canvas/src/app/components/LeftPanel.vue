@@ -6,7 +6,10 @@ import {
   type Comment, type Shape,
 } from '../../model/index.ts';
 import { pinNumber, useStore } from '../context.ts';
-import Icon from './Icon.vue';
+import Button from '../ui/Button.vue';
+import Field from '../ui/Field.vue';
+import Segmented, { type SegmentedOption } from '../ui/Segmented.vue';
+import TreeRow from '../ui/TreeRow.vue';
 import LayerTree from './LayerTree.vue';
 import Palette from './Palette.vue';
 
@@ -56,6 +59,13 @@ function focusShape (s: Shape) {
 
 const comments = computed(() => (board.value?.comments ?? []).filter((c) => c.status === filter.value));
 const openCount = computed(() => (board.value?.comments ?? []).filter((c) => c.status === 'open').length);
+const TABS = computed<SegmentedOption<typeof tab.value>[]>(() => [
+  { value: 'comments', label: 'Comments', count: openCount.value },
+  { value: 'layers', label: 'Layers' },
+  { value: 'components', label: 'Components' },
+]);
+const FILTERS: SegmentedOption<typeof filter.value>[] = [{ value: 'open', label: 'Open' }, { value: 'resolved', label: 'Resolved' }];
+const toggle = (id: string) => (state.layersOpen[id] = !state.layersOpen[id]);
 
 function where (c: Comment): string {
   if (c.anchor.type === 'canvas') return 'On the canvas';
@@ -81,50 +91,45 @@ function sendReply (c: Comment) {
   store.commit(reply(board.value, c.id, state.settings.author, body));
   drafts.value[c.id] = '';
 }
-
 </script>
 
 <template>
   <aside class="ac-panel ac-left" aria-label="Board">
     <div class="ac-left-head">
-      <div class="ac-seg fill" role="tablist" aria-label="Board panel">
-        <button role="tab" type="button" :aria-selected="tab === 'comments'" @click="tab = 'comments'">
-          Comments <span v-if="openCount" class="ac-count">{{ openCount }}</span>
-        </button>
-        <button role="tab" type="button" :aria-selected="tab === 'layers'" @click="tab = 'layers'">Layers</button>
-        <button role="tab" type="button" :aria-selected="tab === 'components'" @click="tab = 'components'">Components</button>
-      </div>
+      <Segmented v-model="tab" :options="TABS" label="Board panel" tabs fill />
     </div>
 
     <div v-if="tab === 'layers'" class="ac-list" role="tabpanel">
       <p v-if="!layers.length" class="ac-caption ac-list-empty">Nothing on this board yet</p>
-      <ul class="ac-layers">
+      <ul class="ac-tree">
         <li v-for="g in layers" :key="g.shape.id">
-          <div class="ac-layer" :class="{ group: g.shape.kind === 'section' }" :aria-current="state.selection.includes(g.shape.id) || undefined">
-            <button v-if="g.shape.kind === 'frame'" class="ac-tree-toggle" type="button" :aria-expanded="!!state.layersOpen[g.shape.id]" aria-label="Show its layers" @click="state.layersOpen[g.shape.id] = !state.layersOpen[g.shape.id]">
-              <Icon name="chevronRight" :size="14" />
-            </button>
-            <button class="ac-layer-name" type="button" @click="focusShape(g.shape)">
-              <Icon :name="g.shape.kind" :size="16" />
-              <span class="ac-truncate">{{ label(g.shape) }}</span>
-              <span v-if="g.shape.kind === 'frame'" class="ac-layer-meta">{{ scenarioLabel(g.shape.scenario) }}</span>
-            </button>
-          </div>
+          <TreeRow
+            :label="label(g.shape)"
+            :icon="g.shape.kind"
+            :meta="g.shape.kind === 'frame' ? scenarioLabel(g.shape.scenario) : undefined"
+            strong
+            :current="state.selection.includes(g.shape.id)"
+            :expandable="g.shape.kind === 'frame'"
+            :open="!!state.layersOpen[g.shape.id]"
+            @toggle="toggle(g.shape.id)"
+            @pick="focusShape(g.shape)"
+          />
           <LayerTree v-if="g.shape.kind === 'frame' && state.layersOpen[g.shape.id]" :frame="g.shape.id" />
-          <ul v-if="g.items.length">
+          <ul v-if="g.items.length" class="ac-tree">
             <li v-for="i in g.items" :key="i.id">
-              <div class="ac-layer nested" :aria-current="state.selection.includes(i.id) || undefined">
-                <button v-if="i.kind === 'frame'" class="ac-tree-toggle" type="button" :aria-expanded="!!state.layersOpen[i.id]" aria-label="Show its layers" @click="state.layersOpen[i.id] = !state.layersOpen[i.id]">
-                  <Icon name="chevronRight" :size="14" />
-                </button>
-                <span v-else class="ac-tree-toggle" />
-                <button class="ac-layer-name" type="button" @click="focusShape(i)">
-                  <Icon :name="i.kind" :size="16" />
-                  <span class="ac-truncate">{{ label(i) }}</span>
-                  <span v-if="i.kind === 'frame'" class="ac-layer-meta">{{ scenarioLabel(i.scenario) }}</span>
-                </button>
-              </div>
-              <LayerTree v-if="i.kind === 'frame' && state.layersOpen[i.id]" :frame="i.id" />
+              <TreeRow
+                :label="label(i)"
+                :icon="i.kind"
+                :depth="1"
+                :meta="i.kind === 'frame' ? scenarioLabel(i.scenario) : undefined"
+                strong
+                :current="state.selection.includes(i.id)"
+                :expandable="i.kind === 'frame'"
+                :open="!!state.layersOpen[i.id]"
+                @toggle="toggle(i.id)"
+                @pick="focusShape(i)"
+              />
+              <LayerTree v-if="i.kind === 'frame' && state.layersOpen[i.id]" :frame="i.id" :depth="1" />
             </li>
           </ul>
         </li>
@@ -133,14 +138,9 @@ function sendReply (c: Comment) {
 
     <div v-else-if="tab === 'comments'" class="ac-list" role="tabpanel">
       <div class="ac-row ac-list-tools">
-        <div class="ac-seg" role="group" aria-label="Show">
-          <button type="button" :aria-pressed="filter === 'open'" @click="filter = 'open'">Open</button>
-          <button type="button" :aria-pressed="filter === 'resolved'" @click="filter = 'resolved'">Resolved</button>
-        </div>
+        <Segmented v-model="filter" :options="FILTERS" label="Show" />
         <span class="ac-spacer" />
-        <button class="ac-btn ghost icon" type="button" :disabled="!comments.length" title="Copy these comments as one Markdown task" aria-label="Copy these comments as Markdown" @click="store.copyFeedback(comments)">
-          <Icon name="copy" />
-        </button>
+        <Button variant="ghost" icon="copy" label="Copy these comments as Markdown" tip="Copy these comments as one Markdown task" :disabled="!comments.length" @click="store.copyFeedback(comments)" />
       </div>
       <div v-if="!comments.length" class="ac-list-empty">
         <p class="ac-heading">{{ filter === 'open' ? 'No open comments' : 'Nothing resolved yet' }}</p>
@@ -149,7 +149,7 @@ function sendReply (c: Comment) {
       <article
         v-for="c in comments"
         :key="c.id"
-        class="ac-comment"
+        class="ac-card ac-comment"
         :class="{ active: state.focus === c.id }"
         @click="focusComment(c)"
       >
@@ -164,13 +164,13 @@ function sendReply (c: Comment) {
           <p class="ac-comment-body">{{ r.body }}</p>
         </div>
         <div v-if="state.focus === c.id" class="ac-stack ac-comment-actions" @click.stop>
-          <input v-model="drafts[c.id]" class="ac-field" placeholder="Reply" aria-label="Reply" @keydown.enter="sendReply(c)" />
-          <div class="ac-row">
-            <button class="ac-btn ghost icon" type="button" title="Copy as Markdown" aria-label="Copy this comment as Markdown" @click="store.copy(commentMarkdown(board!, c), 'Comment copied as Markdown')"><Icon name="copy" /></button>
-            <button class="ac-btn ghost icon" type="button" title="Delete" aria-label="Delete this comment" @click="board && store.commit(remove(board, [c.id]))"><Icon name="trash" /></button>
+          <Field v-model="drafts[c.id]" placeholder="Reply" aria-label="Reply" @keydown.enter="sendReply(c)" />
+          <div class="ac-row tight">
+            <Button variant="ghost" icon="copy" label="Copy this comment as Markdown" @click="store.copy(commentMarkdown(board!, c), 'Comment copied as Markdown')" />
+            <Button variant="ghost" icon="trash" label="Delete this comment" @click="board && store.commit(remove(board, [c.id]))" />
             <span class="ac-spacer" />
-            <button v-if="c.status === 'open'" class="ac-btn" type="button" @click="setCommentStatus(c, 'resolved')"><Icon name="resolve" /> Resolve</button>
-            <button v-else class="ac-btn" type="button" @click="setCommentStatus(c, 'open')"><Icon name="reopen" /> Reopen</button>
+            <Button v-if="c.status === 'open'" icon="resolve" @click="setCommentStatus(c, 'resolved')">Resolve</Button>
+            <Button v-else icon="reopen" @click="setCommentStatus(c, 'open')">Reopen</Button>
           </div>
         </div>
       </article>
@@ -181,92 +181,3 @@ function sendReply (c: Comment) {
     </div>
   </aside>
 </template>
-
-<style>
-.ac-left-head .ac-seg > button { flex: 1 1 auto; }
-.ac-left-head { position: sticky; top: 0; z-index: 1; padding: 8px 8px 8px 12px; background: var(--ac-paper); }
-.ac-list { display: grid; align-content: start; gap: 2px; padding: 0 8px 16px 12px; }
-.ac-list > * { min-width: 0; }
-.ac-list-tools { padding: 4px 0 8px; }
-.ac-list-empty { display: grid; gap: 4px; padding: 24px 8px; text-align: center; }
-.ac-list-empty.ac-caption { padding: 16px 8px; }
-.ac-list-intro { padding: 4px 4px 12px; }
-.ac-layers, .ac-layers ul { list-style: none; margin: 0; padding: 0; }
-.ac-layer {
-  display: flex;
-  align-items: center;
-  height: var(--ac-control);
-  padding: 0 4px;
-  border-radius: 6px;
-  color: var(--ac-ink-weak);
-  transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
-}
-.ac-layer-name {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  height: 100%;
-  padding: 0 4px;
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-.ac-layer-name > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
-.ac-layer-name > .ac-truncate { flex: 1; }
-.ac-layer.group .ac-layer-name { padding-left: 24px; color: var(--ac-ink); font-weight: 500; }
-.ac-layer.nested { padding-left: 16px; }
-.ac-layers ul .ac-tree { padding-left: 36px; }
-.ac-layer-meta { flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; }
-.ac-layer[aria-current] { background: var(--ac-selected); color: var(--ac-violet-text); }
-.ac-layer[aria-current] .ac-layer-name > svg { color: var(--ac-violet-icon); }
-@media (hover: hover) and (pointer: fine) {
-  .ac-layer:not([aria-current]):hover { background: var(--ac-hover); color: var(--ac-ink); }
-}
-
-.ac-comment {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
-}
-.ac-comment + .ac-comment { margin-top: 2px; }
-.ac-comment.active { background: var(--ac-surface); box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e1); cursor: default; }
-@media (hover: hover) and (pointer: fine) {
-  .ac-comment:not(.active):hover { background: var(--ac-hover); }
-}
-.ac-comment-body { white-space: pre-wrap; overflow-wrap: anywhere; text-wrap: pretty; }
-.ac-reply { display: grid; gap: 2px; margin-top: 4px; padding-left: 12px; border-left: 2px solid var(--ac-line); }
-.ac-reply-author { color: var(--ac-ink-weak); font-weight: 500; }
-.ac-comment-actions { margin-top: 6px; }
-.ac-comment-actions .ac-row { gap: 4px; }
-.ac-pin.static { position: static; flex-shrink: 0; transform: none; box-shadow: none; border-width: 0; min-width: 20px; height: 20px; padding: 0 5px; }
-
-.ac-components { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.ac-component {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  height: var(--ac-control);
-  padding: 0 10px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--ac-surface);
-  box-shadow: 0 0 0 1px var(--ac-line);
-  color: var(--ac-ink);
-  text-align: left;
-  cursor: grab;
-  transition: box-shadow 160ms var(--ac-ease), background-color 160ms var(--ac-ease);
-}
-.ac-component > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
-.ac-component[aria-pressed='true'] { background: var(--ac-selected); box-shadow: 0 0 0 1px var(--ac-violet-line); color: var(--ac-violet-text); }
-.ac-component[aria-pressed='true'] > svg { color: var(--ac-violet-icon); }
-@media (hover: hover) and (pointer: fine) {
-  .ac-component:hover { box-shadow: 0 0 0 1px var(--ac-line-hover); }
-}
-</style>

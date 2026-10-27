@@ -8,8 +8,10 @@ import Viewport from './components/Viewport.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import LeftPanel from './components/LeftPanel.vue';
 import Inspector from './components/Inspector.vue';
-import Icon from './components/Icon.vue';
-import Select, { type SelectOption } from './components/Select.vue';
+import Button from './ui/Button.vue';
+import Field from './ui/Field.vue';
+import Select, { type SelectOption } from './ui/Select.vue';
+import Tooltip from './ui/Tooltip.vue';
 
 const props = defineProps<{ store: Store }>();
 const store = props.store;
@@ -194,37 +196,37 @@ onBeforeUnmount(() => {
         />
         <span v-else class="ac-heading">Canvas</span>
         <form v-if="creating" class="ac-row" @submit.prevent="createBoard">
-          <input v-model="newName" class="ac-field ac-top-name" placeholder="New board's name" aria-label="New board's name" autofocus @keydown.esc="creating = false" />
-          <button class="ac-btn primary" type="submit" :disabled="!slugOf(newName)">Create</button>
-          <button class="ac-btn ghost" type="button" @click="creating = false">Cancel</button>
+          <Field v-model="newName" class="ac-top-name" placeholder="New board's name" aria-label="New board's name" autofocus @keydown.esc="creating = false" />
+          <Button variant="primary" type="submit" :disabled="!slugOf(newName)">Create</Button>
+          <Button variant="ghost" @click="creating = false">Cancel</Button>
         </form>
-        <button v-else class="ac-btn ghost icon" type="button" title="New board" aria-label="New board" @click="creating = true"><Icon name="plus" /></button>
+        <Button v-else variant="ghost" icon="plus" label="New board" @click="creating = true" />
       </div>
       <span class="ac-spacer" />
-      <button class="ac-btn ghost" type="button" title="Every command, screen and component (⌘K)" @click="state.palette = 'all'">
-        <Icon name="search" /> Commands <span class="ac-kbd">⌘K</span>
-      </button>
-      <button
+      <Button variant="ghost" icon="search" tip="Every command, screen and component" @click="state.palette = 'all'">
+        Commands <span class="ac-kbd">⌘K</span>
+      </Button>
+      <Button
         v-if="board?.frames.length"
-        class="ac-btn"
-        type="button"
+        :icon="state.flow ? 'stop' : 'play'"
         :aria-pressed="!!state.flow"
-        :title="state.flow ? 'Stop playing (Esc)' : 'Play the flow from the selected frame, or from its start'"
+        :tip="state.flow ? 'Stop playing' : 'Play the flow from the selected frame, or from its start'"
+        :keys="state.flow ? 'Esc' : undefined"
         @click="state.flow ? store.stopPlay() : store.play()"
       >
-        <Icon :name="state.flow ? 'stop' : 'play'" /> {{ state.flow ? 'Stop' : 'Play' }}
-      </button>
+        {{ state.flow ? 'Stop' : 'Play' }}
+      </Button>
       <span class="ac-save ac-caption" :class="state.saving" role="status">
         <span class="ac-save-dot" aria-hidden="true" />
         {{ state.saving === 'saving' ? 'Saving' : state.saving === 'error' ? 'Not saved' : 'Saved' }}
       </span>
-      <div class="ac-row ac-top-history">
-        <button class="ac-btn ghost icon" type="button" title="Undo (⌘Z)" aria-label="Undo" :disabled="!state.history.past" @click="store.undo()"><Icon name="undo" /></button>
-        <button class="ac-btn ghost icon" type="button" title="Redo (⇧⌘Z)" aria-label="Redo" :disabled="!state.history.future" @click="store.redo()"><Icon name="redo" /></button>
+      <div class="ac-row tight">
+        <Button variant="ghost" icon="undo" label="Undo" keys="⌘Z" :disabled="!state.history.past" @click="store.undo()" />
+        <Button variant="ghost" icon="redo" label="Redo" keys="⇧⌘Z" :disabled="!state.history.future" @click="store.redo()" />
       </div>
-      <button class="ac-btn" type="button" :disabled="!openCount" title="Copy every open comment as one Markdown task" @click="store.copyFeedback()">
-        <Icon name="copy" /> Copy feedback <span v-if="openCount" class="ac-count">{{ openCount }}</span>
-      </button>
+      <Button icon="copy" :disabled="!openCount" tip="Copy every open comment as one Markdown task" @click="store.copyFeedback()">
+        Copy feedback <span v-if="openCount" class="ac-count">{{ openCount }}</span>
+      </Button>
     </header>
     <LeftPanel />
     <main class="ac-main">
@@ -232,28 +234,12 @@ onBeforeUnmount(() => {
       <div v-else-if="!state.slug && !state.boards.length" class="ac-start">
         <p class="ac-title">No boards yet</p>
         <p class="ac-caption">A board holds the screens of one feature: its happy path and its edge cases, side by side</p>
-        <button class="ac-btn primary" type="button" @click="creating = true"><Icon name="plus" /> New board</button>
+        <Button variant="primary" icon="plus" @click="creating = true">New board</Button>
       </div>
       <Viewport v-else ref="viewport" />
     </main>
     <Inspector />
     <CommandPalette v-if="state.palette" />
+    <Tooltip />
   </div>
 </template>
-
-<style>
-.ac-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 8px; }
-.ac-top-board { gap: 4px; }
-.ac-top-name { width: 220px; }
-.ac-top-history { gap: 0; }
-.ac-save { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; font-variant-numeric: tabular-nums; }
-.ac-save-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ac-success-icon); transition: background-color 160ms var(--ac-ease); }
-.ac-save.saving .ac-save-dot { background: var(--ac-icon-weak); }
-.ac-save.error { color: var(--ac-danger); }
-.ac-save.error .ac-save-dot { background: var(--ac-danger); }
-.ac-main { position: relative; display: grid; min-height: 0; overflow: clip; }
-.ac-main > .ac-viewport { min-height: 0; }
-.ac-error, .ac-start { align-self: center; justify-self: center; display: grid; justify-items: center; gap: 8px; text-align: center; max-width: 400px; }
-.ac-start > .ac-btn { margin-top: 8px; }
-.ac-error { color: var(--ac-danger); }
-</style>

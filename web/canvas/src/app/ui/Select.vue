@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// A select in the app's look, for the canvas's own choices (the board, a frame's scenario): a
-// 32px trigger like a field, and a floating list that can say what each choice means. The list is
-// put on the canvas's root, so a scrolling panel can't clip it. Keyboard: arrows, Home and End,
-// Enter or Space to choose, Escape to close, a letter to jump.
+// A select for the canvas's own choices (the board, a frame's scenario, a token): a trigger framed
+// like a field, and a floating list of items that can say what each choice means. The list is put
+// on the canvas's root, so a scrolling panel can't clip it. Keyboard: arrows, Home and End, Enter or
+// Space to choose, Escape to close, a letter to jump.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import Icon from './Icon.vue';
+import MenuItem from './MenuItem.vue';
 
 export interface SelectOption {
   value: string;
@@ -23,9 +24,9 @@ const props = withDefaults(defineProps<{
   placeholder?: string;
   /** `field` sits in a form; `ghost` sits in a bar, without a frame until hovered. */
   look?: 'field' | 'ghost';
-  /** The list's width when the trigger is narrower. */
+  /** The list's width when the trigger is narrower: 200px unless said. */
   minWidth?: number;
-}>(), { look: 'field', minWidth: 0, label: undefined, placeholder: 'Choose' });
+}>(), { look: 'field', minWidth: 200, label: undefined, placeholder: 'Choose' });
 
 const emit = defineEmits<{ 'update:modelValue': [string] }>();
 
@@ -157,7 +158,7 @@ onBeforeUnmount(() => {
   >
     <span v-if="current?.swatch" class="ac-swatch" :style="{ background: current.swatch }" />
     <span class="ac-truncate" :class="{ placeholder: !current }">{{ current?.label ?? placeholder }}</span>
-    <span v-if="current?.hint" class="ac-select-hint">{{ current.hint }}</span>
+    <span v-if="current?.hint" class="ac-item-hint">{{ current.hint }}</span>
     <Icon name="chevron" :size="16" class="ac-select-chevron" />
   </button>
   <Teleport to=".ac">
@@ -165,7 +166,7 @@ onBeforeUnmount(() => {
       v-if="open && place"
       :id="id"
       ref="list"
-      class="ac-select-list ac-popover ac-pop-in"
+      class="ac-listbox ac-popover ac-pop-in"
       :class="{ up: place.up }"
       role="listbox"
       tabindex="-1"
@@ -181,90 +182,23 @@ onBeforeUnmount(() => {
       data-ui
       @keydown="onListKey"
     >
-      <div
+      <MenuItem
         v-for="(o, i) in options"
         :id="`${id}-${i}`"
         :key="o.value"
-        class="ac-option"
-        :class="{ active: i === active }"
+        :label="o.label"
+        :swatch="o.swatch"
+        :hint="o.hint"
+        :description="o.description"
+        :active="i === active"
+        :checked="o.value === modelValue"
         role="option"
         :aria-selected="o.value === modelValue"
         :data-index="i"
         @pointermove="active = i"
         @click="choose(i)"
-      >
-        <span class="ac-option-text">
-          <span class="ac-option-label">
-            <span v-if="o.swatch" class="ac-swatch" :style="{ background: o.swatch }" />
-            <span class="ac-truncate">{{ o.label }}</span>
-            <span v-if="o.hint" class="ac-select-hint">{{ o.hint }}</span>
-          </span>
-          <span v-if="o.description" class="ac-caption">{{ o.description }}</span>
-        </span>
-        <Icon v-if="o.value === modelValue" name="check" :size="16" class="ac-option-check" />
-      </div>
-      <p v-if="!options.length" class="ac-option-empty ac-caption">Nothing to choose</p>
+      />
+      <p v-if="!options.length" class="ac-item-empty ac-caption">Nothing to choose</p>
     </div>
   </Teleport>
 </template>
-
-<style>
-.ac-select {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-width: 0;
-  height: var(--ac-control);
-  padding: 0 8px 0 10px;
-  border: 1px solid var(--ac-line-field);
-  border-radius: 10px;
-  background: var(--ac-surface);
-  color: var(--ac-ink);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 160ms var(--ac-ease), background-color 160ms var(--ac-ease);
-}
-.ac-select > .ac-truncate { flex: 1; }
-.ac-select .placeholder { color: var(--ac-ink-muted); }
-.ac-select-chevron { flex-shrink: 0; color: var(--ac-icon-weak); transition: rotate 160ms var(--ac-ease); }
-.ac-select[aria-expanded='true'] .ac-select-chevron { rotate: 180deg; }
-.ac-select.ghost { width: auto; max-width: 320px; border-color: transparent; background: transparent; font-weight: 600; }
-.ac-select.ghost[aria-expanded='true'] { background: var(--ac-active); }
-@media (hover: hover) and (pointer: fine) {
-  .ac-select.field:hover { border-color: var(--ac-line-hover); }
-  .ac-select.ghost:hover { background: var(--ac-hover); }
-}
-.ac-swatch { flex-shrink: 0; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ac-line); }
-.ac-select-hint { flex-shrink: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; font-weight: 400; }
-
-.ac-select-list {
-  position: fixed;
-  z-index: 30;
-  display: grid;
-  align-content: start;
-  gap: 1px;
-  padding: 4px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  outline: none;
-  transform-origin: top;
-}
-.ac-select-list.up { transform-origin: bottom; }
-.ac-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  min-height: var(--ac-control);
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
-}
-.ac-option.active { background: var(--ac-hover); }
-.ac-option[aria-selected='true'] { background: var(--ac-selected); }
-.ac-option-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
-.ac-option-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.ac-option-check { flex-shrink: 0; margin-top: 2px; color: var(--ac-violet-icon); }
-.ac-option-empty { padding: 8px; }
-</style>

@@ -4,7 +4,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { Command, CommandGroup } from '../commands.ts';
 import { useStore } from '../context.ts';
-import Icon from './Icon.vue';
+import MenuItem from '../ui/MenuItem.vue';
 
 const props = defineProps<{ groups: CommandGroup[], at: { x: number, y: number } }>();
 const emit = defineEmits<{ close: [] }>();
@@ -69,26 +69,20 @@ function onKey (e: KeyboardEvent) {
     @contextmenu.prevent
   >
     <template v-for="(g, i) in groups" :key="i">
-      <div v-if="i" class="ac-menu-rule" role="separator" />
-      <div
+      <div v-if="i" class="ac-item-rule" role="separator" />
+      <MenuItem
         v-for="c in g.items"
         :key="c.id"
-        class="ac-menu-item"
-        :class="{ active: indexOf(c) === active, danger: c.danger }"
+        :label="c.label"
+        :icon="c.icon"
+        :keys="c.keys"
+        :active="indexOf(c) === active"
+        :danger="c.danger"
         role="menuitem"
         @pointermove="active = indexOf(c)"
         @pointerleave="active = -1"
         @click="run(c)"
-      >
-        <Icon v-if="c.icon" :name="c.icon" :size="16" />
-        <span class="ac-menu-label">{{ c.label }}</span>
-        <span v-if="c.keys" class="ac-menu-keys">{{ c.keys }}</span>
-      </div>
+      />
     </template>
   </div>
 </template>
-
-<style>
-.ac-menu { position: absolute; z-index: 20; display: grid; min-width: 220px; max-width: 320px; padding: 4px; transform-origin: top left; }
-.ac .ac-menu:focus-visible { outline: none; }
-</style>

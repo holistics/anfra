@@ -3,7 +3,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { FRAME_SIZES, newId, type Frame, type Point } from '../../model/index.ts';
 import { scenarioOptions, useStore } from '../context.ts';
-import Select from './Select.vue';
+import Button from '../ui/Button.vue';
+import Field from '../ui/Field.vue';
+import Segmented from '../ui/Segmented.vue';
+import Select from '../ui/Select.vue';
 
 const props = defineProps<{ at: Point, screen: Point }>();
 const emit = defineEmits<{ add: [Frame], cancel: [] }>();
@@ -13,7 +16,8 @@ const { state } = store;
 const route = ref(state.settings.prototypes[0] ?? state.settings.routes[0] ?? '/');
 const scenario = ref('default');
 const size = ref(1);
-const input = ref<HTMLInputElement>();
+const input = ref<InstanceType<typeof Field>>();
+const SIZES = FRAME_SIZES.map((s, i) => ({ value: i, label: s.name, title: `${s.width} × ${s.height}` }));
 onMounted(() => input.value?.select());
 
 const options = computed(() => scenarioOptions(store));
@@ -38,10 +42,7 @@ function add () {
     <p class="ac-heading">Add a screen</p>
     <label class="ac-stack">
       <span class="ac-label">Route</span>
-      <input ref="input" v-model="route" class="ac-field mono" list="ac-routes" placeholder="/o/acme/settings/users" />
-      <datalist id="ac-routes">
-        <option v-for="r in suggestions" :key="r" :value="r" />
-      </datalist>
+      <Field ref="input" v-model="route" mono list="ac-routes" placeholder="/o/acme/settings/users" />
     </label>
     <div class="ac-stack">
       <span class="ac-label">Scenario</span>
@@ -49,18 +50,14 @@ function add () {
     </div>
     <div class="ac-stack">
       <span class="ac-label">Size</span>
-      <div class="ac-seg fill" role="group" aria-label="Size">
-        <button v-for="(s, i) in FRAME_SIZES" :key="s.name" type="button" :aria-pressed="size === i" :title="`${s.width} × ${s.height}`" @click="size = i">{{ s.name }}</button>
-      </div>
+      <Segmented v-model="size" :options="SIZES" label="Size" fill />
     </div>
+    <datalist id="ac-routes">
+      <option v-for="r in suggestions" :key="r" :value="r" />
+    </datalist>
     <div class="ac-row ac-actions">
-      <button class="ac-btn ghost" type="button" @click="emit('cancel')">Cancel</button>
-      <button class="ac-btn primary" type="submit">Add screen</button>
+      <Button variant="ghost" @click="emit('cancel')">Cancel</Button>
+      <Button variant="primary" type="submit">Add screen</Button>
     </div>
   </form>
 </template>
-
-<style>
-.ac-add { position: absolute; width: 320px; padding: 16px; display: grid; gap: 16px; z-index: 5; transform-origin: top left; }
-.ac-actions { justify-content: flex-end; }
-</style>

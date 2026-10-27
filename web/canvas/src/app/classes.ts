@@ -2,7 +2,7 @@
 // of utilities (gap-*, px-*, text-<role>, bg-<token>, …), reads the one the element has and
 // replaces it. Classes with a variant (hover:, md:) are left alone; the classes field shows them.
 import type { Tokens } from '../vite/catalog.ts';
-import type { SelectOption } from './components/Select.vue';
+import type { SelectOption } from './ui/Select.vue';
 
 export interface Group {
   /** Whether a class (with no variant) is one of this group's. */

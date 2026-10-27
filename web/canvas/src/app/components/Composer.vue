@@ -3,11 +3,12 @@
 import { computed, onMounted, ref } from 'vue';
 import { elementMarkdown } from '../../model/index.ts';
 import { useStore } from '../context.ts';
-import Icon from './Icon.vue';
+import Button from '../ui/Button.vue';
+import Field from '../ui/Field.vue';
 
 const store = useStore();
 const { state, board } = store;
-const area = ref<HTMLTextAreaElement>();
+const area = ref<InstanceType<typeof Field>>();
 const c = computed(() => state.composer!);
 
 const what = computed(() => {
@@ -23,7 +24,7 @@ const style = computed(() => ({
 
 onMounted(() => {
   area.value?.focus();
-  area.value?.setSelectionRange(c.value.body.length, c.value.body.length);
+  area.value?.el?.setSelectionRange(c.value.body.length, c.value.body.length);
 });
 
 function send () {
@@ -42,27 +43,20 @@ function copy () {
 <template>
   <form class="ac-composer ac-popover ac-pop-in" :style="style" data-ui @submit.prevent="send" @pointerdown.stop>
     <p class="ac-caption ac-composer-what">{{ what }}</p>
-    <textarea
+    <Field
       ref="area"
       v-model="c.body"
-      class="ac-field"
-      rows="3"
+      :rows="3"
       placeholder="What should change? Claude reads this"
       @keydown.meta.enter.prevent="send"
       @keydown.ctrl.enter.prevent="send"
       @keydown.esc="state.composer = null"
     />
     <div class="ac-row">
-      <button v-if="c.anchor.type === 'element'" class="ac-btn ghost icon" type="button" title="Copy as Markdown" aria-label="Copy the element and this comment as Markdown" @click="copy"><Icon name="copy" /></button>
+      <Button v-if="c.anchor.type === 'element'" variant="ghost" icon="copy" label="Copy the element and this comment as Markdown" tip="Copy as Markdown" @click="copy" />
       <span class="ac-spacer" />
-      <button class="ac-btn ghost" type="button" @click="state.composer = null">Cancel</button>
-      <button class="ac-btn primary" type="submit" :disabled="!c.body.trim()">Comment</button>
+      <Button variant="ghost" @click="state.composer = null">Cancel</Button>
+      <Button variant="primary" type="submit" :disabled="!c.body.trim()">Comment</Button>
     </div>
   </form>
 </template>
-
-<style>
-.ac-composer { position: absolute; width: 320px; padding: 12px; display: grid; gap: 8px; z-index: 5; transform-origin: top left; }
-.ac-composer-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ac-composer textarea.ac-field { min-height: 72px; }
-</style>

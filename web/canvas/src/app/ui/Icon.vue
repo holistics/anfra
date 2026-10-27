@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Icons from Lucide (ISC), inlined so the canvas carries no icon package of its own.
-defineProps<{ name: keyof typeof PATHS, size?: number }>();
+defineProps<{ name: IconName, size?: number }>();
 </script>
 
 <script lang="ts">
@@ -51,6 +51,8 @@ export const PATHS = {
   textCenter: '<path d="M21 5H3"/><path d="M17 12H7"/><path d="M19 19H5"/>',
   textRight: '<path d="M21 5H3"/><path d="M21 12H9"/><path d="M21 19H7"/>',
 } as const;
+
+export type IconName = keyof typeof PATHS;
 </script>
 
 <template>

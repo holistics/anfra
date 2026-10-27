@@ -8,14 +8,15 @@ import {
   type Command, type CommandGroup,
 } from '../commands.ts';
 import { useStore } from '../context.ts';
-import Icon from './Icon.vue';
+import Field from '../ui/Field.vue';
+import MenuItem from '../ui/MenuItem.vue';
 
 const store = useStore();
 const { state } = store;
 
 const query = ref('');
 const active = ref(0);
-const input = ref<HTMLInputElement>();
+const input = ref<InstanceType<typeof Field>>();
 const list = ref<HTMLElement>();
 onMounted(() => input.value?.focus());
 
@@ -53,7 +54,7 @@ const indexOf = (c: Command) => flat.value.indexOf(c);
 watch(query, () => (active.value = 0));
 watch(active, async () => {
   await nextTick();
-  list.value?.querySelector('.ac-menu-item.active')?.scrollIntoView({ block: 'nearest' });
+  list.value?.querySelector('.ac-item.active')?.scrollIntoView({ block: 'nearest' });
 });
 
 const close = () => (state.palette = '');
@@ -76,58 +77,46 @@ function onKey (e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="ac-palette-scrim" data-ui @pointerdown.self="close">
-    <div class="ac-palette ac-popover ac-pop-in" role="dialog" aria-label="Command palette" @keydown="onKey">
-      <label class="ac-palette-search">
-        <Icon name="search" />
-        <input
+  <div class="ac-command-scrim" data-ui @pointerdown.self="close">
+    <div class="ac-command ac-popover ac-pop-in" role="dialog" aria-label="Command palette" @keydown="onKey">
+      <div class="ac-command-search">
+        <Field
           ref="input"
           v-model="query"
+          icon="search"
+          bare
           :placeholder="state.palette === 'components' ? 'Find a component' : 'Find a command, screen, board or component'"
           aria-label="Search"
           role="combobox"
           aria-expanded="true"
-          aria-controls="ac-palette-list"
+          aria-controls="ac-command-list"
           :aria-activedescendant="flat[active] ? `ac-cmd-${active}` : undefined"
           autocomplete="off"
           spellcheck="false"
         />
         <span class="ac-kbd">Esc</span>
-      </label>
-      <div id="ac-palette-list" ref="list" class="ac-palette-list" role="listbox">
+      </div>
+      <div id="ac-command-list" ref="list" class="ac-command-list" role="listbox">
         <template v-for="g in groups" :key="g.name">
-          <p v-if="g.name" class="ac-palette-group">{{ g.name }}</p>
-          <div
+          <p v-if="g.name" class="ac-item-group">{{ g.name }}</p>
+          <MenuItem
             v-for="c in g.items"
             :id="`ac-cmd-${indexOf(c)}`"
             :key="c.id"
-            class="ac-menu-item"
-            :class="{ active: indexOf(c) === active, danger: c.danger }"
+            :label="c.label"
+            :icon="c.icon"
+            :also="c.id.startsWith('go.') ? c.also : undefined"
+            :keys="c.keys"
+            :active="indexOf(c) === active"
+            :danger="c.danger"
             role="option"
             :aria-selected="indexOf(c) === active"
             @pointermove="active = indexOf(c)"
             @click="run(c)"
-          >
-            <Icon v-if="c.icon" :name="c.icon" :size="16" />
-            <span class="ac-menu-label">{{ c.label }}</span>
-            <span v-if="c.id.startsWith('go.')" class="ac-menu-also ac-mono">{{ c.also }}</span>
-            <span v-if="c.keys" class="ac-menu-keys">{{ c.keys }}</span>
-          </div>
+          />
         </template>
-        <p v-if="!flat.length" class="ac-palette-empty ac-caption">Nothing matches “{{ query }}”</p>
+        <p v-if="!flat.length" class="ac-item-empty ac-caption">Nothing matches “{{ query }}”</p>
       </div>
     </div>
   </div>
 </template>
-
-<style>
-.ac-palette-scrim { position: fixed; inset: 0; z-index: 40; display: grid; justify-items: center; align-items: start; padding: 96px 16px 16px; }
-.ac-palette { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(560px, 100%); max-height: min(480px, calc(100vh - 128px)); overflow: hidden; }
-.ac-palette-search { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--ac-line-weak); color: var(--ac-icon-weak); }
-.ac-palette-search input { flex: 1; min-width: 0; height: var(--ac-control); border: 0; background: transparent; color: var(--ac-ink); font-size: 14px; outline: none; }
-.ac-palette-search input::placeholder { color: var(--ac-ink-muted); }
-.ac .ac-palette-search input:focus-visible { outline: none; }
-.ac-palette-list { overflow: auto; overscroll-behavior: contain; padding: 4px; }
-.ac-palette-group { padding: 8px 8px 4px; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
-.ac-palette-empty { padding: 16px 8px; text-align: center; }
-</style>

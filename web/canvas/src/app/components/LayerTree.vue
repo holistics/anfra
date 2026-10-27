@@ -6,9 +6,10 @@ import { computed, nextTick, ref, watch } from 'vue';
 import type { ElementRef } from '../../model/index.ts';
 import type { LayerNode } from '../../frame/protocol.ts';
 import { useStore } from '../context.ts';
-import Icon from './Icon.vue';
+import TreeRow from '../ui/TreeRow.vue';
 
-const props = defineProps<{ frame: string }>();
+/** `depth`: how deep its frame's row is in the tree around it. */
+const props = withDefaults(defineProps<{ frame: string, depth?: number }>(), { depth: 0 });
 const store = useStore();
 const { state } = store;
 
@@ -67,88 +68,23 @@ function hover (n: LayerNode | null) {
 
 <template>
   <ul class="ac-tree" role="group">
-    <li v-if="!rows.length" class="ac-caption ac-tree-empty">{{ state.attached[frame] ? 'Nothing written in the app on this screen' : 'Loading the screen' }}</li>
+    <li v-if="!rows.length" class="ac-caption ac-tree-empty" :style="{ paddingLeft: `${(depth + 1) * 12 + 28}px` }">{{ state.attached[frame] ? 'Nothing written in the app on this screen' : 'Loading the screen' }}</li>
     <li v-for="r in rows" :key="r.key">
-      <div
-        class="ac-tree-row"
+      <TreeRow
+        :label="r.node.label"
+        :icon="r.node.component ? 'component' : r.node.text && !r.node.children.length ? 'text' : 'box'"
+        :depth="depth + 1 + r.depth"
+        :meta="r.node.text"
+        :strong="!!r.node.component"
+        :current="r.key === pickedKey"
+        :expandable="r.node.children.length > 0"
+        :open="r.open"
         :data-layer="r.key"
-        :aria-current="r.key === pickedKey || undefined"
-        :style="{ paddingLeft: `${r.depth * 12 + 4}px` }"
+        @toggle="state.layersOpen[r.key] = !r.open"
+        @pick="store.pick(frame, r.node.ref)"
         @pointerenter="hover(r.node)"
         @pointerleave="hover(null)"
-      >
-        <button
-          v-if="r.node.children.length"
-          class="ac-tree-toggle"
-          type="button"
-          :aria-label="r.open ? 'Close' : 'Open'"
-          :aria-expanded="r.open"
-          @click="state.layersOpen[r.key] = !r.open"
-        >
-          <Icon name="chevronRight" :size="14" />
-        </button>
-        <span v-else class="ac-tree-toggle" />
-        <button class="ac-tree-name" type="button" @click="store.pick(frame, r.node.ref)">
-          <Icon :name="r.node.component ? 'component' : r.node.text && !r.node.children.length ? 'text' : 'box'" :size="14" />
-          <span class="ac-truncate" :class="{ component: r.node.component }">{{ r.node.label }}</span>
-          <span v-if="r.node.text" class="ac-tree-text ac-truncate">{{ r.node.text }}</span>
-        </button>
-      </div>
+      />
     </li>
   </ul>
 </template>
-
-<style>
-.ac-tree { list-style: none; margin: 0; padding: 0 0 4px 20px; }
-.ac-tree-empty { padding: 4px 12px 8px; }
-.ac-tree-row {
-  display: flex;
-  align-items: center;
-  height: 28px;
-  min-width: 0;
-  border-radius: 6px;
-  color: var(--ac-ink-weak);
-  transition: background-color 160ms var(--ac-ease);
-}
-.ac-tree-row[aria-current] { background: var(--ac-selected); color: var(--ac-violet-text); }
-.ac-tree-toggle {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--ac-icon-weak);
-  cursor: pointer;
-}
-.ac-tree-toggle > svg { transition: rotate 160ms var(--ac-ease); }
-.ac-tree-toggle[aria-expanded='true'] > svg { rotate: 90deg; }
-.ac-tree-name {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 100%;
-  padding: 0 6px 0 2px;
-  border: 0;
-  background: none;
-  text-align: left;
-  font-size: 12px;
-  line-height: 16px;
-  cursor: pointer;
-}
-.ac-tree-name > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
-.ac-tree-row[aria-current] .ac-tree-name > svg { color: var(--ac-violet-icon); }
-.ac-tree-name .component { color: var(--ac-ink); font-weight: 500; }
-.ac-tree-row[aria-current] .component { color: var(--ac-violet-text); }
-.ac-tree-text { flex: 0 100 auto; color: var(--ac-ink-muted); }
-@media (hover: hover) and (pointer: fine) {
-  .ac-tree-row:hover { background: var(--ac-hover); }
-  .ac-tree-row[aria-current]:hover { background: var(--ac-selected); }
-  .ac-tree-toggle:hover { background: var(--ac-active); }
-}
-</style>

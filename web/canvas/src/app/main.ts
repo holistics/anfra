@@ -1,6 +1,7 @@
 import { createApp, type Component } from 'vue';
 import CanvasApp from './CanvasApp.vue';
 import { createStore, type Settings } from './store.ts';
+import './ui/ui.css';
 import './canvas.css';
 
 /** Start the canvas in an element of its page. The Vite plugin's page calls it with the app's settings. */

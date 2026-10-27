@@ -1,0 +1,621 @@
+/*
+ * The canvas's design system: its tokens and every control, in this one sheet. Panels and popovers
+ * build from the components beside it (Button, Field, Select, Segmented, Switch, MenuItem, TreeRow,
+ * Section, PropRow, Tooltip, Icon) and the classes below, and style no control of their own. canvas.css lays
+ * out the app and draws the board; no component has a style block.
+ *
+ * The tokens take the host app's (`--anfra-color-*`), so the canvas wears the app's theme, light or
+ * dark, and fall back to anfra's light values where it has none.
+ *
+ * The rules:
+ * - Two control sizes: 32px in panels, bars and popovers; 24px on the board's own labels.
+ * - One edge for every control, button, field and select alike: `--ac-line-control`. Hover darkens
+ *   it to `--ac-line-hover`. Focus turns a field's or a select's edge violet; everything else takes
+ *   the 2px violet outline.
+ * - Three type sizes: 12/16 (captions, labels of properties, keys), 14/20 (everything else), 20/28
+ *   (an empty state's title). Weights 400, 500 for controls and names, 600 for headings.
+ * - Three radii: 6 (rows, small controls, chips), 10 (controls, cards), 14 (floating surfaces).
+ * - Lines: weak for dividers, default for surfaces and cards, control for controls.
+ * - Depth: e1 resting (a card that's open, a segment that's on), e2 floating (popovers, menus, bars).
+ * - One violet, for what is selected or focused, and the one main action.
+ * - Every tooltip is the kit's (`v-tip`, or a Button's `label`/`tip` and `keys`): its name and its
+ *   shortcut. No `title` attributes.
+ */
+.ac {
+  /* Surfaces */
+  --ac-paper: var(--anfra-color-background-base-default, oklch(0.955 0.007 88.6));
+  --ac-surface: var(--anfra-color-background-default, oklch(1 0 0));
+  --ac-raised: var(--anfra-color-background-raised-default, oklch(1 0 0));
+  --ac-sunken: var(--anfra-color-background-secondary-default, oklch(0.973 0.005 95.1));
+  --ac-hover: var(--anfra-color-background-hover, oklch(0.201 0.022 301.1 / 0.05));
+  --ac-active: var(--anfra-color-background-active, oklch(0.201 0.022 301.1 / 0.09));
+  --ac-selected: var(--anfra-color-background-interactive-highlight-default, oklch(0.946 0.027 304.8));
+  --ac-inverted: var(--anfra-color-background-inverted-default, oklch(0.201 0.022 301.1));
+  --ac-on-inverted: var(--anfra-color-text-inverted-default, oklch(0.985 0.003 95));
+  --ac-disabled: var(--anfra-color-background-disabled, oklch(0.201 0.022 301.1 / 0.04));
+
+  /* Ink */
+  --ac-ink: var(--anfra-color-text-default, oklch(0.201 0.022 301.1));
+  --ac-ink-weak: var(--anfra-color-text-weak, oklch(0.392 0.021 304.3));
+  --ac-ink-muted: var(--anfra-color-text-placeholder, oklch(0.485 0.022 306.3));
+  --ac-ink-disabled: var(--anfra-color-text-disabled, oklch(0.723 0.017 306.3));
+  --ac-icon: var(--anfra-color-icon-default, oklch(0.392 0.021 304.3));
+  --ac-icon-weak: var(--anfra-color-icon-weak, oklch(0.485 0.022 306.3));
+
+  /* Lines: weak for dividers, default for surfaces, control for every button, field and select */
+  --ac-line-weak: var(--anfra-color-border-weak, oklch(0.201 0.022 301.1 / 0.08));
+  --ac-line: var(--anfra-color-border-default, oklch(0.201 0.022 301.1 / 0.12));
+  --ac-line-control: var(--anfra-color-border-strong, oklch(0.201 0.022 301.1 / 0.24));
+  --ac-line-hover: var(--anfra-color-border-hover, oklch(0.485 0.022 306.3));
+
+  /* Violet: selection, focus, the primary action */
+  --ac-violet: var(--anfra-color-background-highlight-default, oklch(0.565 0.194 300.3));
+  --ac-violet-hover: var(--anfra-color-background-highlight-hover, oklch(0.517 0.192 299.1));
+  --ac-violet-text: var(--anfra-color-text-highlight-default, oklch(0.484 0.181 298.1));
+  --ac-violet-icon: var(--anfra-color-icon-highlight-default, oklch(0.565 0.194 300.3));
+  --ac-violet-line: var(--anfra-color-border-highlight-strong, oklch(0.565 0.194 300.3));
+  --ac-on-violet: var(--anfra-color-text-on-fill, oklch(1 0 0));
+
+  /* Status, always with a label or an icon */
+  --ac-note: var(--anfra-color-background-warning-secondary-default, oklch(0.973 0.028 84.6));
+  --ac-note-line: var(--anfra-color-border-warning-default, oklch(0.9 0.07 84));
+  --ac-success: var(--anfra-color-text-success-default, oklch(0.479 0.1 151.8));
+  --ac-success-icon: var(--anfra-color-icon-success-default, oklch(0.63 0.15 152));
+  --ac-danger: var(--anfra-color-text-danger-default, oklch(0.501 0.17 27.2));
+
+  /* Depth: e1 resting, e2 floating. Nothing else */
+  --ac-e1: var(--shadow-e1, 0 1px 0 rgb(24 20 31 / 0.04), 0 1px 2px rgb(24 20 31 / 0.06));
+  --ac-e2: var(--shadow-e2, 0 1px 0 rgb(24 20 31 / 0.03), 0 18px 40px -18px rgb(24 20 31 / 0.28), 0 2px 6px -2px rgb(24 20 31 / 0.08));
+
+  /* Motion: press 90ms, hover 160ms, panels 220ms */
+  --ac-ease: var(--ease-anfra-out, cubic-bezier(0.22, 1, 0.36, 1));
+  --ac-ease-in-out: var(--ease-anfra-in-out, cubic-bezier(0.65, 0, 0.35, 1));
+
+  /* Sizes */
+  --ac-control: 32px;
+  --ac-control-sm: 24px;
+  --ac-radius-sm: 6px;
+  --ac-radius: 10px;
+  --ac-radius-lg: 14px;
+
+  --ac-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ac-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  color: var(--ac-ink);
+  font-family: var(--ac-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Base: no weight of its own, so every class below wins over it ----------------------------- */
+
+:where(.ac) *, :where(.ac) *::before, :where(.ac) *::after { box-sizing: border-box; }
+/* Not inside a component preview: the app's own components are drawn there, with the app's styles */
+:where(.ac) :where(button, input, textarea):not(:where(.ac-preview *)) { font: inherit; color: inherit; letter-spacing: inherit; }
+:where(.ac) :where(p, h1, h2, h3, dl, dd, figure):not(:where(.ac-preview *)) { margin: 0; }
+:where(.ac) :focus-visible { outline: 2px solid var(--ac-violet); outline-offset: 3px; }
+
+/* --- Type and layout ---------------------------------------------------------------------------- */
+
+.ac-title { font-size: 20px; line-height: 28px; font-weight: 600; text-wrap: balance; }
+.ac-heading { font-weight: 600; }
+.ac-label { display: block; color: var(--ac-ink); font-weight: 500; }
+.ac-caption { color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; text-wrap: pretty; }
+.ac-mono { font-family: var(--ac-mono); font-size: 12px; line-height: 16px; }
+.ac-num { font-variant-numeric: tabular-nums; }
+.ac-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ac-row.tight { gap: 4px; }
+.ac-stack { display: grid; gap: 8px; min-width: 0; }
+.ac-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+.ac-spacer { flex: 1; }
+.ac-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-rule-v { flex-shrink: 0; width: 1px; height: 20px; margin: 0 4px; background: var(--ac-line); }
+
+/* --- Button: outline (default), primary, ghost; 32px, or 24px with .sm -------------------------- */
+
+.ac-btn {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: var(--ac-control);
+  padding: 0 12px;
+  border: 1px solid var(--ac-line-control);
+  border-radius: var(--ac-radius);
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition-property: background-color, border-color, color, scale;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ac-ease);
+}
+.ac-btn > svg { flex-shrink: 0; color: var(--ac-icon); transition: color 160ms var(--ac-ease); }
+.ac-btn:has(> svg:first-child):not(.icon) { padding-left: 10px; }
+.ac-btn:has(> .ac-kbd:first-child) { padding-left: 6px; }
+.ac-btn.icon { width: var(--ac-control); padding: 0; }
+.ac-btn.sm { height: var(--ac-control-sm); gap: 4px; padding: 0 8px; border-radius: var(--ac-radius-sm); font-size: 12px; line-height: 16px; }
+.ac-btn.sm.icon { width: var(--ac-control-sm); padding: 0; }
+.ac-btn:active:not(:disabled) { scale: 0.97; transition-duration: 90ms; }
+.ac-btn:disabled { border-color: var(--ac-line-weak); background: var(--ac-disabled); color: var(--ac-ink-disabled); cursor: default; }
+.ac-btn:disabled > svg { color: var(--ac-ink-disabled); }
+.ac-btn.primary { border-color: transparent; background: var(--ac-violet); color: var(--ac-on-violet); }
+.ac-btn.primary > svg { color: var(--ac-on-violet); }
+.ac-btn.primary:disabled { background: var(--ac-disabled); color: var(--ac-ink-disabled); }
+.ac-btn.ghost { border-color: transparent; background: transparent; color: var(--ac-ink-weak); }
+.ac-btn.ghost > svg { color: var(--ac-icon-weak); }
+.ac-btn.ghost:disabled { background: transparent; }
+.ac-btn.ghost[aria-expanded='true'], .ac-btn.ghost:active:not(:disabled) { background: var(--ac-active); color: var(--ac-ink); }
+/* A tool or option that is on: the violet wash of a selection, with a violet icon */
+.ac-btn[aria-pressed='true'] { border-color: transparent; background: var(--ac-selected); color: var(--ac-violet-text); }
+.ac-btn[aria-pressed='true'] > svg { color: var(--ac-violet-icon); }
+@media (hover: hover) and (pointer: fine) {
+  .ac-btn:hover:not(:disabled) { border-color: var(--ac-line-hover); }
+  .ac-btn.primary:hover:not(:disabled) { border-color: transparent; background: var(--ac-violet-hover); }
+  .ac-btn.ghost:hover:not(:disabled) { border-color: transparent; background: var(--ac-hover); color: var(--ac-ink); }
+  .ac-btn.ghost:hover:not(:disabled) > svg { color: var(--ac-icon); }
+  .ac-btn[aria-pressed='true']:hover:not(:disabled) { border-color: transparent; background: var(--ac-selected); color: var(--ac-violet-text); }
+  .ac-btn[aria-pressed='true']:hover:not(:disabled) > svg { color: var(--ac-violet-icon); }
+}
+/* A text link, for a file or a place to go */
+.ac-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ac-violet-text);
+  text-align: left;
+  cursor: pointer;
+}
+.ac-link > svg { flex-shrink: 0; color: var(--ac-violet-icon); }
+@media (hover: hover) and (pointer: fine) {
+  .ac-link:hover .ac-link-text { text-decoration: underline; text-underline-offset: 3px; }
+}
+
+/* --- Field: the frame carries the edge, hover and focus; the input inside has none --------------- */
+
+.ac-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: var(--ac-control);
+  padding: 0 10px;
+  border: 1px solid var(--ac-line-control);
+  border-radius: var(--ac-radius);
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  cursor: text;
+  transition: border-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
+}
+.ac-field > :is(input, textarea) {
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  appearance: none;
+}
+.ac-field > input::-webkit-inner-spin-button, .ac-field > input::-webkit-outer-spin-button, .ac-field > input::-webkit-search-cancel-button { appearance: none; margin: 0; }
+.ac-field > input[type='number'] { font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.ac-field :is(input, textarea)::placeholder { color: var(--ac-ink-muted); opacity: 1; }
+.ac-field > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
+.ac-field-prefix { flex-shrink: 0; min-width: 10px; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; user-select: none; }
+.ac-field:focus-within { border-color: var(--ac-violet-line); box-shadow: inset 0 0 0 1px var(--ac-violet-line); }
+.ac-field.multi { height: auto; align-items: stretch; padding: 0; }
+.ac-field.multi > textarea { min-height: 72px; padding: 6px 10px; resize: vertical; }
+.ac-field.mono { font-family: var(--ac-mono); font-size: 12px; }
+.ac-field.sm { height: var(--ac-control-sm); gap: 4px; padding: 0 6px; border-radius: var(--ac-radius-sm); font-size: 12px; line-height: 16px; }
+/* No frame, where the field is the whole surface: the command palette's search */
+.ac-field.bare, .ac-field.bare:focus-within { padding: 0; border-color: transparent; background: transparent; box-shadow: none; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-field:hover:not(:focus-within, .bare) { border-color: var(--ac-line-hover); }
+}
+
+/* --- Select: a trigger framed like a field, and a floating list of items ------------------------- */
+
+.ac-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: var(--ac-control);
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--ac-line-control);
+  border-radius: var(--ac-radius);
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms var(--ac-ease), background-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
+}
+.ac-select > .ac-truncate { flex: 1; }
+.ac-select > .placeholder { color: var(--ac-ink-muted); }
+.ac-select > .ac-select-chevron { flex-shrink: 0; color: var(--ac-icon-weak); transition: rotate 160ms var(--ac-ease); }
+.ac-select[aria-expanded='true'] > .ac-select-chevron { rotate: 180deg; }
+.ac-select:focus-visible, .ac-select[aria-expanded='true'] { outline: none; border-color: var(--ac-violet-line); box-shadow: inset 0 0 0 1px var(--ac-violet-line); }
+/* In a bar: no frame until hovered or open */
+.ac-select.ghost { width: auto; max-width: 320px; border-color: transparent; background: transparent; font-weight: 600; }
+.ac-select.ghost[aria-expanded='true'] { border-color: transparent; background: var(--ac-active); box-shadow: none; }
+.ac-select.ghost:focus-visible { border-color: transparent; box-shadow: none; outline: 2px solid var(--ac-violet); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-select:not(.ghost, [aria-expanded='true']):hover { border-color: var(--ac-line-hover); }
+  .ac-select.ghost:not([aria-expanded='true']):hover { background: var(--ac-hover); }
+}
+.ac-swatch { flex-shrink: 0; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ac-line); }
+
+/* --- Items: a row of a menu, a select's list or the command palette ------------------------------ */
+
+.ac-listbox {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  padding: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  outline: none;
+  transform-origin: top;
+}
+.ac-listbox.up { transform-origin: bottom; }
+.ac-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--ac-control);
+  padding: 6px 8px;
+  border-radius: var(--ac-radius-sm);
+  color: var(--ac-ink);
+  text-align: start;
+  cursor: pointer;
+  user-select: none;
+}
+.ac-item > svg { flex-shrink: 0; margin-top: 2px; color: var(--ac-icon-weak); }
+.ac-item.active { background: var(--ac-hover); }
+.ac-item.checked { background: var(--ac-selected); }
+.ac-item.danger, .ac-item.danger > svg { color: var(--ac-danger); }
+.ac-item-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.ac-item-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ac-item-hint { flex-shrink: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.ac-item-also { flex: 0 1 auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ac-ink-muted); font-size: 12px; line-height: 20px; }
+.ac-item-keys { flex-shrink: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 20px; font-variant-numeric: tabular-nums; }
+.ac-item > .ac-item-check { color: var(--ac-violet-icon); }
+.ac-item-group { padding: 8px 8px 4px; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+.ac-item-rule { height: 1px; margin: 4px 0; background: var(--ac-line-weak); }
+.ac-item-empty { padding: 16px 8px; text-align: center; }
+
+/* --- Segmented: one of a few side by side, as options or as tabs -------------------------------- */
+
+.ac-seg {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  height: var(--ac-control);
+  padding: 3px;
+  border-radius: var(--ac-radius);
+  background: var(--ac-active);
+}
+.ac-seg.fill { display: flex; }
+.ac-seg.fill > * { flex: 1 1 auto; }
+.ac-seg > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ac-ink-weak);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
+}
+.ac-seg > button > svg { flex-shrink: 0; }
+.ac-seg > button[aria-selected='true'], .ac-seg > button[aria-pressed='true'] { background: var(--ac-surface); color: var(--ac-ink); box-shadow: var(--ac-e1); }
+@media (hover: hover) and (pointer: fine) {
+  .ac-seg > button:hover { color: var(--ac-ink); }
+}
+
+/* --- Switch ------------------------------------------------------------------------------------- */
+
+.ac-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 32px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ac-line-control);
+  cursor: pointer;
+  transition: background-color 160ms var(--ac-ease);
+}
+.ac-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--ac-surface);
+  box-shadow: var(--ac-e1);
+  transition: translate 160ms var(--ac-ease);
+}
+.ac-switch[aria-checked='true'] { background: var(--ac-violet); }
+.ac-switch[aria-checked='true']::after { translate: 14px 0; }
+
+/* --- Chips, counters, keys ---------------------------------------------------------------------- */
+
+.ac-chip {
+  display: inline-block;
+  flex: 0 100 auto;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 6px;
+  overflow: hidden;
+  border-radius: var(--ac-radius-sm);
+  background: var(--ac-active);
+  color: var(--ac-ink-weak);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-chip.violet { background: var(--ac-selected); color: var(--ac-violet-text); }
+/* Live: a green dot before the label */
+.ac-chip.live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 4px 1px 0; border-radius: 999px; background: var(--ac-success-icon); vertical-align: middle; }
+.ac-count {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ac-selected);
+  color: var(--ac-violet-text);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ac-kbd {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--ac-radius-sm);
+  background: var(--ac-surface);
+  box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e1);
+  color: var(--ac-ink-weak);
+  font-family: var(--ac-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+/* --- Sections and properties: what a panel is made of ------------------------------------------ */
+
+.ac-section { display: grid; gap: 12px; padding: 16px; }
+.ac-section + .ac-section { border-top: 1px solid var(--ac-line-weak); }
+.ac-section-head { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 20px; }
+.ac-section-head > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
+/* One that opens: its head is the summary, with a chevron */
+details.ac-section > summary { list-style: none; cursor: pointer; user-select: none; }
+details.ac-section > summary::-webkit-details-marker { display: none; }
+details.ac-section > summary > svg { transition: rotate 160ms var(--ac-ease); }
+details.ac-section[open] > summary > svg { rotate: 90deg; }
+details.ac-section:not([open]) { gap: 0; }
+
+/* A property: its name in a 72px column, its control beside it */
+.ac-props { display: grid; gap: 8px; min-width: 0; }
+.ac-prop { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; min-height: var(--ac-control); }
+.ac-prop-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ac-ink-weak); font-size: 12px; line-height: 16px; }
+.ac-prop.top { align-items: start; }
+.ac-prop.top > .ac-prop-label { padding-top: 8px; }
+
+/* Facts in rows: a name, and its value or keys at the end */
+.ac-dl { display: grid; gap: 8px; margin: 0; }
+.ac-dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 20px; }
+.ac-dl dt { color: var(--ac-ink-weak); font-size: 12px; line-height: 16px; }
+.ac-dl dd { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 1; min-width: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; text-align: right; overflow-wrap: anywhere; }
+.ac-dl.values > div { gap: 4px 12px; }
+.ac-dl.values dd { color: var(--ac-ink); font-family: var(--ac-mono); }
+
+/* Code or a command, in a sunken well; a copy button can sit at its end */
+.ac-snippet { position: relative; }
+.ac-snippet > pre {
+  max-height: 160px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--ac-radius);
+  background: var(--ac-sunken);
+  box-shadow: inset 0 0 0 1px var(--ac-line-weak);
+  color: var(--ac-ink-weak);
+  font-family: var(--ac-mono);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ac-snippet:has(> .ac-btn) > pre { padding-right: 40px; }
+.ac-snippet > .ac-btn { position: absolute; top: 0; right: 0; }
+/* A note with an action, in a sunken well */
+.ac-callout { display: grid; justify-items: start; gap: 8px; padding: 8px 10px; border-radius: var(--ac-radius); background: var(--ac-sunken); }
+
+/* --- Rows of a tree: layers ---------------------------------------------------------------------- */
+
+.ac-tree { list-style: none; margin: 0; padding: 0; }
+.ac-tree-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 28px;
+  padding-right: 4px;
+  border-radius: var(--ac-radius-sm);
+  color: var(--ac-ink-weak);
+  transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
+}
+.ac-tree-row[aria-current] { background: var(--ac-selected); color: var(--ac-violet-text); }
+.ac-tree-toggle {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ac-icon-weak);
+  cursor: pointer;
+}
+.ac-tree-toggle > svg { transition: rotate 160ms var(--ac-ease); }
+.ac-tree-toggle[aria-expanded='true'] > svg { rotate: 90deg; }
+/* Its icon, its name at full width first, then the note in what is left, at the row's end */
+.ac-tree-name {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 2px;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.ac-tree-name > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
+.ac-tree-row[aria-current] .ac-tree-name > svg { color: var(--ac-violet-icon); }
+.ac-tree-name > .strong { color: var(--ac-ink); font-weight: 500; }
+.ac-tree-row[aria-current] .ac-tree-name > .strong { color: var(--ac-violet-text); }
+.ac-tree-meta { justify-self: end; max-width: 100%; color: var(--ac-ink-muted); }
+.ac-tree-empty { padding: 4px 8px 8px; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-tree-row:not([aria-current]):hover { background: var(--ac-hover); color: var(--ac-ink); }
+  .ac-tree-toggle:hover { background: var(--ac-active); }
+}
+
+/* --- Cards and tiles ----------------------------------------------------------------------------- */
+
+/* A card in a list (a comment): flat until hovered, raised while open */
+.ac-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--ac-radius);
+  cursor: pointer;
+  transition: background-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
+}
+.ac-card.active { background: var(--ac-surface); box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e1); cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-card:not(.active):hover { background: var(--ac-hover); }
+}
+/* A tile with a picture (a component of the app), to drag or click */
+.ac-tile {
+  display: grid;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--ac-radius);
+  background: var(--ac-surface);
+  box-shadow: 0 0 0 1px var(--ac-line);
+  text-align: left;
+  cursor: grab;
+  transition: box-shadow 160ms var(--ac-ease), scale 90ms var(--ac-ease);
+}
+.ac-tile:active { scale: 0.97; }
+.ac-tile[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--ac-violet); }
+.ac-tile-name { padding: 6px 10px 8px; font-size: 12px; line-height: 16px; font-weight: 500; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-tile:hover { box-shadow: 0 0 0 1px var(--ac-line-hover), var(--ac-e1); }
+  .ac-tile[aria-pressed='true']:hover { box-shadow: 0 0 0 2px var(--ac-violet); }
+}
+
+/* --- Floating surfaces: popovers, menus, bars, the toast ---------------------------------------- */
+
+.ac-popover {
+  background: var(--ac-raised);
+  border-radius: var(--ac-radius-lg);
+  box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e2);
+}
+.ac-popover:focus-visible { outline: none; }
+.ac-pop-in { animation: ac-pop-in 160ms var(--ac-ease); }
+@keyframes ac-pop-in {
+  from { opacity: 0; scale: 0.97; }
+}
+/* The tooltip: what a control is, and its shortcut */
+.ac-tooltip {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: var(--ac-radius-sm);
+  background: var(--ac-inverted);
+  color: var(--ac-on-inverted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  box-shadow: var(--ac-e2);
+  pointer-events: none;
+  animation: ac-tip-in 120ms var(--ac-ease);
+}
+.ac-tooltip.above { translate: 0 -100%; }
+.ac-tooltip-keys { flex-shrink: 0; color: color-mix(in oklch, var(--ac-on-inverted) 60%, transparent); font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+@keyframes ac-tip-in {
+  from { opacity: 0; }
+}
+/* A bar of tools floating on the board */
+.ac-bar { display: flex; align-items: center; gap: 2px; padding: 4px; }
+.ac-toast {
+  max-width: min(560px, calc(100% - 32px));
+  padding: 6px 12px;
+  border-radius: var(--ac-radius);
+  background: var(--ac-inverted);
+  color: var(--ac-on-inverted);
+  font-size: 12px;
+  line-height: 16px;
+  box-shadow: var(--ac-e2);
+  transform-origin: top;
+  animation: ac-pop-in 160ms var(--ac-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac *, .ac *::before, .ac *::after {
+    transition-property: opacity, background-color, border-color, color !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

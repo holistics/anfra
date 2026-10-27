@@ -11,7 +11,9 @@ import { update, type Frame } from '../../model/index.ts';
 import { frameName } from '../../frame/protocol.ts';
 import { pinNumber, useStore } from '../context.ts';
 import { intersects } from '../geometry.ts';
-import Icon from './Icon.vue';
+import Button from '../ui/Button.vue';
+import Field from '../ui/Field.vue';
+import { vTip } from '../ui/tooltip.ts';
 
 /** Running apps kept, at most, beyond those near the view. */
 const KEEP = 12;
@@ -102,7 +104,7 @@ const pickedName = computed(() => state.picked?.frame === props.frame.id ? state
 const focused = computed(() => pins.value.find((p) => p.id === state.focus)?.rect ?? null);
 
 const editing = ref(false);
-const input = ref<HTMLInputElement>();
+const input = ref<InstanceType<typeof Field>>();
 async function rename () {
   editing.value = true;
   await nextTick();
@@ -127,14 +129,12 @@ function done (e: Event) {
     :style="{ left: `${frame.x}px`, top: `${frame.y}px`, width: `${frame.width}px`, height: `${frame.height}px` }"
   >
     <div class="ac-frame-label" :style="{ width: `calc(${frame.width}px / var(--ac-inv))` }" data-hit="move" :data-id="frame.id" @dblclick="rename">
-      <input v-if="editing" ref="input" class="ac-frame-rename" :value="frame.name" data-ui @keydown.enter="done" @keydown.esc="editing = false" @blur="done" />
+      <Field v-if="editing" ref="input" class="ac-frame-rename" small :value="frame.name" aria-label="Name" data-ui @keydown.enter="done" @keydown.esc="editing = false" @blur="done" />
       <span v-else class="ac-frame-name">{{ frame.name }}</span>
-      <span class="ac-chip" :class="{ live: frame.scenario === 'live' }" :title="state.settings.scenarios[frame.scenario ?? 'default']?.description">{{ state.settings.scenarios[frame.scenario ?? 'default']?.label ?? frame.scenario ?? 'default' }}</span>
-      <span v-if="now && now !== frame.route" class="ac-frame-route ac-mono" :title="`Now at ${now}`">{{ now }}</span>
+      <span class="ac-chip" :class="{ live: frame.scenario === 'live' }" v-tip="state.settings.scenarios[frame.scenario ?? 'default']?.description">{{ state.settings.scenarios[frame.scenario ?? 'default']?.label ?? frame.scenario ?? 'default' }}</span>
+      <span v-if="now && now !== frame.route" class="ac-frame-route ac-mono" v-tip="'Where the screen is now'">{{ now }}</span>
       <span class="ac-spacer" />
-      <button class="ac-frame-reload" type="button" title="Reload" aria-label="Reload the frame" data-ui @click="store.reload(frame.id)">
-        <Icon name="reload" :size="12" />
-      </button>
+      <Button variant="ghost" small icon="reload" label="Reload the frame" data-ui @click="store.reload(frame.id)" />
     </div>
     <div class="ac-frame-screen" :class="{ far: !near }">
       <iframe
@@ -170,114 +170,3 @@ function done (e: Event) {
     <div v-if="selected && state.selection.length === 1" class="ac-handle" data-hit="resize" :data-id="frame.id" />
   </div>
 </template>
-
-<style>
-.ac-frame {
-  position: absolute;
-  background: var(--ac-surface);
-  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-line), 0 calc(1px * var(--ac-inv)) calc(3px * var(--ac-inv)) rgb(24 20 31 / 0.06);
-  transition: opacity 220ms var(--ac-ease);
-}
-.ac-frame.selected, .ac-frame.current { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
-.is-playing .ac-frame:not(.current) { opacity: 0.4; }
-.is-playing .ac-frame:not(.current) iframe { pointer-events: none; }
-.ac-frame-label {
-  position: absolute;
-  left: 0;
-  bottom: 100%;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 0 8px;
-  transform: scale(var(--ac-inv));
-  transform-origin: 0 100%;
-  color: var(--ac-ink-weak);
-  font-size: 12px;
-  line-height: 16px;
-  cursor: grab;
-}
-.ac-frame.selected .ac-frame-label, .ac-frame.current .ac-frame-label { color: var(--ac-violet-text); }
-.ac-frame-name { flex: 0 1 auto; min-width: 48px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ac-frame-label .ac-chip { display: block; flex: 0 100 auto; min-width: 0; height: 18px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
-.ac-frame-label .ac-chip.live::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--ac-success-icon); }
-.ac-frame-route { color: var(--ac-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ac-frame-rename { height: 24px; padding: 0 6px; border: 1px solid var(--ac-violet-line); border-radius: 6px; background: var(--ac-surface); font-size: 12px; outline: none; }
-.ac-frame-reload {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ac-icon-weak);
-  cursor: pointer;
-  transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
-}
-@media (hover: hover) and (pointer: fine) {
-  .ac-frame-reload:hover { background: var(--ac-hover); color: var(--ac-ink); }
-}
-.ac-frame-screen { position: relative; width: 100%; height: 100%; background: var(--ac-surface); }
-.ac-frame-screen iframe { display: block; width: 100%; height: 100%; border: 0; }
-/* Far from the view: kept, but not drawn */
-.ac-frame-screen.far { content-visibility: hidden; }
-.ac-frame-still { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.ac-frame-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.ac-outline { position: absolute; pointer-events: none; }
-.ac-outline.hover { box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-violet); background: color-mix(in oklch, var(--ac-violet) 6%, transparent); }
-.ac-outline.picked { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
-.ac-outline-name {
-  position: absolute;
-  left: calc(-2px * var(--ac-inv));
-  bottom: 100%;
-  margin-bottom: calc(2px * var(--ac-inv));
-  padding: 0 6px;
-  border-radius: 4px;
-  background: var(--ac-violet);
-  color: var(--ac-on-violet);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 500;
-  white-space: nowrap;
-  transform: scale(var(--ac-inv));
-  transform-origin: bottom left;
-}
-.ac-outline.drop.line { background: var(--ac-violet); border-radius: 2px; box-shadow: none; }
-.ac-outline.drop.inside { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); background: color-mix(in oklch, var(--ac-violet) 10%, transparent); }
-.ac-outline.focus { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); background: color-mix(in oklch, var(--ac-violet) 10%, transparent); }
-.ac-pin {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  border: 2px solid var(--ac-surface);
-  border-radius: 999px 999px 999px 4px;
-  background: var(--ac-violet);
-  color: var(--ac-on-violet);
-  font-size: 12px;
-  font-weight: 600;
-  transform: translate(-30%, -70%) scale(var(--ac-inv));
-  transform-origin: 30% 70%;
-  pointer-events: auto;
-  cursor: pointer;
-  box-shadow: var(--ac-e2);
-}
-.ac-pin.resolved { background: var(--ac-ink-muted); }
-.ac-pin.active { outline: 2px solid var(--ac-violet); outline-offset: 2px; }
-.ac-handle {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 12px;
-  height: 12px;
-  transform: translate(50%, 50%) scale(var(--ac-inv));
-  border: 2px solid var(--ac-violet);
-  border-radius: 4px;
-  background: var(--ac-surface);
-  cursor: nwse-resize;
-}
-</style>

@@ -6,10 +6,8 @@ import {
   type Arrow, type Point, type Shape,
 } from '../model/index.ts';
 import type { PaletteItem } from '../vite/catalog.ts';
-import type { PATHS } from './components/Icon.vue';
+import type { IconName } from './ui/Icon.vue';
 import { TOOLS, type Store } from './store.ts';
-
-export type IconName = keyof typeof PATHS;
 
 export interface Command {
   id: string;

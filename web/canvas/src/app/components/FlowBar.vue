@@ -5,7 +5,8 @@
 import { computed } from 'vue';
 import type { Frame } from '../../model/index.ts';
 import { useStore } from '../context.ts';
-import Icon from './Icon.vue';
+import Button from '../ui/Button.vue';
+import Icon from '../ui/Icon.vue';
 
 const store = useStore();
 const { state, board } = store;
@@ -42,17 +43,15 @@ const hover = (id: string) => {
       <span class="ac-caption ac-num">Step {{ flow.path.length }}</span>
     </div>
     <div class="ac-flowbar-actions">
-      <button class="ac-btn ghost icon" type="button" title="Back (←)" aria-label="Back one step" :disabled="flow.path.length < 2" @click="store.playBack()">
-        <Icon name="back" />
-      </button>
+      <Button variant="ghost" icon="back" label="Back one step" keys="←" :disabled="flow.path.length < 2" @click="store.playBack()" />
       <div class="ac-flowbar-next">
         <template v-if="next.length">
-          <button
+          <Button
             v-for="o in next"
             :key="o.id"
-            class="ac-btn"
-            type="button"
-            :title="`${o.label}: to ${o.to} (${o.n})`"
+            class="ac-flowbar-way"
+            :tip="`To ${o.to}`"
+            :keys="String(o.n)"
             @click="store.playNext(o.id)"
             @pointerenter="hover(o.id)"
             @pointerleave="hover('')"
@@ -62,38 +61,14 @@ const hover = (id: string) => {
             <span class="ac-kbd">{{ o.n }}</span>
             <span class="ac-truncate">{{ o.label }}</span>
             <Icon name="arrowRight" />
-          </button>
+          </Button>
         </template>
         <template v-else>
           <span class="ac-caption">End of this path</span>
-          <button class="ac-btn" type="button" @click="store.play(flow.path[0])"><Icon name="reload" /> Play again</button>
+          <Button icon="reload" @click="store.play(flow.path[0])">Play again</Button>
         </template>
       </div>
-      <button class="ac-btn ghost" type="button" title="Stop (Esc)" @click="store.stopPlay()">Stop</button>
+      <Button variant="ghost" tip="Stop playing" keys="Esc" @click="store.stopPlay()">Stop</Button>
     </div>
   </div>
 </template>
-
-<style>
-.ac-flowbar {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  translate: -50% 0;
-  display: grid;
-  gap: 4px;
-  width: min(720px, calc(100% - 32px));
-  padding: 8px;
-  transform-origin: bottom;
-}
-.ac-flowbar-path { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px; height: 24px; }
-.ac-flowbar-icon { flex-shrink: 0; color: var(--ac-violet-icon); }
-.ac-crumbs { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; list-style: none; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; }
-.ac-crumbs li { display: flex; align-items: center; min-width: 0; max-width: 200px; }
-.ac-crumbs li + li::before { content: '›'; padding: 0 6px; color: var(--ac-icon-weak); }
-.ac-crumbs li[aria-current] { color: var(--ac-ink); font-weight: 500; }
-.ac-flowbar-actions { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.ac-flowbar-next { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.ac-flowbar-next > .ac-btn { min-width: 0; max-width: 100%; padding-left: 6px; }
-.ac-flowbar-next > .ac-caption { padding-left: 4px; }
-</style>

@@ -52,6 +52,7 @@ The dev server prints both.
 | Server | `src/vite/index.ts` | `/__canvas/` (the canvas), `/__canvas/api/` (boards, source, edits), `/__canvas/mcp` (MCP over streamable HTTP, JSON answers). Same origin only |
 | MCP tools | `src/vite/mcp.ts` | `list_feedback`, `resolve_feedback`, `reply_feedback`, boards, frames, sections, notes, arrows, `tidy_board`, scenarios |
 | Canvas UI | `src/app/` | The board: pan, zoom, select, move, resize, draw sections and arrows, comment; the element inspector, layers and palette; the command palette (⌘K) and right-click menus (`commands.ts`); undo across board and source edits; saves with a rev and merges when Claude saved first |
+| UI kit | `src/app/ui/` | The canvas's design system: its tokens and every control in one sheet (`ui.css`), and the components panels are built from (Button, Field, Select, Segmented, Switch, MenuItem, TreeRow, Section, PropRow, Tooltip). See below |
 | Connectors | `src/app/route.ts`, `connectors.ts` | Right-angled routes around the screens (A* on a sparse grid, where a bend costs extra), each remembered with the screens near it |
 | Tidy up | `src/model/layout.ts` | Lays the screens out from the arrows: the main path in a row, each branch under the screen it leaves, sections sized to hold theirs |
 
@@ -61,6 +62,23 @@ drawing while it is far; past twelve running, one far for a while is let go and 
 
 Frames are same-origin iframes of the app, so the canvas and the frame agent call each other
 directly (`window.__anfraCanvasHost`), with no message passing.
+
+## The UI kit
+
+Every panel, bar, menu and popover is built from `src/app/ui/`, and no component has a style block of
+its own. `ui/ui.css` holds the tokens (taken from the host app's `--anfra-color-*`, so the canvas wears
+its theme) and every control; `canvas.css` only lays the app out and draws the board.
+
+- Two control sizes: 32px in panels and popovers, 24px (`small`) on the board's own labels.
+- One edge for every button, field and select (`--ac-line-control`), darker on hover. A field or
+  select shows focus on its edge; anything else takes the 2px violet outline.
+- Three type sizes (12, 14, 20), three radii (6, 10, 14), e1 resting and e2 floating.
+- Tooltips are the kit's, never a `title`: a Button's `label` or `tip` with its `keys`, or `v-tip` on
+  anything else, shows the name and the shortcut.
+- A property in a panel is a `PropRow` (its name in a 72px column) in a `.ac-props` group, inside a
+  `Section`.
+
+To add a control, add it to the kit first, then use it.
 
 ## Scenarios
 
