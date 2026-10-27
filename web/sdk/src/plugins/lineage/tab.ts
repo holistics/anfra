@@ -18,6 +18,8 @@ import {
 import { stateOf, traceKey } from './state';
 
 const STRUCTURE_TAB = 'inspect.structure';
+const MENU_GAP = 4;
+const MENU_MARGIN = 8;
 
 /** Each kind's name on its card, as the reader knows it. */
 export const KIND_LABELS: Record<LineageKind, string> = {
@@ -165,7 +167,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
               redraw();
             },
           }, icon(doc, hiddenTotal > 0 ? 'hidden' : 'eye'), 'Show', hiddenTotal > 0 && h(doc, 'span', { class: 'muted' }, `${hiddenTotal} hidden`)),
-          menu === where && h(doc, 'div', { class: 'menu', role: 'menu', 'data-testid': 'lineage-show-menu' },
+          menu === where && h(doc, 'div', { class: 'menu', role: 'menu', popover: 'manual', 'data-testid': 'lineage-show-menu' },
             LINEAGE_KINDS.filter((kind) => counts[kind]).map((kind) => row(
               !view.hidden.has(kind), () => toggle(kind),
               h(doc, 'span', { class: `badge kind-${kind}`, 'aria-hidden': 'true' }, icon(doc, KIND_ICONS[kind])),
@@ -204,6 +206,26 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
     return { key, draw };
   }
 
+  /**
+   * The Show menu, in the top layer where the browser has one, so the panel's edge doesn't clip
+   * it: under its button, or above it, inside the window.
+   */
+  function placeMenu (element: HTMLElement): void {
+    const win = doc.defaultView;
+    const button = element.parentElement?.querySelector('button');
+    if (!win || !button) return;
+    element.showPopover?.();
+    const at = button.getBoundingClientRect();
+    const size = element.getBoundingClientRect();
+    const below = at.bottom + MENU_GAP;
+    const above = at.top - MENU_GAP - size.height;
+    const top = below + size.height <= win.innerHeight - MENU_MARGIN || above < MENU_MARGIN
+      ? Math.max(MENU_MARGIN, Math.min(below, win.innerHeight - MENU_MARGIN - size.height))
+      : above;
+    element.style.left = `${Math.max(MENU_MARGIN, Math.min(at.left, win.innerWidth - MENU_MARGIN - size.width))}px`;
+    element.style.top = `${top}px`;
+  }
+
   /** One canvas and the toolbar over it: the panel's, and the large view's. */
   function surface (where: 'panel' | 'expanded', minFitZoom: number) {
     const head = h(doc, 'div', { class: 'ltoolbar' });
@@ -217,6 +239,8 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
         if (bar.key !== drawnKey) {
           drawnKey = bar.key;
           replace(doc, head, bar.draw());
+          const opened = head.querySelector<HTMLElement>('.menu');
+          if (opened) placeMenu(opened);
         }
         canvas.draw(shown, view.selected);
       },
@@ -338,13 +362,24 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
     menu = undefined;
     redraw();
   };
+  // The menu is placed once, so a resize or a scroll of the page closes it.
+  const onMove = (event: Event) => {
+    if (!menu || (event.target instanceof Node && root.contains(event.target) && (event.target as Element).closest?.('.menu'))) return;
+    menu = undefined;
+    redraw();
+  };
+  const win = doc.defaultView;
   doc.addEventListener('keydown', onKey);
+  win?.addEventListener('resize', onMove);
+  win?.addEventListener('scroll', onMove, true);
   root.addEventListener('pointerdown', onPress, true);
   redraw();
   const stops = [panel.subscribe(redraw), state.subscribe(redraw)];
   return () => {
     stops.forEach((stop) => stop());
     doc.removeEventListener('keydown', onKey);
+    win?.removeEventListener('resize', onMove);
+    win?.removeEventListener('scroll', onMove, true);
     root.removeEventListener('pointerdown', onPress, true);
     expanded.close();
     panelSurface.canvas.dispose();
@@ -368,7 +403,7 @@ const LINEAGE_STYLES = `
 .ltools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .preset { min-width: 0; max-width: 180px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); padding: 3px 6px; font: inherit; font-size: 12px; }
 .menu-wrap { position: relative; }
-.menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; min-width: 220px; padding: 4px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); }
+.menu { position: fixed; inset: auto; margin: 0; z-index: 10; min-width: 220px; max-height: calc(100vh - 16px); overflow: auto; color: var(--anfra-color-fg); padding: 4px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); }
 .menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 4px; background: none; padding: 4px 8px; font-size: 12px; text-align: left; }
 .menu button:hover { background: var(--hover); }
 .menu button[aria-checked="false"] { color: var(--anfra-color-muted); }
