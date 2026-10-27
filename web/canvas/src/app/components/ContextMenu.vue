@@ -59,7 +59,7 @@ function onKey (e: KeyboardEvent) {
 <template>
   <div
     ref="el"
-    class="ac-menu ac-popover ac-pop-in"
+    class="ac-menu ac-popover menu ac-pop-in"
     :style="place"
     role="menu"
     tabindex="-1"

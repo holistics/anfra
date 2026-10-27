@@ -86,10 +86,12 @@ const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas 
           </PropRow>
         </div>
         <datalist id="ac-routes-inspector"><option v-for="r in routes" :key="r" :value="r" /></datalist>
-        <div v-if="state.routes[one!.id] && state.routes[one!.id] !== frameOf(one)!.route" class="ac-callout">
-          <p class="ac-caption">Now at <span class="ac-mono">{{ state.routes[one!.id] }}</span></p>
-          <Button @click="set<Frame>({ route: state.routes[one!.id] })">Keep this route</Button>
-        </div>
+        <template v-if="state.routes[one!.id] && state.routes[one!.id] !== frameOf(one)!.route">
+          <p class="ac-callout ac-caption">Now at <span class="ac-mono">{{ state.routes[one!.id] }}</span></p>
+          <div class="ac-row">
+            <Button @click="set<Frame>({ route: state.routes[one!.id] })">Keep this route</Button>
+          </div>
+        </template>
       </Section>
       <Section title="Size">
         <Segmented :model-value="sizeOf(frameOf(one)!)" :options="SIZES" label="Size" fill @update:model-value="(i) => setSize(Number(i))" />

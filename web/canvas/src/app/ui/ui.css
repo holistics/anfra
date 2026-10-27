@@ -14,7 +14,9 @@
  *   the 2px violet outline.
  * - Three type sizes: 12/16 (captions, labels of properties, keys), 14/20 (everything else), 20/28
  *   (an empty state's title). Weights 400, 500 for controls and names, 600 for headings.
- * - Three radii: 6 (rows, small controls, chips), 10 (controls, cards), 14 (floating surfaces).
+ * - Three radii: 6 (rows, small controls, chips), 10 (controls), 14 (bars, dialogs). Where one rounded
+ *   thing sits in another, the outer radius is derived, never copied: the inner one's radius plus the
+ *   padding between them, so the gap is as even around the corner as along the sides.
  * - Lines: weak for dividers, default for surfaces and cards, control for controls.
  * - Depth: e1 resting (a card that's open, a segment that's on), e2 floating (popovers, menus, bars).
  * - One violet, for what is selected or focused, and the one main action.
@@ -138,7 +140,10 @@
 }
 .ac-btn > svg { flex-shrink: 0; color: var(--ac-icon); transition: color 160ms var(--ac-ease); }
 .ac-btn:has(> svg:first-child):not(.icon) { padding-left: 10px; }
+/* A key at a button's end sits 6px from its edge, its radius 10 − 6 */
 .ac-btn:has(> .ac-kbd:first-child) { padding-left: 6px; }
+.ac-btn:has(> .ac-kbd:last-child) { padding-right: 6px; }
+.ac-btn > .ac-kbd { border-radius: calc(var(--ac-radius) - 6px); }
 .ac-btn.icon { width: var(--ac-control); padding: 0; }
 .ac-btn.sm { height: var(--ac-control-sm); gap: 4px; padding: 0 8px; border-radius: var(--ac-radius-sm); font-size: 12px; line-height: 16px; }
 .ac-btn.sm.icon { width: var(--ac-control-sm); padding: 0; }
@@ -264,7 +269,6 @@
   display: grid;
   align-content: start;
   gap: 1px;
-  padding: 4px;
   overflow: auto;
   overscroll-behavior: contain;
   outline: none;
@@ -321,7 +325,7 @@
   min-width: 0;
   padding: 0 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(var(--ac-radius) - 3px); /* the track's, less its padding */
   background: transparent;
   color: var(--ac-ink-weak);
   font-weight: 500;
@@ -465,7 +469,8 @@ details.ac-section:not([open]) { gap: 0; }
 .ac-snippet:has(> .ac-btn) > pre { padding-right: 40px; }
 .ac-snippet > .ac-btn { position: absolute; top: 0; right: 0; }
 /* A note with an action, in a sunken well */
-.ac-callout { display: grid; justify-items: start; gap: 8px; padding: 8px 10px; border-radius: var(--ac-radius); background: var(--ac-sunken); }
+/* A note in a sunken well. Text only: an action goes under it, not in it */
+.ac-callout { padding: 8px 10px; border-radius: var(--ac-radius); background: var(--ac-sunken); }
 
 /* --- Rows of a tree: layers ---------------------------------------------------------------------- */
 
@@ -489,10 +494,10 @@ details.ac-section:not([open]) { gap: 0; }
   height: 20px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
   background: none;
   color: var(--ac-icon-weak);
   cursor: pointer;
+  transition: color 160ms var(--ac-ease);
 }
 .ac-tree-toggle > svg { transition: rotate 160ms var(--ac-ease); }
 .ac-tree-toggle[aria-expanded='true'] > svg { rotate: 90deg; }
@@ -521,17 +526,18 @@ details.ac-section:not([open]) { gap: 0; }
 .ac-tree-empty { padding: 4px 8px 8px; }
 @media (hover: hover) and (pointer: fine) {
   .ac-tree-row:not([aria-current]):hover { background: var(--ac-hover); color: var(--ac-ink); }
-  .ac-tree-toggle:hover { background: var(--ac-active); }
+  .ac-tree-toggle:hover { color: var(--ac-ink); }
 }
 
 /* --- Cards and tiles ----------------------------------------------------------------------------- */
 
-/* A card in a list (a comment): flat until hovered, raised while open */
+/* A card in a list (a comment): flat until hovered, raised while open. Open, it holds controls at
+   its corners, so its radius is theirs plus its padding */
 .ac-card {
   display: grid;
   gap: 6px;
-  padding: 12px;
-  border-radius: var(--ac-radius);
+  padding: 8px;
+  border-radius: calc(var(--ac-radius) + 8px);
   cursor: pointer;
   transition: background-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
 }
@@ -563,11 +569,21 @@ details.ac-section:not([open]) { gap: 0; }
 
 /* --- Floating surfaces: popovers, menus, bars, the toast ---------------------------------------- */
 
+/*
+ * A popover's corners come from what sits at its edge, plus its padding:
+ *   .menu  rows (6) + 4      = 10   a select's list, the right-click menu
+ *   .bar   buttons (10) + 4  = 14   the toolbar, zoom, the flow bar
+ *   .form  controls (10) + 8 = 18   the comment composer, adding a screen
+ * One with no padding of its own (the command palette) derives its radius the same way.
+ */
 .ac-popover {
   background: var(--ac-raised);
   border-radius: var(--ac-radius-lg);
   box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e2);
 }
+.ac-popover.menu { padding: 4px; border-radius: calc(var(--ac-radius-sm) + 4px); }
+.ac-popover.bar { padding: 4px; border-radius: calc(var(--ac-radius) + 4px); }
+.ac-popover.form { padding: 8px; border-radius: calc(var(--ac-radius) + 8px); }
 .ac-popover:focus-visible { outline: none; }
 .ac-pop-in { animation: ac-pop-in 160ms var(--ac-ease); }
 @keyframes ac-pop-in {
@@ -598,7 +614,7 @@ details.ac-section:not([open]) { gap: 0; }
   from { opacity: 0; }
 }
 /* A bar of tools floating on the board */
-.ac-bar { display: flex; align-items: center; gap: 2px; padding: 4px; }
+.ac-bar { display: flex; align-items: center; gap: 2px; }
 .ac-toast {
   max-width: min(560px, calc(100% - 32px));
   padding: 6px 12px;

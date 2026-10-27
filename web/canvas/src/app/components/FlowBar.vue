@@ -31,7 +31,7 @@ const hover = (id: string) => {
 </script>
 
 <template>
-  <div class="ac-flowbar ac-popover ac-pop-in" data-ui role="region" aria-label="Playing the flow">
+  <div class="ac-flowbar ac-popover bar ac-pop-in" data-ui role="region" aria-label="Playing the flow">
     <div class="ac-flowbar-path">
       <Icon name="play" :size="14" class="ac-flowbar-icon" />
       <ol class="ac-crumbs">

@@ -38,7 +38,7 @@ function add () {
 </script>
 
 <template>
-  <form class="ac-add ac-popover ac-pop-in" :style="style" data-ui @submit.prevent="add" @pointerdown.stop @keydown.esc="emit('cancel')">
+  <form class="ac-add ac-popover form ac-pop-in" :style="style" data-ui @submit.prevent="add" @pointerdown.stop @keydown.esc="emit('cancel')">
     <p class="ac-heading">Add a screen</p>
     <label class="ac-stack">
       <span class="ac-label">Route</span>

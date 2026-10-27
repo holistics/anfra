@@ -41,7 +41,7 @@ function copy () {
 </script>
 
 <template>
-  <form class="ac-composer ac-popover ac-pop-in" :style="style" data-ui @submit.prevent="send" @pointerdown.stop>
+  <form class="ac-composer ac-popover form ac-pop-in" :style="style" data-ui @submit.prevent="send" @pointerdown.stop>
     <p class="ac-caption ac-composer-what">{{ what }}</p>
     <Field
       ref="area"
