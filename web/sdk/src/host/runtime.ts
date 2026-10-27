@@ -316,6 +316,8 @@ export function createHost (options: HostOptions): Host {
         id: nextMount++,
         frame,
         document: doc,
+        user: mountOptions.user,
+        datasets: mountOptions.datasets,
         call: (name, request, callOptions) => endpoint.call(name, request, callOptions?.signal),
         emit: (name, payload) => endpoint.emit(name, payload),
         on (name, listener) {
@@ -363,6 +365,7 @@ export function createHost (options: HostOptions): Host {
             const result = tab.mount(root, {
               tab: id,
               panel,
+              mount: context,
               plugins: infos,
               document: doc,
               get theme () { return theme; },
