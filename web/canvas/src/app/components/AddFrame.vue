@@ -2,7 +2,8 @@
 // Putting a screen on the canvas: which route, under which scenario, at what size.
 import { computed, onMounted, ref } from 'vue';
 import { FRAME_SIZES, newId, type Frame, type Point } from '../../model/index.ts';
-import { useStore } from '../context.ts';
+import { scenarioOptions, useStore } from '../context.ts';
+import Select from './Select.vue';
 
 const props = defineProps<{ at: Point, screen: Point }>();
 const emit = defineEmits<{ add: [Frame], cancel: [] }>();
@@ -15,7 +16,7 @@ const size = ref(1);
 const input = ref<HTMLInputElement>();
 onMounted(() => input.value?.select());
 
-const scenarios = computed(() => [...Object.keys(state.settings.scenarios), 'live']);
+const options = computed(() => scenarioOptions(store));
 const suggestions = computed(() => [...state.settings.prototypes, ...state.settings.routes]);
 const style = computed(() => ({
   left: `${Math.min(props.screen.x, state.viewport.width - 336)}px`,
@@ -33,7 +34,7 @@ function add () {
 </script>
 
 <template>
-  <form class="ac-add ac-popover" :style="style" data-ui @submit.prevent="add" @pointerdown.stop @keydown.esc="emit('cancel')">
+  <form class="ac-add ac-popover ac-pop-in" :style="style" data-ui @submit.prevent="add" @pointerdown.stop @keydown.esc="emit('cancel')">
     <p class="ac-heading">Add a screen</p>
     <label class="ac-stack">
       <span class="ac-label">Route</span>
@@ -42,26 +43,24 @@ function add () {
         <option v-for="r in suggestions" :key="r" :value="r" />
       </datalist>
     </label>
-    <label class="ac-stack">
+    <div class="ac-stack">
       <span class="ac-label">Scenario</span>
-      <select v-model="scenario" class="ac-field">
-        <option v-for="s in scenarios" :key="s" :value="s">{{ state.settings.scenarios[s]?.label ?? (s === 'live' ? 'Live backend' : s) }}</option>
-      </select>
-    </label>
+      <Select v-model="scenario" :options="options" label="Scenario" />
+    </div>
     <div class="ac-stack">
       <span class="ac-label">Size</span>
-      <div class="ac-row">
-        <button v-for="(s, i) in FRAME_SIZES" :key="s.name" type="button" class="ac-btn small" :aria-pressed="size === i" @click="size = i">{{ s.name }}</button>
+      <div class="ac-seg fill" role="group" aria-label="Size">
+        <button v-for="(s, i) in FRAME_SIZES" :key="s.name" type="button" :aria-pressed="size === i" :title="`${s.width} × ${s.height}`" @click="size = i">{{ s.name }}</button>
       </div>
     </div>
-    <div class="ac-row">
-      <span class="ac-spacer" />
-      <button class="ac-btn ghost small" type="button" @click="emit('cancel')">Cancel</button>
-      <button class="ac-btn primary small" type="submit">Add</button>
+    <div class="ac-row ac-actions">
+      <button class="ac-btn ghost" type="button" @click="emit('cancel')">Cancel</button>
+      <button class="ac-btn primary" type="submit">Add screen</button>
     </div>
   </form>
 </template>
 
 <style>
-.ac-add { position: absolute; width: 320px; padding: 16px; display: grid; gap: 12px; z-index: 5; }
+.ac-add { position: absolute; width: 320px; padding: 16px; display: grid; gap: 16px; z-index: 5; transform-origin: top left; }
+.ac-actions { justify-content: flex-end; }
 </style>

@@ -7,6 +7,7 @@ import Viewport from './components/Viewport.vue';
 import LeftPanel from './components/LeftPanel.vue';
 import Inspector from './components/Inspector.vue';
 import Icon from './components/Icon.vue';
+import Select, { type SelectOption } from './components/Select.vue';
 
 const props = defineProps<{ store: Store }>();
 const store = props.store;
@@ -30,6 +31,13 @@ const pick = (slug: string) => {
   location.hash = slug;
 };
 
+const boardOptions = computed<SelectOption[]>(() => state.boards.map((b) => ({
+  value: b.slug,
+  label: b.name,
+  hint: b.open ? `${b.open} open` : undefined,
+  description: `${b.frames} ${b.frames === 1 ? 'screen' : 'screens'}`,
+})));
+
 const openCount = computed(() => board.value?.comments.filter((c) => c.status === 'open').length ?? 0);
 
 function fitAll () {
@@ -40,6 +48,17 @@ function fitAll () {
 
 function shortcut (key: string, meta: boolean, shift: boolean): boolean {
   const k = key.toLowerCase();
+  if (state.flow && !meta) {
+    // Playing: Esc stops, ← goes back, a number takes that way on.
+    if (k === 'escape') store.stopPlay();
+    else if (k === 'arrowleft' || k === 'backspace') store.playBack();
+    else if (/^[1-9]$/.test(k)) {
+      const ways = board.value?.arrows.filter((a) => a.from === state.flow!.path.at(-1)) ?? [];
+      const way = ways[Number(k) - 1];
+      if (way) store.playNext(way.id);
+    } else return false;
+    return true;
+  }
   if (meta && k === 'z') {
     if (shift) store.redo();
     else store.undo();
@@ -136,31 +155,54 @@ onBeforeUnmount(() => {
 <template>
   <div class="ac">
     <header class="ac-top">
-      <span class="ac-heading">Canvas</span>
-      <select class="ac-field ac-board-pick" :value="state.slug" aria-label="Board" @change="pick(($event.target as HTMLSelectElement).value)">
-        <option v-if="!state.boards.length" value="">No boards</option>
-        <option v-for="b in state.boards" :key="b.slug" :value="b.slug">{{ b.name }}{{ b.open ? ` (${b.open})` : '' }}</option>
-      </select>
-      <form v-if="creating" class="ac-row" @submit.prevent="createBoard">
-        <input v-model="newName" class="ac-field" placeholder="New board's name" autofocus @keydown.esc="creating = false" />
-        <button class="ac-btn small" type="submit" :disabled="!slugOf(newName)">Create</button>
-      </form>
-      <button v-else class="ac-btn ghost small" type="button" @click="creating = true"><Icon name="plus" :size="14" /> New board</button>
+      <div class="ac-row ac-top-board">
+        <Select
+          v-if="state.boards.length"
+          :model-value="state.slug"
+          :options="boardOptions"
+          label="Board"
+          look="ghost"
+          :min-width="280"
+          @update:model-value="pick"
+        />
+        <span v-else class="ac-heading">Canvas</span>
+        <form v-if="creating" class="ac-row" @submit.prevent="createBoard">
+          <input v-model="newName" class="ac-field ac-top-name" placeholder="New board's name" aria-label="New board's name" autofocus @keydown.esc="creating = false" />
+          <button class="ac-btn primary" type="submit" :disabled="!slugOf(newName)">Create</button>
+          <button class="ac-btn ghost" type="button" @click="creating = false">Cancel</button>
+        </form>
+        <button v-else class="ac-btn ghost icon" type="button" title="New board" aria-label="New board" @click="creating = true"><Icon name="plus" /></button>
+      </div>
       <span class="ac-spacer" />
-      <span class="ac-caption">{{ state.saving === 'saving' ? 'Saving…' : state.saving === 'error' ? 'Not saved' : 'Saved' }}</span>
-      <button class="ac-btn ghost icon small" type="button" title="Undo (⌘Z)" aria-label="Undo" :disabled="!state.history.past" @click="store.undo()"><Icon name="undo" :size="14" /></button>
-      <button class="ac-btn ghost icon small" type="button" title="Redo (⇧⌘Z)" aria-label="Redo" :disabled="!state.history.future" @click="store.redo()"><Icon name="redo" :size="14" /></button>
-      <button class="ac-btn small" type="button" :disabled="!openCount" title="Copy every open comment as one Markdown task" @click="store.copyFeedback()">
-        <Icon name="copy" :size="14" /> Copy feedback
+      <button
+        v-if="board?.frames.length"
+        class="ac-btn"
+        type="button"
+        :aria-pressed="!!state.flow"
+        :title="state.flow ? 'Stop playing (Esc)' : 'Play the flow from the selected frame, or from its start'"
+        @click="state.flow ? store.stopPlay() : store.play()"
+      >
+        <Icon :name="state.flow ? 'stop' : 'play'" /> {{ state.flow ? 'Stop' : 'Play' }}
+      </button>
+      <span class="ac-save ac-caption" :class="state.saving" role="status">
+        <span class="ac-save-dot" aria-hidden="true" />
+        {{ state.saving === 'saving' ? 'Saving' : state.saving === 'error' ? 'Not saved' : 'Saved' }}
+      </span>
+      <div class="ac-row ac-top-history">
+        <button class="ac-btn ghost icon" type="button" title="Undo (⌘Z)" aria-label="Undo" :disabled="!state.history.past" @click="store.undo()"><Icon name="undo" /></button>
+        <button class="ac-btn ghost icon" type="button" title="Redo (⇧⌘Z)" aria-label="Redo" :disabled="!state.history.future" @click="store.redo()"><Icon name="redo" /></button>
+      </div>
+      <button class="ac-btn" type="button" :disabled="!openCount" title="Copy every open comment as one Markdown task" @click="store.copyFeedback()">
+        <Icon name="copy" /> Copy feedback <span v-if="openCount" class="ac-count">{{ openCount }}</span>
       </button>
     </header>
     <LeftPanel />
     <main class="ac-main">
       <p v-if="state.error" class="ac-error" role="alert">{{ state.error }}</p>
       <div v-else-if="!state.slug && !state.boards.length" class="ac-start">
-        <p class="ac-heading">No boards yet</p>
-        <p class="ac-caption">A board is a canvas of screens. Create one to start.</p>
-        <button class="ac-btn primary" type="button" @click="creating = true">New board</button>
+        <p class="ac-title">No boards yet</p>
+        <p class="ac-caption">A board holds the screens of one feature: its happy path and its edge cases, side by side</p>
+        <button class="ac-btn primary" type="button" @click="creating = true"><Icon name="plus" /> New board</button>
       </div>
       <Viewport v-else ref="viewport" />
     </main>
@@ -169,10 +211,18 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.ac-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
-.ac-board-pick { width: auto; min-width: 200px; max-width: 320px; }
+.ac-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 8px; }
+.ac-top-board { gap: 4px; }
+.ac-top-name { width: 220px; }
+.ac-top-history { gap: 0; }
+.ac-save { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.ac-save-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ac-success-icon); transition: background-color 160ms var(--ac-ease); }
+.ac-save.saving .ac-save-dot { background: var(--ac-icon-weak); }
+.ac-save.error { color: var(--ac-danger); }
+.ac-save.error .ac-save-dot { background: var(--ac-danger); }
 .ac-main { position: relative; display: grid; min-height: 0; overflow: clip; }
 .ac-main > .ac-viewport { min-height: 0; }
-.ac-error, .ac-start { align-self: center; justify-self: center; display: grid; gap: 8px; text-align: center; max-width: 420px; }
+.ac-error, .ac-start { align-self: center; justify-self: center; display: grid; justify-items: center; gap: 8px; text-align: center; max-width: 400px; }
+.ac-start > .ac-btn { margin-top: 8px; }
 .ac-error { color: var(--ac-danger); }
 </style>

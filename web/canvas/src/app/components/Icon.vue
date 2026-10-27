@@ -35,6 +35,9 @@ export const PATHS = {
   reopen: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   reload: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
 } as const;
 </script>
 

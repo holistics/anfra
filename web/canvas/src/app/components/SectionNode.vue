@@ -41,26 +41,26 @@ function done (e: Event) {
 <style>
 .ac-section-node {
   position: absolute;
-  border-radius: calc(14px * var(--ac-inv));
+  border-radius: calc(20px * var(--ac-inv));
   background: color-mix(in oklch, var(--ac-surface) 55%, transparent);
-  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-border-strong);
+  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-line-weak);
 }
 .ac-section-node.selected { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
+.is-playing .ac-section-node { opacity: 0.6; }
 .ac-section-title {
   position: absolute;
-  left: calc(16px * var(--ac-inv));
-  top: calc(16px * var(--ac-inv));
+  left: 0;
+  bottom: 100%;
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background: var(--ac-surface);
-  box-shadow: 0 0 0 1px var(--ac-border);
+  height: 32px;
+  padding: 0 4px 8px;
+  color: var(--ac-ink-weak);
   font-weight: 600;
   white-space: nowrap;
   transform: scale(var(--ac-inv));
-  transform-origin: 0 0;
+  transform-origin: 0 100%;
+  cursor: grab;
 }
 .ac-section-node.selected .ac-section-title { color: var(--ac-violet-text); }
 </style>

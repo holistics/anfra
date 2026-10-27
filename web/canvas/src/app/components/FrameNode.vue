@@ -13,9 +13,10 @@ const store = useStore();
 const { state, board } = store;
 
 const selected = computed(() => state.selection.includes(props.frame.id));
+const current = computed(() => state.flow?.path.at(-1) === props.frame.id);
 const reloads = ref(0);
 const key = computed(() => `${props.frame.route}|${props.frame.scenario ?? ''}|${reloads.value}`);
-const current = computed(() => state.routes[props.frame.id]);
+const now = computed(() => state.routes[props.frame.id]);
 
 const box = (r: { x: number, y: number, width: number, height: number }) => ({
   left: `${r.x}px`, top: `${r.y}px`, width: `${r.width}px`, height: `${r.height}px`,
@@ -59,14 +60,14 @@ function done (e: Event) {
 <template>
   <div
     class="ac-frame"
-    :class="{ selected }"
+    :class="{ selected, current }"
     :style="{ left: `${frame.x}px`, top: `${frame.y}px`, width: `${frame.width}px`, height: `${frame.height}px` }"
   >
     <div class="ac-frame-label" :style="{ width: `calc(${frame.width}px / var(--ac-inv))` }" data-hit="move" :data-id="frame.id" @dblclick="rename">
       <input v-if="editing" ref="input" class="ac-frame-rename" :value="frame.name" data-ui @keydown.enter="done" @keydown.esc="editing = false" @blur="done" />
       <span v-else class="ac-frame-name">{{ frame.name }}</span>
-      <span class="ac-chip" :class="{ violet: frame.scenario && frame.scenario !== 'live' }">{{ frame.scenario ?? 'default' }}</span>
-      <span v-if="current && current !== frame.route" class="ac-frame-route ac-mono">{{ current }}</span>
+      <span class="ac-chip" :class="{ live: frame.scenario === 'live' }" :title="state.settings.scenarios[frame.scenario ?? 'default']?.description">{{ state.settings.scenarios[frame.scenario ?? 'default']?.label ?? frame.scenario ?? 'default' }}</span>
+      <span v-if="now && now !== frame.route" class="ac-frame-route ac-mono" :title="`Now at ${now}`">{{ now }}</span>
       <span class="ac-spacer" />
       <button class="ac-frame-reload" type="button" title="Reload" aria-label="Reload the frame" data-ui @click="reloads++">
         <Icon name="reload" :size="12" />
@@ -105,9 +106,12 @@ function done (e: Event) {
 .ac-frame {
   position: absolute;
   background: var(--ac-surface);
-  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-border-strong);
+  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-line), 0 calc(1px * var(--ac-inv)) calc(3px * var(--ac-inv)) rgb(24 20 31 / 0.06);
+  transition: opacity 220ms var(--ac-ease);
 }
-.ac-frame.selected { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
+.ac-frame.selected, .ac-frame.current { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
+.is-playing .ac-frame:not(.current) { opacity: 0.4; }
+.is-playing .ac-frame:not(.current) iframe { pointer-events: none; }
 .ac-frame-label {
   position: absolute;
   left: 0;
@@ -115,8 +119,8 @@ function done (e: Event) {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 2px 4px;
+  height: 32px;
+  padding: 0 0 8px;
   transform: scale(var(--ac-inv));
   transform-origin: 0 100%;
   color: var(--ac-ink-weak);
@@ -124,22 +128,28 @@ function done (e: Event) {
   line-height: 16px;
   cursor: grab;
 }
-.ac-frame.selected .ac-frame-label { color: var(--ac-violet-text); }
-.ac-frame-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-frame.selected .ac-frame-label, .ac-frame.current .ac-frame-label { color: var(--ac-violet-text); }
+.ac-frame-name { flex: 0 1 auto; min-width: 48px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-frame-label .ac-chip { display: block; flex: 0 100 auto; min-width: 0; height: 18px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.ac-frame-label .ac-chip.live::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--ac-success-icon); }
 .ac-frame-route { color: var(--ac-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ac-frame-rename { height: 22px; padding: 0 4px; border: 1px solid var(--ac-violet); border-radius: 6px; background: var(--ac-surface); font-size: 12px; }
+.ac-frame-rename { height: 24px; padding: 0 6px; border: 1px solid var(--ac-violet-line); border-radius: 6px; background: var(--ac-surface); font-size: 12px; outline: none; }
 .ac-frame-reload {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--ac-ink-muted);
+  color: var(--ac-icon-weak);
   cursor: pointer;
+  transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
 }
-.ac-frame-reload:hover { background: var(--ac-hover); color: var(--ac-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .ac-frame-reload:hover { background: var(--ac-hover); color: var(--ac-ink); }
+}
 .ac-frame-screen { display: block; width: 100%; height: 100%; border: 0; background: var(--ac-surface); }
 .ac-frame-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .ac-outline { position: absolute; pointer-events: none; }
@@ -163,7 +173,7 @@ function done (e: Event) {
   transform-origin: 30% 70%;
   pointer-events: auto;
   cursor: pointer;
-  box-shadow: var(--ac-shadow);
+  box-shadow: var(--ac-e2);
 }
 .ac-pin.resolved { background: var(--ac-ink-muted); }
 .ac-pin.active { outline: 2px solid var(--ac-violet); outline-offset: 2px; }
@@ -175,7 +185,7 @@ function done (e: Event) {
   height: 12px;
   transform: translate(50%, 50%) scale(var(--ac-inv));
   border: 2px solid var(--ac-violet);
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--ac-surface);
   cursor: nwse-resize;
 }

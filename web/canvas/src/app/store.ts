@@ -36,6 +36,13 @@ const MODES: Record<Tool, FrameMode> = {
   hand: 'idle', frame: 'idle', section: 'idle', note: 'idle', arrow: 'idle',
 };
 
+export interface Flow {
+  path: string[];
+  via: string[];
+  /** The next arrow the pointer is on, shown running before it is taken. */
+  hover: string;
+}
+
 export interface Picked {
   frame: string;
   info: ElementInfo;
@@ -83,6 +90,8 @@ export function createStore (settings: Settings) {
     focus: '',
     viewport: { width: 0, height: 0 },
     history: { past: 0, future: 0 },
+    /** Playing the board as a prototype: the frames walked, the arrows taken, the choice hovered. */
+    flow: null as Flow | null,
   });
 
   // The board is kept as an immutable value: each change is a new board, so undo is a list.
@@ -276,6 +285,10 @@ export function createStore (settings: Settings) {
   const syncModes = () => {
     for (const [id, agent] of agents) agent.setMode(modeFor(id));
   };
+  // Choosing another tool ends a flow being played.
+  watch(() => state.tool, (tool) => {
+    if (tool !== 'play' && state.flow) state.flow = null;
+  });
   watch(() => [state.tool, state.panning, state.placing], () => {
     syncModes();
     state.hover = null;
@@ -382,19 +395,101 @@ export function createStore (settings: Settings) {
   const toWorld = (p: { x: number, y: number }) => ({ x: (p.x - state.view.x) / state.view.zoom, y: (p.y - state.view.y) / state.view.zoom });
 
   /** Show a rectangle of the world, as large as fits. */
-  function zoomTo (rect: Rect | undefined, max = 1) {
+  // --- The camera --------------------------------------------------------------------------------
+
+  let glide = 0;
+  const still = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+  /**
+   * Fit a rectangle in the viewport. `smooth` glides there: the zoom changes geometrically and the
+   * point in the middle moves straight, so the camera reads as one move, not a pan and a zoom.
+   */
+  function zoomTo (rect: Rect | undefined, max = 1, smooth = false, below = 0) {
     if (!rect || !state.viewport.width) return;
-    const pad = 80;
-    const zoom = Math.min(max, (state.viewport.width - pad * 2) / rect.width, (state.viewport.height - pad * 2) / rect.height);
-    state.view.zoom = Math.max(0.05, zoom);
-    state.view.x = (state.viewport.width - rect.width * state.view.zoom) / 2 - rect.x * state.view.zoom;
-    state.view.y = (state.viewport.height - rect.height * state.view.zoom) / 2 - rect.y * state.view.zoom;
+    const W = state.viewport.width;
+    const H = state.viewport.height - below; // what lies under a bar at the bottom is not in view
+    const pad = 64;
+    const zoom = Math.max(0.05, Math.min(max, (W - pad * 2) / rect.width, (H - pad * 2) / rect.height));
+    const to = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    cancelAnimationFrame(glide);
+    const put = (c: { x: number, y: number }, z: number) => {
+      state.view.zoom = z;
+      state.view.x = W / 2 - c.x * z;
+      state.view.y = H / 2 - c.y * z;
+    };
+    if (!smooth || still()) return put(to, zoom);
+    const z0 = state.view.zoom;
+    const from = { x: (W / 2 - state.view.x) / z0, y: (H / 2 - state.view.y) / z0 };
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / 380);
+      const e = easeInOut(t);
+      put({ x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e }, z0 * (zoom / z0) ** e);
+      if (t < 1) glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
+  }
+
+  // --- Playing a flow ------------------------------------------------------------------------------
+
+  /** A frame with its label, which the camera keeps in view. */
+  const framed = (id: string): Rect | undefined => {
+    const f = board.value?.frames.find((x) => x.id === id);
+    return f && { x: f.x, y: f.y - 40 / state.view.zoom, width: f.width, height: f.height + 40 / state.view.zoom };
+  };
+  /** The flow bar's height, kept clear under the frame being played. */
+  const BAR = 136;
+
+  /** Where a flow starts when nothing is chosen: a frame arrows leave and none arrive at, top left first. */
+  function startFrame (): string | undefined {
+    const b = board.value;
+    if (!b?.frames.length) return undefined;
+    const chosen = state.selection.find((id) => b.frames.some((f) => f.id === id));
+    if (chosen) return chosen;
+    const into = new Set(b.arrows.map((a) => a.to));
+    const out = new Set(b.arrows.map((a) => a.from));
+    const order = [...b.frames].sort((p, q) => p.y - q.y || p.x - q.x);
+    return (order.find((f) => out.has(f.id) && !into.has(f.id)) ?? order[0]).id;
+  }
+
+  function play (from = startFrame()) {
+    if (!from) return;
+    state.flow = { path: [from], via: [], hover: '' };
+    state.selection = [];
+    state.picked = null;
+    state.composer = null;
+    state.tool = 'play';
+    zoomTo(framed(from), 1, true, BAR);
+  }
+
+  function playNext (arrowId: string) {
+    const f = state.flow;
+    const a = board.value?.arrows.find((x) => x.id === arrowId);
+    if (!f || !a || !board.value?.frames.some((x) => x.id === a.to)) return;
+    state.flow = { path: [...f.path, a.to], via: [...f.via, a.id], hover: '' };
+    zoomTo(framed(a.to), 1, true, BAR);
+  }
+
+  function playBack () {
+    const f = state.flow;
+    if (!f || f.path.length < 2) return;
+    state.flow = { path: f.path.slice(0, -1), via: f.via.slice(0, -1), hover: '' };
+    zoomTo(framed(f.path[f.path.length - 2]), 1, true, BAR);
+  }
+
+  function stopPlay () {
+    const at = state.flow?.path.at(-1);
+    state.flow = null;
+    state.tool = 'select';
+    if (at) state.selection = [at];
   }
 
   return {
     state, board, handlers,
     loadList, open, create, commit, preview, undo, redo, removeSelection, comment,
     locate, pickAt, editText, editClasses, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo,
+    play, playNext, playBack, stopPlay, startFrame,
     endDrag: () => {
       if (dragStart && board.value) commit(board.value);
       dragStart = null;

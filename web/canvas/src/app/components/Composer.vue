@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { elementMarkdown } from '../../model/index.ts';
 import { useStore } from '../context.ts';
+import Icon from './Icon.vue';
 
 const store = useStore();
 const { state, board } = store;
@@ -39,7 +40,7 @@ function copy () {
 </script>
 
 <template>
-  <form class="ac-composer ac-popover" :style="style" data-ui @submit.prevent="send" @pointerdown.stop>
+  <form class="ac-composer ac-popover ac-pop-in" :style="style" data-ui @submit.prevent="send" @pointerdown.stop>
     <p class="ac-caption ac-composer-what">{{ what }}</p>
     <textarea
       ref="area"
@@ -52,15 +53,16 @@ function copy () {
       @keydown.esc="state.composer = null"
     />
     <div class="ac-row">
-      <button v-if="c.anchor.type === 'element'" class="ac-btn ghost small" type="button" @click="copy">Copy as Markdown</button>
+      <button v-if="c.anchor.type === 'element'" class="ac-btn ghost icon" type="button" title="Copy as Markdown" aria-label="Copy the element and this comment as Markdown" @click="copy"><Icon name="copy" /></button>
       <span class="ac-spacer" />
-      <button class="ac-btn ghost small" type="button" @click="state.composer = null">Cancel</button>
-      <button class="ac-btn primary small" type="submit" :disabled="!c.body.trim()">Comment</button>
+      <button class="ac-btn ghost" type="button" @click="state.composer = null">Cancel</button>
+      <button class="ac-btn primary" type="submit" :disabled="!c.body.trim()">Comment</button>
     </div>
   </form>
 </template>
 
 <style>
-.ac-composer { position: absolute; width: 320px; padding: 12px; display: grid; gap: 8px; z-index: 5; }
+.ac-composer { position: absolute; width: 320px; padding: 12px; display: grid; gap: 8px; z-index: 5; transform-origin: top left; }
 .ac-composer-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-composer textarea.ac-field { min-height: 72px; }
 </style>

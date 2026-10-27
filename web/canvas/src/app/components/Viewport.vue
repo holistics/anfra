@@ -12,6 +12,7 @@ import FrameNode from './FrameNode.vue';
 import SectionNode from './SectionNode.vue';
 import NoteNode from './NoteNode.vue';
 import ArrowLayer from './ArrowLayer.vue';
+import FlowBar from './FlowBar.vue';
 import CanvasPins from './CanvasPins.vue';
 import Composer from './Composer.vue';
 import AddFrame from './AddFrame.vue';
@@ -287,7 +288,7 @@ defineExpose({ zoomAt });
   <div
     ref="el"
     class="ac-viewport"
-    :class="{ 'is-dragging': state.dragging, 'is-idle': state.tool !== 'select' && state.tool !== 'comment' && state.tool !== 'play' || state.panning }"
+    :class="{ 'is-playing': !!state.flow, 'is-dragging': state.dragging, 'is-idle': state.tool !== 'select' && state.tool !== 'comment' && state.tool !== 'play' || state.panning }"
     :style="{ cursor }"
     @pointerdown="onPointerDown"
     @wheel="onWheel"
@@ -296,9 +297,10 @@ defineExpose({ zoomAt });
   >
     <div v-if="board" class="ac-world" :style="{ transform, '--ac-inv': 1 / state.view.zoom }">
       <SectionNode v-for="s in board.sections" :key="s.id" :section="s" />
+      <ArrowLayer part="lines" :draft="draftArrow" />
       <FrameNode v-for="f in board.frames" :key="f.id" :frame="f" />
       <NoteNode v-for="n in board.notes" :key="n.id" :note="n" />
-      <ArrowLayer :draft="draftArrow" />
+      <ArrowLayer part="labels" />
       <CanvasPins />
       <div
         v-if="marquee"
@@ -309,14 +311,15 @@ defineExpose({ zoomAt });
     </div>
 
     <div v-if="board && !board.frames.length && !board.sections.length && !board.notes.length" class="ac-empty" data-ui>
-      <p class="ac-heading">An empty board</p>
-      <p class="ac-caption">Press F and click to put a screen of the app here, or ask Claude to lay one out over MCP.</p>
+      <p class="ac-title">An empty board</p>
+      <p class="ac-caption">Press F and click to put a screen of the app here, or ask Claude to lay out a flow</p>
     </div>
 
     <Composer v-if="state.composer" />
     <AddFrame v-if="adding" :at="adding.at" :screen="adding.screen" @add="addFrameAt" @cancel="adding = null" />
-    <Toolbar @zoom="(f) => zoomAt({ x: state.viewport.width / 2, y: state.viewport.height / 2 }, f)" />
-    <div v-if="state.toast" class="ac-toast" data-ui role="status">{{ state.toast }}</div>
+    <FlowBar v-if="state.flow" />
+    <Toolbar v-else @zoom="(f) => zoomAt({ x: state.viewport.width / 2, y: state.viewport.height / 2 }, f)" />
+    <div v-if="state.toast" :key="state.toast" class="ac-toast" data-ui role="status">{{ state.toast }}</div>
   </div>
 </template>
 
@@ -326,9 +329,9 @@ defineExpose({ zoomAt });
   /* clip, not hidden: a hidden box still scrolls when something in a frame takes focus */
   overflow: clip;
   background-color: var(--ac-sunken);
-  background-image: radial-gradient(circle, color-mix(in oklch, var(--ac-ink) 14%, transparent) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--ac-line) 1px, transparent 1.5px);
   background-size: 24px 24px;
-  border: 1px solid var(--ac-border);
+  box-shadow: 0 0 0 1px var(--ac-line-weak);
   border-radius: 14px;
   margin: 0 8px 8px;
   touch-action: none;
@@ -351,20 +354,22 @@ defineExpose({ zoomAt });
   max-width: 360px;
   text-align: center;
   display: grid;
-  gap: 4px;
+  gap: 8px;
 }
 .ac-toast {
   position: absolute;
   top: 12px;
   left: 50%;
-  transform: translateX(-50%);
-  max-width: min(560px, 90%);
-  padding: 8px 14px;
+  translate: -50% 0;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 6px 12px;
   border-radius: 10px;
-  background: var(--ac-ink);
-  color: var(--ac-surface);
+  background: var(--ac-inverted);
+  color: var(--ac-on-inverted);
   font-size: 12px;
   line-height: 16px;
-  box-shadow: var(--ac-shadow);
+  box-shadow: var(--ac-e2);
+  transform-origin: top;
+  animation: ac-pop-in 160ms var(--ac-ease);
 }
 </style>

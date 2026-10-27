@@ -49,11 +49,11 @@ watch(() => state.focus, (id) => {
 .ac-note {
   position: absolute;
   background: var(--ac-note);
-  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-note-border);
+  box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-note-line), 0 calc(1px * var(--ac-inv)) calc(3px * var(--ac-inv)) rgb(24 20 31 / 0.06);
   border-radius: calc(10px * var(--ac-inv));
 }
 .ac-note.selected { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
-.ac-note-body { height: 100%; padding: 16px; font-size: 18px; line-height: 26px; }
+.ac-note-body { height: 100%; padding: 16px 20px; font-size: 20px; line-height: 28px; color: var(--ac-ink); }
 .ac-note-text {
   width: 100%;
   height: 100%;
@@ -67,4 +67,5 @@ watch(() => state.focus, (id) => {
   outline: none;
 }
 .ac-note-text.empty { color: var(--ac-ink-muted); }
+.ac-note-text::placeholder { color: var(--ac-ink-muted); }
 </style>

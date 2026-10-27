@@ -180,6 +180,12 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
     e.preventDefault();
     emit({ type: 'wheel', deltaX: e.deltaX, deltaY: e.deltaY, zoom: e.ctrlKey || e.metaKey, x: e.clientX, y: e.clientY });
   };
+  // Using the app, it keeps its keys; only an Escape it didn't use goes to the canvas (to stop
+  // playing a flow). That one is heard after the app's own handlers, in the bubbling phase.
+  const onUnusedEscape = (e: KeyboardEvent) => {
+    if (mode === 'interact' && e.key === 'Escape' && !e.defaultPrevented) emit({ type: 'key', key: e.key, meta: false, shift: false });
+  };
+  win.addEventListener('keydown', onUnusedEscape);
   const onKey = (e: KeyboardEvent) => {
     if (mode === 'interact' || editing) return;
     const field = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));

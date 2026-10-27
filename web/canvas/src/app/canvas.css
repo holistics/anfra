@@ -1,142 +1,290 @@
 /*
- * The canvas's own look. It takes the host app's tokens where it has them (the shadcn aliases most
- * apps define), so the canvas sits in the app's design system, and falls back to anfra's paper and
- * ink where it doesn't.
+ * The canvas's own look. It takes the host app's semantic tokens where the app defines them
+ * (anfra's `--anfra-color-*`), so the canvas wears the app's design system and its dark theme, and
+ * falls back to anfra's light values where it doesn't. Its controls mirror the app's shadcn ones:
+ * one 32px height for every button, field and select, three type sizes (12, 14, 20), hairlines at
+ * 8, 12 and 24% ink, one violet for the one thing the reader follows.
  */
 .ac {
-  --ac-paper: var(--sidebar, oklch(0.955 0.007 88.6));
-  --ac-surface: var(--background, #fff);
-  --ac-raised: var(--popover, #fff);
-  --ac-sunken: var(--muted, oklch(0.973 0.005 95.1));
-  --ac-ink: var(--foreground, oklch(0.201 0.022 301.1));
-  --ac-ink-weak: var(--sidebar-foreground, oklch(0.392 0.021 304.3));
-  --ac-ink-muted: var(--muted-foreground, oklch(0.485 0.022 306.3));
-  --ac-border: var(--border, oklch(0.9 0.008 300));
-  --ac-border-strong: var(--input, oklch(0.8 0.01 300));
-  --ac-hover: var(--accent, oklch(0.201 0.022 301.1 / 0.05));
-  --ac-violet: var(--primary, oklch(0.565 0.194 300.3));
-  --ac-violet-text: var(--primary-text, oklch(0.484 0.181 298.1));
-  --ac-on-violet: var(--primary-foreground, #fff);
-  --ac-wash: var(--anfra-color-background-interactive-highlight-default, oklch(0.946 0.027 304.8));
+  /* Surfaces */
+  --ac-paper: var(--anfra-color-background-base-default, oklch(0.955 0.007 88.6));
+  --ac-surface: var(--anfra-color-background-default, oklch(1 0 0));
+  --ac-raised: var(--anfra-color-background-raised-default, oklch(1 0 0));
+  --ac-sunken: var(--anfra-color-background-secondary-default, oklch(0.973 0.005 95.1));
+  --ac-hover: var(--anfra-color-background-hover, oklch(0.201 0.022 301.1 / 0.05));
+  --ac-active: var(--anfra-color-background-active, oklch(0.201 0.022 301.1 / 0.09));
+  --ac-selected: var(--anfra-color-background-interactive-highlight-default, oklch(0.946 0.027 304.8));
+  --ac-inverted: var(--anfra-color-background-inverted-default, oklch(0.201 0.022 301.1));
+  --ac-on-inverted: var(--anfra-color-text-inverted-default, oklch(0.985 0.003 95));
+  --ac-disabled: var(--anfra-color-background-disabled, oklch(0.201 0.022 301.1 / 0.04));
+
+  /* Ink */
+  --ac-ink: var(--anfra-color-text-default, oklch(0.201 0.022 301.1));
+  --ac-ink-weak: var(--anfra-color-text-weak, oklch(0.392 0.021 304.3));
+  --ac-ink-muted: var(--anfra-color-text-placeholder, oklch(0.485 0.022 306.3));
+  --ac-ink-disabled: var(--anfra-color-text-disabled, oklch(0.723 0.017 306.3));
+  --ac-icon: var(--anfra-color-icon-default, oklch(0.392 0.021 304.3));
+  --ac-icon-weak: var(--anfra-color-icon-weak, oklch(0.485 0.022 306.3));
+
+  /* Lines: weak for dividers, default for surfaces, strong for outline buttons, field for inputs */
+  --ac-line-weak: var(--anfra-color-border-weak, oklch(0.201 0.022 301.1 / 0.08));
+  --ac-line: var(--anfra-color-border-default, oklch(0.201 0.022 301.1 / 0.12));
+  --ac-line-strong: var(--anfra-color-border-strong, oklch(0.201 0.022 301.1 / 0.24));
+  --ac-line-field: var(--anfra-color-border-field, oklch(0.201 0.022 301.1 / 0.48));
+  --ac-line-hover: var(--anfra-color-border-hover, oklch(0.485 0.022 306.3));
+
+  /* Violet: selection, focus, the primary action */
+  --ac-violet: var(--anfra-color-background-highlight-default, oklch(0.565 0.194 300.3));
+  --ac-violet-hover: var(--anfra-color-background-highlight-hover, oklch(0.517 0.192 299.1));
+  --ac-violet-text: var(--anfra-color-text-highlight-default, oklch(0.484 0.181 298.1));
+  --ac-violet-icon: var(--anfra-color-icon-highlight-default, oklch(0.565 0.194 300.3));
+  --ac-violet-line: var(--anfra-color-border-highlight-strong, oklch(0.565 0.194 300.3));
+  --ac-on-violet: var(--anfra-color-text-on-fill, oklch(1 0 0));
+
+  /* Status, always with a label or an icon */
   --ac-note: var(--anfra-color-background-warning-secondary-default, oklch(0.973 0.028 84.6));
-  --ac-note-border: var(--anfra-color-border-warning-default, oklch(0.85 0.08 84));
+  --ac-note-line: var(--anfra-color-border-warning-default, oklch(0.9 0.07 84));
   --ac-success: var(--anfra-color-text-success-default, oklch(0.479 0.1 151.8));
+  --ac-success-icon: var(--anfra-color-icon-success-default, oklch(0.63 0.15 152));
   --ac-danger: var(--anfra-color-text-danger-default, oklch(0.501 0.17 27.2));
-  --ac-shadow: var(--shadow-e2, 0 8px 24px oklch(0.2 0.02 300 / 0.12), 0 1px 2px oklch(0.2 0.02 300 / 0.08));
+
+  /* Depth: e1 resting, e2 floating. Nothing else */
+  --ac-e1: var(--shadow-e1, 0 1px 0 rgb(24 20 31 / 0.04), 0 1px 2px rgb(24 20 31 / 0.06));
+  --ac-e2: var(--shadow-e2, 0 1px 0 rgb(24 20 31 / 0.03), 0 18px 40px -18px rgb(24 20 31 / 0.28), 0 2px 6px -2px rgb(24 20 31 / 0.08));
+
+  /* Motion: press 90ms, hover 160ms, panels 220ms */
   --ac-ease: var(--ease-anfra-out, cubic-bezier(0.22, 1, 0.36, 1));
+  --ac-ease-in-out: var(--ease-anfra-in-out, cubic-bezier(0.65, 0, 0.35, 1));
+
   --ac-control: 32px;
+  --ac-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 280px 1fr 300px;
-  grid-template-rows: 48px 1fr;
+  grid-template-columns: 288px minmax(0, 1fr) 296px;
+  grid-template-rows: 48px minmax(0, 1fr);
   background: var(--ac-paper);
   color: var(--ac-ink);
-  font-family: Inter, 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 20px;
   -webkit-font-smoothing: antialiased;
+  isolation: isolate;
 }
 
 .ac *, .ac *::before, .ac *::after { box-sizing: border-box; }
-.ac button, .ac input, .ac textarea, .ac select { font: inherit; color: inherit; }
-.ac :focus-visible { outline: 2px solid var(--ac-violet); outline-offset: 2px; }
+.ac button, .ac input, .ac textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+.ac p { margin: 0; }
+.ac :focus-visible { outline: 2px solid var(--ac-violet); outline-offset: 3px; }
 
-/* --- Controls ----------------------------------------------------------------------------------- */
+/* --- Type: three sizes ------------------------------------------------------------------------ */
+
+.ac-title { font-size: 20px; line-height: 28px; font-weight: 600; text-wrap: balance; }
+.ac-heading { font-weight: 600; }
+.ac-label { display: block; color: var(--ac-ink); font-weight: 500; }
+.ac-caption { color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; text-wrap: pretty; }
+.ac-mono { font-family: var(--ac-mono); font-size: 12px; line-height: 16px; }
+.ac-num { font-variant-numeric: tabular-nums; }
+.ac-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ac-stack { display: grid; gap: 8px; min-width: 0; }
+.ac-spacer { flex: 1; }
+.ac-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Buttons: the app's outline, ghost and violet, all 32px -------------------------------------- */
 
 .ac-btn {
+  position: relative;
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
   height: var(--ac-control);
-  padding: 0 10px;
-  border: 1px solid var(--ac-border-strong);
+  padding: 0 12px;
+  border: 1px solid var(--ac-line-strong);
   border-radius: 10px;
   background: var(--ac-surface);
+  color: var(--ac-ink);
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 160ms var(--ac-ease), transform 90ms var(--ac-ease);
+  user-select: none;
+  transition-property: background-color, border-color, color, scale;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ac-ease);
 }
-.ac-btn:hover { background: var(--ac-hover); }
-.ac-btn:active { transform: scale(0.97); }
-.ac-btn:disabled { opacity: 1; color: var(--ac-ink-muted); cursor: default; background: var(--ac-sunken); }
-.ac-btn.primary { background: var(--ac-violet); border-color: var(--ac-violet); color: var(--ac-on-violet); }
+.ac-btn > svg { flex-shrink: 0; color: var(--ac-icon); transition: color 160ms var(--ac-ease); }
+.ac-btn:has(> svg:first-child):not(.icon) { padding-left: 10px; }
+.ac-btn:active:not(:disabled) { scale: 0.97; transition-duration: 90ms; }
+.ac-btn:disabled {
+  border-color: var(--ac-line-weak);
+  background: var(--ac-disabled);
+  color: var(--ac-ink-disabled);
+  cursor: default;
+}
+.ac-btn:disabled > svg { color: var(--ac-ink-disabled); }
+.ac-btn.primary { border-color: transparent; background: var(--ac-violet); color: var(--ac-on-violet); }
+.ac-btn.primary > svg { color: var(--ac-on-violet); }
+.ac-btn.primary:disabled { background: var(--ac-disabled); color: var(--ac-ink-disabled); }
 .ac-btn.ghost { border-color: transparent; background: transparent; color: var(--ac-ink-weak); }
-.ac-btn.ghost:hover { background: var(--ac-hover); color: var(--ac-ink); }
+.ac-btn.ghost:disabled { background: transparent; }
 .ac-btn.icon { width: var(--ac-control); padding: 0; }
-.ac-btn.small { height: 28px; padding: 0 8px; border-radius: 8px; }
-.ac-btn.small.icon { width: 28px; padding: 0; }
-.ac-btn[aria-pressed='true'] { background: var(--ac-wash); color: var(--ac-violet-text); border-color: transparent; }
+.ac-btn.ghost[aria-expanded='true'], .ac-btn.ghost:active:not(:disabled) { background: var(--ac-active); color: var(--ac-ink); }
+/* A tool or option that is on: the violet wash of a selection, with a violet icon */
+.ac-btn.ghost[aria-pressed='true'] { background: var(--ac-selected); color: var(--ac-violet-text); }
+.ac-btn.ghost[aria-pressed='true'] > svg { color: var(--ac-violet-icon); }
+@media (hover: hover) and (pointer: fine) {
+  .ac-btn:hover:not(:disabled) { border-color: var(--ac-line-hover); }
+  .ac-btn.primary:hover:not(:disabled) { border-color: transparent; background: var(--ac-violet-hover); }
+  .ac-btn.ghost:hover:not(:disabled) { border-color: transparent; background: var(--ac-hover); color: var(--ac-ink); }
+  .ac-btn.ghost:hover:not(:disabled) > svg { color: var(--ac-ink); }
+  .ac-btn.ghost[aria-pressed='true']:hover { background: var(--ac-selected); color: var(--ac-violet-text); }
+  .ac-btn.ghost[aria-pressed='true']:hover > svg { color: var(--ac-violet-icon); }
+}
+
+/* Segmented: one of a few, side by side (the app's tabs list) */
+.ac-seg {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  height: var(--ac-control);
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--ac-active);
+}
+.ac-seg.fill { display: flex; }
+.ac-seg.fill > * { flex: 1; }
+.ac-seg > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ac-ink-weak);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
+}
+.ac-seg > button[aria-selected='true'], .ac-seg > button[aria-pressed='true'] {
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  box-shadow: var(--ac-e1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ac-seg > button:hover { color: var(--ac-ink); }
+}
+
+/* --- Fields ----------------------------------------------------------------------------------- */
 
 .ac-field {
+  display: block;
   width: 100%;
+  min-width: 0;
   height: var(--ac-control);
   padding: 0 10px;
-  border: 1px solid var(--ac-border-strong);
+  border: 1px solid var(--ac-line-field);
   border-radius: 10px;
   background: var(--ac-surface);
+  color: var(--ac-ink);
+  transition: border-color 160ms var(--ac-ease);
 }
-textarea.ac-field { height: auto; min-height: 64px; padding: 6px 10px; resize: vertical; }
-.ac-field:focus { outline: none; border-color: var(--ac-violet); box-shadow: inset 0 0 0 1px var(--ac-violet); }
-.ac-field.mono { font-family: 'Geist Mono', 'Geist Mono Variable', ui-monospace, monospace; font-size: 12px; }
+textarea.ac-field { height: auto; min-height: 80px; padding: 6px 10px; resize: vertical; }
+.ac-field::placeholder { color: var(--ac-ink-muted); }
+.ac-field:focus-visible { outline: none; border-color: var(--ac-violet-line); box-shadow: inset 0 0 0 1px var(--ac-violet-line); }
+.ac-field.mono { font-family: var(--ac-mono); font-size: 12px; }
+.ac-field[type='number'] { font-variant-numeric: tabular-nums; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-field:hover:not(:focus-visible) { border-color: var(--ac-line-hover); }
+}
+/* A field with a fixed prefix inside its frame (W, H) */
+.ac-affix { position: relative; display: block; min-width: 0; }
+.ac-affix > span {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--ac-ink-muted);
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}
+.ac-affix > .ac-field { padding-left: 28px; }
 
-.ac-label { display: block; margin-bottom: 4px; color: var(--ac-ink-weak); font-weight: 500; }
-.ac-caption { color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; }
-.ac-mono { font-family: 'Geist Mono', 'Geist Mono Variable', ui-monospace, monospace; font-size: 12px; line-height: 16px; }
-.ac-heading { font-weight: 600; }
-.ac-row { display: flex; align-items: center; gap: 8px; }
-.ac-stack { display: grid; gap: 8px; }
-.ac-spacer { flex: 1; }
+/* --- Chips, counters, keys -------------------------------------------------------------------- */
 
 .ac-chip {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 4px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ac-sunken);
+  border-radius: 6px;
+  background: var(--ac-active);
   color: var(--ac-ink-weak);
   font-size: 12px;
   line-height: 16px;
   font-weight: 500;
   white-space: nowrap;
 }
-.ac-chip.violet { background: var(--ac-wash); color: var(--ac-violet-text); }
-.ac-chip.success { color: var(--ac-success); }
-
-.ac-panel {
-  min-height: 0;
-  overflow: auto;
-  background: var(--ac-paper);
-}
-.ac-section { padding: 12px 16px; border-bottom: 1px solid var(--ac-border); }
-.ac-section:last-child { border-bottom: 0; }
-
-.ac-popover {
-  background: var(--ac-raised);
-  border: 1px solid var(--ac-border-strong);
-  border-radius: 14px;
-  box-shadow: var(--ac-shadow);
-}
-
-.ac-kbd {
+.ac-chip.violet { background: var(--ac-selected); color: var(--ac-violet-text); }
+.ac-count {
   display: inline-grid;
   place-items: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
-  border: 1px solid var(--ac-border);
-  border-radius: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ac-selected);
+  color: var(--ac-violet-text);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ac-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
   background: var(--ac-surface);
-  color: var(--ac-ink-muted);
-  font-size: 11px;
-  line-height: 1;
+  box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e1);
+  color: var(--ac-ink-weak);
+  font-family: var(--ac-mono);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* --- Panels ----------------------------------------------------------------------------------- */
+
+.ac-panel { min-height: 0; overflow: auto; overscroll-behavior: contain; background: var(--ac-paper); }
+.ac-section { display: grid; gap: 12px; padding: 16px; }
+.ac-section + .ac-section { border-top: 1px solid var(--ac-line-weak); }
+.ac-section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+
+/* Floating surfaces: popovers, menus, the toolbar */
+.ac-popover {
+  background: var(--ac-raised);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--ac-line), var(--ac-e2);
+}
+.ac-pop-in { animation: ac-pop-in 160ms var(--ac-ease); }
+@keyframes ac-pop-in {
+  from { opacity: 0; scale: 0.97; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ac *, .ac *::before, .ac *::after { transition-duration: 0ms !important; }
+  .ac *, .ac *::before, .ac *::after {
+    transition-property: opacity, background-color, border-color, color !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
