@@ -16,26 +16,46 @@ export interface ElementInfo {
   textOnly: boolean;
   classes: string;
   style: Record<string, string>;
+  /** It holds elements, or is an empty box: something dropped on its middle goes inside it. */
+  container: boolean;
+}
+
+/** An element in a frame's layer tree: what is written in the app, components shown as one. */
+export interface LayerNode {
+  ref: ElementRef;
+  /** The component's name, or the tag. */
+  label: string;
+  /** Its own text, shortened. */
+  text?: string;
+  component: boolean;
+  children: LayerNode[];
 }
 
 export type FrameEvent =
   | { type: 'hover', info?: ElementInfo }
   | { type: 'pick', info: ElementInfo, shift: boolean, point: { x: number, y: number } }
   | { type: 'activate', info: ElementInfo }
+  | { type: 'menu', info: ElementInfo, point: { x: number, y: number } }
   | { type: 'layout' }
   | { type: 'route', route: string }
   | { type: 'wheel', deltaX: number, deltaY: number, zoom: boolean, x: number, y: number }
-  | { type: 'key', key: string, meta: boolean, shift: boolean };
+  | { type: 'key', key: string, meta: boolean, shift: boolean, alt?: boolean };
 
 export interface FrameAgent {
   setMode: (mode: FrameMode) => void;
   /** Where an element is now, or undefined when the screen no longer shows it. */
   locate: (ref: ElementRef) => ElementInfo | undefined;
+  /** The element written around this one: what a person picks to select the parent. */
+  parent: (ref: ElementRef) => ElementInfo | undefined;
   /** The element a person would pick at a point of the frame's viewport. */
   pickAt: (x: number, y: number) => ElementInfo | undefined;
   /** Edit an element's text in place; answers the text before and after, or undefined if cancelled. */
   editText: (ref: ElementRef) => Promise<{ from: string, to: string } | undefined>;
   route: () => string;
+  /** The elements written in the app that the screen shows, nested as they are drawn. */
+  tree: () => LayerNode[];
+  /** A still of the screen as an SVG image, shown when the frame is far from the view. */
+  snapshot: () => string;
 }
 
 export interface CanvasHost {

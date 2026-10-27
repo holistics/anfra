@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { bounds, duplicate, shapes } from '../model/index.ts';
 import { provideStore } from './context.ts';
 import { TOOLS, type Store } from './store.ts';
+import type { Edit } from '../vite/source.ts';
 import Viewport from './components/Viewport.vue';
+import CommandPalette from './components/CommandPalette.vue';
 import LeftPanel from './components/LeftPanel.vue';
 import Inspector from './components/Inspector.vue';
 import Icon from './components/Icon.vue';
@@ -46,8 +48,29 @@ function fitAll () {
 
 // --- Keyboard --------------------------------------------------------------------------------------
 
-function shortcut (key: string, meta: boolean, shift: boolean): boolean {
+function shortcut (key: string, meta: boolean, shift: boolean, alt = false): boolean {
   const k = key.toLowerCase();
+  if (meta && k === 'k') {
+    state.palette = state.palette ? '' : 'all';
+    return true;
+  }
+  // A picked element: its own keys, written to its file.
+  const p = state.picked;
+  if (p && !state.flow && !state.composer) {
+    const name = p.info.ref.component ?? p.info.ref.tag;
+    const edit: Edit | undefined = !meta && (k === 'backspace' || k === 'delete') ? { kind: 'remove' }
+      : meta && k === 'd' ? { kind: 'duplicate' }
+        : alt && (k === 'arrowup' || k === 'arrowdown') ? { kind: 'move', by: k === 'arrowup' ? -1 : 1 }
+          : undefined;
+    if (shift && k === 'enter') {
+      store.pickParent();
+      return true;
+    }
+    if (edit) {
+      void store.edit(p.frame, p.info.ref, edit, edit.kind === 'remove' ? `${name} removed` : edit.kind === 'duplicate' ? 'Duplicated' : '');
+      return true;
+    }
+  }
   if (state.flow && !meta) {
     // Playing: Esc stops, ← goes back, a number takes that way on.
     if (k === 'escape') store.stopPlay();
@@ -57,6 +80,10 @@ function shortcut (key: string, meta: boolean, shift: boolean): boolean {
       const way = ways[Number(k) - 1];
       if (way) store.playNext(way.id);
     } else return false;
+    return true;
+  }
+  if (meta && alt && (k === 't' || k === '†')) {
+    store.tidyUp();
     return true;
   }
   if (meta && k === 'z') {
@@ -119,14 +146,14 @@ function onKeyDown (e: KeyboardEvent) {
     e.preventDefault();
     return;
   }
-  if (shortcut(e.key, e.metaKey || e.ctrlKey, e.shiftKey)) e.preventDefault();
+  if (shortcut(e.key, e.metaKey || e.ctrlKey, e.shiftKey, e.altKey)) e.preventDefault();
 }
 function onKeyUp (e: KeyboardEvent) {
   if (e.key === ' ') state.panning = false;
 }
 store.handlers.key = (e) => {
   if (e.key === ' ') return;
-  shortcut(e.key, e.meta, e.shift);
+  shortcut(e.key, e.meta, e.shift, e.alt);
 };
 
 async function openFromHash () {
@@ -174,6 +201,9 @@ onBeforeUnmount(() => {
         <button v-else class="ac-btn ghost icon" type="button" title="New board" aria-label="New board" @click="creating = true"><Icon name="plus" /></button>
       </div>
       <span class="ac-spacer" />
+      <button class="ac-btn ghost" type="button" title="Every command, screen and component (⌘K)" @click="state.palette = 'all'">
+        <Icon name="search" /> Commands <span class="ac-kbd">⌘K</span>
+      </button>
       <button
         v-if="board?.frames.length"
         class="ac-btn"
@@ -207,6 +237,7 @@ onBeforeUnmount(() => {
       <Viewport v-else ref="viewport" />
     </main>
     <Inspector />
+    <CommandPalette v-if="state.palette" />
   </div>
 </template>
 

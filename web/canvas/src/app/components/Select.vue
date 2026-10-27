@@ -12,6 +12,8 @@ export interface SelectOption {
   description?: string;
   /** Beside the label, quieter: a count, a key. */
   hint?: string;
+  /** A color shown before the label: a CSS color. */
+  swatch?: string;
 }
 
 const props = withDefaults(defineProps<{
@@ -153,6 +155,7 @@ onBeforeUnmount(() => {
     @click="open ? hide() : show()"
     @keydown="onTriggerKey"
   >
+    <span v-if="current?.swatch" class="ac-swatch" :style="{ background: current.swatch }" />
     <span class="ac-truncate" :class="{ placeholder: !current }">{{ current?.label ?? placeholder }}</span>
     <span v-if="current?.hint" class="ac-select-hint">{{ current.hint }}</span>
     <Icon name="chevron" :size="16" class="ac-select-chevron" />
@@ -192,6 +195,7 @@ onBeforeUnmount(() => {
       >
         <span class="ac-option-text">
           <span class="ac-option-label">
+            <span v-if="o.swatch" class="ac-swatch" :style="{ background: o.swatch }" />
             <span class="ac-truncate">{{ o.label }}</span>
             <span v-if="o.hint" class="ac-select-hint">{{ o.hint }}</span>
           </span>
@@ -231,6 +235,7 @@ onBeforeUnmount(() => {
   .ac-select.field:hover { border-color: var(--ac-line-hover); }
   .ac-select.ghost:hover { background: var(--ac-hover); }
 }
+.ac-swatch { flex-shrink: 0; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ac-line); }
 .ac-select-hint { flex-shrink: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; font-weight: 400; }
 
 .ac-select-list {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The canvas itself: the world of sections, frames, notes and arrows, panned and zoomed, and every
 // pointer gesture on it. Nodes mark where a gesture starts (`data-hit`); this decides what it does.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   addArrow, addNote, addSection, find, isShape, move, resize, shapes,
   type Frame, type Point, type Rect, type Shape,
@@ -16,6 +16,8 @@ import FlowBar from './FlowBar.vue';
 import CanvasPins from './CanvasPins.vue';
 import Composer from './Composer.vue';
 import AddFrame from './AddFrame.vue';
+import ContextMenu from './ContextMenu.vue';
+import { menuFor, type CommandGroup } from '../commands.ts';
 import Toolbar from './Toolbar.vue';
 
 const store = useStore();
@@ -209,41 +211,74 @@ store.handlers.wheel = (frameId, e) => {
   wheel(store.toScreen({ x: f.x + e.x, y: f.y + e.y }), e.deltaX, e.deltaY, e.zoom);
 };
 
-// A component dropped onto a frame: a comment on the element it landed on, for the agent to place.
+// --- The right-click menu ------------------------------------------------------------------------
+
+const menu = ref<{ at: Point, groups: CommandGroup[] } | null>(null);
+watch(() => [state.view.x, state.view.y, state.view.zoom], () => (menu.value = null));
+
+/** On the canvas: for the shape under the pointer (selected first), or for the empty canvas. */
+function onContextMenu (e: MouseEvent) {
+  e.preventDefault();
+  if (!board.value || state.flow) return;
+  const at = local(e);
+  const p = store.toWorld(at);
+  const hit = (e.target as HTMLElement).closest<HTMLElement>('[data-hit]')?.dataset.id ?? shapeAt(p)?.id;
+  state.picked = null;
+  state.composer = null;
+  adding.value = null;
+  if (hit) {
+    if (!state.selection.includes(hit)) state.selection = [hit];
+    menu.value = { at, groups: menuFor(store, 'selection') };
+  } else {
+    state.selection = [];
+    menu.value = { at, groups: menuFor(store, 'canvas', p) };
+  }
+}
+
+// On an element of a screen: the frame tells where, and the element is picked first.
+store.handlers.menu = (frameId, point) => {
+  const f = board.value && find(board.value, frameId);
+  if (f?.kind !== 'frame') return;
+  menu.value = { at: store.toScreen({ x: f.x + point.x, y: f.y + point.y }), groups: menuFor(store, 'element') };
+};
+
+store.handlers.addScreen = (at) => {
+  adding.value = { at, screen: store.toScreen(at) };
+};
+
+// An element picked with the comment tool: a comment on it, written where it is.
 store.handlers.pickedForComment = (frameId, info, point) => {
   const f = board.value && find(board.value, frameId);
   if (f?.kind !== 'frame') return;
   const at = store.toScreen({ x: f.x + point.x, y: f.y + point.y });
-  const body = state.placing ? `Add a \`<${componentName(state.placing)}>\` here` : '';
-  state.composer = { anchor: { type: 'element', ...info.ref }, at, body };
-  state.placing = '';
+  state.composer = { anchor: { type: 'element', ...info.ref }, at, body: '' };
 };
 
-const componentName = (dir: string) => dir.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+/** Where a palette item dragged to a world point would land: the element under it, and beside or in it. */
+function dropAt (p: Point) {
+  const f = board.value?.frames.find((s) => contains(s, p));
+  const info = f && store.pickAt(f.id, p.x - f.x, p.y - f.y);
+  return f && info ? { frame: f.id, info, where: store.whereIn(info, p.y - f.y) } : null;
+}
 
 function onDragOver (e: DragEvent) {
   if (!e.dataTransfer?.types.includes('application/x-anfra-component')) return;
   e.preventDefault();
-  const p = world(e);
-  const f = board.value?.frames.find((s) => contains(s, p));
-  state.hover = f ? (() => {
-    const info = store.pickAt(f.id, p.x - f.x, p.y - f.y);
-    return info ? { frame: f.id, info } : null;
-  })() : null;
+  e.dataTransfer.dropEffect = 'copy';
+  state.drop = dropAt(world(e));
 }
 
 function onDrop (e: DragEvent) {
-  const name = e.dataTransfer?.getData('application/x-anfra-component');
+  const id = e.dataTransfer?.getData('application/x-anfra-component');
   state.dragging = false;
-  if (!name || !board.value) return;
+  const target = state.drop ?? (id ? dropAt(world(e)) : null);
+  state.drop = null;
+  if (!id || !board.value) return;
   e.preventDefault();
-  const p = world(e);
-  const f = board.value.frames.find((s) => contains(s, p));
-  const info = f && store.pickAt(f.id, p.x - f.x, p.y - f.y);
-  state.hover = null;
-  if (!f || !info) return store.flash('Drop a component onto an element of a frame');
-  state.placing = name;
-  store.handlers.pickedForComment(f.id, info, { x: p.x - f.x, y: p.y - f.y });
+  const item = state.settings.palette.find((i) => i.id === id);
+  if (!item) return;
+  if (!target) return store.flash('Drop it onto a screen, on the element it goes beside or in');
+  void store.insert(target.frame, target.info, target.where, item);
 }
 
 function addFrameAt (frame: Frame) {
@@ -267,6 +302,17 @@ onMounted(() => {
 onBeforeUnmount(() => observer?.disconnect());
 
 const transform = computed(() => `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.zoom})`);
+
+// While the view moves, the world is one layer, moved and scaled as it was drawn, and drawn sharp
+// again once it stops: a pan or a wheel turn doesn't redraw every screen at each step.
+const moving = ref(false);
+let settle: ReturnType<typeof setTimeout> | undefined;
+watch(() => [state.view.x, state.view.y, state.view.zoom], () => {
+  moving.value = true;
+  clearTimeout(settle);
+  settle = setTimeout(() => (moving.value = false), 180);
+});
+onBeforeUnmount(() => clearTimeout(settle));
 const marquee = computed(() => (drag.value?.kind === 'marquee' || drag.value?.kind === 'section') ? between(drag.value.start, drag.value.at) : null);
 const draftArrow = computed(() => {
   const d = drag.value;
@@ -288,12 +334,14 @@ defineExpose({ zoomAt });
   <div
     ref="el"
     class="ac-viewport"
-    :class="{ 'is-playing': !!state.flow, 'is-dragging': state.dragging, 'is-idle': state.tool !== 'select' && state.tool !== 'comment' && state.tool !== 'play' || state.panning }"
+    :class="{ 'is-playing': !!state.flow, 'is-dragging': state.dragging, 'is-moving': moving, 'is-idle': state.tool !== 'select' && state.tool !== 'comment' && state.tool !== 'play' || state.panning }"
     :style="{ cursor }"
     @pointerdown="onPointerDown"
     @wheel="onWheel"
     @dragover="onDragOver"
+    @dragleave="(e) => !el?.contains(e.relatedTarget as Node) && (state.drop = null)"
     @drop="onDrop"
+    @contextmenu="onContextMenu"
   >
     <div v-if="board" class="ac-world" :style="{ transform, '--ac-inv': 1 / state.view.zoom }">
       <SectionNode v-for="s in board.sections" :key="s.id" :section="s" />
@@ -316,6 +364,7 @@ defineExpose({ zoomAt });
     </div>
 
     <Composer v-if="state.composer" />
+    <ContextMenu v-if="menu" :groups="menu.groups" :at="menu.at" @close="menu = null" />
     <AddFrame v-if="adding" :at="adding.at" :screen="adding.screen" @add="addFrameAt" @cancel="adding = null" />
     <FlowBar v-if="state.flow" />
     <Toolbar v-else @zoom="(f) => zoomAt({ x: state.viewport.width / 2, y: state.viewport.height / 2 }, f)" />
@@ -338,7 +387,8 @@ defineExpose({ zoomAt });
   user-select: none;
 }
 .ac-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.ac-viewport.is-dragging iframe, .ac-viewport.is-idle iframe { pointer-events: none; }
+.ac-viewport.is-dragging iframe, .ac-viewport.is-idle iframe, .ac-viewport.is-moving iframe { pointer-events: none; }
+.ac-viewport.is-moving .ac-world { will-change: transform; }
 .ac-marquee {
   position: absolute;
   border: calc(1px * var(--ac-inv)) solid var(--ac-violet);

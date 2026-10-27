@@ -3,11 +3,15 @@
 // it answers the app's API calls from the frame's scenario, and gives the canvas an agent that
 // picks, locates and edits elements.
 import type { ElementRef } from '../model/board.ts';
+import { snapshot } from './snapshot.ts';
 import { answer, opOf, scenarioOps, type Scenarios } from '../model/scenario.ts';
 import {
   COMPONENT_ATTR, SOURCE_ATTR, parseFrameName,
-  type CanvasHost, type ElementInfo, type FrameAgent, type FrameEvent, type FrameMode,
+  type CanvasHost, type ElementInfo, type FrameAgent, type FrameEvent, type FrameMode, type LayerNode,
 } from './protocol.ts';
+
+/** Elements that can't hold others, and ones that hold text, not boxes: a drop goes beside them. */
+const LEAF = /^(INPUT|IMG|BR|HR|TEXTAREA|SELECT|SVG|PATH|BUTTON|A|LABEL|SPAN|P|H[1-6]|CODE|STRONG|EM|SMALL)$/i;
 
 export interface FrameOptions {
   scenarios: Scenarios;
@@ -98,22 +102,55 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
     return el && el !== doc.body && el !== doc.documentElement ? el : undefined;
   };
 
-  const describe = (el: Element): ElementInfo => {
-    const r = el.getBoundingClientRect();
-    const source = el.getAttribute(SOURCE_ATTR) ?? undefined;
-    const same = source ? [...doc.querySelectorAll(`[${SOURCE_ATTR}="${quoted(source)}"]`)] : [];
+  /**
+   * Every place that draws this element, innermost first. One element can stand for several
+   * components: `<Button as-child><RouterLink>` draws one <a>, whose tag says RouterLink; the
+   * Button is found on the component instances whose root it is.
+   */
+  const placesOf = (el: Element): { source: string, component?: string }[] => {
+    const own = el.getAttribute(SOURCE_ATTR);
+    const out = own ? [{ source: own, component: el.getAttribute(COMPONENT_ATTR) ?? undefined }] : [];
+    let inst = (el as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent;
+    while (inst && inst.vnode?.el === el) {
+      const src = inst.vnode.props?.[SOURCE_ATTR];
+      const cmp = inst.vnode.props?.[COMPONENT_ATTR];
+      if (typeof src === 'string' && !out.some((p) => p.source === src) && !libraryDirs.some((d) => src.startsWith(d))) {
+        out.push({ source: src, component: typeof cmp === 'string' ? cmp : undefined });
+      }
+      inst = inst.parent ?? undefined;
+    }
+    return out;
+  };
+
+  /** The elements a place draws: tagged with it, or drawn by a component used there. */
+  const drawnBy = (source: string): Element[] => {
+    const tagged = [...doc.querySelectorAll(`[${SOURCE_ATTR}="${quoted(source)}"]`)];
+    if (tagged.length) return tagged;
+    return [...doc.querySelectorAll(`[${SOURCE_ATTR}]`)].filter((e) => placesOf(e).some((p) => p.source === source));
+  };
+
+  const refOf = (el: Element, place?: { source: string, component?: string }): ElementRef => {
+    const source = place?.source ?? el.getAttribute(SOURCE_ATTR) ?? undefined;
+    const component = place ? place.component : el.getAttribute(COMPONENT_ATTR) ?? undefined;
+    const same = source ? drawnBy(source) : [];
     const index = same.length > 1 ? same.indexOf(el) : undefined;
-    const cs = win.getComputedStyle(el);
     const text = (el as HTMLElement).innerText ?? el.textContent ?? '';
-    const ref: ElementRef = {
+    return {
       frame: id,
       tag: el.tagName.toLowerCase(),
       ...(source ? { source } : {}),
       ...(index !== undefined && index > 0 ? { index } : {}),
-      ...(el.getAttribute(COMPONENT_ATTR) ? { component: el.getAttribute(COMPONENT_ATTR)! } : {}),
+      ...(component ? { component } : {}),
       ...(text.trim() ? { text: text.trim().replace(/\s+/g, ' ').slice(0, 120) } : {}),
       selector: selectorOf(el),
     };
+  };
+
+  const describe = (el: Element, place?: { source: string, component?: string }): ElementInfo => {
+    const r = el.getBoundingClientRect();
+    const cs = win.getComputedStyle(el);
+    const text = (el as HTMLElement).innerText ?? el.textContent ?? '';
+    const ref = refOf(el, place);
     return {
       ref,
       rect: { x: r.x, y: r.y, width: r.width, height: r.height },
@@ -128,12 +165,33 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
         padding: cs.padding,
         radius: cs.borderRadius,
       },
+      container: !LEAF.test(el.tagName) && !ref.component && (el.children.length > 0 || !text.trim()),
     };
+  };
+
+  const tree = (): LayerNode[] => {
+    let budget = 3000;
+    const nodes = (parent: Element): LayerNode[] => [...parent.children].flatMap((c): LayerNode[] => {
+      if (budget-- <= 0 || /^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(c.tagName)) return [];
+      const children = nodes(c);
+      if (!c.hasAttribute(SOURCE_ATTR) || inLibrary(c)) return children;
+      const own = [...c.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent ?? '').join(' ').trim().replace(/\s+/g, ' ');
+      const component = c.getAttribute(COMPONENT_ATTR);
+      const text = own || (component && !children.length ? ((c as HTMLElement).innerText ?? '').trim().replace(/\s+/g, ' ') : '');
+      return [{
+        ref: refOf(c),
+        label: component ?? c.tagName.toLowerCase(),
+        ...(text ? { text: text.slice(0, 48) } : {}),
+        component: !!component,
+        children,
+      }];
+    });
+    return nodes(doc.body);
   };
 
   const resolve = (ref: ElementRef): Element | undefined => {
     if (ref.source) {
-      const all = doc.querySelectorAll(`[${SOURCE_ATTR}="${quoted(ref.source)}"]`);
+      const all = drawnBy(ref.source);
       const el = all[ref.index ?? 0] ?? all[0];
       if (el) return el;
     }
@@ -175,6 +233,13 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
     const el = pickable(e.target);
     if (el) emit({ type: 'activate', info: describe(el) });
   };
+  // A right click opens the canvas's menu for the element under it, not the browser's.
+  const onMenu = (e: MouseEvent) => {
+    if (!picking()) return;
+    swallow(e);
+    const el = pickable(e.target);
+    if (el) emit({ type: 'menu', info: describe(el), point: { x: e.clientX, y: e.clientY } });
+  };
   const onWheel = (e: WheelEvent) => {
     if (mode === 'interact') return;
     e.preventDefault();
@@ -191,7 +256,7 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
     const field = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
     if (field) return;
     e.preventDefault();
-    emit({ type: 'key', key: e.key, meta: e.metaKey || e.ctrlKey, shift: e.shiftKey });
+    emit({ type: 'key', key: e.key, meta: e.metaKey || e.ctrlKey, shift: e.shiftKey, alt: e.altKey });
   };
 
   win.addEventListener('pointermove', onMove, true);
@@ -199,6 +264,7 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
   for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'submit']) win.addEventListener(type, swallow, true);
   win.addEventListener('click', onClick, true);
   win.addEventListener('dblclick', onDouble, true);
+  win.addEventListener('contextmenu', onMenu, true);
   win.addEventListener('wheel', onWheel, { capture: true, passive: false });
   win.addEventListener('keydown', onKey, true);
 
@@ -243,6 +309,18 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
       const el = resolve(ref);
       return el ? describe(el) : undefined;
     },
+    parent (ref) {
+      const el = resolve(ref);
+      if (!el) return undefined;
+      // A component drawing the same element comes first (the Button around a RouterLink).
+      const places = placesOf(el);
+      const outer = places[places.findIndex((p) => p.source === ref.source) + 1];
+      if (outer) return describe(el, outer);
+      const own = new Set(places.map((p) => p.source));
+      let at = el.parentElement;
+      while (at && at !== doc.body && (inLibrary(at) || own.has(at.getAttribute(SOURCE_ATTR) ?? ''))) at = at.parentElement;
+      return at && at !== doc.body ? describe(at) : undefined;
+    },
     pickAt (x, y) {
       const el = pickable(doc.elementFromPoint(x, y));
       return el ? describe(el) : undefined;
@@ -284,12 +362,20 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
       });
     },
     route,
+    tree,
+    snapshot: () => snapshot(doc),
   };
 
   const attach = () => host()?.attach(id, agent);
   attach();
   win.addEventListener('pagehide', () => host()?.detach(id, agent));
   return agent;
+}
+
+/** What the agent reads of a Vue component instance: its vnode's props, its element, its parent. */
+interface VueInstance {
+  vnode?: { el?: unknown, props?: Record<string, unknown> | null };
+  parent?: VueInstance | null;
 }
 
 /** A value for a double-quoted attribute selector. */

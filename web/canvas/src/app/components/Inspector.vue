@@ -1,14 +1,16 @@
 <script setup lang="ts">
-// The properties of what is selected: a picked element (its source, text and classes, written back
-// to its file), or a frame, section, note or arrow (on the board).
-import { computed, ref, watch } from 'vue';
+// The properties of what is selected: a picked element (ElementPanel, written back to its file),
+// or a frame, section, note or arrow (on the board).
+import { computed } from 'vue';
 import {
-  FRAME_SIZES, addSection, arrange, bounds, duplicate, elementMarkdown, isShape, update,
+  FRAME_SIZES, arrange, bounds, isShape, update,
   type Arrow, type BoardObject, type Frame, type Note, type Section, type Shape,
 } from '../../model/index.ts';
+import { duplicateSelection, wrapSelection } from '../commands.ts';
 import { scenarioOptions, useStore } from '../context.ts';
 import Icon from './Icon.vue';
 import Select from './Select.vue';
+import ElementPanel from './ElementPanel.vue';
 
 const store = useStore();
 const { state, board } = store;
@@ -20,51 +22,6 @@ const selected = computed<BoardObject[]>(() => {
 const one = computed(() => (selected.value.length === 1 ? selected.value[0] : undefined));
 const picked = computed(() => state.picked);
 
-// --- The picked element's source -------------------------------------------------------------------
-
-const src = ref<{ tag: string, opening: string, classes?: string, text?: string } | undefined>();
-const classes = ref('');
-const text = ref('');
-watch(() => [picked.value?.info.ref.source, state.layout] as const, async ([loc]) => {
-  if (!loc) {
-    src.value = undefined;
-    return;
-  }
-  const s = await store.source(loc);
-  if (picked.value?.info.ref.source !== loc) return;
-  src.value = s;
-  if (document.activeElement?.closest('.ac-inspector') == null) {
-    classes.value = s?.classes ?? '';
-    text.value = s?.text ?? '';
-  }
-}, { immediate: true });
-
-/** A source location split for showing: the file and line first, its folder under it. */
-const where = (loc: string) => {
-  const i = loc.lastIndexOf('/');
-  return { file: loc.slice(i + 1), dir: i > 0 ? loc.slice(0, i) : '' };
-};
-const openInEditor = (loc: string) => fetch(`/__open-in-editor?file=${encodeURIComponent(loc)}`);
-
-async function saveText () {
-  const p = picked.value;
-  if (!p?.info.ref.source || !src.value?.text || text.value.trim() === src.value.text) return;
-  const r = await fetch('/__canvas/api/edit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ loc: p.info.ref.source, edit: { kind: 'text', from: src.value.text, to: text.value } }),
-  });
-  store.flash(r.ok ? 'Saved to the file' : ((await r.json()).message ?? 'Couldn\'t write it'));
-}
-
-function commentOnPicked () {
-  const p = picked.value;
-  if (!p || !board.value) return;
-  const f = board.value.frames.find((x) => x.id === p.frame);
-  if (!f) return;
-  state.composer = { anchor: { type: 'element', ...p.info.ref }, at: store.toScreen({ x: f.x + p.info.rect.x + p.info.rect.width, y: f.y + p.info.rect.y }), body: '' };
-}
-
 // --- Board objects ---------------------------------------------------------------------------------
 
 const set = <T extends BoardObject>(patch: Partial<T>) => {
@@ -75,20 +32,8 @@ const str = (e: Event) => (e.target as HTMLInputElement).value;
 const options = computed(() => scenarioOptions(store));
 const shapesSelected = computed(() => selected.value.filter(isShape) as Shape[]);
 
-function wrap () {
-  if (!board.value) return;
-  const box = bounds(shapesSelected.value)!;
-  const r = addSection(board.value, { name: 'Section', x: box.x - 80, y: box.y - 120, width: box.width + 160, height: box.height + 200 });
-  store.commit({ ...r.board, sections: [r.section, ...r.board.sections.filter((s) => s.id !== r.section.id)] });
-  state.selection = [r.section.id];
-}
-
-function copyShapes () {
-  if (!board.value) return;
-  const r = duplicate(board.value, state.selection);
-  store.commit(r.board);
-  state.selection = r.ids;
-}
+const wrap = () => wrapSelection(store);
+const copyShapes = () => duplicateSelection(store);
 
 const frameOf = (o: BoardObject | undefined) => (o?.kind === 'frame' ? (o as Frame) : undefined);
 const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas ${location.origin}${state.settings.mcp}`);
@@ -97,55 +42,7 @@ const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas 
 <template>
   <aside class="ac-panel ac-inspector" aria-label="Properties">
     <!-- A picked element -->
-    <template v-if="picked">
-      <div class="ac-section">
-        <div class="ac-section-head">
-          <Icon name="code" class="ac-inspector-icon" />
-          <span class="ac-heading ac-truncate">{{ picked.info.ref.component ? `<${picked.info.ref.component}>` : `<${picked.info.ref.tag}>` }}</span>
-          <span class="ac-spacer" />
-          <button class="ac-btn ghost icon" type="button" title="Deselect (Esc)" aria-label="Deselect the element" @click="state.picked = null"><Icon name="x" /></button>
-        </div>
-        <template v-if="picked.info.ref.source">
-          <button class="ac-source" type="button" :title="`Open ${picked.info.ref.source} in your editor`" @click="openInEditor(picked.info.ref.source)">
-            <span class="ac-source-file ac-mono ac-truncate">{{ where(picked.info.ref.source).file }}</span>
-            <Icon name="external" :size="14" />
-            <span class="ac-source-dir ac-caption ac-truncate"><bdi>{{ where(picked.info.ref.source).dir }}</bdi></span>
-          </button>
-          <pre v-if="src" class="ac-snippet ac-mono">{{ src.opening }}</pre>
-        </template>
-        <p v-else class="ac-caption">Drawn at run time, not written in a template: only a comment can change it</p>
-        <div class="ac-row">
-          <button class="ac-btn" type="button" @click="commentOnPicked"><Icon name="comment" /> Comment</button>
-          <button class="ac-btn" type="button" @click="board && store.copy(elementMarkdown(board, picked.info.ref), 'Element copied as Markdown')"><Icon name="copy" /> Markdown</button>
-        </div>
-      </div>
-      <div v-if="src?.text !== undefined" class="ac-section">
-        <div class="ac-stack">
-          <label class="ac-label" for="ac-text">Text</label>
-          <input id="ac-text" v-model="text" class="ac-field" @keydown.enter="saveText" @blur="saveText" />
-          <p class="ac-caption">Saved to the file. Or double-click the text on the screen</p>
-        </div>
-      </div>
-      <div v-if="picked.info.ref.source" class="ac-section">
-        <div class="ac-stack">
-          <label class="ac-label" for="ac-classes">Classes</label>
-          <textarea id="ac-classes" v-model="classes" class="ac-field mono" rows="3" @keydown.meta.enter="store.editClasses(picked.info.ref, classes)" />
-          <div class="ac-row">
-            <span class="ac-caption ac-spacer">Static classes, saved to the file</span>
-            <button class="ac-btn" type="button" :disabled="classes === (src?.classes ?? '')" @click="store.editClasses(picked.info.ref, classes)">Apply</button>
-          </div>
-        </div>
-      </div>
-      <div class="ac-section">
-        <p class="ac-heading">Computed</p>
-        <dl class="ac-props">
-          <template v-for="(v, k) in picked.info.style" :key="k">
-            <dt>{{ k }}</dt>
-            <dd class="ac-mono">{{ v }}</dd>
-          </template>
-        </dl>
-      </div>
-    </template>
+    <ElementPanel v-if="picked" :key="`${picked.frame}|${picked.info.ref.source ?? picked.info.ref.selector}|${picked.info.ref.index ?? 0}`" />
 
     <!-- A frame -->
     <template v-else-if="frameOf(one)">
@@ -240,6 +137,8 @@ const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas 
       <div class="ac-section">
         <p class="ac-heading">Shortcuts</p>
         <dl class="ac-keys">
+          <div><dt>Every command</dt><dd><kbd class="ac-kbd">⌘K</kbd></dd></div>
+          <div><dt>More on what you click</dt><dd><kbd class="ac-kbd">Right-click</kbd></dd></div>
           <div><dt>Select, pan, use the app</dt><dd><kbd class="ac-kbd">V</kbd><kbd class="ac-kbd">H</kbd><kbd class="ac-kbd">P</kbd></dd></div>
           <div><dt>Comment</dt><dd><kbd class="ac-kbd">C</kbd></dd></div>
           <div><dt>Frame, section, note, arrow</dt><dd><kbd class="ac-kbd">F</kbd><kbd class="ac-kbd">S</kbd><kbd class="ac-kbd">N</kbd><kbd class="ac-kbd">A</kbd></dd></div>
@@ -248,6 +147,7 @@ const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas 
           <div><dt>Fit, zoom to selection</dt><dd><kbd class="ac-kbd">⇧1</kbd><kbd class="ac-kbd">⇧2</kbd></dd></div>
           <div><dt>Edit text</dt><dd>Double-click</dd></div>
           <div><dt>Duplicate, delete</dt><dd><kbd class="ac-kbd">⌘D</kbd><kbd class="ac-kbd">⌫</kbd></dd></div>
+          <div><dt>Tidy up the flow</dt><dd><kbd class="ac-kbd">⌃⌥T</kbd></dd></div>
           <div><dt>Undo, redo</dt><dd><kbd class="ac-kbd">⌘Z</kbd><kbd class="ac-kbd">⇧⌘Z</kbd></dd></div>
           <div><dt>Playing: next, back, stop</dt><dd><kbd class="ac-kbd">1</kbd><kbd class="ac-kbd">←</kbd><kbd class="ac-kbd">Esc</kbd></dd></div>
         </dl>

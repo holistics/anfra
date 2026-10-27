@@ -1,21 +1,35 @@
 // The canvas's state: the open board and its history, what is selected, the view, and the frames'
 // agents. Every change to the board goes through `commit` (one undo step, saved) or `preview` (a
 // drag in progress: shown, not yet saved).
-import { reactive, shallowRef, watch } from 'vue';
+import { markRaw, nextTick, reactive, shallowRef, watch, type Component } from 'vue';
 import {
-  addComment, feedbackMarkdown, find, merge, parseBoard, remove,
+  FRAME_SIZES, addComment, bounds, feedbackMarkdown, find, merge, newId, nextSpot, parseBoard, remove, shapes, tidy,
   type Anchor, type Board, type BoardObject, type Comment, type ElementRef, type Rect, type Scenarios,
 } from '../model/index.ts';
-import type { CanvasHost, ElementInfo, FrameAgent, FrameEvent, FrameMode } from '../frame/protocol.ts';
+import type { CanvasHost, ElementInfo, FrameAgent, FrameEvent, FrameMode, LayerNode } from '../frame/protocol.ts';
 import type { BoardSummary } from '../vite/boards.ts';
+import type { ComponentSpec, PaletteItem, Tokens } from '../vite/catalog.ts';
+import type { Edit, SourceInfo, Where } from '../vite/source.ts';
 
 export interface Settings {
   scenarios: Scenarios;
   prototypes: string[];
-  components: string[];
+  catalog: ComponentSpec[];
+  palette: PaletteItem[];
+  tokens: Tokens;
   routes: string[];
   mcp: string;
   author: string;
+}
+
+/** One undo step: the board as it was, or a file the canvas edited, before and after. */
+type Step = { kind: 'board', board: Board } | { kind: 'source', file: string, before: string, after: string };
+
+/** Where a component being dragged would land. */
+export interface Drop {
+  frame: string;
+  info: ElementInfo;
+  where: Where;
 }
 
 export type Tool = 'select' | 'hand' | 'play' | 'comment' | 'frame' | 'section' | 'note' | 'arrow';
@@ -63,7 +77,7 @@ async function api<T> (path: string, init?: RequestInit): Promise<{ status: numb
   return { status: res.status, data };
 }
 
-export function createStore (settings: Settings) {
+export function createStore (settings: Settings, previews?: Component) {
   const state = reactive({
     settings,
     boards: [] as BoardSummary[],
@@ -78,13 +92,27 @@ export function createStore (settings: Settings) {
     picked: null as Picked | null,
     hover: null as Picked | null,
     composer: null as Composer | null,
-    /** A component being placed: the next pick says where. */
+    /** A palette item being placed: the next pick says where. */
     placing: '',
+    /** Where a dragged palette item would land, shown on the frame. */
+    drop: null as Drop | null,
+    /** The open layers: frames and elements, by key. */
+    layersOpen: {} as Record<string, boolean>,
     view: { x: 80, y: 80, zoom: 0.4 },
-    /** Bumped whenever a frame's screen changes, so outlines and pins are placed again. */
-    layout: 0,
+    /** Each frame's redraws, counted, so its outlines and pins are placed again: only its own. */
+    layouts: {} as Record<string, number>,
+    /** Bumped when a source file changes, so the inspector reads the picked element again. */
+    sources: 0,
     routes: {} as Record<string, string>,
     attached: {} as Record<string, boolean>,
+    /** The command palette, when open: everything, or the components to insert. */
+    palette: '' as '' | 'all' | 'components',
+    /** A frame or section whose name is being edited on the canvas. */
+    renaming: '',
+    /** Each frame's reloads, counted: a new count loads its screen again. */
+    reloads: {} as Record<string, number>,
+    /** The frames whose app is running: near the view, or not let go yet. */
+    alive: {} as Record<string, boolean>,
     saving: 'saved' as 'saved' | 'saving' | 'error',
     toast: '',
     focus: '',
@@ -97,10 +125,12 @@ export function createStore (settings: Settings) {
   // The board is kept as an immutable value: each change is a new board, so undo is a list.
   const board = shallowRef<Board | null>(null);
   let base: Board | null = null; // the last board the server confirmed
-  const past: Board[] = [];
-  const future: Board[] = [];
+  const past: Step[] = [];
+  const future: Step[] = [];
   let dragStart: Board | null = null;
   const agents = new Map<string, FrameAgent>();
+  /** Each frame's redraws, counted: an edit waits for the screen to redraw before picking in it. */
+  const redraws = new Map<string, number>();
 
   // --- Loading and saving -------------------------------------------------------------------------
 
@@ -204,6 +234,7 @@ export function createStore (settings: Settings) {
 
   if (import.meta.hot) {
     import.meta.hot.on('anfra-canvas:board', ({ slug, board: b }: { slug: string, board: Board }) => received(slug, parseBoard(b)));
+    import.meta.hot.on('anfra-canvas:source', () => state.sources++);
   }
 
   // --- Changing the board -------------------------------------------------------------------------
@@ -217,7 +248,7 @@ export function createStore (settings: Settings) {
     const prev = dragStart ?? board.value;
     dragStart = null;
     if (!prev || next === prev) return;
-    past.push(prev);
+    past.push({ kind: 'board', board: prev });
     if (past.length > 100) past.shift();
     future.length = 0;
     board.value = next;
@@ -230,22 +261,38 @@ export function createStore (settings: Settings) {
     board.value = next;
   }
 
-  function undo () {
-    const prev = past.pop();
-    if (!prev || !board.value) return;
-    future.push(board.value);
-    board.value = prev;
+  async function undo () {
+    const step = past.pop();
+    if (!step || !board.value) return;
+    if (step.kind === 'board') {
+      future.push({ kind: 'board', board: board.value });
+      board.value = step.board;
+      scheduleSave();
+    } else if (await restore(step.file, step.before, step.after)) {
+      future.push(step);
+    }
     synced();
-    scheduleSave();
   }
 
-  function redo () {
-    const next = future.pop();
-    if (!next || !board.value) return;
-    past.push(board.value);
-    board.value = next;
+  async function redo () {
+    const step = future.pop();
+    if (!step || !board.value) return;
+    if (step.kind === 'board') {
+      past.push({ kind: 'board', board: board.value });
+      board.value = step.board;
+      scheduleSave();
+    } else if (await restore(step.file, step.after, step.before)) {
+      past.push(step);
+    }
     synced();
-    scheduleSave();
+  }
+
+  /** A file the canvas edited, put back as it was; refused when it changed since. */
+  async function restore (file: string, content: string, expect: string): Promise<boolean> {
+    const { status, data } = await api<{ message?: string }>('/restore', { method: 'POST', body: JSON.stringify({ file, content, expect }) });
+    if (status !== 200) flash(data.message ?? 'Couldn\'t undo it');
+    state.picked = null;
+    return status === 200;
   }
 
   function removeSelection () {
@@ -264,13 +311,17 @@ export function createStore (settings: Settings) {
 
   // --- Frames -------------------------------------------------------------------------------------
 
+  const redrawn = (frame: string) => {
+    state.layouts[frame] = (state.layouts[frame] ?? 0) + 1;
+  };
+
   const host: CanvasHost = {
     attach (frame, agent) {
       agents.set(frame, agent);
       state.attached[frame] = true;
       state.routes[frame] = agent.route();
       agent.setMode(modeFor(frame));
-      state.layout++;
+      redrawn(frame);
     },
     detach (frame, agent) {
       if (agents.get(frame) !== agent) return;
@@ -282,6 +333,9 @@ export function createStore (settings: Settings) {
   window.__anfraCanvasHost = host;
 
   const modeFor = (_frame: string): FrameMode => (state.panning ? 'idle' : state.placing ? 'comment' : MODES[state.tool]);
+  watch(() => state.tool, () => {
+    state.placing = '';
+  });
   const syncModes = () => {
     for (const [id, agent] of agents) agent.setMode(modeFor(id));
   };
@@ -299,6 +353,14 @@ export function createStore (settings: Settings) {
     wheel: (_frame: string, _e: Extract<FrameEvent, { type: 'wheel' }>) => {},
     key: (_e: Extract<FrameEvent, { type: 'key' }>) => {},
     pickedForComment: (_frame: string, _info: ElementInfo, _point: { x: number, y: number }) => {},
+    /** A right click on an element of a frame, at a point of the frame's viewport. */
+    menu: (_frame: string, _point: { x: number, y: number }) => {},
+    /** Ask where a new screen goes, and which route, at a point of the board. */
+    addScreen: (_at: { x: number, y: number }) => {},
+    /** Open the command palette: everything, or the components to insert. */
+    palette: (mode: 'all' | 'components') => {
+      state.palette = mode;
+    },
   };
 
   function onFrameEvent (frame: string, e: FrameEvent) {
@@ -307,7 +369,11 @@ export function createStore (settings: Settings) {
         state.hover = e.info ? { frame, info: e.info } : state.hover?.frame === frame ? null : state.hover;
         break;
       case 'pick':
-        if (state.tool === 'comment') {
+        if (state.placing) {
+          const item = settings.palette.find((i) => i.id === state.placing);
+          state.placing = '';
+          if (item) void insert(frame, e.info, whereIn(e.info, e.point.y), item);
+        } else if (state.tool === 'comment') {
           handlers.pickedForComment(frame, e.info, e.point);
         } else {
           state.picked = { frame, info: e.info };
@@ -317,8 +383,14 @@ export function createStore (settings: Settings) {
       case 'activate':
         void editText(frame, e.info);
         break;
+      case 'menu':
+        state.picked = { frame, info: e.info };
+        state.selection = [frame];
+        handlers.menu(frame, e.point);
+        break;
       case 'layout':
-        state.layout++;
+        redraws.set(frame, (redraws.get(frame) ?? 0) + 1);
+        redrawn(frame);
         break;
       case 'route':
         state.routes[frame] = e.route;
@@ -335,6 +407,87 @@ export function createStore (settings: Settings) {
   const locate = (ref: ElementRef): ElementInfo | undefined => agents.get(ref.frame)?.locate(ref);
   const pickAt = (frame: string, x: number, y: number) => agents.get(frame)?.pickAt(x, y);
 
+  /** The layer tree of a frame's screen, or nothing while it loads. */
+  const tree = (frame: string): LayerNode[] => agents.get(frame)?.tree() ?? [];
+  const snapshot = (frame: string): string | undefined => {
+    try {
+      return agents.get(frame)?.snapshot();
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** Pick an element of a frame, as clicking it on the screen does. */
+  function pick (frame: string, ref: ElementRef) {
+    const info = locate(ref);
+    if (!info) return;
+    state.picked = { frame, info };
+    state.selection = [frame];
+  }
+
+  /** Pick the element around the picked one. */
+  function pickParent () {
+    const p = state.picked;
+    const info = p && agents.get(p.frame)?.parent(p.info.ref);
+    if (p && info) state.picked = { frame: p.frame, info };
+  }
+
+  /**
+   * Pick the element written at a place once the frame shows it: after the edit redraws the screen,
+   * and drawn as what was written there (`name`, a component or tag), not what stood there before.
+   */
+  function pickWhenShown (frame: string, source: string, name: string, since: number) {
+    const until = Date.now() + 4000;
+    const look = () => {
+      const info = (redraws.get(frame) ?? 0) > since ? locate({ frame, tag: '', source }) : undefined;
+      if (info && (!name || (info.ref.component ?? info.ref.tag) === name)) {
+        state.picked = { frame, info };
+        state.selection = [frame];
+      } else if (Date.now() < until) {
+        setTimeout(look, 120);
+      }
+    };
+    setTimeout(look, 120);
+  }
+
+  /** Make an edit to the source of an element, as one undo step; answers whether it was written. */
+  async function edit (frame: string, ref: ElementRef, change: Edit, done = 'Saved to the file'): Promise<boolean> {
+    if (!ref.source) {
+      flash('This element is drawn at run time: comment on it for Claude to change');
+      return false;
+    }
+    const since = redraws.get(frame) ?? 0;
+    const { status, data } = await api<{ message?: string, file: string, before: string, after: string, at?: string }>('/edit', {
+      method: 'POST',
+      body: JSON.stringify({ loc: ref.source, edit: change }),
+    });
+    if (status !== 200) {
+      flash(data.message ?? 'Couldn\'t write it');
+      return false;
+    }
+    past.push({ kind: 'source', file: data.file, before: data.before, after: data.after });
+    if (past.length > 100) past.shift();
+    future.length = 0;
+    synced();
+    if (change.kind === 'remove') state.picked = null;
+    const name = change.kind === 'insert' ? /^\s*<([\w-]+)/.exec(change.markup)?.[1] ?? '' : ref.component ?? ref.tag;
+    if (data.at) pickWhenShown(frame, data.at, name, since);
+    redrawn(frame);
+    if (done) flash(done);
+    return true;
+  }
+
+  /** Before, after or inside an element, from where the pointer is on it (in the frame's viewport). */
+  function whereIn (info: ElementInfo, y: number): Where {
+    const t = (y - info.rect.y) / Math.max(1, info.rect.height);
+    if (info.container && t > 0.25 && t < 0.75) return 'inside';
+    return t < 0.5 ? 'before' : 'after';
+  }
+
+  async function insert (frame: string, target: ElementInfo, where: Where, item: PaletteItem) {
+    await edit(frame, target.ref, { kind: 'insert', where, markup: item.markup, imports: item.imports }, `${item.name} added`);
+  }
+
   /** Edit an element's text where it is drawn, and write it to its file; else leave it to the agent. */
   async function editText (frame: string, info: ElementInfo) {
     const agent = agents.get(frame);
@@ -345,32 +498,59 @@ export function createStore (settings: Settings) {
     }
     const change = await agent.editText(info.ref);
     if (!change) return;
-    const { status, data } = await api<{ message?: string }>('/edit', {
-      method: 'POST',
-      body: JSON.stringify({ loc: info.ref.source, edit: { kind: 'text', ...change } }),
-    });
-    if (status === 200) return flash('Saved to the file');
+    if (await edit(frame, info.ref, { kind: 'text', ...change })) return;
     comment({ type: 'element', ...info.ref }, `Change the text "${change.from}" to "${change.to}"`);
-    flash(`${data.message ?? 'Couldn\'t write it'}. Left a comment for Claude instead`);
+    flash('Couldn\'t write it. Left a comment for Claude instead');
   }
 
-  async function editClasses (ref: ElementRef, classes: string) {
-    if (!ref.source) return;
-    const { status, data } = await api<{ message?: string }>('/edit', {
-      method: 'POST',
-      body: JSON.stringify({ loc: ref.source, edit: { kind: 'class', to: classes } }),
-    });
-    flash(status === 200 ? 'Saved to the file' : data.message ?? 'Couldn\'t write it');
-  }
-
-  async function source (loc: string) {
-    const { status, data } = await api<{ tag: string, opening: string, classes?: string, text?: string }>(`/source?loc=${encodeURIComponent(loc)}`);
+  async function source (loc: string): Promise<SourceInfo | undefined> {
+    const { status, data } = await api<SourceInfo>(`/source?loc=${encodeURIComponent(loc)}`);
     return status === 200 ? data : undefined;
   }
 
   // --- Small things -------------------------------------------------------------------------------
 
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  /** A comment on an element, written beside it. */
+  function commentOn (frame: string, info: ElementInfo) {
+    const f = board.value?.frames.find((x) => x.id === frame);
+    if (!f) return;
+    state.composer = { anchor: { type: 'element', ...info.ref }, at: toScreen({ x: f.x + info.rect.x + info.rect.width, y: f.y + info.rect.y }), body: '' };
+  }
+
+  /** Open the file an element is written in, at its line, in the editor the dev server knows. */
+  const openInEditor = (source: string) => fetch(`/__open-in-editor?file=${encodeURIComponent(source)}`);
+
+  const reload = (frame: string) => {
+    state.reloads[frame] = (state.reloads[frame] ?? 0) + 1;
+  };
+
+  /** Place a palette item: the next element picked says where it goes. */
+  async function place (id: string) {
+    const item = settings.palette.find((i) => i.id === id);
+    if (!item || state.placing === id) {
+      state.placing = '';
+      return;
+    }
+    if (state.tool !== 'select') {
+      state.tool = 'select';
+      await nextTick(); // changing the tool stops placing
+    }
+    state.placing = id;
+    flash(`Click where the ${item.name} goes on a screen`);
+  }
+
+  /** A screen of a route, in the first free spot, shown. */
+  function addFrame (route: string) {
+    if (!board.value) return;
+    const size = FRAME_SIZES[1];
+    const name = route.split('/').filter(Boolean).pop() ?? route;
+    const frame = { kind: 'frame' as const, id: newId('frame'), name, route, scenario: 'default', ...nextSpot(board.value), width: size.width, height: size.height };
+    commit({ ...board.value, frames: [...board.value.frames, frame] });
+    state.selection = [frame.id];
+    zoomTo(frame, 1, true);
+  }
+
   function flash (message: string) {
     state.toast = message;
     clearTimeout(toastTimer);
@@ -405,6 +585,14 @@ export function createStore (settings: Settings) {
    * Fit a rectangle in the viewport. `smooth` glides there: the zoom changes geometrically and the
    * point in the middle moves straight, so the camera reads as one move, not a pan and a zoom.
    */
+  /** Tidy up: lay the screens out from the flow, then show the whole board. */
+  function tidyUp () {
+    if (!board.value) return;
+    const next = tidy(board.value);
+    if (JSON.stringify(next) !== JSON.stringify(board.value)) commit(next);
+    zoomTo(bounds(shapes(board.value)), 1, true);
+  }
+
   function zoomTo (rect: Rect | undefined, max = 1, smooth = false, below = 0) {
     if (!rect || !state.viewport.width) return;
     const W = state.viewport.width;
@@ -486,9 +674,9 @@ export function createStore (settings: Settings) {
   }
 
   return {
-    state, board, handlers,
+    state, board, handlers, previews: previews && markRaw(previews),
     loadList, open, create, commit, preview, undo, redo, removeSelection, comment,
-    locate, pickAt, editText, editClasses, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo,
+    locate, pickAt, tree, snapshot, commentOn, openInEditor, reload, place, addFrame, pick, pickParent, edit, insert, whereIn, editText, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo, tidyUp,
     play, playNext, playBack, stopPlay, startFrame,
     endDrag: () => {
       if (dragStart && board.value) commit(board.value);

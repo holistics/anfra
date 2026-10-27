@@ -4,7 +4,7 @@
 //   - serves the canvas at /__canvas/, its boards and source edits at /__canvas/api/, and its MCP
 //     tools at /__canvas/mcp.
 // None of it is in a production build: every hook is for `vite serve`.
-import { mkdirSync, watch } from 'node:fs';
+import { mkdirSync, watch, writeFileSync } from 'node:fs';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,8 @@ import { parseBoard, type Board } from '../model/board.ts';
 import type { Scenarios } from '../model/scenario.ts';
 import { BoardStore, Conflict, SLUG } from './boards.ts';
 import { handleMcp, type McpContext } from './mcp.ts';
-import { EditError, applyEdit, describeSource, parseLoc, sourceTransform, type Edit } from './source.ts';
+import { palette, readCatalog, readTokens, type ComponentSpec, type PaletteItem } from './catalog.ts';
+import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
 
 export interface CanvasOptions {
   /** Where boards are kept, from the Vite root. */
@@ -33,8 +34,13 @@ export interface CanvasOptions {
   styles?: string[];
   /** Folders of prototypes, whose `.vue` files are offered as frames, and the route each is served at. */
   prototypes?: { dir: string, route: string };
-  /** A folder of component folders (`ui/button`, …), offered in the canvas's component list. */
+  /** A folder of component folders (`ui/button`, …), offered in the canvas's component palette. */
   components?: string;
+  /**
+   * A module exporting `snippets`: the markup each component folder is placed with
+   * (`{ card: '<Card>…</Card>' }`), or false to leave it out of the palette. The rest get `<Name>Name</Name>`.
+   */
+  snippets?: string;
   /** Routes offered when adding a frame. */
   routes?: string[];
   /** What an agent is told when it connects over MCP. */
@@ -46,6 +52,8 @@ const PACKAGE = resolve(HERE, '../..');
 const FRAME_ID = '/@anfra-canvas/frame';
 const APP_ID = '/@anfra-canvas/app';
 const BASE = '/__canvas';
+/** The palette's previews, written where Vite compiles them like the app's own files. */
+const PREVIEWS = 'node_modules/.anfra-canvas/Previews.vue';
 
 export function anfraCanvas (options: CanvasOptions = {}): Plugin {
   const opts = {
@@ -125,9 +133,14 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         ].join('\n');
       }
       if (id === `\0${APP_ID}`) {
+        const catalog = await components();
+        const items = palette(catalog, await snippets());
+        writePreviews(items);
         const settings = {
           prototypes: await prototypeRoutes(),
-          components: await componentNames(),
+          catalog,
+          palette: items,
+          tokens: readTokens((await Promise.all(opts.styles.map((css) => readFile(abs(css.replace(/^\//, '')), 'utf8').catch(() => '')))).join('\n')),
           routes: opts.routes,
           mcp: `${BASE}/mcp`,
           author: await gitUser(config.root),
@@ -135,8 +148,9 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         return [
           ...opts.styles.map((css) => `import ${JSON.stringify(css)};`),
           `import { mount } from ${JSON.stringify(`/@fs${PACKAGE}/src/app/main.ts`)};`,
+          `import Previews from ${JSON.stringify(`/@fs${abs(PREVIEWS)}`)};`,
           scenarioCode,
-          `mount(document.getElementById('anfra-canvas'), { ...${JSON.stringify(settings)}, scenarios });`,
+          `mount(document.getElementById('anfra-canvas'), { ...${JSON.stringify(settings)}, scenarios }, Previews);`,
         ].join('\n');
       }
       return undefined;
@@ -168,6 +182,12 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       mkdirSync(store.dir, { recursive: true });
       const watcher = watch(store.dir, (_event, name) => void external(name));
       dev.httpServer?.once('close', () => watcher.close());
+
+      // A component's file changed (an edit from the canvas, the agent, an editor): the inspector
+      // reads the picked element's source again. Not on every redraw: a spinner redraws each frame.
+      dev.watcher.on('change', (file) => {
+        if (file.endsWith('.vue')) dev.ws.send({ type: 'custom', event: 'anfra-canvas:source', data: { file: relative(config.root, file) } });
+      });
 
       const mcp: McpContext = {
         store,
@@ -217,7 +237,18 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           if (path === '/api/edit' && req.method === 'POST') {
             const { loc: at, edit } = await body(req) as { loc: string, edit: Edit };
             const { loc, file } = editableLoc(at);
-            await writeFile(file, applyEdit(await readFile(file, 'utf8'), loc, edit));
+            const before = await readFile(file, 'utf8');
+            const done = editSource(before, loc, edit);
+            await writeFile(file, done.code);
+            const where = done.at && `${done.at.file}:${done.at.line}:${done.at.column}`;
+            return send(res, 200, { file: loc.file, before, after: done.code, ...(where ? { at: where } : {}) });
+          }
+          // Undo and redo of an edit: the file put back, if no one changed it since.
+          if (path === '/api/restore' && req.method === 'POST') {
+            const { file: rel, content, expect } = await body(req) as { file: string, content: string, expect: string };
+            const { file } = editableLoc(`${rel}:1:1`);
+            if (await readFile(file, 'utf8') !== expect) throw new EditError(`${rel} changed since: undo it in your editor`);
+            await writeFile(file, content);
             return send(res, 200, { ok: true });
           }
           return send(res, 404, { message: `no ${req.method} ${path}` });
@@ -258,13 +289,48 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       .map((f) => `${route}/${relative(abs(dir), f).slice(0, -4).split(sep).join('/')}`);
   }
 
-  async function componentNames (): Promise<string[]> {
+  async function components (): Promise<ComponentSpec[]> {
     if (!opts.components) return [];
+    return readCatalog(abs(opts.components), importPath(abs(opts.components)));
+  }
+
+  async function snippets (): Promise<Record<string, string | false>> {
+    if (!opts.snippets || !server) return {};
     try {
-      return (await readdir(abs(opts.components), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name).sort();
-    } catch {
-      return [];
+      const mod = await server.ssrLoadModule(`/${opts.snippets.replace(/^\//, '')}`);
+      return (mod.snippets ?? mod.default ?? {}) as Record<string, string | false>;
+    } catch (e) {
+      config.logger.warn(`[anfra canvas] couldn't load ${opts.snippets}: ${(e as Error).message}`);
+      return {};
     }
+  }
+
+  /** How the app imports a folder: through its alias (`@/components/ui`), else from the root. */
+  function importPath (dir: string): string {
+    for (const a of config.resolve.alias) {
+      if (typeof a.find !== 'string' || typeof a.replacement !== 'string') continue;
+      const to = a.replacement.replace(/\/$/, '');
+      if (dir === to || dir.startsWith(`${to}/`)) return `${a.find}${dir.slice(to.length)}`;
+    }
+    return `/${relative(config.root, dir).split(sep).join('/')}`;
+  }
+
+  /** One component showing any palette item, by its id: the palette renders the app's own components. */
+  function writePreviews (items: PaletteItem[]) {
+    const imports = new Map(items.flatMap((i) => i.imports.map((x) => [x.name, x.from] as const)));
+    const code = [
+      '<script setup lang="ts">',
+      ...[...imports].map(([name, from]) => `import { ${name} } from ${JSON.stringify(from)};`),
+      'defineProps<{ id: string }>();',
+      '</script>',
+      '',
+      '<template>',
+      ...items.map((i, n) => `  <template ${n ? 'v-else-if' : 'v-if'}="id === ${JSON.stringify(i.id).replace(/"/g, '\'')}">${i.markup}</template>`),
+      '</template>',
+      '',
+    ].join('\n');
+    mkdirSync(dirname(abs(PREVIEWS)), { recursive: true });
+    writeFileSync(abs(PREVIEWS), code);
   }
 }
 

@@ -1,57 +1,25 @@
 <script setup lang="ts">
-// The arrows between shapes: curved connectors that leave and enter square to a side, spread out
-// where several share one, with their label at the middle. An arrow runs (its dashes flow from
-// start to end) when it is the way on: selected, leaving the selected frame, or a next step while
-// a flow is played. The arrows already walked in a flow stay violet; the rest fade back.
+// The arrows between shapes: right-angled connectors with rounded corners, routed around the
+// screens (route.ts), spread out where several share a side, each label on a straight run where
+// it collides with no screen and no other label. An arrow runs (its dashes flow from start to end)
+// when it is the way on: selected, leaving the selected frame, or a next step while a flow is
+// played. The arrows already walked in a flow stay violet; the rest fade back.
 import { computed } from 'vue';
-import { find, isShape, type Arrow, type Point, type Rect, type Shape } from '../../model/index.ts';
+import type { Arrow, Point, Shape } from '../../model/index.ts';
+import { useConnectors } from '../connectors.ts';
 import { useStore } from '../context.ts';
-import { curve, edgePoint, center, port, sides, type Side } from '../geometry.ts';
+import { edgePoint } from '../geometry.ts';
 
-// Drawn twice: the lines under the frames, so a connector passing behind a screen doesn't cross
-// it, and the labels over everything, so they can always be read and clicked.
+// Drawn twice: the lines under the frames, so a connector passing near a screen never covers it,
+// and the labels over everything, so they can always be read and clicked. Both draw the same routes.
 const props = withDefaults(defineProps<{ part: 'lines' | 'labels', draft?: { from: Shape, to: Point } | null }>(), { draft: null });
 const store = useStore();
-const { state, board } = store;
-
-/** A frame's box includes its label above it, so an arrow meets the label rather than crossing it. */
-const box = (s: Shape): Rect => (s.kind === 'frame' ? { ...s, y: s.y - 32 / state.view.zoom, height: s.height + 32 / state.view.zoom } : s);
+const { state } = store;
+const { list: routes, box } = useConnectors(store);
 
 type Role = 'walked' | 'next' | 'hover' | 'run' | 'rest' | 'faded';
 
 const arrows = computed(() => {
-  const b = board.value;
-  if (!b) return [];
-  const ends = b.arrows.flatMap((a) => {
-    const from = find(b, a.from);
-    const to = find(b, a.to);
-    if (!isShape(from) || !isShape(to)) return [];
-    const r1 = box(from);
-    const r2 = box(to);
-    const [s1, s2] = sides(r1, r2);
-    return [{ a, r1, r2, s1, s2 }];
-  });
-
-  // Arrows sharing a side of a shape spread along it, ordered by where their other end is, so they
-  // don't leave from one point and cross each other.
-  const groups = new Map<string, { i: number, key: number }[]>();
-  const add = (shape: string, side: Side, i: number, other: Rect) => {
-    const k = `${shape}|${side}`;
-    const c = center(other);
-    const list = groups.get(k) ?? [];
-    list.push({ i, key: side === 'left' || side === 'right' ? c.y : c.x });
-    groups.set(k, list);
-  };
-  ends.forEach((e, i) => {
-    add(e.a.from, e.s1, i * 2, e.r2);
-    add(e.a.to, e.s2, i * 2 + 1, e.r1);
-  });
-  const along = new Map<number, number>();
-  for (const list of groups.values()) {
-    list.sort((p, q) => p.key - q.key);
-    list.forEach((x, n) => along.set(x.i, list.length === 1 ? 0.5 : 0.3 + (0.4 * n) / (list.length - 1)));
-  }
-
   const flow = state.flow;
   const here = flow?.path.at(-1);
   const selectedFrame = state.selection.length === 1 ? state.selection[0] : '';
@@ -65,12 +33,7 @@ const arrows = computed(() => {
     if (state.selection.includes(a.id) || a.from === selectedFrame) return 'run';
     return 'rest';
   };
-
-  return ends.map((e, i) => {
-    const p1 = port(e.r1, e.s1, along.get(i * 2));
-    const p2 = port(e.r2, e.s2, along.get(i * 2 + 1));
-    return { ...e.a, ...curve(p1, e.s1, p2, e.s2), role: role(e.a), selected: state.selection.includes(e.a.id) };
-  });
+  return routes.value.map((r) => ({ ...r.arrow, d: r.d, mid: r.mid, role: role(r.arrow), selected: state.selection.includes(r.arrow.id) }));
 });
 
 const draftLine = computed(() => {

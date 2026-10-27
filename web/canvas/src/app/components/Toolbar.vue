@@ -26,6 +26,10 @@ const fit = () => board.value && store.zoomTo(bounds(shapes(board.value)));
         <Icon :name="t.tool" />
       </button>
     </template>
+    <span class="ac-toolbar-rule" aria-hidden="true" />
+    <button class="ac-btn ghost icon" type="button" title="Tidy up: lay screens out from the flow (⌃⌥T)" aria-label="Tidy up" @click="store.tidyUp()">
+      <Icon name="tidy" />
+    </button>
   </div>
   <div class="ac-zoom ac-popover" data-ui role="group" aria-label="Zoom">
     <button class="ac-btn ghost icon" type="button" title="Zoom out (⌘−)" aria-label="Zoom out" @click="emit('zoom', 1 / 1.25)"><Icon name="minus" /></button>

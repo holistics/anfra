@@ -5,6 +5,7 @@
 import { find, isShape } from '../model/ops.ts';
 import * as ops from '../model/ops.ts';
 import { feedbackMarkdown } from '../model/markdown.ts';
+import { tidy } from '../model/layout.ts';
 import type { Board, Comment, Frame, Rect, Section, Shape } from '../model/board.ts';
 import type { Scenarios } from '../model/scenario.ts';
 import { SLUG, type BoardStore } from './boards.ts';
@@ -217,6 +218,15 @@ const TOOLS: Record<string, Tool> = {
     run: async ({ board, ids }, ctx) => {
       await ctx.store.change(board, (b) => ops.remove(b, ids));
       return `Removed ${ids.length}.`;
+    },
+  },
+  tidy_board: {
+    description: 'Lay a board\'s frames out from its arrows, as the Tidy up button does: the main path left to right in the first row, each branch below the frame it leaves, each section sized to hold its frames, and notes beside what they belong to. Call it after adding frames and arrows.',
+    input: { board },
+    required: ['board'],
+    run: async ({ board }, ctx) => {
+      await ctx.store.change(board, (b) => tidy(b));
+      return `Tidied ${board}: ${ctx.url}#${board}`;
     },
   },
   list_scenarios: {

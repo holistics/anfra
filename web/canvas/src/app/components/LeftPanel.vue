@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // Beside the canvas: what is on the board, the comments on it, and the components to place.
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   commentMarkdown, contents, find, isShape, remove, reply, setStatus,
   type Comment, type Shape,
 } from '../../model/index.ts';
 import { pinNumber, useStore } from '../context.ts';
 import Icon from './Icon.vue';
+import LayerTree from './LayerTree.vue';
+import Palette from './Palette.vue';
 
 const store = useStore();
 const { state, board } = store;
@@ -25,6 +27,11 @@ const layers = computed(() => {
   });
   const loose = [...b.frames, ...b.notes].filter((s) => !inSection.has(s.id)).map((s) => ({ shape: s as Shape, items: [] as Shape[] }));
   return [...groups, ...loose];
+});
+
+// Picking an element on a screen opens that frame's layers, down to it.
+watch(() => state.picked?.frame, (frame) => {
+  if (frame) state.layersOpen[frame] = true;
 });
 
 const scenarioLabel = (id = 'default') => state.settings.scenarios[id]?.label ?? (id === 'live' ? 'Live backend' : id);
@@ -75,16 +82,6 @@ function sendReply (c: Comment) {
   drafts.value[c.id] = '';
 }
 
-function startPlacing (name: string) {
-  state.placing = name;
-  state.tool = 'comment';
-  store.flash(`Click an element in a frame to say where the ${name} goes`);
-}
-
-function onDragStart (e: DragEvent, name: string) {
-  e.dataTransfer?.setData('application/x-anfra-component', name);
-  state.dragging = true;
-}
 </script>
 
 <template>
@@ -103,17 +100,31 @@ function onDragStart (e: DragEvent, name: string) {
       <p v-if="!layers.length" class="ac-caption ac-list-empty">Nothing on this board yet</p>
       <ul class="ac-layers">
         <li v-for="g in layers" :key="g.shape.id">
-          <button class="ac-layer" :class="{ group: g.shape.kind === 'section' }" :aria-current="state.selection.includes(g.shape.id) || undefined" type="button" @click="focusShape(g.shape)">
-            <Icon :name="g.shape.kind" :size="16" />
-            <span class="ac-truncate">{{ label(g.shape) }}</span>
-          </button>
+          <div class="ac-layer" :class="{ group: g.shape.kind === 'section' }" :aria-current="state.selection.includes(g.shape.id) || undefined">
+            <button v-if="g.shape.kind === 'frame'" class="ac-tree-toggle" type="button" :aria-expanded="!!state.layersOpen[g.shape.id]" aria-label="Show its layers" @click="state.layersOpen[g.shape.id] = !state.layersOpen[g.shape.id]">
+              <Icon name="chevronRight" :size="14" />
+            </button>
+            <button class="ac-layer-name" type="button" @click="focusShape(g.shape)">
+              <Icon :name="g.shape.kind" :size="16" />
+              <span class="ac-truncate">{{ label(g.shape) }}</span>
+              <span v-if="g.shape.kind === 'frame'" class="ac-layer-meta">{{ scenarioLabel(g.shape.scenario) }}</span>
+            </button>
+          </div>
+          <LayerTree v-if="g.shape.kind === 'frame' && state.layersOpen[g.shape.id]" :frame="g.shape.id" />
           <ul v-if="g.items.length">
             <li v-for="i in g.items" :key="i.id">
-              <button class="ac-layer nested" :aria-current="state.selection.includes(i.id) || undefined" type="button" @click="focusShape(i)">
-                <Icon :name="i.kind" :size="16" />
-                <span class="ac-truncate">{{ label(i) }}</span>
-                <span v-if="i.kind === 'frame'" class="ac-layer-meta">{{ scenarioLabel(i.scenario) }}</span>
-              </button>
+              <div class="ac-layer nested" :aria-current="state.selection.includes(i.id) || undefined">
+                <button v-if="i.kind === 'frame'" class="ac-tree-toggle" type="button" :aria-expanded="!!state.layersOpen[i.id]" aria-label="Show its layers" @click="state.layersOpen[i.id] = !state.layersOpen[i.id]">
+                  <Icon name="chevronRight" :size="14" />
+                </button>
+                <span v-else class="ac-tree-toggle" />
+                <button class="ac-layer-name" type="button" @click="focusShape(i)">
+                  <Icon :name="i.kind" :size="16" />
+                  <span class="ac-truncate">{{ label(i) }}</span>
+                  <span v-if="i.kind === 'frame'" class="ac-layer-meta">{{ scenarioLabel(i.scenario) }}</span>
+                </button>
+              </div>
+              <LayerTree v-if="i.kind === 'frame' && state.layersOpen[i.id]" :frame="i.id" />
             </li>
           </ul>
         </li>
@@ -166,24 +177,7 @@ function onDragStart (e: DragEvent, name: string) {
     </div>
 
     <div v-else class="ac-list" role="tabpanel">
-      <p class="ac-caption ac-list-intro">Drag a component onto an element of a screen, or click one and then the element. It becomes a comment telling Claude where to add it</p>
-      <p v-if="!state.settings.components.length" class="ac-caption ac-list-intro">No component folder is configured</p>
-      <div class="ac-components">
-        <button
-          v-for="c in state.settings.components"
-          :key="c"
-          class="ac-component"
-          :aria-pressed="state.placing === c"
-          type="button"
-          draggable="true"
-          @dragstart="onDragStart($event, c)"
-          @dragend="state.dragging = false"
-          @click="startPlacing(c)"
-        >
-          <Icon name="component" :size="16" />
-          <span class="ac-truncate">{{ c }}</span>
-        </button>
-      </div>
+      <Palette />
     </div>
   </aside>
 </template>
@@ -201,25 +195,33 @@ function onDragStart (e: DragEvent, name: string) {
 .ac-layer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
   height: var(--ac-control);
-  padding: 0 8px;
-  border: 0;
+  padding: 0 4px;
   border-radius: 6px;
-  background: transparent;
   color: var(--ac-ink-weak);
-  text-align: left;
-  cursor: pointer;
   transition: background-color 160ms var(--ac-ease), color 160ms var(--ac-ease);
 }
-.ac-layer > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
-.ac-layer > .ac-truncate { flex: 1; }
-.ac-layer.group { color: var(--ac-ink); font-weight: 500; }
-.ac-layer.nested { padding-left: 32px; }
+.ac-layer-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.ac-layer-name > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
+.ac-layer-name > .ac-truncate { flex: 1; }
+.ac-layer.group .ac-layer-name { padding-left: 24px; color: var(--ac-ink); font-weight: 500; }
+.ac-layer.nested { padding-left: 16px; }
+.ac-layers ul .ac-tree { padding-left: 36px; }
 .ac-layer-meta { flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; }
 .ac-layer[aria-current] { background: var(--ac-selected); color: var(--ac-violet-text); }
-.ac-layer[aria-current] > svg { color: var(--ac-violet-icon); }
+.ac-layer[aria-current] .ac-layer-name > svg { color: var(--ac-violet-icon); }
 @media (hover: hover) and (pointer: fine) {
   .ac-layer:not([aria-current]):hover { background: var(--ac-hover); color: var(--ac-ink); }
 }

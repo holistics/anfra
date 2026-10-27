@@ -74,8 +74,9 @@
 }
 
 .ac *, .ac *::before, .ac *::after { box-sizing: border-box; }
-.ac button, .ac input, .ac textarea { font: inherit; color: inherit; letter-spacing: inherit; }
-.ac p { margin: 0; }
+/* Not inside a component preview: the app's own components are drawn there, with the app's styles */
+.ac :is(button, input, textarea):not(.ac-preview *) { font: inherit; color: inherit; letter-spacing: inherit; }
+.ac p:not(.ac-preview *) { margin: 0; }
 .ac :focus-visible { outline: 2px solid var(--ac-violet); outline-offset: 3px; }
 
 /* --- Type: three sizes ------------------------------------------------------------------------ */
@@ -215,6 +216,8 @@ textarea.ac-field { height: auto; min-height: 80px; padding: 6px 10px; resize: v
   pointer-events: none;
 }
 .ac-affix > .ac-field { padding-left: 28px; }
+.ac-affix > svg { position: absolute; left: 8px; top: 50%; translate: 0 -50%; pointer-events: none; }
+.ac-affix > svg + .ac-field { padding-left: 32px; }
 
 /* --- Chips, counters, keys -------------------------------------------------------------------- */
 
@@ -269,6 +272,33 @@ textarea.ac-field { height: auto; min-height: 80px; padding: 6px 10px; resize: v
 .ac-section { display: grid; gap: 12px; padding: 16px; }
 .ac-section + .ac-section { border-top: 1px solid var(--ac-line-weak); }
 .ac-section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+
+/* A command in a menu or the command palette: icon, label, shortcut */
+.ac-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--ac-control);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ac-ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: start;
+  cursor: pointer;
+  user-select: none;
+}
+.ac-menu-item > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
+.ac-menu-item.active { background: var(--ac-hover); }
+.ac-menu-item.danger, .ac-menu-item.danger > svg { color: var(--ac-danger); }
+.ac-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-menu-also { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; }
+.ac-menu-keys { flex-shrink: 0; color: var(--ac-ink-muted); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.ac-menu-rule { height: 1px; margin: 4px 0; background: var(--ac-line-weak); }
 
 /* Floating surfaces: popovers, menus, the toolbar */
 .ac-popover {

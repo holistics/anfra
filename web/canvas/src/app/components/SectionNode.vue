@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { update, type Section } from '../../model/index.ts';
 import { useStore } from '../context.ts';
 
@@ -15,6 +15,11 @@ async function rename () {
   await nextTick();
   input.value?.select();
 }
+watch(() => state.renaming === props.section.id, (now) => {
+  if (!now) return;
+  state.renaming = '';
+  void rename();
+});
 function done (e: Event) {
   const name = (e.target as HTMLInputElement).value.trim();
   editing.value = false;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compileTemplate, parse } from 'vue/compiler-sfc';
-import { EditError, applyEdit, describeSource, parseLoc, sourceTransform } from './source.ts';
+import { EditError, applyEdit, describeSource, editSource, parseLoc, sourceTransform } from './source.ts';
 
 const FILE = `<script setup lang="ts">
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,44 @@ describe('applyEdit', () => {
   });
 
   it('describes an element for the inspector', () => {
-    expect(describeSource(FILE, at(8, 5))).toEqual({ tag: 'h1', opening: '<h1 class="text-title">', classes: 'text-title', text: 'Invite your team' });
+    expect(describeSource(FILE, at(8, 5))).toEqual({
+      tag: 'h1', opening: '<h1 class="text-title">', classes: 'text-title', text: 'Invite your team',
+      attrs: [{ name: 'class', value: 'text-title' }], children: 0, first: true, last: false,
+    });
+    expect(describeSource(FILE, at(14, 7)).attrs).toEqual([{ name: 'key', bound: 'i' }]);
+  });
+
+  it('sets, adds and removes attributes, and leaves bound ones to the agent', () => {
+    expect(applyEdit(FILE, at(9, 5), { kind: 'attr', name: 'variant', value: 'ghost' })).toContain('<Button variant="ghost">');
+    expect(applyEdit(FILE, at(9, 5), { kind: 'attr', name: 'disabled', value: true })).toContain('<Button disabled variant="outline">');
+    expect(applyEdit(FILE, at(9, 5), { kind: 'attr', name: 'variant', value: null })).toContain('<Button>\n      Send invites');
+    expect(applyEdit(FILE, at(7, 3), { kind: 'class', to: '' })).toContain('<section>');
+    expect(() => applyEdit(FILE, at(14, 7), { kind: 'attr', name: 'key', value: 'x' })).toThrow(/bound to `i`/);
+  });
+
+  it('removes, duplicates and moves an element, saying where it now is', () => {
+    expect(applyEdit(FILE, at(8, 5), { kind: 'remove' })).toContain('<section class="p-4">\n    <Button');
+    const dup = editSource(FILE, at(8, 5), { kind: 'duplicate' });
+    expect(dup.code).toContain('Invite your team</h1>\n    <h1 class="text-title">Invite your team</h1>');
+    expect(dup.at).toEqual({ file: 'src/pages/Invite.vue', line: 9, column: 5 });
+    const down = editSource(FILE, at(8, 5), { kind: 'move', by: 1 });
+    expect(down.code).toContain('</Button>\n    <h1 class="text-title">');
+    expect(down.at).toEqual({ file: 'src/pages/Invite.vue', line: 11, column: 5 });
+    expect(() => applyEdit(FILE, at(8, 5), { kind: 'move', by: -1 })).toThrow(/already the first/);
+  });
+
+  it('inserts markup beside or inside an element, with its imports', () => {
+    const imports = [{ name: 'Badge', from: '@/components/ui/badge' }, { name: 'Button', from: '@/components/ui/button' }];
+    const after = editSource(FILE, at(8, 5), { kind: 'insert', where: 'after', markup: '<Badge>New</Badge>', imports });
+    expect(after.code).toContain("import { Button } from '@/components/ui/button';\nimport { Badge } from '@/components/ui/badge';\nconst n");
+    expect(after.code).toContain('Invite your team</h1>\n    <Badge>New</Badge>');
+    expect(after.at).toEqual({ file: 'src/pages/Invite.vue', line: 10, column: 5 });
+    const inside = editSource(FILE, at(13, 5), { kind: 'insert', where: 'inside', markup: '<li>\n  Last\n</li>' });
+    expect(inside.code).toContain('<li v-for="i in n" :key="i">Row</li>\n      <li>\n        Last\n      </li>\n    </ul>');
+    expect(inside.at).toEqual({ file: 'src/pages/Invite.vue', line: 15, column: 7 });
+    const bare = editSource('<template>\n  <div />\n</template>\n', at(2, 3), { kind: 'insert', where: 'inside', markup: '<Badge />', imports });
+    expect(bare.code).toBe("<script setup lang=\"ts\">\nimport { Badge } from '@/components/ui/badge';\nimport { Button } from '@/components/ui/button';\n</script>\n\n<template>\n  <div>\n    <Badge />\n  </div>\n</template>\n");
+    expect(bare.at).toEqual({ file: 'src/pages/Invite.vue', line: 8, column: 5 });
   });
 
   it('reads a place in a file', () => {

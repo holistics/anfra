@@ -30,6 +30,7 @@ export const PATHS = {
   alignLeft: '<rect width="9" height="6" x="6" y="14" rx="2"/><rect width="16" height="6" x="6" y="4" rx="2"/><path d="M2 2v20"/>',
   alignTop: '<rect width="6" height="16" x="4" y="6" rx="2"/><rect width="6" height="9" x="14" y="6" rx="2"/><path d="M22 2H2"/>',
   row: '<rect width="6" height="14" x="2" y="5" rx="2"/><rect width="6" height="10" x="16" y="7" rx="2"/><path d="M12 2v20"/>',
+  tidy: '<rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>',
   column: '<rect width="14" height="6" x="5" y="2" rx="2"/><rect width="10" height="6" x="7" y="16" rx="2"/><path d="M2 12h20"/>',
   resolve: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
   reopen: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
@@ -38,6 +39,17 @@ export const PATHS = {
   back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
   arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
   stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
+  parent: '<path d="M14 9 9 4 4 9"/><path d="M20 20h-7a4 4 0 0 1-4-4V4"/>',
+  box: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
+  text: '<path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  duplicate: '<line x1="15" x2="15" y1="12" y2="18"/><line x1="12" x2="18" y1="15" y2="15"/><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  arrowUp: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  arrowDown: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  textLeft: '<path d="M21 5H3"/><path d="M15 12H3"/><path d="M17 19H3"/>',
+  textCenter: '<path d="M21 5H3"/><path d="M17 12H7"/><path d="M19 19H5"/>',
+  textRight: '<path d="M21 5H3"/><path d="M21 12H9"/><path d="M21 19H7"/>',
 } as const;
 </script>
 
