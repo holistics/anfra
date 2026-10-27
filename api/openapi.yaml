@@ -1137,6 +1137,17 @@ components:
     SearchInput:
       additionalProperties: false
       properties:
+        limit:
+          description: at most this many entities; absent, 50
+          format: int64
+          maximum: 500
+          minimum: 1
+          type: integer
+        offset:
+          description: skip this many entities first, to page with limit
+          format: int64
+          minimum: 0
+          type: integer
         query:
           description: search query
           items:

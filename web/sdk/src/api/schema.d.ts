@@ -780,6 +780,16 @@ export interface components {
             max_rows?: number;
         };
         SearchInput: {
+            /**
+             * Format: int64
+             * @description at most this many entities; absent, 50
+             */
+            limit?: number;
+            /**
+             * Format: int64
+             * @description skip this many entities first, to page with limit
+             */
+            offset?: number;
             /** @description search query */
             query?: string[];
         };

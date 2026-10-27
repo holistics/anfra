@@ -40,7 +40,9 @@ var Search = command.Define(command.Def[SearchInput, anfranode.CatalogSearchResu
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return nil, err
 		}
-		return search.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, strings.TrimSpace(strings.Join(in.Query, " ")))
+		return search.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, search.Request{
+			Query: strings.TrimSpace(strings.Join(in.Query, " ")), Limit: in.Limit, Offset: in.Offset,
+		})
 	},
 })
 
@@ -53,9 +55,11 @@ func (IngestInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema
 	return command.ArgsSchema[IngestInput](s)
 }
 
-// SearchInput is search's input.
+// SearchInput is search's input: the query, and the page of what it matches.
 type SearchInput struct {
-	Query []string `json:"query,omitempty" cli:"positional" doc:"search query"`
+	Query  []string `json:"query,omitempty" cli:"positional" doc:"search query"`
+	Limit  int      `json:"limit,omitempty" minimum:"1" maximum:"500" doc:"at most this many entities; absent, 50"`
+	Offset int      `json:"offset,omitempty" minimum:"0" doc:"skip this many entities first, to page with limit"`
 }
 
 func (SearchInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
