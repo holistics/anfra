@@ -221,11 +221,7 @@ anfra serve                # if not: http://127.0.0.1:7878/apps/ (or the free po
 
 Leave it running: it reloads the open app whenever its file, or the AML, changes. Lineage is the
 exception: run `anfra ingest` after an AML change, or it shows the old definitions. Its header shows
-the repo's problems (AML that does not compile, a data source not configured). Its Inspect panel
-has two tabs: **Structure**, the tree of marked parts, with a problem count for markup it could
-not read (an unknown query name, a block inside a block), and **Data**, each query's state,
-executed AQL and error, in how many places it is drawn, and a Locate button. A query that says
-"Not drawn yet" has no element marked with it.
+the repo's problems (AML that does not compile, a data source not configured).
 
 If you can drive a browser, open the app, exercise every control and click, and read the console
 of the app's frame, not just the page. Otherwise ask the user to, and to report what they see
