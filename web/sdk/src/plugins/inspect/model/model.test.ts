@@ -3,6 +3,7 @@ import {
   ORDERS_AQL, REVENUE_AQL, column, salesApp, salesSnapshot,
 } from '../tabs/testSupport';
 import { changesOf } from './changes';
+import { dedent } from './format';
 import { declaredFilters, isActive, queryInputs } from './inputs';
 import { issuesOf, queryCounts } from './issues';
 import { attributeRequests, type RequestEntry } from './requests';
@@ -76,5 +77,11 @@ describe('request attribution', () => {
     const { byQuery } = attributeRequests([entry(1, REVENUE_AQL)], [app]);
     expect(byQuery.get('0/copy')?.[0]?.shared).toBe(true);
     expect(byQuery.get('0/revenue')?.[0]?.shared).toBe(true);
+  });
+});
+
+describe('dedent', () => {
+  it('strips the indent of the lines after the first', () => {
+    expect(dedent('explore {\n    a\n      b\n  }')).toBe('explore {\n  a\n    b\n}');
   });
 });

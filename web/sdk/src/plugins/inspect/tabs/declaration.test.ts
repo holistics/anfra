@@ -67,17 +67,30 @@ describe('Declaration', () => {
     expect(byTestId(root, 'checks-none')?.textContent).toBe('No issues found.');
   });
 
-  it('writes the declaration back out as JS', async () => {
-    harness = await inspect({ tab: TAB });
+  it('shows the declaration as its JSON, the text the same as JSON.stringify writes it', async () => {
+    const app = salesApp();
+    app.declaration.queries.leak = { dataset: 'sales', aql: 'explore sales {\n\tmeasures {\n\t  cancelled: revenue | where(orders.status == "cancelled")\n\t}\n}' };
+    harness = await inspect({ tab: TAB, snapshot: salesSnapshot([app]) });
     const { root } = await harness.tab(TAB);
-    const code = byTestId(root, 'declaration-0')!.querySelector('pre')!.textContent!;
-    expect(code).toContain('const revenue = app.createQuery("revenue", {\n  dataset: "sales",\n  aql: `');
-    expect(code).toContain('pageSize: 50,');
-    expect(code).toContain('const month = app.createDateDrill("month", {"default":"month"});');
-    expect(code).toContain('app.mapControl(region, revenue, {"field":"orders.region"});');
-    expect(code).toContain('app.mapCrossFilter(orders, revenue);');
-    expect(byTestId(root, 'declaration-0')!.querySelector('.tok-kw')).not.toBeNull();
-    expect(byTestId(root, 'declaration-0')!.querySelector('.row-action')?.getAttribute('aria-label')).toBe('Copy the declaration');
+    const block = byTestId(root, 'declaration-0')!;
+    const declaration = harness.mounted.panel.snapshot!.apps[0]!.declaration;
+    expect(block.querySelector('pre')!.textContent).toBe(JSON.stringify(declaration, null, 2));
+    expect(JSON.parse(block.querySelector('pre')!.textContent!)).toEqual(JSON.parse(JSON.stringify(declaration)));
+    expect(block.querySelector('.tok-key')?.textContent).toBe('"title"');
+    expect(block.querySelector('.row-action')?.getAttribute('aria-label')).toBe('Copy the declaration');
+  });
+
+  it("shows a query's AQL across its lines, highlighted, under its key and without the indent it shares", async () => {
+    // As a template literal in a definition leaves it: a newline first, every line indented.
+    const app = salesApp({ declaration: { ...salesApp().declaration, queries: { revenue: { dataset: 'sales', aql: '\n      explore sales {\n        measures { revenue }\n      }\n    ' } } } });
+    harness = await inspect({ tab: TAB, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(TAB);
+    const aql = [...byTestId(root, 'declaration-0')!.querySelectorAll('.tok-str')].find((string) => string.querySelector('.json-br'))!;
+    expect(aql.querySelectorAll('.json-br')).toHaveLength(4);
+    expect(aql.querySelector('.json-br')?.getAttribute('data-indent')).toBe('        ');
+    expect([...aql.querySelectorAll('.json-dedent')].map((indent) => indent.textContent)).toEqual(['      ', '      ', '      ', '    ']);
+    expect(aql.querySelector('.tok-kw')?.textContent).toBe('explore');
+    expect(aql.textContent).toBe(JSON.stringify(app.declaration.queries.revenue!.aql));
   });
 
   it('says so when nothing is declared, and leaves the wiring out with no queries', async () => {

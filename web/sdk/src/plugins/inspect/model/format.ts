@@ -108,3 +108,17 @@ export function firstEntityUnder (
     ? { entity: entity.kind, app: entity.app ?? 0, name: entity.name ?? '' }
     : undefined;
 }
+
+/**
+ * Strips the indentation the code was written with. The first line is usually trimmed already
+ * (`aql: \`explore {`), so the common indent comes from the lines after it.
+ */
+export function dedent (text: string): string {
+  const lines = text.replace(/\t/g, '  ').trim().split('\n');
+  const indentOf = (line: string) => line.length - line.trimStart().length;
+  const rest = lines.slice(1).filter((line) => line.trim());
+  const indent = rest.length ? Math.min(...rest.map(indentOf)) : 0;
+  return lines
+    .map((line, i) => (i ? line.slice(Math.min(indent, indentOf(line))) : line).trimEnd())
+    .join('\n');
+}
