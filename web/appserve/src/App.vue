@@ -210,18 +210,28 @@ function onAppMounted (host: Host, mounted: MountedDataApp): void {
   panelVersion.value += 1;
 }
 const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? false));
-// The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones (such as
-// render's downloads) in the More menu; the palette has them all. Not those for the menu on the
-// page (`target`), which the frame shows there.
+// The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones in a menu
+// per icon, so render's downloads are one Download button; the palette has them all. Not those for
+// the menu on the page (`target`), which the frame shows there.
+const ICONS = ['inspect', 'download', 'table', 'copy', 'reload'] as const;
 const chromeCommands = computed(() => runtime.value?.commands.filter((command) => !command.target) ?? []);
 const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow'));
-const overflowCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'overflow'));
-const moreOpen = ref(false);
+// An overflow command with no icon appserve draws goes in a More menu of its own.
+const MENU_LABELS: Partial<Record<typeof ICONS[number], string>> = { download: 'Download' };
+const overflowMenus = computed(() => {
+  const menus = new Map<string, { icon: typeof ICONS[number] | 'more', label: string, commands: Command[] }>();
+  for (const command of chromeCommands.value.filter((candidate) => candidate.placement === 'overflow')) {
+    const icon = (ICONS as readonly string[]).includes(command.icon ?? '') ? command.icon as typeof ICONS[number] : 'more';
+    if (!menus.has(icon)) menus.set(icon, { icon, label: (icon !== 'more' && MENU_LABELS[icon]) || 'More actions', commands: [] });
+    menus.get(icon)!.commands.push(command);
+  }
+  return [...menus.values()];
+});
+const moreOpen = ref<string>();
 function commandState (command: Command): { pressed?: boolean, disabled?: string } {
   void panelVersion.value;
   return app.value ? app.value.commandState(command.id) : { disabled: 'No Data App is open' };
 }
-const ICONS = ['inspect', 'download', 'table', 'copy', 'reload'] as const;
 const commandIcon = (command: Command) => (ICONS as readonly string[]).includes(command.icon ?? '') ? command.icon as typeof ICONS[number] : 'app';
 
 // A command's failure shows for a few seconds, out of the page's way; so does what a rendering
@@ -234,7 +244,7 @@ function showToast (text: string, error: boolean): void {
   toastTimer = setTimeout(() => { toast.value = undefined; }, 8000);
 }
 async function runCommand (command: Command): Promise<void> {
-  moreOpen.value = false;
+  moreOpen.value = undefined;
   if (!app.value) return;
   try {
     const result = await app.value.run(command.id);
@@ -402,7 +412,7 @@ function onSearchKeydown (event: KeyboardEvent): void {
 
 function onDocumentClick (event: MouseEvent): void {
   if (!(event.target as HTMLElement).closest('.problems')) problemsOpen.value = false;
-  if (!(event.target as HTMLElement).closest('.more')) moreOpen.value = false;
+  if (!(event.target as HTMLElement).closest('.more')) moreOpen.value = undefined;
 }
 
 function onPopState (): void {
@@ -462,6 +472,16 @@ onBeforeUnmount(() => {
       <div class="brand">
         <span class="logo"><Icon name="brand" /></span>
         <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
+        <button
+          type="button"
+          class="icon-button palette-open"
+          :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
+          :title="`Command palette (${PALETTE_SHORTCUT})`"
+          data-testid="palette-open"
+          @click="paletteOpen = true"
+        >
+          <Icon name="command" />
+        </button>
       </div>
       <label class="search">
         <Icon name="search" />
@@ -574,12 +594,13 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="icon-button"
-            :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
-            :title="`Command palette (${PALETTE_SHORTCUT})`"
-            data-testid="palette-open"
-            @click="paletteOpen = true"
+            aria-label="Reload Data App"
+            title="Reload Data App"
+            data-testid="reload"
+            :disabled="!selected"
+            @click="reload"
           >
-            <Icon name="command" />
+            <Icon name="reload" />
           </button>
           <button
             v-for="command in toolbarCommands"
@@ -596,22 +617,23 @@ onBeforeUnmount(() => {
           >
             <Icon :name="commandIcon(command)" />
           </button>
-          <div v-if="overflowCommands.length" class="more">
+          <div v-for="menu in overflowMenus" :key="menu.icon" class="more">
             <button
               type="button"
               class="icon-button"
-              aria-label="More actions"
-              title="More actions"
-              data-testid="more"
-              :aria-expanded="moreOpen"
+              :aria-label="menu.label"
+              :title="menu.label"
+              :data-testid="`more-${menu.icon}`"
+              aria-haspopup="menu"
+              :aria-expanded="moreOpen === menu.icon"
               :disabled="!selected"
-              @click="moreOpen = !moreOpen"
+              @click="moreOpen = moreOpen === menu.icon ? undefined : menu.icon"
             >
-              <Icon name="more" />
+              <Icon :name="menu.icon" />
             </button>
-            <div v-if="moreOpen" class="menu" role="menu" data-testid="more-menu">
+            <div v-if="moreOpen === menu.icon" class="menu" role="menu" :data-testid="`more-${menu.icon}-menu`">
               <button
-                v-for="command in overflowCommands"
+                v-for="command in menu.commands"
                 :key="command.id"
                 type="button"
                 role="menuitem"
@@ -624,17 +646,6 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            class="icon-button"
-            aria-label="Reload Data App"
-            title="Reload Data App"
-            data-testid="reload"
-            :disabled="!selected"
-            @click="reload"
-          >
-            <Icon name="reload" />
-          </button>
         </div>
         <div v-if="loading" class="progress" role="progressbar" aria-label="Loading Data App" data-testid="loading" />
       </header>
