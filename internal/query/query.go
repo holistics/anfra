@@ -46,9 +46,10 @@ type Limits struct {
 	// DefaultMaxResultRows.
 	MaxResultRows int
 	// MaxResultBytes is the most a query's result may hold, in bytes, as
-	// canal-query holds it (Arrow data in memory, about what its JSON takes): a
-	// query that produces more fails with ResultTooLarge. Zero:
-	// DefaultMaxResultBytes.
+	// canal-query measures it while streaming it (each batch's Arrow data, about
+	// what its JSON takes; neither it nor the engine holds the result whole): a
+	// query that produces more fails with ResultTooLarge. It bounds how much one
+	// query moves, not memory. Zero: DefaultMaxResultBytes.
 	MaxResultBytes int64
 	// MaxPageBytes is the most a page answered whole may hold, in its rows'
 	// bytes: a page over it fails with PageTooLarge rather than being cut short,

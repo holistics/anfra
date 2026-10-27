@@ -97,8 +97,8 @@ func (c *Client) WaitReady(ctx context.Context) error {
 // canal as they are; no DBSetting is canal's defaults), answering at most
 // TruncateRows rows (negative: all of them), and failing once its result holds
 // more than MaxResultBytes (zero: no maximum) with TypeResultTooLarge.
-// canal-query counts those bytes as the result's Arrow data in memory, not as
-// the JSON it writes.
+// canal-query counts those bytes as each batch's Arrow data, summed as it
+// streams them, not as the JSON it writes; it holds a batch, never the result.
 type Statement struct {
 	SQL            string
 	DBType         string
