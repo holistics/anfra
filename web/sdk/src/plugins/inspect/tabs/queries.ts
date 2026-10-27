@@ -10,9 +10,8 @@ import type {
 import type { TabContext } from '../../../host/contributions';
 import { columnKind } from '../model/columns';
 import { isChanged } from '../model/changes';
-import { dedent } from '../model/declaration';
 import {
-  blockNodeKey, entityAttribute, entityKey, formatAgo, formatCondition, formatTime, plural, usageOf,
+  blockNodeKey, dedent, entityAttribute, entityKey, formatAgo, formatCondition, formatTime, plural, usageOf,
 } from '../model/format';
 import {
   controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryInput,
