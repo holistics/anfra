@@ -46,6 +46,14 @@ describe('Structure', () => {
     expect(harness.mounted.panel.tab).toBe('inspect.queries');
   });
 
+  it("shows a query's rows in Data", async () => {
+    harness = await inspect({ tab: 'inspect.structure' });
+    harness.mounted.panel.select('0.0');
+    const { root } = await harness.tab('inspect.structure');
+    byTestId(root, 'view-data')!.click();
+    expect(harness.mounted.panel.tab).toBe('inspect.data');
+  });
+
   it('waits for the frame, and stops drawing once taken down', async () => {
     harness = await inspect();
     harness.mounted.panel.hide();
