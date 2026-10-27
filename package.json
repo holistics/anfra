@@ -14,7 +14,9 @@
     "build:appserve": "pnpm --filter anfra-appserve build",
     "dev:appserve": "pnpm --filter anfra-appserve dev",
     "test:appserve": "pnpm --filter anfra-appserve test",
-    "test:web": "pnpm test:sdk && pnpm test:appserve"
+    "typecheck:canvas": "pnpm --filter @holistics/anfra-canvas typecheck",
+    "test:canvas": "pnpm --filter @holistics/anfra-canvas test",
+    "test:web": "pnpm test:sdk && pnpm test:appserve && pnpm test:canvas"
   },
   "config": {
     "commitizen": {

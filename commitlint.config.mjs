@@ -31,6 +31,7 @@ export default {
         'sdk.app',
 
         'appserve',
+        'canvas',
 
         'meta',
         'deps',

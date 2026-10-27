@@ -1,0 +1,37 @@
+{
+  "name": "@holistics/anfra-canvas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A canvas for prototyping app screens with an agent: live frames of a Vite app, comments on any element, inline edits written back to source, and an MCP server for Claude",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holistics/anfra.git",
+    "directory": "web/canvas"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/model/index.ts",
+    "./frame": "./src/frame/index.ts",
+    "./vite": "./src/vite/index.ts"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "vite": ">=7",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "@vue/compiler-core": "3.5.43",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.3",
+    "vitest": "^4.1.11",
+    "vue": "^3.5.43",
+    "vue-tsc": "^3.3.12"
+  }
+}

@@ -109,6 +109,7 @@ jobs:
             || { echo "web/sdk/package.json version $sdk != manifest.yml version $release: pnpm bump sets both" >&2; exit 1; }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @holistics/anfra-sdk typecheck
+      - run: pnpm typecheck:canvas # the prototyping canvas (web/canvas), dev tooling only
       - name: build, as a release does
         run: pnpm build:web # the SDK, then the frontend, type-checked (vue-tsc)
       - run: pnpm test:web # after the build: the frontend's tests import the built SDK
