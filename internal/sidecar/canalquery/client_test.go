@@ -60,28 +60,34 @@ func streaming(t *testing.T, lines ...string) (*Client, *map[string]any) {
 	return NewClient(srv.URL, false).ForTenant("org_1"), &sent
 }
 
-// A pooling client pools a query, except on an in-memory DuckDB, whose every
-// connection is a database of its own.
+// A pooling client pools a query, except an unpooled one, or one on an
+// in-memory DuckDB, whose every connection is a database of its own.
 func TestPoolOptions(t *testing.T) {
 	canal := NewClient("http://canal", true)
 	for _, tc := range []struct {
 		dbtype   string
 		dbconfig map[string]any
 		pooled   bool
+		unpooled bool
 	}{
-		{"postgres", map[string]any{"host": "h"}, true},
-		{"duckdb", map[string]any{"path": "data/shop.duckdb"}, true},
-		{"duckdb", map[string]any{"path": "/abs/shop.duckdb?access_mode=read_only"}, true},
-		{"duckdb", nil, false},
-		{"duckdb", map[string]any{"path": ""}, false},
-		{"duckdb", map[string]any{"path": ":memory:"}, false},
-		{"duckdb", map[string]any{"path": ":memory:?threads=4"}, false},
-		{"duckdb", map[string]any{"path": "?threads=4"}, false},
+		{"postgres", map[string]any{"host": "h"}, true, false},
+		{"postgres", map[string]any{"host": "h"}, false, true},
+		{"duckdb", map[string]any{"path": "data/shop.duckdb"}, true, false},
+		{"duckdb", map[string]any{"path": "data/shop.duckdb"}, false, true},
+		{"duckdb", map[string]any{"path": "/abs/shop.duckdb?access_mode=read_only"}, true, false},
+		{"duckdb", nil, false, false},
+		{"duckdb", map[string]any{"path": ""}, false, false},
+		{"duckdb", map[string]any{"path": ":memory:"}, false, false},
+		{"duckdb", map[string]any{"path": ":memory:?threads=4"}, false, false},
+		{"duckdb", map[string]any{"path": "?threads=4"}, false, false},
 	} {
-		got := canal.poolFor(Statement{DBType: tc.dbtype, DBConfig: tc.dbconfig})
+		got := canal.poolFor(Statement{DBType: tc.dbtype, DBConfig: tc.dbconfig, Unpooled: tc.unpooled})
 		if got["enabled"] != tc.pooled {
-			t.Errorf("%s %v: pool %v, want enabled=%v", tc.dbtype, tc.dbconfig, got, tc.pooled)
+			t.Errorf("%s %v, unpooled %v: pool %v, want enabled=%v", tc.dbtype, tc.dbconfig, tc.unpooled, got, tc.pooled)
 		}
+	}
+	if got := canal.poolFor(Statement{DBType: "postgres"}); got["min_evictable_idle_s"] != 60*60 {
+		t.Errorf("pool %v, want connections idle for an hour evicted", got)
 	}
 }
 

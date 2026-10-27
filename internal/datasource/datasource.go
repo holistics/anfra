@@ -25,12 +25,15 @@ const FileName = "data_sources.yml"
 // (passed to canal-query as dbconfig) and is never serialized to the sidecar.
 // Settings are how canal-query connects and queries (timeouts, SSL, the
 // type's own options), passed to it as dbsetting; none leaves each at canal's
-// default.
+// default. Unpooled has canal-query open a connection for each statement and
+// close it after, rather than keep it in a pool: for a data source used once,
+// such as a connection being checked, which a pool would outlive by hours.
 type DataSource struct {
 	Name       string         `json:"name"`
 	DBType     string         `json:"dbtype"`
 	Connection map[string]any `json:"-"`
 	Settings   map[string]any `json:"-"`
+	Unpooled   bool           `json:"-"`
 }
 
 // first-cut schema (connection keys map straight to canal's dbconfig):

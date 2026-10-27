@@ -31,10 +31,13 @@ type Client struct {
 // enablePooling, canal-query reuses DB connections across requests from its
 // process-global pool — which only pays off when canal-query is long-lived
 // (under `anfra serve`); one-shot callers pass false. Sizes mirror the monolith.
+// A connection idle for an hour is evicted, not after canal-query's default of
+// 3 hours: a pool whose data source changed, or went unused, then stops
+// holding the warehouse's connections sooner.
 func NewClient(baseURL string, enablePooling bool) *Client {
 	pool := map[string]any{"enabled": false}
 	if enablePooling {
-		pool = map[string]any{"enabled": true, "max_total": 10, "max_idle": 5}
+		pool = map[string]any{"enabled": true, "max_total": 10, "max_idle": 5, "min_evictable_idle_s": 60 * 60}
 	}
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -103,6 +106,9 @@ type Statement struct {
 	DBSetting      map[string]any
 	TruncateRows   int
 	MaxResultBytes int64
+	// Unpooled runs st on a connection of its own, closed after it, whatever
+	// the client's pooling.
+	Unpooled bool
 }
 
 // TypeResultTooLarge is the Error.Type of a result past its MaxResultBytes.
@@ -346,11 +352,11 @@ func (c *Client) Execute(ctx context.Context, st Statement) (*Result, error) {
 }
 
 // poolFor is the pool_options st is sent with: the client's, except that an
-// in-memory DuckDB is never pooled. Each of its connections is a database of
-// its own, so a pooled one would carry one query's tables into another's, and
-// canal-query refuses it.
+// unpooled statement, or one on an in-memory DuckDB, is never pooled. Each of
+// an in-memory DuckDB's connections is a database of its own, so a pooled one
+// would carry one query's tables into another's, and canal-query refuses it.
 func (c *Client) poolFor(st Statement) map[string]any {
-	if st.DBType == "duckdb" && duckdbInMemory(st.DBConfig) {
+	if st.Unpooled || st.DBType == "duckdb" && duckdbInMemory(st.DBConfig) {
 		return map[string]any{"enabled": false}
 	}
 	return c.pool

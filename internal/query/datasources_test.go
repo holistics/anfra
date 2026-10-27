@@ -95,14 +95,15 @@ func TestUngovernedSQL(t *testing.T) {
 	}
 }
 
-// A query runs with its data source's connection and settings.
+// A query runs with its data source's connection and settings, and unpooled
+// if the data source is.
 func TestRunsWithTheDataSourcesSettings(t *testing.T) {
-	ds := datasource.DataSource{Name: "w", DBType: "postgresql", Connection: map[string]any{"host": "h"}, Settings: map[string]any{"require_ssl": true}}
+	ds := datasource.DataSource{Name: "w", DBType: "postgresql", Connection: map[string]any{"host": "h"}, Settings: map[string]any{"require_ssl": true}, Unpooled: true}
 	st, err := on(ds, canalquery.Statement{SQL: "select 1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.DBConfig["host"] != "h" || st.DBSetting["require_ssl"] != true {
+	if st.DBConfig["host"] != "h" || st.DBSetting["require_ssl"] != true || !st.Unpooled {
 		t.Errorf("statement = %+v", st)
 	}
 }
