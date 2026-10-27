@@ -70,10 +70,11 @@ const CSS = `
 .change .from { text-decoration: line-through; color: var(--anfra-color-muted); }
 .warning { margin: 0 0 8px; padding: 6px 8px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); font-size: 12px; }
 .levels { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.levels li { display: flex; gap: 8px; padding: 4px 6px; border-radius: 6px; }
-.levels li[aria-current] { background: var(--hover); }
-.levels ul { margin: 2px 0 0; padding-left: 16px; color: var(--anfra-color-muted); }
-.trust-pop { width: 280px; }
+.levels > li { display: flex; align-items: flex-start; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.levels > li > .bars { margin-top: 3px; }
+.levels > li[aria-current] { background: var(--hover); }
+.levels ul { margin: 1px 0 0; padding-left: 14px; color: var(--anfra-color-muted); }
+.trust-pop { display: block; width: 300px; }
 .trust-pop header { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 `;
 
@@ -116,7 +117,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
       shown.map((item) => h(doc, 'button', {
         type: 'button',
         class: `count ${item.dot}`,
-        title: 'Show in Queries',
+        'data-tip': 'Show in Queries',
         'data-key': `status:${item.label}`,
         'data-testid': `status-${item.label}`,
         onclick: () => showQueries(item.filter),
@@ -147,7 +148,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     },
     h(doc, 'span', { class: 'eyebrow' }, title),
     h(doc, 'span', { class: `stat-value${tone ? ` tone-${tone}` : ''}` }, value),
-    h(doc, 'span', { class: 'stat-detail', title: detail }, detail),
+    h(doc, 'span', { class: 'stat-detail', 'data-tip': detail }, detail),
     onclick && h(doc, 'span', { class: 'go' }, icon(doc, 'chevron')));
   }
 
@@ -175,7 +176,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
         stat('queries', 'Queries', String(counts.total), queries, () => showQueries('all'), counts.error ? 'error' : undefined),
         stat('controls', 'Controls', String(controls), unapplied ? `${unapplied} unapplied` : 'All applied', () => showQueries('all'), unapplied ? 'warn' : undefined)),
       h(doc, 'div', { class: 'stats two' },
-        stat('last-request', 'Last request', last ? h(doc, 'span', { title: formatTime(last.at) }, formatAgo(last.at)) : '—',
+        stat('last-request', 'Last request', last ? h(doc, 'span', { 'data-tip': formatTime(last.at) }, formatAgo(last.at)) : '—',
           last ? (lastQuery?.name ?? 'no query') : 'Nothing has run yet',
           lastQuery && (() => reveal({ entity: 'query', ...lastQuery })),
           last?.status === 'error' ? 'error' : undefined),
@@ -218,17 +219,17 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
           link(doc, [
             h(doc, 'strong', {}, `${apps.length > 1 ? `App ${change.app + 1} · ` : ''}${change.name}`),
             h(doc, 'span', {}, h(doc, 'span', { class: 'from' }, change.from), ' → ', change.to),
-          ], show, { title: targets.length ? `Applies to ${targets.join(', ')}` : 'Applies to no query', 'data-key': `change:${change.app}/${change.name}` }),
+          ], show, { 'data-tip': targets.length ? `Applies to ${targets.join(', ')}` : 'Applies to no query', 'data-key': `change:${change.app}/${change.name}` }),
           usageOf(structure, 'control', change.app, change.name) && h(doc, 'button', {
             type: 'button',
             class: 'row-action',
-            title: 'Highlight on the page',
+            'data-tip': 'Highlight on the page',
             'aria-label': 'Highlight on the page',
             'data-testid': 'change-locate',
             onclick: () => panel.locate({ app: change.app, kind: 'control', name: change.name }),
           }, icon(doc, 'locate')),
           h(doc, 'button', {
-            type: 'button', class: 'row-action', title: 'Show in Queries', 'aria-label': 'Show in Queries', 'data-testid': 'change-show', onclick: show,
+            type: 'button', class: 'row-action', 'data-tip': 'Show in Queries', 'aria-label': 'Show in Queries', 'data-testid': 'change-show', onclick: show,
           }, icon(doc, 'query')));
       }))), { class: 'tile' });
   }

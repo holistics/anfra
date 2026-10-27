@@ -90,7 +90,7 @@ describe('Declaration', () => {
     expect([...table.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['query', 'region', 'month', 'cross-filtered by']);
     const mapped = byTestId(root, 'wiring-cell-revenue-region')!;
     expect(mapped.textContent).toBe('●');
-    expect(mapped.querySelector('span')?.getAttribute('title')).toBe('orders.region');
+    expect(mapped.querySelector('span')?.getAttribute('data-tip')).toBe('orders.region');
     expect(byTestId(root, 'wiring-cell-orders-region')?.textContent).toBe('·');
     expect(byTestId(root, 'wiring-by-revenue')?.textContent).toBe('orders');
     expect(byTestId(root, 'wiring-by-orders')?.textContent).toBe('—');

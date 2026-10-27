@@ -44,7 +44,7 @@ describe('Data', () => {
     const card = await open(cardOf(root, 'revenue'));
     const rows = byTestId(card, 'table-rows')!;
     expect([...rows.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['region', 'revenue']);
-    expect(byTestId(card, 'column-revenue')?.getAttribute('title')).toContain('Metric · sum');
+    expect(byTestId(card, 'column-revenue')?.dataset.tip).toContain('Metric · sum');
     expect([...rows.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent))).toEqual([['EU', '1200.5'], ['US', '980']]);
     expect(byTestId(card, 'table-count')?.textContent).toContain('2 rows');
     expect(byTestId(card, 'download-csv')).not.toBeNull();

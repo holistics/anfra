@@ -80,7 +80,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
           'aria-selected': String(selected),
           'aria-expanded': node.children.length ? String(open) : undefined,
           style: `padding-left:${4 + depth * 14}px`,
-          title: node.problems.length ? node.problems.join('\n') : undefined,
+          'data-tip': node.problems.length ? node.problems.join('\n') : undefined,
           'data-key': `node:${node.key}`,
           'data-testid': `node-${node.key}`,
           onmouseenter: () => panel.highlight(node.key),
@@ -116,7 +116,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
           declared(node) && h(doc, 'button', {
             type: 'button',
             class: 'row-action',
-            title: 'Show in Queries',
+            'data-tip': 'Show in Queries',
             'aria-label': 'Show in Queries',
             'data-testid': 'show-in-queries',
             onclick: (event: Event) => {
@@ -127,7 +127,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
           canRender && renderable(node) && h(doc, 'button', {
             type: 'button',
             class: 'row-action',
-            title: 'Download PNG',
+            'data-tip': 'Download PNG',
             'aria-label': 'Download PNG',
             'data-testid': 'download-node',
             onclick: (event: Event) => {
@@ -172,11 +172,11 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
         type: 'button',
         class: 'tool',
         'aria-pressed': String(panel.picking),
-        title: 'Click a part of the page to select it here. Esc stops.',
+        'data-tip': 'Click a part of the page to select it here. Esc stops.',
         'data-testid': 'pick',
         onclick: () => panel.pick(!panel.picking),
       }, icon(doc, 'pick'), 'Pick'),
-      problems > 0 && h(doc, 'span', { class: 'pill error', title: 'Problems in the markup' }, plural(problems, 'problem')));
+      problems > 0 && h(doc, 'span', { class: 'pill error', 'data-tip': 'Problems in the markup' }, plural(problems, 'problem')));
     // A node selected elsewhere (a pick, a link): its ancestors open, so it can be seen.
     if (structure && panel.selection !== null && panel.selection !== revealed) {
       ancestorsOf(structure.nodes, panel.selection)?.forEach((key) => collapsed.delete(key));

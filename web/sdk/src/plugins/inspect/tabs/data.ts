@@ -134,7 +134,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       meta.isMeasure && `Type · ${meta.semantic_type}`,
       meta.adhoc && "Ad hoc: the query's own expression, not the dataset's",
     ].filter(Boolean);
-    return h(doc, 'span', { class: 'col', tabindex: '0', title: lines.join('\n'), 'data-testid': `column-${column}` }, columnIcon(doc, meta), label);
+    return h(doc, 'span', { class: 'col', tabindex: '0', 'data-tip': lines.join('\n'), 'data-testid': `column-${column}` }, columnIcon(doc, meta), label);
   }
 
   function body (name: string, query: InspectedQuery, latest: RequestEntry | undefined): Node {
@@ -159,11 +159,11 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       h(doc, 'div', { class: 'count', 'data-testid': 'table-count' },
         rowCount(preview.length, latest.numRows),
         h(doc, 'span', { 'aria-hidden': 'true' }, '·'),
-        h(doc, 'span', { title: returned.toLocaleString() }, formatAgo(returned)),
+        h(doc, 'span', { 'data-tip': returned.toLocaleString() }, formatAgo(returned)),
         canExport && h(doc, 'button', {
           type: 'button',
           class: 'row-action',
-          title: 'Download CSV',
+          'data-tip': 'Download CSV',
           'aria-label': 'Download CSV',
           'data-testid': 'download-csv',
           onclick: () => download(doc, `${name}.csv`, toCsv(columns, preview, labels)),
@@ -183,7 +183,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       h(doc, 'button', {
         type: 'button',
         class: 'row-action',
-        title: 'Query',
+        'data-tip': 'Query',
         'aria-label': 'Query',
         'data-testid': 'show-query',
         onclick: (event: Event) => {
