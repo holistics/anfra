@@ -176,8 +176,8 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		return fmt.Errorf("the repo has %d files to publish; %s takes at most %d", len(files), org, limits.Files)
 	}
 	for _, f := range files {
-		if sizes[f] > limits.UploadBytes {
-			return fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], org, limits.UploadBytes)
+		if sizes[f] > limits.MaxFileBytes() {
+			return fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], org, limits.MaxFileBytes())
 		}
 	}
 	// What was published since this folder last published is replaced, unseen:

@@ -408,6 +408,25 @@ func TestPublishBatchesUploads(t *testing.T) {
 	}
 }
 
+// A file past the server's largest is refused by name, before anything is
+// uploaded; a server that does not say takes any file one upload call fits.
+func TestPublishRefusesLargeFiles(t *testing.T) {
+	s, url := newServer(t)
+	s.limits.FileBytes = 4
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"a.aml": "1", "big.aml": "12345"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err == nil || !strings.Contains(err.Error(), "big.aml is 5 bytes") {
+		t.Errorf("past file_bytes: %v", err)
+	}
+	if s.uploads != 0 {
+		t.Errorf("%d upload calls, want none", s.uploads)
+	}
+	s.limits.FileBytes = 0
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Errorf("without file_bytes: %v", err)
+	}
+}
+
 // Content collected between upload and publish is uploaded again, once.
 func TestPublishUploadsAgainWhatWasCollected(t *testing.T) {
 	s, url := newServer(t)

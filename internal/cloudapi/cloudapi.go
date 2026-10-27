@@ -78,6 +78,17 @@ type Limits struct {
 	Files       int `json:"files"`
 	UploadBlobs int `json:"upload_blobs"`
 	UploadBytes int `json:"upload_bytes"`
+	// FileBytes is the largest file; a server that does not send it takes any
+	// file that fits in one upload call.
+	FileBytes int `json:"file_bytes"`
+}
+
+// MaxFileBytes is the largest file the server takes.
+func (l Limits) MaxFileBytes() int {
+	if l.FileBytes > 0 {
+		return min(l.FileBytes, l.UploadBytes)
+	}
+	return l.UploadBytes
 }
 
 // Person is who published a revision. Email is empty once the account is gone,
