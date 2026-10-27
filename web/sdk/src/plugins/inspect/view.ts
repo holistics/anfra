@@ -49,6 +49,22 @@ const PATHS = {
   query: 'M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3z M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6 M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3',
   tree: 'M5 4v16 M5 8h6 M5 16h6 M13 6h6v4h-6z M13 14h6v4h-6z',
   search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M16 16l4 4',
+  // Lineage: a card per kind, and the canvas's tools.
+  lineage: 'M4 6h5v4H4z M15 4h5v4h-5z M15 16h5v4h-5z M9 8h3v10h3 M12 6h3',
+  control: 'M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4',
+  block: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
+  metric: 'M18 5H6l6 7-6 7h12',
+  dimension: 'M3 17L17 3l4 4L7 21z M7 13l2 2 M10 10l2 2 M13 7l2 2',
+  dataset: 'M4 8l8-4 8 4-8 4z M4 12l8 4 8-4 M4 16l8 4 8-4',
+  model: 'M4 7l8-4 8 4v10l-8 4-8-4z M4 7l8 4 8-4 M12 11v10',
+  focus: 'M4 8V4h4 M16 4h4v4 M20 16v4h-4 M8 20H4v-4 M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',
+  expand: 'M14 4h6v6 M10 20H4v-6 M20 4l-7 7 M4 20l7-7',
+  help: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6 M12 17v.5',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',
+  hidden: 'M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.9 M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6 M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  plus: 'M12 5v14 M5 12h14',
+  minus: 'M5 12h14',
+  fit: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -204,7 +220,7 @@ const TIP_WARM = 400;
 const TIP_GAP = 4;
 const TIP_MARGIN = 8;
 
-interface Tooltips {
+export interface Tooltips {
   toggle: (element: HTMLElement) => void;
   /** After a redraw: follow the element shown on to its new self by `data-key`, or hide. */
   redrawn: () => void;
@@ -220,7 +236,7 @@ const controllers = new WeakMap<Node, Tooltips>();
  * has one, so no scrolling box or panel edge clips it, and placed under its element, or above it,
  * inside the window.
  */
-function tooltips (root: ShadowRoot): Tooltips {
+export function tooltips (root: ShadowRoot): Tooltips {
   const doc = root.ownerDocument;
   const win = doc.defaultView!;
   const box = h(doc, 'div', { class: 'tooltip', role: 'tooltip', id: 'anfra-tooltip', popover: 'manual', hidden: true });

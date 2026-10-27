@@ -453,3 +453,18 @@ describe('lineage', () => {
     expect(bare.edges.filter((e) => e.source === 'dataset:ecommerce').map((e) => e.target)).toEqual(['model:orders']);
   });
 });
+
+describe('a block marked twice', () => {
+  test('is its first node, drawing the queries marked in either', () => {
+    const twice: InspectedStructure = {
+      nodes: [
+        { key: '0', kind: 'block', id: 'kpis', problems: [], children: [{ key: '0.0', kind: 'query', app: 0, name: 'orders', problems: [], children: [] }] },
+        { key: '1', kind: 'block', id: 'kpis', problems: ['Another block is marked kpis.'], children: [{ key: '1.0', kind: 'query', app: 0, name: 'later', problems: [], children: [] }] },
+      ],
+      usage: {},
+    };
+    const g = buildLineageGraph([app], twice, undefined);
+    expect(g.nodes.find((n) => n.id === 'block:kpis')?.structureKey).toBe('0');
+    expect(g.edges.filter((e) => e.source === 'block:kpis').map((e) => e.target).sort()).toEqual(['query:0/later', 'query:0/orders']);
+  });
+});

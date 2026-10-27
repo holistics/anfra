@@ -80,17 +80,17 @@ export function lineageTargets (apps: readonly InspectedApp[]): LineageTarget[] 
   return [...targets.values()].sort((a, b) => targetKey(a).localeCompare(targetKey(b)));
 }
 
-/** Each block in the tree, with the queries marked inside it. */
+/** Each block in the tree, by its first node, with the queries marked inside any node of that id. */
 function blocksOf (nodes: StructureNode[], out = new Map<string, { node: StructureNode, queries: Set<string> }>()) {
   for (const node of nodes) {
     if (node.kind === 'block' && node.id) {
-      const queries = new Set<string>();
+      const block = out.get(node.id) ?? { node, queries: new Set<string>() };
       const walk = (n: StructureNode) => {
-        if (n.kind === 'query' && n.name !== undefined) queries.add(`${n.app ?? 0}/${n.name}`);
+        if (n.kind === 'query' && n.name !== undefined) block.queries.add(`${n.app ?? 0}/${n.name}`);
         n.children.forEach(walk);
       };
       node.children.forEach(walk);
-      out.set(node.id, { node, queries });
+      out.set(node.id, block);
     }
     blocksOf(node.children, out);
   }
