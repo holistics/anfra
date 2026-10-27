@@ -1,3 +1,4 @@
+import type { DatasetDescriptor, User } from '../common/types';
 import type { CommandContribution, TabContribution } from './contributions';
 
 /**
@@ -86,6 +87,9 @@ export interface MountContext {
   readonly frame: HTMLIFrameElement;
   /** The host page's document, where the frame is. */
   readonly document: Document;
+  /** Who reads the Data App, and the datasets it may query: what the frame is provisioned with. */
+  readonly user: User;
+  readonly datasets: Readonly<Record<string, DatasetDescriptor>>;
   /** Make a call a frame half answers, in this frame. */
   call: <T = unknown>(name: string, request?: unknown, options?: CallOptions) => Promise<T>;
   /** Send this frame an event. */
