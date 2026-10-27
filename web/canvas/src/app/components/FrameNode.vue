@@ -148,9 +148,7 @@ function done (e: Event) {
     </div>
     <div class="ac-frame-overlay">
       <div v-if="hoverBox && state.tool !== 'play'" class="ac-outline hover" :style="box(hoverBox)" />
-      <div v-if="pickedBox" class="ac-outline picked" :style="box(pickedBox)">
-        <span class="ac-outline-name">{{ pickedName }}</span>
-      </div>
+      <div v-if="pickedBox" class="ac-outline picked" :style="box(pickedBox)" />
       <div v-if="drop" class="ac-outline drop" :class="drop.class" :style="drop.style" />
       <div v-if="focused" class="ac-outline focus" :style="box(focused)" />
       <button
@@ -166,6 +164,10 @@ function done (e: Event) {
       >
         {{ p.n }}
       </button>
+    </div>
+    <!-- The picked element's name, above it: outside the frame's clip, so it shows over the frame's edge -->
+    <div v-if="pickedBox" class="ac-outline-tag" :style="{ left: `${Math.min(Math.max(pickedBox.x, 0), frame.width)}px`, top: `${Math.min(Math.max(pickedBox.y, 0), frame.height)}px` }">
+      <span class="ac-outline-name">{{ pickedName }}</span>
     </div>
     <div v-if="selected && state.selection.length === 1" class="ac-handle" data-hit="resize" :data-id="frame.id" />
   </div>

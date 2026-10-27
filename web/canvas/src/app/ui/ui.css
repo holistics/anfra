@@ -9,9 +9,9 @@
  *
  * The rules:
  * - Two control sizes: 32px in panels, bars and popovers; 24px on the board's own labels.
- * - One edge for every control, button, field and select alike: `--ac-line-control`. Hover darkens
- *   it to `--ac-line-hover`. Focus turns a field's or a select's edge violet; everything else takes
- *   the 2px violet outline.
+ * - One edge for every control, button, field and select alike: `--ac-line-control`, at rest and on
+ *   hover. Hover shows as a faint fill (`--ac-fill-hover`), never a darker edge. Focus turns a
+ *   field's or a select's edge violet; everything else takes the 2px violet outline.
  * - Three type sizes: 12/16 (captions, labels of properties, keys), 14/20 (everything else), 20/28
  *   (an empty state's title). Weights 400, 500 for controls and names, 600 for headings.
  * - Three radii: 6 (rows, small controls, chips), 10 (controls), 14 (bars, dialogs). Where one rounded
@@ -35,6 +35,8 @@
   --ac-inverted: var(--anfra-color-background-inverted-default, oklch(0.201 0.022 301.1));
   --ac-on-inverted: var(--anfra-color-text-inverted-default, oklch(0.985 0.003 95));
   --ac-disabled: var(--anfra-color-background-disabled, oklch(0.201 0.022 301.1 / 0.04));
+  /* A control under the pointer: its fill, a shade off the surface. Its edge stays as it is */
+  --ac-fill-hover: color-mix(in oklch, var(--ac-surface), var(--ac-ink) 4%);
 
   /* Ink */
   --ac-ink: var(--anfra-color-text-default, oklch(0.201 0.022 301.1));
@@ -48,7 +50,6 @@
   --ac-line-weak: var(--anfra-color-border-weak, oklch(0.201 0.022 301.1 / 0.08));
   --ac-line: var(--anfra-color-border-default, oklch(0.201 0.022 301.1 / 0.12));
   --ac-line-control: var(--anfra-color-border-strong, oklch(0.201 0.022 301.1 / 0.24));
-  --ac-line-hover: var(--anfra-color-border-hover, oklch(0.485 0.022 306.3));
 
   /* Violet: selection, focus, the primary action */
   --ac-violet: var(--anfra-color-background-highlight-default, oklch(0.565 0.194 300.3));
@@ -161,7 +162,7 @@
 .ac-btn[aria-pressed='true'] { border-color: transparent; background: var(--ac-selected); color: var(--ac-violet-text); }
 .ac-btn[aria-pressed='true'] > svg { color: var(--ac-violet-icon); }
 @media (hover: hover) and (pointer: fine) {
-  .ac-btn:hover:not(:disabled) { border-color: var(--ac-line-hover); }
+  .ac-btn:hover:not(:disabled) { background: var(--ac-fill-hover); }
   .ac-btn.primary:hover:not(:disabled) { border-color: transparent; background: var(--ac-violet-hover); }
   .ac-btn.ghost:hover:not(:disabled) { border-color: transparent; background: var(--ac-hover); color: var(--ac-ink); }
   .ac-btn.ghost:hover:not(:disabled) > svg { color: var(--ac-icon); }
@@ -198,7 +199,7 @@
   background: var(--ac-surface);
   color: var(--ac-ink);
   cursor: text;
-  transition: border-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
+  transition: border-color 160ms var(--ac-ease), background-color 160ms var(--ac-ease), box-shadow 160ms var(--ac-ease);
 }
 .ac-field > :is(input, textarea) {
   flex: 1;
@@ -225,7 +226,7 @@
 /* No frame, where the field is the whole surface: the command palette's search */
 .ac-field.bare, .ac-field.bare:focus-within { padding: 0; border-color: transparent; background: transparent; box-shadow: none; }
 @media (hover: hover) and (pointer: fine) {
-  .ac-field:hover:not(:focus-within, .bare) { border-color: var(--ac-line-hover); }
+  .ac-field:hover:not(:focus-within, .bare) { background: var(--ac-fill-hover); }
 }
 
 /* --- Select: a trigger framed like a field, and a floating list of items ------------------------- */
@@ -256,7 +257,7 @@
 .ac-select.ghost[aria-expanded='true'] { border-color: transparent; background: var(--ac-active); box-shadow: none; }
 .ac-select.ghost:focus-visible { border-color: transparent; box-shadow: none; outline: 2px solid var(--ac-violet); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) {
-  .ac-select:not(.ghost, [aria-expanded='true']):hover { border-color: var(--ac-line-hover); }
+  .ac-select:not(.ghost, [aria-expanded='true']):hover { background: var(--ac-fill-hover); }
   .ac-select.ghost:not([aria-expanded='true']):hover { background: var(--ac-hover); }
 }
 .ac-swatch { flex-shrink: 0; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ac-line); }
@@ -563,7 +564,7 @@ details.ac-section:not([open]) { gap: 0; }
 .ac-tile[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--ac-violet); }
 .ac-tile-name { padding: 6px 10px 8px; font-size: 12px; line-height: 16px; font-weight: 500; }
 @media (hover: hover) and (pointer: fine) {
-  .ac-tile:hover { box-shadow: 0 0 0 1px var(--ac-line-hover), var(--ac-e1); }
+  .ac-tile:hover { box-shadow: 0 0 0 1px var(--ac-line-control), var(--ac-e1); }
   .ac-tile[aria-pressed='true']:hover { box-shadow: 0 0 0 2px var(--ac-violet); }
 }
 

@@ -154,7 +154,7 @@ function sendReply (c: Comment) {
         @click="focusComment(c)"
       >
         <div class="ac-row">
-          <span class="ac-pin static" :class="{ resolved: c.status === 'resolved' }">{{ pinNumber(store, c.id) }}</span>
+          <span class="ac-pin listed" :class="{ resolved: c.status === 'resolved' }">{{ pinNumber(store, c.id) }}</span>
           <span class="ac-caption ac-truncate">{{ where(c) }}</span>
         </div>
         <p class="ac-comment-body">{{ c.body }}</p>

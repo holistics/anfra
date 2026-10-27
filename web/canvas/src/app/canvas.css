@@ -192,6 +192,8 @@
 .ac-outline { position: absolute; pointer-events: none; }
 .ac-outline.hover { box-shadow: 0 0 0 calc(1px * var(--ac-inv)) var(--ac-violet); background: color-mix(in oklch, var(--ac-violet) 6%, transparent); }
 .ac-outline.picked { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); }
+/* A zero-size anchor at the picked element's top left, in the frame but not clipped by it */
+.ac-outline-tag { position: absolute; width: 0; height: 0; pointer-events: none; }
 .ac-outline-name {
   position: absolute;
   left: calc(-2px * var(--ac-inv));
@@ -282,7 +284,7 @@
 }
 .ac-pin.resolved { background: var(--ac-ink-muted); }
 .ac-pin.active { outline: 2px solid var(--ac-violet); outline-offset: 2px; }
-.ac-pin.static { position: static; flex-shrink: 0; transform: none; box-shadow: none; border-width: 0; min-width: 20px; height: 20px; padding: 0 5px; }
+.ac-pin.listed { position: static; flex-shrink: 0; transform: none; box-shadow: none; border-width: 0; min-width: 20px; height: 20px; padding: 0 5px; }
 
 /* The resize handle of what is selected */
 .ac-handle {

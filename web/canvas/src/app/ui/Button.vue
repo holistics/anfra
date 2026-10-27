@@ -21,7 +21,7 @@ withDefaults(defineProps<{
   <button
     v-tip="{ text: tip ?? ($slots.default ? '' : label ?? ''), keys }"
     class="ac-btn"
-    :class="[variant, { icon: !$slots.default, sm: small }]"
+    :class="[variant === 'outline' ? '' : variant, { icon: !$slots.default, sm: small }]"
     :type="type"
     :aria-label="$slots.default ? undefined : label"
   >
