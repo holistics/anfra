@@ -170,15 +170,41 @@ export function collapsible (doc: Document, key: string, summary: Children, body
 }
 
 /**
- * A button that shows `content` beside it until clicked again, or until focus leaves. Given a
- * `data-key`, it stays open across a redraw.
+ * A button that shows `content` under it until clicked again, or until focus leaves, the panel
+ * scrolls or the window resizes. Given a `data-key`, it stays open across a redraw. The box is a
+ * manual popover, so it sits in the top layer where the browser has one, and no scrolling box or
+ * panel edge clips it; it is placed against the viewport, flipped above or shifted left to fit.
  */
 export function popover (doc: Document, trigger: Children, content: () => Children, attributes: Attributes = {}): HTMLElement {
-  const box = h(doc, 'span', { class: 'popover', role: 'tooltip', hidden: true });
+  const win = doc.defaultView!;
+  const box = h(doc, 'span', { class: 'popover', role: 'tooltip', popover: 'manual', hidden: true });
+  const place = () => {
+    const anchor = button.getBoundingClientRect();
+    const size = box.getBoundingClientRect();
+    const room = { width: win.innerWidth, height: win.innerHeight };
+    const below = anchor.bottom + POP_GAP;
+    const top = below + size.height <= room.height - POP_MARGIN || anchor.top - POP_GAP - size.height < POP_MARGIN ? below : anchor.top - POP_GAP - size.height;
+    const left = Math.max(POP_MARGIN, Math.min(anchor.left, room.width - POP_MARGIN - size.width));
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+  };
+  const away = () => set(false);
   const set = (show: boolean) => {
+    if (show === !box.hidden) return;
+    const root = wrap.getRootNode();
+    // A scroll inside the tab's shadow root doesn't reach the document, so both are listened to.
+    for (const target of [win, root]) {
+      if (show) target.addEventListener('scroll', away, true);
+      else target.removeEventListener('scroll', away, true);
+    }
+    if (show) win.addEventListener('resize', away);
+    else win.removeEventListener('resize', away);
     if (show) replace(doc, box, content());
     box.hidden = !show;
+    if (show) box.showPopover?.();
+    else box.hidePopover?.();
     button.setAttribute('aria-expanded', String(show));
+    if (show) place();
   };
   const button = h(doc, 'button', {
     type: 'button',
@@ -195,9 +221,13 @@ export function popover (doc: Document, trigger: Children, content: () => Childr
     if (!wrap.contains((event as FocusEvent).relatedTarget as Node | null)) set(false);
   });
   const key = attributes['data-key'];
-  if (typeof key === 'string' && kept?.has(key)) set(true);
+  // Reopened once it is in the page, so it can be placed.
+  if (typeof key === 'string' && kept?.has(key)) queueMicrotask(() => { if (wrap.isConnected) set(true); });
   return wrap;
 }
+
+const POP_GAP = 4;
+const POP_MARGIN = 8;
 
 /** The trust meter: one rising bar per level, filled up to the one reached. */
 export function trustBars (doc: Document, trust: Trust, size: 'sm' | 'md' | 'lg' = 'md'): HTMLElement {
@@ -421,7 +451,7 @@ code.wrap { overflow-wrap: anywhere; }
 /* Popovers */
 .pop { position: relative; display: inline-flex; }
 .pop-trigger { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 4px; color: inherit; }
-.popover { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; width: max-content; max-width: 280px; padding: 8px 10px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); font-size: 12px; font-weight: normal; text-transform: none; letter-spacing: normal; white-space: normal; }
+.popover { position: fixed; inset: auto; margin: 0; z-index: 10; width: max-content; max-width: 280px; padding: 8px 10px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); font-size: 12px; font-weight: normal; text-transform: none; letter-spacing: normal; white-space: normal; }
 /* Code */
 .code { margin-top: 6px; border: 1px solid var(--anfra-color-border); border-radius: 6px; overflow: hidden; position: relative; }
 .code-head { display: flex; align-items: center; gap: 2px; padding: 0 4px; border-bottom: 1px solid var(--anfra-color-border); background: var(--subtle); }
