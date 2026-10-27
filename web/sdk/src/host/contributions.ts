@@ -68,6 +68,8 @@ export interface TabContext {
   readonly tab: string;
   /** The panel it is in: the node selected, the frame's snapshot, highlight, locate, pick. */
   readonly panel: Panel;
+  /** The mount the panel is for: a plugin keys what it keeps about the frame by it. */
+  readonly mount: MountContext;
   /** The plugins the host installed. */
   readonly plugins: readonly PluginInfo[];
   /** The host page's document. */
