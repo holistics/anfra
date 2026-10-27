@@ -124,7 +124,7 @@ const host = createHost({                                // one per page
   plugins: [
     corePlugin(backend),                                 // required: runs the queries
     exportPlugin(backend),                               // query.export()
-    lineagePlugin(backend),                              // Anfra.lineage()
+    lineagePlugin(backend),                              // Anfra.lineage(), and the panel's Lineage tab
     renderPlugin(),                                      // Anfra.render(): the host saves PNGs and PDFs the frame makes
     inspectPlugin(),                                     // what an inspect panel needs
   ],

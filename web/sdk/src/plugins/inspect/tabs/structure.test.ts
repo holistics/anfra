@@ -1,6 +1,7 @@
 import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
+import { lineagePlugin } from '../../lineage';
 import { byTestId, inspect, type Harness } from './testSupport';
 
 let harness: Harness | undefined;
@@ -62,5 +63,21 @@ describe('Structure', () => {
     expect(byTestId(root, 'inspect-waiting')).not.toBeNull();
     unmount();
     expect(root.childNodes).toHaveLength(0);
+  });
+
+  it('shows a node in Lineage, selected, when lineage is installed', async () => {
+    harness = await inspect({ tab: 'inspect.structure', plugins: [lineagePlugin({ lineage: vi.fn(async () => ({ results: [] })) } as never)] });
+    const { root } = await harness.tab('inspect.structure');
+    byTestId(root, 'node-0')!.querySelector<HTMLElement>('[data-testid="show-in-lineage"]')!.click();
+    expect(harness.mounted.panel.tab).toBe('lineage.lineage');
+    expect(harness.mounted.panel.selection).toBe('0');
+  });
+
+  it('offers no Lineage link without lineage', async () => {
+    harness = await inspect({ tab: 'inspect.structure' });
+    harness.mounted.panel.select('0');
+    const { root } = await harness.tab('inspect.structure');
+    expect(byTestId(root, 'show-in-lineage')).toBeNull();
+    expect(byTestId(root, 'detail-show-in-lineage')).toBeNull();
   });
 });
