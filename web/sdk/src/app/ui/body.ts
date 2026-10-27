@@ -62,6 +62,9 @@ export interface UiBody {
 const STYLES = `
 :host { all: initial; }
 * { box-sizing: border-box; }
+/* A part's container: over the whole viewport in the top layer, letting the pointer through to the page. */
+.part { position: fixed; inset: 0; width: auto; height: auto; margin: 0; padding: 0; border: 0; overflow: visible; background: none; pointer-events: none; }
+.surface, .backdrop { pointer-events: auto; }
 .surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, #18181b); background: var(--anfra-color-bg, #fff);
   border: 1px solid var(--anfra-color-border, #e4e4e7); border-radius: var(--anfra-radius, 8px);
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%), 0 1px 3px rgb(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
@@ -131,14 +134,22 @@ function beside (win: Window, size: { width: number, height: number }, anchor: R
   return { left: clamp(left, size.width, width), top: clamp(top, size.height, height) };
 }
 
-/** A part of the UI: its stylesheet and a container in the kernel's root, removed by the returned function. */
+/**
+ * A part of the UI: its stylesheet and a container in the kernel's root, removed by the returned
+ * function. The container is a manual popover, shown at once, so it sits in the top layer: above
+ * the author's own dialogs and popovers, and placed against the viewport whatever the page
+ * transforms. Without the Popover API it is the plugin layer's top z-index that lifts it.
+ */
 function part (root: ShadowRoot): { container: HTMLElement, remove: () => void } {
   const doc = root.ownerDocument;
   const container = doc.createElement('div');
+  container.className = 'part';
+  container.setAttribute('popover', 'manual');
   const style = doc.createElement('style');
   style.textContent = STYLES;
   container.append(style);
   root.append(container);
+  container.showPopover?.();
   return { container, remove: () => container.remove() };
 }
 
@@ -275,8 +286,19 @@ function modal (root: ShadowRoot, options: ModalOptions): () => void {
   // The page under the modal can't be reached, by pointer, keyboard or scroll, while it is open:
   // everything in the body but the plugin layer is inert, and the page doesn't scroll.
   const layer = root.host.parentElement;
-  const inerted = [...doc.body.children].filter((element) => element !== layer && !element.hasAttribute('inert'));
-  inerted.forEach((element) => element.setAttribute('inert', ''));
+  const realm = win as Window & typeof globalThis;
+  const inerted: Element[] = [];
+  const inert = (elements: Iterable<Node>) => {
+    for (const element of elements) {
+      if (!(element instanceof realm.Element) || element === layer || element.hasAttribute('inert')) continue;
+      element.setAttribute('inert', '');
+      inerted.push(element);
+    }
+  };
+  inert(doc.body.children);
+  // What the page adds while the modal is open, a toast say, can't be reached either.
+  const observer = new realm.MutationObserver((records) => records.forEach((record) => inert(record.addedNodes)));
+  observer.observe(doc.body, { childList: true });
   // The page stops scrolling, and keeps its scrollbar's room so hiding the bar moves nothing.
   const html = doc.documentElement;
   const saved = { overflow: html.style.overflow, gutter: html.style.getPropertyValue('scrollbar-gutter') };
@@ -295,6 +317,7 @@ function modal (root: ShadowRoot, options: ModalOptions): () => void {
     closed = true;
     doc.removeEventListener('keydown', onKey, true);
     try { unmount(); } catch { /* it is going anyway */ }
+    observer.disconnect();
     inerted.forEach((element) => element.removeAttribute('inert'));
     html.style.overflow = saved.overflow;
     if (saved.gutter) html.style.setProperty('scrollbar-gutter', saved.gutter);
