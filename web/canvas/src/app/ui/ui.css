@@ -65,6 +65,10 @@
   --ac-success: var(--anfra-color-text-success-default, oklch(0.479 0.1 151.8));
   --ac-success-icon: var(--anfra-color-icon-success-default, oklch(0.63 0.15 152));
   --ac-danger: var(--anfra-color-text-danger-default, oklch(0.501 0.17 27.2));
+  /* Changes: lines added and taken out, and the elements a change touched on a screen */
+  --ac-added: var(--anfra-color-background-success-secondary-default, oklch(0.972 0.021 152.2));
+  --ac-removed: var(--anfra-color-background-danger-secondary-default, oklch(0.971 0.014 22.8));
+  --ac-changed: var(--anfra-color-icon-warning-default, oklch(0.64 0.139 69.5));
 
   /* Depth: e1 resting, e2 floating. Nothing else */
   --ac-e1: var(--shadow-e1, 0 1px 0 rgb(24 20 31 / 0.04), 0 1px 2px rgb(24 20 31 / 0.06));

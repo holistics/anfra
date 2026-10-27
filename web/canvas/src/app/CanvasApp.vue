@@ -119,7 +119,8 @@ function shortcut (key: string, meta: boolean, shift: boolean, alt = false): boo
     return true;
   }
   if (k === 'escape') {
-    if (state.composer) state.composer = null;
+    if (state.compare) state.compare = null;
+    else if (state.composer) state.composer = null;
     else if (state.placing) state.placing = '';
     else if (state.picked) state.picked = null;
     else state.selection = [];
@@ -173,6 +174,7 @@ onMounted(async () => {
   window.addEventListener('hashchange', openFromHash);
   await store.loadList();
   await openFromHash();
+  void store.loadChanges();
 });
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown);

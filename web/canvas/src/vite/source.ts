@@ -90,6 +90,47 @@ function find (descriptor: SFCDescriptor, line: number, column: number): Found {
   return found;
 }
 
+/**
+ * The elements a change touched: those whose own lines (the opening tag, and the text right in
+ * them) take in a changed line. Answers their places, as the screens tag them. `outermost` stops
+ * at a touched element, leaving out the ones inside it.
+ */
+export function touched (code: string, file: string, lines: Set<number>, outermost = false): string[] {
+  let descriptor: SFCDescriptor;
+  try {
+    descriptor = parse(code, { filename: file }).descriptor;
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  const any = (from: number, to: number) => {
+    for (let l = from; l <= to; l++) if (lines.has(l)) return true;
+    return false;
+  };
+  const walk = (nodes: TemplateChildNode[]) => {
+    for (const n of nodes) {
+      if (n.type === NodeTypes.ELEMENT) {
+        if (!SKIP.has(n.tag) && n.tagType !== ElementTypes.TEMPLATE && n.tagType !== ElementTypes.SLOT) {
+          const inner = n.children.find((c) => c.type !== NodeTypes.TEXT && c.type !== NodeTypes.COMMENT && c.type !== 5 /* interpolation */);
+          const head = any(n.loc.start.line, inner ? Math.max(n.loc.start.line, inner.loc.start.line - 1) : n.loc.end.line);
+          const text = n.children.some((c) => (c.type === NodeTypes.TEXT || c.type === 5) && any(c.loc.start.line, c.loc.end.line));
+          if (head || text) {
+            out.push(`${file}:${n.loc.start.line}:${n.loc.start.column}`);
+            if (outermost) continue;
+          }
+        }
+        walk(n.children);
+      } else if (n.type === NodeTypes.IF) {
+        for (const b of n.branches) walk(b.children);
+      } else if (n.type === NodeTypes.FOR) {
+        walk(n.children);
+      }
+    }
+  };
+  if (descriptor.template?.ast) walk(descriptor.template.ast.children);
+  return out;
+}
+
 const written = (nodes: TemplateChildNode[]) => nodes.filter((c) => !(c.type === NodeTypes.TEXT && !c.content.trim()) && c.type !== NodeTypes.COMMENT);
 
 export class EditError extends Error {}

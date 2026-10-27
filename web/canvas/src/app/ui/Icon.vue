@@ -50,6 +50,9 @@ export const PATHS = {
   textLeft: '<path d="M21 5H3"/><path d="M15 12H3"/><path d="M17 19H3"/>',
   textCenter: '<path d="M21 5H3"/><path d="M17 12H7"/><path d="M19 19H5"/>',
   textRight: '<path d="M21 5H3"/><path d="M21 12H9"/><path d="M21 19H7"/>',
+  branch: '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  commit: '<circle cx="12" cy="12" r="3"/><line x1="3" x2="9" y1="12" y2="12"/><line x1="15" x2="21" y1="12" y2="12"/>',
+  compare: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

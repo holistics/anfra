@@ -47,6 +47,54 @@
 .ac-reply-author { color: var(--ac-ink-weak); font-weight: 500; }
 .ac-comment-actions { margin-top: 6px; }
 
+/* Changes: the branch, the changed files and their lines, the commit box, the branch's commits */
+.ac-changes-head { display: grid; gap: 8px; padding: 4px 0 8px; }
+.ac-changes-head > .ac-row > svg { flex-shrink: 0; color: var(--ac-icon-weak); }
+.ac-changes-branch { font-family: var(--ac-mono); font-size: 12px; line-height: 16px; font-weight: 500; }
+.ac-changes-sub { padding: 16px 4px 4px; }
+.ac-changes-nested { padding-left: 20px; }
+p.ac-changes-nested { padding: 4px 0 8px 24px; }
+.ac-files { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.ac-file-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px 6px 4px;
+  border: 0;
+  border-radius: var(--ac-radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms var(--ac-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ac-file-head:hover { background: var(--ac-hover); }
+}
+.ac-file-head > svg { flex-shrink: 0; margin-top: 3px; color: var(--ac-icon-weak); transition: rotate 160ms var(--ac-ease); }
+.ac-file-head[aria-expanded='true'] > svg { rotate: 90deg; }
+.ac-file-text { flex: 1; display: grid; min-width: 0; }
+.ac-file-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; }
+/* A long folder keeps its end, where the file is */
+.ac-file-dir { direction: rtl; text-align: left; }
+.ac-diffstat { flex-shrink: 0; display: flex; gap: 6px; font-size: 12px; line-height: 20px; font-weight: 500; }
+.ac-diffstat > .added { color: var(--ac-success); }
+.ac-diffstat > .removed { color: var(--ac-danger); }
+.ac-diff { display: grid; gap: 4px; padding: 0 0 12px 4px; }
+.ac-diff-at { padding: 4px 0 0 2px; }
+.ac-diff-lines { overflow: hidden; border-radius: var(--ac-radius-sm); background: var(--ac-surface); box-shadow: 0 0 0 1px var(--ac-line-weak); }
+.ac-diff-line { display: grid; grid-template-columns: 28px 12px minmax(0, 1fr); }
+.ac-diff-line.added { background: var(--ac-added); }
+.ac-diff-line.removed { background: var(--ac-removed); }
+.ac-diff-num { padding-right: 6px; color: var(--ac-ink-disabled); text-align: right; font-variant-numeric: tabular-nums; user-select: none; }
+.ac-diff-sign { color: var(--ac-ink-muted); user-select: none; }
+.ac-diff-line.added > .ac-diff-sign { color: var(--ac-success); }
+.ac-diff-line.removed > .ac-diff-sign { color: var(--ac-danger); }
+.ac-diff-text { padding-right: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ac-commit { display: grid; gap: 8px; margin-top: 12px; padding: 16px 4px 0; border-top: 1px solid var(--ac-line-weak); }
+.ac-commit-error { max-height: 160px; overflow: auto; color: var(--ac-danger); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* Components to place */
 .ac-palette { display: grid; gap: 12px; }
 .ac-palette-grid { display: grid; gap: 8px; }
@@ -213,6 +261,62 @@
 .ac-outline.drop.line { background: var(--ac-violet); border-radius: 2px; box-shadow: none; }
 .ac-outline.drop.inside { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); background: color-mix(in oklch, var(--ac-violet) 10%, transparent); }
 .ac-outline.focus { box-shadow: 0 0 0 calc(2px * var(--ac-inv)) var(--ac-violet); background: color-mix(in oklch, var(--ac-violet) 10%, transparent); }
+
+/* An element changed since the last commit, while the Changes tab is open */
+.ac-outline.changed { box-shadow: 0 0 0 calc(1.5px * var(--ac-inv)) var(--ac-changed); background: color-mix(in oklch, var(--ac-changed) 8%, transparent); }
+
+/* Before and now: the still from before the changes over the left of the live screen, to `--at` */
+.ac-compare { position: absolute; inset: 0; pointer-events: none; }
+.ac-compare-before {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--ac-surface);
+  clip-path: inset(0 calc(100% - var(--at)) 0 0);
+}
+.ac-compare-tag {
+  position: absolute;
+  top: calc(8px * var(--ac-inv));
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ac-inverted);
+  color: var(--ac-on-inverted);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  scale: var(--ac-inv);
+}
+.ac-compare-tag.before { left: calc(8px * var(--ac-inv)); transform-origin: top left; }
+.ac-compare-tag.now { right: calc(8px * var(--ac-inv)); transform-origin: top right; }
+.ac-compare-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--at);
+  width: calc(16px * var(--ac-inv));
+  translate: -50% 0;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.ac-compare-line::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: calc(2px * var(--ac-inv)); translate: -50% 0; background: var(--ac-violet); }
+.ac-compare-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  translate: -50% -50%;
+  scale: var(--ac-inv);
+  border-radius: 999px;
+  background: var(--ac-violet);
+  color: var(--ac-on-violet);
+  box-shadow: var(--ac-e2);
+}
 
 /* Sections and notes */
 .ac-section-node {

@@ -18,6 +18,7 @@ import { BoardStore, Conflict, SLUG } from './boards.ts';
 import { handleMcp, type McpContext } from './mcp.ts';
 import { palette, readCatalog, readTokens, type ComponentSpec, type PaletteItem } from './catalog.ts';
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
+import { CommitError, Stills, commit, readChanges, readCommit } from './changes.ts';
 
 export interface CanvasOptions {
   /** Where boards are kept, from the Vite root. */
@@ -45,6 +46,8 @@ export interface CanvasOptions {
   routes?: string[];
   /** What an agent is told when it connects over MCP. */
   instructions?: string;
+  /** How a commit message from the canvas starts, for repos that check it (`feat(ui): `). */
+  commitPrefix?: string;
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -54,6 +57,8 @@ const APP_ID = '/@anfra-canvas/app';
 const BASE = '/__canvas';
 /** The palette's previews, written where Vite compiles them like the app's own files. */
 const PREVIEWS = 'node_modules/.anfra-canvas/Previews.vue';
+/** Stills of the frames from before the changes, to compare with now. */
+const STILLS = 'node_modules/.anfra-canvas/stills';
 
 export function anfraCanvas (options: CanvasOptions = {}): Plugin {
   const opts = {
@@ -68,6 +73,8 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
   };
   let config: ResolvedConfig;
   let server: ViteDevServer | undefined;
+  /** Hold a file's change until the canvas has stills of how it looked before (set by the server). */
+  let hold: (file: string) => Promise<void> = async () => {};
 
   const abs = (p: string) => resolve(config.root, p);
   const scenarioImport = () => (opts.scenarios ? `/${opts.scenarios.replace(/^\//, '')}` : undefined);
@@ -144,6 +151,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           routes: opts.routes,
           mcp: `${BASE}/mcp`,
           author: await gitUser(config.root),
+          commitPrefix: opts.commitPrefix ?? '',
         };
         return [
           ...opts.styles.map((css) => `import ${JSON.stringify(css)};`),
@@ -156,6 +164,13 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       return undefined;
     },
 
+    // The first change to an app file since the last commit waits for the canvas to keep a still of
+    // each frame it may change, so the canvas can show the frame before and after.
+    async handleHotUpdate ({ file }) {
+      const rel = relative(config.root, file);
+      if (/\.(vue|[cm]?[jt]sx?|s?css)$/.test(rel) && !rel.startsWith('..') && !rel.includes('node_modules')) await hold(rel);
+    },
+
     transformIndexHtml: {
       order: 'pre',
       handler: (_html, ctx) =>
@@ -164,7 +179,24 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
 
     configureServer (dev) {
       server = dev;
+      /** When a canvas last asked for changes: only then does a change wait for its stills. */
+      let canvasSeen = 0;
+      /** The app's files changed since the last commit, as the canvas last read them. */
+      let dirty = new Set<string>();
+      /** Changes held until the canvas has its stills of the frames they are in. */
+      const waiting = new Map<string, () => void>();
+      hold = async (file) => {
+        if (Date.now() - canvasSeen > 120_000 || dirty.has(file)) return;
+        dirty.add(file);
+        dev.ws.send({ type: 'custom', event: 'anfra-canvas:changing', data: { file } });
+        await new Promise<void>((done) => {
+          waiting.set(file, done);
+          setTimeout(done, 600);
+        });
+        waiting.delete(file);
+      };
       const store = new BoardStore(abs(opts.boards), (slug, board) => broadcast(slug, board));
+      const stills = new Stills(abs(STILLS));
       const broadcast = (slug: string, board: Board) => dev.ws.send({ type: 'custom', event: 'anfra-canvas:board', data: { slug, board } });
 
       // A board file changed by someone else (an agent editing it directly, a git checkout).
@@ -188,6 +220,13 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       dev.watcher.on('change', (file) => {
         if (file.endsWith('.vue')) dev.ws.send({ type: 'custom', event: 'anfra-canvas:source', data: { file: relative(config.root, file) } });
       });
+      // Any of the app's files changed, came or went: the Changes tab reads git again.
+      for (const event of ['change', 'add', 'unlink'] as const) {
+        dev.watcher.on(event, (file) => {
+          const rel = relative(config.root, file);
+          if (!rel.startsWith('..') && !rel.includes('node_modules')) dev.ws.send({ type: 'custom', event: 'anfra-canvas:files', data: { file: rel } });
+        });
+      }
 
       const mcp: McpContext = {
         store,
@@ -242,6 +281,48 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
             await writeFile(file, done.code);
             const where = done.at && `${done.at.file}:${done.at.line}:${done.at.column}`;
             return send(res, 200, { file: loc.file, before, after: done.code, ...(where ? { at: where } : {}) });
+          }
+          if (path === '/api/changes' && req.method === 'GET') {
+            canvasSeen = Date.now();
+            const changes = await readChanges(config.root, url.searchParams.get('scope') === 'branch' ? 'branch' : 'head');
+            dirty = new Set(changes.pending);
+            if (!changes.pending.length) await stills.clear(changes.head);
+            changes.stills = await stills.list(changes.head);
+            return send(res, 200, changes);
+          }
+          const commitPath = /^\/api\/commits\/([0-9a-f]+)$/.exec(path);
+          if (commitPath && req.method === 'GET') return send(res, 200, await readCommit(config.root, commitPath[1]));
+          if (path === '/api/commit' && req.method === 'POST') {
+            try {
+              const done = await commit(config.root, await body(req) as { message: string, branch?: string, files?: string[] });
+              dirty = new Set();
+              dev.ws.send({ type: 'custom', event: 'anfra-canvas:files', data: { file: '' } });
+              return send(res, 200, done);
+            } catch (e) {
+              if (e instanceof CommitError) return send(res, 422, { message: e.message });
+              throw e;
+            }
+          }
+          // A frame's still from before the changes: kept once, read to compare.
+          if (path === '/api/still') {
+            const board = url.searchParams.get('board') ?? '';
+            const frame = url.searchParams.get('frame') ?? '';
+            if (!SLUG.test(board) || !/^[\w-]+$/.test(frame)) return send(res, 400, { message: 'Which board and frame?' });
+            const head = await gitHead(config.root);
+            if (req.method === 'GET') {
+              const svg = await stills.read(head, board, frame).catch(() => undefined);
+              if (!svg) return send(res, 404, { message: 'No still of this frame' });
+              res.setHeader('Content-Type', 'image/svg+xml');
+              res.setHeader('Cache-Control', 'no-store');
+              return res.end(svg);
+            }
+            if (req.method === 'PUT') return send(res, 200, { kept: await stills.keep(head, board, frame, await text(req)) });
+          }
+          // The canvas took its stills of the frames a file is in, before the file's change shows.
+          if (path === '/api/ready' && req.method === 'POST') {
+            const { file } = await body(req) as { file: string };
+            waiting.get(file)?.();
+            return send(res, 200, { ok: true });
           }
           // Undo and redo of an edit: the file put back, if no one changed it since.
           if (path === '/api/restore' && req.method === 'POST') {
@@ -383,11 +464,24 @@ async function serveMcp (req: IncomingMessage, res: ServerResponse, ctx: McpCont
   return send(res, 200, Array.isArray(msg) ? answers : answers[0]);
 }
 
-async function body (req: IncomingMessage): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+async function text (req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
-  const text = Buffer.concat(chunks).toString('utf8');
-  return text ? JSON.parse(text) : {};
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function body (req: IncomingMessage): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const raw = await text(req);
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function gitHead (cwd: string): Promise<string> {
+  try {
+    const { stdout } = await promisify(execFile)('git', ['rev-parse', 'HEAD'], { cwd });
+    return stdout.trim() || 'none';
+  } catch {
+    return 'none';
+  }
 }
 
 function send (res: ServerResponse, status: number, value: unknown) {

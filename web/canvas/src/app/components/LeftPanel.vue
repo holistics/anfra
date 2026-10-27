@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Beside the canvas: what is on the board, the comments on it, and the components to place.
+// Beside the canvas: what is on the board, the comments on it, the components to place, and what
+// changed in the app's files.
 import { computed, ref, watch } from 'vue';
 import {
   commentMarkdown, contents, find, isShape, remove, reply, setStatus,
@@ -10,12 +11,12 @@ import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
 import Segmented, { type SegmentedOption } from '../ui/Segmented.vue';
 import TreeRow from '../ui/TreeRow.vue';
+import ChangesPanel from './ChangesPanel.vue';
 import LayerTree from './LayerTree.vue';
 import Palette from './Palette.vue';
 
 const store = useStore();
 const { state, board } = store;
-const tab = ref<'layers' | 'comments' | 'components'>('comments');
 const filter = ref<'open' | 'resolved'>('open');
 const drafts = ref<Record<string, string>>({});
 
@@ -59,11 +60,13 @@ function focusShape (s: Shape) {
 
 const comments = computed(() => (board.value?.comments ?? []).filter((c) => c.status === filter.value));
 const openCount = computed(() => (board.value?.comments ?? []).filter((c) => c.status === 'open').length);
-const TABS = computed<SegmentedOption<typeof tab.value>[]>(() => [
-  { value: 'comments', label: 'Comments', count: openCount.value },
-  { value: 'layers', label: 'Layers' },
-  { value: 'components', label: 'Components' },
-]);
+// Four tabs fit the panel as icons, with the open one named.
+const TABS = computed<SegmentedOption<typeof state.panel>[]>(() => ([
+  { value: 'comments', label: 'Comments', icon: 'comment', count: openCount.value },
+  { value: 'layers', label: 'Layers', icon: 'layers' },
+  { value: 'components', label: 'Components', icon: 'component' },
+  { value: 'changes', label: 'Changes', icon: 'branch', count: state.changes?.pending.length },
+] as const).map((t) => ({ ...t, iconOnly: t.value !== state.panel })));
 const FILTERS: SegmentedOption<typeof filter.value>[] = [{ value: 'open', label: 'Open' }, { value: 'resolved', label: 'Resolved' }];
 const toggle = (id: string) => (state.layersOpen[id] = !state.layersOpen[id]);
 
@@ -96,10 +99,10 @@ function sendReply (c: Comment) {
 <template>
   <aside class="ac-panel ac-left" aria-label="Board">
     <div class="ac-left-head">
-      <Segmented v-model="tab" :options="TABS" label="Board panel" tabs fill />
+      <Segmented v-model="state.panel" :options="TABS" label="Board panel" tabs fill />
     </div>
 
-    <div v-if="tab === 'layers'" class="ac-list" role="tabpanel">
+    <div v-if="state.panel === 'layers'" class="ac-list" role="tabpanel">
       <p v-if="!layers.length" class="ac-caption ac-list-empty">Nothing on this board yet</p>
       <ul class="ac-tree">
         <li v-for="g in layers" :key="g.shape.id">
@@ -136,7 +139,7 @@ function sendReply (c: Comment) {
       </ul>
     </div>
 
-    <div v-else-if="tab === 'comments'" class="ac-list" role="tabpanel">
+    <div v-else-if="state.panel === 'comments'" class="ac-list" role="tabpanel">
       <div class="ac-row ac-list-tools">
         <Segmented v-model="filter" :options="FILTERS" label="Show" />
         <span class="ac-spacer" />
@@ -176,8 +179,10 @@ function sendReply (c: Comment) {
       </article>
     </div>
 
-    <div v-else class="ac-list" role="tabpanel">
+    <div v-else-if="state.panel === 'components'" class="ac-list" role="tabpanel">
       <Palette />
     </div>
+
+    <ChangesPanel v-else />
   </aside>
 </template>

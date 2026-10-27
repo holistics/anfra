@@ -9,6 +9,10 @@ siblings. They drop the app's own components in from a palette that draws them, 
 in each screen's tree. For a flow, or a change across screens, they leave a comment: Claude reads
 the comments over MCP, changes the code, and resolves them.
 
+What changed shows on the board too. The Changes tab lists the files changed since the last commit
+(or on the branch) with their lines, each screen outlines the elements a change touched and can show
+itself before the change beside now, and the changes can be committed from the canvas.
+
 It is dev tooling: a Vite plugin that applies to `vite serve` only, so nothing of it reaches a build.
 anfra Cloud's web app uses it today (`pnpm dev:canvas`); any Vite + Vue app can.
 
@@ -86,6 +90,7 @@ async function canvas () {
       snippets: 'canvas/snippets.ts',           // optional: the markup each palette item inserts
       routes: ['/', '/settings'],               // offered when adding a screen
       instructions: 'How this app is built, for Claude',
+      commitPrefix: 'feat(ui): ',               // optional: how a commit from the canvas starts
     }),
   ];
 }
@@ -104,6 +109,8 @@ plugin applies to `vite serve` only, so nothing of it reaches a build.
   and the `__proto` routes in its `src/router.ts`.
 - **Scenarios** answer the app's API in frames, so screens show any state without a backend: see
   [Scenarios](#scenarios). Without them, frames call the real API through the dev server.
+- **`commitPrefix`** is for a repo whose hooks check commit messages (commitlint): the canvas puts it
+  before the message a person writes, and starts what they wrote in lower case.
 - Everything else is optional; the comments a person leaves for Claude work on any screen.
 
 ### Connect Claude
@@ -130,6 +137,12 @@ comments, changes the code they point at, and resolves each one with a note. Wit
    the arrows, and **Play** walks it like a prototype.
 6. **⌘K** finds every command, screen, board and component; right-click shows what you can do with
    what's under the pointer.
+7. Open **Changes** (the branch icon among the tabs on the left) to see the files changed since the
+   last commit and their lines; **This branch** shows everything the branch adds, with its commits.
+   While the tab is open, the screens outline the elements a change touched, and the compare button
+   on a frame's label shows its screen before the change and now, split by a line you drag. Write
+   what changed and **Commit**: it commits on this computer, on a new branch if you're on `main`, and
+   never pushes.
 
 ### When something is off
 
@@ -141,6 +154,8 @@ comments, changes the code they point at, and resolves each one with a note. Wit
 | A screen is blank or stuck loading | A call its scenario doesn't answer: the browser console names the op (a 501). Add it to the scenario, or pick a scenario that has it |
 | Errors about missing packages in the canvas | Run `pnpm install` in the anfra checkout too, not only in the app |
 | Claude doesn't see the comments | The MCP server is added per repo: run the `claude mcp add` line in the app's repo, with the dev server running, and check `claude mcp list` |
+| A frame has no compare button, though its screen changed | The canvas keeps a screen's still the moment a change first reaches it. It wasn't open then, or the frame wasn't running. The next change after a commit will have one |
+| **Commit** shows an error | The repo's hooks ran on the commit and refused it. The error is what the hook printed: fix the message (or what it asks for) and commit again |
 | A picked element shows only **Comment**, no controls | It's drawn at run time (text from data, say) rather than written in a template, or its file is outside `src/`: leave a comment for Claude instead |
 
 ## Set it up with an AI
@@ -186,7 +201,8 @@ path.
 | Source tags | `src/vite/source.ts` | A Vue compiler transform that writes `data-canvas-src="file:line:col"` on every element, so a picked element knows where it is written. Edits (text, classes, attributes and props, remove, duplicate, move, insert with its imports) are applied to that spot in the file |
 | Catalog | `src/vite/catalog.ts` | The app's components (props from `defineProps`, variants from `cva`), the palette, and the theme's tokens from its CSS |
 | Frame agent | `src/frame/` | Injected into the app's page. Inside a canvas frame (an iframe named by the canvas) it answers the API from the frame's scenario, reports hover, pick and layout, and edits text in place. Elsewhere it does nothing |
-| Server | `src/vite/index.ts` | `/__canvas/` (the canvas), `/__canvas/api/` (boards, source, edits), `/__canvas/mcp` (MCP over streamable HTTP, JSON answers). Same origin only |
+| Server | `src/vite/index.ts` | `/__canvas/` (the canvas), `/__canvas/api/` (boards, source, edits, changes, commits, stills), `/__canvas/mcp` (MCP over streamable HTTP, JSON answers). Same origin only |
+| Changes | `src/vite/changes.ts` | Reads git in the app's folder: the files changed since the last commit or on the branch, their lines, the elements each change touched (`touched()` in `source.ts`), and the branch's commits. Commits from the canvas, never pushes. The first change to a file since the commit waits (600ms at most) while the canvas keeps a still of each screen it is in, so a frame can show before and now |
 | MCP tools | `src/vite/mcp.ts` | `list_feedback`, `resolve_feedback`, `reply_feedback`, boards, frames, sections, notes, arrows, `tidy_board`, scenarios |
 | Canvas UI | `src/app/` | The board: pan, zoom, select, move, resize, draw sections and arrows, comment; the element inspector, layers and palette; the command palette (⌘K) and right-click menus (`commands.ts`); undo across board and source edits; saves with a rev and merges when Claude saved first |
 | UI kit | `src/app/ui/` | The canvas's design system: its tokens and every control in one sheet (`ui.css`), and the components panels are built from (Button, Field, Select, Segmented, Switch, MenuItem, TreeRow, Section, PropRow, Tooltip). See below |
@@ -207,8 +223,11 @@ its own. `ui/ui.css` holds the tokens (taken from the host app's `--anfra-color-
 its theme) and every control; `canvas.css` only lays the app out and draws the board.
 
 - Two control sizes: 32px in panels and popovers, 24px (`small`) on the board's own labels.
-- One edge for every button, field and select (`--ac-line-control`), darker on hover. A field or
-  select shows focus on its edge; anything else takes the 2px violet outline.
+- One edge for every button, field and select (`--ac-line-control`), the same at rest and on hover:
+  hover is a faint fill. A field or select shows focus on its edge; anything else takes the 2px
+  violet outline.
+- Kit classes start with `ac-`, and a modifier class never takes a name Tailwind owns (`outline`,
+  `static`, `hidden`): the host app's Tailwind would style it.
 - Three type sizes (12, 14, 20), three radii (6, 10, 14), e1 resting and e2 floating.
 - Tooltips are the kit's, never a `title`: a Button's `label` or `tip` with its `keys`, or `v-tip` on
   anything else, shows the name and the shortcut.

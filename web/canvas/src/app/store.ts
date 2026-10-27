@@ -8,6 +8,7 @@ import {
 } from '../model/index.ts';
 import type { CanvasHost, ElementInfo, FrameAgent, FrameEvent, FrameMode, LayerNode } from '../frame/protocol.ts';
 import type { BoardSummary } from '../vite/boards.ts';
+import type { Changes, FileDiff } from '../vite/changes.ts';
 import type { ComponentSpec, PaletteItem, Tokens } from '../vite/catalog.ts';
 import type { Edit, SourceInfo, Where } from '../vite/source.ts';
 
@@ -20,6 +21,8 @@ export interface Settings {
   routes: string[];
   mcp: string;
   author: string;
+  /** How a commit message from the canvas starts, for a repo that checks it (`feat(ui): `). */
+  commitPrefix: string;
 }
 
 /** One undo step: the board as it was, or a file the canvas edited, before and after. */
@@ -120,6 +123,15 @@ export function createStore (settings: Settings, previews?: Component) {
     history: { past: 0, future: 0 },
     /** Playing the board as a prototype: the frames walked, the arrows taken, the choice hovered. */
     flow: null as Flow | null,
+    /** The tab beside the board. */
+    panel: 'comments' as 'comments' | 'layers' | 'components' | 'changes',
+    /** What changed in the app's files, from git: since the last commit, or on this branch. */
+    changes: null as Changes | null,
+    changesScope: 'head' as Changes['scope'],
+    /** Outline the changed elements on the screens, while the Changes tab is open. */
+    outlineChanges: true,
+    /** A frame shown before its changes and now, split at `at` (0 to 1 of its width). */
+    compare: null as { frame: string, at: number } | null,
   });
 
   // The board is kept as an immutable value: each change is a new board, so undo is a list.
@@ -235,7 +247,96 @@ export function createStore (settings: Settings, previews?: Component) {
   if (import.meta.hot) {
     import.meta.hot.on('anfra-canvas:board', ({ slug, board: b }: { slug: string, board: Board }) => received(slug, parseBoard(b)));
     import.meta.hot.on('anfra-canvas:source', () => state.sources++);
+    import.meta.hot.on('anfra-canvas:files', () => readChangesSoon());
+    import.meta.hot.on('anfra-canvas:changing', ({ file }: { file: string }) => void keepStills(file));
   }
+
+  // --- Changes ------------------------------------------------------------------------------------
+
+  async function loadChanges () {
+    const { status, data } = await api<Changes>(`/changes?scope=${state.changesScope}`);
+    if (status === 200) state.changes = data;
+  }
+  let changesTimer: ReturnType<typeof setTimeout> | undefined;
+  const readChangesSoon = () => {
+    clearTimeout(changesTimer);
+    changesTimer = setTimeout(loadChanges, 300);
+  };
+  watch(() => state.changesScope, () => void loadChanges());
+  // Read again each minute while the canvas is seen: a commit made in a terminal shows, and the
+  // server knows the canvas is open (only then does a change wait for the stills of its screens).
+  setInterval(() => {
+    if (document.visibilityState === 'visible') void loadChanges();
+  }, 60_000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') readChangesSoon();
+  });
+
+  const onBoard = (frame: string) => !!board.value?.frames.some((f) => f.id === frame);
+
+  /** The frames of this board whose screens draw an element written in a file. */
+  function framesShowing (file: string): string[] {
+    return [...agents].filter(([id, agent]) => {
+      try {
+        return onBoard(id) && agent.shows(file);
+      } catch {
+        return false;
+      }
+    }).map(([id]) => id);
+  }
+
+  /**
+   * A file is about to change for the first time since the last commit: keep a still of each screen
+   * it may change (those that draw it, or every screen for a script or a style), to compare with
+   * after. The server holds the change until the stills are taken.
+   */
+  async function keepStills (file: string) {
+    const slug = state.slug;
+    const ids = file.endsWith('.vue') ? framesShowing(file) : [...agents.keys()].filter(onBoard);
+    const shots = ids.flatMap((id) => {
+      try {
+        return [[id, agents.get(id)!.snapshot()] as const];
+      } catch {
+        return []; // a screen that is loading
+      }
+    });
+    void api('/ready', { method: 'POST', body: JSON.stringify({ file }) });
+    await Promise.all(shots.map(([id, svg]) => fetch(`${API}/still?board=${encodeURIComponent(slug)}&frame=${id}`, { method: 'PUT', body: svg })));
+    if (shots.length) readChangesSoon();
+  }
+
+  const hasStill = (frame: string) => !!state.changes?.stills[state.slug]?.includes(frame);
+  const stillUrl = (frame: string) => `${API}/still?board=${encodeURIComponent(state.slug)}&frame=${frame}&at=${state.changes?.head ?? ''}`;
+
+  /** Where the changed elements of a frame's screen are drawn now. */
+  function changedRects (frame: string): Rect[] {
+    const marks = state.changes?.marks;
+    const agent = agents.get(frame);
+    if (!marks || !agent) return [];
+    try {
+      return agent.rects(Object.values(marks).flat());
+    } catch {
+      return [];
+    }
+  }
+
+  /** Commit the changed files; answers why it couldn't, or nothing when it did. */
+  async function commitChanges (message: string, branch?: string): Promise<string | undefined> {
+    const { status, data } = await api<{ sha: string, branch: string, message?: string }>('/commit', {
+      method: 'POST',
+      body: JSON.stringify({ message, ...(branch ? { branch } : {}) }),
+    });
+    if (status !== 200) return data.message ?? 'Couldn\'t commit';
+    state.compare = null;
+    flash(`Committed ${data.sha} on ${data.branch}`);
+    await loadChanges();
+    return undefined;
+  }
+
+  const readCommit = async (sha: string): Promise<FileDiff[]> => {
+    const { status, data } = await api<FileDiff[]>(`/commits/${sha}`);
+    return status === 200 && Array.isArray(data) ? data : [];
+  };
 
   // --- Changing the board -------------------------------------------------------------------------
 
@@ -676,6 +777,7 @@ export function createStore (settings: Settings, previews?: Component) {
   return {
     state, board, handlers, previews: previews && markRaw(previews),
     loadList, open, create, commit, preview, undo, redo, removeSelection, comment,
+    loadChanges, framesShowing, hasStill, stillUrl, changedRects, commitChanges, readCommit,
     locate, pickAt, tree, snapshot, commentOn, openInEditor, reload, place, addFrame, pick, pickParent, edit, insert, whereIn, editText, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo, tidyUp,
     play, playNext, playBack, stopPlay, startFrame,
     endDrag: () => {

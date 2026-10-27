@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // A live screen: the app at the frame's route, in an iframe, under its scenario. Above it, its
 // label (drag it to move the frame); over it, the outlines of the hovered and picked elements and
-// the pins of comments on its elements.
+// of the elements changed since the last commit, and the pins of comments on its elements. It can
+// show its screen before the changes beside it now, split by a line to drag.
 //
 // Only screens near the view run. A frame's app starts when the frame first comes near the view
 // and stops drawing while it is far; when many are running, one far for a while is let go, and a
@@ -13,6 +14,7 @@ import { pinNumber, useStore } from '../context.ts';
 import { intersects } from '../geometry.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
+import Icon from '../ui/Icon.vue';
 import { vTip } from '../ui/tooltip.ts';
 
 /** Running apps kept, at most, beyond those near the view. */
@@ -103,6 +105,36 @@ const pickedName = computed(() => state.picked?.frame === props.frame.id ? state
 
 const focused = computed(() => pins.value.find((p) => p.id === state.focus)?.rect ?? null);
 
+/** The elements changed since the last commit (or on the branch), while the Changes tab is open. */
+const changed = computed(() => {
+  void state.layouts[props.frame.id];
+  if (state.panel !== 'changes' || !state.outlineChanges || !state.attached[props.frame.id]) return [];
+  return store.changedRects(props.frame.id);
+});
+
+// --- Before and now -------------------------------------------------------------------------------
+
+const comparing = computed(() => state.compare?.frame === props.frame.id);
+function compare () {
+  state.compare = comparing.value ? null : { frame: props.frame.id, at: 0.5 };
+}
+// The still goes with the changes: once they are committed or undone, so is the comparing.
+watch(() => store.hasStill(props.frame.id), (has) => {
+  if (!has && comparing.value) state.compare = null;
+});
+const screen = ref<HTMLElement>();
+function slide (e: PointerEvent) {
+  const el = e.currentTarget as HTMLElement;
+  el.setPointerCapture(e.pointerId);
+  const move = (m: PointerEvent) => {
+    const r = screen.value?.getBoundingClientRect();
+    if (r && state.compare) state.compare.at = Math.min(1, Math.max(0, (m.clientX - r.left) / r.width));
+  };
+  move(e);
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', () => el.removeEventListener('pointermove', move), { once: true });
+}
+
 const editing = ref(false);
 const input = ref<InstanceType<typeof Field>>();
 async function rename () {
@@ -134,9 +166,19 @@ function done (e: Event) {
       <span class="ac-chip" :class="{ live: frame.scenario === 'live' }" v-tip="state.settings.scenarios[frame.scenario ?? 'default']?.description">{{ state.settings.scenarios[frame.scenario ?? 'default']?.label ?? frame.scenario ?? 'default' }}</span>
       <span v-if="now && now !== frame.route" class="ac-frame-route ac-mono" v-tip="'Where the screen is now'">{{ now }}</span>
       <span class="ac-spacer" />
+      <Button
+        v-if="store.hasStill(frame.id)"
+        variant="ghost"
+        small
+        icon="compare"
+        label="Compare with before the changes"
+        :aria-pressed="comparing"
+        data-ui
+        @click="compare"
+      />
       <Button variant="ghost" small icon="reload" label="Reload the frame" data-ui @click="store.reload(frame.id)" />
     </div>
-    <div class="ac-frame-screen" :class="{ far: !near }">
+    <div ref="screen" class="ac-frame-screen" :class="{ far: !near }">
       <iframe
         v-if="alive"
         :key="key"
@@ -145,8 +187,18 @@ function done (e: Event) {
         :title="frame.name"
       />
       <img v-if="showStill" class="ac-frame-still" :src="still" alt="" />
+      <!-- The screen before the changes, over the left of the live one: a document, so it loads the app's fonts -->
+      <div v-if="comparing && state.compare" class="ac-compare" :style="{ '--at': `${state.compare.at * 100}%` }">
+        <iframe class="ac-compare-before" :src="store.stillUrl(frame.id)" :title="`${frame.name}, before the changes`" tabindex="-1" />
+        <span class="ac-compare-tag before">Before</span>
+        <span class="ac-compare-tag now">Now</span>
+        <div class="ac-compare-line" data-ui role="slider" aria-label="Before and now" :aria-valuenow="Math.round(state.compare.at * 100)" aria-valuemin="0" aria-valuemax="100" @pointerdown.stop="slide">
+          <span class="ac-compare-knob"><Icon name="code" :size="14" /></span>
+        </div>
+      </div>
     </div>
     <div class="ac-frame-overlay">
+      <div v-for="(r, i) in changed" :key="`c${i}`" class="ac-outline changed" :style="box(r)" />
       <div v-if="hoverBox && state.tool !== 'play'" class="ac-outline hover" :style="box(hoverBox)" />
       <div v-if="pickedBox" class="ac-outline picked" :style="box(pickedBox)" />
       <div v-if="drop" class="ac-outline drop" :class="drop.class" :style="drop.style" />

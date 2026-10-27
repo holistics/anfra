@@ -2,7 +2,7 @@
 // dev. In a page that isn't a canvas frame it does nothing, so the app runs as always. In a frame,
 // it answers the app's API calls from the frame's scenario, and gives the canvas an agent that
 // picks, locates and edits elements.
-import type { ElementRef } from '../model/board.ts';
+import type { ElementRef, Rect } from '../model/board.ts';
 import { snapshot } from './snapshot.ts';
 import { answer, opOf, scenarioOps, type Scenarios } from '../model/scenario.ts';
 import {
@@ -364,6 +364,15 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
     route,
     tree,
     snapshot: () => snapshot(doc),
+    rects (sources) {
+      const out: Rect[] = [];
+      for (const el of new Set(sources.flatMap(drawnBy))) {
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height) out.push({ x: r.x, y: r.y, width: r.width, height: r.height });
+      }
+      return out;
+    },
+    shows: (file) => !!doc.querySelector(`[${SOURCE_ATTR}^="${quoted(`${file}:`)}"]`),
   };
 
   const attach = () => host()?.attach(id, agent);

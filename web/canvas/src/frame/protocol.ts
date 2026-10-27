@@ -56,6 +56,10 @@ export interface FrameAgent {
   tree: () => LayerNode[];
   /** A still of the screen as an SVG image, shown when the frame is far from the view. */
   snapshot: () => string;
+  /** Where the elements written at these places are drawn now, in the frame's viewport. */
+  rects: (sources: string[]) => Rect[];
+  /** The screen draws an element written in this file. */
+  shows: (file: string) => boolean;
 }
 
 export interface CanvasHost {
