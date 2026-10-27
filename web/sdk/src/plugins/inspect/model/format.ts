@@ -92,6 +92,16 @@ export function blockNodeKey (structure: InspectedStructure | undefined, id: str
   return (blocks.find(holds) ?? blocks[0])?.key;
 }
 
+/** The key of an entity's first marker in the structure, in document order; undefined when it has none. */
+export function entityNodeKey (nodes: StructureNode[], kind: 'query' | 'control', app: number, name: string): string | undefined {
+  for (const node of nodes) {
+    if (node.kind === kind && (node.app ?? 0) === app && node.name === name) return node.key;
+    const found = entityNodeKey(node.children, kind, app, name);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 /**
  * The first query or control at or below the node with `key`, in document order. `kinds` narrows
  * it: the first query alone is what leads to Data. Undefined when the node isn't there or holds none.

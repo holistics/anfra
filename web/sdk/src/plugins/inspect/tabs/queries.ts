@@ -11,7 +11,7 @@ import type { TabContext } from '../../../host/contributions';
 import { columnKind } from '../model/columns';
 import { isChanged } from '../model/changes';
 import {
-  blockNodeKey, dedent, entityAttribute, entityKey, formatAgo, formatCondition, formatTime, plural, usageOf,
+  blockNodeKey, dedent, entityAttribute, entityKey, entityNodeKey, formatAgo, formatCondition, formatTime, plural, usageOf,
 } from '../model/format';
 import {
   controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryInput,
@@ -19,7 +19,7 @@ import {
 import { queryCounts } from '../model/issues';
 import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
-import type { QueriesFilter } from '../model/types';
+import { LINEAGE_TAB, type QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
   codeBlock, collapsible, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, link, note, stateDot, table, trustIndicator,
@@ -132,6 +132,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   const state = stateOf(context.mount);
   const view = state.queries;
   const canViewSql = context.mount.user.permissions.canViewGeneratedSql;
+  const hasLineage = context.plugins.some((plugin) => plugin.name === 'lineage');
   // What is open inside a row, kept while the tab is up: inner sections by key, each query's code
   // tab, the rows showing all their filters and all their requests.
   const inner = new Map<string, boolean>();
@@ -310,6 +311,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   function queryRow (app: InspectedApp, index: number, name: string, query: InspectedQuery, requests: readonly Attributed[], structure: InspectedStructure | undefined): HTMLElement {
     const key = entityKey('query', index, name);
     const declaration = app.declaration.queries[name];
+    const marker = structure && entityNodeKey(structure.nodes, 'query', index, name);
     const filters = [...declaredFilters(declaration?.aql), ...queryInputs(app, name)];
     const active = filters.filter(isActive);
     const summary = h(doc, 'span', { class: 'entry' },
@@ -345,7 +347,9 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
             (query.hasMore || query.page > 1) && ['Page', `${query.page}${query.hasMore ? ', more available' : ''}`],
           ]),
           h(doc, 'div', { class: 'detail-actions' },
-            link(doc, [icon(doc, 'table'), 'Show data'], () => state.reveal(panel, { table: name, app: index }), { 'data-testid': 'show-data' })),
+            link(doc, [icon(doc, 'table'), 'Show data'], () => state.reveal(panel, { table: name, app: index }), { 'data-testid': 'show-data' }),
+            // Lineage follows the selection, so a query links through its marker: one drawn nowhere has no link.
+            hasLineage && marker !== undefined && link(doc, [icon(doc, 'lineage'), 'Show in Lineage'], () => panel.show(LINEAGE_TAB, marker), { 'data-testid': 'show-in-lineage' })),
         ]),
         query.columns.length === 0
           ? sub(`${key}:definition`, 'Definition', () => h(doc, 'p', { class: 'muted' }, notRun === 'Not run yet.' ? 'Known once it runs.' : 'No fields.'))

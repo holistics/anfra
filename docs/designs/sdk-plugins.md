@@ -74,7 +74,7 @@ Every call that crosses the bridge is a plugin's, including running a query. anf
 |---|---|---|---|
 | `core` | `core.submitQuery`, `core.fieldSuggestions` (frame may call) | | nothing: the app model is its frame side. Required. |
 | `export` | `export.query` (frame may call): makes the file, saves it from the host page | | `query.export()` |
-| `lineage` | `lineage.trace` (frame may call) | | `Anfra.lineage()` |
+| `lineage` | `lineage.trace` (frame may call); the panel's Lineage tab, a canvas of where the page's numbers come from, which pins the card a selection holds | | `Anfra.lineage()` |
 | `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host) | | `Anfra.render()`. The renderer is its body. Commands: Download as PNG, as PDF (`overflow`). |
 | `inspect` | none: the panel's Overview, Data, Queries, Structure and Declaration tabs, and the Inspect command (`Alt+Shift+I`); a middleware logs each mount's frame calls for them | | nothing |
 

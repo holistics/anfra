@@ -4,6 +4,7 @@ import {
 import {
   byTestId, inspect, REVENUE_AQL, salesSnapshot, type Harness,
 } from './testSupport';
+import { lineagePlugin } from '../../lineage';
 
 const QUERIES = 'inspect.queries';
 
@@ -162,5 +163,24 @@ describe('Queries', () => {
     harness.mounted.panel.show(QUERIES);
     const { root } = await harness.tab(QUERIES);
     expect(byTestId(root, 'inspect-waiting')).not.toBeNull();
+  });
+
+  it('shows a query in Lineage through its marker, when lineage is installed', async () => {
+    harness = await inspect({ tab: QUERIES, plugins: [lineagePlugin({ lineage: vi.fn(async () => ({ results: [] })) } as never)] });
+    const { root } = await harness.tab(QUERIES);
+    await open(byTestId(root, 'query-0/revenue'));
+    byTestId(byTestId(root, 'query-0/revenue')!, 'show-in-lineage')!.click();
+    expect(harness.mounted.panel.tab).toBe('lineage.lineage');
+    expect(harness.mounted.panel.selection).toBe('0.0');
+    // `orders` is drawn nowhere on the page.
+    await open(byTestId(root, 'query-0/orders'));
+    expect(byTestId(byTestId(root, 'query-0/orders')!, 'show-in-lineage')).toBeNull();
+  });
+
+  it('offers no Lineage link without lineage', async () => {
+    harness = await inspect({ tab: QUERIES });
+    const { root } = await harness.tab(QUERIES);
+    await open(byTestId(root, 'query-0/revenue'));
+    expect(byTestId(root, 'show-in-lineage')).toBeNull();
   });
 });

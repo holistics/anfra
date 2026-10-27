@@ -5,6 +5,8 @@ export const DATA_TAB = 'inspect.data';
 export const QUERIES_TAB = 'inspect.queries';
 export const STRUCTURE_TAB = 'inspect.structure';
 export const DECLARATION_TAB = 'inspect.declaration';
+/** The `lineage` plugin's tab: linked to through the selection, when it is installed. */
+export const LINEAGE_TAB = 'lineage.lineage';
 
 /** What Queries narrows to: everything, the queries that failed, or what is dirty. */
 export type QueriesFilter = 'all' | 'errors' | 'dirty';
