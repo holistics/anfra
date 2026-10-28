@@ -6,13 +6,13 @@
 import type { ColumnMeta, InspectedApp, InspectedQuery } from '../../../common/types';
 import type { TabContext } from '../../../host/contributions';
 import { columnKind } from '../model/columns';
-import { formatAgo, plural } from '../model/format';
+import { entityNodeKey, formatAgo, plural } from '../model/format';
 import { declaredFilters, isActive, queryInputs } from '../model/inputs';
 import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
 import { stateOf, type InspectState } from '../state';
 import {
-  collapsible, drawTab, filterIndicator, flash, h, icon, note, table, trustIndicator,
+  collapsible, drawTab, filterIndicator, flash, h, icon, lineageButton, note, table, trustIndicator,
 } from '../view';
 
 const CSS = `
@@ -102,6 +102,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
   const doc = context.document;
   const { panel } = context;
   const state = stateOf(context.mount);
+  const hasLineage = context.plugins.some((plugin) => plugin.name === 'lineage');
   let search = '';
 
   const input = h(doc, 'input', {
@@ -180,6 +181,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       h(doc, 'span', { class: 'spacer' }),
       filterIndicator(doc, active),
       trustIndicator(doc, queryTrust(declaration, query)),
+      hasLineage && lineageButton(doc, panel, entityNodeKey(panel.snapshot?.structure?.nodes ?? [], 'query', index, name)),
       h(doc, 'button', {
         type: 'button',
         class: 'row-action',

@@ -7,6 +7,7 @@ import { toCsv } from './data';
 import {
   byTestId, inspect, REVENUE_AQL, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
+import { lineagePlugin } from '../../lineage';
 
 let harness: Harness | undefined;
 
@@ -181,5 +182,20 @@ describe('toCsv', () => {
   it('quotes what must be, and guards text a spreadsheet would run', () => {
     expect(toCsv(['a'], [['x,y'], ['say "hi"'], ['line\nbreak'], ['=SUM(A1)'], ['+1'], ['-1'], ['@x'], ['\tx'], ['\rx'], [-1], [{ k: 1 }]], {}))
       .toBe(['﻿a', '"x,y"', '"say ""hi"""', '"line\nbreak"', "'=SUM(A1)", "'+1", "'-1", "'@x", "'\tx", '"\'\rx"', '-1', '"{""k"":1}"'].join('\r\n'));
+  });
+
+  it("shows a table's query in Lineage, when lineage is installed and the query is on the page", async () => {
+    harness = await inspect({ tab: 'inspect.data', plugins: [lineagePlugin({ lineage: vi.fn(async () => ({ results: [] })) } as never)] });
+    const { root } = await harness.tab('inspect.data');
+    expect(byTestId<HTMLButtonElement>(byTestId(root, 'table-0/orders')!, 'show-in-lineage')?.disabled).toBe(true);
+    byTestId(byTestId(root, 'table-0/revenue')!, 'show-in-lineage')!.click();
+    expect(harness.mounted.panel.tab).toBe('lineage.lineage');
+    expect(harness.mounted.panel.selection).toBe('0.0');
+  });
+
+  it('offers no Lineage button without lineage', async () => {
+    harness = await inspect({ tab: 'inspect.data' });
+    const { root } = await harness.tab('inspect.data');
+    expect(byTestId(root, 'show-in-lineage')).toBeNull();
   });
 });
