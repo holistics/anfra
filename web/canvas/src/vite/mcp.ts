@@ -47,6 +47,7 @@ const AGENT = 'Claude';
 /** How the canvas works, told to every agent after the app's own instructions. */
 export const GUIDE = `How the canvas works:
 - A board (list_boards, get_board) holds frames, sections, notes and arrows. A frame is a live screen: the app at a route, in an iframe, in one scenario (a mock state of its API, list_scenarios).
+- To start a new prototype, start from a template when the canvas has any, unless asked for a blank board: list_templates, then create_from_template. It copies the template's screens into the project, where they are yours to change, and lays them out on a board.
 - The screens a frame can show are in list_screens. A route can carry ?open=<name> to show an overlay open, for apps whose overlays read it.
 - To lay out a flow: create_board (with its project), add_frame for each screen, add_arrow between them with the action as the label, add_section around a happy path or edge cases, then tidy_board. Arrows are also how Present steps from screen to screen.
 - People pick elements in frames and edit them; each edit is written to the .vue file. What they can't do in the panel they leave as a comment: list_feedback says what each points at (frame, route, scenario, element, file and line). Change the code, then resolve_feedback with a short note, or reply_feedback to ask.
