@@ -75,7 +75,7 @@ Every call that crosses the bridge is a plugin's, including running a query. anf
 | `core` | `core.submitQuery`, `core.fieldSuggestions` (frame may call) | | nothing: the app model is its frame side. Required. |
 | `export` | `export.query` (frame may call): makes the file, saves it from the host page | | `query.export()` |
 | `lineage` | `lineage.trace` (frame may call); the panel's Lineage tab, a canvas of where the page's numbers come from, which pins the card a selection holds | | `Anfra.lineage()` |
-| `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host) | | `Anfra.render()`. The renderer is its body. Commands: Download as PNG, as PDF (`overflow`). |
+| `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host); `render.download` (host only): `render.draw`, one at a time, its commands disabled meanwhile | | `Anfra.render()`. The renderer is its body. Commands: Download as PNG, as PDF (`overflow`). |
 | `inspect` | none: the panel's Overview, Data, Queries, Structure and Declaration tabs, and the Inspect command (`Alt+Shift+I`); a middleware logs each mount's frame calls for them | | nothing |
 
 `core` is required, and the host always names it: `corePlugin(coreApiBackend(api, { datasets }))`. The app model runs its queries by calling `core.submitQuery` through the pipeline like any other caller, so a host swaps or wraps queries the way it would any plugin's calls, with another `core` or with middleware. The SDK has no default `core` because it can't know where a host's core API is.

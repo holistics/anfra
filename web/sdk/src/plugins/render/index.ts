@@ -60,8 +60,9 @@ export async function saveBlob (doc: Document, request: SaveFileRequest): Promis
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/** Saves started in each frame, for the limit. */
+/** Each frame's rendering for a command, and the saves it started, for the limit. */
 interface SaveState {
+  rendering: boolean;
   saving: boolean;
   saves: number[];
 }
@@ -83,9 +84,26 @@ export function renderPlugin (options: RenderPluginOptions = {}): Plugin {
     version: PLUGIN_VERSION,
     host: {
       mount (mount) {
-        states.set(mount, { saving: false, saves: [] });
+        states.set(mount, { rendering: false, saving: false, saves: [] });
       },
       calls: {
+        /**
+         * Draw the page in the frame and save it, for the host's commands: one at a time, the commands
+         * disabled until it is done. Answers what the frame's `render.draw` does.
+         */
+        async download (request: unknown, { mount, call, signal }) {
+          const state = mount && states.get(mount);
+          if (!mount || !state) throw new ValidationError('A rendering is drawn for a frame.');
+          if (state.rendering) throw new ValidationError('A picture is being drawn already.');
+          state.rendering = true;
+          mount.commandsChanged();
+          try {
+            return await call('render.draw', request, { signal });
+          } finally {
+            state.rendering = false;
+            mount.commandsChanged();
+          }
+        },
         /** Save a rendering the frame made: one at a time, and only so many in a window. */
         save: {
           frame: true,
@@ -117,8 +135,11 @@ export function renderPlugin (options: RenderPluginOptions = {}): Plugin {
         title: `Download as ${format.toUpperCase()}`,
         icon: 'download',
         placement: 'overflow' as const,
-        run: { call: 'render.draw', request: { format } },
-        state: ({ mount }: { mount: MountContext }) => (states.get(mount)?.saving ? { disabled: 'Saving a picture…' } : {}),
+        run: { call: 'render.download', request: { format } },
+        state: ({ mount }: { mount: MountContext }) => {
+          const state = states.get(mount);
+          return state?.rendering ? { disabled: 'Drawing a picture…' } : state?.saving ? { disabled: 'Saving a picture…' } : {};
+        },
       })),
     },
     frame: { setup, ...(renderer ? { body: renderer } : {}) },

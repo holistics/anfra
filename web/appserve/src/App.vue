@@ -248,7 +248,7 @@ async function runCommand (command: Command): Promise<void> {
   if (!app.value) return;
   try {
     const result = await app.value.run(command.id);
-    if ('call' in command.run && command.run.call === 'render.draw') {
+    if ('call' in command.run && command.run.call === 'render.download') {
       const { omitted } = result as Rendering;
       if (omitted.length) {
         showToast(`Saved, with ${omitted.length === 1 ? 'an image' : `${omitted.length} images`} left blank: `
