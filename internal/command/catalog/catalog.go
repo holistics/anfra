@@ -58,7 +58,7 @@ func (IngestInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema
 // SearchInput is search's input: the query, and the page of what it matches.
 type SearchInput struct {
 	Query  []string `json:"query,omitempty" cli:"positional" doc:"search query"`
-	Limit  int      `json:"limit,omitempty" minimum:"1" maximum:"500" doc:"at most this many entities; absent, 50"`
+	Limit  int      `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"at most this many entities; absent, 50"`
 	Offset int      `json:"offset,omitempty" minimum:"0" doc:"skip this many entities first, to page with limit"`
 }
 
