@@ -61,8 +61,15 @@ const headRe = /<head(?:\s[^>]*)?>/i;
 // keep their attributes. Anything else (a <script> ahead of <head>, no <head> at all) and the
 // policy goes before it: the parser then opens <html> and <head> itself, merges a later <html>'s
 // attributes and drops a later <head>'s, which is the price of no script running ahead of it.
-const gap = '(?:\\s|<!--[\\s\\S]*?-->)*';
-const preambleRe = new RegExp(`^${gap}(?:<!doctype[^>]*>${gap})?(?:<html(?:\\s[^>]*)?>${gap})?(?:<head(?:\\s[^>]*)?>)?`, 'i');
+// Each part matches only what the parser ends where the pattern does: a comment closes at `-->` or
+// `--!>`, and `<!-->` or `<!--->` is a whole one; a `>` in a quoted attribute value doesn't end the
+// tag, while a quote is a value's only after `=` (elsewhere it is part of a name). A doctype ends at
+// any `>`, quoted or not. A name and an unquoted value run to their end, so the definition, which is
+// untrusted, can't make the pattern backtrack through every way of splitting them.
+const gap = '(?:\\s|<!--(?!-?>)[\\s\\S]*?--!?>)*';
+const attribute = `[^\\s/>][^\\s/>=]*(?![^\\s/>=])(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>"'][^\\s>]*(?![^\\s>]))|(?!\\s*=))`;
+const attributes = `(?:\\s(?:[\\s/]|${attribute})*)?`;
+const preambleRe = new RegExp(`^${gap}(?:<!doctype[^>]*>${gap})?(?:<html${attributes}>${gap})?(?:<head${attributes}>)?`, 'i');
 
 /**
  * A Data App's frame document: its definition, with its content policy as the first element the
