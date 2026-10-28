@@ -5,6 +5,8 @@
  */
 import type { InspectedQuery } from '../../common/types';
 import type { TabContext } from '../../host/contributions';
+import type { Panel } from '../../host/panel';
+import { LINEAGE_TAB } from './model/types';
 import type { QueryInput } from './model/inputs';
 import { tokenize, type Lang } from './model/highlight';
 import { plural } from './model/format';
@@ -166,6 +168,29 @@ export function link (doc: Document, label: Children, onclick: () => void, attri
       onclick();
     },
   }, label);
+}
+
+/**
+ * Show a query in Lineage: Lineage follows the selection, so this selects the query's first marker
+ * (`node`). A query drawn nowhere on the page has none, and the button is disabled, saying why. It
+ * sits in a row's summary, so its click neither opens nor closes the row.
+ */
+export function lineageButton (doc: Document, panel: Panel, node: string | undefined): HTMLElement {
+  const button = h(doc, 'button', {
+    type: 'button',
+    class: 'row-action',
+    'aria-label': 'Show in Lineage',
+    'data-tip': node === undefined ? undefined : 'Show in Lineage',
+    'data-testid': 'show-in-lineage',
+    disabled: node === undefined,
+    onclick: (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (node !== undefined) panel.show(LINEAGE_TAB, node);
+    },
+  }, icon(doc, 'lineage'));
+  // A disabled button may get no pointer events, so what wraps it says why.
+  return node === undefined ? h(doc, 'span', { class: 'row-action-wrap', 'data-tip': "Not on the page, so it can't be selected in Lineage" }, button) : button;
 }
 
 /**
@@ -535,7 +560,9 @@ code.wrap { overflow-wrap: anywhere; }
 .segments button + button { border-left: 1px solid var(--anfra-color-border); }
 .segments button[aria-pressed="true"] { background: var(--accent-bg); color: var(--anfra-color-accent); }
 .row-action { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted); }
-.row-action:hover { background: var(--hover); color: var(--anfra-color-accent); }
+.row-action:hover:not(:disabled) { background: var(--hover); color: var(--anfra-color-accent); }
+.row-action:disabled { opacity: 0.4; cursor: default; }
+.row-action-wrap { flex: none; display: inline-flex; }
 .spacer { flex: 1; }
 /* Collapsibles */
 .collapsible > summary { list-style: none; display: flex; align-items: center; gap: 6px; padding: 4px 0; cursor: pointer; user-select: none; }
