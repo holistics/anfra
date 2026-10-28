@@ -1,0 +1,52 @@
+<script setup lang="ts">
+// A board on the home page: its cover (a still of its first screen, else its map), its name, its
+// project and when it last changed, who owns it, its open comments, and ways to present it or
+// change its details.
+import { computed, ref } from 'vue';
+import type { BoardSummary } from '../../../vite/boards.ts';
+import { useStore } from '../../context.ts';
+import { ago, boardProject, person } from '../../home.ts';
+import Avatar from '../../ui/Avatar.vue';
+import Button from '../../ui/Button.vue';
+import { vTip } from '../../ui/tooltip.ts';
+import BoardMap from './BoardMap.vue';
+
+const props = defineProps<{ board: BoardSummary }>();
+const emit = defineEmits<{ edit: [] }>();
+
+const { state } = useStore();
+const cover = ref(true);
+const project = computed(() => boardProject(props.board, state.settings.prototypeRoute ?? ''));
+const owners = computed(() => (props.board.owners ?? []).map((o) => person(o, state.settings)));
+const href = computed(() => `#${props.board.slug}`);
+const present = () => {
+  location.hash = `${props.board.slug}/present/${props.board.first}`;
+};
+</script>
+
+<template>
+  <article class="ac-board-card">
+    <a class="ac-board-cover" :href="href" :aria-label="`Open ${board.name}`">
+      <img v-if="cover && board.frames" :src="`/__canvas/api/thumb?board=${board.slug}&v=${board.updated}`" alt="" loading="lazy" @error="cover = false">
+      <BoardMap v-else :map="board.map" />
+    </a>
+    <div class="ac-board-meta">
+      <div class="ac-row">
+        <a class="ac-board-name ac-truncate" :href="href">{{ board.name }}</a>
+        <span v-if="board.open" v-tip="`${board.open} open ${board.open === 1 ? 'comment' : 'comments'}`" class="ac-count">{{ board.open }}</span>
+      </div>
+      <p class="ac-caption ac-truncate">
+        {{ [project, `${board.frames} ${board.frames === 1 ? 'screen' : 'screens'}`, `Edited ${ago(board.updated).toLowerCase()}`].filter(Boolean).join(' · ') }}
+      </p>
+      <div class="ac-row ac-board-foot">
+        <span class="ac-avatars">
+          <Avatar v-for="o in owners.slice(0, 4)" :key="o.id" :name="o.name" :src="o.avatarUrl" :size="20" />
+        </span>
+        <span v-if="!owners.length" class="ac-caption">No owner</span>
+        <span class="ac-spacer" />
+        <Button v-if="board.first" variant="ghost" small icon="present" label="Present" @click="present" />
+        <Button variant="ghost" small icon="pencil" label="Edit details" @click="emit('edit')" />
+      </div>
+    </div>
+  </article>
+</template>

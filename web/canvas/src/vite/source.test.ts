@@ -73,6 +73,8 @@ describe('applyEdit', () => {
   });
 
   it('keeps a v-if chain whole when its first element is removed, and refuses edits that break the template', () => {
+    const spaced = '<template>\n  <main>\n    <h1>A</h1>\n\n    <p>B</p>\n\n    <p>C</p>\n  </main>\n</template>\n';
+    expect(applyEdit(spaced, at(5, 5), { kind: 'remove' })).toBe('<template>\n  <main>\n    <h1>A</h1>\n\n    <p>C</p>\n  </main>\n</template>\n');
     const chain = `<template>
   <main>
     <p v-if="failed">Failed</p>

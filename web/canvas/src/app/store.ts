@@ -7,7 +7,7 @@ import {
   type Anchor, type Board, type BoardObject, type Comment, type ElementRef, type Rect, type Scenarios,
 } from '../model/index.ts';
 import type { CanvasHost, ElementInfo, FrameAgent, FrameEvent, FrameMode, LayerNode } from '../frame/protocol.ts';
-import type { BoardSummary } from '../vite/boards.ts';
+import type { BoardDetails, BoardSummary } from '../vite/boards.ts';
 import type { Changes, FileDiff } from '../vite/changes.ts';
 import type { ComponentSpec, PaletteItem, Tokens } from '../vite/catalog.ts';
 import type { Edit, SourceInfo, Where } from '../vite/source.ts';
@@ -25,6 +25,27 @@ export interface Settings {
   commitPrefix: string;
   /** The kit's icons, for props that take one: their names, and the prop that names one. */
   icons?: { prop: string, names: string[] };
+  /** Who makes prototypes, by id, to name a board's owners. */
+  people?: Record<string, { name: string, avatarUrl?: string }>;
+  /** Whoever runs the canvas: one of the people's ids, else their git name. */
+  me?: string;
+  /** Where the prototypes are served (`/p`): the folder after it is a screen's project. */
+  prototypeRoute?: string;
+}
+
+/** What the home page lists: every board, the recent ones, a project's, or a person's. */
+export interface HomeView {
+  kind: 'all' | 'recent' | 'project' | 'person';
+  id?: string;
+}
+
+/** The id of the frame that presents a prototype full screen: its app is used, never picked in. */
+export const PRESENT_FRAME = 'present';
+
+/** Presenting one frame's prototype full screen: the frame, and the scenario it is shown in. */
+export interface Present {
+  frame: string;
+  scenario?: string;
 }
 
 /** One undo step: the board as it was, or a file the canvas edited, before and after. */
@@ -134,6 +155,10 @@ export function createStore (settings: Settings, previews?: Component) {
     outlineChanges: true,
     /** A frame shown before its changes and now, split at `at` (0 to 1 of its width). */
     compare: null as { frame: string, at: number } | null,
+    /** The home page, when no board is open: what it lists (all, recent, a project, a person). */
+    home: null as HomeView | null,
+    /** Presenting a frame's prototype full screen, over the board. */
+    present: null as Present | null,
   });
 
   // The board is kept as an immutable value: each change is a new board, so undo is a list.
@@ -168,14 +193,32 @@ export function createStore (settings: Settings, previews?: Component) {
     synced();
     state.selection = [];
     state.picked = null;
-    if (location.hash !== `#${slug}`) history.replaceState(null, '', `#${slug}`);
+    if (decodeURIComponent(location.hash.slice(1)).split('/')[0] !== slug) history.replaceState(null, '', `#${slug}`);
   }
 
-  async function create (slug: string, name: string) {
-    const { status, data } = await api<{ message?: string }>('/boards', { method: 'POST', body: JSON.stringify({ slug, name }) });
+  async function create (slug: string, name: string, details: BoardDetails = {}) {
+    const { status, data } = await api<{ message?: string }>('/boards', { method: 'POST', body: JSON.stringify({ slug, name, ...details }) });
     if (status !== 201) return flash(data.message ?? 'Couldn\'t create the board');
     await loadList();
-    await open(slug);
+    location.hash = slug;
+  }
+
+  /** Change a board's name, project or owners, from its card on the home page. */
+  async function updateDetails (slug: string, details: BoardDetails) {
+    const { status, data } = await api<{ message?: string }>(`/boards/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(details) });
+    if (status !== 200) return flash(data.message ?? 'Couldn\'t change the board');
+    await loadList();
+  }
+
+  /** Keep a still of the board's first screen as its cover on the home page. */
+  function keepCover () {
+    const slug = state.slug;
+    const first = board.value?.frames[0];
+    const agent = first && agents.get(first.id);
+    if (!slug || !agent) return;
+    try {
+      void fetch(`${API}/thumb?board=${encodeURIComponent(slug)}`, { method: 'PUT', body: agent.snapshot() });
+    } catch { /* a screen that is loading */ }
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -435,7 +478,7 @@ export function createStore (settings: Settings, previews?: Component) {
   };
   window.__anfraCanvasHost = host;
 
-  const modeFor = (_frame: string): FrameMode => (state.panning ? 'idle' : state.placing ? 'comment' : MODES[state.tool]);
+  const modeFor = (frame: string): FrameMode => (frame === PRESENT_FRAME ? 'interact' : state.panning ? 'idle' : state.placing ? 'comment' : MODES[state.tool]);
   watch(() => state.tool, () => {
     state.placing = '';
   });
@@ -778,7 +821,7 @@ export function createStore (settings: Settings, previews?: Component) {
 
   return {
     state, board, handlers, previews: previews && markRaw(previews),
-    loadList, open, create, commit, preview, undo, redo, removeSelection, comment,
+    loadList, open, create, updateDetails, keepCover, commit, preview, undo, redo, removeSelection, comment,
     loadChanges, framesShowing, hasStill, stillUrl, changedRects, commitChanges, readCommit,
     locate, pickAt, tree, snapshot, commentOn, openInEditor, reload, place, addFrame, pick, pickParent, edit, insert, whereIn, editText, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo, tidyUp,
     play, playNext, playBack, stopPlay, startFrame,

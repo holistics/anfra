@@ -236,7 +236,12 @@ function editElement (code: string, loc: SourceLoc, edit: Edit): Edited {
         const quote = now.includes('"') ? "'" : '"';
         out = out.slice(0, at) + `v-if=${quote}${now}${quote}` + out.slice(follower.loc.end.offset);
       }
-      const [from, to] = wholeLines(out, start, end);
+      let [from, to] = wholeLines(out, start, end);
+      // Between two blank lines, one of them goes too.
+      const blank = /^[ \t]*\n/;
+      if (to > from && out[from - 1] === '\n' && /\n[ \t]*\n$/.test(out.slice(0, from)) && blank.test(out.slice(to))) {
+        to += blank.exec(out.slice(to))![0].length;
+      }
       return { code: out.slice(0, from) + out.slice(to) };
     }
     case 'duplicate': {

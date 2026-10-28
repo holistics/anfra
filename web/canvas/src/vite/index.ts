@@ -5,7 +5,7 @@
 //     tools at /__canvas/mcp.
 // None of it is in a production build: every hook is for `vite serve`.
 import { mkdirSync, watch, writeFileSync } from 'node:fs';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 import { searchForWorkspaceRoot, type Plugin, type ResolvedConfig, type ViteDevServer } from 'vite';
 import { parseBoard, type Board } from '../model/board.ts';
 import type { Scenarios } from '../model/scenario.ts';
-import { BoardStore, Conflict, SLUG } from './boards.ts';
+import { BoardStore, Conflict, SLUG, withDetails, type BoardDetails } from './boards.ts';
 import { handleMcp, type McpContext } from './mcp.ts';
 import { kitCatalog, palette, readCatalog, readTokens, type ComponentSpec, type Kit, type KitIcons, type PaletteItem } from './catalog.ts';
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
@@ -49,6 +49,12 @@ export interface CanvasOptions {
    * props a designer sets and the markup each is placed with, and its icons (see `Kit`).
    */
   kit?: string;
+  /**
+   * A module exporting `people`: who makes prototypes, by id (`{ 'thong.do': { name, avatarUrl } }`),
+   * to name a board's owners on the home page. Whoever runs the canvas is matched to one by the
+   * local part of their git email, else by their git name.
+   */
+  people?: string;
   /** Routes offered when adding a frame. */
   routes?: string[];
   /** What an agent is told when it connects over MCP. */
@@ -66,6 +72,8 @@ const BASE = '/__canvas';
 const PREVIEWS = 'node_modules/.anfra-canvas/Previews.vue';
 /** Stills of the frames from before the changes, to compare with now. */
 const STILLS = 'node_modules/.anfra-canvas/stills';
+/** Each board's cover for the home page. */
+const THUMBS = 'node_modules/.anfra-canvas/thumbs';
 
 export function anfraCanvas (options: CanvasOptions = {}): Plugin {
   const opts = {
@@ -160,6 +168,9 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           routes: opts.routes,
           mcp: `${BASE}/mcp`,
           author: await gitUser(config.root),
+          people: await people(),
+          me: await whoAmI(),
+          prototypeRoute: opts.prototypes?.route ?? '',
           commitPrefix: opts.commitPrefix ?? '',
           icons: kit.icons ? { prop: kit.icons.prop ?? 'name', names: kit.icons.names } : undefined,
         };
@@ -261,14 +272,19 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           if (path === '/api/boards') {
             if (req.method === 'GET') return send(res, 200, await store.list());
             if (req.method === 'POST') {
-              const { slug, name } = await body(req);
-              return send(res, 201, await store.create(String(slug), String(name || slug)));
+              const { slug, name, project, owners } = await body(req) as { slug: string, name?: string, project?: string, owners?: string[] };
+              return send(res, 201, await store.create(String(slug), String(name || slug), { project, owners }));
             }
           }
           const boardPath = /^\/api\/boards\/([^/]+)$/.exec(path);
           if (boardPath) {
             const slug = decodeURIComponent(boardPath[1]);
             if (req.method === 'GET') return send(res, 200, await store.read(slug));
+            // The board's details (name, project, owners), from its card on the home page.
+            if (req.method === 'PATCH') {
+              const details = await body(req) as BoardDetails;
+              return send(res, 200, await store.change(slug, (b) => withDetails(b, details)));
+            }
             if (req.method === 'PUT') {
               const { board, base } = await body(req);
               try {
@@ -311,6 +327,25 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
             } catch (e) {
               if (e instanceof CommitError) return send(res, 422, { message: e.message });
               throw e;
+            }
+          }
+          // A board's cover for its card on the home page: a still of its first screen, kept
+          // locally (not committed) each time the board is opened.
+          if (path === '/api/thumb') {
+            const board = url.searchParams.get('board') ?? '';
+            if (!SLUG.test(board)) return send(res, 400, { message: 'Which board?' });
+            const file = join(abs(THUMBS), `${board}.svg`);
+            if (req.method === 'GET') {
+              const svg = await readFile(file, 'utf8').catch(() => undefined);
+              if (!svg) return send(res, 404, { message: 'No cover for this board yet' });
+              res.setHeader('Content-Type', 'image/svg+xml');
+              res.setHeader('Cache-Control', 'no-store');
+              return res.end(svg);
+            }
+            if (req.method === 'PUT') {
+              await mkdir(abs(THUMBS), { recursive: true });
+              await writeFile(file, await text(req));
+              return send(res, 200, { kept: true });
             }
           }
           // A frame's still from before the changes: kept once, read to compare.
@@ -369,6 +404,27 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       throw new EditError(`the canvas edits .vue files under ${opts.editable.join(', ')} only`);
     }
     return { loc, file };
+  }
+
+  async function people (): Promise<Record<string, Person>> {
+    if (!opts.people || !server) return {};
+    try {
+      const mod = await server.ssrLoadModule(`/${opts.people.replace(/^\//, '')}`);
+      return (mod.people ?? mod.default ?? {}) as Record<string, Person>;
+    } catch (e) {
+      config.logger.warn(`[anfra canvas] couldn't read the people in ${opts.people}: ${e instanceof Error ? e.message : e}`);
+      return {};
+    }
+  }
+
+  /** Whoever runs the canvas: one of the people when their git email or name says so. */
+  async function whoAmI (): Promise<string> {
+    const [name, email] = await Promise.all([gitConfig(config.root, 'user.name'), gitConfig(config.root, 'user.email')]);
+    const known = await people();
+    const local = email.split('@')[0].toLowerCase();
+    const id = Object.keys(known).find((k) => k.toLowerCase() === local)
+      ?? Object.entries(known).find(([, p]) => p.name.toLowerCase() === name.toLowerCase())?.[0];
+    return id ?? (name || local || 'Designer');
   }
 
   async function prototypeRoutes (): Promise<string[]> {
@@ -454,6 +510,21 @@ async function cssText (file: string, seen = new Set<string>()): Promise<string>
 }
 
 /** Who comments: the git user of the app's repo, as the person's commits name them. */
+/** One of the people who make prototypes. */
+export interface Person {
+  name: string;
+  avatarUrl?: string;
+}
+
+async function gitConfig (cwd: string, key: string): Promise<string> {
+  try {
+    const { stdout } = await promisify(execFile)('git', ['config', key], { cwd });
+    return stdout.trim();
+  } catch {
+    return '';
+  }
+}
+
 async function gitUser (cwd: string): Promise<string> {
   try {
     const { stdout } = await promisify(execFile)('git', ['config', 'user.name'], { cwd });

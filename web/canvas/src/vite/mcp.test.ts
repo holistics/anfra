@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addComment, emptyBoard } from '../model/index.ts';
-import { BoardStore, Conflict } from './boards.ts';
+import { BoardStore, Conflict, withDetails } from './boards.ts';
 import { handleMcp, type McpContext } from './mcp.ts';
 
 let ctx: McpContext;
@@ -83,7 +83,17 @@ describe('the board store', () => {
   });
 
   it('reads a board someone wrote by hand', async () => {
-    await writeFile(join(ctx.store.dir, 'hand.json'), JSON.stringify({ ...emptyBoard('Hand') }));
-    expect(await ctx.store.list()).toEqual([{ slug: 'hand', name: 'Hand', frames: 0, open: 0 }]);
+    await writeFile(join(ctx.store.dir, 'hand.json'), JSON.stringify({ ...emptyBoard('Hand'), project: 'datasets', owners: ['thong.do'] }));
+    expect(await ctx.store.list()).toEqual([expect.objectContaining({
+      slug: 'hand', name: 'Hand', frames: 0, open: 0, project: 'datasets', owners: ['thong.do'], routes: [], screens: [], map: { sections: [], frames: [] },
+    })]);
+  });
+
+  it('keeps a board\'s details, and changes them', async () => {
+    const made = await ctx.store.create('details', 'Details', { project: 'datasets', owners: ['khai.to'] });
+    expect(Object.keys(made).slice(0, 4)).toEqual(['version', 'name', 'project', 'owners']);
+    const changed = await ctx.store.change('details', (b) => withDetails(b, { name: 'Renamed', project: '', owners: ['khai.to', 'thong.do'] }));
+    expect(changed).toMatchObject({ name: 'Renamed', owners: ['khai.to', 'thong.do'] });
+    expect(changed.project).toBeUndefined();
   });
 });

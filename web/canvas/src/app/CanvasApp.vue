@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { bounds, duplicate, shapes } from '../model/index.ts';
 import { provideStore } from './context.ts';
 import { TOOLS, type Store } from './store.ts';
@@ -8,6 +8,10 @@ import Viewport from './components/Viewport.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import LeftPanel from './components/LeftPanel.vue';
 import Inspector from './components/Inspector.vue';
+import HomePage from './components/home/HomePage.vue';
+import PresentView from './components/PresentView.vue';
+import { opened, parseView } from './home.ts';
+import Icon from './ui/Icon.vue';
 import Button from './ui/Button.vue';
 import Field from './ui/Field.vue';
 import Select, { type SelectOption } from './ui/Select.vue';
@@ -18,6 +22,7 @@ const store = props.store;
 provideStore(store);
 const { state, board } = store;
 const viewport = ref<InstanceType<typeof Viewport>>();
+const presenting = ref<InstanceType<typeof PresentView>>();
 
 const creating = ref(false);
 const newName = ref('');
@@ -51,6 +56,8 @@ function fitAll () {
 // --- Keyboard --------------------------------------------------------------------------------------
 
 function shortcut (key: string, meta: boolean, shift: boolean, alt = false): boolean {
+  if (state.home) return false;
+  if (state.present) return !meta && !!presenting.value?.key(key);
   const k = key.toLowerCase();
   if (meta && k === 'k') {
     state.palette = state.palette ? '' : 'all';
@@ -159,13 +166,51 @@ store.handlers.key = (e) => {
   shortcut(e.key, e.meta, e.shift, e.alt);
 };
 
+// The address says what shows: the home page (`#`, `#@project/datasets`), a board (`#<board>`),
+// or a board's frame presented full screen (`#<board>/present/<frame>`).
+let coverTimer: ReturnType<typeof setTimeout> | undefined;
 async function openFromHash () {
-  const slug = decodeURIComponent(location.hash.slice(1));
-  const target = slug || state.boards[0]?.slug;
-  if (target && target !== state.slug) {
-    await store.open(target);
-    requestAnimationFrame(fitAll);
+  const hash = decodeURIComponent(location.hash.slice(1));
+  const view = parseView(hash);
+  if (view) {
+    if (state.slug) store.keepCover();
+    state.present = null;
+    state.home = view;
+    void store.loadList();
+    return;
   }
+  const [slug, mode, frame] = hash.split('/');
+  if (slug !== state.slug || state.home) {
+    if (state.slug && slug !== state.slug) store.keepCover();
+    state.home = null;
+    if (slug !== state.slug) {
+      await store.open(slug);
+      if (state.slug !== slug) return;
+      opened(slug);
+      // The board's view mounts with it: fit once it has its size.
+      await nextTick();
+      fitWhenSized();
+      // Its first screen as the board's cover on the home page, once it has drawn.
+      clearTimeout(coverTimer);
+      coverTimer = setTimeout(() => store.keepCover(), 4000);
+    }
+  }
+  state.present = mode === 'present' && frame ? { frame } : null;
+}
+
+function fitWhenSized (tries = 30) {
+  if (state.viewport.width || !tries) fitAll();
+  else requestAnimationFrame(() => fitWhenSized(tries - 1));
+}
+
+const goHome = () => {
+  location.hash = '';
+};
+
+/** Present the picked frame, else the selected one, else the board's first. */
+function present () {
+  const id = state.picked?.frame ?? board.value?.frames.find((f) => state.selection.includes(f.id))?.id ?? board.value?.frames[0]?.id;
+  if (id) location.hash = `${state.slug}/present/${id}`;
 }
 
 onMounted(async () => {
@@ -180,13 +225,22 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
   window.removeEventListener('hashchange', openFromHash);
+  clearTimeout(coverTimer);
 });
 </script>
 
 <template>
   <div class="ac">
+    <header v-if="state.home" class="ac-top">
+      <a class="ac-row ac-home-brand" href="#"><Icon name="home" /> <span class="ac-heading">Canvas</span></a>
+      <span class="ac-spacer" />
+      <a class="ac-btn ghost" href="/" target="_blank" rel="noopener">The app <Icon name="external" :size="14" /></a>
+    </header>
+    <HomePage v-if="state.home" />
+    <template v-else>
     <header class="ac-top">
       <div class="ac-row ac-top-board">
+        <Button variant="ghost" icon="home" label="All boards" @click="goHome" />
         <Select
           v-if="state.boards.length"
           :model-value="state.slug"
@@ -218,6 +272,14 @@ onBeforeUnmount(() => {
       >
         {{ state.flow ? 'Stop' : 'Play' }}
       </Button>
+      <Button
+        v-if="board?.frames.length"
+        icon="present"
+        tip="Present the selected screen full screen, as it runs on its own"
+        @click="present"
+      >
+        Present
+      </Button>
       <span class="ac-save ac-caption" :class="state.saving" role="status">
         <span class="ac-save-dot" aria-hidden="true" />
         {{ state.saving === 'saving' ? 'Saving' : state.saving === 'error' ? 'Not saved' : 'Saved' }}
@@ -233,14 +295,11 @@ onBeforeUnmount(() => {
     <LeftPanel />
     <main class="ac-main">
       <p v-if="state.error" class="ac-error" role="alert">{{ state.error }}</p>
-      <div v-else-if="!state.slug && !state.boards.length" class="ac-start">
-        <p class="ac-title">No boards yet</p>
-        <p class="ac-caption">A board holds the screens of one feature: its happy path and its edge cases, side by side</p>
-        <Button variant="primary" icon="plus" @click="creating = true">New board</Button>
-      </div>
-      <Viewport v-else ref="viewport" />
+      <Viewport v-else-if="state.slug" ref="viewport" />
     </main>
     <Inspector />
+    <PresentView v-if="state.present && board" ref="presenting" />
+    </template>
     <CommandPalette v-if="state.palette" />
     <Tooltip />
   </div>

@@ -89,6 +89,10 @@ export type BoardObject = Shape | Arrow | Comment;
 export interface Board {
   version: typeof BOARD_VERSION;
   name: string;
+  /** The project it belongs to, for the boards' home; else the folder of most of its screens. */
+  project?: string;
+  /** Who works on it: ids of the canvas's people, or names. */
+  owners?: string[];
   /** Bumped by the server on every save, so a stale save can be told apart and merged. */
   rev: number;
   frames: Frame[];
@@ -122,7 +126,16 @@ export const FRAME_SIZES = [
 export function parseBoard (value: unknown): Board {
   if (!isObject(value)) throw new Error('a board is a JSON object');
   if (value.version !== BOARD_VERSION) throw new Error(`a board's version is ${BOARD_VERSION}`);
-  const board = emptyBoard(typeof value.name === 'string' ? value.name : 'Untitled');
+  const owners = Array.isArray(value.owners) ? value.owners.filter((o): o is string => typeof o === 'string' && !!o.trim()) : [];
+  const { version, name, ...rest } = emptyBoard(typeof value.name === 'string' ? value.name : 'Untitled');
+  // The details sit under the name in the file, where a person reading it looks.
+  const board: Board = {
+    version,
+    name,
+    ...(typeof value.project === 'string' && value.project.trim() ? { project: value.project.trim() } : {}),
+    ...(owners.length ? { owners } : {}),
+    ...rest,
+  };
   board.rev = typeof value.rev === 'number' ? value.rev : 0;
   for (const key of COLLECTIONS) {
     const list = value[key] ?? [];

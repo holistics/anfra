@@ -1,7 +1,7 @@
 // The boards on disk: one JSON file each in the app's boards folder. Every save goes through here,
 // one at a time per board, and bumps the board's rev; a save from an older rev is refused with the
 // current board, for the saver to merge onto and save again.
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { emptyBoard, parseBoard, type Board } from '../model/board.ts';
 
@@ -12,7 +12,42 @@ export interface BoardSummary {
   name: string;
   frames: number;
   open: number;
+  project?: string;
+  owners?: string[];
+  /** When its file last changed, in ms. */
+  updated: number;
+  /** Its screens' routes, and names, for search and the project a board without one is in. */
+  routes: string[];
+  screens: string[];
+  /** Its first frame, which presenting the board starts at. */
+  first?: string;
+  /** A small map of the board for its card: sections and frames, as x, y, width, height. */
+  map: { sections: number[][], frames: number[][] };
 }
+
+/** A board's details, as its home card edits them. */
+export interface BoardDetails {
+  name?: string;
+  project?: string;
+  owners?: string[];
+}
+
+export function withDetails (board: Board, details: BoardDetails): Board {
+  const next: Board = { ...board };
+  if (typeof details.name === 'string' && details.name.trim()) next.name = details.name.trim();
+  if ('project' in details) {
+    if (details.project?.trim()) next.project = details.project.trim();
+    else delete next.project;
+  }
+  if ('owners' in details) {
+    const owners = (details.owners ?? []).filter((o) => typeof o === 'string' && o.trim());
+    if (owners.length) next.owners = owners;
+    else delete next.owners;
+  }
+  return next;
+}
+
+const rect = (r: { x: number, y: number, width: number, height: number }) => [r.x, r.y, r.width, r.height].map(Math.round);
 
 export class Conflict extends Error {
   readonly current: Board;
@@ -51,7 +86,20 @@ export class BoardStore {
       const slug = f.slice(0, -5);
       try {
         const b = await this.read(slug);
-        out.push({ slug, name: b.name, frames: b.frames.length, open: b.comments.filter((c) => c.status === 'open').length });
+        const { mtimeMs } = await stat(this.path(slug));
+        out.push({
+          slug,
+          name: b.name,
+          frames: b.frames.length,
+          open: b.comments.filter((c) => c.status === 'open').length,
+          ...(b.project ? { project: b.project } : {}),
+          ...(b.owners ? { owners: b.owners } : {}),
+          updated: Math.round(mtimeMs),
+          routes: [...new Set(b.frames.map((f) => f.route))],
+          screens: b.frames.map((f) => f.name),
+          ...(b.frames[0] ? { first: b.frames[0].id } : {}),
+          map: { sections: b.sections.map(rect), frames: b.frames.map(rect) },
+        });
       } catch { /* a broken file is skipped here and reported when opened */ }
     }
     return out;
@@ -70,10 +118,10 @@ export class BoardStore {
     }
   }
 
-  async create (slug: string, name: string): Promise<Board> {
+  async create (slug: string, name: string, details: BoardDetails = {}): Promise<Board> {
     return this.serial(slug, async () => {
       if (await this.exists(slug)) throw new Error(`a board named ${slug} exists`);
-      return this.write(slug, emptyBoard(name));
+      return this.write(slug, withDetails(emptyBoard(name), details));
     });
   }
 
