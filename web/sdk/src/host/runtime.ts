@@ -17,7 +17,7 @@ import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
-import { eventShortcut, normalizeShortcut } from '../common/shortcut';
+import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
 import {
   commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
@@ -219,10 +219,17 @@ export function createHost (options: HostOptions): Host {
   const tabIds = tabs.map((tab) => tab.id);
   // Which kinds of target the host's own menu commands are for: the frame listens only when asked.
   const menuKinds = [...new Set(commands.flatMap((command) => (command.target ? [command.target] : [])))];
-  const byShortcut = new Map(commands.flatMap((command) => {
+  // The chrome's commands by shortcut: a menu command runs only with its target, so has none.
+  const byShortcut = new Map<string, string>();
+  for (const command of commands) {
+    if (command.shortcut === undefined) continue;
     const shortcut = normalizeShortcut(command.shortcut);
-    return shortcut ? [[shortcut, command.id] as const] : [];
-  }));
+    if (!shortcut) throw new Error(`Command '${command.id}' has a shortcut that isn't one: '${command.shortcut}'.`);
+    if (command.target) throw new Error(`Command '${command.id}' is for the menu on the page, which has no shortcuts.`);
+    const other = byShortcut.get(shortcut);
+    if (other) throw new Error(`Commands '${other}' and '${command.id}' have the same shortcut, '${command.shortcut}'.`);
+    byShortcut.set(shortcut, command.id);
+  }
   let nextMount = 1;
 
   /**
@@ -333,7 +340,7 @@ export function createHost (options: HostOptions): Host {
           // The panel's own, from the kernel.
           if (name === 'anfra.snapshot') { panelState.snapshot(payload); return; }
           if (name === 'anfra.picked') { panelState.picked(payload); return; }
-          if (name === 'anfra.shortcut') { runShortcut(payload); return; }
+          if (name === 'anfra.shortcut') { runShortcut(payload, 'key'); return; }
           // Only what a plugin declared, as its check let it through: the frame is untrusted.
           const check = events.get(name);
           if (!check || !listeners.has(name)) return;
@@ -390,10 +397,10 @@ export function createHost (options: HostOptions): Host {
       themeListeners.add(sendTheme);
       const stateContext = { mount: context, panel: panelState.panel };
       /** Run the command a shortcut names, for a key in the frame or the host's page: whether one did. */
-      const runShortcut = (shortcut: unknown): boolean => {
+      const runShortcut = (shortcut: unknown, from: 'host' | 'key' = 'host'): boolean => {
         const id = typeof shortcut === 'string' ? byShortcut.get(shortcut) : undefined;
         if (!id) return false;
-        runCommand(id).catch(() => { /* a disabled command says why in its state, not here */ });
+        runCommand(id, undefined, from).catch(() => { /* a disabled command says why in its state, not here */ });
         return true;
       };
       const commandOf = (id: string) => {
@@ -435,29 +442,35 @@ export function createHost (options: HostOptions): Host {
         setups: plugins.flatMap((plugin) => (plugin.frame ? [{ name: plugin.name, setup: plugin.frame.setup }] : [])),
       });
 
-      /** Run a command for this frame, unless its state says it can't run; one for content, with its target. */
-      const runCommand = async (id: string, target?: MenuTarget, fromFrame = false): Promise<unknown> => {
+      /**
+       * Run a command for this frame, unless its state says it can't run; one for content, with its
+       * target. Asked by the host, the reader in the frame's menu, or a key the frame forwarded: the
+       * frame may make that one up, so its call is held to what the frame may call itself.
+       */
+      const runCommand = async (id: string, target?: MenuTarget, from: 'host' | 'menu' | 'key' = 'host'): Promise<unknown> => {
         const command = commandOf(id);
         if (command.target && target?.kind !== command.target) throw new ValidationError(`'${id}' runs from the menu on the page, with a ${command.target} target.`);
-        const { disabled } = commandState(command, stateContext, target);
+        const { disabled, pressed } = commandState(command, stateContext, target);
         if (disabled) throw new PermissionError(disabled);
         if ('tab' in command.run) {
           const node = target ? (target.kind === 'node' ? target : target.node)?.node.key : undefined;
           const selected = node ?? command.run.target;
           if (selected !== undefined) panelState.panel.show(command.run.tab, selected);
-          else panelState.panel.toggle(command.run.tab);
+          // A toggle: pressed, it closes the panel, whichever of its tabs shows.
+          else if (pressed) panelState.panel.hide();
+          else panelState.panel.show(command.run.tab);
           return null;
         }
         const request = target ? { ...(command.run.request as object | undefined ?? {}), target } : command.run.request ?? null;
-        const callers: Caller[] = fromFrame ? [{ kind: 'frame' }, ...callersOf(command.plugin)] : callersOf(command.plugin);
-        return call(command.run.call, request, callers, context);
+        const callers: Caller[] = from === 'host' ? callersOf(command.plugin) : [{ kind: 'frame' }, ...callersOf(command.plugin)];
+        return call(command.run.call, request, callers, context, { asOrigin: from === 'key' });
       };
       menus.set(context, {
         entries: (target) => menuFor(target),
         // Picked in the frame: the command's call keeps the frame as its origin.
         run: (id, target) => {
           if (!commandOf(id).target) return Promise.reject(new PermissionError(`'${id}' isn't a menu command.`));
-          return runCommand(id, target, true);
+          return runCommand(id, target, 'menu');
         },
       });
       /** The host's menu commands that apply to a target, as the frame's menu shows them. */
@@ -482,7 +495,7 @@ export function createHost (options: HostOptions): Host {
         run: (id) => runCommand(id),
         onCommandsChange: (listener) => listen(commandListeners, listener),
         handleKeydown (event) {
-          if (event.defaultPrevented || event.repeat) return false;
+          if (event.defaultPrevented || event.repeat || isTyping(event.target)) return false;
           if (!runShortcut(eventShortcut(event))) return false;
           event.preventDefault();
           return true;

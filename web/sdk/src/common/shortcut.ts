@@ -19,6 +19,13 @@ export function normalizeShortcut (shortcut: unknown): string | undefined {
   return [...MODIFIERS.filter((modifier) => parts.includes(modifier)), key].join('+');
 }
 
+/** Whether a key event's target takes text, where a shortcut would eat what the reader types. */
+export function isTyping (target: EventTarget | null): boolean {
+  const element = target as Partial<HTMLElement> | null;
+  if (!element || typeof element.tagName !== 'string') return false;
+  return element.isContentEditable === true || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName.toUpperCase());
+}
+
 /** The combination a key event makes, in the same form. */
 export function eventShortcut (event: KeyboardEvent): string {
   const code = typeof event.code === 'string' ? event.code : '';

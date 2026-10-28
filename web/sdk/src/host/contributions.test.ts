@@ -3,7 +3,7 @@ import {
 } from 'vitest';
 import { salesDataset, testUser } from '../app/testSupport';
 import { corePlugin } from '../plugins/core';
-import { definePlugin, type CallHandler, type Plugin } from './plugin';
+import { definePlugin, type CallDefinition, type CallHandler, type Plugin } from './plugin';
 import { createHost, type HostOptions, type MountedDataApp } from './runtime';
 
 let mounted: MountedDataApp | undefined;
@@ -82,6 +82,20 @@ describe('contributions', () => {
     expect(changes).toHaveBeenCalled();
     await app.run('notes.open');
     expect(app.panel.open).toBe(false);
+  });
+
+  it('closes the panel when pressed, whichever of its plugin\'s tabs shows', async () => {
+    const { mounted: app } = host([notes()]);
+    app.panel.show('notes.first');
+    expect(app.commandState('notes.open')).toEqual({ pressed: true });
+    await app.run('notes.open');
+    expect(app.panel.open).toBe(false);
+  });
+
+  it('opens the panel at its first tab when pick mode starts it', () => {
+    const { mounted: app } = host([notes()]);
+    app.panel.pick(true);
+    expect(app.panel).toMatchObject({ open: true, tab: 'notes.first', picking: true });
   });
 
   it('reads a command\'s own state, again when its plugin says it changed, and refuses it disabled', async () => {
@@ -170,20 +184,18 @@ describe('the theme', () => {
 });
 
 describe('shortcuts', () => {
-  const plugin = () => definePlugin({
+  const plugin = (save: CallHandler | CallDefinition = () => 'saved') => definePlugin({
     name: 'notes',
     version: '1',
     host: {
-      calls: { save: () => 'saved' },
+      calls: { save },
       commands: [{ id: 'save', title: 'Save', shortcut: 'Alt+Shift+S', run: { call: 'notes.save' } }],
     },
   });
 
-  it('tells a ready frame which to forward, and runs the command it forwards', async () => {
+  it('tells a ready frame which to forward, and runs the command it forwards only with a call the frame may make', async () => {
     const save = vi.fn(() => 'saved');
-    const p = plugin();
-    p.host!.calls!.save = save;
-    const runtime = createHost({ plugins: [core(), p], frameScript: 'x' });
+    const runtime = createHost({ plugins: [core(), plugin({ frame: true, handler: save })], frameScript: 'x' });
     mounted = runtime.mount({
       container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
     });
@@ -196,6 +208,37 @@ describe('shortcuts', () => {
     fromFrame({ type: 'anfra:event', name: 'anfra.shortcut', payload: 'alt+shift+x' });
     await new Promise((resolve) => { setTimeout(resolve, 0); });
     expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a forwarded key whose command\'s call is the host\'s alone, which a key on the host\'s page runs', async () => {
+    const save = vi.fn(() => 'saved');
+    const { mounted: app } = host([plugin(save)]);
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'anfra:event', name: 'anfra.shortcut', payload: 'alt+shift+s' }, source: app.frame.contentWindow,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(save).not.toHaveBeenCalled();
+    app.handleKeydown(new KeyboardEvent('keydown', { code: 'KeyS', altKey: true, shiftKey: true }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a key alone while the reader types', () => {
+    const { mounted: app } = host([plugin()]);
+    const input = document.createElement('input');
+    document.body.append(input);
+    const event = new KeyboardEvent('keydown', { code: 'KeyS', altKey: true, shiftKey: true, cancelable: true });
+    Object.defineProperty(event, 'target', { value: input });
+    expect(app.handleKeydown(event)).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    input.remove();
+  });
+
+  it('refuses a shortcut that isn\'t one, two commands with one, and one on a menu command', () => {
+    const command = (id: string, shortcut: string, target?: 'node') => ({ id, title: id, shortcut, run: { call: 'notes.save' }, ...(target ? { target } : {}) });
+    expect(() => host([plugin()], { commands: [command('x', 'Alt+Shift')] })).toThrow("Command 'x' has a shortcut that isn't one: 'Alt+Shift'.");
+    expect(() => host([plugin()], { commands: [command('x', 'shift+alt+s')] })).toThrow("Commands 'notes.save' and 'x' have the same shortcut, 'shift+alt+s'.");
+    expect(() => host([plugin()], { commands: [command('x', 'Alt+X', 'node')] })).toThrow("Command 'x' is for the menu on the page, which has no shortcuts.");
   });
 
   it('matches a key on the host\'s page by its physical key, and leaves a handled one alone', () => {
