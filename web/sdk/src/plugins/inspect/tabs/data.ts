@@ -17,7 +17,7 @@ import {
 
 const CSS = `
 .search-bar { flex: none; padding: 8px 14px 4px; }
-.app-title { margin: 12px 0 6px; font-size: 14px; font-weight: 500; }
+.app-title { margin: 12px 0 6px; font-size: 13px; font-weight: 500; }
 .table-card > .collapsible-body { padding-top: 0; }
 /* Each card is in its own element, so the kit's gap between adjacent tiles doesn't reach them. */
 .table-item + .table-item { margin-top: 8px; }
