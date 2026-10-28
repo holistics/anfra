@@ -15,7 +15,7 @@ import { installInspection } from './inspection';
 import { installContentUi } from './menu';
 import { themeLayer } from './layer';
 import { resolveTheme } from '../common/theme';
-import { eventShortcut, normalizeShortcut } from '../common/shortcut';
+import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
 import { createKernel, type FrameKernel, type KernelShared } from './kernel';
 import { Query } from './query';
 import { createSdk } from './sdk';
@@ -105,7 +105,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
     if (listening || !shortcuts.size) return;
     listening = true;
     win.addEventListener('keydown', (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat) return;
+      if (event.defaultPrevented || event.repeat || isTyping(event.target)) return;
       const shortcut = eventShortcut(event);
       if (!shortcuts.has(shortcut)) return;
       event.preventDefault();
