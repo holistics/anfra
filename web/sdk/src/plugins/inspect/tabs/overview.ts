@@ -44,7 +44,7 @@ const CSS = `
 .eyebrow .pop-trigger { color: var(--anfra-color-muted); cursor: help; }
 .trust-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .trust-level { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2; }
-.trust-level span { display: block; font-size: 14px; font-weight: 500; }
+.trust-level span { display: block; font-size: 13px; font-weight: 500; }
 .trust-why { margin: 2px 0 0; font-size: 12px; color: var(--anfra-color-muted); }
 .stats { display: grid; gap: 10px; }
 .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
