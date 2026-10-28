@@ -1,3 +1,8 @@
+## [0.14.1](https://github.com/holistics/anfra/compare/v0.14.0...v0.14.1) (2026-10-28)
+
+### Bug Fixes
+
+* **engine:** bump to support relative path in semantic catalog ([2e27130](https://github.com/holistics/anfra/commit/2e2713080c1d41800173423c4ee6f1eaaf4bb8c3))
 ## [0.14.0](https://github.com/holistics/anfra/compare/v0.13.5...v0.14.0) (2026-10-28)
 
 ### ⚠ BREAKING CHANGES
