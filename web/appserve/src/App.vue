@@ -209,6 +209,13 @@ function onAppMounted (host: Host, mounted: MountedDataApp): void {
   if (keptPanel) mounted.panel.show(keptPanel.tab);
   panelVersion.value += 1;
 }
+// The Data App went (Reload, another one picked): nothing runs on its mount until the next one is.
+function onAppUnmounted (mounted: MountedDataApp): void {
+  if (app.value !== mounted) return;
+  stopWatching?.();
+  stopWatching = undefined;
+  app.value = undefined;
+}
 const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? false));
 // The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones in a menu
 // per icon, so render's downloads are one Download button; the palette has them all. Not those for
@@ -662,6 +669,7 @@ onBeforeUnmount(() => {
           :theme="pluginTheme"
           @load="loading = false"
           @mounted="onAppMounted"
+          @unmounted="onAppUnmounted"
           @error="frameError = $event"
         />
         <div v-else-if="selectedPath && loaded" class="empty-state" data-testid="not-found">
