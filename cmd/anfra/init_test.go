@@ -49,6 +49,26 @@ func TestInitSetsUpARepo(t *testing.T) {
 	}
 }
 
+// A symlinked .gitignore is not read by Git, and its target may be outside
+// the repo: init leaves it alone and says so.
+func TestInitRefusesASymlinkedGitignore(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "rc")
+	if err := os.WriteFile(outside, []byte("export X=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, ".gitignore")); err != nil {
+		t.Fatal(err)
+	}
+	err := initRepo(dir, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), ".gitignore") {
+		t.Fatalf("err = %v, want one about .gitignore", err)
+	}
+	if got, _ := os.ReadFile(outside); string(got) != "export X=1\n" {
+		t.Errorf("the link's target changed: %q", got)
+	}
+}
+
 func TestInitKeepsWhatIsThere(t *testing.T) {
 	dir := t.TempDir()
 	mine := "data_sources:\n  prod:\n    type: snowflake\n"
