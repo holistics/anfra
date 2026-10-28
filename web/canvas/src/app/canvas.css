@@ -160,9 +160,11 @@ p.ac-changes-nested { padding: 4px 0 8px 24px; }
 .ac-menu { position: absolute; z-index: 20; display: grid; min-width: 220px; max-width: 320px; transform-origin: top left; }
 .ac-command-scrim { position: fixed; inset: 0; z-index: 40; display: grid; justify-items: center; align-items: start; padding: 96px 16px 16px; }
 /* The command palette: its rows (6) sit 8px in, so its corners are 6 + 8 */
-.ac-command { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(560px, 100%); max-height: min(480px, calc(100vh - 128px)); overflow: hidden; border-radius: calc(var(--ac-radius-sm) + 8px); }
+.ac-command { display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(480px, calc(100vh - 128px)); overflow: hidden; border-radius: calc(var(--ac-radius-sm) + 8px); }
 .ac-command-search { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--ac-line-weak); }
-.ac-command-list { overflow: auto; overscroll-behavior: contain; padding: 8px; }
+.ac-command-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 8px; }
+.ac-command-search, .ac-command-kinds { flex-shrink: 0; }
+.ac-command-kinds { padding: 8px 16px; border-bottom: 1px solid var(--ac-line-weak); overflow-x: auto; scrollbar-width: none; }
 .ac-viewport > .ac-toast { position: absolute; top: 12px; left: 50%; translate: -50% 0; }
 
 /* --- The board ------------------------------------------------------------------------------- */
