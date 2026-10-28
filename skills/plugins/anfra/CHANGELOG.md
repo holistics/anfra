@@ -1,3 +1,10 @@
+## [0.4.4](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.3...anfra-v0.4.4) (2026-10-28)
+
+### Bug Fixes
+
+* **plugins.anfra:** say anfra query answers one 10,000-row page ([8b6a806](https://github.com/holistics/anfra-skills/commit/8b6a8064f416c21c79a95bef9a9430e15936aff4))
+* **plugins.anfra:** say Data App queries are uncapped and what a paged result holds ([05f4c72](https://github.com/holistics/anfra-skills/commit/05f4c72d66089dcb3a5430afd1adad86947e62b2))
+
 ## [0.4.3](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.2...anfra-v0.4.3) (2026-10-21)
 
 ### Features
