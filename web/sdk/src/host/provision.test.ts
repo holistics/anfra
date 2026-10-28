@@ -45,6 +45,36 @@ describe('provisionDocument', () => {
     expect(parse('<script>early()</script><html lang="en"><body></body></html>').documentElement.getAttribute('lang')).toBe('en');
   });
 
+  it('puts the policy ahead of every script however the definition starts', () => {
+    const parse = (definition: string) => new DOMParser().parseFromString(provisionDocument(definition, options), 'text/html');
+    for (const definition of [
+      // A '>' quoted in an attribute: the policy must not land inside its value.
+      '<!doctype html><html data-x=">"><head><meta charset="utf-8"><script>early()</script></head></html>',
+      `<!doctype html><html><head data-x='>'><script>early()</script></head></html>`,
+      // A quote in a name opens no value: the tag ends at the first '>'.
+      '<html a"><script>early()</script><head x=">"></head></html>',
+      '<html a="1"b\'><script>early()</script><head x=\'>\'></head></html>',
+      // Comments the parser closes sooner than the first '-->'.
+      '<!--><script>early()</script><!-- -->\n<!doctype html><html><head></head></html>',
+      '<!---><script>early()</script><!-- -->\n<html><head></head></html>',
+      '<!-- a --!><script>early()</script><!-- -->\n<html><head></head></html>',
+    ]) {
+      const doc = parse(definition);
+      const policy = doc.querySelector('meta[http-equiv="Content-Security-Policy"]');
+      expect(policy, definition).not.toBeNull();
+      for (const script of doc.querySelectorAll('script')) {
+        expect(policy!.compareDocumentPosition(script) & Node.DOCUMENT_POSITION_FOLLOWING, definition).toBeTruthy();
+      }
+    }
+  });
+
+  it('reads a long unclosed tag without backtracking through it', () => {
+    // Each would take minutes if a name or a value could be split every way.
+    for (const definition of [`<html ${'a'.repeat(5000)}`, `<html x=${'a'.repeat(5000)}`, `<head ${'a=b '.repeat(2000)}`]) {
+      expect(provisionDocument(definition, options).startsWith(POLICY)).toBe(true);
+    }
+  });
+
   it('puts no base in the document', () => {
     expect(provisionDocument('<head></head>', options)).not.toContain('<base');
   });
