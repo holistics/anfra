@@ -21,6 +21,7 @@ const emit = defineEmits<{
   load: [],
   // The host runtime and this Data App's mount: the shell draws the plugins' commands and the panel on them.
   mounted: [host: Host, mounted: MountedDataApp],
+  unmounted: [mounted: MountedDataApp],
   error: [message: string],
 }>();
 
@@ -74,7 +75,11 @@ onMounted(async () => {
 
 watch(() => props.theme, (theme) => { host?.runtime.setTheme(theme); });
 
-onBeforeUnmount(() => mounted?.unmount());
+onBeforeUnmount(() => {
+  if (!mounted) return;
+  mounted.unmount();
+  emit('unmounted', mounted);
+});
 
 </script>
 

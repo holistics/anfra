@@ -25,26 +25,28 @@ const tabIcon = (tab: Tab) => (tab.icon ? TAB_ICONS[tab.icon] : undefined);
 
 const content = ref<HTMLElement>();
 let unmountTab: (() => void) | undefined;
-let shown: string | undefined;
+let shown: { panel: Panel, tab: string | undefined } | undefined;
 
 // The open tab, drawn into its own element: a tab draws in that element's shadow root, so a new
-// element per tab keeps one tab's root from being reused by another.
+// element per tab keeps one tab's root from being reused by another. Drawn again for another
+// mount's panel, even at the same tab.
 function draw (): void {
-  const tab = props.panel.tab;
-  if (tab === shown || !content.value) return;
+  const { panel } = props;
+  const tab = panel.tab;
+  if ((shown?.panel === panel && shown.tab === tab) || !content.value) return;
   unmountTab?.();
   unmountTab = undefined;
   content.value.replaceChildren();
-  shown = tab;
+  shown = { panel, tab };
   if (!tab) return;
   const element = document.createElement('div');
   element.className = 'panel-tab';
   element.dataset.testid = `panel-tab-${tab}`;
   content.value.append(element);
-  unmountTab = props.panel.mountTab(tab, element);
+  unmountTab = panel.mountTab(tab, element);
 }
 
-watch([() => props.version, content], draw, { immediate: true, flush: 'post' });
+watch([() => props.version, () => props.panel, content], draw, { immediate: true, flush: 'post' });
 
 // The strip and a hidden copy of every tab in it, which gives each tab's width.
 const bar = ref<HTMLElement>();
