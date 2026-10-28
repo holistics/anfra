@@ -133,6 +133,18 @@ describe('render', () => {
     expect(replies[0]).toMatchObject({ type: 'anfra:call', name: 'render.draw', request: { format: 'pdf' } });
   });
 
+  it('shows its commands as disabled while the frame draws, and answers what it drew', async () => {
+    const app = mount(renderPlugin({ renderer: 'R' }));
+    const run = app.run('render.png');
+    await answered(1);
+    expect(app.commandState('render.pdf')).toEqual({ disabled: 'Drawing a picture…' });
+    await expect(app.run('render.pdf')).rejects.toThrow('Drawing a picture…');
+    const { id } = replies[0] as { id: number };
+    fromFrame({ type: 'anfra:result', id, ok: true, result: { omitted: [] } });
+    await expect(run).resolves.toEqual({ omitted: [] });
+    expect(app.commandState('render.pdf')).toEqual({});
+  });
+
   it('shows its commands as disabled while a picture saves', async () => {
     const app = mount(renderPlugin({ renderer: 'R' }));
     const states: unknown[] = [];
