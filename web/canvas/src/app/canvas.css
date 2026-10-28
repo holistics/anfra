@@ -198,7 +198,8 @@ p.ac-changes-nested { padding: 4px 0 8px 24px; }
   background-size: 24px 24px;
   box-shadow: 0 0 0 1px var(--ac-line-weak);
   border-radius: 14px;
-  margin: 0 8px 8px;
+  /* 1px on top, or the board area's clip cuts the line along the top edge */
+  margin: 1px 8px 8px;
   touch-action: none;
   user-select: none;
 }
