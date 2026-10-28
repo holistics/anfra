@@ -17,6 +17,12 @@ const props = defineProps<{
   version: number,
 }>();
 
+// The icon appserve draws for each icon a tab names; a tab naming another has none.
+const TAB_ICONS: Record<string, InstanceType<typeof Icon>['$props']['name']> = {
+  overview: 'overview', table: 'sheet', query: 'database', lineage: 'lineage', tree: 'tree', code: 'code',
+};
+const tabIcon = (tab: Tab) => (tab.icon ? TAB_ICONS[tab.icon] : undefined);
+
 const content = ref<HTMLElement>();
 let unmountTab: (() => void) | undefined;
 let shown: string | undefined;
@@ -109,6 +115,7 @@ onBeforeUnmount(() => {
             :data-testid="`tab-${tab.id}`"
             @click="panel.show(tab.id)"
           >
+            <Icon v-if="tabIcon(tab)" :name="tabIcon(tab)!" />
             {{ tab.title }}
           </button>
         </div>
@@ -134,12 +141,15 @@ onBeforeUnmount(() => {
               :data-testid="`tab-${tab.id}`"
               @click="choose(tab.id)"
             >
+              <Icon v-if="tabIcon(tab)" :name="tabIcon(tab)!" />
               {{ tab.title }}
             </button>
           </div>
         </div>
         <div ref="measure" class="panel-tabs panel-tabs-measure" aria-hidden="true">
-          <button v-for="tab in tabs" :key="tab.id" type="button" tabindex="-1">{{ tab.title }}</button>
+          <button v-for="tab in tabs" :key="tab.id" type="button" tabindex="-1">
+            <Icon v-if="tabIcon(tab)" :name="tabIcon(tab)!" />{{ tab.title }}
+          </button>
         </div>
       </div>
       <button type="button" class="icon-button" aria-label="Close panel" @click="panel.hide()">
