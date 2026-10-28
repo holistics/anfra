@@ -22,7 +22,7 @@ import { queryTrust } from '../model/trust';
 import type { QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
-  codeBlock, collapsible, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
+  codeBlock, collapsible, columnIcon, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
   type Children, type CodeSource, type IconName,
 } from '../view';
 
@@ -33,6 +33,8 @@ type Attributed = { entry: RequestEntry, shared?: boolean };
 /** How many requests show before "Show all". */
 const FIRST = 5;
 const FILTERS: readonly QueriesFilter[] = ['all', 'errors', 'dirty'];
+/** Where a filter comes from, as an icon: a control, a cross-filter, or the query's own AQL. */
+const SOURCE_ICONS: Record<QueryInput['kind'], IconName> = { control: 'control', crossFilter: 'filter', declared: 'code' };
 
 /** The last reveal each mount's Queries handled, so a remount of the tab doesn't flash it again. */
 const handled = new WeakMap<InspectState, number>();
@@ -277,6 +279,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       columns.map((column) => {
         const unlabelled = !column.label || column.label === column.name;
         return collapsible(doc, `${key}:column:${column.name}`, [
+          h(doc, 'span', { class: 'type', 'aria-hidden': 'true' }, columnIcon(doc, column)),
           h(doc, 'span', { class: 'name', 'data-tip': columnKind(column) }, column.name),
           column.adhoc && h(doc, 'span', { class: 'pill warn' }, 'ad hoc'),
           h(doc, 'span', { class: 'spacer' }),
@@ -296,20 +299,25 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     if (filters.length === 0) return null;
     const all = allFilters.has(key);
     const shown = all ? filters : active;
-    return sub(`${key}:filters`, ['Filters', h(doc, 'span', { class: 'count' }, `· ${shown.length}`)], () => [
-      h(doc, 'div', { class: 'segments small', role: 'group', 'aria-label': 'Which filters' },
-        h(doc, 'button', { type: 'button', 'aria-pressed': String(!all), 'data-testid': 'filters-active', onclick: () => all && toggle(allFilters, key) }, `Active (${active.length})`),
-        h(doc, 'button', { type: 'button', 'aria-pressed': String(all), 'data-testid': 'filters-all', onclick: () => !all && toggle(allFilters, key) }, `All (${filters.length})`)),
-      shown.length === 0 ? h(doc, 'p', { class: 'muted' }, 'No active filters.') : h(doc, 'ul', { class: 'list filters', 'data-testid': 'filter-list' }, shown.map((input) => h(doc, 'li', { 'data-tip': filterSource(input) },
-        h(doc, 'div', {},
-          input.kind === 'declared' ? h(doc, 'span', { class: 'muted' }, 'query')
-            : input.self ? h(doc, 'span', { class: 'muted' }, 'itself')
-              : link(doc, input.source, () => state.reveal(panel, { entity: input.kind === 'control' ? 'control' : 'query', app, name: input.source }), { 'data-testid': 'filter-source' }),
-          h(doc, 'div', { class: 'field' }, input.field)),
-        h(doc, 'div', {},
-          h(doc, 'span', { class: isActive(input) ? undefined : 'muted' }, input.value),
-          input.pending && h(doc, 'div', { class: 'pending' }, `pending: ${input.pending}`))))),
-    ]);
+    // In the heading: a click on it would also open or close the section.
+    const choose = (wanted: boolean) => (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (all !== wanted) toggle(allFilters, key);
+    };
+    return sub(`${key}:filters`, ['Filters', h(doc, 'span', { class: 'count' }, `· ${shown.length}`), h(doc, 'span', { class: 'spacer' }),
+      h(doc, 'span', { class: 'segments small', role: 'group', 'aria-label': 'Which filters' },
+        h(doc, 'button', { type: 'button', 'aria-pressed': String(!all), 'data-testid': 'filters-active', onclick: choose(false) }, `Active (${active.length})`),
+        h(doc, 'button', { type: 'button', 'aria-pressed': String(all), 'data-testid': 'filters-all', onclick: choose(true) }, `All (${filters.length})`))],
+    () => (shown.length === 0 ? h(doc, 'p', { class: 'muted' }, 'No active filters.') : h(doc, 'ul', { class: 'list filters', 'data-testid': 'filter-list' }, shown.map((input) => h(doc, 'li', { 'data-tip': filterSource(input) },
+      h(doc, 'span', { class: 'type', 'aria-hidden': 'true' }, icon(doc, SOURCE_ICONS[input.kind])),
+      h(doc, 'span', { class: 'field' }, input.field),
+      h(doc, 'span', { class: `value${isActive(input) ? '' : ' muted'}` }, input.value,
+        input.pending && h(doc, 'span', { class: 'pending' }, ` · pending: ${input.pending}`)),
+      h(doc, 'span', { class: 'source' },
+        input.kind === 'declared' ? h(doc, 'span', { class: 'muted' }, 'query')
+          : input.self ? h(doc, 'span', { class: 'muted' }, 'itself')
+            : link(doc, input.source, () => state.reveal(panel, { entity: input.kind === 'control' ? 'control' : 'query', app, name: input.source }), { 'data-testid': 'filter-source' })))))));
   }
 
   function queryRow (app: InspectedApp, index: number, name: string, query: InspectedQuery, requests: readonly Attributed[], structure: InspectedStructure | undefined): HTMLElement {
@@ -518,16 +526,15 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
 const CSS = `
 .app + .app, .app + .section { margin-top: 18px; }
 .app-line { margin: 8px 0 0; font-size: 12px; color: var(--anfra-color-muted); }
-.app-line strong { color: var(--anfra-color-fg); font-weight: 600; }
+.app-line strong { color: var(--anfra-color-fg); font-weight: 500; }
 .count { font-weight: normal; letter-spacing: normal; color: var(--anfra-color-muted); font-variant-numeric: tabular-nums; }
-.entity > summary { align-items: flex-start; }
-.entity > summary > .icon { margin-top: 3px; }
+.entity > summary { align-items: center; }
 .entry { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .line { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .entry .error-text { margin: 2px 0 0; font-size: 12px; }
-.rows, .time { flex: none; font-size: 11px; color: var(--anfra-color-muted); font-variant-numeric: tabular-nums; }
-.time { color: var(--anfra-color-fg); font-weight: 600; }
-.condition { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--anfra-color-muted); }
+.rows, .time { flex: none; font-size: 12px; color: var(--anfra-color-muted); font-variant-numeric: tabular-nums; }
+.time { color: var(--anfra-color-fg); font-weight: 500; }
+.condition { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--anfra-color-muted); }
 .changed { flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; background: var(--warn-bg); color: var(--warn); font-size: 10px; font-weight: 600; }
 .indicator.targets { width: 32px; }
 .inline > summary { display: inline-flex; padding: 0; }
@@ -537,22 +544,28 @@ const CSS = `
 .places li:hover { background: var(--hover); }
 .places li > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.chips li { max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; border: 1px solid var(--anfra-color-border); border-radius: 4px; font-size: 11px; color: var(--anfra-color-muted); }
+.chips li { max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; border: 1px solid var(--anfra-color-border); border-radius: 4px; font-size: 12px; color: var(--anfra-color-muted); }
 .chips li.selected { color: var(--anfra-color-fg); font-weight: 600; border-color: var(--anfra-color-accent); background: var(--accent-bg); }
-.list, .requests { margin-top: 2px; border: 1px solid var(--anfra-color-border); border-radius: 6px; font-size: 12px; }
+/* A tile's lists sit on the panel's ground, divided. */
+.list { margin-top: 2px; border-radius: 8px; background: var(--anfra-color-bg); box-shadow: inset 0 0 0 1px var(--anfra-color-border); font-size: 12px; }
 .list > * + * { border-top: 1px solid var(--anfra-color-border); }
-.item > summary { padding: 4px 8px; }
-.item > summary .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.item > .collapsible-body { padding: 2px 8px 8px 28px; }
-.filters li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 4px 8px; }
-.filters .field { font-weight: 600; overflow-wrap: anywhere; }
+.type { flex: none; display: inline-grid; place-items: center; width: 16px; color: var(--anfra-color-muted); }
+.item > summary { padding: 7px 8px 7px 10px; gap: 8px; }
+.item > summary > .icon { order: 99; color: var(--anfra-color-muted); }
+.item > summary .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.item > .collapsible-body { padding: 0 10px 10px 34px; }
+/* A filter on one line: where it comes from, the field, its value, and its source. */
+.filters li { display: grid; grid-template-columns: 16px minmax(0, max-content) minmax(0, 1fr) max-content; align-items: baseline; gap: 8px; padding: 7px 10px; }
+.filters .type { align-self: center; }
+.filters .field { font-weight: 500; overflow-wrap: anywhere; }
+.filters .value { overflow-wrap: anywhere; }
+.filters .source { text-align: right; }
 .filters .link { padding: 0; font-size: 12px; }
-.pending { color: var(--warn); font-size: 11px; }
-.segments.small { margin-bottom: 6px; }
-.segments.small button { padding: 1px 6px; font-size: 11px; }
-.requests .row:last-child { border-bottom: 0; }
-.request > summary { padding: 4px 8px; }
-.request > .collapsible-body { padding: 2px 8px 8px 28px; }
-.preview-count { margin: 6px 0 4px; font-size: 11px; color: var(--anfra-color-muted); }
+.pending { color: var(--warn); font-size: 12px; }
+.segments.small button { padding: 1px 8px; }
+.sub > summary .segments { margin: -2px 0; }
+.requests > .row + .row { margin-top: 6px; }
+.request > summary { min-height: 36px; padding: 4px 8px 4px 10px; }
+.preview-count { margin: 6px 0 4px; font-size: 12px; color: var(--anfra-color-muted); }
 .lossy { margin: 0 0 6px; font-size: 12px; }
 `;

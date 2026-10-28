@@ -15,7 +15,7 @@ import {
 } from '../view';
 
 const CSS = `
-.app-title { margin: 12px 0 0; font-weight: 600; }
+.app-title { margin: 12px 0 0; font-weight: 500; }
 .app-group + .app-group { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--anfra-color-border); }
 .counts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
 .hint { color: var(--anfra-color-muted); }
@@ -25,7 +25,7 @@ const CSS = `
 .check.info { color: var(--anfra-color-muted); }
 .check .mark { flex: none; width: 14px; text-align: center; font-weight: 600; }
 /* An entity a check names: its own colour even in a muted row, so it reads as a name. */
-.check .entity { padding: 0 4px; border-radius: 4px; background: var(--hover); color: var(--anfra-color-fg); font-size: 12px; font-weight: 600; }
+.check .entity { padding: 0 4px; border-radius: 4px; background: var(--hover); color: var(--anfra-color-fg); font-size: 12px; font-weight: 500; }
 .check.info .mark { color: var(--anfra-color-muted); }
 .checks .flash { border-radius: 4px; }
 .declaration-code .code-text { max-height: 384px; }
