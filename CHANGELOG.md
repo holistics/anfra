@@ -1,3 +1,64 @@
+## [0.14.0](https://github.com/holistics/anfra/compare/v0.13.5...v0.14.0) (2026-10-28)
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** inspect logs the frame's calls, and gets a rich Queries tab
+* **sdk:** the inspect.watch, inspect.highlight, inspect.locate
+and inspect.pick calls and the inspect.snapshot and inspect.picked
+events are gone; use mounted.panel instead.
+
+### Features
+
+* **appserve:** a command palette over the shell's and the plugins' commands ([587a914](https://github.com/holistics/anfra/commit/587a914c65d3994115efc11984b1b236e8783cfe))
+* **appserve:** draw the plugins' commands and panel tabs, dropping the Vue inspector ([463281a](https://github.com/holistics/anfra/commit/463281a7226a28070c30b5c74c40694ea6a64609))
+* **appserve:** group the panel's tabs that don't fit behind a More tabs menu ([28dc60d](https://github.com/holistics/anfra/commit/28dc60d962f538b8069a53cf012a3652bd4bf233))
+* **appserve:** scan-search for Inspect, and an icon before each panel tab's title ([40ea3f3](https://github.com/holistics/anfra/commit/40ea3f36a1535ca0ca1e73aae3b5b7be9767783d))
+* **appserve:** the palette in the sidebar, Reload first, and a Download menu for render's commands ([fdedde4](https://github.com/holistics/anfra/commit/fdedde4ae1505f9095976bcb07574a2f14b3e848))
+* **sdk.host:** add command and tab contributions from plugins and the host ([e5b53ee](https://github.com/holistics/anfra/commit/e5b53ee13e7dc98c9a285f9b2ce3a39d39206a5b))
+* **sdk.host:** give a tab its mount, and a mount its reader and datasets ([6cdf0f1](https://github.com/holistics/anfra/commit/6cdf0f13ad3c22cd57a5cf9eeca9ce82089db79c))
+* **sdk:** a menu on blocks and on query rows, and modals and popovers in the frame ([7af77df](https://github.com/holistics/anfra/commit/7af77df2853f411d1412f40f8d7033dcb833321a))
+* **sdk:** give every mount a panel, with the frame's snapshot, pick and highlight ([aac3027](https://github.com/holistics/anfra/commit/aac3027d9906075a9aa61de550f6f314f6438c30))
+* **sdk:** hover tooltips in inspect's tabs, in place of click popovers and native titles ([91c0ce3](https://github.com/holistics/anfra/commit/91c0ce370784117728083cc62d89b4ee6ce4611c))
+* **sdk:** inspect logs the frame's calls, and gets a rich Queries tab ([4178c56](https://github.com/holistics/anfra/commit/4178c560d80ac4a62c70cb8c1b7de770209212a9))
+* **sdk:** inspect's Data tab, each query's latest rows, with a CSV download ([b078641](https://github.com/holistics/anfra/commit/b07864177f11b26bb5a785af2bd8935be0fe4d3a))
+* **sdk:** inspect's Declaration tab: counts, checks, the code and the wiring ([5fb21bb](https://github.com/holistics/anfra/commit/5fb21bb12ed96e5714f33fcd3141f6dbea248663))
+* **sdk:** inspect's Overview tab, where the panel opens: trust, issues, changes ([003878d](https://github.com/holistics/anfra/commit/003878de79e3daee57eb79834becda688df7295a))
+* **sdk:** inspect's Structure and Data tabs and its Inspect command ([7ed89d8](https://github.com/holistics/anfra/commit/7ed89d8b798b59a27ba149e9792b3c4635922b5c))
+* **sdk:** inspect's tabs as tiles, with type icons and one type scale ([5b721a9](https://github.com/holistics/anfra/commit/5b721a94608de000ffcf99357c1632ccf9ff7e4f))
+* **sdk:** lineage's graph of the page and its layered layout ([5e078bf](https://github.com/holistics/anfra/commit/5e078bf2eb38641b4bcf0608708e6e6def22d807))
+* **sdk:** lineage's Lineage tab, a canvas of where the page's numbers come from ([2a170e2](https://github.com/holistics/anfra/commit/2a170e20218b89e0324c34953186fdb5c6de0b89))
+* **sdk:** put Lineage after Queries, and draw it as a fork ([b5bad3f](https://github.com/holistics/anfra/commit/b5bad3f42f79f9813b2f0aedd248380840decbdb))
+* **sdk:** render offers Download as PNG and PDF as commands, which appserve draws ([6297dba](https://github.com/holistics/anfra/commit/6297dbaa1e0c6ca7a070de244bcaf99cacbd75ae))
+* **sdk:** run commands by shortcut, forwarded from the frame ([51105e0](https://github.com/holistics/anfra/commit/51105e03db19ebc25f6ea14c5e120478ea9d3c0c))
+* **sdk:** show a declaration as its JSON, with its AQL highlighted across its lines ([97a9981](https://github.com/holistics/anfra/commit/97a9981ea0e267d1a61f4c454dcaf12337d31f71))
+* **sdk:** show a query in Lineage from its row in Queries and its card in Data ([fa0fdcf](https://github.com/holistics/anfra/commit/fa0fdcf2e01d7534868a0be468e4e0b5751ea7be))
+* **sdk:** show a query or a node in Lineage from inspect's tabs ([d89e3fa](https://github.com/holistics/anfra/commit/d89e3fad9517b421ffcf0ab0e1bace3f21236c0b))
+* **sdk:** show a query's signature as the Declaration shows its JSON ([1c0d9cf](https://github.com/holistics/anfra/commit/1c0d9cf77887b95daaeace85ffb5358e12d22db6))
+* **sdk:** theme tokens for plugin tabs, the plugin layer and Anfra.theme ([4c5f0a9](https://github.com/holistics/anfra/commit/4c5f0a90df8fbcf0011e6ee91d493e0d202f79d5))
+
+### Bug Fixes
+
+* **appserve:** drop a Data App's mount when it goes, and redraw the panel for the next ([25babb3](https://github.com/holistics/anfra/commit/25babb381ca476d5f8540af22b2ccf7f05021c1a))
+* **appserve:** keep commands for the page's menu out of the toolbar ([9b9aab4](https://github.com/holistics/anfra/commit/9b9aab4ce1012f960e4ea37217df805e3e92dbf7))
+* **appserve:** let the panel's tab strip scroll when its tabs don't fit ([d4e2703](https://github.com/holistics/anfra/commit/d4e27037bd810b15afeb85939c37292d1b0d44c5))
+* **appserve:** open the More tabs menu leftward, so the window doesn't cut it off ([8a981c9](https://github.com/holistics/anfra/commit/8a981c9942fb37215e695ddb42c6ada87878e213))
+* **sdk.app:** keep the browser's menu when no frame item applies ([b9a1fc6](https://github.com/holistics/anfra/commit/b9a1fc66024be1261628fa855dd4efcb89c85d65))
+* **sdk.host:** check a snapshot's every node, and open pick mode at a tab ([344714a](https://github.com/holistics/anfra/commit/344714a1e37aa4c5215c97117d3b8b6871edf503))
+* **sdk.host:** hold a forwarded shortcut to the frame's calls ([ba547aa](https://github.com/holistics/anfra/commit/ba547aac5139eddf338271cc67c7e9f8176619a9))
+* **sdk.host:** keep the policy ahead of a definition's scripts however it starts ([9d7825d](https://github.com/holistics/anfra/commit/9d7825d8dc0b44f7f34c8a29a4a55318a64366b7))
+* **sdk:** always show a section's chevron ([2375e44](https://github.com/holistics/anfra/commit/2375e448cc71d9f4b2427da59d9bbb6121af84f6))
+* **sdk:** centre the lineage legend's button ([029a8ea](https://github.com/holistics/anfra/commit/029a8eabb6bbfde864e5f0978e6b48547c3ae567))
+* **sdk:** draw the frame's menu, modal and popover in the top layer, and keep a modal's page inert ([89caf2c](https://github.com/holistics/anfra/commit/89caf2ccb6fa2f1ad0b1c479070fecae90398ce2))
+* **sdk:** give a popover a close button, and focus so Escape closes it ([387a095](https://github.com/holistics/anfra/commit/387a0954ca86e76e0c09f78bfe08ec6977c88f2c))
+* **sdk:** inspect's tabs at 13px, as before ([fe44852](https://github.com/holistics/anfra/commit/fe4485278f81caf0a8f189c660927b8cd17f4cc0))
+* **sdk:** keep Download disabled while the frame draws ([acd0515](https://github.com/holistics/anfra/commit/acd0515ec16129c053e5828aed2901e4a81f8577))
+* **sdk:** keep the page's scrollbar room under a modal, and open popovers on a side ([702b6bd](https://github.com/holistics/anfra/commit/702b6bda870c9d39fe3dc68b3f1e83473e115cbe))
+* **sdk:** mute only Structure's labels, not Queries' app sections ([663528a](https://github.com/holistics/anfra/commit/663528aec7e1014bb8347d402f7b4b7ef56dad1e))
+* **sdk:** one highlight in the menu, moved by the pointer and the arrows ([e66dc6e](https://github.com/holistics/anfra/commit/e66dc6e48c66b20872b3dde2756eabbbb95b9246))
+* **sdk:** open lineage's Show menu in the top layer, inside the window ([8276a15](https://github.com/holistics/anfra/commit/8276a15cbba0877fc57d6c594deb0abbf84aee2d))
+* **sdk:** put inspect's popovers in the top layer, kept inside the window ([0afdcd1](https://github.com/holistics/anfra/commit/0afdcd1bb7ab40cb34962b36875e631f3a2beb4c))
+* **sdk:** set apart the queries and controls a declaration check names ([e3862a1](https://github.com/holistics/anfra/commit/e3862a1be2b70b6aa8a51156e994bcf8223c54ba))
+* **sdk:** space Data's tables apart ([411e99d](https://github.com/holistics/anfra/commit/411e99d8cecd284126b080d8dd53ec992cdceef5))
 ## [0.13.5](https://github.com/holistics/anfra/compare/v0.13.4...v0.13.5) (2026-10-28)
 
 ### Features
