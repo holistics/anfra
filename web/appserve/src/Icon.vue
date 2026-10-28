@@ -11,7 +11,7 @@ const PATHS = {
   close: 'M6 6l12 12 M18 6L6 18',
   sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 2v2 M12 20v2 M2 12h2 M20 12h2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',
-  inspect: 'M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 6l-3 12',
+  inspect: 'M3 7V5a2 2 0 0 1 2-2h2 M17 3h2a2 2 0 0 1 2 2v2 M21 17v2a2 2 0 0 1-2 2h-2 M7 21H5a2 2 0 0 1-2-2v-2 M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M16 16l-1.9-1.9',
   brand: 'M4 18l5-12 3 7 2-4 6 9',
   update: 'M12 19V5 M6 11l6-6 6 6',
   copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
@@ -21,6 +21,13 @@ const PATHS = {
   more: 'M6 12h.01 M12 12h.01 M18 12h.01',
   overflow: 'M6 7l5 5-5 5 M13 7l5 5-5 5',
   command: 'M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z',
+  // The panel's tabs, by the icon each names (`table` is the Data tab's sheet).
+  overview: 'M4 3h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z M15 3h5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z M15 12h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z M4 16h5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z',
+  sheet: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-14a2 2 0 0 1-2-2v-14a2 2 0 0 1 2-2z M3 9h18 M3 15h18 M9 9v12 M15 9v12',
+  database: 'M3 5a9 3 0 1 0 18 0a9 3 0 1 0-18 0 M3 5v14a9 3 0 0 0 18 0V5 M3 12a9 3 0 0 0 18 0',
+  lineage: 'M9 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M3 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M15 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9 M12 12v3',
+  tree: 'M21 12h-8 M21 6H8 M21 18h-8 M3 6v4c0 1.1.9 2 2 2h3 M3 10v6c0 1.1.9 2 2 2h3',
+  code: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
 } as const;
 
 defineProps<{ name: keyof typeof PATHS }>();
