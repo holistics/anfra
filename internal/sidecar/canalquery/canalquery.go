@@ -5,8 +5,8 @@ package canalquery
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
+	"os"
+	"path/filepath"
 
 	"github.com/holistics/anfra/internal/sidecar"
 )
@@ -23,10 +23,10 @@ const EnvPrefix = "ANFRA_CANAL_QUERY_ENV_"
 // it. Consumers talk to the client (which also works against an external
 // canal-query).
 type Sidecar struct {
-	cfg    sidecar.Config
-	proc   *sidecar.Process
-	client *Client
-	port   int
+	cfg        sidecar.Config
+	socketPath string
+	proc       *sidecar.Process
+	client     *Client
 }
 
 // New is canal-query's supervisor, not yet started.
@@ -35,8 +35,8 @@ func New(cfg sidecar.Config) *Sidecar {
 }
 
 // Start connects to canal-query and waits until it's healthy: to an external one
-// when Config.CanalQueryURL is set, otherwise to one it spawns on a free
-// loopback port.
+// when Config.CanalQueryURL is set, otherwise to one it spawns on a Unix
+// socket.
 func (c *Sidecar) Start(ctx context.Context) error {
 	// Before binary resolution: a build with no embedded sidecar must still be
 	// able to use a remote one.
@@ -54,17 +54,16 @@ func (c *Sidecar) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("resolve canal-query binary: %w", err)
 	}
-	port, err := freePort()
-	if err != nil {
-		return fmt.Errorf("pick canal-query port: %w", err)
-	}
-	c.port = port
+	// UDS paths are capped at ~108 bytes (sun_path), so keep it short and in the
+	// temp dir; per-pid so multiple repos don't collide. canal-query replaces a
+	// file left by one that is gone, and removes it when it stops.
+	c.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("anfra-%d-canal-query.sock", os.Getpid()))
 
 	proc, err := sidecar.StartProcess(sidecar.ProcSpec{
 		Name: Name,
 		Path: binPath,
 		ExtraEnv: []string{
-			"PORT=" + strconv.Itoa(port),
+			"SOCKET=" + c.socketPath,
 			"SKIP_HOLISTICS_DB=1",       // standalone: no monolith DB / job ops
 			"ENABLE_DUCKDB_CONNECTOR=1", // duckdb connector on by default under anfra
 			"ANFRA_REPO_ID=" + c.cfg.RepoID,
@@ -82,34 +81,27 @@ func (c *Sidecar) Start(ctx context.Context) error {
 		return err
 	}
 	c.proc = proc
-	c.client = NewClient(fmt.Sprintf("http://127.0.0.1:%d", port), c.cfg.EnablePooling)
+	c.client = NewClientUnix(c.socketPath, c.cfg.EnablePooling)
 
 	if err := c.client.WaitReady(ctx); err != nil {
 		c.Close()
 		return err
 	}
 	c.cfg.Wrap(Name, c.client.http)
-	c.proc.Logger().Info("sidecar.ready", "name", Name, "port", port)
+	c.proc.Logger().Info("sidecar.ready", "name", Name, "socket", c.socketPath)
 	return nil
 }
 
 // Client returns the query client for the spawned canal-query.
 func (c *Sidecar) Client() *Client { return c.client }
 
-// Close stops canal-query. A no-op for an external one, which this process
-// never owned.
+// Close stops canal-query and removes its socket file, which one killed before
+// it could leaves. A no-op for an external one, which this process never owned.
 func (c *Sidecar) Close() {
 	if c.proc != nil {
 		c.proc.Close()
 	}
-}
-
-// freePort asks the OS for an unused loopback TCP port.
-func freePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
+	if c.socketPath != "" {
+		_ = os.Remove(c.socketPath)
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
 }

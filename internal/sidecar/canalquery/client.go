@@ -7,6 +7,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -17,12 +18,15 @@ import (
 )
 
 // Client talks to a canal-query server over HTTP. Address-based and
-// owns no process, so it works against a host-spawned canal sidecar or an
-// external one (docker-compose / k8s).
+// owns no process, so it works against a host-spawned canal sidecar (Unix
+// socket) or an external one (docker-compose / k8s).
 type Client struct {
 	baseURL string
-	http    *http.Client
-	pool    map[string]any // pool_options sent with each query
+	// socketPath is the Unix socket a host-spawned canal-query listens on, "" for
+	// one reached over TCP.
+	socketPath string
+	http       *http.Client
+	pool       map[string]any // pool_options sent with each query
 	// tenant is whom the queries run for (ForTenant): canal-query's tenant_id.
 	tenant string
 }
@@ -35,20 +39,48 @@ type Client struct {
 // 3 hours: a pool whose data source changed, or went unused, then stops
 // holding the warehouse's connections sooner.
 func NewClient(baseURL string, enablePooling bool) *Client {
-	pool := map[string]any{"enabled": false}
-	if enablePooling {
-		pool = map[string]any{"enabled": true, "max_total": 10, "max_idle": 5, "min_evictable_idle_s": 60 * 60}
-	}
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		http:    &http.Client{},
-		pool:    pool,
+		pool:    poolOptions(enablePooling),
 	}
 }
 
-// BaseURL exposes the canal-query HTTP endpoint for runtimes that own their own
-// query client, such as anfra-node catalog ingestion.
-func (c *Client) BaseURL() string { return c.baseURL }
+// NewClientUnix is NewClient for a host-spawned canal-query, dialed over its
+// Unix socket.
+func NewClientUnix(socketPath string, enablePooling bool) *Client {
+	return &Client{
+		baseURL:    "http://unix",
+		socketPath: socketPath,
+		http: &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					var d net.Dialer
+					return d.DialContext(ctx, "unix", socketPath)
+				},
+			},
+		},
+		pool: poolOptions(enablePooling),
+	}
+}
+
+func poolOptions(enablePooling bool) map[string]any {
+	if enablePooling {
+		return map[string]any{"enabled": true, "max_total": 10, "max_idle": 5, "min_evictable_idle_s": 60 * 60}
+	}
+	return map[string]any{"enabled": false}
+}
+
+// BaseURL is where canal-query is, for runtimes that own their own query
+// client, such as anfra-node catalog ingestion: its HTTP endpoint, or
+// unix:<path> for a host-spawned one. An HTTP client fails on the latter
+// ("unknown scheme") rather than reaching another canal-query.
+func (c *Client) BaseURL() string {
+	if c.socketPath != "" {
+		return "unix:" + c.socketPath
+	}
+	return c.baseURL
+}
 
 // Health does a single /health check (unlike WaitReady, which polls).
 func (c *Client) Health(ctx context.Context) error {
