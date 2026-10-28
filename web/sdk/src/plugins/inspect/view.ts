@@ -406,11 +406,58 @@ export function highlighted (doc: Document, code: string, lang: Lang | undefined
   return h(doc, 'pre', { class: 'code-text scroll' }, h(doc, 'code', {}, tokens.map((token) => (token.kind ? h(doc, 'span', { class: `tok-${token.kind}` }, token.text) : token.text))));
 }
 
+/**
+ * A value written as `JSON.stringify(value, null, 2)` writes it, as highlighted spans: the text
+ * is the same, character for character. `aql` strings are shown across their lines.
+ */
+function json (doc: Document, value: unknown, indent: string, key: string | undefined): Children {
+  const data = (value as { toJSON?: () => unknown } | null)?.toJSON?.() ?? value;
+  if (typeof data === 'string') return key === 'aql' && data.includes('\n') ? aql(doc, data, `${indent}  `) : h(doc, 'span', { class: 'tok-str' }, JSON.stringify(data));
+  if (typeof data === 'number' || typeof data === 'boolean' || data === null) {
+    return h(doc, 'span', { class: typeof data === 'number' ? 'tok-num' : 'tok-kw' }, JSON.stringify(data));
+  }
+  const inner = `${indent}  `;
+  if (Array.isArray(data)) {
+    if (!data.length) return '[]';
+    // As JSON.stringify does: a value it can't write is null in an array.
+    return ['[\n', data.map((item, i) => [inner, json(doc, item === undefined || typeof item === 'function' ? null : item, inner, undefined), i < data.length - 1 ? ',\n' : '\n']), `${indent}]`];
+  }
+  const entries = Object.entries(data as Record<string, unknown>).filter(([, item]) => item !== undefined && typeof item !== 'function');
+  if (!entries.length) return '{}';
+  return ['{\n', entries.map(([name, item], i) => [
+    inner, h(doc, 'span', { class: 'tok-key' }, JSON.stringify(name)), ': ', json(doc, item, inner, name), i < entries.length - 1 ? ',\n' : '\n',
+  ]), `${indent}}`];
+}
+
+/** An AQL string as JSON, highlighted as AQL, its lines shown under `indent` without the indent they share. */
+function aql (doc: Document, text: string, indent: string): Children {
+  const lines = text.split('\n');
+  // As `dedent` reads it: the first line is usually trimmed already (`aql: \`explore {`).
+  const rest = lines.slice(1).filter((line) => line.trim());
+  const shared = rest.length ? Math.min(...rest.map((line) => line.length - line.trimStart().length)) : 0;
+  const escape = (part: string) => JSON.stringify(part).slice(1, -1);
+  return h(doc, 'span', { class: 'tok-str' }, '"', lines.map((line, i) => {
+    const cut = i === 0 ? 0 : Math.min(shared, line.length - line.trimStart().length);
+    return [
+      cut > 0 && h(doc, 'span', { class: 'json-dedent' }, escape(line.slice(0, cut))),
+      tokenize(line.slice(cut), 'aql').map((token) => (token.kind ? h(doc, 'span', { class: `tok-${token.kind}` }, escape(token.text)) : escape(token.text))),
+      i < lines.length - 1 && [h(doc, 'span', { class: 'json-nl' }, '\\n'), h(doc, 'span', { class: 'json-br', 'data-indent': indent })],
+    ];
+  }), '"');
+}
+
+/** A value as `JSON.stringify(value, null, 2)` writes it, highlighted, with its `aql` strings across their lines. */
+export function jsonView (doc: Document, value: unknown): HTMLElement {
+  return h(doc, 'pre', { class: 'code-text scroll' }, h(doc, 'code', {}, json(doc, value, '', undefined)));
+}
+
 /** One piece of code a code block shows: its label, its code and language, and why it is empty when it is. */
 export interface CodeSource {
   label: string;
   code: string | undefined;
   lang?: Lang;
+  /** The value `code` is the JSON of: shown as `jsonView` shows it. */
+  json?: unknown;
   empty: string;
 }
 
@@ -423,8 +470,8 @@ export function codeBlock<T extends string> (doc: Document, sources: Record<T, C
   let shown = sources[tab]?.code ? tab : (tabs.find((t) => sources[t].code) ?? tab);
   const block = h(doc, 'div', { class: 'code' });
   const draw = () => {
-    const { label, code, lang, empty } = sources[shown];
-    const body = code ? highlighted(doc, code, lang) : h(doc, 'p', { class: 'code-empty' }, empty);
+    const { label, code, lang, json: value, empty } = sources[shown];
+    const body = !code ? h(doc, 'p', { class: 'code-empty' }, empty) : value !== undefined ? jsonView(doc, value) : highlighted(doc, code, lang);
     const copy = code && copyIcon(doc, `Copy the ${label}`, () => code);
     replace(doc, block,
       tabs.length > 1
@@ -606,6 +653,13 @@ code.wrap { overflow-wrap: anywhere; }
 .code-text { margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px; font-size: 12px; line-height: 1.5; background: var(--subtle); }
 .code-empty { margin: 0; padding: 8px 10px; font-size: 12px; color: var(--anfra-color-muted); background: var(--subtle); }
 .tok-kw { color: light-dark(#6d28d9, #c4b5fd); font-weight: 600; } .tok-str { color: light-dark(#047857, #6ee7b7); }
+.tok-key { color: light-dark(#0f766e, #5eead4); }
+/* An AQL string, shown across its lines: the text stays the JSON, escapes and all, so a copy of
+   it is too; the line breaks and the indent under its key are generated, which a copy leaves out. */
+.json-nl { opacity: 0.45; }
+.json-br::after { content: "\\A" attr(data-indent); white-space: pre; }
+/* The indent every line of the AQL shares: kept in the text, so the copy is exact, but not shown. */
+.json-dedent { font-size: 0; }
 .tok-num { color: light-dark(#b45309, #fcd34d); } .tok-com { color: var(--anfra-color-muted); font-style: italic; } .tok-fn { color: light-dark(#1d4ed8, #93c5fd); }
 /* Tables */
 .table-wrap { overflow: auto; max-height: 320px; border: 1px solid var(--anfra-color-border); border-radius: 6px; }
