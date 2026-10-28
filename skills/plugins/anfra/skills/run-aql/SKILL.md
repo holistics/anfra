@@ -20,6 +20,17 @@ anfra query compile --dataset <uname> '<query>'
 An invalid query fails (exit 1) and prints its diagnostics; fix it with
 [](../validate-aql/).
 
+## How many rows come back
+`anfra query` (and the MCP query tool) answers one page: the first 10,000 rows,
+or `--page-size` rows of `--page`. `has_more: true` means rows were left out, so
+read it before treating a result as complete, and never report a count, a sum or
+"all rows" from a page that has more.
+
+This cap is the command's, not the data's or anfra's: a Data App's query gets
+every row unless it declares a `pageSize`, and `anfra query export` writes the
+whole result to a file. To answer a question, ask the query for what you need
+(aggregate, filter, `limit:`) rather than fetching rows to count them.
+
 > Replace this command for other runtimes if needed.
 
 ## Writing correct queries
