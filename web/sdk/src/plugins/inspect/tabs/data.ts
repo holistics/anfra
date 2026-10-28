@@ -19,6 +19,8 @@ const CSS = `
 .search-bar { flex: none; padding: 8px 14px 4px; }
 .app-title { margin: 12px 0 6px; font-size: 14px; font-weight: 500; }
 .table-card > .collapsible-body { padding-top: 0; }
+/* Each card is in its own element, so the kit's gap between adjacent tiles doesn't reach them. */
+.table-item + .table-item { margin-top: 8px; }
 .col { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
 .col .icon { color: var(--anfra-color-muted); }
 .count { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--anfra-color-muted); }
@@ -194,7 +196,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       return h(doc, 'section', { 'data-testid': `data-app-${index}` },
         apps.length > 1 && h(doc, 'p', { class: 'app-title' }, `App ${index + 1} · ${app.title || 'Untitled'}`),
         tables.length === 0 && term && note(doc, `No tables match "${search.trim()}".`, { 'data-testid': 'data-no-match' }),
-        tables.map(([name, query]) => h(doc, 'div', { 'data-testid': `table-${index}/${name}` },
+        tables.map(([name, query]) => h(doc, 'div', { class: 'table-item', 'data-testid': `table-${index}/${name}` },
           card(app, index, name, query, latestRows(byQuery.get(`${index}/${name}`))))));
     });
   }, { head, also: [state.subscribe] });
