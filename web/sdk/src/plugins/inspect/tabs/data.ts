@@ -12,42 +12,19 @@ import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
 import { stateOf, type InspectState } from '../state';
 import {
-  collapsible, drawTab, filterIndicator, flash, h, icon, lineageButton, note, table, trustIndicator,
+  collapsible, columnIcon, drawTab, filterIndicator, flash, h, icon, lineageButton, note, table, trustIndicator,
 } from '../view';
 
 const CSS = `
 .search-bar { flex: none; padding: 8px 14px 4px; }
-.app-title { margin: 12px 0 6px; font-size: 12px; font-weight: 600; }
-.table-card { padding: 2px 10px; }
-.table-card > summary .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.table-card > .collapsible-body { padding: 4px 0 8px; }
+.app-title { margin: 12px 0 6px; font-size: 14px; font-weight: 500; }
+.table-card > .collapsible-body { padding-top: 0; }
 .col { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
 .col .icon { color: var(--anfra-color-muted); }
 .count { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--anfra-color-muted); }
 .count .row-action { margin-left: auto; }
 .table-state { margin: 4px 0; font-size: 12px; color: var(--anfra-color-muted); }
 `;
-
-// A column's icon: Σ for a metric, its semantic type's for a dimension. Drawn as the kit's icons are.
-const TYPE_PATHS: Record<string, string> = {
-  metric: 'M17 5H7l6 7-6 7h10',
-  text: 'M5 7V5h14v2 M12 5v14 M9 19h6',
-  number: 'M5 9h14 M5 15h14 M10 4L8 20 M16 4l-2 16',
-  date: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4',
-  datetime: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4 M12 13v3h3',
-  truefalse: 'M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z M8 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z',
-  bit: 'M6 5v6 M12 5h4v6h-4z M6 13h4v6H6z M16 13v6',
-  json: 'M9 4c-2 0-3 1-3 3v2c0 1.5-1 3-2 3 1 0 2 1.5 2 3v2c0 2 1 3 3 3 M15 4c2 0 3 1 3 3v2c0 1.5 1 3 2 3-1 0-2 1.5-2 3v2c0 2-1 3-3 3',
-  unknown: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7 M12 17v.5',
-};
-
-function columnIcon (doc: Document, column: ColumnMeta): SVGElement {
-  const svg = icon(doc, 'info');
-  svg.querySelector('path')!.setAttribute('d', column.isMeasure ? TYPE_PATHS.metric! : TYPE_PATHS[column.semantic_type] ?? TYPE_PATHS.unknown!);
-  svg.setAttribute('width', '12');
-  svg.setAttribute('height', '12');
-  return svg;
-}
 
 /** One CSV field: empty for no value, quoted when it must be, and text a spreadsheet would run as a formula kept as text. */
 export function csvField (value: unknown): string {
@@ -197,7 +174,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       }, icon(doc, 'query')),
     ], () => body(name, query, latest), {
       open: state.data.open.has(key),
-      class: 'card table-card',
+      class: 'row table-card',
       onToggle: (open) => {
         if (open) state.data.open.add(key);
         else state.data.open.delete(key);
