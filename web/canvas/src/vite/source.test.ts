@@ -72,6 +72,23 @@ describe('applyEdit', () => {
     expect(() => applyEdit(FILE, at(8, 5), { kind: 'move', by: -1 })).toThrow(/already the first/);
   });
 
+  it('keeps a v-if chain whole when its first element is removed, and refuses edits that break the template', () => {
+    const chain = `<template>
+  <main>
+    <p v-if="failed">Failed</p>
+    <p v-else-if="loading">Loading</p>
+    <ul v-else>List</ul>
+  </main>
+</template>
+`;
+    const first = applyEdit(chain, at(3, 5), { kind: 'remove' });
+    expect(first).toContain('<main>\n    <p v-if="!(failed) && (loading)">Loading</p>\n    <ul v-else>');
+    const two = applyEdit(first, at(3, 5), { kind: 'remove' });
+    expect(two).toContain('<main>\n    <ul v-if="!(!(failed) && (loading))">List</ul>');
+    expect(applyEdit(chain, at(5, 5), { kind: 'remove' })).toContain('Loading</p>\n  </main>');
+    expect(() => applyEdit(chain, at(4, 5), { kind: 'move', by: 1 })).toThrow(/would break/);
+  });
+
   it('inserts markup beside or inside an element, with its imports', () => {
     const imports = [{ name: 'Badge', from: '@/components/ui/badge' }, { name: 'Button', from: '@/components/ui/button' }];
     const after = editSource(FILE, at(8, 5), { kind: 'insert', where: 'after', markup: '<Badge>New</Badge>', imports });
@@ -84,6 +101,13 @@ describe('applyEdit', () => {
     const bare = editSource('<template>\n  <div />\n</template>\n', at(2, 3), { kind: 'insert', where: 'inside', markup: '<Badge />', imports });
     expect(bare.code).toBe("<script setup lang=\"ts\">\nimport { Badge } from '@/components/ui/badge';\nimport { Button } from '@/components/ui/button';\n</script>\n\n<template>\n  <div>\n    <Badge />\n  </div>\n</template>\n");
     expect(bare.at).toEqual({ file: 'src/pages/Invite.vue', line: 8, column: 5 });
+  });
+
+  it('adds a name to the import of its module that is already there', () => {
+    const imports = [{ name: 'Badge', from: '@/components/ui/button' }, { name: 'Card', from: '@/components/ui/card' }];
+    const out = editSource(FILE, at(8, 5), { kind: 'insert', where: 'after', markup: '<Badge /><Card />', imports });
+    expect(out.code).toContain("import { Button, Badge } from '@/components/ui/button';\nimport { Card } from '@/components/ui/card';\nconst n");
+    expect(out.at).toEqual({ file: 'src/pages/Invite.vue', line: 10, column: 5 });
   });
 
   it('reads a place in a file', () => {

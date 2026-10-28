@@ -97,9 +97,39 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
 
   /** The element a person means: the nearest one written in the app, not inside a component. */
   const pickable = (target: EventTarget | null): Element | undefined => {
-    let el = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
+    const start = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
+    let el = start;
     while (el && el !== doc.body && el !== doc.documentElement && inLibrary(el)) el = el.parentElement;
-    return el && el !== doc.body && el !== doc.documentElement ? el : undefined;
+    if (el && el !== doc.body && el !== doc.documentElement) return el;
+    return start ? overlayOf(start) : undefined;
+  };
+
+  /**
+   * What a component teleported to the body draws (a modal's dialog, a popover's box, a tooltip)
+   * has no element written in the app above it, so it stands for the component that drew it, found
+   * on Vue's instances: a pick on a modal's title picks the modal where the screen uses it. The
+   * element it stands as is the overlay's own box, not a backdrop that covers the whole screen.
+   */
+  const overlays = new Map<Element, { source: string, component?: string }>();
+  const overlayOf = (start: Element): Element | undefined => {
+    let inst = (start as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent;
+    while (inst) {
+      const src = inst.vnode?.props?.[SOURCE_ATTR];
+      if (typeof src === 'string' && !libraryDirs.some((d) => src.startsWith(d))) {
+        let box = start;
+        for (let a = start.parentElement; a && a !== doc.body && a !== doc.documentElement; a = a.parentElement) {
+          const r = a.getBoundingClientRect();
+          if (r.width >= win.innerWidth - 1 && r.height >= win.innerHeight - 1) break;
+          box = a;
+        }
+        const cmp = inst.vnode?.props?.[COMPONENT_ATTR];
+        for (const e of overlays.keys()) if (!e.isConnected) overlays.delete(e);
+        overlays.set(box, { source: src, component: typeof cmp === 'string' ? cmp : undefined });
+        return box;
+      }
+      inst = inst.parent ?? undefined;
+    }
+    return undefined;
   };
 
   /**
@@ -108,6 +138,8 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
    * Button is found on the component instances whose root it is.
    */
   const placesOf = (el: Element): { source: string, component?: string }[] => {
+    const overlay = overlays.get(el);
+    if (overlay) return [overlay];
     const own = el.getAttribute(SOURCE_ATTR);
     const out = own ? [{ source: own, component: el.getAttribute(COMPONENT_ATTR) ?? undefined }] : [];
     let inst = (el as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent;
@@ -126,10 +158,12 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
   const drawnBy = (source: string): Element[] => {
     const tagged = [...doc.querySelectorAll(`[${SOURCE_ATTR}="${quoted(source)}"]`)];
     if (tagged.length) return tagged;
-    return [...doc.querySelectorAll(`[${SOURCE_ATTR}]`)].filter((e) => placesOf(e).some((p) => p.source === source));
+    const drawn = [...doc.querySelectorAll(`[${SOURCE_ATTR}]`)].filter((e) => placesOf(e).some((p) => p.source === source));
+    if (drawn.length) return drawn;
+    return [...overlays].filter(([e, p]) => e.isConnected && p.source === source).map(([e]) => e);
   };
 
-  const refOf = (el: Element, place?: { source: string, component?: string }): ElementRef => {
+  const refOf = (el: Element, place = overlays.get(el)): ElementRef => {
     const source = place?.source ?? el.getAttribute(SOURCE_ATTR) ?? undefined;
     const component = place ? place.component : el.getAttribute(COMPONENT_ATTR) ?? undefined;
     const same = source ? drawnBy(source) : [];

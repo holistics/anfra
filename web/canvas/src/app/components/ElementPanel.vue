@@ -224,7 +224,7 @@ const title = computed(() => ref_.value.component ?? ref_.value.tag);
           <PropRow v-if="src?.text !== undefined" label="Text">
             <Field v-model="text" aria-label="Text" @keydown.enter="saveText" @blur="saveText" />
           </PropRow>
-          <PropRow v-for="p in props" :key="p.name" :label="p.name" :top="p.type === 'icon'">
+          <PropRow v-for="p in props" :key="p.name" :label="p.name">
             <p v-if="attr(p.name)?.bound !== undefined" v-tip="attr(p.name)!.bound" class="ac-caption ac-truncate">Bound to <code class="ac-mono">{{ attr(p.name)!.bound }}</code></p>
             <Select v-else-if="p.type === 'enum'" :model-value="enumValue(p)" :options="enumOptions(p)" :label="p.name" @update:model-value="(v) => setProp(p, v)" />
             <Switch v-else-if="p.type === 'boolean'" :model-value="boolValue(p)" :label="p.name" @update:model-value="(v) => setProp(p, v || null)" />

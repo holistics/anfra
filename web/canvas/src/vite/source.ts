@@ -3,7 +3,7 @@
 // tags every element with its place in its file (`src/pages/Home.vue:12:5`), and an edit finds the
 // element by that place again. Anything wider (a flow, several screens, logic) is the agent's.
 import { relative } from 'node:path';
-import { babelParse, parse, type SFCDescriptor } from 'vue/compiler-sfc';
+import { babelParse, compileTemplate, parse, type SFCDescriptor } from 'vue/compiler-sfc';
 import type { AttributeNode, DirectiveNode, ElementNode, NodeTransform, TemplateChildNode, TextNode } from '@vue/compiler-core';
 import { COMPONENT_ATTR, SOURCE_ATTR } from '../frame/protocol.ts';
 
@@ -131,6 +131,10 @@ export function touched (code: string, file: string, lines: Set<number>, outermo
   return out;
 }
 
+const directive = (el: ElementNode, name: string) =>
+  el.props.find((p): p is DirectiveNode => p.type === NodeTypes.DIRECTIVE && p.name === name);
+const expression = (d: DirectiveNode) => (d.exp?.type === NodeTypes.SIMPLE_EXPRESSION ? d.exp.content : 'false');
+
 const written = (nodes: TemplateChildNode[]) => nodes.filter((c) => !(c.type === NodeTypes.TEXT && !c.content.trim()) && c.type !== NodeTypes.COMMENT);
 
 export class EditError extends Error {}
@@ -164,7 +168,34 @@ export function applyEdit (code: string, loc: SourceLoc, edit: Edit): string {
   return editSource(code, loc, edit).code;
 }
 
+/**
+ * The file with the edit made. An edit that moves, adds or removes elements is refused when the
+ * template wouldn't compile after it (a `v-else` left without its `v-if`, say), so a screen never
+ * breaks on a canvas edit: the person leaves a comment for Claude instead.
+ */
 export function editSource (code: string, loc: SourceLoc, edit: Edit): Edited {
+  const done = editElement(code, loc, edit);
+  if (edit.kind === 'remove' || edit.kind === 'duplicate' || edit.kind === 'move' || edit.kind === 'insert') {
+    const broken = templateError(done.code, loc.file);
+    if (broken) throw new EditError(`that would break ${loc.file} (${broken}): leave a comment for Claude instead`);
+  }
+  return done;
+}
+
+/** Why a file's template doesn't compile, if it doesn't. */
+function templateError (code: string, file: string): string | undefined {
+  try {
+    const { descriptor, errors } = parse(code, { filename: file });
+    if (errors.length) return String(errors[0]);
+    if (!descriptor.template) return undefined;
+    const compiled = compileTemplate({ source: descriptor.template.content, filename: file, id: 'canvas-check' });
+    return compiled.errors.length ? String(compiled.errors[0]) : undefined;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+function editElement (code: string, loc: SourceLoc, edit: Edit): Edited {
   const descriptor = descriptorOf(code, loc.file);
   const { el, siblings } = find(descriptor, loc.line, loc.column);
   const start = el.loc.start.offset;
@@ -193,8 +224,20 @@ export function editSource (code: string, loc: SourceLoc, edit: Edit): Edited {
     case 'attr':
       return { code: setAttribute(code, el, edit.name, edit.value === false ? null : edit.value) };
     case 'remove': {
-      const [from, to] = wholeLines(code, start, end);
-      return { code: code.slice(0, from) + code.slice(to) };
+      // The first of a v-if chain: the next in the chain takes its place, with the condition it had.
+      const cond = directive(el, 'if');
+      const next = cond && siblings[siblings.indexOf(el) + 1];
+      const follower = next?.type === NodeTypes.ELEMENT ? directive(next, 'else-if') ?? directive(next, 'else') : undefined;
+      let out = code;
+      if (cond && follower) {
+        const was = `!(${expression(cond)})`;
+        const now = follower.name === 'else' ? was : `${was} && (${expression(follower)})`;
+        const at = follower.loc.start.offset;
+        const quote = now.includes('"') ? "'" : '"';
+        out = out.slice(0, at) + `v-if=${quote}${now}${quote}` + out.slice(follower.loc.end.offset);
+      }
+      const [from, to] = wholeLines(out, start, end);
+      return { code: out.slice(0, from) + out.slice(to) };
     }
     case 'duplicate': {
       const copy = `\n${indent}${code.slice(start, end)}`;
@@ -289,12 +332,26 @@ function addImports (code: string, file: string, imports: Import[]): { code: str
   if (!missing.length) return { code, at: Infinity, length: 0 };
   const quote = /from\s+"/.test(body) && !/from\s+'/.test(body) ? '"' : '\'';
   const semi = decls.length && !decls.every((d) => body[d.end! - 1] === ';') ? '' : ';';
-  const lines = missing.map((i) => `import { ${i.name} } from ${quote}${i.from}${quote}${semi}`).join('\n');
+  // A name from a module already imported by name joins that import; the rest get a line each.
+  const joins: { at: number, text: string }[] = [];
+  const own: Import[] = [];
+  for (const i of missing) {
+    const into = decls.find((d) => d.source.value === i.from && d.importKind !== 'type'
+      && d.specifiers.length && d.specifiers.every((x) => x.type === 'ImportSpecifier'));
+    const close = into && body.lastIndexOf('}', into.source.start!);
+    if (into && close !== undefined && close > into.start!) {
+      const before = body.slice(into.start!, close);
+      joins.push({ at: close - before.length + before.trimEnd().length, text: `${before.trimEnd().endsWith(',') ? ' ' : ', '}${i.name}` });
+    } else own.push(i);
+  }
+  const lines = own.map((i) => `import { ${i.name} } from ${quote}${i.from}${quote}${semi}`).join('\n');
   const last = decls.at(-1);
-  const inBody = last ? last.end! : body.match(/^\s*/)![0].length;
-  const text = last ? `\n${lines}` : `${lines}\n`;
-  const at = script.loc.start.offset + inBody;
-  return { code: code.slice(0, at) + text + code.slice(at), at, length: text.length };
+  if (lines) joins.push(last ? { at: last.end!, text: `\n${lines}` } : { at: body.match(/^\s*/)![0].length, text: `${lines}\n` });
+  let out = body;
+  for (const j of [...joins].sort((x, y) => y.at - x.at)) out = out.slice(0, j.at) + j.text + out.slice(j.at);
+  const at = script.loc.start.offset + Math.min(...joins.map((j) => j.at));
+  const start = script.loc.start.offset;
+  return { code: code.slice(0, start) + out + code.slice(start + body.length), at, length: out.length - body.length };
 }
 
 /** The whitespace before an offset on its line, when only whitespace is before it there. */
