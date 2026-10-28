@@ -23,10 +23,22 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
 describe('the MCP server', () => {
   it('initializes with the app\'s instructions and lists its tools', async () => {
     const init = await handleMcp({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion: '2025-03-26' } }, ctx) as { result: Record<string, unknown> };
-    expect(init.result).toMatchObject({ protocolVersion: '2025-03-26', capabilities: { tools: {} }, instructions: 'Read the guide' });
+    expect(init.result).toMatchObject({ protocolVersion: '2025-03-26', capabilities: { tools: {} } });
+    expect(init.result.instructions).toMatch(/^Read the guide\n\nHow the canvas works:/);
     expect(await handleMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, ctx)).toBeUndefined();
     const list = await handleMcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, ctx) as { result: { tools: { name: string }[] } };
     expect(list.result.tools.map((t) => t.name)).toContain('list_feedback');
+  });
+
+  it('lists the screens a frame can show', async () => {
+    expect((await call('list_screens')).text).toMatch(/No screens listed/);
+    ctx.screens = async () => ({ prototypes: ['/p/datasets/DatasetList'], routes: ['/'] });
+    expect((await call('list_screens')).text).toBe('- /p/datasets/DatasetList\n\nOther routes:\n- /');
+  });
+
+  it('makes a board in a project, with its owners', async () => {
+    await call('create_board', { board: 'invite', name: 'Invite flow', project: 'members', owners: ['thong.do'] });
+    expect((await ctx.store.list())[0]).toMatchObject({ slug: 'invite', project: 'members', owners: ['thong.do'] });
   });
 
   it('lays out a board', async () => {

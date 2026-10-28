@@ -33,10 +33,16 @@ export interface CanvasOptions {
   libraryDirs?: string[];
   /** Folders whose `.vue` files the canvas may edit in place. */
   editable?: string[];
+  /** Folders and files under those it must leave alone (the app's shell, a shared component library). */
+  readonly?: string[];
   /** Stylesheets for the canvas page itself (fonts, tokens), as the app imports them. */
   styles?: string[];
-  /** Folders of prototypes, whose `.vue` files are offered as frames, and the route each is served at. */
-  prototypes?: { dir: string, route: string };
+  /**
+   * The prototypes, offered as frames, and the route they are served under: the `.vue` files of a
+   * folder (`dir`), each at its path below `route`, or, when the app's router finds its pages itself
+   * (Nuxt), their routes from `list`.
+   */
+  prototypes?: { route: string, dir?: string, list?: () => string[] | Promise<string[]> };
   /** A folder of component folders (`ui/button`, …), offered in the canvas's component palette. */
   components?: string;
   /**
@@ -65,7 +71,8 @@ export interface CanvasOptions {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE = resolve(HERE, '../..');
-const FRAME_ID = '/@anfra-canvas/frame';
+/** The frame agent, for an app whose page Vite doesn't serve (Nuxt): import it first thing on the client. */
+export const FRAME_ID = '/@anfra-canvas/frame';
 const APP_ID = '/@anfra-canvas/app';
 const BASE = '/__canvas';
 /** The palette's previews, written where Vite compiles them like the app's own files. */
@@ -81,6 +88,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
     apiBase: '/api',
     libraryDirs: ['src/components/ui/'],
     editable: ['src/'],
+    readonly: [] as string[],
     styles: [],
     routes: [],
     instructions: 'Open feedback is in list_feedback. Change the code it points at, then resolve each comment.',
@@ -252,6 +260,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       const mcp: McpContext = {
         store,
         scenarios,
+        screens: async () => ({ prototypes: await prototypeRoutes(), routes: opts.routes }),
         instructions: opts.instructions,
         url: `${BASE}/`,
       };
@@ -403,6 +412,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
     if (rel.startsWith('..') || !file.endsWith('.vue') || !opts.editable.some((d) => rel.startsWith(d))) {
       throw new EditError(`the canvas edits .vue files under ${opts.editable.join(', ')} only`);
     }
+    if (opts.readonly.some((d) => rel === d || rel.startsWith(d))) throw new EditError(`${rel} is the app's own, not a prototype's: the canvas leaves it alone`);
     return { loc, file };
   }
 
@@ -429,7 +439,9 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
 
   async function prototypeRoutes (): Promise<string[]> {
     if (!opts.prototypes) return [];
-    const { dir, route } = opts.prototypes;
+    const { dir, route, list } = opts.prototypes;
+    if (list) return [...await list()].sort();
+    if (!dir) return [];
     const files = await walk(abs(dir));
     return files
       .filter((f) => f.endsWith('.vue') && !f.split(sep).some((p) => p.startsWith('_')) && !/Host\.vue$/.test(f))

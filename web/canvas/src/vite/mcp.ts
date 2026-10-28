@@ -15,6 +15,8 @@ export const PROTOCOL_VERSION = '2025-06-18';
 export interface McpContext {
   store: BoardStore;
   scenarios: () => Promise<Scenarios>;
+  /** The routes a frame can show: the prototypes', then any others the app offers. */
+  screens?: () => Promise<{ prototypes: string[], routes: string[] }>;
   /** What the agent is told on connecting: how prototypes are written in this app. */
   instructions: string;
   /** The canvas's address, for links to a board. */
@@ -33,6 +35,14 @@ const num = (description: string) => ({ type: 'number', description });
 const board = str('The board\'s name, as list_boards gives it');
 
 const AGENT = 'Claude';
+
+/** How the canvas works, told to every agent after the app's own instructions. */
+export const GUIDE = `How the canvas works:
+- A board (list_boards, get_board) holds frames, sections, notes and arrows. A frame is a live screen: the app at a route, in an iframe, in one scenario (a mock state of its API, list_scenarios).
+- The screens a frame can show are in list_screens. A route can carry ?open=<name> to show an overlay open, for apps whose overlays read it.
+- To lay out a flow: create_board (with its project and owners), add_frame for each screen, add_arrow between them with the action as the label, add_section around a happy path or edge cases, then tidy_board. Arrows are also how Present steps from screen to screen.
+- People pick elements in frames and edit them; each edit is written to the .vue file. What they can't do in the panel they leave as a comment: list_feedback says what each points at (frame, route, scenario, element, file and line). Change the code, then resolve_feedback with a short note, or reply_feedback to ask.
+- The canvas reloads a frame as its files change, so there is no need to tell it. Its tools change boards only: change code with your own tools.`;
 
 function summary (b: Board) {
   const shape = (s: Shape) => ({ id: s.id, ...(s.kind === 'note' ? { text: s.text } : { name: s.name }), x: s.x, y: s.y, width: s.width, height: s.height });
@@ -119,20 +129,34 @@ const TOOLS: Record<string, Tool> = {
     },
   },
   create_board: {
-    description: 'A new, empty board.',
-    input: { board: str('Its file name: lowercase letters, digits and dashes'), name: str('Its title') },
+    description: 'A new, empty board, with the project it belongs to and who owns it, as the home page lists boards by both.',
+    input: {
+      board: str('Its file name: lowercase letters, digits and dashes'),
+      name: str('Its title'),
+      project: str('The project, usually the folder its screens are in (datasets for /p/datasets/…)'),
+      owners: { type: 'array', items: { type: 'string' }, description: 'People\'s ids, as the canvas\'s people list names them (thong.do)' },
+    },
     required: ['board'],
-    run: async ({ board, name }, ctx) => {
+    run: async ({ board, name, project, owners }, ctx) => {
       if (!SLUG.test(board)) throw new Error('a board name is lowercase letters, digits and dashes');
-      await ctx.store.create(board, name ?? board);
+      await ctx.store.create(board, name ?? board, { project, owners });
       return `Created ${board}: ${ctx.url}#${board}`;
     },
   },
+  list_screens: {
+    description: 'The screens a frame can show: the routes of the app\'s prototypes, then any other routes it offers.',
+    input: {},
+    run: async (_, ctx) => {
+      const s = await ctx.screens?.();
+      if (!s || (!s.prototypes.length && !s.routes.length)) return 'No screens listed: a frame takes any route the app serves.';
+      return [...s.prototypes.map((r) => `- ${r}`), ...(s.routes.length ? ['', 'Other routes:', ...s.routes.map((r) => `- ${r}`)] : [])].join('\n');
+    },
+  },
   add_frame: {
-    description: 'Put a live screen on a board: the app at a route (a prototype is at /__proto/<path under src/prototypes>), answered by a mock scenario (list_scenarios), or "live" for the real backend.',
+    description: 'Put a live screen on a board: the app at a route (list_screens), answered by a mock scenario (list_scenarios), or "live" for the real backend.',
     input: {
       board,
-      route: str('The app\'s path, e.g. /o/acme/settings/users or /o/acme/__proto/onboarding/GettingStarted'),
+      route: str('The app\'s path, as list_screens gives it; ?open=<name> shows an overlay open'),
       name: str('Its label on the canvas'),
       scenario: str('A scenario\'s name; "default" if left out'),
       section: str('A section\'s id to place it in'),
@@ -257,7 +281,7 @@ export async function handleMcp (msg: Message, ctx: McpContext): Promise<object 
         protocolVersion: typeof msg.params?.protocolVersion === 'string' ? msg.params.protocolVersion : PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: { name: 'anfra-canvas', version: '0.0.0' },
-        instructions: ctx.instructions,
+        instructions: [ctx.instructions, GUIDE].filter(Boolean).join('\n\n'),
       });
     case 'ping':
       return ok({});

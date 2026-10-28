@@ -28,7 +28,8 @@ export function installFrame (options: FrameOptions, win: Window = window): Fram
   quietTags(win);
   const named = parseFrameName(win.name);
   if (!named || win.parent === win) return undefined;
-  if (named.scenario !== LIVE) installMocks(win, options.scenarios, named.scenario ?? 'default', options.apiBase ?? '/api');
+  // An app with no scenarios has no mocks: its API calls go where they always do.
+  if (named.scenario !== LIVE && Object.keys(options.scenarios).length) installMocks(win, options.scenarios, named.scenario ?? 'default', options.apiBase ?? '/api');
   const agent = createAgent(win, named.id, options.libraryDirs ?? ['src/components/ui/']);
   return agent;
 }
