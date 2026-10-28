@@ -104,10 +104,10 @@ a bare dataset metric is an aggregate condition too.
 | Member | Does |
 | --- | --- |
 | `query.state` | `'idle' \| 'executing' \| 'success' \| 'error'` |
-| `query.result` | `{ columns, rows, meta: { numRows, page?, pageSize? }, debug? }` (`page` and `pageSize` only for a paged query), or `undefined` before success. Kept while re-executing, so you can render stale data under a spinner. |
+| `query.result` | `{ columns, rows, meta: { numRows, page?, pageSize?, hasMore? }, debug? }` (`page`, `pageSize` and `hasMore` only for a paged query), or `undefined` before success. Kept while re-executing, so you can render stale data under a spinner. For a paged query, `rows` and `numRows` count the pages loaded so far, not the whole result, and `debug` describes the latest page's request. |
 | `query.error` | The error when `state === 'error'`. |
 | `query.setSort([{ field, direction }])` | Sorts by a result column `name`. `[]` restores the AQL's own sort. Re-run with `execute()`. |
-| `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. |
+| `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. Each page is a query of its own, and a re-execute starts again from page 1, so sort a paged query down to a unique field, or rows can repeat or go missing between pages. |
 | `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
 | `await query.export(options?)` | The `export` plugin, where installed: downloads the query's whole result as a file for the reader. See [plugins/export.md](plugins/export.md). |

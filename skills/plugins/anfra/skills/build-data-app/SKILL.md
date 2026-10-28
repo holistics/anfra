@@ -116,7 +116,9 @@ the query's `explore { }` before it runs.
   as soon as a reader touches a control, sort or date drill mapped to it.
 - **Alias every dimension and measure** (`revenue: sum(orders.amount)`). The alias is the row key
   in `query.result.rows`, and what `sorts` and `setSort` name.
-- **No limit.** Paging is the SDK's (`pageSize`, `fetchMore`).
+- **No limit.** Paging is the SDK's (`pageSize`, `fetchMore`). A query without `pageSize` gets
+  every row, up to the server's maximum, past which it fails rather than truncating. The 10,000
+  rows `anfra query` stops at are that command's page, not a cap on apps.
 - **Nothing a reader changes goes in the AQL text.** Static conditions go in `filters` or
   `having`; a reader's choice is a control (`createFilter` + `mapControl`), never a string built
   into the query.
