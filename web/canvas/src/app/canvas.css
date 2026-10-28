@@ -182,7 +182,6 @@ p.ac-changes-nested { padding: 4px 0 8px 24px; }
 }
 .ac-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .ac-viewport.is-dragging iframe, .ac-viewport.is-idle iframe, .ac-viewport.is-moving iframe { pointer-events: none; }
-.ac-viewport.is-moving .ac-world { will-change: transform; }
 .ac-marquee {
   position: absolute;
   border: calc(1px * var(--ac-inv)) solid var(--ac-violet);

@@ -303,8 +303,9 @@ onBeforeUnmount(() => observer?.disconnect());
 
 const transform = computed(() => `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.zoom})`);
 
-// While the view moves, the world is one layer, moved and scaled as it was drawn, and drawn sharp
-// again once it stops: a pan or a wheel turn doesn't redraw every screen at each step.
+// While the view moves, the screens don't take the pointer. The world is not made a layer of its
+// own for the move (will-change): switching it on and off at each pause of a pinch made every
+// screen redraw from blank, which flickered.
 const moving = ref(false);
 let settle: ReturnType<typeof setTimeout> | undefined;
 watch(() => [state.view.x, state.view.y, state.view.zoom], () => {
