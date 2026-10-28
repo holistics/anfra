@@ -60,7 +60,7 @@ const SHORTCUTS: [string, string[] | string][] = [
   ['Undo, redo', ['⌘Z', '⇧⌘Z']],
   ['Playing: next, back, stop', ['1', '←', 'Esc']],
 ];
-const mcpCommand = computed(() => `claude mcp add --transport http anfra-canvas ${location.origin}${state.settings.mcp}`);
+const mcpCommand = computed(() => `claude mcp add --transport http ${state.settings.mcpName ?? 'anfra-canvas'} ${location.origin}${state.settings.mcp}`);
 </script>
 
 <template>

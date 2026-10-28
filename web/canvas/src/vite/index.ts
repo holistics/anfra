@@ -66,6 +66,8 @@ export interface CanvasOptions {
   routes?: string[];
   /** What an agent is told when it connects over MCP. */
   instructions?: string;
+  /** The name an agent knows the canvas's MCP server by (`claude mcp add … <name>`): `anfra-canvas` unless said. */
+  mcpName?: string;
   /** How a commit message from the canvas starts, for repos that check it (`feat(ui): `). */
   commitPrefix?: string;
 }
@@ -176,6 +178,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           tokens: readTokens((await Promise.all(opts.styles.map((css) => cssText(abs(css.replace(/^\//, '')))))).join('\n')),
           routes: opts.routes,
           mcp: `${BASE}/mcp`,
+          mcpName: opts.mcpName ?? 'anfra-canvas',
           author: await gitUser(config.root),
           prototypeRoute: opts.prototypes?.route ?? '',
           commitPrefix: opts.commitPrefix ?? '',
@@ -408,7 +411,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         const local = dev.resolvedUrls?.local[0]?.replace(/\/$/, '');
         if (!local) return;
         config.logger.info(`  ➜  Canvas:  ${local}${BASE}/`);
-        config.logger.info(`  ➜  MCP:     claude mcp add --transport http anfra-canvas ${local}${BASE}/mcp`);
+        config.logger.info(`  ➜  MCP:     claude mcp add --transport http ${opts.mcpName ?? 'anfra-canvas'} ${local}${BASE}/mcp`);
       };
     },
   };

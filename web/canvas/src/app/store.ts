@@ -21,6 +21,8 @@ export interface Settings {
   tokens: Tokens;
   routes: string[];
   mcp: string;
+  /** The name to add its MCP server by. */
+  mcpName?: string;
   author: string;
   /** How a commit message from the canvas starts, for a repo that checks it (`feat(ui): `). */
   commitPrefix: string;
