@@ -147,6 +147,8 @@ export type Edit =
   | { kind: 'remove' }
   | { kind: 'duplicate' }
   | { kind: 'move', by: -1 | 1 }
+  /** Put the element in a `<div>` of its own, which takes its v-if, v-for and key, to place it. */
+  | { kind: 'wrap' }
   /** New markup beside or inside the element, with the imports it needs in the script. */
   | { kind: 'insert', where: Where, markup: string, imports?: Import[] };
 
@@ -175,7 +177,7 @@ export function applyEdit (code: string, loc: SourceLoc, edit: Edit): string {
  */
 export function editSource (code: string, loc: SourceLoc, edit: Edit): Edited {
   const done = editElement(code, loc, edit);
-  if (edit.kind === 'remove' || edit.kind === 'duplicate' || edit.kind === 'move' || edit.kind === 'insert') {
+  if (edit.kind === 'remove' || edit.kind === 'duplicate' || edit.kind === 'move' || edit.kind === 'insert' || edit.kind === 'wrap') {
     const broken = templateError(done.code, loc.file);
     if (broken) throw new EditError(`that would break ${loc.file} (${broken}): leave a comment for Claude instead`);
   }
@@ -258,6 +260,23 @@ function editElement (code: string, loc: SourceLoc, edit: Edit): Edited {
       const between = code.slice(a.loc.end.offset, b.loc.start.offset);
       const out = code.slice(0, a.loc.start.offset) + bSrc + between + aSrc + code.slice(b.loc.end.offset);
       return placed(out, edit.by < 0 ? a.loc.start.offset : a.loc.start.offset + bSrc.length + between.length);
+    }
+    case 'wrap': {
+      // What decides whether and how often it is drawn goes to the wrapper.
+      const moved = el.props.filter((p) => (p.type === NodeTypes.DIRECTIVE && ['if', 'else-if', 'else', 'for'].includes(p.name))
+        || (p.name === 'key' && p.type === NodeTypes.ATTRIBUTE)
+        || (p.type === NodeTypes.DIRECTIVE && p.name === 'bind' && p.arg?.type === NodeTypes.SIMPLE_EXPRESSION && p.arg.content === 'key'));
+      let inner = code.slice(start, end);
+      for (const p of [...moved].sort((a, b) => b.loc.start.offset - a.loc.start.offset)) {
+        const from = p.loc.start.offset - start;
+        const lead = /\s*$/.exec(inner.slice(0, from))![0].length;
+        inner = inner.slice(0, from - lead) + inner.slice(p.loc.end.offset - start);
+      }
+      const unit = indentUnit(code);
+      const attrs = [...moved].sort((a, b) => a.loc.start.offset - b.loc.start.offset).map((p) => ` ${p.loc.source}`).join('');
+      const body = inner.split('\n').map((l, n) => (n ? unit + l : l)).join('\n');
+      const wrapped = `<div${attrs}>\n${indent}${unit}${body}\n${indent}</div>`;
+      return placed(code.slice(0, start) + wrapped + code.slice(end), start);
     }
     case 'insert': {
       const unit = indentUnit(code);

@@ -28,4 +28,18 @@ describe('kitCatalog', () => {
       { id: 'hdivider', name: 'HDivider', markup: '<HDivider />', imports: [{ name: 'HDivider', from: '@holistics/design-system' }] },
     ]);
   });
+  it('marks a kit\'s components as instances, with the placement each takes', () => {
+    const { catalog } = kitCatalog({ components: [
+      { name: 'HButton', from: 'ds' },
+      { name: 'HTextInput', from: 'ds', classTarget: 'inner' },
+      { name: 'HModal', from: 'ds', classTarget: 'none', placement: ['width'] },
+      { name: 'HTooltip', from: 'ds', placement: [] },
+    ] });
+    expect(catalog.map((c) => [c.kit, c.classTarget, c.placement])).toEqual([
+      [true, 'root', ['width', 'grow', 'align', 'margin']],
+      [true, 'inner', ['width', 'grow', 'align', 'margin']],
+      [true, 'none', []],
+      [true, 'root', []],
+    ]);
+  });
 });

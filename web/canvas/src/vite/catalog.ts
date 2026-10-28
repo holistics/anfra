@@ -26,7 +26,20 @@ export interface ComponentSpec {
   slot: boolean;
   /** The folder's own component (Button in button/), the one the palette offers. */
   main: boolean;
+  /**
+   * A design system's component (from a kit): picked, it is an instance, whose look is its props.
+   * The panel offers only how it is placed in its parent, never its insides.
+   */
+  kit?: boolean;
+  /** The placement styles the panel offers on an instance. */
+  placement?: Placement[];
+  /** Where a class on its tag ends up: its root, an inner part, or nowhere. */
+  classTarget?: 'root' | 'inner' | 'none';
 }
+
+/** How an instance sits in its parent: its width, its share of a row, its own alignment, space above it. */
+export type Placement = 'width' | 'grow' | 'align' | 'margin';
+export const PLACEMENT: Placement[] = ['width', 'grow', 'align', 'margin'];
 
 export interface PaletteItem {
   /** The folder. */
@@ -50,6 +63,13 @@ export interface KitComponent {
   slot?: boolean;
   /** The markup the palette places it with, or false to keep it out of the palette. */
   snippet?: string | false;
+  /** The placement styles the panel offers: all of them unless said; [] for none. */
+  placement?: Placement[];
+  /**
+   * Where a class on its tag ends up: its root (the default), an inner part (the component sets
+   * `inheritAttrs: false` and passes them on), or nowhere (it drops them, or draws in a teleport).
+   */
+  classTarget?: 'root' | 'inner' | 'none';
 }
 
 /** The icons a kit's `icon` props take, and the component that draws one, for the picker. */
@@ -72,7 +92,17 @@ export function kitCatalog (kit: Kit): { catalog: ComponentSpec[], snippets: Rec
   const snippets: Record<string, string | false> = {};
   for (const c of kit.components ?? []) {
     const folder = c.name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-    catalog.push({ name: c.name, folder, from: c.from, props: c.props ?? [], slot: c.slot ?? false, main: true });
+    catalog.push({
+      name: c.name,
+      folder,
+      from: c.from,
+      props: c.props ?? [],
+      slot: c.slot ?? false,
+      main: true,
+      kit: true,
+      placement: c.classTarget === 'none' ? [] : c.placement ?? PLACEMENT,
+      classTarget: c.classTarget ?? 'root',
+    });
     if (c.snippet !== undefined) snippets[folder] = c.snippet;
   }
   return { catalog, snippets };

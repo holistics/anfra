@@ -112,6 +112,14 @@ describe('applyEdit', () => {
     expect(out.at).toEqual({ file: 'src/pages/Invite.vue', line: 10, column: 5 });
   });
 
+  it('wraps an element in a div, which takes what decides whether it is drawn', () => {
+    const out = editSource(FILE, at(14, 7), { kind: 'wrap' });
+    expect(out.code).toContain('<ul>\n      <div v-for="i in n" :key="i">\n        <li>Row</li>\n      </div>\n    </ul>');
+    expect(out.at).toEqual({ file: 'src/pages/Invite.vue', line: 14, column: 7 });
+    const multi = editSource(FILE, at(9, 5), { kind: 'wrap' });
+    expect(multi.code).toContain('<div>\n      <Button variant="outline">\n        Send invites\n      </Button>\n    </div>');
+  });
+
   it('reads a place in a file', () => {
     expect(parseLoc('src/a b.vue:12:5')).toEqual({ file: 'src/a b.vue', line: 12, column: 5 });
     expect(parseLoc('nowhere')).toBeUndefined();

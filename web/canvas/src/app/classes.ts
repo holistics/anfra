@@ -59,7 +59,22 @@ export function groups (tokens: Tokens) {
     border: re('border|border-[0-9]+'),
     borderColor: re(`border-(${names([...tokens.borderColor, ...tokens.color])})`),
     radius: re(`rounded(-(none|full|${names(tokens.radius)}))?`),
+    // How an element sits in its parent: its share of a row, its own alignment, space above it.
+    grow: re('flex-1|flex-auto|flex-none|grow|grow-0|shrink-0'),
+    self: re('self-(auto|start|end|center|stretch|baseline)'),
+    marginTop: re('mt-[\\w.[\\]-]+'),
   };
+}
+
+/** What a design system's component draws itself: classes on its tag that change these fight it. */
+const INSIDES = ['display', 'direction', 'wrap', 'gap', 'items', 'justify', 'padding', 'px', 'py', 'type', 'textColor', 'textAlign', 'background', 'border', 'borderColor', 'radius'] as const;
+
+/** Any fill, type, spacing inside, border, radius or shadow, theme token or not (`bg-red-500`). */
+const RESTYLES = /^-?(bg|text|font|leading|tracking|rounded|shadow|border|ring|p[xytrbl]?|gap|space-[xy]|items|justify|content|place-[a-z]+|grid-cols|grid-rows|flex-(row|col|wrap))(-|$)/;
+
+/** The classes on a component's tag that restyle its insides, rather than place it. */
+export function overrides (classes: string, g: Groups): string[] {
+  return split(classes).filter((c) => base(c) && !g.grow.test(c) && (INSIDES.some((k) => g[k].test(c)) || RESTYLES.test(c)));
 }
 
 export type Groups = ReturnType<typeof groups>;
@@ -86,6 +101,16 @@ export function choices (tokens: Tokens) {
     textColor: color('text', tokens.textColor.length ? tokens.textColor : tokens.color),
     background: color('bg', tokens.background.length ? tokens.background : tokens.color),
     borderColor: color('border', tokens.borderColor.length ? tokens.borderColor : tokens.color),
+    grow: [
+      { value: '', label: 'Its own size' },
+      { value: 'flex-1', label: 'Fill the rest', description: 'Takes the room left in its row or column' },
+      { value: 'shrink-0', label: 'Never shrink', description: 'Keeps its size when the row is tight' },
+    ],
+    self: [
+      { value: '', label: 'As its parent says' },
+      ...['start', 'center', 'end', 'stretch'].map((v) => ({ value: `self-${v}`, label: v })),
+    ],
+    marginTop: steps('mt'),
     radius: [
       { value: '', label: 'None' },
       ...tokens.radius.map((t) => ({ value: `rounded-${t.name}`, label: t.name, hint: px(t.value) })),

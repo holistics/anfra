@@ -20,7 +20,7 @@ import { kitCatalog, palette, readCatalog, readTokens, type ComponentSpec, type 
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
 import { CommitError, Stills, commit, readChanges, readCommit } from './changes.ts';
 
-export type { Kit, KitComponent, KitIcons, PropSpec } from './catalog.ts';
+export type { Kit, KitComponent, KitIcons, Placement, PropSpec } from './catalog.ts';
 
 export interface CanvasOptions {
   /** Where boards are kept, from the Vite root. */

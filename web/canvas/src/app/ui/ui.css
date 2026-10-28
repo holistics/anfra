@@ -268,7 +268,7 @@
 
 /* An icon prop: a select-like trigger, and when open the kit's icons in a grid under it */
 /* The icon picker's panel: a search, then the icons, which scroll */
-.ac-icon-panel { position: fixed; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; transform-origin: top right; }
+.ac-icon-panel { position: fixed; z-index: 50; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; transform-origin: top right; }
 .ac-icon-panel.up { transform-origin: bottom right; }
 .ac-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); align-content: start; gap: 2px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .ac-icon-choice { display: grid; place-items: center; height: 32px; padding: 0; border: 0; border-radius: var(--ac-radius-sm); background: transparent; color: var(--ac-ink); cursor: pointer; }
@@ -282,7 +282,8 @@
 
 .ac-listbox {
   position: fixed;
-  z-index: 30;
+  /* Over the present view (45) too, whose bar has selects */
+  z-index: 50;
   display: grid;
   align-content: start;
   gap: 1px;
@@ -670,3 +671,6 @@ details.ac-section:not([open]) { gap: 0; }
 .ac-avatar > img { width: 100%; height: 100%; object-fit: cover; }
 .ac-avatars { display: inline-flex; }
 .ac-avatars > .ac-avatar + .ac-avatar { margin-left: -4px; box-shadow: 0 0 0 2px var(--ac-surface); }
+/* A callout that warns: the design system overridden */
+.ac-callout.warn { background: var(--ac-note); box-shadow: inset 0 0 0 1px var(--ac-note-line); }
+.ac-callout.warn code { color: var(--ac-ink); overflow-wrap: anywhere; }

@@ -7,7 +7,7 @@ import { computed, ref, watch } from 'vue';
 import { elementMarkdown } from '../../model/index.ts';
 import type { PropSpec } from '../../vite/catalog.ts';
 import type { Edit, SourceInfo } from '../../vite/source.ts';
-import { choices, groups, read, sizeClass, sizeOf, write, type Group, type SizeMode } from '../classes.ts';
+import { choices, groups, overrides, read, sizeClass, sizeOf, write, type Group, type SizeMode } from '../classes.ts';
 import { useStore } from '../context.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
@@ -77,6 +77,17 @@ const NATIVE: Record<string, PropSpec[]> = {
 const STANDS_FOR: Record<string, string> = { Button: 'button', Input: 'input', Textarea: 'textarea', Checkbox: 'button', Switch: 'button' };
 
 const component = computed(() => state.settings.catalog.find((c) => c.name === ref_.value.component));
+/**
+ * A design system's component is an instance: its look is its props, and the panel offers only how
+ * it is placed in its parent. Classes on its tag that restyle its insides are flagged, to remove.
+ */
+const instance = computed(() => (component.value?.kit ? component.value : undefined));
+const placement = computed(() => new Set(instance.value?.placement ?? []));
+const overriding = computed(() => (instance.value ? overrides(cls.value, G) : []));
+function removeOverrides () {
+  const drop = new Set(overriding.value);
+  void change({ kind: 'class', to: cls.value.split(/\s+/).filter((c) => c && !drop.has(c)).join(' ') });
+}
 const props = computed<PropSpec[]>(() => {
   const own = component.value?.props ?? [];
   const tag = ref_.value.component ? STANDS_FOR[ref_.value.component] : src.value?.tag;
@@ -241,6 +252,54 @@ const title = computed(() => ref_.value.component ?? ref_.value.tag);
         </div>
       </Section>
 
+      <Section v-if="instance" title="Placement">
+        <template v-if="instance.classTarget === 'none'">
+          <p class="ac-caption">{{ title }} takes no classes. To size or place it, put it in a div of its own.</p>
+          <div class="ac-row">
+            <Button icon="box" @click="change({ kind: 'wrap' }, 'Put in a div')">Put in a div</Button>
+          </div>
+        </template>
+        <p v-else-if="!placement.size" class="ac-caption">{{ title }} opens from what it wraps: size and place that instead.</p>
+        <div v-else class="ac-props">
+          <PropRow v-if="placement.has('width')" label="Width">
+            <div class="ac-pair">
+              <Select :model-value="size('w').mode" :options="SIZE_MODES" label="Width" @update:model-value="(v) => setSize('w', v as SizeMode)" />
+              <Field
+                prefix="px"
+                type="number"
+                min="0"
+                :value="size('w').mode === 'fixed' ? size('w').px : Math.round(picked.info.rect.width)"
+                aria-label="Width in px"
+                @change="setSize('w', 'fixed', Number(($event.target as HTMLInputElement).value))"
+              />
+            </div>
+          </PropRow>
+          <PropRow v-if="placement.has('grow')" label="In a row" tip="Its share of a row or column it is in">
+            <Select :model-value="get(G.grow)" :options="C.grow" label="In a row" :min-width="240" @update:model-value="(v) => set(G.grow, v)" />
+          </PropRow>
+          <PropRow v-if="placement.has('align')" label="Align" tip="Its own alignment in its parent">
+            <Select :model-value="get(G.self)" :options="C.self" label="Align itself" @update:model-value="(v) => set(G.self, v)" />
+          </PropRow>
+          <PropRow v-if="placement.has('margin')" label="Above" tip="Space above it, in px">
+            <Select :model-value="get(G.marginTop)" :options="C.marginTop" label="Space above" @update:model-value="(v) => set(G.marginTop, v)" />
+          </PropRow>
+        </div>
+        <p class="ac-caption">
+          Its look is its properties. Spacing between it and what is beside it is its parent's:
+          <button type="button" class="ac-link" @click="store.pickParent()">select the parent</button>
+        </p>
+        <template v-if="overriding.length">
+          <p class="ac-callout warn ac-caption" role="note">
+            {{ overriding.length }} {{ overriding.length === 1 ? 'class restyles' : 'classes restyle' }} {{ title }} over the design system:
+            <code class="ac-mono">{{ overriding.join(' ') }}</code>
+          </p>
+          <div class="ac-row">
+            <Button @click="removeOverrides">Remove {{ overriding.length === 1 ? 'it' : 'them' }}</Button>
+          </div>
+        </template>
+      </Section>
+
+      <template v-else>
       <Section title="Layout">
         <Segmented :model-value="display" :options="DISPLAYS" label="Layout" fill @update:model-value="(v) => setDisplay(v as Display)" />
         <p v-if="display === 'block' && computedDisplay && computedDisplay !== 'block'" class="ac-caption">Drawn as {{ computedDisplay }} by its component</p>
@@ -314,10 +373,12 @@ const title = computed(() => ref_.value.component ?? ref_.value.tag);
         </div>
       </Section>
 
-      <Section title="Classes" collapsible>
+      </template>
+
+      <Section :title="instance ? 'Raw classes' : 'Classes'" collapsible>
         <Field v-model="classes" :rows="3" mono aria-label="Classes" @keydown.meta.enter="change({ kind: 'class', to: classes })" />
         <div class="ac-row">
-          <span class="ac-caption ac-spacer">Every static class, hover: and md: ones too</span>
+          <span class="ac-caption ac-spacer">{{ instance ? 'On a design system component, classes beyond placement restyle it: leave its look to its properties' : 'Every static class, hover: and md: ones too' }}</span>
           <Button :disabled="classes === cls" @click="change({ kind: 'class', to: classes })">Apply</Button>
         </div>
       </Section>
