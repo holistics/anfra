@@ -89,7 +89,14 @@ describe('the panel', () => {
     fromFrame(event('anfra.picked', { node: '0' }));
     expect(panel).toMatchObject({ snapshot: undefined, selection: null });
     panel.show();
-    for (const payload of [null, 'x', { apps: 'x' }, { apps: [1] }, { apps: [], structure: { nodes: {} } }]) {
+    const node = (children: unknown[] = []) => ({
+      key: '0', kind: 'block', problems: [], children,
+    });
+    for (const payload of [
+      null, 'x', { apps: 'x' }, { apps: [1] }, { apps: [], structure: { nodes: {} } },
+      { apps: [], structure: { nodes: [1] } }, { apps: [], structure: { nodes: [{ key: 'a' }] } },
+      { apps: [], structure: { nodes: [node([node(), { ...node(), problems: null }])] } },
+    ]) {
       fromFrame(event('anfra.snapshot', payload));
     }
     for (const payload of [null, { node: 3 }, {}]) fromFrame(event('anfra.picked', payload));

@@ -15,6 +15,10 @@ export interface Snapshot {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** A structure node, and every one under it, of the shape the tabs read. */
+const isNodeTree = (value: unknown): boolean => isObject(value) && typeof value.key === 'string' && typeof value.kind === 'string'
+  && Array.isArray(value.problems) && Array.isArray(value.children) && value.children.every(isNodeTree);
+
 /**
  * A snapshot as the frame posts it, or undefined when it isn't one: the frame is the definition's
  * realm, so a panel gets only something of the snapshot's shape, never what a script made up.
@@ -22,7 +26,7 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 export function checkSnapshot (payload: unknown): Snapshot | undefined {
   if (!isObject(payload) || !Array.isArray(payload.apps) || !payload.apps.every(isObject)) return undefined;
   const structure = payload.structure ?? { nodes: [], usage: {} };
-  if (!isObject(structure) || !Array.isArray(structure.nodes) || !isObject(structure.usage ?? {})) return undefined;
+  if (!isObject(structure) || !Array.isArray(structure.nodes) || !structure.nodes.every(isNodeTree) || !isObject(structure.usage ?? {})) return undefined;
   return {
     apps: payload.apps as unknown as InspectedApp[],
     structure: { nodes: structure.nodes, usage: structure.usage ?? {} } as InspectedStructure,
@@ -158,7 +162,10 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
       mount.emit('anfra.locate', target);
     },
     pick (on) {
-      if (on && !open) setOpen(true);
+      if (on && !open) {
+        setOpen(true);
+        tab = known(tab);
+      }
       setPicking(on === true);
       changed();
     },
