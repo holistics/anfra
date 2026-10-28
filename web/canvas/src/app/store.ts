@@ -4,13 +4,14 @@
 import { markRaw, nextTick, reactive, shallowRef, watch, type Component } from 'vue';
 import {
   FRAME_SIZES, addComment, bounds, feedbackMarkdown, find, merge, newId, nextSpot, parseBoard, remove, shapes, tidy,
-  type Anchor, type Board, type BoardObject, type Comment, type ElementRef, type Rect, type Scenarios,
+  type Anchor, type Board, type BoardObject, type Comment, type ElementRef, type Rect, type Scenarios, type TemplateSummary,
 } from '../model/index.ts';
 import type { CanvasHost, ElementInfo, FrameAgent, FrameEvent, FrameMode, LayerNode } from '../frame/protocol.ts';
 import type { BoardDetails, BoardSummary } from '../vite/boards.ts';
 import type { Changes, FileDiff } from '../vite/changes.ts';
 import type { ComponentSpec, PaletteItem, Tokens } from '../vite/catalog.ts';
 import type { Edit, SourceInfo, Where } from '../vite/source.ts';
+import type { StartFrom } from '../vite/templates.ts';
 
 export interface Settings {
   scenarios: Scenarios;
@@ -197,6 +198,20 @@ export function createStore (settings: Settings, previews?: Component) {
     if (status !== 201) return flash(data.message ?? 'Couldn\'t create the board');
     await loadList();
     location.hash = slug;
+  }
+
+  /** The templates a board can start from (the New board dialog's picker). */
+  async function templates (): Promise<TemplateSummary[]> {
+    const { status, data } = await api<TemplateSummary[]>('/templates');
+    return status === 200 ? data : [];
+  }
+
+  /** Start a board from a template: its folder copied into the project, its screens on the board. */
+  async function startFrom (req: StartFrom) {
+    const { status, data } = await api<{ message?: string }>('/templates/start', { method: 'POST', body: JSON.stringify(req) });
+    if (status !== 201) return flash(data.message ?? 'Couldn\'t start from the template');
+    await loadList();
+    location.hash = req.board;
   }
 
   /** Change a board's name or project, from its card on the home page. */
@@ -817,7 +832,7 @@ export function createStore (settings: Settings, previews?: Component) {
 
   return {
     state, board, handlers, previews: previews && markRaw(previews),
-    loadList, open, create, updateDetails, keepCover, commit, preview, undo, redo, removeSelection, comment,
+    loadList, open, create, templates, startFrom, updateDetails, keepCover, commit, preview, undo, redo, removeSelection, comment,
     loadChanges, framesShowing, hasStill, stillUrl, changedRects, commitChanges, readCommit,
     locate, pickAt, tree, snapshot, commentOn, openInEditor, reload, place, addFrame, pick, pickParent, edit, insert, whereIn, editText, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo, tidyUp,
     play, playNext, playBack, stopPlay, startFrame,

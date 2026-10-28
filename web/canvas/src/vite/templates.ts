@@ -39,8 +39,12 @@ export class Templates {
   }
 
   async read (id: string): Promise<TemplateSummary> {
-    if (!/^[\w-]+$/.test(id)) throw new Error(`no template ${id}`);
-    const mod = await this.load(join(this.dir, id, 'template.ts'));
+    const file = join(this.dir, id, 'template.ts');
+    if (!/^[\w-]+$/.test(id) || !await stat(file).catch(() => undefined)) {
+      const ids = (await this.list()).map((t) => t.id);
+      throw new Error(`no template ${id}${ids.length ? `: there are ${ids.join(', ')}` : ''}`);
+    }
+    const mod = await this.load(file);
     const t = (mod.template ?? mod.default) as Template | undefined;
     if (!t?.screens?.length) throw new Error(`${id}/template.ts exports no template with screens`);
     const cover = t.screens.find((s) => s.id === t.cover) ?? t.screens[0];
