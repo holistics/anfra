@@ -3,7 +3,7 @@
  * shares, and the stylesheet, all on the host's `--anfra-*` tokens. Plain DOM, so the tabs carry
  * no framework into a host that has its own.
  */
-import type { InspectedQuery } from '../../common/types';
+import type { ColumnMeta, InspectedQuery } from '../../common/types';
 import type { TabContext } from '../../host/contributions';
 import type { Panel } from '../../host/panel';
 import { LINEAGE_TAB } from './model/types';
@@ -67,6 +67,7 @@ const PATHS = {
   plus: 'M12 5v14 M5 12h14',
   minus: 'M5 12h14',
   fit: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',
+  code: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -80,6 +81,27 @@ export function icon (doc: Document, name: IconName): SVGElement {
   const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', PATHS[name]);
   svg.append(path);
+  return svg;
+}
+
+// A column's icon: Σ for a metric, its semantic type's for a dimension. Drawn as the kit's icons are.
+export const TYPE_PATHS: Record<string, string> = {
+  metric: 'M17 5H7l6 7-6 7h10',
+  text: 'M5 7V5h14v2 M12 5v14 M9 19h6',
+  number: 'M5 9h14 M5 15h14 M10 4L8 20 M16 4l-2 16',
+  date: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4',
+  datetime: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4 M12 13v3h3',
+  truefalse: 'M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z M8 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z',
+  bit: 'M6 5v6 M12 5h4v6h-4z M6 13h4v6H6z M16 13v6',
+  json: 'M9 4c-2 0-3 1-3 3v2c0 1.5-1 3-2 3 1 0 2 1.5 2 3v2c0 2 1 3 3 3 M15 4c2 0 3 1 3 3v2c0 1.5 1 3 2 3-1 0-2 1.5-2 3v2c0 2-1 3-3 3',
+  unknown: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7 M12 17v.5',
+};
+
+export function columnIcon (doc: Document, column: Pick<ColumnMeta, 'isMeasure' | 'semantic_type'>): SVGElement {
+  const svg = icon(doc, 'info');
+  svg.querySelector('path')!.setAttribute('d', column.isMeasure ? TYPE_PATHS.metric! : TYPE_PATHS[column.semantic_type] ?? TYPE_PATHS.unknown!);
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
   return svg;
 }
 
@@ -556,7 +578,7 @@ function keepFlashes (body: HTMLElement): void {
 
 /** The tabs' stylesheet, on the host's tokens. Fixed colours only for meaning (states, tones, kinds), each with a dark variant. */
 export const STYLES = `
-:host { display: block; height: 100%; color: var(--anfra-color-fg); background: var(--anfra-color-bg); font: 13px/1.45 var(--anfra-font); }
+:host { display: block; height: 100%; color: var(--anfra-color-fg); background: var(--anfra-color-bg); font: 14px/1.45 var(--anfra-font); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -576,16 +598,16 @@ button:disabled { cursor: default; }
 .muted { color: var(--anfra-color-muted); }
 code, pre { font-family: var(--anfra-font-mono); }
 h4 { margin: 16px 0 0; font-size: 14px; }
-h5 { margin: 16px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--anfra-color-muted); display: flex; align-items: center; gap: 6px; }
+h5 { margin: 16px 0 6px; font-size: 14px; font-weight: 500; color: var(--anfra-color-fg); display: flex; align-items: center; gap: 6px; }
 dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
 dt { color: var(--anfra-color-muted); }
 dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .icon { flex: none; }
-.card { margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--anfra-color-border); border-radius: var(--anfra-radius); }
+.card { margin-bottom: 8px; padding: 10px 12px; border-radius: 8px; background: var(--subtle); }
 .card header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .flash { animation: flash 1.2s ease-out; }
 @keyframes flash { from { box-shadow: inset 0 0 0 2px var(--anfra-color-accent); background: var(--accent-bg); } }
-.pill { flex: none; padding: 1px 8px; border-radius: 10px; background: var(--hover); color: var(--anfra-color-muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.pill { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--hover); color: var(--anfra-color-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .pill.warn { background: var(--warn-bg); color: var(--warn); }
 .pill.success, .pill.ok { background: var(--ok-bg); color: var(--ok); }
 .pill.error { background: var(--danger-bg); color: var(--anfra-color-danger); }
@@ -593,7 +615,7 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .tone-ok { color: var(--ok); } .tone-warn { color: var(--warn); } .tone-error { color: var(--anfra-color-danger); }
 code.wrap { overflow-wrap: anywhere; }
 .error-text { margin: 6px 0 0; color: var(--anfra-color-danger); overflow-wrap: anywhere; }
-.link { border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--anfra-color-accent); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+.link { border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--anfra-color-accent); font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
 .link:hover:not(:disabled) { background: var(--hover); }
 .link:disabled { color: var(--anfra-color-muted); }
 .toolbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--anfra-color-border); }
@@ -602,10 +624,11 @@ code.wrap { overflow-wrap: anywhere; }
 .tool[aria-pressed="true"] { border-color: var(--anfra-color-accent); color: var(--anfra-color-accent); background: var(--accent-bg); }
 .search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--anfra-color-border); border-radius: 6px; color: var(--anfra-color-muted); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--anfra-color-fg); font: inherit; font-size: 12px; }
-.segments { flex: none; display: inline-flex; border: 1px solid var(--anfra-color-border); border-radius: 6px; overflow: hidden; }
-.segments button { border: 0; background: none; padding: 3px 8px; font-size: 12px; }
-.segments button + button { border-left: 1px solid var(--anfra-color-border); }
-.segments button[aria-pressed="true"] { background: var(--accent-bg); color: var(--anfra-color-accent); }
+.segments { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--hover); }
+.segments button { border: 0; border-radius: 6px; background: none; padding: 2px 8px; font-size: 12px; font-weight: 500; color: var(--anfra-color-muted); white-space: nowrap; }
+.segments button:hover { color: var(--anfra-color-fg); }
+/* The selected one is raised, in ink: violet is for links, selection and focus. */
+.segments button[aria-pressed="true"] { background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 0 0 1px var(--anfra-color-border), 0 1px 2px rgb(0 0 0 / 0.08); }
 .row-action { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted); }
 .row-action:hover:not(:disabled) { background: var(--hover); color: var(--anfra-color-accent); }
 .row-action:disabled { opacity: 0.4; cursor: default; }
@@ -617,16 +640,24 @@ code.wrap { overflow-wrap: anywhere; }
 .collapsible > summary > .icon { transition: transform 0.15s; color: var(--anfra-color-muted); }
 .collapsible[open] > summary > .icon { transform: rotate(90deg); }
 .collapsible-body { padding: 2px 0 8px 20px; min-width: 0; }
-.section > summary { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--anfra-color-muted); margin-top: 10px; }
-/* One-line rows that open */
-.row { border-bottom: 1px solid var(--anfra-color-border); }
-.row > summary { padding: 6px 4px; border-radius: 4px; min-width: 0; }
+.section > summary { font-size: 14px; font-weight: 500; margin-top: 12px; }
+/* A heading's chevron shows when it is pointed at or focused: the heading is what reads. */
+.section > summary > .icon, .sub > summary > .icon { opacity: 0; transition: transform 0.15s, opacity 0.15s; }
+.section > summary:hover > .icon, .section > summary:focus-visible > .icon, .sub > summary:hover > .icon, .sub > summary:focus-visible > .icon { opacity: 1; }
+.section > .collapsible-body { padding-left: 0; }
+/* Rows that open, as tiles: the chevron at the end, the body inside the tile. A tile in a tile is on the panel's ground. */
+.row { border-radius: 8px; background: var(--subtle); }
+.row + .row { margin-top: 6px; }
+.row > summary { min-height: 40px; padding: 6px 8px 6px 12px; border-radius: 8px; min-width: 0; }
 .row > summary:hover { background: var(--hover); }
-.row > summary .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.row .collapsible-body { padding: 4px 4px 12px 20px; }
-.row.flash > summary, .card.flash { animation: flash 1.2s ease-out; }
-.sub > summary { font-size: 12px; font-weight: 600; color: var(--anfra-color-muted); }
-.indicator { flex: none; display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; color: var(--anfra-color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.row > summary > .icon { order: 99; margin-left: 4px; color: var(--anfra-color-muted); }
+.row > summary .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.row > .collapsible-body { padding: 2px 12px 12px; }
+.row .row { background: var(--anfra-color-bg); box-shadow: inset 0 0 0 1px var(--anfra-color-border); }
+.row.flash > summary, .card.flash, .row.flash { animation: flash 1.2s ease-out; }
+.sub > summary { font-size: 14px; font-weight: 500; }
+.sub > .collapsible-body { padding-left: 20px; }
+.indicator { flex: none; display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; color: var(--anfra-color-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .indicator.filters { width: 32px; }
 .indicator.trust { width: 20px; height: 12px; align-items: flex-end; }
 .bars { display: inline-flex; align-items: flex-end; gap: 2px; }
@@ -645,7 +676,7 @@ code.wrap { overflow-wrap: anywhere; }
 /* Code */
 .code { margin-top: 6px; border: 1px solid var(--anfra-color-border); border-radius: 6px; overflow: hidden; position: relative; }
 .code-head { display: flex; align-items: center; gap: 2px; padding: 0 4px; border-bottom: 1px solid var(--anfra-color-border); background: var(--subtle); }
-.code-tab { border: 0; border-bottom: 2px solid transparent; background: none; padding: 5px 6px; font-size: 11px; color: var(--anfra-color-muted); }
+.code-tab { border: 0; border-bottom: 2px solid transparent; background: none; padding: 5px 6px; font-size: 12px; color: var(--anfra-color-muted); }
 .code-tab[aria-selected="true"] { color: var(--anfra-color-fg); border-bottom-color: var(--anfra-color-accent); }
 .code-tab:disabled { opacity: 0.5; }
 .code-tab-wrap { display: inline-flex; }
@@ -665,16 +696,16 @@ code.wrap { overflow-wrap: anywhere; }
 .table-wrap { overflow: auto; max-height: 320px; border: 1px solid var(--anfra-color-border); border-radius: 6px; }
 table { border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%; }
 th, td { padding: 3px 8px; text-align: left; border-bottom: 1px solid var(--anfra-color-border); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
-th { position: sticky; top: 0; background: var(--anfra-color-bg); font-weight: 600; z-index: 1; }
+th { position: sticky; top: 0; background: var(--anfra-color-bg); font-weight: 500; z-index: 1; }
 tbody tr:last-child td { border-bottom: 0; }
 /* Structure */
 .tree { list-style: none; margin: 0; padding: 0; }
-.node { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.node { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; }
 .node:hover { background: var(--hover); }
 .twist .icon { transition: transform 0.15s; } .twist.open .icon { transform: rotate(90deg); }
 .node .twist { width: 16px; height: 16px; } .twist-space { flex: none; width: 16px; }
 .node.selected { background: var(--accent-bg); }
-.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 .label, .app { color: var(--anfra-color-muted); overflow: hidden; text-overflow: ellipsis; }
 .node.problem .name { color: var(--anfra-color-danger); }
 .kind { flex: none; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
