@@ -553,6 +553,7 @@ const CSS = `
 .item > summary { padding: 7px 8px 7px 10px; gap: 8px; }
 .item > summary > .icon { order: 99; color: var(--anfra-color-muted); }
 .item > summary .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.item > summary .label { min-width: 0; color: var(--anfra-color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item > .collapsible-body { padding: 0 10px 10px 34px; }
 /* A filter on one line: where it comes from, the field, its value, and its source. */
 .filters li { display: grid; grid-template-columns: 16px minmax(0, max-content) minmax(0, 1fr) max-content; align-items: baseline; gap: 8px; padding: 7px 10px; }

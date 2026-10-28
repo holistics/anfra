@@ -706,7 +706,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .node .twist { width: 16px; height: 16px; } .twist-space { flex: none; width: 16px; }
 .node.selected { background: var(--accent-bg); }
 .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-.label, .app { color: var(--anfra-color-muted); overflow: hidden; text-overflow: ellipsis; }
+.node .label, .node .app { color: var(--anfra-color-muted); overflow: hidden; text-overflow: ellipsis; }
 .node.problem .name { color: var(--anfra-color-danger); }
 .kind { flex: none; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .kind.container { background: color-mix(in srgb, light-dark(#7c3aed, #a78bfa) 18%, transparent); color: light-dark(#7c3aed, #a78bfa); }
