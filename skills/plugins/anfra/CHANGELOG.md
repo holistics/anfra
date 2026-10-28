@@ -1,3 +1,14 @@
+## [0.4.5](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.4...anfra-v0.4.5) (2026-10-28)
+
+### Features
+
+* **plugins.anfra:** follow the host's light or dark mode with Anfra.theme ([e428bc3](https://github.com/holistics/anfra-skills/commit/e428bc34a43cf67ae8e5c09c0dcfbb2db0a2a431))
+* **plugins.anfra:** open the host's menu on a chart's point with query.menu ([60fc394](https://github.com/holistics/anfra-skills/commit/60fc394fb058b1acfa2f8a96630959946bade2f2))
+
+### Bug Fixes
+
+* **plugins.anfra:** drop the Inspect panel's tabs from build-data-app ([b07d41f](https://github.com/holistics/anfra-skills/commit/b07d41f6cc085d7d86e24b1c17631d006ad756f4))
+
 ## [0.4.4](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.3...anfra-v0.4.4) (2026-10-28)
 
 ### Bug Fixes

@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Skills for working with Anfra — building and exploring analytics via AMQL and Data Apps.",
-    "version": "0.4.4"
+    "version": "0.4.5"
   },
   "plugins": [
     {
