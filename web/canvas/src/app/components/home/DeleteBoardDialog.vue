@@ -17,7 +17,10 @@ const store = useStore();
 const files = ref<BoardFiles>();
 const withFolder = ref(false);
 const busy = ref(false);
+const form = ref<HTMLFormElement>();
 onMounted(async () => {
+  // Cancel takes the focus, so Esc and Enter keep the board.
+  form.value?.querySelector<HTMLButtonElement>('.ac-board-actions .ac-btn')?.focus();
   files.value = await store.boardFiles(props.board.slug);
 });
 
@@ -38,14 +41,14 @@ async function confirm () {
 
 <template>
   <div class="ac-command-scrim" data-ui @pointerdown.self="emit('close')">
-    <form class="ac-board-dialog ac-popover form ac-pop-in delete-board-dialog" role="alertdialog" :aria-label="`Delete ${board.name}`" @submit.prevent="confirm" @keydown.esc="emit('close')">
+    <form ref="form" class="ac-board-dialog ac-popover form ac-pop-in delete-board-dialog" role="alertdialog" :aria-label="`Delete ${board.name}`" @submit.prevent="confirm" @keydown.esc="emit('close')">
       <p class="ac-heading">Delete {{ board.name }}?</p>
       <p v-if="!files" class="ac-caption">Reading what it would delete…</p>
       <template v-else>
         <div class="ac-board-field">
           <span class="ac-label">Deletes from the repo</span>
           <p class="ac-delete-item"><code class="ac-mono">{{ files.board.path }}</code><span class="ac-caption">{{ GIT[files.board.git] }}</span></p>
-          <p class="ac-caption">Its screens stay unless you delete their folder too.</p>
+          <p v-if="board.frames" class="ac-caption">{{ files.folder ? 'Its screens stay unless you delete their folder too.' : 'Its screens stay: they aren\'t in a folder of their own.' }}</p>
         </div>
         <label v-if="files.folder" class="ac-board-field ac-delete-folder">
           <span class="ac-row">
