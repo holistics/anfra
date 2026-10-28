@@ -578,7 +578,7 @@ function keepFlashes (body: HTMLElement): void {
 
 /** The tabs' stylesheet, on the host's tokens. Fixed colours only for meaning (states, tones, kinds), each with a dark variant. */
 export const STYLES = `
-:host { display: block; height: 100%; color: var(--anfra-color-fg); background: var(--anfra-color-bg); font: 14px/1.45 var(--anfra-font); }
+:host { display: block; height: 100%; color: var(--anfra-color-fg); background: var(--anfra-color-bg); font: 13px/1.45 var(--anfra-font); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -597,8 +597,8 @@ button:disabled { cursor: default; }
 .note { color: var(--anfra-color-muted); margin: 12px 0; }
 .muted { color: var(--anfra-color-muted); }
 code, pre { font-family: var(--anfra-font-mono); }
-h4 { margin: 16px 0 0; font-size: 14px; }
-h5 { margin: 16px 0 6px; font-size: 14px; font-weight: 500; color: var(--anfra-color-fg); display: flex; align-items: center; gap: 6px; }
+h4 { margin: 16px 0 0; font-size: 13px; }
+h5 { margin: 16px 0 6px; font-size: 13px; font-weight: 500; color: var(--anfra-color-fg); display: flex; align-items: center; gap: 6px; }
 dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
 dt { color: var(--anfra-color-muted); }
 dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
@@ -640,7 +640,7 @@ code.wrap { overflow-wrap: anywhere; }
 .collapsible > summary > .icon { transition: transform 0.15s; color: var(--anfra-color-muted); }
 .collapsible[open] > summary > .icon { transform: rotate(90deg); }
 .collapsible-body { padding: 2px 0 8px 20px; min-width: 0; }
-.section > summary { font-size: 14px; font-weight: 500; margin-top: 12px; }
+.section > summary { font-size: 13px; font-weight: 500; margin-top: 12px; }
 /* A heading's chevron shows when it is pointed at or focused: the heading is what reads. */
 .section > summary > .icon, .sub > summary > .icon { opacity: 0; transition: transform 0.15s, opacity 0.15s; }
 .section > summary:hover > .icon, .section > summary:focus-visible > .icon, .sub > summary:hover > .icon, .sub > summary:focus-visible > .icon { opacity: 1; }
@@ -655,7 +655,7 @@ code.wrap { overflow-wrap: anywhere; }
 .row > .collapsible-body { padding: 2px 12px 12px; }
 .row .row { background: var(--anfra-color-bg); box-shadow: inset 0 0 0 1px var(--anfra-color-border); }
 .row.flash > summary, .card.flash, .row.flash { animation: flash 1.2s ease-out; }
-.sub > summary { font-size: 14px; font-weight: 500; }
+.sub > summary { font-size: 13px; font-weight: 500; }
 .sub > .collapsible-body { padding-left: 20px; }
 .indicator { flex: none; display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; color: var(--anfra-color-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .indicator.filters { width: 32px; }
@@ -700,7 +700,7 @@ th { position: sticky; top: 0; background: var(--anfra-color-bg); font-weight: 5
 tbody tr:last-child td { border-bottom: 0; }
 /* Structure */
 .tree { list-style: none; margin: 0; padding: 0; }
-.node { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.node { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; }
 .node:hover { background: var(--hover); }
 .twist .icon { transition: transform 0.15s; } .twist.open .icon { transform: rotate(90deg); }
 .node .twist { width: 16px; height: 16px; } .twist-space { flex: none; width: 16px; }
