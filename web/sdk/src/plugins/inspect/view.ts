@@ -50,7 +50,7 @@ const PATHS = {
   tree: 'M5 4v16 M5 8h6 M5 16h6 M13 6h6v4h-6z M13 14h6v4h-6z',
   search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M16 16l4 4',
   // Lineage: a card per kind, and the canvas's tools.
-  lineage: 'M4 6h5v4H4z M15 4h5v4h-5z M15 16h5v4h-5z M9 8h3v10h3 M12 6h3',
+  lineage: 'M9 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M3 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M15 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9 M12 12v3',
   control: 'M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4',
   block: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
   metric: 'M18 5H6l6 7-6 7h12',
