@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A board on the home page: its cover (a still of its first screen, else its map), its name, its
-// project and when it last changed, its open comments, and ways to present it or change its details.
+// project and when it last changed, its open comments, and ways to present it, change its details or
+// delete it.
 import { computed, ref } from 'vue';
 import type { BoardSummary } from '../../../vite/boards.ts';
 import { useStore } from '../../context.ts';
@@ -10,7 +11,7 @@ import { vTip } from '../../ui/tooltip.ts';
 import BoardMap from './BoardMap.vue';
 
 const props = defineProps<{ board: BoardSummary }>();
-const emit = defineEmits<{ edit: [] }>();
+const emit = defineEmits<{ edit: [], delete: [] }>();
 
 const { state } = useStore();
 const cover = ref(true);
@@ -39,6 +40,7 @@ const present = () => {
         <span class="ac-spacer" />
         <Button v-if="board.first" variant="ghost" small icon="present" label="Present" @click="present" />
         <Button variant="ghost" small icon="pencil" label="Edit details" @click="emit('edit')" />
+        <Button variant="ghost" small icon="trash" label="Delete board" @click="emit('delete')" />
       </div>
     </div>
   </article>

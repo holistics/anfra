@@ -1,7 +1,7 @@
 // The boards on disk: one JSON file each in the app's boards folder. Every save goes through here,
 // one at a time per board, and bumps the board's rev; a save from an older rev is refused with the
 // current board, for the saver to merge onto and save again.
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { emptyBoard, parseBoard, type Board } from '../model/board.ts';
 
@@ -123,6 +123,15 @@ export class BoardStore {
       const current = await this.read(slug);
       if (current.rev !== base) throw new Conflict(current);
       return this.write(slug, { ...board, rev: current.rev });
+    });
+  }
+
+  /** Delete a board's file. Its screens stay: they are the app's code, and other boards may show them. */
+  async remove (slug: string): Promise<void> {
+    return this.serial(slug, async () => {
+      if (!await this.exists(slug)) throw new Error(`there is no board named ${slug}`);
+      this.written.delete(slug);
+      await rm(this.path(slug));
     });
   }
 

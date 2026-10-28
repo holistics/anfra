@@ -4,8 +4,8 @@
 //   - serves the canvas at /__canvas/, its boards and source edits at /__canvas/api/, and its MCP
 //     tools at /__canvas/mcp.
 // None of it is in a production build: every hook is for `vite serve`.
-import { mkdirSync, watch, writeFileSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, watch, writeFileSync } from 'node:fs';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -20,6 +20,7 @@ import { kitCatalog, palette, readCatalog, readTokens, type ComponentSpec, type 
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
 import { CommitError, Stills, commit, readChanges, readCommit } from './changes.ts';
 import { Templates, startFrom, type StartFrom } from './templates.ts';
+import { filesIn, gitState, keepAndDeleteFolder, restoreFiles, screensFolder, type BoardFiles, type Deleted } from './board-files.ts';
 
 export type { Kit, KitComponent, KitIcons, Placement, PropSpec } from './catalog.ts';
 
@@ -240,7 +241,14 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           if (store.written.get(slug) === text) return;
           store.written.set(slug, text);
           broadcast(slug, parseBoard(JSON.parse(text)));
-        } catch { /* half-written, or not a board: the next change tells */ }
+        } catch {
+          // Gone (a hand delete, a git checkout): open canvases drop it. Otherwise it is half-written,
+          // or not a board, and the next change tells.
+          if (!existsSync(join(store.dir, name))) {
+            store.written.delete(slug);
+            dev.ws.send({ type: 'custom', event: 'anfra-canvas:board-removed', data: { slug } });
+          }
+        }
       };
       mkdirSync(store.dir, { recursive: true });
       const watcher = watch(store.dir, (_event, name) => void external(name));
@@ -265,12 +273,44 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         return startFrom(templates, store, { dir: abs(opts.prototypes.dir), route: opts.prototypes.route }, req);
       };
 
+      // Deleting a board from the canvas, in the repo: its file, and, when asked, the folder of its
+      // screens. What was deleted is kept until the server stops, for the home page's Undo.
+      const deleted = new Map<string, Deleted>();
+      const removed = (slug: string) => dev.ws.send({ type: 'custom', event: 'anfra-canvas:board-removed', data: { slug } });
+      const boardFiles = async (slug: string): Promise<BoardFiles> => {
+        const board = await store.read(slug);
+        const others = await Promise.all((await store.list()).filter((b) => b.slug !== slug).map((b) => store.read(b.slug)));
+        const out: BoardFiles = { board: { path: relative(config.root, store.path(slug)), git: await gitState(config.root, store.path(slug)) } };
+        const folder = opts.prototypes?.dir ? screensFolder(board, others, { dir: abs(opts.prototypes.dir), route: opts.prototypes.route }) : undefined;
+        if (folder) out.folder = { path: relative(config.root, folder), files: (await filesIn(folder)).length, git: await gitState(config.root, folder) };
+        return out;
+      };
+      const deleteBoard = async (slug: string, withFolder: boolean): Promise<BoardFiles> => {
+        const files = await boardFiles(slug);
+        const folder = withFolder && files.folder ? abs(files.folder.path) : undefined;
+        deleted.set(slug, await keepAndDeleteFolder(store.path(slug), folder, opts.prototypes?.dir ? abs(opts.prototypes.dir) : undefined));
+        await store.remove(slug);
+        await rm(join(abs(THUMBS), `${slug}.svg`), { force: true });
+        removed(slug);
+        return folder ? files : { board: files.board };
+      };
+      const restoreBoard = async (slug: string): Promise<void> => {
+        const kept = deleted.get(slug);
+        if (!kept) throw new Error(`${slug} wasn't deleted from this canvas since it started: restore it with git`);
+        if (await store.exists(slug)) throw new Error(`a board named ${slug} exists again`);
+        await restoreFiles(kept);
+        deleted.delete(slug);
+        broadcast(slug, await store.read(slug));
+      };
+
       const mcp: McpContext = {
         store,
         scenarios,
         screens: async () => ({ prototypes: await prototypeRoutes(), routes: opts.routes }),
         instructions: opts.instructions,
         url: `${BASE}/`,
+        boardFiles,
+        deleteBoard,
         ...(templates ? { templates: { list: () => templates.list(), read: (id) => templates.read(id), start } } : {}),
       };
 
@@ -294,10 +334,20 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
               return send(res, 201, await store.create(String(slug), String(name || slug), { project }));
             }
           }
+          // What deleting a board would delete, for its confirm; deleting it (and its screens' folder on
+          // ?folder=1); and putting it back.
+          const filesPath = /^\/api\/boards\/([^/]+)\/files$/.exec(path);
+          if (filesPath && req.method === 'GET') return send(res, 200, await boardFiles(decodeURIComponent(filesPath[1])));
+          const restorePath = /^\/api\/boards\/([^/]+)\/restore$/.exec(path);
+          if (restorePath && req.method === 'POST') {
+            await restoreBoard(decodeURIComponent(restorePath[1]));
+            return send(res, 200, { restored: true });
+          }
           const boardPath = /^\/api\/boards\/([^/]+)$/.exec(path);
           if (boardPath) {
             const slug = decodeURIComponent(boardPath[1]);
             if (req.method === 'GET') return send(res, 200, await store.read(slug));
+            if (req.method === 'DELETE') return send(res, 200, await deleteBoard(slug, url.searchParams.get('folder') === '1'));
             // The board's details (name, project), from its card on the home page.
             if (req.method === 'PATCH') {
               const details = await body(req) as BoardDetails;

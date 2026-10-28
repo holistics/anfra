@@ -13,6 +13,7 @@ import Icon from '../../ui/Icon.vue';
 import Select from '../../ui/Select.vue';
 import BoardCard from './BoardCard.vue';
 import BoardDialog from './BoardDialog.vue';
+import DeleteBoardDialog from './DeleteBoardDialog.vue';
 
 const store = useStore();
 const { state } = store;
@@ -56,6 +57,23 @@ function newBoard () {
     },
   };
 }
+// Deleting a board: its confirm, then a note with Undo while the server keeps what went.
+const deleting = ref<BoardSummary | null>(null);
+const undoable = ref<{ slug: string, name: string, withFolder: boolean } | null>(null);
+let undoTimer: ReturnType<typeof setTimeout> | undefined;
+function deleted (b: BoardSummary, withFolder: boolean) {
+  deleting.value = null;
+  undoable.value = { slug: b.slug, name: b.name, withFolder };
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => (undoable.value = null), 15_000);
+}
+async function undo () {
+  const u = undoable.value;
+  if (!u) return;
+  undoable.value = null;
+  await store.restoreBoard(u.slug);
+}
+
 const edit = (b: BoardSummary) => {
   dialog.value = { slug: b.slug, initial: { name: b.name, project: b.project ?? '' } };
 };
@@ -133,7 +151,7 @@ const boardsShowing = (route: string) => state.boards.filter((b) => b.routes?.so
         <h2 v-if="shownScreens.length" class="ac-heading">Boards</h2>
         <ul v-if="boards.length" class="ac-board-grid">
           <li v-for="b in boards" :key="b.slug">
-            <BoardCard :board="b" @edit="edit(b)" />
+            <BoardCard :board="b" @edit="edit(b)" @delete="deleting = b" />
           </li>
         </ul>
         <div v-else class="ac-start ac-home-empty">
@@ -147,5 +165,11 @@ const boardsShowing = (route: string) => state.boards.filter((b) => b.routes?.so
     </section>
 
     <BoardDialog v-if="dialog" :slug="dialog.slug" :initial="dialog.initial" @close="dialog = null" />
+    <DeleteBoardDialog v-if="deleting" :board="deleting" @close="deleting = null" @deleted="(withFolder) => deleted(deleting!, withFolder)" />
+    <div v-if="undoable" class="ac-toast ac-home-toast" data-ui role="status">
+      <span>{{ undoable.name }} deleted{{ undoable.withFolder ? ', with its screens' : '' }}</span>
+      <Button variant="ghost" small @click="undo">Undo</Button>
+    </div>
+    <div v-else-if="state.toast" :key="state.toast" class="ac-toast ac-home-toast" data-ui role="status">{{ state.toast }}</div>
   </div>
 </template>

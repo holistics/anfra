@@ -8,6 +8,7 @@ import {
 } from '../model/index.ts';
 import type { CanvasHost, ElementInfo, FrameAgent, FrameEvent, FrameMode, LayerNode } from '../frame/protocol.ts';
 import type { BoardDetails, BoardSummary } from '../vite/boards.ts';
+import type { BoardFiles } from '../vite/board-files.ts';
 import type { Changes, FileDiff } from '../vite/changes.ts';
 import type { ComponentSpec, PaletteItem, Tokens } from '../vite/catalog.ts';
 import type { Edit, SourceInfo, Where } from '../vite/source.ts';
@@ -219,6 +220,34 @@ export function createStore (settings: Settings, previews?: Component) {
     location.hash = req.board;
   }
 
+  /** What deleting a board would delete from the repo, for its confirm. */
+  async function boardFiles (slug: string): Promise<BoardFiles | undefined> {
+    const { status, data } = await api<BoardFiles>(`/boards/${encodeURIComponent(slug)}/files`);
+    return status === 200 ? data : undefined;
+  }
+
+  /** Delete a board from the repo, and its screens' folder with `withFolder`. True when it went. */
+  async function deleteBoard (slug: string, withFolder: boolean): Promise<boolean> {
+    const { status, data } = await api<{ message?: string }>(`/boards/${encodeURIComponent(slug)}${withFolder ? '?folder=1' : ''}`, { method: 'DELETE' });
+    if (status !== 200) {
+      flash(data.message ?? 'Couldn\'t delete the board');
+      return false;
+    }
+    state.boards = state.boards.filter((b) => b.slug !== slug);
+    return true;
+  }
+
+  /** Put back a board deleted from this canvas since its server started. */
+  async function restoreBoard (slug: string): Promise<boolean> {
+    const { status, data } = await api<{ message?: string }>(`/boards/${encodeURIComponent(slug)}/restore`, { method: 'POST' });
+    if (status !== 200) {
+      flash(data.message ?? 'Couldn\'t bring the board back');
+      return false;
+    }
+    await loadList();
+    return true;
+  }
+
   /** Change a board's name or project, from its card on the home page. */
   async function updateDetails (slug: string, details: BoardDetails) {
     const { status, data } = await api<{ message?: string }>(`/boards/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(details) });
@@ -308,6 +337,15 @@ export function createStore (settings: Settings, previews?: Component) {
   if (import.meta.hot) {
     import.meta.hot.on('anfra-canvas:board', ({ slug, board: b }: { slug: string, board: Board }) => received(slug, parseBoard(b)));
     import.meta.hot.on('anfra-canvas:source', () => state.sources++);
+    // A board deleted (from here, another canvas, or by hand): it leaves the list, and an open copy
+    // of it closes to the home page, since its file is gone.
+    import.meta.hot.on('anfra-canvas:board-removed', ({ slug }: { slug: string }) => {
+      state.boards = state.boards.filter((b) => b.slug !== slug);
+      if (state.slug === slug) {
+        location.hash = '';
+        flash(`${board.value?.name ?? slug} was deleted`);
+      }
+    });
     import.meta.hot.on('anfra-canvas:files', () => readChangesSoon());
     import.meta.hot.on('anfra-canvas:changing', ({ file }: { file: string }) => void keepStills(file));
   }
@@ -837,7 +875,7 @@ export function createStore (settings: Settings, previews?: Component) {
 
   return {
     state, board, handlers, previews: previews && markRaw(previews),
-    loadList, open, create, templates, startFrom, updateDetails, keepCover, commit, preview, undo, redo, removeSelection, comment,
+    loadList, open, create, templates, startFrom, updateDetails, boardFiles, deleteBoard, restoreBoard, keepCover, commit, preview, undo, redo, removeSelection, comment,
     loadChanges, framesShowing, hasStill, stillUrl, changedRects, commitChanges, readCommit,
     locate, pickAt, tree, snapshot, commentOn, openInEditor, reload, place, addFrame, pick, pickParent, edit, insert, whereIn, editText, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo, tidyUp,
     play, playNext, playBack, stopPlay, startFrame,

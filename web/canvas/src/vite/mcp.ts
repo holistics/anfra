@@ -11,6 +11,7 @@ import type { Scenarios } from '../model/scenario.ts';
 import { SLUG, type BoardStore } from './boards.ts';
 import type { TemplateSummary } from '../model/template.ts';
 import type { StartFrom, Started } from './templates.ts';
+import type { BoardFiles } from './board-files.ts';
 
 export const PROTOCOL_VERSION = '2025-06-18';
 
@@ -23,6 +24,9 @@ export interface McpContext {
   instructions: string;
   /** The canvas's address, for links to a board. */
   url: string;
+  /** What deleting a board would delete, and deleting it (with its screens' folder when asked). */
+  boardFiles?: (slug: string) => Promise<BoardFiles>;
+  deleteBoard?: (slug: string, withFolder: boolean) => Promise<BoardFiles>;
   /** The templates to start a prototype from, when the app has any. */
   templates?: {
     list: () => Promise<TemplateSummary[]>;
@@ -270,6 +274,28 @@ const TOOLS: Record<string, Tool> = {
     run: async ({ board }, ctx) => {
       await ctx.store.change(board, (b) => tidy(b));
       return `Tidied ${board}: ${ctx.url}#${board}`;
+    },
+  },
+  delete_board: {
+    description: 'Delete a board from the repo: its JSON file, and with folder: true the folder of its screens too (offered only when every screen of the board is in one folder no other board shows). Only when the person asks to delete that board: it is not a cleanup step. Call it first without confirm to see what it would delete and whether each is committed (a file never committed can\'t come back with git), tell the person, then call again with confirm set to the board\'s name. The home page can undo it until the canvas server stops.',
+    input: {
+      board,
+      folder: { type: 'boolean', description: 'Also delete the folder of its screens; false if left out' },
+      confirm: str('The board\'s name again, once the person agreed; leave out to see what it would delete'),
+    },
+    required: ['board'],
+    run: async ({ board, folder = false, confirm }, ctx) => {
+      if (!ctx.boardFiles || !ctx.deleteBoard) throw new Error('this canvas can\'t delete boards');
+      const files = await ctx.boardFiles(board);
+      const item = (f: { path: string, git: string }) => `${f.path} (${f.git === 'new' ? 'never committed' : f.git === 'changed' ? 'changed since the last commit' : 'committed'})`;
+      const plan = [`- ${item(files.board)}`, folder && files.folder ? `- ${item(files.folder)}: ${files.folder.files} files` : '']
+        .filter(Boolean).join('\n');
+      if (folder && !files.folder) throw new Error(`${board}'s screens aren't in one folder of their own, so only the board can be deleted`);
+      if (confirm !== board) {
+        return `Deleting ${board} would delete:\n${plan}${!folder && files.folder ? `\nIts screens' folder (${files.folder.path}) stays; pass folder: true to delete it too.` : ''}\nAsk the person, then call again with confirm: "${board}".`;
+      }
+      await ctx.deleteBoard(board, folder);
+      return `Deleted:\n${plan}`;
     },
   },
   list_templates: {
