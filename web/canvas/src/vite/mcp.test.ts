@@ -36,9 +36,9 @@ describe('the MCP server', () => {
     expect((await call('list_screens')).text).toBe('- /p/datasets/DatasetList\n\nOther routes:\n- /');
   });
 
-  it('makes a board in a project, with its owners', async () => {
-    await call('create_board', { board: 'invite', name: 'Invite flow', project: 'members', owners: ['thong.do'] });
-    expect((await ctx.store.list())[0]).toMatchObject({ slug: 'invite', project: 'members', owners: ['thong.do'] });
+  it('makes a board in a project', async () => {
+    await call('create_board', { board: 'invite', name: 'Invite flow', project: 'members' });
+    expect((await ctx.store.list())[0]).toMatchObject({ slug: 'invite', project: 'members' });
   });
 
   it('lays out a board', async () => {
@@ -94,18 +94,20 @@ describe('the board store', () => {
     await expect(ctx.store.save('b', { ...first, name: 'B3' }, first.rev)).rejects.toBeInstanceOf(Conflict);
   });
 
-  it('reads a board someone wrote by hand', async () => {
+  it('reads a board someone wrote by hand, leaving out what a board no longer keeps', async () => {
     await writeFile(join(ctx.store.dir, 'hand.json'), JSON.stringify({ ...emptyBoard('Hand'), project: 'datasets', owners: ['thong.do'] }));
-    expect(await ctx.store.list()).toEqual([expect.objectContaining({
-      slug: 'hand', name: 'Hand', frames: 0, open: 0, project: 'datasets', owners: ['thong.do'], routes: [], screens: [], map: { sections: [], frames: [] },
-    })]);
+    const [hand] = await ctx.store.list();
+    expect(hand).toEqual(expect.objectContaining({
+      slug: 'hand', name: 'Hand', frames: 0, open: 0, project: 'datasets', routes: [], screens: [], map: { sections: [], frames: [] },
+    }));
+    expect(await ctx.store.read('hand')).not.toHaveProperty('owners');
   });
 
   it('keeps a board\'s details, and changes them', async () => {
-    const made = await ctx.store.create('details', 'Details', { project: 'datasets', owners: ['khai.to'] });
-    expect(Object.keys(made).slice(0, 4)).toEqual(['version', 'name', 'project', 'owners']);
-    const changed = await ctx.store.change('details', (b) => withDetails(b, { name: 'Renamed', project: '', owners: ['khai.to', 'thong.do'] }));
-    expect(changed).toMatchObject({ name: 'Renamed', owners: ['khai.to', 'thong.do'] });
+    const made = await ctx.store.create('details', 'Details', { project: 'datasets' });
+    expect(Object.keys(made).slice(0, 3)).toEqual(['version', 'name', 'project']);
+    const changed = await ctx.store.change('details', (b) => withDetails(b, { name: 'Renamed', project: '' }));
+    expect(changed).toMatchObject({ name: 'Renamed' });
     expect(changed.project).toBeUndefined();
   });
 });

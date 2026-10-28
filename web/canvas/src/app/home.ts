@@ -1,13 +1,7 @@
-// The home page's reading of the boards: the project each is in, the people on them, what a search
-// finds, and the boards opened last. Pure, beside the recents kept in this browser.
+// The home page's reading of the boards: the project each is in, what a search finds, and the boards
+// opened last. Pure, beside the recents kept in this browser.
 import type { BoardSummary } from '../vite/boards.ts';
 import type { HomeView, Settings } from './store.ts';
-
-export interface Person {
-  id: string;
-  name: string;
-  avatarUrl?: string;
-}
 
 /** A screen's project: the folder it is in under the prototypes' route (`/p/datasets/List` is in `datasets`). */
 export function screenProject (route: string, prefix: string): string | undefined {
@@ -46,23 +40,6 @@ export function projects (boards: BoardSummary[], settings: Settings): { name: s
   }));
 }
 
-/** Everyone known: the canvas's people, whoever owns a board, and whoever runs the canvas. */
-export function people (boards: BoardSummary[], settings: Settings): Person[] {
-  const known = settings.people ?? {};
-  const ids = new Set([...boards.flatMap((b) => b.owners ?? []), ...(settings.me ? [settings.me] : [])]);
-  const all = new Map<string, Person>();
-  for (const id of ids) all.set(id, person(id, settings));
-  for (const id of Object.keys(known)) if (!all.has(id)) all.set(id, person(id, settings));
-  return [...all.values()];
-}
-
-export function person (id: string, settings: Settings): Person {
-  const p = settings.people?.[id];
-  return { id, name: p?.name ?? id, ...(p?.avatarUrl ? { avatarUrl: p.avatarUrl } : {}) };
-}
-
-export const initials = (name: string) => name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
-
 /** The boards a view lists, found by a search when there is one, newest or by name. */
 export function listed (boards: BoardSummary[], settings: Settings, view: HomeView, query: string, order: 'updated' | 'name', recent: string[]): BoardSummary[] {
   const prefix = settings.prototypeRoute ?? '';
@@ -70,10 +47,9 @@ export function listed (boards: BoardSummary[], settings: Settings, view: HomeVi
   let out = boards;
   if (q) {
     out = boards.filter((b) => [
-      b.name, b.slug, boardProject(b, prefix) ?? '', ...(b.owners ?? []).map((o) => person(o, settings).name), ...(b.screens ?? []), ...(b.routes ?? []),
+      b.name, b.slug, boardProject(b, prefix) ?? '', ...(b.screens ?? []), ...(b.routes ?? []),
     ].some((t) => t.toLowerCase().includes(q)));
   } else if (view.kind === 'project') out = boards.filter((b) => boardProject(b, prefix) === view.id);
-  else if (view.kind === 'person') out = boards.filter((b) => b.owners?.includes(view.id ?? ''));
   else if (view.kind === 'recent') {
     return recent.map((slug) => boards.find((b) => b.slug === slug)).filter((b): b is BoardSummary => !!b);
   }
@@ -99,14 +75,14 @@ export function ago (ms: number, now = Date.now()): string {
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-/** Where a view lives in the page's address: `#@project/datasets`, `#@person/thong.do`, `#@recent`. */
+/** Where a view lives in the page's address: `#@project/datasets`, `#@recent`. */
 export function viewHash (view: HomeView): string {
   return view.kind === 'all' ? '' : view.id ? `@${view.kind}/${encodeURIComponent(view.id)}` : `@${view.kind}`;
 }
 
 export function parseView (hash: string): HomeView | undefined {
   if (!hash) return { kind: 'all' };
-  const m = /^@(recent|project|person)(?:\/(.+))?$/.exec(hash);
+  const m = /^@(recent|project)(?:\/(.+))?$/.exec(hash);
   if (!m) return undefined;
   return { kind: m[1] as HomeView['kind'], ...(m[2] ? { id: decodeURIComponent(m[2]) } : {}) };
 }

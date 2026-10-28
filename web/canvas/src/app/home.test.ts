@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardSummary } from '../vite/boards.ts';
-import { boardProject, listed, parseView, people, projects, screenProject, screens, viewHash } from './home.ts';
+import { boardProject, listed, parseView, projects, screenProject, screens, viewHash } from './home.ts';
 import type { Settings } from './store.ts';
 
 const board = (slug: string, more: Partial<BoardSummary> = {}): BoardSummary => ({
@@ -9,8 +9,6 @@ const board = (slug: string, more: Partial<BoardSummary> = {}): BoardSummary => 
 const settings = {
   prototypes: ['/p/datasets/List', '/p/datasets/Detail', '/p/reports/Editor', '/p/Loose'],
   prototypeRoute: '/p',
-  people: { 'thong.do': { name: 'Thong Do' } },
-  me: 'Hung',
 } as unknown as Settings;
 
 describe('the home page', () => {
@@ -21,33 +19,32 @@ describe('the home page', () => {
     expect(boardProject(board('b', { project: 'mine', routes: ['/p/datasets/List'] }), '/p')).toBe('mine');
   });
 
-  it('lists projects with their boards and screens, and everyone', () => {
-    const boards = [board('a', { routes: ['/p/datasets/List'], owners: ['thong.do', 'khai.to'] })];
+  it('lists projects with their boards and screens', () => {
+    const boards = [board('a', { routes: ['/p/datasets/List'] })];
     expect(projects(boards, settings)).toEqual([
       { name: 'datasets', boards: 1, screens: 2 },
       { name: 'reports', boards: 0, screens: 1 },
     ]);
-    expect(people(boards, settings).map((p) => p.name)).toEqual(['Thong Do', 'khai.to', 'Hung']);
   });
 
   it('lists a view\'s boards, and what a search finds', () => {
     const boards = [
-      board('old', { updated: 1, owners: ['thong.do'], project: 'datasets' }),
+      board('old', { updated: 1, project: 'datasets' }),
       board('new', { updated: 2, screens: ['Checkout'], routes: ['/p/reports/Editor'] }),
     ];
     expect(listed(boards, settings, { kind: 'all' }, '', 'updated', []).map((b) => b.slug)).toEqual(['new', 'old']);
-    expect(listed(boards, settings, { kind: 'person', id: 'thong.do' }, '', 'updated', []).map((b) => b.slug)).toEqual(['old']);
     expect(listed(boards, settings, { kind: 'project', id: 'reports' }, '', 'updated', []).map((b) => b.slug)).toEqual(['new']);
-    expect(listed(boards, settings, { kind: 'all' }, 'thong', 'updated', []).map((b) => b.slug)).toEqual(['old']);
+    expect(listed(boards, settings, { kind: 'all' }, 'datasets', 'updated', []).map((b) => b.slug)).toEqual(['old']);
     expect(listed(boards, settings, { kind: 'all' }, 'checkout', 'updated', []).map((b) => b.slug)).toEqual(['new']);
     expect(listed(boards, settings, { kind: 'recent' }, '', 'updated', ['old', 'gone']).map((b) => b.slug)).toEqual(['old']);
     expect(screens(settings, { kind: 'project', id: 'datasets' }, '')).toEqual(['/p/datasets/List', '/p/datasets/Detail']);
   });
 
   it('keeps its view in the address', () => {
-    for (const v of [{ kind: 'all' }, { kind: 'recent' }, { kind: 'project', id: 'data sets' }, { kind: 'person', id: 'thong.do' }] as const) {
+    for (const v of [{ kind: 'all' }, { kind: 'recent' }, { kind: 'project', id: 'data sets' }] as const) {
       expect(parseView(viewHash(v))).toEqual(v);
     }
+    expect(parseView('@person/thong.do')).toBeUndefined();
     expect(parseView('getting-started')).toBeUndefined();
   });
 });

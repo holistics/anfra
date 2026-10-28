@@ -546,23 +546,6 @@ p.ac-changes-nested { padding: 4px 0 8px 24px; }
 .ac-screen-row > .ac-truncate { flex: 1; }
 .ac-board-dialog.ac-popover { display: grid; gap: 16px; width: min(440px, 100%); padding: 20px; }
 .ac-board-field { display: grid; gap: 6px; }
-.ac-owner-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.ac-owner {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  height: 28px;
-  padding: 0 10px 0 4px;
-  border: 1px solid var(--ac-line-control);
-  border-radius: 999px;
-  background: var(--ac-surface);
-  color: var(--ac-ink);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.ac-owner[aria-pressed='true'] { border-color: var(--ac-violet-line); background: var(--ac-selected); color: var(--ac-violet-text); }
 .ac-board-actions { margin-top: 4px; }
 
 /* --- Present: one screen, full screen -------------------------------------------------------- */

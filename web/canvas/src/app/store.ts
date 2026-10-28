@@ -25,17 +25,13 @@ export interface Settings {
   commitPrefix: string;
   /** The kit's icons, for props that take one: their names, and the prop that names one. */
   icons?: { prop: string, names: string[] };
-  /** Who makes prototypes, by id, to name a board's owners. */
-  people?: Record<string, { name: string, avatarUrl?: string }>;
-  /** Whoever runs the canvas: one of the people's ids, else their git name. */
-  me?: string;
   /** Where the prototypes are served (`/p`): the folder after it is a screen's project. */
   prototypeRoute?: string;
 }
 
-/** What the home page lists: every board, the recent ones, a project's, or a person's. */
+/** What the home page lists: every board, the recent ones, or a project's. */
 export interface HomeView {
-  kind: 'all' | 'recent' | 'project' | 'person';
+  kind: 'all' | 'recent' | 'project';
   id?: string;
 }
 
@@ -155,7 +151,7 @@ export function createStore (settings: Settings, previews?: Component) {
     outlineChanges: true,
     /** A frame shown before its changes and now, split at `at` (0 to 1 of its width). */
     compare: null as { frame: string, at: number } | null,
-    /** The home page, when no board is open: what it lists (all, recent, a project, a person). */
+    /** The home page, when no board is open: what it lists (all, recent, a project). */
     home: null as HomeView | null,
     /** Presenting a frame's prototype full screen, over the board. */
     present: null as Present | null,
@@ -203,7 +199,7 @@ export function createStore (settings: Settings, previews?: Component) {
     location.hash = slug;
   }
 
-  /** Change a board's name, project or owners, from its card on the home page. */
+  /** Change a board's name or project, from its card on the home page. */
   async function updateDetails (slug: string, details: BoardDetails) {
     const { status, data } = await api<{ message?: string }>(`/boards/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(details) });
     if (status !== 200) return flash(data.message ?? 'Couldn\'t change the board');

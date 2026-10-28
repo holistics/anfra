@@ -40,7 +40,7 @@ const AGENT = 'Claude';
 export const GUIDE = `How the canvas works:
 - A board (list_boards, get_board) holds frames, sections, notes and arrows. A frame is a live screen: the app at a route, in an iframe, in one scenario (a mock state of its API, list_scenarios).
 - The screens a frame can show are in list_screens. A route can carry ?open=<name> to show an overlay open, for apps whose overlays read it.
-- To lay out a flow: create_board (with its project and owners), add_frame for each screen, add_arrow between them with the action as the label, add_section around a happy path or edge cases, then tidy_board. Arrows are also how Present steps from screen to screen.
+- To lay out a flow: create_board (with its project), add_frame for each screen, add_arrow between them with the action as the label, add_section around a happy path or edge cases, then tidy_board. Arrows are also how Present steps from screen to screen.
 - People pick elements in frames and edit them; each edit is written to the .vue file. What they can't do in the panel they leave as a comment: list_feedback says what each points at (frame, route, scenario, element, file and line). Change the code, then resolve_feedback with a short note, or reply_feedback to ask.
 - The canvas reloads a frame as its files change, so there is no need to tell it. Its tools change boards only: change code with your own tools.`;
 
@@ -129,17 +129,16 @@ const TOOLS: Record<string, Tool> = {
     },
   },
   create_board: {
-    description: 'A new, empty board, with the project it belongs to and who owns it, as the home page lists boards by both.',
+    description: 'A new, empty board, with the project it belongs to, as the home page lists boards by project.',
     input: {
       board: str('Its file name: lowercase letters, digits and dashes'),
       name: str('Its title'),
       project: str('The project, usually the folder its screens are in (datasets for /p/datasets/…)'),
-      owners: { type: 'array', items: { type: 'string' }, description: 'People\'s ids, as the canvas\'s people list names them (thong.do)' },
     },
     required: ['board'],
-    run: async ({ board, name, project, owners }, ctx) => {
+    run: async ({ board, name, project }, ctx) => {
       if (!SLUG.test(board)) throw new Error('a board name is lowercase letters, digits and dashes');
-      await ctx.store.create(board, name ?? board, { project, owners });
+      await ctx.store.create(board, name ?? board, { project });
       return `Created ${board}: ${ctx.url}#${board}`;
     },
   },

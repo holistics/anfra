@@ -12,11 +12,8 @@ export function merge (base: Board, mine: Board, theirs: Board): Board {
   const out: Board = { ...theirs, name: mine.name !== base.name ? mine.name : theirs.name };
   // The board's details: mine where I changed them, else theirs.
   const project = mine.project !== base.project ? mine.project : theirs.project;
-  const owners = JSON.stringify(mine.owners) !== JSON.stringify(base.owners) ? mine.owners : theirs.owners;
   if (project === undefined) delete out.project;
   else out.project = project;
-  if (owners === undefined) delete out.owners;
-  else out.owners = owners;
   for (const key of COLLECTIONS) {
     const was = index(base[key] as BoardObject[]);
     const now = index(mine[key] as BoardObject[]);

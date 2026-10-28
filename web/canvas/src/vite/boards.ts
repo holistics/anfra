@@ -13,7 +13,6 @@ export interface BoardSummary {
   frames: number;
   open: number;
   project?: string;
-  owners?: string[];
   /** When its file last changed, in ms. */
   updated: number;
   /** Its screens' routes, and names, for search and the project a board without one is in. */
@@ -29,7 +28,6 @@ export interface BoardSummary {
 export interface BoardDetails {
   name?: string;
   project?: string;
-  owners?: string[];
 }
 
 export function withDetails (board: Board, details: BoardDetails): Board {
@@ -38,11 +36,6 @@ export function withDetails (board: Board, details: BoardDetails): Board {
   if ('project' in details) {
     if (details.project?.trim()) next.project = details.project.trim();
     else delete next.project;
-  }
-  if ('owners' in details) {
-    const owners = (details.owners ?? []).filter((o) => typeof o === 'string' && o.trim());
-    if (owners.length) next.owners = owners;
-    else delete next.owners;
   }
   return next;
 }
@@ -93,7 +86,6 @@ export class BoardStore {
           frames: b.frames.length,
           open: b.comments.filter((c) => c.status === 'open').length,
           ...(b.project ? { project: b.project } : {}),
-          ...(b.owners ? { owners: b.owners } : {}),
           updated: Math.round(mtimeMs),
           routes: [...new Set(b.frames.map((f) => f.route))],
           screens: b.frames.map((f) => f.name),

@@ -55,12 +55,6 @@ export interface CanvasOptions {
    * props a designer sets and the markup each is placed with, and its icons (see `Kit`).
    */
   kit?: string;
-  /**
-   * A module exporting `people`: who makes prototypes, by id (`{ 'thong.do': { name, avatarUrl } }`),
-   * to name a board's owners on the home page. Whoever runs the canvas is matched to one by the
-   * local part of their git email, else by their git name.
-   */
-  people?: string;
   /** Routes offered when adding a frame. */
   routes?: string[];
   /** What an agent is told when it connects over MCP. */
@@ -176,8 +170,6 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           routes: opts.routes,
           mcp: `${BASE}/mcp`,
           author: await gitUser(config.root),
-          people: await people(),
-          me: await whoAmI(),
           prototypeRoute: opts.prototypes?.route ?? '',
           commitPrefix: opts.commitPrefix ?? '',
           icons: kit.icons ? { prop: kit.icons.prop ?? 'name', names: kit.icons.names } : undefined,
@@ -281,15 +273,15 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           if (path === '/api/boards') {
             if (req.method === 'GET') return send(res, 200, await store.list());
             if (req.method === 'POST') {
-              const { slug, name, project, owners } = await body(req) as { slug: string, name?: string, project?: string, owners?: string[] };
-              return send(res, 201, await store.create(String(slug), String(name || slug), { project, owners }));
+              const { slug, name, project } = await body(req) as { slug: string, name?: string, project?: string };
+              return send(res, 201, await store.create(String(slug), String(name || slug), { project }));
             }
           }
           const boardPath = /^\/api\/boards\/([^/]+)$/.exec(path);
           if (boardPath) {
             const slug = decodeURIComponent(boardPath[1]);
             if (req.method === 'GET') return send(res, 200, await store.read(slug));
-            // The board's details (name, project, owners), from its card on the home page.
+            // The board's details (name, project), from its card on the home page.
             if (req.method === 'PATCH') {
               const details = await body(req) as BoardDetails;
               return send(res, 200, await store.change(slug, (b) => withDetails(b, details)));
@@ -416,27 +408,6 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
     return { loc, file };
   }
 
-  async function people (): Promise<Record<string, Person>> {
-    if (!opts.people || !server) return {};
-    try {
-      const mod = await server.ssrLoadModule(`/${opts.people.replace(/^\//, '')}`);
-      return (mod.people ?? mod.default ?? {}) as Record<string, Person>;
-    } catch (e) {
-      config.logger.warn(`[anfra canvas] couldn't read the people in ${opts.people}: ${e instanceof Error ? e.message : e}`);
-      return {};
-    }
-  }
-
-  /** Whoever runs the canvas: one of the people when their git email or name says so. */
-  async function whoAmI (): Promise<string> {
-    const [name, email] = await Promise.all([gitConfig(config.root, 'user.name'), gitConfig(config.root, 'user.email')]);
-    const known = await people();
-    const local = email.split('@')[0].toLowerCase();
-    const id = Object.keys(known).find((k) => k.toLowerCase() === local)
-      ?? Object.entries(known).find(([, p]) => p.name.toLowerCase() === name.toLowerCase())?.[0];
-    return id ?? (name || local || 'Designer');
-  }
-
   async function prototypeRoutes (): Promise<string[]> {
     if (!opts.prototypes) return [];
     const { dir, route, list } = opts.prototypes;
@@ -522,21 +493,6 @@ async function cssText (file: string, seen = new Set<string>()): Promise<string>
 }
 
 /** Who comments: the git user of the app's repo, as the person's commits name them. */
-/** One of the people who make prototypes. */
-export interface Person {
-  name: string;
-  avatarUrl?: string;
-}
-
-async function gitConfig (cwd: string, key: string): Promise<string> {
-  try {
-    const { stdout } = await promisify(execFile)('git', ['config', key], { cwd });
-    return stdout.trim();
-  } catch {
-    return '';
-  }
-}
-
 async function gitUser (cwd: string): Promise<string> {
   try {
     const { stdout } = await promisify(execFile)('git', ['config', 'user.name'], { cwd });
