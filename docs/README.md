@@ -26,6 +26,14 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
 
+## Research
+
+Findings and options for work not yet designed.
+
+| Doc | Covers |
+|---|---|
+| [skills install](research/skills-install.md) | Installing the anfra skills into every coding agent, keeping them current, and what each agent supports. |
+
 ## Usage
 
 How to run and build on anfra: embedding the engine, running the Docker image, configuring a setup. See [usage/](usage/README.md).
