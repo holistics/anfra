@@ -5,7 +5,7 @@ anfra is a Go program with two helper processes, its sidecars. anfra owns the CL
 | Sidecar | What it is | Talks over |
 |---|---|---|
 | anfra-node | anfra's core Node.js functions: today, compiling and validating AML and AQL, showing a repo's objects, and ingesting, searching and tracing lineage through the catalog. Built from `holistics-core/apps/anfra-node`. | A Unix socket (JSON-RPC over HTTP) |
-| canal-query | The query engine: runs SQL against the warehouse, with a connector per database type. Built from `holistics/canal` (`app/query`). | HTTP on a free loopback port |
+| canal-query | The query engine: runs SQL against the warehouse, with a connector per database type. Built from `holistics/canal` (`app/query`). | A Unix socket (HTTP) |
 
 Each has its own package under `internal/sidecar/` (its supervisor, client and wire types), on the shared framework in `internal/sidecar/` itself: the `Config` they are given, the lifecycle of a spawned one (`process.go`), how its binary is found (`binary.go`), and how one that does not answer is classified (`unreachable.go`). See [architecture.md](architecture.md) for where they sit in a command's path.
 
@@ -40,7 +40,7 @@ A spawned sidecar runs with anfra's environment, less the names anfra owns, plus
 | **Shared with anfra** | `OTEL_EXPORTER_OTLP_*`, `LOG_LEVEL`, `TZ`, `LANG`, proxies, `SSL_CERT_FILE` | Inherited. |
 | **A driver's conveniences,** not anfra's to support | `AWS_*`, `GOOGLE_APPLICATION_CREDENTIALS`, `KRB5_CONFIG`, `DATABRICKS_*` | Inherited, until a data source's settings or a setting of the second kind replaces them. |
 
-Inheriting by default is deliberate. The first kind cannot be listed reliably: it is read by the sidecars' libraries and the C code they load, differs by host, and changes with each sidecar release, so a list that misses one breaks the sidecar on the hosts that need it, and no test on anfra's CI hosts would show it. The names anfra owns, it can list: its own (`ANFRA_*`, which also keeps its secrets, such as `ANFRA_GITHUB_TOKEN`, out of the sidecars) and the second kind, which are the ones that collide. Set for anfra, they would also land on a sidecar: two pprof servers on one address, three processes' traces under one service name, anfra's memory limit on each process. A sidecar's supervisor sets the variables it must control (canal-query's `PORT`, `ANFRA_REPO_ID`) over both, and its defaults (anfra-node's `ANFRA_PROGRAM_MEMORY_SIZE`) under the prefix's.
+Inheriting by default is deliberate. The first kind cannot be listed reliably: it is read by the sidecars' libraries and the C code they load, differs by host, and changes with each sidecar release, so a list that misses one breaks the sidecar on the hosts that need it, and no test on anfra's CI hosts would show it. The names anfra owns, it can list: its own (`ANFRA_*`, which also keeps its secrets, such as `ANFRA_GITHUB_TOKEN`, out of the sidecars) and the second kind, which are the ones that collide. Set for anfra, they would also land on a sidecar: two pprof servers on one address, three processes' traces under one service name, anfra's memory limit on each process. A sidecar's supervisor sets the variables it must control (canal-query's `SOCKET`, `ANFRA_REPO_ID`) over both, and its defaults (anfra-node's `ANFRA_PROGRAM_MEMORY_SIZE`) under the prefix's.
 
 A sidecar setting that is a generic name, read by the sidecar's own code, belongs to the second kind: a new one, in a sidecar release, is added to `stripped` with the pin bump.
 
@@ -50,7 +50,7 @@ A sidecar anfra does not spawn (`ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL`) gets 
 
 ## Sockets and ports
 
-anfra-node listens on a Unix socket in the temp dir, `anfra-<pid>.sock` (`internal/sidecar/anfranode/anfranode.go`): per anfra process, so several repos' servers do not collide, and in the temp dir because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. canal-query listens on a free loopback port chosen at spawn (`internal/sidecar/canalquery/canalquery.go`).
+anfra-node listens on a Unix socket in the temp dir, `anfra-<pid>.sock` (`internal/sidecar/anfranode/anfranode.go`): per anfra process, so several repos' servers do not collide, and in the temp dir because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. canal-query listens on one beside it, `anfra-<pid>-canal-query.sock`, for the same reasons (`internal/sidecar/canalquery/canalquery.go`); it replaces a file left by one that is gone, and removes it when it stops. Neither listens on a port, so neither is reachable from another machine, and no other process can take its address between anfra choosing it and the sidecar listening on it.
 
 ## One-shot and warm
 
