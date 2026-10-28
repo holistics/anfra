@@ -56,7 +56,7 @@ Develop analytics with Anfra.
 
 | Agent | What it does |
 |---|---|
-| `aql-writer` | Writes and validates AQL in a subagent, keeping the reference-heavy authoring out of the main context. |
+| `aql-writer` | Optionally writes and validates AQL in a subagent — e.g. several independent queries in parallel. By default the agent writes AQL itself. |
 
 | Hook | What it does |
 |---|---|

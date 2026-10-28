@@ -12,7 +12,11 @@ run it.
 > **Read the [](../aql/) references _before_ you write — not after you fail.**
 > Looking things up first is faster than guessing and retrying.
 
-> **Prefer delegating to a sub-agent (to save context).** Reading the AQL references consumes context. If an `aql-writer` sub-agent is available, hand the request to it and let it do the lookups + write/validate/run — it returns only the final AQL and result, keeping your main context lean. Otherwise, if your runtime has a generic task/subagent tool, spawn one and tell it to use the `aql`, `write-aql`, and `validate-aql` skills. (If you *are* the `aql-writer` sub-agent, ignore this and do the work yourself.)
+## Sub-agent or inline?
+Prefer writing the AQL yourself. You can instead hand it to a sub-agent — an `aql-writer` sub-agent if available, otherwise a generic one told to use the `aql`, `write-aql`, and `validate-aql` skills. It does the lookups, writes and validates, and returns only the final AQL. Decide per task:
+* **Do it inline** (the default) when you've already read the AQL references this session (a sub-agent re-reads them every time it starts), when it's a small edit to an existing query, or when the work needs back-and-forth with the user or depends on surrounding decisions.
+* **Delegate** only when several independent queries can be written in parallel, or when the session is long and keeping the AQL references out of your context matters.
+* **Always inline** when no sub-agent is available (e.g. Codex), or when you *are* the sub-agent.
 
 ## Prerequisites
 * Work inside an AMQL repo. Discover the available datasets/models/fields — that's your `dataset_fields`. Use only those models and fields, with their **EXACT** names.
@@ -20,7 +24,7 @@ run it.
 
 ## Workflow
 1. **Understand the request** against the available fields. If you genuinely can't (no matching fields, ambiguous business logic, or it's not an analytic), ask the user to clarify instead of guessing.
-2. **Read the AQL references first — required, before writing anything.** Don't write AQL from memory or SQL intuition. Via the [](../aql/) skill:
+2. **Read the AQL references first — required, before writing anything.** Don't write AQL from memory, SQL intuition, or by copying queries found in the project. Load the [](../aql/) skill (the files below live in its directory), then:
    * Read `references/aqlearn.md` (the core lessons/rules) if you haven't yet this session.
    * Look up the exact functions/operators you'll use in `references/aql/`.
    * For nested aggregation, top-N-per-group, period comparison, level-of-detail, cohort retention, or ranking — study the worked examples and gotchas in `references/examples/`. Always check the `[silent]` gotchas: they produce wrong-but-valid AQL with **no** validation error, so validation won't catch them for you.
