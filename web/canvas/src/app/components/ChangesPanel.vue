@@ -97,7 +97,7 @@ watch(() => c.value?.head, () => {
         </p>
       </div>
       <ul v-else class="ac-files">
-        <li v-for="f in c.files" :key="f.path"><FileChange :file="f" /></li>
+        <li v-for="f in c.files" :key="f.path"><FileChange :file="f" :discardable="c.scope === 'head'" /></li>
       </ul>
 
       <form v-if="c.scope === 'head' && count" class="ac-commit" @submit.prevent="commit">

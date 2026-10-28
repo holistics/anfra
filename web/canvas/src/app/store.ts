@@ -142,6 +142,8 @@ export function createStore (settings: Settings, previews?: Component) {
     alive: {} as Record<string, boolean>,
     saving: 'saved' as 'saved' | 'saving' | 'error',
     toast: '',
+    /** A button on the toast, to undo what it reports. */
+    toastAction: null as { label: string, run: () => void } | null,
     focus: '',
     viewport: { width: 0, height: 0 },
     history: { past: 0, future: 0 },
@@ -430,6 +432,28 @@ export function createStore (settings: Settings, previews?: Component) {
     flash(`Committed ${data.sha} on ${data.branch}`);
     await loadChanges();
     return undefined;
+  }
+
+  /**
+   * Put a changed file back as the last commit has it (a renamed one under both names), with Undo
+   * on the toast while the server keeps how it was.
+   */
+  async function discardChanges (file: FileDiff): Promise<boolean> {
+    const files = file.from ? [file.from, file.path] : [file.path];
+    const { status, data } = await api<{ id: number, message?: string }>('/discard', { method: 'POST', body: JSON.stringify({ files }) });
+    if (status !== 200) {
+      flash(data.message ?? 'Couldn\'t discard the changes');
+      return false;
+    }
+    flash(`Discarded the changes to ${file.path.split('/').pop()}`, { label: 'Undo', run: () => void undoDiscard(data.id) });
+    await loadChanges();
+    return true;
+  }
+
+  async function undoDiscard (id: number) {
+    const { status, data } = await api<{ message?: string }>('/discard/undo', { method: 'POST', body: JSON.stringify({ id }) });
+    flash(status === 200 ? 'The changes are back' : data.message ?? 'Couldn\'t undo the discard');
+    await loadChanges();
   }
 
   const readCommit = async (sha: string): Promise<FileDiff[]> => {
@@ -751,10 +775,15 @@ export function createStore (settings: Settings, previews?: Component) {
     zoomTo(frame, 1, true);
   }
 
-  function flash (message: string) {
+  function flash (message: string, action?: { label: string, run: () => void }) {
     state.toast = message;
+    state.toastAction = action ?? null;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (state.toast = ''), 4000);
+    // A toast with a button stays long enough to reach it.
+    toastTimer = setTimeout(() => {
+      state.toast = '';
+      state.toastAction = null;
+    }, action ? 10_000 : 4000);
   }
 
   async function copy (text: string, what = 'Copied') {
@@ -876,7 +905,7 @@ export function createStore (settings: Settings, previews?: Component) {
   return {
     state, board, handlers, previews: previews && markRaw(previews),
     loadList, open, create, templates, startFrom, updateDetails, boardFiles, deleteBoard, restoreBoard, keepCover, commit, preview, undo, redo, removeSelection, comment,
-    loadChanges, framesShowing, hasStill, stillUrl, changedRects, commitChanges, readCommit,
+    loadChanges, framesShowing, hasStill, stillUrl, changedRects, commitChanges, discardChanges, readCommit,
     locate, pickAt, tree, snapshot, commentOn, openInEditor, reload, place, addFrame, pick, pickParent, edit, insert, whereIn, editText, source, flash, copy, copyFeedback, selected, toScreen, toWorld, zoomTo, tidyUp,
     play, playNext, playBack, stopPlay, startFrame,
     endDrag: () => {

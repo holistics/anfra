@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CommitError, Stills, changedLines, commit, parseDiff, readChanges } from './changes.ts';
+import { CommitError, Stills, changedLines, commit, discard, parseDiff, readChanges, undoDiscard } from './changes.ts';
 import { touched } from './source.ts';
 
 const DIFF = `diff --git a/src/A.vue b/src/A.vue
@@ -97,6 +97,30 @@ describe('readChanges and commit', () => {
     expect(await commit(dir, { message: 'say hello', branch: 'design/hello' })).toMatchObject({ branch: 'design/hello' });
     expect(git('log', '-1', '--format=%s', 'design/hello').trim()).toBe('say hello');
     expect(git('rev-list', '--count', 'main').trim()).toBe('1');
+  });
+});
+
+describe('discard', () => {
+  it('puts files back as the last commit has them, and undoes that', async () => {
+    const { dir } = await repo();
+    await writeFile(join(dir, 'A.vue'), SFC.replace('Welcome', 'Hello'));
+    await writeFile(join(dir, 'B.vue'), '<template><p>New</p></template>\n');
+    await expect(discard(dir, ['../A.vue'])).rejects.toBeInstanceOf(CommitError);
+    await expect(discard(dir, ['C.vue'])).rejects.toThrow('no changes to discard');
+
+    const kept = await discard(dir, ['A.vue', 'B.vue']);
+    expect(await readFile(join(dir, 'A.vue'), 'utf8')).toBe(SFC);
+    await expect(readFile(join(dir, 'B.vue'))).rejects.toThrow();
+    expect((await readChanges(dir, 'head')).files).toEqual([]);
+
+    await undoDiscard(dir, kept);
+    expect(await readFile(join(dir, 'A.vue'), 'utf8')).toContain('Hello');
+    expect(await readFile(join(dir, 'B.vue'), 'utf8')).toContain('New');
+
+    // Changed again since: the undo would lose that, so it is refused.
+    const again = await discard(dir, ['A.vue']);
+    await writeFile(join(dir, 'A.vue'), SFC.replace('Welcome', 'Hi'));
+    await expect(undoDiscard(dir, again)).rejects.toThrow('changed since');
   });
 });
 

@@ -19,10 +19,19 @@ import AddFrame from './AddFrame.vue';
 import ContextMenu from './ContextMenu.vue';
 import { menuFor, type CommandGroup } from '../commands.ts';
 import Toolbar from './Toolbar.vue';
+import Button from '../ui/Button.vue';
 
 const store = useStore();
 const { state, board } = store;
 const el = ref<HTMLElement>();
+
+/** The toast's button (Undo), once: the toast goes with it. */
+function runToast () {
+  const action = state.toastAction;
+  state.toast = '';
+  state.toastAction = null;
+  action?.run();
+}
 
 type Drag =
   | { kind: 'pan', start: Point, view: Point }
@@ -369,6 +378,9 @@ defineExpose({ zoomAt });
     <AddFrame v-if="adding" :at="adding.at" :screen="adding.screen" @add="addFrameAt" @cancel="adding = null" />
     <FlowBar v-if="state.flow" />
     <Toolbar v-else @zoom="(f) => zoomAt({ x: state.viewport.width / 2, y: state.viewport.height / 2 }, f)" />
-    <div v-if="state.toast" :key="state.toast" class="ac-toast" data-ui role="status">{{ state.toast }}</div>
+    <div v-if="state.toast" :key="state.toast" class="ac-toast" :class="{ action: state.toastAction }" data-ui role="status">
+      {{ state.toast }}
+      <Button v-if="state.toastAction" variant="ghost" small @click="runToast">{{ state.toastAction.label }}</Button>
+    </div>
   </div>
 </template>

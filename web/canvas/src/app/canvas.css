@@ -75,6 +75,14 @@
 .ac-changes-nested { padding-left: 20px; }
 p.ac-changes-nested { padding: 4px 0 8px 24px; }
 .ac-files { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+/* A file's row, and its Discard: shown on the row's hover where there is one */
+.ac-file-top { display: flex; align-items: flex-start; min-width: 0; }
+.ac-file-top > .ac-file-head { flex: 1; }
+.ac-file-discard { flex-shrink: 0; margin: 4px 2px 0 0; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-file-discard { opacity: 0; }
+  .ac-file-top:hover > .ac-file-discard, .ac-file-discard:focus-visible { opacity: 1; }
+}
 .ac-file-head {
   display: flex;
   align-items: flex-start;
@@ -578,9 +586,11 @@ p.ac-changes-nested { padding: 4px 0 8px 24px; }
   .ac-btn.primary.danger:hover:not(:disabled) { background: color-mix(in oklch, var(--ac-danger) 88%, black); }
 }
 .ac-home-toast { position: fixed; left: 50%; bottom: 24px; translate: -50% 0; z-index: 50; display: flex; align-items: center; gap: 8px; }
-.ac-home-toast > .ac-btn { color: inherit; font-weight: 600; }
+/* A toast with a button (Undo) */
+.ac-toast.action { display: flex; align-items: center; gap: 8px; padding-right: 4px; }
+.ac-toast > .ac-btn { color: inherit; font-weight: 600; }
 @media (hover: hover) and (pointer: fine) {
-  .ac-home-toast > .ac-btn:hover { background: color-mix(in oklch, currentColor 16%, transparent); }
+  .ac-toast > .ac-btn:hover { background: color-mix(in oklch, currentColor 16%, transparent); }
 }
 /* Start from: a blank board, or a template with its cover screen live and small (1440 × 900 at 1/8) */
 .ac-template-picker { margin: 0; padding: 0; border: 0; min-width: 0; }

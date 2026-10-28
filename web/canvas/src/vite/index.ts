@@ -18,7 +18,7 @@ import { BoardStore, Conflict, SLUG, withDetails, type BoardDetails } from './bo
 import { handleMcp, type McpContext } from './mcp.ts';
 import { kitCatalog, palette, readCatalog, readTokens, type ComponentSpec, type Kit, type KitIcons, type PaletteItem } from './catalog.ts';
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
-import { CommitError, Stills, commit, readChanges, readCommit } from './changes.ts';
+import { CommitError, Stills, commit, discard, readChanges, readCommit, undoDiscard, type Discarded } from './changes.ts';
 import { Templates, startFrom, type StartFrom } from './templates.ts';
 import { filesIn, gitState, keepAndDeleteFolder, restoreFiles, screensFolder, type BoardFiles, type Deleted } from './board-files.ts';
 
@@ -273,6 +273,10 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         return startFrom(templates, store, { dir: abs(opts.prototypes.dir), route: opts.prototypes.route }, req);
       };
 
+      // Files whose changes were discarded from the Changes tab, as they were, for its Undo: kept
+      // until the server stops.
+      const discards = new Map<number, Discarded[]>();
+
       // Deleting a board from the canvas, in the repo: its file, and, when asked, the folder of its
       // screens. What was deleted is kept until the server stops, for the home page's Undo.
       const deleted = new Map<string, Deleted>();
@@ -399,6 +403,31 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
               if (e instanceof CommitError) return send(res, 422, { message: e.message });
               throw e;
             }
+          }
+          // A file's changes discarded (put back as the last commit has it), and that undone.
+          if (path === '/api/discard' && req.method === 'POST') {
+            try {
+              const kept = await discard(config.root, ((await body(req)) as { files?: string[] }).files ?? []);
+              const id = discards.size ? Math.max(...discards.keys()) + 1 : 1;
+              discards.set(id, kept);
+              return send(res, 200, { id, files: kept.map((k) => k.path) });
+            } catch (e) {
+              if (e instanceof CommitError) return send(res, 422, { message: e.message });
+              throw e;
+            }
+          }
+          if (path === '/api/discard/undo' && req.method === 'POST') {
+            const id = Number(((await body(req)) as { id?: number }).id);
+            const kept = discards.get(id);
+            if (!kept) return send(res, 404, { message: 'Nothing to undo: that discard is gone' });
+            try {
+              await undoDiscard(config.root, kept);
+            } catch (e) {
+              if (e instanceof CommitError) return send(res, 422, { message: e.message });
+              throw e;
+            }
+            discards.delete(id);
+            return send(res, 200, { ok: true });
           }
           // A board's cover for its card on the home page: a still of its first screen, kept
           // locally (not committed) each time the board is opened.

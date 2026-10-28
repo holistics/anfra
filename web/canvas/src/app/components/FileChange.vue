@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One changed file in the Changes tab: its name and folder, how many lines came and went, and,
-// opened, its changed lines with a few around them. A screen's file can be found on the board.
+// opened, its changed lines with a few around them. A screen's file can be found on the board. A
+// change not yet committed can be discarded: the file goes back to the last commit, with Undo.
 import { computed, ref } from 'vue';
 import { bounds, type Frame } from '../../model/index.ts';
 import type { FileDiff } from '../../vite/changes.ts';
@@ -8,7 +9,7 @@ import { useStore } from '../context.ts';
 import Button from '../ui/Button.vue';
 import Icon from '../ui/Icon.vue';
 
-const props = defineProps<{ file: FileDiff }>();
+const props = defineProps<{ file: FileDiff, discardable?: boolean }>();
 const store = useStore();
 const { state, board } = store;
 const open = ref(false);
@@ -39,6 +40,13 @@ const hunks = computed(() => {
 /** The first line the change touched, to open the file at. */
 const first = computed(() => props.file.hunks.flatMap((h) => h.lines).find((l) => l.kind === '+')?.new ?? hunks.value[0]?.start ?? 1);
 
+const discarding = ref(false);
+async function discard () {
+  discarding.value = true;
+  await store.discardChanges(props.file);
+  discarding.value = false;
+}
+
 /** Show the screens of this board that draw this file. */
 function find () {
   const ids = store.framesShowing(props.file.path);
@@ -51,20 +59,33 @@ function find () {
 
 <template>
   <div class="ac-file">
-    <button class="ac-file-head" type="button" :aria-expanded="open" @click="open = !open">
-      <Icon name="chevronRight" :size="14" />
-      <span class="ac-file-text">
-        <span class="ac-file-name">
-          <span class="ac-truncate">{{ name }}</span>
-          <span v-if="STATUS[file.status]" class="ac-chip">{{ STATUS[file.status] }}</span>
+    <div class="ac-file-top">
+      <button class="ac-file-head" type="button" :aria-expanded="open" @click="open = !open">
+        <Icon name="chevronRight" :size="14" />
+        <span class="ac-file-text">
+          <span class="ac-file-name">
+            <span class="ac-truncate">{{ name }}</span>
+            <span v-if="STATUS[file.status]" class="ac-chip">{{ STATUS[file.status] }}</span>
+          </span>
+          <span v-if="dir" class="ac-file-dir ac-caption ac-truncate">{{ file.from ? `from ${file.from}` : dir }}</span>
         </span>
-        <span v-if="dir" class="ac-file-dir ac-caption ac-truncate">{{ file.from ? `from ${file.from}` : dir }}</span>
-      </span>
-      <span class="ac-diffstat ac-num">
-        <span v-if="file.added" class="added">+{{ file.added }}</span>
-        <span v-if="file.removed" class="removed">−{{ file.removed }}</span>
-      </span>
-    </button>
+        <span class="ac-diffstat ac-num">
+          <span v-if="file.added" class="added">+{{ file.added }}</span>
+          <span v-if="file.removed" class="removed">−{{ file.removed }}</span>
+        </span>
+      </button>
+      <Button
+        v-if="discardable"
+        class="ac-file-discard"
+        variant="ghost"
+        small
+        icon="undo"
+        label="Discard changes"
+        :tip="file.status === 'added' ? 'Discard it: the last commit doesn\'t have this file, so it is deleted' : 'Discard changes: back as the last commit has it'"
+        :disabled="discarding"
+        @click="discard"
+      />
+    </div>
     <div v-if="open" class="ac-diff">
       <div class="ac-row tight">
         <Button v-if="file.status !== 'deleted'" variant="ghost" small icon="external" @click="store.openInEditor(`${file.path}:${first}`)">Open in editor</Button>

@@ -4,7 +4,7 @@
 // Everything runs in the app's folder (the Vite root), so only the app's files are seen.
 import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { touched } from './source.ts';
 
@@ -215,6 +215,58 @@ export async function commit (cwd: string, o: { message: string, branch?: string
   await run(cwd, ['add', '--all', '--', ...paths]);
   await run(cwd, ['commit', '-m', message, '--', ...paths]);
   return { sha: await tryGit(cwd, ['rev-parse', '--short', 'HEAD']), branch: await tryGit(cwd, ['branch', '--show-current']) };
+}
+
+// --- Discarding: files put back as the last commit has them --------------------------------------
+
+/** A file as a discard found it and left it, for its undo: null where there was no file. */
+export interface Discarded {
+  path: string;
+  before: Buffer | null;
+  after: Buffer | null;
+}
+
+/**
+ * Put files back as the last commit has them: a changed or deleted one restored, a new one removed
+ * (a renamed one is both, under its two names). Only the app's files with changes since the last
+ * commit: a file with none, or outside the app's folder, is refused before anything is touched.
+ */
+export async function discard (cwd: string, files: string[]): Promise<Discarded[]> {
+  if (!files.length) throw new CommitError('Which files?');
+  for (const path of files) {
+    if (!path || isAbsolute(path) || path.split(/[\\/]/).includes('..')) throw new CommitError(`"${path}" isn't one of the app's files`);
+    if (!await tryGit(cwd, ['status', '--porcelain', '--untracked-files=all', '--', path])) throw new CommitError(`${path} has no changes to discard`);
+  }
+  const out: Discarded[] = [];
+  for (const path of files) {
+    const file = join(cwd, path);
+    const before = await readFile(file).catch(() => null);
+    if (await tryGit(cwd, ['cat-file', '-t', `HEAD:./${path}`])) {
+      await run(cwd, ['restore', '--source=HEAD', '--staged', '--worktree', '--', path]);
+    } else {
+      await tryGit(cwd, ['rm', '--cached', '--quiet', '--ignore-unmatch', '--', path]);
+      await rm(file, { force: true });
+    }
+    out.push({ path, before, after: await readFile(file).catch(() => null) });
+  }
+  return out;
+}
+
+/** Undo a discard: each file as it was before, refused when any of them changed since. */
+export async function undoDiscard (cwd: string, kept: Discarded[]): Promise<void> {
+  const same = (a: Buffer | null, b: Buffer | null) => (a && b ? a.equals(b) : a === b);
+  for (const k of kept) {
+    if (!same(await readFile(join(cwd, k.path)).catch(() => null), k.after)) throw new CommitError(`${k.path} changed since it was discarded: undo it in your editor`);
+  }
+  for (const k of kept) {
+    const file = join(cwd, k.path);
+    if (!k.before) {
+      await rm(file, { force: true });
+      continue;
+    }
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, k.before);
+  }
 }
 
 /** A git command whose failure (a hook that refused, say) is told as it is. */
