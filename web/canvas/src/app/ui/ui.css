@@ -266,6 +266,17 @@
 }
 .ac-swatch { flex-shrink: 0; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ac-line); }
 
+/* An icon prop: a select-like trigger, and when open the kit's icons in a grid under it */
+.ac-icon-picker { display: grid; gap: 8px; min-width: 0; }
+.ac-icon-panel { display: grid; gap: 8px; }
+.ac-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 2px; max-height: 240px; overflow-y: auto; }
+.ac-icon-choice { display: grid; place-items: center; height: 32px; padding: 0; border: 0; border-radius: var(--ac-radius-sm); background: transparent; color: var(--ac-ink); cursor: pointer; }
+.ac-icon-choice[aria-selected='true'] { background: var(--ac-selected); }
+.ac-icon-cell { display: inline-grid; place-items: center; flex-shrink: 0; width: 16px; height: 16px; overflow: hidden; pointer-events: none; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-icon-choice:hover { background: var(--ac-hover); }
+}
+
 /* --- Items: a row of a menu, a select's list or the command palette ------------------------------ */
 
 .ac-listbox {

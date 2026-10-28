@@ -16,9 +16,11 @@ import { parseBoard, type Board } from '../model/board.ts';
 import type { Scenarios } from '../model/scenario.ts';
 import { BoardStore, Conflict, SLUG } from './boards.ts';
 import { handleMcp, type McpContext } from './mcp.ts';
-import { palette, readCatalog, readTokens, type ComponentSpec, type PaletteItem } from './catalog.ts';
+import { kitCatalog, palette, readCatalog, readTokens, type ComponentSpec, type Kit, type KitIcons, type PaletteItem } from './catalog.ts';
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
 import { CommitError, Stills, commit, readChanges, readCommit } from './changes.ts';
+
+export type { Kit, KitComponent, KitIcons, PropSpec } from './catalog.ts';
 
 export interface CanvasOptions {
   /** Where boards are kept, from the Vite root. */
@@ -42,6 +44,11 @@ export interface CanvasOptions {
    * (`{ card: '<Card>…</Card>' }`), or false to leave it out of the palette. The rest get `<Name>Name</Name>`.
    */
   snippets?: string;
+  /**
+   * A module exporting `kit`: the components of a design system that comes as a package, with the
+   * props a designer sets and the markup each is placed with, and its icons (see `Kit`).
+   */
+  kit?: string;
   /** Routes offered when adding a frame. */
   routes?: string[];
   /** What an agent is told when it connects over MCP. */
@@ -140,18 +147,21 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         ].join('\n');
       }
       if (id === `\0${APP_ID}`) {
-        const catalog = await components();
-        const items = palette(catalog, await snippets());
-        writePreviews(items);
+        const kit = await loadKit();
+        const fromKit = kitCatalog(kit);
+        const catalog = [...await components(), ...fromKit.catalog];
+        const items = palette(catalog, { ...fromKit.snippets, ...await snippets() });
+        writePreviews(items, kit.icons);
         const settings = {
           prototypes: await prototypeRoutes(),
           catalog,
           palette: items,
-          tokens: readTokens((await Promise.all(opts.styles.map((css) => readFile(abs(css.replace(/^\//, '')), 'utf8').catch(() => '')))).join('\n')),
+          tokens: readTokens((await Promise.all(opts.styles.map((css) => cssText(abs(css.replace(/^\//, '')))))).join('\n')),
           routes: opts.routes,
           mcp: `${BASE}/mcp`,
           author: await gitUser(config.root),
           commitPrefix: opts.commitPrefix ?? '',
+          icons: kit.icons ? { prop: kit.icons.prop ?? 'name', names: kit.icons.names } : undefined,
         };
         return [
           ...opts.styles.map((css) => `import ${JSON.stringify(css)};`),
@@ -386,6 +396,17 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
     }
   }
 
+  async function loadKit (): Promise<Kit> {
+    if (!opts.kit || !server) return {};
+    try {
+      const mod = await server.ssrLoadModule(`/${opts.kit.replace(/^\//, '')}`);
+      return (mod.kit ?? mod.default ?? {}) as Kit;
+    } catch (e) {
+      config.logger.warn(`[anfra canvas] couldn't load ${opts.kit}: ${(e as Error).message}`);
+      return {};
+    }
+  }
+
   /** How the app imports a folder: through its alias (`@/components/ui`), else from the root. */
   function importPath (dir: string): string {
     for (const a of config.resolve.alias) {
@@ -396,9 +417,17 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
     return `/${relative(config.root, dir).split(sep).join('/')}`;
   }
 
-  /** One component showing any palette item, by its id: the palette renders the app's own components. */
-  function writePreviews (items: PaletteItem[]) {
+  /**
+   * One component showing any palette item, by its id: the palette renders the app's own components.
+   * `icon:<name>` shows that icon, drawn by the kit's icon component, for the icon picker.
+   */
+  function writePreviews (items: PaletteItem[], icons?: KitIcons) {
     const imports = new Map(items.flatMap((i) => i.imports.map((x) => [x.name, x.from] as const)));
+    const branches = items.map((i) => [`id === ${JSON.stringify(i.id).replace(/"/g, '\'')}`, i.markup]);
+    if (icons) {
+      imports.set(icons.component, icons.from);
+      branches.unshift(['id.startsWith(\'icon:\')', `<${icons.component} :${icons.prop ?? 'name'}="id.slice(5)" />`]);
+    }
     const code = [
       '<script setup lang="ts">',
       ...[...imports].map(([name, from]) => `import { ${name} } from ${JSON.stringify(from)};`),
@@ -406,13 +435,22 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       '</script>',
       '',
       '<template>',
-      ...items.map((i, n) => `  <template ${n ? 'v-else-if' : 'v-if'}="id === ${JSON.stringify(i.id).replace(/"/g, '\'')}">${i.markup}</template>`),
+      ...branches.map(([test, markup], n) => `  <template ${n ? 'v-else-if' : 'v-if'}="${test}">${markup}</template>`),
       '</template>',
       '',
     ].join('\n');
     mkdirSync(dirname(abs(PREVIEWS)), { recursive: true });
     writeFileSync(abs(PREVIEWS), code);
   }
+}
+
+/** A stylesheet's text, with the local files it `@import`s (`./tokens.css`) in it, where tokens may be. */
+async function cssText (file: string, seen = new Set<string>()): Promise<string> {
+  if (seen.has(file)) return '';
+  seen.add(file);
+  const text = await readFile(file, 'utf8').catch(() => '');
+  const local = [...text.matchAll(/@import\s+(?:url\()?['"](\.{1,2}\/[^'"]+\.css)['"]/g)].map((m) => resolve(dirname(file), m[1]));
+  return [text, ...await Promise.all(local.map((f) => cssText(f, seen)))].join('\n');
 }
 
 /** Who comments: the git user of the app's repo, as the person's commits name them. */

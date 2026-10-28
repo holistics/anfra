@@ -12,6 +12,7 @@ import { useStore } from '../context.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
 import Icon from '../ui/Icon.vue';
+import IconPicker from './IconPicker.vue';
 import PropRow from '../ui/PropRow.vue';
 import Section from '../ui/Section.vue';
 import Segmented from '../ui/Segmented.vue';
@@ -97,6 +98,10 @@ const enumValue = (p: PropSpec) => {
 const boolValue = (p: PropSpec) => {
   const a = attr(p.name);
   return a ? a.value === true || a.value === '' || a.value === 'true' : p.default === true;
+};
+const stringValue = (p: PropSpec) => {
+  const v = attr(p.name)?.value;
+  return typeof v === 'string' ? v : '';
 };
 const setProp = (p: PropSpec, value: string | boolean | null) => change({ kind: 'attr', name: p.name, value: value === '' ? null : value });
 
@@ -219,14 +224,15 @@ const title = computed(() => ref_.value.component ?? ref_.value.tag);
           <PropRow v-if="src?.text !== undefined" label="Text">
             <Field v-model="text" aria-label="Text" @keydown.enter="saveText" @blur="saveText" />
           </PropRow>
-          <PropRow v-for="p in props" :key="p.name" :label="p.name">
+          <PropRow v-for="p in props" :key="p.name" :label="p.name" :top="p.type === 'icon'">
             <p v-if="attr(p.name)?.bound !== undefined" v-tip="attr(p.name)!.bound" class="ac-caption ac-truncate">Bound to <code class="ac-mono">{{ attr(p.name)!.bound }}</code></p>
             <Select v-else-if="p.type === 'enum'" :model-value="enumValue(p)" :options="enumOptions(p)" :label="p.name" @update:model-value="(v) => setProp(p, v)" />
             <Switch v-else-if="p.type === 'boolean'" :model-value="boolValue(p)" :label="p.name" @update:model-value="(v) => setProp(p, v || null)" />
+            <IconPicker v-else-if="p.type === 'icon'" :model-value="stringValue(p)" :label="p.name" @update:model-value="(v) => setProp(p, v)" />
             <Field
               v-else
               :type="p.type === 'number' ? 'number' : 'text'"
-              :value="typeof attr(p.name)?.value === 'string' ? attr(p.name)!.value : ''"
+              :value="stringValue(p)"
               :placeholder="p.default !== undefined ? String(p.default) : ''"
               :aria-label="p.name"
               @change="setProp(p, ($event.target as HTMLInputElement).value)"

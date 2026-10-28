@@ -23,6 +23,8 @@ export interface Settings {
   author: string;
   /** How a commit message from the canvas starts, for a repo that checks it (`feat(ui): `). */
   commitPrefix: string;
+  /** The kit's icons, for props that take one: their names, and the prop that names one. */
+  icons?: { prop: string, names: string[] };
 }
 
 /** One undo step: the board as it was, or a file the canvas edited, before and after. */

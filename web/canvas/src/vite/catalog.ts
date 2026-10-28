@@ -1,14 +1,16 @@
 // What the canvas knows about the app's components and design tokens, read from their source: each
 // component's props (with the options of a variant, from its cva call), whether it takes a slot,
 // where it is imported from, and the markup it is placed with. The tokens are the theme's colors,
-// type roles and radii, which the inspector offers in place of raw classes.
+// type roles and radii, which the inspector offers in place of raw classes. A design system that
+// comes as a package has no source to read: its kit describes it instead (`kitCatalog`).
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { babelParse, parse } from 'vue/compiler-sfc';
 
 export interface PropSpec {
   name: string;
-  type: 'enum' | 'boolean' | 'string' | 'number';
+  /** `icon` takes the name of one of the kit's icons. */
+  type: 'enum' | 'boolean' | 'string' | 'number' | 'icon';
   options?: string[];
   default?: string | number | boolean;
 }
@@ -32,6 +34,48 @@ export interface PaletteItem {
   name: string;
   markup: string;
   imports: { name: string, from: string }[];
+}
+
+/**
+ * A component of a package (a design system), as its kit describes it: the props a designer sets,
+ * not every prop it takes. Props that are code (data, callbacks, behaviour) are left out, so the
+ * inspector shows them as written and a comment asks Claude to change them.
+ */
+export interface KitComponent {
+  /** As it is written in a template: `UiButton`. */
+  name: string;
+  /** Where it is imported from: `@acme/design-system`. */
+  from: string;
+  props?: PropSpec[];
+  slot?: boolean;
+  /** The markup the palette places it with, or false to keep it out of the palette. */
+  snippet?: string | false;
+}
+
+/** The icons a kit's `icon` props take, and the component that draws one, for the picker. */
+export interface KitIcons {
+  component: string;
+  from: string;
+  /** The prop that names the icon: `name` unless said. */
+  prop?: string;
+  names: string[];
+}
+
+export interface Kit {
+  components?: KitComponent[];
+  icons?: KitIcons;
+}
+
+/** A kit's components as the catalog holds them, and the snippets they are placed with. */
+export function kitCatalog (kit: Kit): { catalog: ComponentSpec[], snippets: Record<string, string | false> } {
+  const catalog: ComponentSpec[] = [];
+  const snippets: Record<string, string | false> = {};
+  for (const c of kit.components ?? []) {
+    const folder = c.name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    catalog.push({ name: c.name, folder, from: c.from, props: c.props ?? [], slot: c.slot ?? false, main: true });
+    if (c.snippet !== undefined) snippets[folder] = c.snippet;
+  }
+  return { catalog, snippets };
 }
 
 /** A theme token: its utility suffix (`weak` for `text-weak`) and its CSS value, for a swatch. */
