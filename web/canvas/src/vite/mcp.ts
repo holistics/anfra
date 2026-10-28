@@ -9,6 +9,8 @@ import { tidy } from '../model/layout.ts';
 import type { Board, Comment, Frame, Rect, Section, Shape } from '../model/board.ts';
 import type { Scenarios } from '../model/scenario.ts';
 import { SLUG, type BoardStore } from './boards.ts';
+import type { TemplateSummary } from '../model/template.ts';
+import type { StartFrom, Started } from './templates.ts';
 
 export const PROTOCOL_VERSION = '2025-06-18';
 
@@ -21,6 +23,12 @@ export interface McpContext {
   instructions: string;
   /** The canvas's address, for links to a board. */
   url: string;
+  /** The templates to start a prototype from, when the app has any. */
+  templates?: {
+    list: () => Promise<TemplateSummary[]>;
+    read: (id: string) => Promise<TemplateSummary>;
+    start: (req: StartFrom) => Promise<Started>;
+  };
 }
 
 interface Tool {
@@ -74,6 +82,17 @@ function grow (b: Board, sectionId: string | undefined, r: Rect): Board {
   const bottom = Math.max(section.y + section.height, r.y + r.height + 80);
   return ops.update<Section>(b, section.id, { width: right - section.x, height: bottom - section.y });
 }
+
+function templatesOf (ctx: McpContext) {
+  if (!ctx.templates) throw new Error('this canvas has no templates');
+  return ctx.templates;
+}
+
+const started = (r: Started, ctx: McpContext) => [
+  `Copied ${r.files.length} file${r.files.length === 1 ? '' : 's'}${r.files.length ? `: ${r.files.join(', ')}` : ' (all were there already)'}.`,
+  `Frames on ${r.board}: ${Object.entries(r.frames).map(([s, f]) => `${s} → ${f}`).join(', ')}.`,
+  `${ctx.url}#${r.board}`,
+].join('\n');
 
 function comment (b: Board, id: string): Comment {
   const c = find(b, id);
@@ -251,6 +270,43 @@ const TOOLS: Record<string, Tool> = {
       await ctx.store.change(board, (b) => tidy(b));
       return `Tidied ${board}: ${ctx.url}#${board}`;
     },
+  },
+  list_templates: {
+    description: 'Templates to start a prototype from: real screens of the app (in its app shell, with its navigation) and the parts only they use. Start a new prototype from the closest one with create_from_template rather than from a blank file.',
+    input: {},
+    run: async (_, ctx) => {
+      const list = await templatesOf(ctx).list();
+      return list.map((t) => `- \`${t.id}\`: ${t.name}${t.area ? ` (${t.area})` : ''}. ${t.description} Screens: ${t.screens.map((s) => s.id).join(', ')}.`).join('\n') || 'No templates.';
+    },
+  },
+  get_template: {
+    description: 'One template: its screens (file, route query, scenario, size), the arrows between them, and where its cover screen is served to look at.',
+    input: { template: str('The template\'s id, as list_templates gives it') },
+    required: ['template'],
+    run: async ({ template }, ctx) => JSON.stringify(await templatesOf(ctx).read(template), null, 2),
+  },
+  create_from_template: {
+    description: 'Start a prototype from a template: copies its folder (screens, their own parts, app-routes.ts) into src/prototypes/<project>/, where it is yours to change, and puts its screens on a board with its arrows, laid out. The board is made if there is none. Then change the copied files, not the template.',
+    input: {
+      template: str('The template\'s id'),
+      project: str('The folder under src/prototypes for the copy: lowercase words and dashes, nested with slashes, e.g. datasets/bulk-edit'),
+      board: str('The board for its screens: lowercase letters, digits and dashes; made if there is none'),
+      name: str('The board\'s title, when it is made'),
+      screens: { type: 'array', items: { type: 'string' }, description: 'Only these screens on the board, by id; all if left out' },
+    },
+    required: ['template', 'project', 'board'],
+    run: async ({ template, project, board, name, screens }, ctx) => started(await templatesOf(ctx).start({ template, project, board, name, screens }), ctx),
+  },
+  add_template_screen: {
+    description: 'Put one more screen of a template on a board, from the copy in a project (made if it is not there yet). For a screen a prototype started from a template left off its board.',
+    input: {
+      board,
+      template: str('The template\'s id'),
+      screen: str('The screen\'s id, as get_template gives it'),
+      project: str('The project folder the template was copied to'),
+    },
+    required: ['board', 'template', 'screen', 'project'],
+    run: async ({ board, template, screen, project }, ctx) => started(await templatesOf(ctx).start({ template, project, board, screens: [screen] }), ctx),
   },
   list_scenarios: {
     description: 'The mock scenarios a frame can use, each a state of the API (signed in with data, empty, failing, …). They are written in the app\'s code; add one there for a new state.',

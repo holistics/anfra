@@ -19,6 +19,7 @@ import { handleMcp, type McpContext } from './mcp.ts';
 import { kitCatalog, palette, readCatalog, readTokens, type ComponentSpec, type Kit, type KitIcons, type PaletteItem } from './catalog.ts';
 import { EditError, describeSource, editSource, parseLoc, sourceTransform, type Edit } from './source.ts';
 import { CommitError, Stills, commit, readChanges, readCommit } from './changes.ts';
+import { Templates, startFrom, type StartFrom } from './templates.ts';
 
 export type { Kit, KitComponent, KitIcons, Placement, PropSpec } from './catalog.ts';
 
@@ -43,6 +44,12 @@ export interface CanvasOptions {
    * (Nuxt), their routes from `list`.
    */
   prototypes?: { route: string, dir?: string, list?: () => string[] | Promise<string[]> };
+  /**
+   * A folder of templates to start a prototype from, each a folder with a template.ts (see
+   * `Template`), and the route their screens are served at as they are, for previews. Starting
+   * from one copies its folder into the prototypes.
+   */
+  templates?: { dir: string, route: string };
   /** A folder of component folders (`ui/button`, …), offered in the canvas's component palette. */
   components?: string;
   /**
@@ -249,12 +256,19 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
         });
       }
 
+      const templates = opts.templates && new Templates(abs(opts.templates.dir), (file) => dev.ssrLoadModule(file), opts.templates.route);
+      const start = (req: StartFrom) => {
+        if (!templates || !opts.prototypes?.dir) throw new Error('this canvas has no templates, or no prototypes folder to copy one to');
+        return startFrom(templates, store, { dir: abs(opts.prototypes.dir), route: opts.prototypes.route }, req);
+      };
+
       const mcp: McpContext = {
         store,
         scenarios,
         screens: async () => ({ prototypes: await prototypeRoutes(), routes: opts.routes }),
         instructions: opts.instructions,
         url: `${BASE}/`,
+        ...(templates ? { templates: { list: () => templates.list(), read: (id) => templates.read(id), start } } : {}),
       };
 
       dev.middlewares.use(async (req, res, next) => {
@@ -296,6 +310,9 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
               }
             }
           }
+          // The templates to start from, and starting from one (from the home page's New board).
+          if (path === '/api/templates' && req.method === 'GET') return send(res, 200, templates ? await templates.list() : []);
+          if (path === '/api/templates/start' && req.method === 'POST') return send(res, 201, await start(await body(req) as StartFrom));
           if (path === '/api/source' && req.method === 'GET') {
             const { loc, file } = editableLoc(url.searchParams.get('loc') ?? '');
             return send(res, 200, describeSource(await readFile(file, 'utf8'), loc));
