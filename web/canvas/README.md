@@ -86,11 +86,15 @@ async function canvas () {
       apiBase: '/api',                          // requests below it are answered by a frame's scenario
       styles: ['/src/main.css'],                // the app's tokens and fonts, for the canvas's own UI
       prototypes: { dir: 'src/prototypes', route: '/__proto' }, // optional, see below
+      templates: { dir: 'src/templates', route: '/__template' }, // optional: prototypes to start from
       components: 'src/components/ui',          // the palette: one folder per component
       snippets: 'canvas/snippets.ts',           // optional: the markup each palette item inserts
       routes: ['/', '/settings'],               // offered when adding a screen
       instructions: 'How this app is built, for Claude',
       commitPrefix: 'feat(ui): ',               // optional: how a commit from the canvas starts
+      readonly: ['src/components/shell/'],      // optional: folders under `editable` to leave alone
+      mcpName: 'anfra-canvas',                  // optional: the name its MCP server is added by
+      kit: 'canvas/kit.ts',                     // optional: a design system that comes as a package
     }),
   ];
 }
@@ -107,10 +111,14 @@ plugin applies to `vite serve` only, so nothing of it reaches a build.
   serves them at `prototypes.route` with a dev-only route that renders the file named by the path,
   inside the app's layout if you mount it there: see anfra Cloud's `src/prototypes/PrototypeHost.vue`
   and the `__proto` routes in its `src/router.ts`.
+- **Templates** are prototypes to start from: see [Templates](#templates). The app serves them at
+  `templates.route` the way it serves prototypes, so the home page can preview them.
 - **Scenarios** answer the app's API in frames, so screens show any state without a backend: see
   [Scenarios](#scenarios). Without them, frames call the real API through the dev server.
 - **`commitPrefix`** is for a repo whose hooks check commit messages (commitlint): the canvas puts it
   before the message a person writes, and starts what they wrote in lower case.
+- **`kit`** is for a design system installed as a package, which has no source to read: see
+  [A kit](#a-kit).
 - Everything else is optional; the comments a person leaves for Claude work on any screen.
 
 ### Connect Claude
@@ -127,7 +135,8 @@ comments, changes the code they point at, and resolves each one with a note. Wit
 
 ### Your first five minutes
 
-1. Pick the board at the top left, or make one with **+**.
+1. The canvas opens on its home page: every board as a card, by project or Recents, with a search.
+   Open one, or make one with **New board**, from a template or blank.
 2. Press **F** and click the board to add a screen: a route of the app, a scenario, a size.
 3. Click any element in a screen to pick it. The panel on the right edits its props, text, layout,
    spacing, size, type and fill, and each change is written to the `.vue` file it's in. **⌘Z** undoes
@@ -135,14 +144,19 @@ comments, changes the code they point at, and resolves each one with a note. Wit
 4. Press **C** and click an element to leave a comment for Claude.
 5. Press **A** and drag from one screen to another to draw the flow; **⌃⌥T** tidies the board from
    the arrows, and **Play** walks it like a prototype.
-6. **⌘K** finds every command, screen, board and component; right-click shows what you can do with
-   what's under the pointer.
+6. **⌘K** finds every command, screen, board and component, with a tab for each kind (Tab moves
+   between them); right-click shows what you can do with what's under the pointer.
 7. Open **Changes** (the branch icon among the tabs on the left) to see the files changed since the
    last commit and their lines; **This branch** shows everything the branch adds, with its commits.
    While the tab is open, the screens outline the elements a change touched, and the compare button
    on a frame's label shows its screen before the change and now, split by a line you drag. Write
    what changed and **Commit**: it commits on this computer, on a new branch if you're on `main`, and
-   never pushes.
+   never pushes. **Discard** on a file's row puts it back as the last commit has it, with Undo in
+   the toast. Board files are listed apart, under **Boards**, and are undone on the board instead.
+8. **Present** runs the selected screen full screen and fully usable, with the board's arrows as its
+   next steps (1, 2, …), ← to go back and Esc to return.
+9. Drag the edge of a side panel to resize it, or past its narrowest to hide it; **[** and **]**
+   hide or show each, **⌘\\** both.
 
 ### When something is off
 
@@ -203,7 +217,10 @@ path.
 | Frame agent | `src/frame/` | Injected into the app's page. Inside a canvas frame (an iframe named by the canvas) it answers the API from the frame's scenario, reports hover, pick and layout, and edits text in place. Elsewhere it does nothing |
 | Server | `src/vite/index.ts` | `/__canvas/` (the canvas), `/__canvas/api/` (boards, source, edits, changes, commits, stills), `/__canvas/mcp` (MCP over streamable HTTP, JSON answers). Same origin only |
 | Changes | `src/vite/changes.ts` | Reads git in the app's folder: the files changed since the last commit or on the branch, their lines, the elements each change touched (`touched()` in `source.ts`), and the branch's commits. Commits from the canvas, never pushes. The first change to a file since the commit waits (600ms at most) while the canvas keeps a still of each screen it is in, so a frame can show before and now |
-| MCP tools | `src/vite/mcp.ts` | `list_feedback`, `resolve_feedback`, `reply_feedback`, boards, frames, sections, notes, arrows, `tidy_board`, scenarios |
+| MCP tools | `src/vite/mcp.ts` | `list_feedback`, `resolve_feedback`, `reply_feedback`, boards (with `delete_board`, which asks first), frames, sections, notes, arrows, `tidy_board`, scenarios, `list_screens`, templates. Agents get a guide to how the canvas works (`GUIDE`) after the app's own instructions |
+| Templates | `src/model/template.ts`, `src/vite/templates.ts` | Lists the app's templates, copies one into the prototypes and lays its screens out on a board |
+| Board files | `src/vite/board-files.ts` | Deleting a board: its file and, when asked, its screens' folder, kept in memory for Undo until the server stops |
+| Home | `src/app/home.ts`, `components/home/` | Every board as a card with a cover of its first screen, by project or Recents, with a search; New board, from a template or blank; Delete |
 | Canvas UI | `src/app/` | The board: pan, zoom, select, move, resize, draw sections and arrows, comment; the element inspector, layers and palette; the command palette (⌘K) and right-click menus (`commands.ts`); undo across board and source edits; saves with a rev and merges when Claude saved first |
 | UI kit | `src/app/ui/` | The canvas's design system: its tokens and every control in one sheet (`ui.css`), and the components panels are built from (Button, Field, Select, Segmented, Switch, MenuItem, TreeRow, Section, PropRow, Tooltip). See below |
 | Connectors | `src/app/route.ts`, `connectors.ts` | Right-angled routes around the screens (A* on a sparse grid, where a bend costs extra), each remembered with the screens near it |
@@ -235,6 +252,39 @@ its theme) and every control; `canvas.css` only lays the app out and draws the b
   `Section`.
 
 To add a control, add it to the kit first, then use it.
+
+## Templates
+
+A template is a prototype to start from: a folder in `templates.dir` with its screens (and the parts
+only they use) and a `template.ts` exporting `template`: its name, description, area, its screens
+(file, name, a route query, a scenario, a size) and the arrows between them (`Template` in
+`src/model/template.ts`). Starting from one, on the home page's **New board** or with
+`create_from_template` over MCP, copies the folder into `prototypes.dir/<project>/`, where it is the
+person's own to change, and puts its screens on a board as a flow. A folder starting with `_` is not
+a template.
+
+## Overlays
+
+A frame's route can carry `?open=<name>` (several comma separated). The canvas only passes it on: an
+app shows a dialog, popover or menu open on the board by starting its open state from it. anfra
+Cloud's `useOpen('<name>')` (`src/prototypes/use-open.ts`) does that. A pick on an overlay's own
+parts, teleported out of the component, selects the component that drew it.
+
+## A kit
+
+The catalog reads an app's own components from source. A design system that comes as a package has
+none to read, so a module named by the `kit` option describes it: each component's name, the package
+it is imported from, the props a designer sets (`enum`, `boolean`, `string`, `number`, or `icon`, which
+gets an icon picker), where a class on its tag lands (`classTarget`), and the markup the palette
+places it with (`false` keeps it out of the palette). Props that are code are left out: the panel
+shows them as written, and a comment asks Claude. `icons` names the component that draws an icon
+and the names it takes. See `Kit` in `src/vite/catalog.ts`.
+
+A picked kit component is an **instance**: the panel shows its props and how it sits in its parent
+(width, its share of a row, its own alignment, space above), not layout, padding, type or fill,
+which would restyle it. Classes on it that do are flagged, with a button to remove them. A component
+drawn in its text's color can take an icon token (`color: 'icon'`, from `--icon-color-*`).
+Components read from source, as anfra Cloud's are, keep every control.
 
 ## Scenarios
 
