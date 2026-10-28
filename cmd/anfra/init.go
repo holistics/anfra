@@ -154,9 +154,15 @@ func writeNew(content []byte, perm fs.FileMode) func(path string) (bool, error) 
 }
 
 // ignoreLine adds pattern to a .gitignore, creating it, unless a line already
-// is that pattern. Reported as created when it adds the line.
+// is that pattern. Reported as created when it adds the line. A .gitignore
+// that is not a regular file is refused: Git does not follow a symlinked
+// one, so the line would not ignore anything, and writing through the link
+// would change a file outside the repo.
 func ignoreLine(pattern string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
+		if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+			return false, fmt.Errorf("not a regular file, which Git does not read: add %s to the repo's ignore rules yourself", pattern)
+		}
 		existing, err := os.ReadFile(path) //nolint:gosec // G304: the .gitignore of the repo being set up
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return false, err
