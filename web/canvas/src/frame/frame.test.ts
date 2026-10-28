@@ -53,5 +53,22 @@ describe('installFrame', () => {
     const pick = (host.event as ReturnType<typeof vi.fn>).mock.calls.find(([, e]) => e.type === 'pick')![1];
     expect(pick.info.ref).toMatchObject({ frame: 'fr_1', tag: 'button', component: 'Button', source: 'src/pages/P.vue:4:5', text: 'Invite' });
     expect(agent.locate(pick.info.ref)?.ref.source).toBe('src/pages/P.vue:4:5');
+
+    // A component that gives its attributes to an inner element (HTextInput, to its <input>) is
+    // picked as its root, on the inner element or anywhere else in it.
+    document.body.innerHTML = `
+      <main data-canvas-src="src/pages/P.vue:2:3">
+        <div class="field"><svg></svg><input data-canvas-src="src/pages/P.vue:6:5" data-canvas-cmp="HTextInput"></div>
+      </main>`;
+    const field = document.querySelector('.field')!;
+    const input = { vnode: { el: field, props: { 'data-canvas-src': 'src/pages/P.vue:6:5', 'data-canvas-cmp': 'HTextInput' } }, parent: null };
+    for (const el of [field, ...field.children]) Object.assign(el, { __vueParentComponent: input });
+    const picks = () => (host.event as ReturnType<typeof vi.fn>).mock.calls.filter(([, e]) => e.type === 'pick').map(([, e]) => e.info.ref);
+    for (const el of [document.querySelector('input')!, document.querySelector('svg')!]) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(picks().at(-1)).toMatchObject({ tag: 'div', component: 'HTextInput', source: 'src/pages/P.vue:6:5' });
+    }
+    expect(agent.locate(picks().at(-1))?.ref).toMatchObject({ tag: 'div', component: 'HTextInput' });
+    expect(agent.tree()[0].children[0]).toMatchObject({ label: 'HTextInput', ref: { tag: 'div', source: 'src/pages/P.vue:6:5' } });
   });
 });

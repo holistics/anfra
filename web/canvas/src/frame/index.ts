@@ -96,12 +96,40 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
     return !src || libraryDirs.some((d) => src.startsWith(d));
   };
 
+  /**
+   * The element a component used in the app stands as: its root. A component that gives its
+   * attributes to an inner element (`inheritAttrs: false`, as HTextInput gives them to its <input>)
+   * carries its tag there, so the root is found on Vue's instances: the outermost one the tag was
+   * given to, when its root holds the tagged element. A root that is a fragment or a teleport holds
+   * nothing, and the tagged element stays.
+   */
+  const rootOf = (el: Element): Element => {
+    const src = el.getAttribute(SOURCE_ATTR);
+    if (!src || !el.hasAttribute(COMPONENT_ATTR)) return el;
+    let root = el;
+    for (let inst = (el as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent; inst; inst = inst.parent ?? undefined) {
+      if (inst.vnode?.props?.[SOURCE_ATTR] !== src) continue;
+      const at = inst.vnode.el as Element | undefined;
+      if (at?.nodeType === Node.ELEMENT_NODE && at.contains(el)) root = at;
+    }
+    return root;
+  };
+
+  /** The element is the root of a component used in the app, whose tag went to an inner element. */
+  const isAppRoot = (el: Element) => {
+    for (let inst = (el as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent; inst && inst.vnode?.el === el; inst = inst.parent ?? undefined) {
+      const src = inst.vnode.props?.[SOURCE_ATTR];
+      if (typeof src === 'string' && !libraryDirs.some((d) => src.startsWith(d))) return true;
+    }
+    return false;
+  };
+
   /** The element a person means: the nearest one written in the app, not inside a component. */
   const pickable = (target: EventTarget | null): Element | undefined => {
     const start = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
     let el = start;
-    while (el && el !== doc.body && el !== doc.documentElement && inLibrary(el)) el = el.parentElement;
-    if (el && el !== doc.body && el !== doc.documentElement) return el;
+    while (el && el !== doc.body && el !== doc.documentElement && inLibrary(el) && !isAppRoot(el)) el = el.parentElement;
+    if (el && el !== doc.body && el !== doc.documentElement) return rootOf(el);
     return start ? overlayOf(start) : undefined;
   };
 
@@ -157,14 +185,17 @@ function createAgent (win: Window, id: string, libraryDirs: string[]): FrameAgen
 
   /** The elements a place draws: tagged with it, or drawn by a component used there. */
   const drawnBy = (source: string): Element[] => {
-    const tagged = [...doc.querySelectorAll(`[${SOURCE_ATTR}="${quoted(source)}"]`)];
+    const tagged = [...new Set([...doc.querySelectorAll(`[${SOURCE_ATTR}="${quoted(source)}"]`)].map(rootOf))];
     if (tagged.length) return tagged;
     const drawn = [...doc.querySelectorAll(`[${SOURCE_ATTR}]`)].filter((e) => placesOf(e).some((p) => p.source === source));
     if (drawn.length) return drawn;
     return [...overlays].filter(([e, p]) => e.isConnected && p.source === source).map(([e]) => e);
   };
 
-  const refOf = (el: Element, place = overlays.get(el)): ElementRef => {
+  const refOf = (at: Element, given?: { source: string, component?: string }): ElementRef => {
+    const el = given || overlays.has(at) ? at : rootOf(at);
+    // A component's root, its tag on an inner element, is the place its instance was given.
+    const place = given ?? overlays.get(el) ?? (el.hasAttribute(SOURCE_ATTR) ? undefined : placesOf(el)[0]);
     const source = place?.source ?? el.getAttribute(SOURCE_ATTR) ?? undefined;
     const component = place ? place.component : el.getAttribute(COMPONENT_ATTR) ?? undefined;
     const same = source ? drawnBy(source) : [];
