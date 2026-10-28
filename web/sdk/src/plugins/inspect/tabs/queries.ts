@@ -23,7 +23,7 @@ import type { QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
   codeBlock, collapsible, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
-  type Children, type IconName,
+  type Children, type CodeSource, type IconName,
 } from '../view';
 
 type CodeTab = 'declared' | 'aql' | 'sql' | 'signature';
@@ -58,11 +58,15 @@ const errorText = (error: InspectedError) => `${error.name}${error.status !== un
 
 const queriesText = (n: number) => (n === 1 ? '1 query' : `${n} queries`);
 
-function prettyJson (text: string): string {
+/** A signature as code: its JSON, parsed to show as the Declaration's is; as it is if it isn't JSON. */
+function signatureSource (signature: string | undefined): CodeSource {
+  const source: CodeSource = { label: 'Signature', code: signature, empty: 'No signature.' };
+  if (!signature) return source;
   try {
-    return JSON.stringify(JSON.parse(text), null, 2);
+    const value: unknown = JSON.parse(signature);
+    return { ...source, code: JSON.stringify(value, null, 2), json: value };
   } catch {
-    return text;
+    return source;
   }
 }
 
@@ -361,7 +365,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
           declared: { label: 'Declared AQL', code: declaration?.aql ? dedent(declaration.aql) : undefined, lang: 'aql', empty: 'Not declared.' },
           aql: { label: 'Executed AQL', code: query.debug?.executedAql, lang: 'aql', empty: notRun },
           sql: { label: 'Executed SQL', code: query.debug?.executedSql, lang: 'sql', empty: canViewSql ? notRun : 'Needs canViewGeneratedSql.' },
-          signature: { label: 'Signature', code: query.signature ? prettyJson(query.signature) : undefined, empty: 'No signature.' },
+          signature: signatureSource(query.signature),
         }, codeTabs.get(key) ?? 'aql', (t) => codeTabs.set(key, t)), false),
         requests.length > 0 && sub(`${key}:requests`, ['Requests', h(doc, 'span', { class: 'count' }, `· ${requests.length}`)],
           () => requestList(key, requests, false), false),

@@ -2,7 +2,7 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import {
-  byTestId, inspect, REVENUE_AQL, salesSnapshot, type Harness,
+  byTestId, inspect, REVENUE_AQL, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
 import { lineagePlugin } from '../../lineage';
 
@@ -102,6 +102,22 @@ describe('Queries', () => {
     expect(code.querySelector('.code-text')?.textContent).toBe('SELECT region, SUM(amount) FROM orders GROUP BY 1');
     tabs[0]!.click();
     expect(code.querySelector('.code-text')?.textContent).toBe(REVENUE_AQL);
+  });
+
+  it("shows a JSON signature as the Declaration shows JSON, its AQL across its lines", async () => {
+    const signature = JSON.stringify({ declaration: { dataset: 'sales', aql: REVENUE_AQL }, conditions: [] });
+    const app = salesApp();
+    app.queries.revenue.signature = signature;
+    harness = await inspect({ tab: QUERIES, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(QUERIES);
+    const row = await open(byTestId(root, 'query-0/revenue'));
+    const code = await open(byTestId(row, 'code'));
+    code.querySelectorAll<HTMLButtonElement>('.code-tab')[3]!.click();
+    const text = code.querySelector('.code-text')!;
+    // The text is the JSON, pretty-printed; the AQL's line breaks are drawn, not in it.
+    expect(text.textContent).toBe(JSON.stringify(JSON.parse(signature), null, 2));
+    expect([...text.querySelectorAll('.tok-key')].map((key) => key.textContent)).toContain('"aql"');
+    expect(text.querySelectorAll('.json-br')).toHaveLength(REVENUE_AQL.split('\n').length - 1);
   });
 
   it("lists a query's filters, active first, with a link to the control", async () => {
