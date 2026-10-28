@@ -19,10 +19,10 @@ import {
 import { queryCounts } from '../model/issues';
 import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
-import { LINEAGE_TAB, type QueriesFilter } from '../model/types';
+import type { QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
-  codeBlock, collapsible, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, link, note, stateDot, table, trustIndicator,
+  codeBlock, collapsible, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
   type Children, type IconName,
 } from '../view';
 
@@ -322,6 +322,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         query.isDirty ? h(doc, 'span', { class: 'pill warn' }, 'dirty') : query.debug?.fromCache && h(doc, 'span', { class: 'pill' }, 'cache'),
         h(doc, 'span', { class: 'spacer' }),
         filterIndicator(doc, active),
+        hasLineage && lineageButton(doc, panel, marker),
         trustIndicator(doc, queryTrust(declaration, query)),
         stateDot(doc, query.state)),
       // An error shows open or not: it is what a failing app is inspected for.
@@ -347,9 +348,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
             (query.hasMore || query.page > 1) && ['Page', `${query.page}${query.hasMore ? ', more available' : ''}`],
           ]),
           h(doc, 'div', { class: 'detail-actions' },
-            link(doc, [icon(doc, 'table'), 'Show data'], () => state.reveal(panel, { table: name, app: index }), { 'data-testid': 'show-data' }),
-            // Lineage follows the selection, so a query links through its marker: one drawn nowhere has no link.
-            hasLineage && marker !== undefined && link(doc, [icon(doc, 'lineage'), 'Show in Lineage'], () => panel.show(LINEAGE_TAB, marker), { 'data-testid': 'show-in-lineage' })),
+            link(doc, [icon(doc, 'table'), 'Show data'], () => state.reveal(panel, { table: name, app: index }), { 'data-testid': 'show-data' })),
         ]),
         query.columns.length === 0
           ? sub(`${key}:definition`, 'Definition', () => h(doc, 'p', { class: 'muted' }, notRun === 'Not run yet.' ? 'Known once it runs.' : 'No fields.'))
