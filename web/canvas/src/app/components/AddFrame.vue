@@ -2,7 +2,7 @@
 // Putting a screen on the canvas: which route, under which scenario, at what size.
 import { computed, onMounted, ref } from 'vue';
 import { FRAME_SIZES, newId, type Frame, type Point } from '../../model/index.ts';
-import { scenarioOptions, useStore } from '../context.ts';
+import { hasScenarios, scenarioOptions, useStore } from '../context.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
 import Segmented from '../ui/Segmented.vue';
@@ -44,7 +44,7 @@ function add () {
       <span class="ac-label">Route</span>
       <Field ref="input" v-model="route" mono list="ac-routes" placeholder="/o/acme/settings/users" />
     </label>
-    <div class="ac-stack">
+    <div v-if="hasScenarios(store)" class="ac-stack">
       <span class="ac-label">Scenario</span>
       <Select v-model="scenario" :options="options" label="Scenario" />
     </div>

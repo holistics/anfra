@@ -10,7 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { update, type Frame } from '../../model/index.ts';
 import { frameName } from '../../frame/protocol.ts';
-import { pinNumber, useStore } from '../context.ts';
+import { hasScenarios, pinNumber, useStore } from '../context.ts';
 import { intersects } from '../geometry.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
@@ -163,7 +163,7 @@ function done (e: Event) {
     <div class="ac-frame-label" :style="{ width: `calc(${frame.width}px / var(--ac-inv))` }" data-hit="move" :data-id="frame.id" @dblclick="rename">
       <Field v-if="editing" ref="input" class="ac-frame-rename" small :value="frame.name" aria-label="Name" data-ui @keydown.enter="done" @keydown.esc="editing = false" @blur="done" />
       <span v-else class="ac-frame-name">{{ frame.name }}</span>
-      <span class="ac-chip" :class="{ live: frame.scenario === 'live' }" v-tip="state.settings.scenarios[frame.scenario ?? 'default']?.description">{{ state.settings.scenarios[frame.scenario ?? 'default']?.label ?? frame.scenario ?? 'default' }}</span>
+      <span v-if="hasScenarios(store)" class="ac-chip" :class="{ live: frame.scenario === 'live' }" v-tip="state.settings.scenarios[frame.scenario ?? 'default']?.description">{{ state.settings.scenarios[frame.scenario ?? 'default']?.label ?? frame.scenario ?? 'default' }}</span>
       <span v-if="now && now !== frame.route" class="ac-frame-route ac-mono" v-tip="'Where the screen is now'">{{ now }}</span>
       <span class="ac-spacer" />
       <Button

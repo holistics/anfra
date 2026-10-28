@@ -6,7 +6,7 @@ import {
   commentMarkdown, contents, find, isShape, remove, reply, setStatus,
   type Comment, type Shape,
 } from '../../model/index.ts';
-import { pinNumber, useStore } from '../context.ts';
+import { hasScenarios, pinNumber, useStore } from '../context.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
 import Segmented, { type SegmentedOption } from '../ui/Segmented.vue';
@@ -38,7 +38,7 @@ watch(() => state.picked?.frame, (frame) => {
   if (frame) state.layersOpen[frame] = true;
 });
 
-const scenarioLabel = (id = 'default') => state.settings.scenarios[id]?.label ?? (id === 'live' ? 'Live backend' : id);
+const scenarioLabel = (id = 'default') => !hasScenarios(store) ? undefined : state.settings.scenarios[id]?.label ?? (id === 'live' ? 'Live backend' : id);
 
 /** "2 min ago", "Yesterday", or a date: when a comment was written, as people say it. */
 function when (iso: string): string {

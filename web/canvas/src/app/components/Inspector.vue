@@ -7,7 +7,7 @@ import {
   type Arrow, type BoardObject, type Frame, type Note, type Section as SectionShape, type Shape,
 } from '../../model/index.ts';
 import { duplicateSelection, wrapSelection } from '../commands.ts';
-import { scenarioOptions, useStore } from '../context.ts';
+import { hasScenarios, scenarioOptions, useStore } from '../context.ts';
 import Button from '../ui/Button.vue';
 import Field from '../ui/Field.vue';
 import PropRow from '../ui/PropRow.vue';
@@ -81,7 +81,7 @@ const mcpCommand = computed(() => `claude mcp add --transport http ${state.setti
           <PropRow label="Route">
             <Field :value="frameOf(one)!.route" mono list="ac-routes-inspector" aria-label="Route" @change="set<Frame>({ route: str($event) })" />
           </PropRow>
-          <PropRow label="Scenario">
+          <PropRow v-if="hasScenarios(store)" label="Scenario">
             <Select :model-value="frameOf(one)!.scenario ?? 'default'" :options="options" label="Scenario" :min-width="264" @update:model-value="(v) => set<Frame>({ scenario: v })" />
           </PropRow>
         </div>
