@@ -641,9 +641,6 @@ code.wrap { overflow-wrap: anywhere; }
 .collapsible[open] > summary > .icon { transform: rotate(90deg); }
 .collapsible-body { padding: 2px 0 8px 20px; min-width: 0; }
 .section > summary { font-size: 13px; font-weight: 500; margin-top: 12px; }
-/* A heading's chevron shows when it is pointed at or focused: the heading is what reads. */
-.section > summary > .icon, .sub > summary > .icon { opacity: 0; transition: transform 0.15s, opacity 0.15s; }
-.section > summary:hover > .icon, .section > summary:focus-visible > .icon, .sub > summary:hover > .icon, .sub > summary:focus-visible > .icon { opacity: 1; }
 .section > .collapsible-body { padding-left: 0; }
 /* Rows that open, as tiles: the chevron at the end, the body inside the tile. A tile in a tile is on the panel's ground. */
 .row { border-radius: 8px; background: var(--subtle); }
