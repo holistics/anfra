@@ -117,8 +117,11 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     };
   }
 
-  /** The entries for one target: the frame's items, then the host's. */
-  async function entriesFor (target: MenuTarget): Promise<{ entries: MenuEntry[], run: Map<string, () => unknown> }> {
+  /** A menu's entries for one target, and what each runs. */
+  type Entries = { entries: MenuEntry[], run: Map<string, () => unknown> };
+
+  /** The frame's items that apply to one target, decided now, while the event can still be kept. */
+  function frameEntries (target: MenuTarget): Entries {
     const run = new Map<string, () => unknown>();
     const entries: MenuEntry[] = [];
     for (const item of items) {
@@ -130,6 +133,13 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
       entries.push({ id: key, label: item.label });
       run.set(key, () => item.run(target));
     }
+    return { entries, run };
+  }
+
+  /** The entries for one target: the frame's items, then the host's. */
+  async function entriesFor (target: MenuTarget, own: Entries): Promise<Entries> {
+    const run = new Map(own.run);
+    const entries = [...own.entries];
     if (hostKinds.has(target.kind)) {
       try {
         const answered = await kernel.call<MenuEntry[]>('anfra.menu', target);
@@ -146,14 +156,17 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
 
   /** Open the menu on these targets (the rows first, then their node), for the event. */
   function open (event: Event, targets: MenuTarget[]): boolean {
-    const relevant = targets.filter((target) => offered(target.kind));
+    // The browser's menu is kept unless something may show: a frame item that applies, or the host's
+    // commands for the kind (whose own conditions are only known once it answers).
+    const relevant = targets.map((target) => ({ target, own: frameEntries(target) }))
+      .filter(({ target, own }) => own.entries.length || hostKinds.has(target.kind));
     if (!relevant.length) return false;
     event.preventDefault();
     const point = event as Partial<MouseEvent>;
     const x = typeof point.clientX === 'number' ? point.clientX : 0;
     const y = typeof point.clientY === 'number' ? point.clientY : 0;
     void (async () => {
-      const [body, ...found] = await Promise.all([ui(), ...relevant.map(entriesFor)]);
+      const [body, ...found] = await Promise.all([ui(), ...relevant.map(({ target, own }) => entriesFor(target, own))]);
       const groups = found.map((group) => group.entries).filter((group) => group.length);
       if (!groups.length) return;
       closeCurrent();

@@ -90,11 +90,11 @@ describe('the menu on a block', () => {
     expect(f.calls[2].request).toMatchObject({ id: 'ask', target: { kind: 'node', node: { id: 'trend' } } });
   });
 
-  it('keeps an item away from targets its `when` refuses', async () => {
+  it('keeps an item away from targets its `when` refuses, and the browser\'s menu when none is left', async () => {
     frame((kernel) => kernel.menuItem({
       id: 'note', label: 'Add a note', target: 'node', when: (target) => target.kind === 'node' && target.node.id === 'other', run: () => {},
     }));
-    rightClick('inside');
+    expect(rightClick('inside').defaultPrevented).toBe(false);
     await settle();
     expect(entries()).toEqual([]);
   });
