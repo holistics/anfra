@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CommitError, Stills, changedLines, commit, discard, parseDiff, readChanges, undoDiscard } from './changes.ts';
+import { CommitError, Stills, changedLines, commit, describeBoard, discard, parseDiff, readChanges, undoDiscard } from './changes.ts';
 import { touched } from './source.ts';
 
 const DIFF = `diff --git a/src/A.vue b/src/A.vue
@@ -133,5 +133,32 @@ describe('Stills', () => {
     expect(await stills.list('c1')).toEqual({ board: ['f1'] });
     expect(await stills.list('c2')).toEqual({});
     await expect(readFile(join(stills.dir, 'c1', 'board', 'f1.svg'))).rejects.toThrow();
+  });
+});
+
+describe('boards among the changes', () => {
+  const frame = (id: string, y: number) => ({ id, kind: 'frame', name: id, route: '/p/a/A', x: 0, y, width: 100, height: 100 });
+  const board = (o: object) => ({ version: 1, name: 'Flow', rev: 1, frames: [], sections: [], notes: [], arrows: [], comments: [], ...o });
+
+  it('tells what changed on a board in words', () => {
+    const was = board({ frames: [frame('a', 0), frame('b', 0), frame('c', 0)] });
+    expect(describeBoard(was, board({ rev: 4, frames: [frame('a', -2), frame('b', -2), { ...frame('c', 0), name: 'C' }, frame('d', 0)] })))
+      .toEqual(['1 screen added', '2 screens moved', '1 screen changed']);
+    expect(describeBoard(was, board({ name: 'Flows', frames: [frame('a', 0)] }))).toEqual(['renamed', '2 screens removed']);
+    expect(describeBoard(undefined, was)).toEqual(['3 screens']);
+    expect(describeBoard(was, board({ rev: 2, frames: was.frames }))).toEqual(['saved again, nothing else changed']);
+    expect(describeBoard(was, { not: 'a board' })).toEqual([]);
+  });
+
+  it('marks a board\'s file as the board, with its name', async () => {
+    const { dir, git } = await repo();
+    await mkdir(join(dir, 'boards'));
+    await writeFile(join(dir, 'boards', 'flow.json'), JSON.stringify(board({ frames: [frame('a', 0)] })));
+    git('add', '.');
+    git('commit', '-q', '-m', 'board');
+    await writeFile(join(dir, 'boards', 'flow.json'), JSON.stringify(board({ rev: 2, frames: [frame('a', 8)] })));
+    const [f] = (await readChanges(dir, 'head', { boards: 'boards' })).files;
+    expect(f.board).toEqual({ slug: 'flow', name: 'Flow', summary: ['1 screen moved'] });
+    expect((await readChanges(dir, 'head')).files[0].board).toBeUndefined();
   });
 });

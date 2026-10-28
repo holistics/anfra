@@ -104,6 +104,8 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
   let hold: (file: string) => Promise<void> = async () => {};
 
   const abs = (p: string) => resolve(config.root, p);
+  /** The boards' folder, as git names it from the app's folder. */
+  const boardsDir = () => relative(config.root, abs(opts.boards)).split(sep).join('/');
   const scenarioImport = () => (opts.scenarios ? `/${opts.scenarios.replace(/^\//, '')}` : undefined);
 
   async function scenarios (): Promise<Scenarios> {
@@ -229,7 +231,10 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
       };
       const store = new BoardStore(abs(opts.boards), (slug, board) => broadcast(slug, board));
       const stills = new Stills(abs(STILLS));
-      const broadcast = (slug: string, board: Board) => dev.ws.send({ type: 'custom', event: 'anfra-canvas:board', data: { slug, board } });
+      // `outside`: the file was written by someone else, so it is the board now, whatever its rev
+      // (a git restore or checkout puts an older one back).
+      const broadcast = (slug: string, board: Board, outside = false) =>
+        dev.ws.send({ type: 'custom', event: 'anfra-canvas:board', data: { slug, board, ...(outside ? { outside } : {}) } });
 
       // A board file changed by someone else (an agent editing it directly, a git checkout).
       const external = async (name: string | null) => {
@@ -240,16 +245,23 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           const text = await readFile(join(store.dir, name), 'utf8');
           if (store.written.get(slug) === text) return;
           store.written.set(slug, text);
-          broadcast(slug, parseBoard(JSON.parse(text)));
+          broadcast(slug, parseBoard(JSON.parse(text)), true);
         } catch {
-          // Gone (a hand delete, a git checkout): open canvases drop it. Otherwise it is half-written,
-          // or not a board, and the next change tells.
-          if (!existsSync(join(store.dir, name))) {
+          // Gone (a hand delete, a branch without it): open canvases drop it. Git puts a file back
+          // by deleting it and writing it again, so it is gone only if it is still gone a moment
+          // later. Otherwise it is half-written, or not a board, and the next change tells.
+          if (existsSync(join(store.dir, name)) || vanishing.has(slug)) return;
+          vanishing.add(slug);
+          setTimeout(() => {
+            vanishing.delete(slug);
+            if (existsSync(join(store.dir, name))) return void external(name);
             store.written.delete(slug);
             dev.ws.send({ type: 'custom', event: 'anfra-canvas:board-removed', data: { slug } });
-          }
+          }, 500);
         }
       };
+      /** Boards whose file went, waiting a moment to see if it comes back. */
+      const vanishing = new Set<string>();
       mkdirSync(store.dir, { recursive: true });
       const watcher = watch(store.dir, (_event, name) => void external(name));
       dev.httpServer?.once('close', () => watcher.close());
@@ -385,7 +397,7 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           }
           if (path === '/api/changes' && req.method === 'GET') {
             canvasSeen = Date.now();
-            const changes = await readChanges(config.root, url.searchParams.get('scope') === 'branch' ? 'branch' : 'head');
+            const changes = await readChanges(config.root, url.searchParams.get('scope') === 'branch' ? 'branch' : 'head', { boards: boardsDir() });
             dirty = new Set(changes.pending);
             if (!changes.pending.length) await stills.clear(changes.head);
             changes.stills = await stills.list(changes.head);
@@ -407,7 +419,11 @@ export function anfraCanvas (options: CanvasOptions = {}): Plugin {
           // A file's changes discarded (put back as the last commit has it), and that undone.
           if (path === '/api/discard' && req.method === 'POST') {
             try {
-              const kept = await discard(config.root, ((await body(req)) as { files?: string[] }).files ?? []);
+              const files = ((await body(req)) as { files?: string[] }).files ?? [];
+              // A board's file is the canvas's own: put back under an open board it would lose its
+              // comments and every move since the commit. Its changes are undone on the canvas.
+              if (files.some((f) => f.startsWith(`${boardsDir()}/`))) throw new CommitError('A board\'s changes are undone on the canvas, not discarded here');
+              const kept = await discard(config.root, files);
               const id = discards.size ? Math.max(...discards.keys()) + 1 : 1;
               discards.set(id, kept);
               return send(res, 200, { id, files: kept.map((k) => k.path) });

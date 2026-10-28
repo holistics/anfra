@@ -35,8 +35,8 @@ function runToast () {
 
 type Drag =
   | { kind: 'pan', start: Point, view: Point }
-  | { kind: 'move', ids: string[], start: Point, from: NonNullable<typeof board.value> }
-  | { kind: 'resize', id: string, start: Point, rect: Rect, from: NonNullable<typeof board.value> }
+  | { kind: 'move', ids: string[], start: Point, from: NonNullable<typeof board.value>, screen: Point, moved?: boolean }
+  | { kind: 'resize', id: string, start: Point, rect: Rect, from: NonNullable<typeof board.value>, screen: Point, moved?: boolean }
   | { kind: 'marquee', start: Point, at: Point, add: boolean }
   | { kind: 'section', start: Point, at: Point }
   | { kind: 'arrow', from: string, at: Point };
@@ -82,12 +82,12 @@ function onPointerDown (e: PointerEvent) {
     case 'play':
       if (hit?.dataset.hit === 'resize' && id) {
         const s = find(board.value, id);
-        if (isShape(s)) start(e, { kind: 'resize', id, start: p, rect: { x: s.x, y: s.y, width: s.width, height: s.height }, from: board.value });
+        if (isShape(s)) start(e, { kind: 'resize', id, start: p, rect: { x: s.x, y: s.y, width: s.width, height: s.height }, from: board.value, screen: local(e) });
         return;
       }
       if (hit?.dataset.hit === 'move' && id) {
         select(id, e.shiftKey);
-        return start(e, { kind: 'move', ids: [...state.selection], start: p, from: board.value });
+        return start(e, { kind: 'move', ids: [...state.selection], start: p, from: board.value, screen: local(e) });
       }
       if (hit?.dataset.hit === 'select' && id) return select(id, e.shiftKey);
       if (!e.shiftKey) {
@@ -127,10 +127,18 @@ function start (e: PointerEvent, d: Drag) {
   window.addEventListener('pointerup', onUp, { once: true });
 }
 
+/** How far, in screen pixels, a press travels before it moves or resizes: a click's jitter doesn't. */
+const SLOP = 4;
+
 function onMove (e: PointerEvent) {
   const d = drag.value;
   if (!d || !board.value) return;
   const p = world(e);
+  if ((d.kind === 'move' || d.kind === 'resize') && !d.moved) {
+    const at = local(e);
+    if (Math.hypot(at.x - d.screen.x, at.y - d.screen.y) < SLOP) return;
+    d.moved = true;
+  }
   switch (d.kind) {
     case 'pan': {
       const at = local(e);

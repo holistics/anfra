@@ -17,6 +17,9 @@ const store = useStore();
 const { state } = store;
 const c = computed(() => state.changes);
 const onBranch = computed(() => !!c.value && !c.value.needsBranch);
+/** The app's files, and apart from them the boards' own files, which the canvas writes. */
+const code = computed(() => c.value?.files.filter((f) => !f.board) ?? []);
+const boards = computed(() => c.value?.files.filter((f) => f.board) ?? []);
 
 const SCOPES = computed<SegmentedOption<typeof state.changesScope>[]>(() => [
   { value: 'head', label: 'Not committed', count: c.value?.pending.length },
@@ -96,9 +99,17 @@ watch(() => c.value?.head, () => {
             : `This branch has nothing ${c.defaultBranch} doesn't have yet` }}
         </p>
       </div>
-      <ul v-else class="ac-files">
-        <li v-for="f in c.files" :key="f.path"><FileChange :file="f" :discardable="c.scope === 'head'" /></li>
-      </ul>
+      <template v-else>
+        <ul v-if="code.length" class="ac-files">
+          <li v-for="f in code" :key="f.path"><FileChange :file="f" :discardable="c.scope === 'head'" /></li>
+        </ul>
+        <template v-if="boards.length">
+          <p class="ac-changes-sub ac-heading">Boards</p>
+          <ul class="ac-files">
+            <li v-for="f in boards" :key="f.path"><FileChange :file="f" /></li>
+          </ul>
+        </template>
+      </template>
 
       <form v-if="c.scope === 'head' && count" class="ac-commit" @submit.prevent="commit">
         <p class="ac-heading">Commit {{ count }} {{ count === 1 ? 'file' : 'files' }}</p>

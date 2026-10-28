@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
+import { COLLECTIONS, parseBoard, type Board, type Collection } from '../model/board.ts';
 import { touched } from './source.ts';
 
 export interface Line {
@@ -30,6 +31,15 @@ export interface FileDiff {
   removed: number;
   binary?: boolean;
   hunks: Hunk[];
+  /** A board's own file (the canvas's, not the app's): what changed on it, in words. */
+  board?: BoardChange;
+}
+
+export interface BoardChange {
+  slug: string;
+  name: string;
+  /** A phrase each: "4 screens moved", "1 note added". */
+  summary: string[];
 }
 
 export interface CommitInfo {
@@ -151,7 +161,52 @@ async function added (cwd: string, path: string): Promise<FileDiff> {
   };
 }
 
-export async function readChanges (cwd: string, scope: 'head' | 'branch'): Promise<Changes> {
+const NOUNS: Record<Collection, string> = { frames: 'screen', sections: 'section', notes: 'note', arrows: 'arrow', comments: 'comment' };
+
+/** What changed on a board between two versions of its file, in words. Either may be missing. */
+export function describeBoard (before: unknown, after: unknown): string[] {
+  const read = (v: unknown): Board | undefined => {
+    try {
+      return v === undefined ? undefined : parseBoard(v);
+    } catch {
+      return undefined;
+    }
+  };
+  const was = read(before);
+  const now = read(after);
+  const count = (n: number, noun: string, verb = '') => `${n} ${noun}${n === 1 ? '' : 's'}${verb ? ` ${verb}` : ''}`;
+  if (!now) return [];
+  if (!was) return COLLECTIONS.filter((k) => now[k].length).map((k) => count(now[k].length, NOUNS[k]));
+
+  const out: string[] = [];
+  if (now.name !== was.name) out.push('renamed');
+  if (now.project !== was.project) out.push('project changed');
+  // Each object is told by its id: come, gone, or changed in place (its spot, its size, the rest).
+  const items = (b: Board, k: Collection) => b[k] as unknown as (Record<string, unknown> & { id: string })[];
+  const rest = (o: object, keys: string[]) => JSON.stringify(Object.entries(o).filter(([k]) => !keys.includes(k)));
+  for (const k of COLLECTIONS) {
+    const old = new Map(items(was, k).map((o) => [o.id, o]));
+    const ids = new Set(items(now, k).map((o) => o.id));
+    const n = { added: 0, removed: [...old.keys()].filter((id) => !ids.has(id)).length, moved: 0, resized: 0, changed: 0 };
+    for (const o of items(now, k)) {
+      const p = old.get(o.id);
+      if (!p) n.added++;
+      else if (rest(o, ['x', 'y', 'width', 'height']) !== rest(p, ['x', 'y', 'width', 'height'])) n.changed++;
+      else if (o.width !== p.width || o.height !== p.height) n.resized++;
+      else if (o.x !== p.x || o.y !== p.y) n.moved++;
+    }
+    for (const verb of ['added', 'removed', 'moved', 'resized', 'changed'] as const) {
+      if (n[verb]) out.push(count(n[verb], NOUNS[k], verb));
+    }
+  }
+  return out.length ? out : ['saved again, nothing else changed'];
+}
+
+/**
+ * What changed, since the last commit or (scope `branch`) since this branch left the default
+ * branch. `boards` is the folder of the canvas's boards: their files are told apart, in words.
+ */
+export async function readChanges (cwd: string, scope: 'head' | 'branch', o: { boards?: string } = {}): Promise<Changes> {
   const repo = !!await tryGit(cwd, ['rev-parse', '--git-dir']);
   const branch = await tryGit(cwd, ['branch', '--show-current']);
   const main = await defaultBranch(cwd);
@@ -174,6 +229,23 @@ export async function readChanges (cwd: string, scope: 'head' | 'branch'): Promi
     const code = await readFile(join(cwd, f.path), 'utf8').catch(() => '');
     const places = code ? touched(code, f.path, changedLines(f), f.status === 'added') : [];
     if (places.length) marks[f.path] = places;
+  }));
+
+  // A board's file: what changed on it, from the file at the base and the file now.
+  const boardOf = (p: string) => (o.boards && p.startsWith(`${o.boards}/`) && p.endsWith('.json') ? p.slice(o.boards.length + 1, -5) : undefined);
+  await Promise.all(files.filter((f) => boardOf(f.path)).map(async (f) => {
+    const json = (text: string) => {
+      try {
+        return text ? JSON.parse(text) as unknown : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    const before = f.status === 'added' ? undefined : json(await tryGit(cwd, ['show', `${base}:./${f.from ?? f.path}`]));
+    const after = f.status === 'deleted' ? undefined : json(await readFile(join(cwd, f.path), 'utf8').catch(() => ''));
+    const name = (v: unknown) => (typeof v === 'object' && v && typeof (v as Board).name === 'string' ? (v as Board).name : undefined);
+    const slug = boardOf(f.path)!;
+    f.board = { slug, name: name(after) ?? name(before) ?? slug, summary: describeBoard(before, after) };
   }));
 
   const log = forkedAt ? await tryGit(cwd, ['log', '--format=%H%x1f%h%x1f%s%x1f%an%x1f%cr', `${forkedAt}..HEAD`, '--', '.']) : '';

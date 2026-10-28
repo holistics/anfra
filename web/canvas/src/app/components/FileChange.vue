@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // One changed file in the Changes tab: its name and folder, how many lines came and went, and,
 // opened, its changed lines with a few around them. A screen's file can be found on the board. A
-// change not yet committed can be discarded: the file goes back to the last commit, with Undo.
+// change not yet committed can be discarded: the file goes back to the last commit, with Undo. A
+// board's own file reads as the board, with what changed on it in words, and is never discarded
+// here: the open canvas has it, and its changes are undone there.
 import { computed, ref } from 'vue';
 import { bounds, type Frame } from '../../model/index.ts';
 import type { FileDiff } from '../../vite/changes.ts';
@@ -19,8 +21,8 @@ const all = ref(false);
 const LIMIT = 200;
 const STATUS: Partial<Record<FileDiff['status'], string>> = { added: 'New', deleted: 'Deleted', renamed: 'Renamed' };
 
-const name = computed(() => props.file.path.split('/').pop() ?? props.file.path);
-const dir = computed(() => props.file.path.split('/').slice(0, -1).join('/'));
+const name = computed(() => props.file.board?.name ?? props.file.path.split('/').pop() ?? props.file.path);
+const dir = computed(() => props.file.board?.summary.join(', ') || props.file.path.split('/').slice(0, -1).join('/'));
 const total = computed(() => props.file.hunks.reduce((n, h) => n + h.lines.length, 0));
 
 /** Each part of the file that changed, its lines moved left by the indent they all share. */
@@ -47,6 +49,10 @@ async function discard () {
   discarding.value = false;
 }
 
+function openBoard () {
+  location.hash = props.file.board!.slug;
+}
+
 /** Show the screens of this board that draw this file. */
 function find () {
   const ids = store.framesShowing(props.file.path);
@@ -67,7 +73,7 @@ function find () {
             <span class="ac-truncate">{{ name }}</span>
             <span v-if="STATUS[file.status]" class="ac-chip">{{ STATUS[file.status] }}</span>
           </span>
-          <span v-if="dir" class="ac-file-dir ac-caption ac-truncate">{{ file.from ? `from ${file.from}` : dir }}</span>
+          <span v-if="dir" class="ac-caption ac-truncate" :class="{ 'ac-file-dir': !file.board }">{{ file.from ? `from ${file.from}` : dir }}</span>
         </span>
         <span class="ac-diffstat ac-num">
           <span v-if="file.added" class="added">+{{ file.added }}</span>
@@ -75,7 +81,7 @@ function find () {
         </span>
       </button>
       <Button
-        v-if="discardable"
+        v-if="discardable && !file.board"
         class="ac-file-discard"
         variant="ghost"
         small
@@ -87,9 +93,14 @@ function find () {
       />
     </div>
     <div v-if="open" class="ac-diff">
+      <p v-if="file.board" class="ac-caption">
+        The board's layout, notes and comments, saved by the canvas as you work and committed with the
+        screens. Undo a change to it on the canvas
+      </p>
       <div class="ac-row tight">
         <Button v-if="file.status !== 'deleted'" variant="ghost" small icon="external" @click="store.openInEditor(`${file.path}:${first}`)">Open in editor</Button>
         <Button v-if="file.path.endsWith('.vue') && file.status !== 'deleted'" variant="ghost" small icon="frame" @click="find">Find on the board</Button>
+        <Button v-if="file.board && file.board.slug !== state.slug && file.status !== 'deleted'" variant="ghost" small icon="layers" @click="openBoard">Open the board</Button>
       </div>
       <p v-if="file.binary" class="ac-caption">A binary or very large file: no lines to show</p>
       <template v-for="(h, i) in hunks" :key="i">

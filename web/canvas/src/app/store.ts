@@ -313,21 +313,24 @@ export function createStore (settings: Settings, previews?: Component) {
       inflight = false;
       const next = waiting;
       waiting = undefined;
-      if (next) received(next.slug, next.board);
+      if (next) received(next.slug, next.board, next.outside);
     }
   }
 
   /** A board that came while saving, seen once the save is answered: it may be the save itself. */
-  let waiting: { slug: string, board: Board } | undefined;
+  let waiting: { slug: string, board: Board, outside: boolean } | undefined;
 
-  /** A board the server says changed: an agent's change over MCP, or the file edited directly. */
-  function received (slug: string, incoming: Board) {
+  /**
+   * A board the server says changed: an agent's change over MCP, or the file edited directly. One
+   * written outside the canvas is taken even with an older rev: git put that file back.
+   */
+  function received (slug: string, incoming: Board, outside = false) {
     if (slug !== state.slug) return void loadList();
     if (inflight) {
-      waiting = { slug, board: incoming };
+      waiting = { slug, board: incoming, outside: outside || !!waiting?.outside };
       return;
     }
-    if (!base || incoming.rev <= base.rev) return;
+    if (!base || (!outside && incoming.rev <= base.rev)) return;
     const mine = board.value!;
     const clean = mine === base;
     board.value = clean ? incoming : merge(base, mine, incoming);
@@ -337,12 +340,17 @@ export function createStore (settings: Settings, previews?: Component) {
   }
 
   if (import.meta.hot) {
-    import.meta.hot.on('anfra-canvas:board', ({ slug, board: b }: { slug: string, board: Board }) => received(slug, parseBoard(b)));
+    // A board's file changed: the Changes tab reads git again too (Vite doesn't watch the boards).
+    import.meta.hot.on('anfra-canvas:board', ({ slug, board: b, outside }: { slug: string, board: Board, outside?: boolean }) => {
+      received(slug, parseBoard(b), outside);
+      readChangesSoon();
+    });
     import.meta.hot.on('anfra-canvas:source', () => state.sources++);
     // A board deleted (from here, another canvas, or by hand): it leaves the list, and an open copy
     // of it closes to the home page, since its file is gone.
     import.meta.hot.on('anfra-canvas:board-removed', ({ slug }: { slug: string }) => {
       state.boards = state.boards.filter((b) => b.slug !== slug);
+      readChangesSoon();
       if (state.slug === slug) {
         location.hash = '';
         flash(`${board.value?.name ?? slug} was deleted`);
