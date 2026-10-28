@@ -11,7 +11,7 @@
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 288px minmax(0, 1fr) 296px;
+  grid-template-columns: var(--ac-left, 288px) minmax(0, 1fr) var(--ac-right, 296px);
   grid-template-rows: 48px minmax(0, 1fr);
   background: var(--ac-paper);
   isolation: isolate;
@@ -24,7 +24,7 @@
 .ac-save.saving .ac-save-dot { background: var(--ac-icon-weak); }
 .ac-save.error { color: var(--ac-danger); }
 .ac-save.error .ac-save-dot { background: var(--ac-danger); }
-.ac-main { position: relative; display: grid; min-height: 0; overflow: clip; }
+.ac-main { position: relative; grid-area: 2 / 2; display: grid; min-height: 0; overflow: clip; }
 .ac-main > .ac-viewport { min-height: 0; }
 .ac-error, .ac-start { align-self: center; justify-self: center; display: grid; justify-items: center; gap: 8px; max-width: 400px; text-align: center; }
 .ac-start > .ac-btn { margin-top: 8px; }
@@ -33,6 +33,26 @@
 /* --- Panels ---------------------------------------------------------------------------------- */
 
 .ac-panel { min-height: 0; overflow: auto; overscroll-behavior: contain; background: var(--ac-paper); }
+/* Placed by name, so the board keeps its column while a panel is hidden */
+.ac-left { grid-area: 2 / 1; }
+.ac-inspector { grid-area: 2 / 3; }
+/* The edge between a panel and the board, in the board's 8px margin: drag to resize */
+.ac-resizer { position: absolute; top: 0; bottom: 8px; z-index: 5; width: 8px; cursor: col-resize; touch-action: none; }
+.ac-resizer.left { left: 0; }
+.ac-resizer.right { right: 0; }
+.ac-resizer::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  transition: background-color 120ms var(--ac-ease);
+}
+.ac-resizer:hover::after { background: var(--ac-violet-line); transition-delay: 150ms; }
+.ac-resizer.active::after, .ac-resizer:focus-visible::after { background: var(--ac-violet-line); transition-delay: 0ms; }
+.ac-resizer:focus-visible { outline: none; }
 .ac-left-head { position: sticky; top: 0; z-index: 1; padding: 8px 8px 8px 12px; background: var(--ac-paper); }
 .ac-list { display: grid; align-content: start; gap: 2px; padding: 0 8px 16px 12px; }
 .ac-list > * { min-width: 0; }

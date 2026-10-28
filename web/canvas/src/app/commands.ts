@@ -8,6 +8,7 @@ import {
 import type { PaletteItem } from '../vite/catalog.ts';
 import type { IconName } from './ui/Icon.vue';
 import { TOOLS, type Store } from './store.ts';
+import { togglePanel, togglePanels } from './panels.ts';
 
 export interface Command {
   id: string;
@@ -172,6 +173,18 @@ export function viewCommands (store: Store): Command[] {
     { id: 'view.in', label: 'Zoom in', icon: 'plus', keys: '⌘+', run: () => zoomBy(store, 1.25) },
     { id: 'view.out', label: 'Zoom out', icon: 'minus', keys: '⌘−', run: () => zoomBy(store, 1 / 1.25) },
     { id: 'view.100', label: 'Zoom to 100%', icon: 'fit', also: 'actual size', run: () => zoomBy(store, 1 / state.view.zoom) },
+    {
+      id: 'view.left', label: `${state.panels.leftOpen ? 'Hide' : 'Show'} the left panel`, icon: 'panelLeft', keys: '[',
+      also: 'sidebar comments layers collapse', run: () => togglePanel(state.panels, 'left'),
+    },
+    {
+      id: 'view.right', label: `${state.panels.rightOpen ? 'Hide' : 'Show'} the right panel`, icon: 'panelRight', keys: ']',
+      also: 'sidebar inspector properties collapse', run: () => togglePanel(state.panels, 'right'),
+    },
+    {
+      id: 'view.panels', label: `${!state.panels.leftOpen && !state.panels.rightOpen ? 'Show' : 'Hide'} both panels`, icon: 'fit', keys: '⌘\\',
+      also: 'sidebars focus board only', run: () => togglePanels(state.panels),
+    },
     { id: 'history.undo', label: 'Undo', icon: 'undo', keys: '⌘Z', run: () => store.undo() },
     { id: 'history.redo', label: 'Redo', icon: 'redo', keys: '⇧⌘Z', run: () => store.redo() },
     ...TOOLS.map((t) => ({ id: `tool.${t.tool}`, label: `Tool: ${t.label}`, icon: TOOL_ICONS[t.tool], keys: t.key.toUpperCase(), run: () => (state.tool = t.tool) })),

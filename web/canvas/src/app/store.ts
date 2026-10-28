@@ -12,6 +12,7 @@ import type { Changes, FileDiff } from '../vite/changes.ts';
 import type { ComponentSpec, PaletteItem, Tokens } from '../vite/catalog.ts';
 import type { Edit, SourceInfo, Where } from '../vite/source.ts';
 import type { StartFrom } from '../vite/templates.ts';
+import { loadPanels } from './panels.ts';
 
 export interface Settings {
   scenarios: Scenarios;
@@ -147,6 +148,8 @@ export function createStore (settings: Settings, previews?: Component) {
     flow: null as Flow | null,
     /** The tab beside the board. */
     panel: 'comments' as 'comments' | 'layers' | 'components' | 'changes',
+    /** The panels' widths, and which show. */
+    panels: loadPanels(),
     /** What changed in the app's files, from git: since the last commit, or on this branch. */
     changes: null as Changes | null,
     changesScope: 'head' as Changes['scope'],

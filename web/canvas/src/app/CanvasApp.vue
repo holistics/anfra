@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { bounds, duplicate, shapes } from '../model/index.ts';
 import { provideStore } from './context.ts';
 import { TOOLS, type Store } from './store.ts';
@@ -8,9 +8,11 @@ import Viewport from './components/Viewport.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import LeftPanel from './components/LeftPanel.vue';
 import Inspector from './components/Inspector.vue';
+import PanelResizer from './components/PanelResizer.vue';
 import HomePage from './components/home/HomePage.vue';
 import PresentView from './components/PresentView.vue';
 import { opened, parseView } from './home.ts';
+import { savePanels, togglePanel, togglePanels } from './panels.ts';
 import Icon from './ui/Icon.vue';
 import Button from './ui/Button.vue';
 import Field from './ui/Field.vue';
@@ -48,6 +50,19 @@ const boardOptions = computed<SelectOption[]>(() => state.boards.map((b) => ({
 })));
 
 const openCount = computed(() => board.value?.comments.filter((c) => c.status === 'open').length ?? 0);
+
+// --- Panels --------------------------------------------------------------------------------------
+
+const leftWidth = computed(() => (state.panels.leftOpen ? state.panels.left : 0));
+const panelStyle = computed(() => ({
+  '--ac-left': `${leftWidth.value}px`,
+  '--ac-right': `${state.panels.rightOpen ? state.panels.right : 0}px`,
+}));
+// The board stays where it is on screen as the left panel opens, closes or changes width.
+watch(leftWidth, (now, was) => {
+  state.view.x -= now - was;
+});
+watch(() => state.panels, savePanels, { deep: true });
 
 function fitAll () {
   if (board.value) store.zoomTo(bounds(shapes(board.value)));
@@ -112,11 +127,19 @@ function shortcut (key: string, meta: boolean, shift: boolean, alt = false): boo
     if (board.value) state.selection = shapes(board.value).map((s) => s.id);
     return true;
   }
+  if (meta && k === '\\') {
+    togglePanels(state.panels);
+    return true;
+  }
   if (meta && (k === '=' || k === '+' || k === '-')) {
     viewport.value?.zoomAt({ x: state.viewport.width / 2, y: state.viewport.height / 2 }, k === '-' ? 1 / 1.25 : 1.25);
     return true;
   }
   if (meta) return false;
+  if (k === '[' || k === ']') {
+    togglePanel(state.panels, k === '[' ? 'left' : 'right');
+    return true;
+  }
   if (shift && (k === '!' || k === '1')) {
     fitAll();
     return true;
@@ -230,7 +253,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ac">
+  <div class="ac" :style="panelStyle">
     <header v-if="state.home" class="ac-top">
       <a class="ac-row ac-home-brand" href="#"><Icon name="home" /> <span class="ac-heading">Canvas</span></a>
       <span class="ac-spacer" />
@@ -240,6 +263,13 @@ onBeforeUnmount(() => {
     <template v-else>
     <header class="ac-top">
       <div class="ac-row ac-top-board">
+        <Button
+          variant="ghost"
+          icon="panelLeft"
+          :label="`${state.panels.leftOpen ? 'Hide' : 'Show'} the left panel`"
+          keys="["
+          @click="togglePanel(state.panels, 'left')"
+        />
         <Button variant="ghost" icon="home" label="All boards" @click="goHome" />
         <Select
           v-if="state.boards.length"
@@ -291,13 +321,22 @@ onBeforeUnmount(() => {
       <Button icon="copy" :disabled="!openCount" tip="Copy every open comment as one Markdown task" @click="store.copyFeedback()">
         Copy feedback <span v-if="openCount" class="ac-count">{{ openCount }}</span>
       </Button>
+      <Button
+        variant="ghost"
+        icon="panelRight"
+        :label="`${state.panels.rightOpen ? 'Hide' : 'Show'} the right panel`"
+        keys="]"
+        @click="togglePanel(state.panels, 'right')"
+      />
     </header>
-    <LeftPanel />
+    <LeftPanel v-show="state.panels.leftOpen" />
     <main class="ac-main">
       <p v-if="state.error" class="ac-error" role="alert">{{ state.error }}</p>
       <Viewport v-else-if="state.slug" ref="viewport" />
+      <PanelResizer v-if="state.panels.leftOpen" side="left" />
+      <PanelResizer v-if="state.panels.rightOpen" side="right" />
     </main>
-    <Inspector />
+    <Inspector v-show="state.panels.rightOpen" />
     <PresentView v-if="state.present && board" ref="presenting" />
     </template>
     <CommandPalette v-if="state.palette" />

@@ -58,6 +58,7 @@ const SHORTCUTS: [string, string[] | string][] = [
   ['Duplicate, delete', ['⌘D', '⌫']],
   ['Tidy up the flow', ['⌃⌥T']],
   ['Undo, redo', ['⌘Z', '⇧⌘Z']],
+  ['Hide the panels', ['[', ']', '⌘\\']],
   ['Playing: next, back, stop', ['1', '←', 'Esc']],
 ];
 const mcpCommand = computed(() => `claude mcp add --transport http ${state.settings.mcpName ?? 'anfra-canvas'} ${location.origin}${state.settings.mcp}`);
