@@ -165,16 +165,19 @@ describe('Queries', () => {
     expect(byTestId(root, 'inspect-waiting')).not.toBeNull();
   });
 
-  it('shows a query in Lineage through its marker, when lineage is installed', async () => {
+  it('shows a query in Lineage through its marker, from its summary, when lineage is installed', async () => {
     harness = await inspect({ tab: QUERIES, plugins: [lineagePlugin({ lineage: vi.fn(async () => ({ results: [] })) } as never)] });
     const { root } = await harness.tab(QUERIES);
-    await open(byTestId(root, 'query-0/revenue'));
-    byTestId(byTestId(root, 'query-0/revenue')!, 'show-in-lineage')!.click();
+    const row = byTestId<HTMLDetailsElement>(root, 'query-0/revenue')!;
+    byTestId(row.querySelector('summary')!, 'show-in-lineage')!.click();
+    // The row stays as it was: the click is the button's.
+    expect(row.open).toBe(false);
     expect(harness.mounted.panel.tab).toBe('lineage.lineage');
     expect(harness.mounted.panel.selection).toBe('0.0');
-    // `orders` is drawn nowhere on the page.
-    await open(byTestId(root, 'query-0/orders'));
-    expect(byTestId(byTestId(root, 'query-0/orders')!, 'show-in-lineage')).toBeNull();
+    // `orders` is drawn nowhere on the page, so it can't be selected.
+    const orders = byTestId<HTMLButtonElement>(byTestId(root, 'query-0/orders')!.querySelector('summary')!, 'show-in-lineage')!;
+    expect(orders.disabled).toBe(true);
+    expect(orders.parentElement?.dataset.tip).toContain('Not on the page');
   });
 
   it('offers no Lineage link without lineage', async () => {
