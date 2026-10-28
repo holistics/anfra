@@ -46,6 +46,11 @@ async function lineage (options: { trace?: (request: BackendLineageRequest) => u
 const card = (root: ShadowRoot, id: string) => byTestId(root, `card-${id}`);
 
 describe('Lineage', () => {
+  it("sits between inspect's Queries and Structure", async () => {
+    const { harness } = await lineage();
+    expect(harness.host.tabs.map((t) => t.id)).toEqual(['inspect.overview', 'inspect.data', 'inspect.queries', TAB, 'inspect.structure', 'inspect.declaration']);
+  });
+
   it('traces the fields the queries return, and draws the page down to its tables', async () => {
     const { root, trace } = await lineage();
     expect(trace).toHaveBeenCalledTimes(1);
