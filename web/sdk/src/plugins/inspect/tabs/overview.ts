@@ -31,7 +31,7 @@ const CSS = `
 .overview { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
 .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .statusbar .pop-trigger.pill, .count { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 2px 9px; font-variant-numeric: tabular-nums; }
-.count { border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--hover); color: var(--anfra-color-fg); }
+.count { border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--hover); color: var(--anfra-color-fg); }
 .count:hover { filter: brightness(0.95); }
 .count.error { background: var(--danger-bg); color: var(--anfra-color-danger); }
 .count.executing { background: color-mix(in srgb, var(--run) 16%, transparent); color: var(--run); }
@@ -39,12 +39,12 @@ const CSS = `
 .count .dot { width: 6px; height: 6px; }
 .dot.dirty { background: var(--warn); }
 .tile { padding: 12px 14px; border-radius: 10px; background: var(--subtle); min-width: 0; }
-.eyebrow { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--anfra-color-muted); }
+.eyebrow { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--anfra-color-muted); }
 .eyebrow strong { color: var(--anfra-color-fg); }
 .eyebrow .pop-trigger { color: var(--anfra-color-muted); cursor: help; }
 .trust-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .trust-level { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2; }
-.trust-level span { display: block; font-size: 13px; font-weight: 500; }
+.trust-level span { display: block; font-size: 14px; font-weight: 500; }
 .trust-why { margin: 2px 0 0; font-size: 12px; color: var(--anfra-color-muted); }
 .stats { display: grid; gap: 10px; }
 .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -62,7 +62,7 @@ const CSS = `
 .issue .mark.error { background: var(--anfra-color-danger); } .issue .mark.warn { background: var(--warn); }
 .overview > h5 { margin: 6px 0 0; }
 .tile.collapsible { padding: 6px 12px; }
-.tile.collapsible > summary { font-weight: 600; }
+.tile.collapsible > summary { font-weight: 500; }
 .tile.collapsible > summary .muted { margin-left: auto; font-weight: normal; font-size: 12px; }
 .changes { list-style: none; margin: 0; padding: 0; }
 .change { display: flex; align-items: center; gap: 2px; padding: 3px 0; }
