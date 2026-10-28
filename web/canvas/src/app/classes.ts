@@ -55,6 +55,7 @@ export function groups (tokens: Tokens) {
     type: re(`text-(${names(tokens.type)})`),
     textColor: re(`text-(${names([...tokens.textColor, ...tokens.color])})`),
     textAlign: re('text-(left|center|right|justify|start|end)'),
+    iconColor: re(`icon-(${names(tokens.iconColor)})`),
     background: re(`bg-(${names([...tokens.background, ...tokens.color])}|transparent|white|black)`),
     border: re('border|border-[0-9]+'),
     borderColor: re(`border-(${names([...tokens.borderColor, ...tokens.color])})`),
@@ -101,6 +102,10 @@ export function choices (tokens: Tokens) {
     textColor: color('text', tokens.textColor.length ? tokens.textColor : tokens.color),
     background: color('bg', tokens.background.length ? tokens.background : tokens.color),
     borderColor: color('border', tokens.borderColor.length ? tokens.borderColor : tokens.color),
+    iconColor: [
+      { value: '', label: 'Inherit', description: 'The color of the text around it' },
+      ...tokens.iconColor.map((t) => ({ value: `icon-${t.name}`, label: t.name, swatch: t.value })),
+    ],
     grow: [
       { value: '', label: 'Its own size' },
       { value: 'flex-1', label: 'Fill the rest', description: 'Takes the room left in its row or column' },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kitCatalog, palette } from './catalog.ts';
+import { kitCatalog, palette, readTokens } from './catalog.ts';
 
 describe('kitCatalog', () => {
   const kit = {
@@ -41,5 +41,18 @@ describe('kitCatalog', () => {
       [true, 'none', []],
       [true, 'root', []],
     ]);
+  });
+
+  it('keeps the semantic color a component takes', () => {
+    const { catalog } = kitCatalog({ components: [{ name: 'HIcon', from: 'ds', color: 'icon' }, { name: 'HButton', from: 'ds' }] });
+    expect(catalog.map((c) => c.color)).toEqual(['icon', undefined]);
+  });
+});
+
+describe('readTokens', () => {
+  it('reads an icon\'s colors apart from the text\'s', () => {
+    const t = readTokens('@theme { --text-color-weak: #666; --icon-color-weak: #888; --icon-color-highlight-default: #1b7ce4; }');
+    expect(t.textColor).toEqual([{ name: 'weak', value: '#666' }]);
+    expect(t.iconColor).toEqual([{ name: 'weak', value: '#888' }, { name: 'highlight-default', value: '#1b7ce4' }]);
   });
 });

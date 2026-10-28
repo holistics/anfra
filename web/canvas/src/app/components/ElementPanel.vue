@@ -249,6 +249,9 @@ const title = computed(() => ref_.value.component ?? ref_.value.tag);
               @change="setProp(p, ($event.target as HTMLInputElement).value)"
             />
           </PropRow>
+          <PropRow v-if="instance?.color === 'icon' && C.iconColor.length > 1" label="color" tip="An icon token: a class on its tag">
+            <Select :model-value="get(G.iconColor)" :options="C.iconColor" label="Icon color" :min-width="240" @update:model-value="(v) => set(G.iconColor, v)" />
+          </PropRow>
         </div>
       </Section>
 

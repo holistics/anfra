@@ -35,6 +35,8 @@ export interface ComponentSpec {
   placement?: Placement[];
   /** Where a class on its tag ends up: its root, an inner part, or nowhere. */
   classTarget?: 'root' | 'inner' | 'none';
+  /** The semantic color its tag takes, offered with its props: `icon` for an icon token (`icon-weak`). */
+  color?: 'icon';
 }
 
 /** How an instance sits in its parent: its width, its share of a row, its own alignment, space above it. */
@@ -70,6 +72,11 @@ export interface KitComponent {
    * `inheritAttrs: false` and passes them on), or nowhere (it drops them, or draws in a teleport).
    */
   classTarget?: 'root' | 'inner' | 'none';
+  /**
+   * The semantic color its tag takes as a class, offered with its props: `icon` for an icon token
+   * (`icon-weak`), for a component drawn in its text's color, as an icon is.
+   */
+  color?: 'icon';
 }
 
 /** The icons a kit's `icon` props take, and the component that draws one, for the picker. */
@@ -102,6 +109,7 @@ export function kitCatalog (kit: Kit): { catalog: ComponentSpec[], snippets: Rec
       kit: true,
       placement: c.classTarget === 'none' ? [] : c.placement ?? PLACEMENT,
       classTarget: c.classTarget ?? 'root',
+      ...(c.color ? { color: c.color } : {}),
     });
     if (c.snippet !== undefined) snippets[folder] = c.snippet;
   }
@@ -113,6 +121,8 @@ export interface Token { name: string, value: string }
 
 export interface Tokens {
   textColor: Token[];
+  /** An icon's colors (`icon-weak`), from `--icon-color-*`. */
+  iconColor: Token[];
   background: Token[];
   borderColor: Token[];
   color: Token[];
@@ -305,13 +315,14 @@ function walk (n: Node, visit: (n: Node) => void) {
  * (`--text-color-weak` is `text-weak`, `--text-title` is `text-title`, `--radius-lg` is `rounded-lg`).
  */
 export function readTokens (css: string): Tokens {
-  const t: Tokens = { textColor: [], background: [], borderColor: [], color: [], type: [], radius: [] };
+  const t: Tokens = { textColor: [], iconColor: [], background: [], borderColor: [], color: [], type: [], radius: [] };
   const add = (list: Token[], name: string, value: string) => list.some((x) => x.name === name) || list.push({ name, value: value.trim() });
   for (const m of css.matchAll(/(?:^|[\s;{])--([a-z][a-z0-9-]*)\s*:\s*([^;]+);/g)) {
     const [, name, value] = m;
     if (value.trim() === 'initial' || name.includes('--')) continue;
     let k: RegExpExecArray | null;
     if ((k = /^text-color-(.+)$/.exec(name))) add(t.textColor, k[1], value);
+    else if ((k = /^icon-color-(.+)$/.exec(name))) add(t.iconColor, k[1], value);
     else if ((k = /^background-color-(.+)$/.exec(name))) add(t.background, k[1], value);
     else if ((k = /^border-color-(.+)$/.exec(name))) add(t.borderColor, k[1], value);
     else if ((k = /^color-(.+)$/.exec(name))) add(t.color, k[1], value);
