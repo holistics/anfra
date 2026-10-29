@@ -87,9 +87,8 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
   flex: none;
   width: 20px;
   height: 20px;
-  fill: var(--anfra-violet-600); /* the artwork's violet, #8a51d4 */
+  fill: var(--anfra-color-icon-logo);
 }
-[data-theme="dark"] .brand .logo { fill: oklch(0.955 0.025 298.6); /* its inverse, #f2edff */ }
 
 .brand .palette-open { margin-left: auto; flex: none; }
 .brand h1 {

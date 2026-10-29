@@ -47,6 +47,7 @@
   --anfra-paper-100: oklch(0.955 0.007 88.6); /* #f2f0eb */
   --anfra-paper-200: oklch(0.925 0.01 87.5); /* #e9e6df */
 
+  --anfra-violet-50: oklch(0.955 0.025 298.6); /* #f2edff  the logomark's inverse, on dark */
   --anfra-violet-100: oklch(0.946 0.027 304.8); /* #f1e9fc */
   --anfra-violet-200: oklch(0.904 0.049 303.6); /* #e6d8fb */
   --anfra-violet-300: oklch(0.878 0.072 302.8); /* #e0ccff */
@@ -196,6 +197,7 @@
   --anfra-color-icon-highlight-default: var(
     --anfra-violet-600
   ); /* Current nav icon, checked mark */
+  --anfra-color-icon-logo: var(--anfra-violet-600); /* The logomark: the artwork's violet */
   --anfra-color-icon-on-fill: var(--anfra-ink-0); /* Icon on solid fills */
   --anfra-color-icon-inverted-default: var(--anfra-ink-100); /* Icon on inverted bg */
   --anfra-color-icon-danger-default: var(--anfra-red-500); /* Danger icon */
@@ -290,6 +292,7 @@
   --anfra-color-icon-hover: var(--anfra-ink-100);
   --anfra-color-icon-disabled: var(--anfra-ink-500); /* was ink-600 (exempt) */
   --anfra-color-icon-highlight-default: var(--anfra-violet-500);
+  --anfra-color-icon-logo: var(--anfra-violet-50); /* The logomark's inverse */
   --anfra-color-icon-inverted-default: var(--anfra-ink-900);
   --anfra-color-icon-danger-default: var(--anfra-red-400);
   --anfra-color-icon-warning-default: var(--anfra-amber-400);
