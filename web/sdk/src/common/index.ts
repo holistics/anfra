@@ -12,7 +12,7 @@ export {
   checkTarget, type MenuEntry, type MenuTarget, type MenuTargetKind, type NodeTarget, type RowsTarget, type TargetRect,
 } from './menu';
 export {
-  THEME_TOKENS, DEFAULT_TOKENS, resolveTheme, type Theme, type ThemeInput, type ThemeScheme, type ThemeToken, type ThemeTokens,
+  THEME_TOKENS, DEFAULT_TOKENS, DESIGN_TOKENS, designTheme, resolveTheme, type Theme, type ThemeInput, type ThemeScheme, type ThemeToken, type ThemeTokens,
 } from './theme';
 export type {
   BridgeError, BridgeMessage, FrameMessage, HostMessage, PluginInfo, Provision,

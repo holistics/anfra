@@ -2,6 +2,7 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import { salesDataset, testUser } from '../app/testSupport';
+import { DEFAULT_TOKENS } from '../common/theme';
 import { corePlugin } from '../plugins/core';
 import { definePlugin, type CallDefinition, type CallHandler, type Plugin } from './plugin';
 import { createHost, type HostOptions, type MountedDataApp } from './runtime';
@@ -161,10 +162,10 @@ describe('the theme', () => {
     expect(element.style.getPropertyValue('color-scheme')).toBe('dark');
     runtime.setTheme({ scheme: 'light' });
     expect(runtime.theme.scheme).toBe('light');
-    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe('#ffffff');
+    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe(DEFAULT_TOKENS.light['color-bg']);
     unmount();
     runtime.setTheme({ scheme: 'dark' });
-    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe('#ffffff');
+    expect(element.style.getPropertyValue('--anfra-color-bg')).toBe(DEFAULT_TOKENS.light['color-bg']);
   });
 
   it('sends the frame its theme each time it is ready, and on each change', () => {
