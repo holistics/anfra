@@ -58,7 +58,7 @@ var Validate = command.Define(command.Def[ValidateInput, aml.RepoValidation]{
 
 // ValidateInput is validate's input.
 type ValidateInput struct {
-	Globs []string `json:"globs,omitempty" cli:"positional" doc:"optional file globs; report only diagnostics for matching files"`
+	Globs []string `json:"globs,omitempty" cli:"positional" maxItems:"100" doc:"optional file globs, at most 100; report only diagnostics for matching files"`
 }
 
 func (ValidateInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {

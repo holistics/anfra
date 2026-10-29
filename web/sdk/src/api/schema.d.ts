@@ -940,7 +940,7 @@ export interface components {
             latest: string;
         };
         ValidateInput: {
-            /** @description optional file globs; report only diagnostics for matching files */
+            /** @description optional file globs, at most 100; report only diagnostics for matching files */
             globs?: string[];
         };
         ValidationReport: {

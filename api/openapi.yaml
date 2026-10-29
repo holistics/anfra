@@ -1444,9 +1444,10 @@ components:
       additionalProperties: false
       properties:
         globs:
-          description: optional file globs; report only diagnostics for matching files
+          description: optional file globs, at most 100; report only diagnostics for matching files
           items:
             type: string
+          maxItems: 100
           type: array
       type: object
     ValidationReport:
