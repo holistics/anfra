@@ -48,6 +48,17 @@ const groups = computed(() => {
 watch(query, () => { active.value = Math.max(0, shown.value.findIndex((entry) => !entry.disabled)); });
 void nextTick(() => input.value?.focus());
 
+// Whether the list runs on past its top or bottom edge, where it fades out.
+const above = ref(false);
+const below = ref(false);
+function measure (): void {
+  const el = list.value;
+  if (!el) return;
+  above.value = el.scrollTop > 1;
+  below.value = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+}
+watch(shown, () => nextTick(measure), { immediate: true });
+
 function move (step: number): void {
   const count = shown.value.length;
   if (!count) return;
@@ -99,7 +110,7 @@ function onKeydown (event: KeyboardEvent): void {
           @keydown="onKeydown"
         >
       </label>
-      <div id="palette-list" ref="list" class="palette-list" role="listbox">
+      <div id="palette-list" ref="list" class="palette-list" role="listbox" :data-more-above="above || undefined" :data-more-below="below || undefined" @scroll.passive="measure">
         <p v-if="!shown.length" class="palette-empty">No commands match.</p>
         <section v-for="([group, items], g) in groups" :key="group" role="group" :aria-labelledby="`palette-group-${g}`">
           <div :id="`palette-group-${g}`" class="a-menu-label">{{ group }}</div>

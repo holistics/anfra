@@ -478,6 +478,28 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 .palette-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--text); font: var(--anfra-type-body); outline: none; }
 .palette-search input::placeholder { color: var(--muted); }
 .palette-list { flex: 1; min-height: 0; overflow: auto; padding: 4px; }
+/* Where the list runs on past an edge, it fades out there over 32px, on an eased curve so the fade
+   has no hard start; the fade grows and shrinks as the list reaches the edge. */
+@property --palette-fade-top { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --palette-fade-bottom { syntax: '<length>'; inherits: false; initial-value: 0px; }
+.palette-list {
+  transition: --palette-fade-top 160ms var(--anfra-ease-out), --palette-fade-bottom 160ms var(--anfra-ease-out);
+  mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0) 0,
+    rgb(0 0 0 / 0.16) calc(var(--palette-fade-top) * 0.25),
+    rgb(0 0 0 / 0.5) calc(var(--palette-fade-top) * 0.5),
+    rgb(0 0 0 / 0.84) calc(var(--palette-fade-top) * 0.75),
+    #000 var(--palette-fade-top),
+    #000 calc(100% - var(--palette-fade-bottom)),
+    rgb(0 0 0 / 0.84) calc(100% - var(--palette-fade-bottom) * 0.75),
+    rgb(0 0 0 / 0.5) calc(100% - var(--palette-fade-bottom) * 0.5),
+    rgb(0 0 0 / 0.16) calc(100% - var(--palette-fade-bottom) * 0.25),
+    rgb(0 0 0 / 0) 100%
+  );
+}
+.palette-list[data-more-above] { --palette-fade-top: 32px; }
+.palette-list[data-more-below] { --palette-fade-bottom: 32px; }
 .palette-list section + section { margin-top: 4px; }
 .palette-list .a-menu-label { padding: 6px 8px 4px; }
 /* A row a touch roomier than a dropdown's, as shadcn's CommandItem is. */
