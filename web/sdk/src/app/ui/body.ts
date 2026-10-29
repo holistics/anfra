@@ -65,24 +65,24 @@ const STYLES = `
 /* A part's container: over the whole viewport in the top layer, letting the pointer through to the page. */
 .part { position: fixed; inset: 0; width: auto; height: auto; margin: 0; padding: 0; border: 0; overflow: visible; background: none; pointer-events: none; }
 .surface, .backdrop { pointer-events: auto; }
-.surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, #18181b); background: var(--anfra-color-bg, #fff);
-  border: 1px solid var(--anfra-color-border, #e4e4e7); border-radius: var(--anfra-radius, 8px);
+.surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); background: var(--anfra-color-bg, oklch(1 0 0));
+  border: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); border-radius: var(--anfra-radius, 8px);
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%), 0 1px 3px rgb(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
 .menu { min-width: 180px; max-width: 320px; padding: 4px; outline: none; }
 .menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 /* One highlight, as a native menu has: the focused entry, which the pointer and the arrows both move. */
-.menu button:focus { outline: none; background: color-mix(in srgb, var(--anfra-color-accent, #5b3df5) 14%, transparent); }
-.menu button[aria-disabled="true"] { color: var(--anfra-color-muted, #71717a); cursor: default; }
-.menu .reason { display: block; font-size: 11px; color: var(--anfra-color-muted, #71717a); }
-.menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--anfra-color-border, #e4e4e7); }
+.menu button:focus { outline: none; background: color-mix(in srgb, var(--anfra-color-accent, oklch(0.484 0.181 298.1)) 14%, transparent); }
+.menu button[aria-disabled="true"] { color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); cursor: default; }
+.menu .reason { display: block; font-size: 11px; color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); }
+.menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); }
 .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 40%); }
 .modal { display: flex; flex-direction: column; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); }
 .modal.sm { width: 360px; } .modal.md { width: 560px; } .modal.lg { width: 860px; }
 .modal.full { width: calc(100vw - 32px); height: calc(100vh - 32px); }
-.modal header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--anfra-color-border, #e4e4e7); }
+.modal header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); }
 .modal h2 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted, #71717a); cursor: pointer; font: 18px/1 var(--anfra-font, system-ui, sans-serif); }
-.close:hover { color: var(--anfra-color-fg, #18181b); background: color-mix(in srgb, var(--anfra-color-fg, #18181b) 7%, transparent); }
+.close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); cursor: pointer; font: 18px/1 var(--anfra-font, system-ui, sans-serif); }
+.close:hover { color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); background: color-mix(in srgb, var(--anfra-color-fg, oklch(0.201 0.022 301.1)) 7%, transparent); }
 .content { flex: 1; min-height: 0; overflow: auto; }
 .popover { max-width: min(360px, calc(100vw - 16px)); outline: none; }
 .popover > .close { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; font-size: 16px; }
