@@ -128,8 +128,8 @@
 @media (hover: hover) {
   .a-input:hover { border-color: var(--anfra-color-border-hover); }
 }
-.a-input[readonly] { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
-.a-input:disabled {
+.a-input:is([readonly], :has(input[readonly])) { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
+.a-input:is(:disabled, :has(input:disabled)) {
   cursor: not-allowed;
   border-color: var(--anfra-color-border-disabled);
   background: var(--anfra-color-background-disabled);
