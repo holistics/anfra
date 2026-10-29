@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@holistics/anfra-design": "workspace:*",
     "vue": "^3.5.43"
   },
   "devDependencies": {

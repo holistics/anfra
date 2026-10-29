@@ -36,6 +36,9 @@ importers:
 
   web/appserve:
     dependencies:
+      '@holistics/anfra-design':
+        specifier: workspace:*
+        version: link:../design
       vue:
         specifier: ^3.5.43
         version: 3.5.43(typescript@5.9.3)
