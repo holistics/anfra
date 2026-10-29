@@ -237,7 +237,7 @@ One density for every screen, on a 4px unit {spacing.unit}.
 
 ## Elevation & Depth
 
-Depth comes from tone and hairlines: paper behind, white in front, 1px rules between. Shadows are neutral ink, never colored, and only two exist: `--anfra-e1` for a resting card, `--anfra-e2` for what floats (menus, popovers, dialogs). On dark, both become a border.
+Depth comes from tone and hairlines: paper behind, white in front, 1px rules between. Shadows are neutral ink, never colored, and only two exist: `--anfra-e1` for a resting card, `--anfra-e2` for what floats (menus, popovers, dialogs). `--anfra-e2` carries its own edge, a translucent 1px ring, so a menu needs no border and reads on any ground. On dark, a shadow doesn't show: e1 becomes a border and e2 a translucent white ring.
 
 ## Shapes
 
@@ -282,7 +282,7 @@ A change to a Cloud component's look is a change to its class here, in the same 
 
 ### Fields
 
-- **Rest**: white, `border-field`, the body role, `text-placeholder` for the placeholder.
+- **Rest**: white, `border-strong` (the outline button's edge), the body role, `text-placeholder` for the placeholder. **Hover**: `border-hover`. A checkbox or a switch track keeps `border-field`, its 3:1 boundary.
 - **Focus**: no outline; the border turns violet (`border-highlight-strong`) and doubles to 2px.
 - **Error**: the border is red (`border-danger-strong`) at rest and on focus, never violet. The message is `text-danger-default` under the field and clears as soon as the user types again.
 
