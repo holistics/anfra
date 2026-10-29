@@ -5,6 +5,7 @@ import {
 import AppTree from './AppTree.vue';
 import DataAppFrame from './DataAppFrame.vue';
 import Icon from './Icon.vue';
+import Logo from './Logo.vue';
 import PluginPanel from './PluginPanel.vue';
 import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
 import type {
@@ -464,7 +465,7 @@ onBeforeUnmount(() => {
     <div v-if="narrow && sidebarOpen" class="backdrop" @click="sidebarOpen = false" />
     <nav class="sidebar" aria-label="Data Apps" :inert="!sidebarOpen">
       <div class="brand">
-        <span class="logo"><Icon name="brand" /></span>
+        <Logo />
         <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
         <button
           type="button"
