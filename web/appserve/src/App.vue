@@ -8,6 +8,8 @@ import Icon from './Icon.vue';
 import Logo from './Logo.vue';
 import PluginPanel from './PluginPanel.vue';
 import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
+import Keys from './Keys.vue';
+import { IS_MAC, keyLabels } from './shortcut';
 import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
@@ -335,23 +337,22 @@ watch(selectedPath, () => {
 
 // The command palette: the shell's own commands, the plugins', and every Data App to open.
 const paletteOpen = ref(false);
-const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-const PALETTE_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
+const PALETTE_SHORTCUT = IS_MAC ? 'Meta+K' : 'Ctrl+K';
 const paletteEntries = computed<PaletteEntry[]>(() => {
   const noApp = selected.value ? undefined : 'Open a Data App first';
-  const plugins = chromeCommands.value.map((command) => {
+  const plugins = chromeCommands.value.map((command): PaletteEntry => {
     const state = commandState(command);
     return {
-      id: `command:${command.id}`, title: command.title, group: 'Data App', shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
+      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
     };
   });
   return [
     ...plugins,
-    { id: 'reload', title: 'Reload Data App', group: 'Data App', disabled: noApp },
-    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View' },
-    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View' },
-    ...allApps(entries.value).map((entry) => ({
-      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', disabled: entry.path === selected.value?.path ? 'Open now' : undefined,
+    { id: 'reload', title: 'Reload Data App', group: 'Data App', icon: 'reload', disabled: noApp },
+    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: 'sidebar' },
+    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View', icon: theme.value === 'dark' ? 'sun' : 'moon' },
+    ...allApps(entries.value).map((entry): PaletteEntry => ({
+      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: 'app', disabled: entry.path === selected.value?.path ? 'Open now' : undefined,
     })),
   ];
 });
@@ -469,7 +470,7 @@ onBeforeUnmount(() => {
         >
           <Icon name="search" />
           <span class="search-label">Search</span>
-          <kbd class="a-kbd" aria-hidden="true">{{ PALETTE_SHORTCUT }}</kbd>
+          <Keys :combo="PALETTE_SHORTCUT" />
         </button>
       </div>
       <div class="tree-scroll">
@@ -603,7 +604,7 @@ onBeforeUnmount(() => {
             data-variant="ghost"
             data-size="icon-sm"
             :aria-label="command.title"
-            :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${command.shortcut})` : command.title)"
+            :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title)"
             :data-testid="`command-${command.id}`"
             :aria-pressed="commandState(command).pressed ?? false"
             :disabled="!selected || !!commandState(command).disabled"

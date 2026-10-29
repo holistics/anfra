@@ -2,12 +2,16 @@
 // The command palette: every command the shell offers, its own and the plugins', found by typing
 // and run with Enter. What each entry does, and whether it can run, the shell decides.
 import { computed, nextTick, ref, watch } from 'vue';
+import type { IconName } from '@holistics/anfra-design/icons';
 import Icon from './Icon.vue';
+import Keys from './Keys.vue';
 
 export interface PaletteEntry {
   id: string;
   title: string;
   group: string;
+  // Lucide's, as the command's button draws it.
+  icon?: IconName;
   // A key combination shown beside it.
   shortcut?: string;
   // Why it can't run now; it shows, greyed, and Enter skips it.
@@ -97,23 +101,26 @@ function onKeydown (event: KeyboardEvent): void {
       </label>
       <div id="palette-list" ref="list" class="palette-list" role="listbox">
         <p v-if="!shown.length" class="palette-empty">No commands match.</p>
-        <section v-for="[group, items] in groups" :key="group" role="group" :aria-label="group">
-          <h3>{{ group }}</h3>
+        <section v-for="([group, items], g) in groups" :key="group" role="group" :aria-labelledby="`palette-group-${g}`">
+          <div :id="`palette-group-${g}`" class="a-menu-label">{{ group }}</div>
           <div
             v-for="{ entry, index } in items"
             :key="entry.id"
-            class="palette-entry"
+            class="a-menu-item palette-entry"
             role="option"
             :aria-selected="index === active"
+            :data-highlighted="index === active || undefined"
             :aria-disabled="!!entry.disabled"
             :title="entry.disabled"
             :data-testid="`palette-${entry.id}`"
             @pointermove="!entry.disabled && (active = index)"
             @click="run(entry)"
           >
-            <span class="palette-title">{{ entry.title }}<span v-if="entry.pressed" class="palette-on">on</span></span>
+            <Icon v-if="entry.icon" :name="entry.icon" />
+            <span class="palette-title">{{ entry.title }}</span>
+            <span v-if="entry.pressed" class="a-badge" data-variant="secondary">On</span>
             <span v-if="entry.disabled" class="palette-hint">{{ entry.disabled }}</span>
-            <kbd v-else-if="entry.shortcut">{{ entry.shortcut }}</kbd>
+            <Keys v-else-if="entry.shortcut" :combo="entry.shortcut" />
           </div>
         </section>
       </div>

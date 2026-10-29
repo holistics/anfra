@@ -461,25 +461,30 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
   * { transition: none !important; animation: none !important; }
 }
 
-/* The command palette */
+/* The command palette: shadcn's CommandDialog. The dialog is a raised surface on the scrim, its edge
+   e2's ring; inside, the list is a menu (.a-menu-label, .a-menu-item) and its keys are Kbds. */
 .palette-backdrop {
   position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center; align-items: flex-start;
-  padding: 12vh 16px 16px; background: oklch(0 0 0 / 25%);
+  padding: 12vh 16px 16px; background: var(--anfra-color-background-interactive-overlay);
 }
 .palette {
   display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(440px, 76vh);
-  border: 1px solid var(--border); border-radius: var(--anfra-radius-xl); background: var(--bg); box-shadow: var(--shadow); overflow: hidden;
+  border-radius: var(--anfra-radius-xl); background: var(--anfra-color-background-raised-default); box-shadow: var(--anfra-e2); overflow: hidden;
 }
-.palette-search { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
-.palette-search input { flex: 1; height: 46px; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; outline: none; }
+.palette-search {
+  flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px;
+  border-bottom: 1px solid var(--border); color: var(--anfra-color-icon-weak);
+}
+.palette-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--text); font: var(--anfra-type-body); outline: none; }
+.palette-search input::placeholder { color: var(--muted); }
 .palette-list { flex: 1; min-height: 0; overflow: auto; padding: 4px; }
-.palette-list h3 { margin: 8px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-/* Nested in the palette, as a menu item is in a menu: the palette's radius less the list's padding. */
-.palette-entry { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: calc(var(--anfra-radius-xl) - 4px); cursor: pointer; }
-.palette-entry[aria-selected="true"] { background: var(--accent-bg); }
-.palette-entry[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.palette-list section + section { margin-top: 4px; }
+.palette-list .a-menu-label { padding: 6px 8px 4px; }
+/* A row a touch roomier than a dropdown's, as shadcn's CommandItem is. */
+.palette-entry { gap: 8px; min-height: 32px; padding: 6px 8px; cursor: pointer; }
+.palette-entry[aria-disabled="true"] { cursor: default; }
+.palette-entry > .icon { color: var(--anfra-color-icon-weak); }
 .palette-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.palette-on { margin-left: 8px; padding: 0 6px; border-radius: 4px; background: var(--accent-bg); color: var(--accent-text); font-size: 11px; font-weight: 600; }
-.palette-hint { flex: none; font-size: 12px; }
-.palette-entry kbd { flex: none; padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font: 11px var(--anfra-font-mono); }
-.palette-empty { margin: 16px 8px; color: var(--muted); }
+.palette-entry .a-kbd-group { margin-left: auto; }
+.palette-hint { flex: none; color: var(--muted); font: var(--anfra-type-caption); }
+.palette-empty { margin: 0; padding: 24px 8px; color: var(--muted); text-align: center; }
