@@ -122,19 +122,45 @@ const UNSAFE_VALUE = /[;{}<>]|url\(|expression\(|@import|\\/i;
 
 /**
  * A theme with every token, from what a host or the bridge gives: the scheme's defaults under the
- * tokens set, and each value that isn't a short, plain CSS value left at its default.
+ * tokens set, and each value that isn't a short, plain CSS value left at its default. A newer token
+ * the host leaves out is mixed from the older ones it sets (`DERIVED`), so it follows the host.
  */
 export function resolveTheme (input: unknown): Theme {
   const given = (typeof input === 'object' && input !== null ? input : {}) as { scheme?: unknown, tokens?: unknown };
   const scheme: ThemeScheme = given.scheme === 'dark' ? 'dark' : 'light';
   const tokens: ThemeTokens = { ...DEFAULT_TOKENS[scheme] };
   const set = (typeof given.tokens === 'object' && given.tokens !== null ? given.tokens : {}) as Record<string, unknown>;
+  const taken = new Set<ThemeToken>();
   for (const name of THEME_TOKENS) {
     const value = set[name];
-    if (typeof value === 'string' && value.trim() !== '' && value.length <= 200 && !UNSAFE_VALUE.test(value)) tokens[name] = value.trim();
+    if (typeof value === 'string' && value.trim() !== '' && value.length <= 200 && !UNSAFE_VALUE.test(value)) {
+      tokens[name] = value.trim();
+      taken.add(name);
+    }
+  }
+  for (const [name, { from, value }] of Object.entries(DERIVED) as [ThemeToken, Derived][]) {
+    if (taken.has(name) || !from.some((source) => taken.has(source))) continue;
+    const derived = value(tokens);
+    if (derived.length <= 200) tokens[name] = derived;
   }
   return Object.freeze({ scheme, tokens: Object.freeze(tokens) });
 }
+
+interface Derived { from: ThemeToken[], value: (tokens: ThemeTokens) => string }
+
+/**
+ * The tokens added after the first nine, from those nine, for a host that maps the first nine and
+ * not these: its own ink and accent, mixed, rather than anfra's paper and violet beside its colours.
+ * The status colours keep anfra's.
+ */
+const DERIVED: Partial<Record<ThemeToken, Derived>> = {
+  'color-bg-sunken': { from: ['color-fg', 'color-bg'], value: (t) => `color-mix(in srgb, ${t['color-fg']} 4%, ${t['color-bg']})` },
+  'color-fg-weak': { from: ['color-fg', 'color-bg'], value: (t) => `color-mix(in srgb, ${t['color-fg']} 80%, ${t['color-bg']})` },
+  'color-border-strong': { from: ['color-fg', 'color-border'], value: (t) => `color-mix(in srgb, ${t['color-fg']} 10%, ${t['color-border']})` },
+  'color-hover': { from: ['color-fg'], value: (t) => `color-mix(in srgb, ${t['color-fg']} 7%, transparent)` },
+  'color-active': { from: ['color-fg'], value: (t) => `color-mix(in srgb, ${t['color-fg']} 12%, transparent)` },
+  'color-selected': { from: ['color-accent'], value: (t) => `color-mix(in srgb, ${t['color-accent']} 14%, transparent)` },
+};
 
 /** Set a theme's custom properties, and its `color-scheme`, on an element's style. */
 export function applyTheme (style: CSSStyleDeclaration, theme: Theme): void {
