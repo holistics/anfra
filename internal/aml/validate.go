@@ -20,6 +20,10 @@ type RepoValidation struct {
 	// failed to compile. The key core.show uses for the same items.
 	Diagnostics []anfranode.CompileError     `json:"diagnostics"`
 	Reports     []anfranode.ValidationReport `json:"reports"`
+	// Unmatched are the paths that selected no AML file. Not part of the
+	// answer: the validate command decides what they mean, as it also selects
+	// the repo's Data Apps by them.
+	Unmatched []string `json:"-"`
 }
 
 func repoValid(diagnostics []anfranode.CompileError, reports []anfranode.ValidationReport) bool {
@@ -45,5 +49,6 @@ func Validate(ctx context.Context, node *anfranode.Client, r repo.Repo, paths []
 		Valid:       repoValid(res.CompileErrors, res.Reports),
 		Diagnostics: res.CompileErrors,
 		Reports:     res.Reports,
+		Unmatched:   res.UnmatchedPaths,
 	}, nil
 }
