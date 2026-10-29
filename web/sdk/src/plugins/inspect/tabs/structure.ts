@@ -12,7 +12,7 @@ import {
 import { LINEAGE_TAB } from '../model/types';
 import { stateOf } from '../state';
 import {
-  copyIcon, drawTab, fields, h, icon, link, note, replace,
+  badge, control, copyIcon, drawTab, fields, h, icon, link, note, replace,
 } from '../view';
 
 const boxed = (node: StructureNode) => node.kind === 'container' || node.kind === 'block';
@@ -101,7 +101,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
         node.children.length
           ? h(doc, 'button', {
             type: 'button',
-            class: `row-action twist${open ? ' open' : ''}`,
+            ...control('row-action', `twist${open ? ' open' : ''}`),
             'aria-label': open ? 'Collapse' : 'Expand',
             tabindex: '-1',
             onclick: (event: Event) => {
@@ -115,11 +115,11 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
         h(doc, 'span', { class: `kind ${node.kind}` }, node.kind),
         id && h(doc, 'span', { class: 'name' }, id),
         node.label && node.label !== id && h(doc, 'span', { class: 'label' }, node.label),
-        node.problems.length > 0 && h(doc, 'span', { class: 'pill error', 'aria-label': 'Problems' }, '!'),
+        node.problems.length > 0 && h(doc, 'span', { ...badge('error'), 'aria-label': 'Problems' }, '!'),
         h(doc, 'span', { class: 'actions' },
           declared(node) && h(doc, 'button', {
             type: 'button',
-            class: 'row-action',
+            ...control('row-action'),
             'data-tip': 'Show in Queries',
             'aria-label': 'Show in Queries',
             'data-testid': 'show-in-queries',
@@ -130,7 +130,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
           }, icon(doc, 'query')),
           hasLineage && (node.kind === 'block' || declared(node)) && h(doc, 'button', {
             type: 'button',
-            class: 'row-action',
+            ...control('row-action'),
             'data-tip': 'Show in Lineage',
             'aria-label': 'Show in Lineage',
             'data-testid': 'show-in-lineage',
@@ -141,7 +141,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
           }, icon(doc, 'lineage')),
           canRender && renderable(node) && h(doc, 'button', {
             type: 'button',
-            class: 'row-action',
+            ...control('row-action'),
             'data-tip': 'Download PNG',
             'aria-label': 'Download PNG',
             'data-testid': 'download-node',
@@ -173,7 +173,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
         hasLineage && link(doc, [icon(doc, 'lineage'), 'Show in Lineage'], () => showInLineage(node), { 'data-testid': 'detail-show-in-lineage' }),
         copyIcon(doc, 'Copy the attribute', () => attributeFor(node)),
         canRender && renderable(node) && (['png', 'pdf'] as const).map((format) => h(doc, 'button', {
-          type: 'button', class: 'tool', 'data-testid': `download-${format}`, onclick: () => { void render(node, format); },
+          type: 'button', ...control('tool'), 'data-testid': `download-${format}`, onclick: () => { void render(node, format); },
         }, icon(doc, 'download'), format.toUpperCase()))),
       status && h(doc, 'p', { class: 'status', role: 'status' }, status));
   }
@@ -186,7 +186,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
     // Pick is the panel's own command, in the host's strip; the toolbar shows only what's wrong.
     head.hidden = problems === 0;
     replace(doc, head,
-      problems > 0 && h(doc, 'span', { class: 'pill error', 'data-tip': 'Problems in the markup' }, plural(problems, 'problem')));
+      problems > 0 && h(doc, 'span', { ...badge('error'), 'data-tip': 'Problems in the markup' }, plural(problems, 'problem')));
     // A node selected elsewhere (a pick, a link): its ancestors open, so it can be seen.
     if (structure && panel.selection !== null && panel.selection !== revealed) {
       ancestorsOf(structure.nodes, panel.selection)?.forEach((key) => collapsed.delete(key));

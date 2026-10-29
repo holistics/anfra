@@ -58,7 +58,7 @@
 @media (hover: hover) {
   .a-button[data-variant="outline"]:hover { border-color: var(--anfra-color-border-hover); background-color: var(--anfra-color-background-default); }
 }
-.a-button[data-variant="outline"]:is(:active, [aria-expanded="true"]) { background-color: var(--anfra-color-background-active); }
+.a-button[data-variant="outline"]:is(:active, [aria-expanded="true"], [aria-pressed="true"]) { background-color: var(--anfra-color-background-active); }
 
 .a-button[data-variant="secondary"] {
   background-color: var(--anfra-color-background-secondary-default);
@@ -109,7 +109,7 @@
 .a-button[data-size="icon-lg"] { width: 36px; height: 36px; }
 
 /* Input: shadcn's Input, edged as an outline button is. Focus shows on its own border, violet and
-   doubled, never an outline. */
+   doubled, never an outline. A field with an icon is a label.a-input around the icon and a bare input. */
 .a-input {
   box-sizing: border-box;
   width: 100%;
@@ -128,14 +128,14 @@
 @media (hover: hover) {
   .a-input:hover { border-color: var(--anfra-color-border-hover); }
 }
-.a-input:read-only { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
+.a-input[readonly] { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
 .a-input:disabled {
   cursor: not-allowed;
   border-color: var(--anfra-color-border-disabled);
   background: var(--anfra-color-background-disabled);
   color: var(--anfra-color-text-disabled);
 }
-.a-input:focus-visible {
+.a-input:is(:focus-visible, :has(:focus-visible)) {
   border-color: var(--anfra-color-border-highlight-strong);
   box-shadow: inset 0 0 0 1px var(--anfra-color-border-highlight-strong);
 }
@@ -213,7 +213,7 @@
 .a-pill[data-tone="danger"] { background: var(--anfra-color-background-danger-secondary-default); color: var(--anfra-color-text-danger-default); }
 
 /* Tabs: shadcn's TabsList and TabsTrigger. A segmented list by default; data-variant="line" for an
-   underline. The open tab is aria-selected="true". */
+   underline. The open tab is aria-selected="true", or aria-pressed="true" in a group of toggles (a filter). */
 .a-tabs {
   display: inline-flex;
   align-items: center;
@@ -249,13 +249,13 @@
   .a-tab:hover { color: var(--anfra-color-text-default); }
 }
 .a-tab:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
-.a-tab[aria-selected="true"] {
+.a-tab:is([aria-selected="true"], [aria-pressed="true"]) {
   background: var(--anfra-color-background-default);
   color: var(--anfra-color-text-default);
   box-shadow: var(--anfra-e1);
 }
 .a-tabs[data-variant="line"] { border-radius: 0; background: transparent; }
-.a-tabs[data-variant="line"] .a-tab[aria-selected="true"] { background: transparent; box-shadow: none; }
+.a-tabs[data-variant="line"] .a-tab:is([aria-selected="true"], [aria-pressed="true"]) { background: transparent; box-shadow: none; }
 .a-tabs[data-variant="line"] .a-tab::after {
   content: "";
   position: absolute;
@@ -264,7 +264,7 @@
   background: var(--anfra-color-background-inverted-default);
   opacity: 0;
 }
-.a-tabs[data-variant="line"] .a-tab[aria-selected="true"]::after { opacity: 1; }
+.a-tabs[data-variant="line"] .a-tab:is([aria-selected="true"], [aria-pressed="true"])::after { opacity: 1; }
 
 /* Menu: shadcn's DropdownMenuContent and its parts. An item is highlighted on hover, on focus, or
    with data-highlighted (a menu that moves a highlight by keyboard). */

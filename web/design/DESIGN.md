@@ -255,10 +255,10 @@ Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has 
 | Class | Cloud's component | Variants |
 | --- | --- | --- |
 | `.a-button` | Button | `data-variant` default, outline, secondary, ghost, destructive, link; `data-size` xs, sm, default, lg, icon, icon-xs, icon-sm, icon-lg |
-| `.a-input` | Input | `aria-invalid="true"` for an error |
+| `.a-input` | Input | `aria-invalid="true"` for an error; a field with an icon is a `label.a-input` around the icon and a bare `input` |
 | `.a-badge` | Badge | `data-variant` default, secondary, outline, destructive, warning, success |
 | `.a-pill` | StatusPill | `data-tone` neutral, highlight, success, warning, danger |
-| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; the open tab is `aria-selected="true"` |
+| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
 | `.a-menu`, `.a-menu-item`, `.a-menu-label`, `.a-menu-separator`, `.a-menu-shortcut` | DropdownMenu | `data-variant="destructive"` on an item; `data-highlighted` for a keyboard highlight |
 | `.a-tooltip` | TooltipContent | |
 | `.a-kbd` | Kbd | |

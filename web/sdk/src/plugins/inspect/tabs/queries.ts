@@ -22,7 +22,7 @@ import { queryTrust } from '../model/trust';
 import type { QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
-  codeBlock, collapsible, columnIcon, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
+  badge, codeBlock, collapsible, columnIcon, control, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
   type Children, type CodeSource, type IconName,
 } from '../view';
 
@@ -154,7 +154,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
 
   const iconButton = (name: IconName, label: string, onclick: () => void, attributes: Record<string, string> = {}) => h(doc, 'button', {
     type: 'button',
-    class: 'row-action',
+    ...control('row-action'),
     'data-tip': label,
     'aria-label': label,
     ...attributes,
@@ -249,7 +249,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         dot,
         h(doc, 'span', { class: 'time' }, formatTime(entry.at)),
         h(doc, 'span', { class: 'condition' }, summaryOf(entry)),
-        shared && h(doc, 'span', { class: 'pill', 'data-tip': 'Another query declares the same dataset and AQL' }, 'shared'),
+        shared && h(doc, 'span', { ...badge(), 'data-tip': 'Another query declares the same dataset and AQL' }, 'shared'),
         h(doc, 'span', { class: 'spacer' }),
         h(doc, 'span', { class: 'rows' }, entry.durationMs === undefined ? '…' : `${entry.durationMs} ms`));
     const details = collapsible(doc, `${scope}:request:${entry.id}`, summary, () => [
@@ -281,9 +281,9 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         return collapsible(doc, `${key}:column:${column.name}`, [
           h(doc, 'span', { class: 'type', 'aria-hidden': 'true' }, columnIcon(doc, column)),
           h(doc, 'span', { class: 'name', 'data-tip': columnKind(column) }, column.name),
-          column.adhoc && h(doc, 'span', { class: 'pill warn' }, 'ad hoc'),
+          column.adhoc && h(doc, 'span', { ...badge('warn') }, 'ad hoc'),
           h(doc, 'span', { class: 'spacer' }),
-          unlabelled ? h(doc, 'span', { class: 'pill warn' }, 'no label') : h(doc, 'span', { class: 'label' }, column.label),
+          unlabelled ? h(doc, 'span', { ...badge('warn') }, 'no label') : h(doc, 'span', { class: 'label' }, column.label),
         ], () => fields(doc, [
           ['Label', column.label || h(doc, 'span', { class: 'muted' }, 'None')],
           ['Type', columnKind(column)],
@@ -306,9 +306,9 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       if (all !== wanted) toggle(allFilters, key);
     };
     return sub(`${key}:filters`, ['Filters', h(doc, 'span', { class: 'count' }, `· ${shown.length}`), h(doc, 'span', { class: 'spacer' }),
-      h(doc, 'span', { class: 'segments small', role: 'group', 'aria-label': 'Which filters' },
-        h(doc, 'button', { type: 'button', 'aria-pressed': String(!all), 'data-testid': 'filters-active', onclick: choose(false) }, `Active (${active.length})`),
-        h(doc, 'button', { type: 'button', 'aria-pressed': String(all), 'data-testid': 'filters-all', onclick: choose(true) }, `All (${filters.length})`))],
+      h(doc, 'span', { class: 'a-tabs segments small', role: 'group', 'aria-label': 'Which filters' },
+        h(doc, 'button', { type: 'button', class: 'a-tab', 'aria-pressed': String(!all), 'data-testid': 'filters-active', onclick: choose(false) }, `Active (${active.length})`),
+        h(doc, 'button', { type: 'button', class: 'a-tab', 'aria-pressed': String(all), 'data-testid': 'filters-all', onclick: choose(true) }, `All (${filters.length})`))],
     () => (shown.length === 0 ? h(doc, 'p', { class: 'muted' }, 'No active filters.') : h(doc, 'ul', { class: 'list filters', 'data-testid': 'filter-list' }, shown.map((input) => h(doc, 'li', { 'data-tip': filterSource(input) },
       h(doc, 'span', { class: 'type', 'aria-hidden': 'true' }, icon(doc, SOURCE_ICONS[input.kind])),
       h(doc, 'span', { class: 'field' }, input.field),
@@ -331,7 +331,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         h(doc, 'span', { class: 'name' }, name),
         h(doc, 'span', { class: 'rows', 'data-tip': query.state === 'success' ? plural(query.rowCount, 'row') : 'No rows yet' },
           query.state === 'success' ? query.rowCount.toLocaleString() : '—'),
-        query.isDirty ? h(doc, 'span', { class: 'pill warn' }, 'dirty') : query.debug?.fromCache && h(doc, 'span', { class: 'pill' }, 'cache'),
+        query.isDirty ? h(doc, 'span', { ...badge('warn') }, 'dirty') : query.debug?.fromCache && h(doc, 'span', { ...badge() }, 'cache'),
         h(doc, 'span', { class: 'spacer' }),
         filterIndicator(doc, active),
         hasLineage && lineageButton(doc, panel, marker),
@@ -392,7 +392,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     const summary = h(doc, 'span', { class: 'line' },
       h(doc, 'span', { class: 'name' }, name),
       h(doc, 'span', { class: 'condition' }, control.condition.values?.length ? formatCondition(control.condition) : ''),
-      control.isDirty && h(doc, 'span', { class: 'pill warn' }, 'unapplied'),
+      control.isDirty && h(doc, 'span', { ...badge('warn') }, 'unapplied'),
       h(doc, 'span', { class: 'spacer' }),
       isChanged(app, name, control) && h(doc, 'span', { class: 'changed', role: 'img', 'aria-label': 'Changed from the default', 'data-tip': 'Changed from the default value' }, 'M'),
       h(doc, 'span', {
@@ -420,7 +420,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
 
   function selectionCard (label: string, selection: InspectedSelection): HTMLElement {
     return h(doc, 'div', { class: 'card', 'data-testid': `selection-${label.toLowerCase()}` },
-      h(doc, 'header', {}, h(doc, 'strong', {}, label), selection.lossy && h(doc, 'span', { class: 'pill warn' }, 'lossy')),
+      h(doc, 'header', {}, h(doc, 'strong', {}, label), selection.lossy && h(doc, 'span', { ...badge('warn') }, 'lossy')),
       selection.lossy && h(doc, 'p', { class: 'tone-warn lossy' },
         "Some selected values can't be expressed as a filter, so the queries it filters see less than was selected."),
       fields(doc, [
@@ -472,6 +472,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   }) as HTMLInputElement;
   const buttons = FILTERS.map((filter) => h(doc, 'button', {
     type: 'button',
+    class: 'a-tab',
     'data-testid': `queries-filter-${filter}`,
     onclick: () => {
       view.filter = filter;
@@ -479,8 +480,8 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     },
   }));
   const head = h(doc, 'div', { class: 'toolbar' },
-    h(doc, 'label', { class: 'search' }, icon(doc, 'search'), input),
-    h(doc, 'div', { class: 'segments', role: 'group', 'aria-label': 'Filter' }, buttons));
+    h(doc, 'label', { class: 'a-input search' }, icon(doc, 'search'), input),
+    h(doc, 'div', { class: 'a-tabs segments', role: 'group', 'aria-label': 'Filter' }, buttons));
 
   const tab = drawTab(root, context, () => {
     const snapshot = panel.snapshot;
@@ -561,9 +562,10 @@ const CSS = `
 .filters .field { font-weight: 500; overflow-wrap: anywhere; }
 .filters .value { overflow-wrap: anywhere; }
 .filters .source { text-align: right; }
-.filters .link { padding: 0; font-size: 12px; }
+
 .pending { color: var(--warn); font-size: 12px; }
-.segments.small button { padding: 1px 8px; }
+.segments.small { height: 24px; }
+.segments.small .a-tab { padding: 0 6px; }
 .sub > summary .segments { margin: -2px 0; }
 .requests > .row + .row { margin-top: 6px; }
 .request > summary { min-height: 36px; padding: 4px 8px 4px 10px; }
