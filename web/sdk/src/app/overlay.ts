@@ -12,15 +12,15 @@ export const OVERLAY_ID = 'anfra-overlay';
 /** How long a flash (the author's `locate()`) stays. */
 export const FLASH_MS = 1500;
 
-const BOX_STYLE = 'position:fixed;box-sizing:border-box;background:rgba(37,99,235,0.22);outline:1px solid #2563eb;outline-offset:-1px;';
+const BOX_STYLE = 'position:fixed;box-sizing:border-box;background:oklch(0.546 0.215 262.9 / 0.22);outline:1px solid oklch(0.546 0.215 262.9);outline-offset:-1px;';
 const LABEL_STYLE = 'position:fixed;max-width:60vw;display:flex;gap:6px;align-items:baseline;padding:3px 8px;border-radius:4px;'
-  + 'background:#0f172a;color:#f8fafc;font:12px/1.4 system-ui,sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.35);';
+  + 'background:oklch(0.208 0.04 265.8);color:oklch(0.984 0.003 247.9);font:12px/1.4 system-ui,sans-serif;white-space:nowrap;box-shadow:0 2px 8px oklch(0 0 0 / 0.35);';
 const PART_STYLE: Record<keyof OverlayLabel, string> = {
-  kind: 'color:#94a3b8;',
-  name: 'color:#93c5fd;font-weight:700;',
-  label: 'color:#f8fafc;',
-  note: 'color:#94a3b8;',
-  size: 'color:#94a3b8;margin-left:10px;',
+  kind: 'color:oklch(0.711 0.035 256.8);',
+  name: 'color:oklch(0.809 0.096 251.8);font-weight:700;',
+  label: 'color:oklch(0.984 0.003 247.9);',
+  note: 'color:oklch(0.711 0.035 256.8);',
+  size: 'color:oklch(0.711 0.035 256.8);margin-left:10px;',
 };
 
 /**

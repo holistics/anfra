@@ -420,7 +420,7 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
   width: 100%;
   min-height: 0;
   border: 0;
-  background: #fff; /* the Data App's own page: white, whatever the theme */
+  background: oklch(1 0 0); /* the Data App's own page: white, whatever the theme */
 }
 
 .empty-state {
@@ -492,7 +492,7 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 
 /* Narrow: the sidebar floats over the viewer instead of beside it. */
 
-.backdrop { position: fixed; inset: 0; z-index: 19; background: rgb(0 0 0 / 30%); }
+.backdrop { position: fixed; inset: 0; z-index: 19; background: oklch(0 0 0 / 30%); }
 
 .shell.narrow { grid-template-columns: minmax(0, 1fr); }
 .shell.narrow .viewer { margin: 8px; }
@@ -531,7 +531,7 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 /* The command palette */
 .palette-backdrop {
   position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center; align-items: flex-start;
-  padding: 12vh 16px 16px; background: rgb(0 0 0 / 25%);
+  padding: 12vh 16px 16px; background: oklch(0 0 0 / 25%);
 }
 .palette {
   display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(440px, 76vh);
