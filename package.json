@@ -14,7 +14,8 @@
     "build:appserve": "pnpm --filter anfra-appserve build",
     "dev:appserve": "pnpm --filter anfra-appserve dev",
     "test:appserve": "pnpm --filter anfra-appserve test",
-    "test:web": "pnpm test:sdk && pnpm test:appserve"
+    "test:design": "pnpm --filter @holistics/anfra-design test",
+    "test:web": "pnpm test:design && pnpm test:sdk && pnpm test:appserve"
   },
   "config": {
     "commitizen": {
