@@ -352,7 +352,7 @@ const paletteEntries = computed<PaletteEntry[]>(() => {
     { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: 'sidebar' },
     { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View', icon: theme.value === 'dark' ? 'sun' : 'moon' },
     ...allApps(entries.value).map((entry): PaletteEntry => ({
-      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: 'app', disabled: entry.path === selected.value?.path ? 'Open now' : undefined,
+      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: 'app', disabled: entry.path === selected.value?.path ? 'Already open' : undefined,
     })),
   ];
 });

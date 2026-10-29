@@ -484,7 +484,7 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 @property --palette-fade-bottom { syntax: '<length>'; inherits: false; initial-value: 0px; }
 .palette-list {
   transition: --palette-fade-top 160ms var(--anfra-ease-out), --palette-fade-bottom 160ms var(--anfra-ease-out);
-  mask-image: linear-gradient(
+  --palette-mask: linear-gradient(
     to bottom,
     rgb(0 0 0 / 0) 0,
     rgb(0 0 0 / 0.16) calc(var(--palette-fade-top) * 0.25),
@@ -497,6 +497,8 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
     rgb(0 0 0 / 0.16) calc(100% - var(--palette-fade-bottom) * 0.25),
     rgb(0 0 0 / 0) 100%
   );
+  -webkit-mask-image: var(--palette-mask); /* Chrome before 120 */
+  mask-image: var(--palette-mask);
 }
 .palette-list[data-more-above] { --palette-fade-top: 32px; }
 .palette-list[data-more-below] { --palette-fade-bottom: 32px; }

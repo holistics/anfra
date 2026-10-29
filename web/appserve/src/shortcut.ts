@@ -1,13 +1,16 @@
-// A key combination ("Alt+Shift+I", the form commands declare it in) as the keys to draw, one per
-// Kbd: on a Mac the modifiers are its symbols, elsewhere their names.
-const MAC: Record<string, string> = { Meta: '⌘', Cmd: '⌘', Ctrl: '⌃', Control: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧' };
-const OTHER: Record<string, string> = { Meta: 'Win', Cmd: 'Ctrl', Control: 'Ctrl', Option: 'Alt' };
+// A key combination ("Alt+Shift+I", as a command declares it; the SDK takes any case and spaces) as
+// the keys to draw, one per Kbd: on a Mac the modifiers are its symbols, elsewhere their names.
+const MAC: Record<string, string> = { meta: '⌘', ctrl: '⌃', alt: '⌥', shift: '⇧' };
+const OTHER: Record<string, string> = { meta: 'Win', ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift' };
 const NAMED: Record<string, string> = {
-  Escape: 'Esc', Enter: '↵', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backspace: '⌫', Space: '␣',
+  escape: 'Esc', enter: '↵', arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→', backspace: '⌫', space: '␣',
 };
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function keyLabels (combo: string, mac = IS_MAC): string[] {
-  return combo.split('+').filter(Boolean).map((key) => (mac ? MAC : OTHER)[key] ?? NAMED[key] ?? (key.length === 1 ? key.toUpperCase() : key));
+  return combo.split('+').map((key) => key.trim()).filter(Boolean).map((key) => {
+    const name = key.toLowerCase();
+    return (mac ? MAC : OTHER)[name] ?? NAMED[name] ?? key.charAt(0).toUpperCase() + key.slice(1);
+  });
 }
