@@ -147,7 +147,9 @@ onBeforeUnmount(() => {
         <div v-if="moreTabs.length" class="more panel-more">
           <button
             type="button"
-            class="icon-button"
+            class="a-button"
+            data-variant="ghost"
+            data-size="icon-xs"
             aria-label="More tabs"
             title="More tabs"
             aria-haspopup="menu"
@@ -157,11 +159,12 @@ onBeforeUnmount(() => {
           >
             <Icon name="overflow" />
           </button>
-          <div v-if="moreOpen" ref="menu" class="menu" role="menu" data-testid="more-tabs-menu" @keydown="onMenuKey">
+          <div v-if="moreOpen" ref="menu" class="menu a-menu" role="menu" data-testid="more-tabs-menu" @keydown="onMenuKey">
             <button
               v-for="tab in moreTabs"
               :key="tab.id"
               type="button"
+              class="a-menu-item"
               role="menuitem"
               :data-testid="`tab-${tab.id}`"
               @click="choose(tab.id)"
@@ -177,7 +180,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
-      <button type="button" class="icon-button" aria-label="Close panel" @click="panel.hide()">
+      <button type="button" class="a-button" data-variant="ghost" data-size="icon-xs" aria-label="Close panel" @click="panel.hide()">
         <Icon name="close" />
       </button>
     </header>
