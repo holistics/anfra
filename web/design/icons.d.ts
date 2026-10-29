@@ -2,6 +2,7 @@
 
 export type IconName =
   | "folder"
+  | "folder-open"
   | "app"
   | "database"
   | "dataset"
