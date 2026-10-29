@@ -359,6 +359,8 @@
   pointer-events: none;
   user-select: none;
 }
+/* KbdGroup: a combination, one Kbd per key. */
+.a-kbd-group { display: inline-flex; flex: none; align-items: center; gap: 4px; }
 
 /* Sidebar: shadcn's SidebarGroupLabel, SidebarMenuButton (.a-nav-item), SidebarMenuSub (.a-tree) and
    SidebarMenuSubButton (.a-tree-row). The current page is aria-current="page" (or data-active): a

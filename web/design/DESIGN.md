@@ -281,7 +281,7 @@ Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has 
 | `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; `data-size="sm"` for a 24px list with a 2px track; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
 | `.a-menu`, `.a-menu-item`, `.a-menu-label`, `.a-menu-separator`, `.a-menu-shortcut` | DropdownMenu | `data-variant="destructive"` on an item; `data-highlighted` for a keyboard highlight |
 | `.a-tooltip` | TooltipContent | |
-| `.a-kbd` | Kbd | |
+| `.a-kbd`, `.a-kbd-group` | Kbd, KbdGroup | a combination is a group, one Kbd per key |
 | `.a-nav-label`, `.a-nav-item`, `.a-tree`, `.a-tree-row` | SidebarGroupLabel, SidebarMenuButton, SidebarMenuSub, SidebarMenuSubButton | `data-size="sm"` on a nav item; the current page is `aria-current="page"` |
 
 A change to a Cloud component's look is a change to its class here, in the same release.
@@ -313,6 +313,7 @@ A change to a Cloud component's look is a change to its class here, in the same 
 - **A control keeps its edge on any ground**: a control's fill is translucent (`background-fill-*`), never a surface color, so a tab list or a secondary button in a well (`background-secondary-default`) still stands off it.
 - **Badges and status pills**: caption at 500, a label or an icon always beside the color.
 - **Tooltips**: inverse ink (`background-inverted-default`, `text-inverted-default`), the caption role, `--anfra-radius-md`.
+- **Shortcuts**: a combination is a KbdGroup, one Kbd per key, beside the command it runs (a field's hint, a palette entry). On a Mac the modifiers are its symbols (⌘ ⌥ ⇧ ⌃), elsewhere their names (Ctrl, Alt, Shift).
 
 ### Icons
 
@@ -342,6 +343,7 @@ The product shows the logomark only: violet on light, the inverse on dark (`--an
 
 - "anfra" is lowercase, even first in a sentence.
 - Text of one sentence has no end period; two or more sentences keep all of theirs.
+- Labels, headings and group labels are sentence case. Never uppercase text with CSS; only the mono-label role (kinds, revisions) is uppercase.
 - Users read "organization", never "org", "tenant" or "workspace". Code and URLs keep `org`.
 
 ## Accessibility
