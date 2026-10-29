@@ -20,7 +20,12 @@
   /* Spacing, on a 4px unit. */
   --anfra-space-unit: 4px;
   --anfra-control-height: 32px;
+  --anfra-field-gap: 8px; /* a label and its field */
+  --anfra-form-gap: 24px; /* one field and the next */
   --anfra-panel-inset: 8px;
+  --anfra-sheet-padding: 24px;
+  --anfra-sheet-width: 384px;
+  --anfra-logomark-sheet: 48px; /* the logomark atop a sheet */
 
   /* Motion: under 300ms on a control. */
   --anfra-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
