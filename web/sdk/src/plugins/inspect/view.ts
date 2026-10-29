@@ -585,11 +585,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: default; }
 :focus-visible { outline: 2px solid var(--anfra-color-accent); outline-offset: 1px; }
 .pane { height: 100%; display: flex; flex-direction: column; min-height: 0;
-  --hover: color-mix(in srgb, var(--anfra-color-fg) 7%, transparent);
-  --subtle: color-mix(in srgb, var(--anfra-color-fg) 4%, transparent);
-  --accent-bg: color-mix(in srgb, var(--anfra-color-accent) 14%, transparent);
+  --hover: var(--anfra-color-hover);
+  --subtle: var(--anfra-color-bg-sunken);
+  --accent-bg: var(--anfra-color-selected);
   --danger-bg: color-mix(in srgb, var(--anfra-color-danger) 14%, transparent);
-  --ok: light-dark(#059669, #34d399); --warn: light-dark(#d97706, #fbbf24); --run: light-dark(#0284c7, #38bdf8);
+  --ok: var(--anfra-color-success); --warn: var(--anfra-color-warning); --run: light-dark(#0284c7, #38bdf8);
   --warn-bg: color-mix(in srgb, var(--warn) 16%, transparent); --ok-bg: color-mix(in srgb, var(--ok) 16%, transparent); }
 .body { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 16px; }
 .body.split { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
