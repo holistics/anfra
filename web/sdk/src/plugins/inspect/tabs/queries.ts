@@ -306,7 +306,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       if (all !== wanted) toggle(allFilters, key);
     };
     return sub(`${key}:filters`, ['Filters', h(doc, 'span', { class: 'count' }, `· ${shown.length}`), h(doc, 'span', { class: 'spacer' }),
-      h(doc, 'span', { class: 'a-tabs segments small', 'data-ground': 'secondary', role: 'group', 'aria-label': 'Which filters' },
+      h(doc, 'span', { class: 'a-tabs segments', 'data-size': 'sm', 'data-ground': 'secondary', role: 'group', 'aria-label': 'Which filters' },
         h(doc, 'button', { type: 'button', class: 'a-tab', 'aria-pressed': String(!all), 'data-testid': 'filters-active', onclick: choose(false) }, `Active (${active.length})`),
         h(doc, 'button', { type: 'button', class: 'a-tab', 'aria-pressed': String(all), 'data-testid': 'filters-all', onclick: choose(true) }, `All (${filters.length})`))],
     () => (shown.length === 0 ? h(doc, 'p', { class: 'muted' }, 'No active filters.') : h(doc, 'ul', { class: 'list filters', 'data-testid': 'filter-list' }, shown.map((input) => h(doc, 'li', { 'data-tip': filterSource(input) },
@@ -564,8 +564,6 @@ const CSS = `
 .filters .source { text-align: right; }
 
 .pending { color: var(--warn); font-size: 12px; }
-.segments.small { height: 24px; }
-.segments.small .a-tab { padding: 0 6px; }
 .sub > summary .segments { margin: -2px 0; }
 .requests > .row + .row { margin-top: 6px; }
 .request > summary { min-height: 36px; padding: 4px 8px 4px 10px; }

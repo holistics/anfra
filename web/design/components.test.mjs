@@ -32,10 +32,10 @@ test('icons.js is what scripts/icons.mjs writes', () => {
 
 // Nested radii: a part inside a padded container takes the container's radius less the padding, so
 // the corners stay concentric. Each pair is [container, part]; the container's padding is even.
-const NESTED = [['.a-tabs', '.a-tab'], ['.a-menu', '.a-menu-item']];
+const NESTED = [['.a-tabs', '.a-tab'], ['.a-tabs[data-size="sm"]', '.a-tabs[data-size="sm"] .a-tab'], ['.a-menu', '.a-menu-item']];
 const radii = Object.fromEntries([...read('type.css').matchAll(/(--anfra-radius-[\w-]+)\s*:\s*(\d+)px/g)].map((m) => [m[1], Number(m[2])]));
 const rule = (selector) => {
-  const body = components.match(new RegExp(`(?:^|\\n)${selector.replace('.', '\\.')} \\{([^}]*)\\}`))?.[1];
+  const body = components.match(new RegExp(`(?:^|\\n)${selector.replace(/[.[\]"]/g, '\\$&')} \\{([^}]*)\\}`))?.[1];
   assert.ok(body, `no rule for ${selector}`);
   const value = (property) => body.match(new RegExp(`(?:^|\\s)${property}:\\s*([^;]+);`))?.[1].trim();
   return { radius: value('border-radius'), padding: value('padding') };
