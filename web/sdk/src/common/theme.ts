@@ -10,6 +10,8 @@ export type ThemeScheme = 'light' | 'dark';
 /** The tokens, by name: each is the CSS custom property `--anfra-<name>`. */
 export const THEME_TOKENS = [
   'color-bg', 'color-fg', 'color-muted', 'color-border', 'color-accent', 'color-danger', 'radius', 'font', 'font-mono',
+  'color-bg-sunken', 'color-fg-weak', 'color-border-strong', 'color-hover', 'color-active', 'color-selected',
+  'color-warning', 'color-success',
 ] as const;
 
 export type ThemeToken = typeof THEME_TOKENS[number];
@@ -28,34 +30,92 @@ export interface Theme {
   readonly tokens: Readonly<ThemeTokens>;
 }
 
-const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-const FONT_MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const FONT = "'Inter Variable', ui-sans-serif, system-ui, sans-serif";
+const FONT_MONO = "'Geist Mono Variable', ui-monospace, monospace";
 
-/** Each scheme's tokens where the host sets none. */
+/**
+ * Each scheme's tokens where the host sets none: anfra's own (`@holistics/anfra-design`'s
+ * `tokens.css`, resolved), so plugin UI looks like anfra in a host that maps nothing. A test
+ * holds them to that file.
+ */
 export const DEFAULT_TOKENS: Readonly<Record<ThemeScheme, Readonly<ThemeTokens>>> = {
   light: {
-    'color-bg': '#ffffff',
-    'color-fg': '#18181b',
-    'color-muted': '#71717a',
-    'color-border': '#e4e4e7',
-    'color-accent': '#5b3df5',
-    'color-danger': '#c4261d',
-    radius: '8px',
+    'color-bg': 'oklch(1 0 0)',
+    'color-bg-sunken': 'oklch(0.973 0.005 95.1)',
+    'color-fg': 'oklch(0.201 0.022 301.1)',
+    'color-fg-weak': 'oklch(0.392 0.021 304.3)',
+    'color-muted': 'oklch(0.485 0.022 306.3)',
+    'color-border': 'oklch(0.201 0.022 301.1 / 0.12)',
+    'color-border-strong': 'oklch(0.201 0.022 301.1 / 0.24)',
+    'color-accent': 'oklch(0.484 0.181 298.1)',
+    'color-danger': 'oklch(0.501 0.17 27.2)',
+    'color-warning': 'oklch(0.501 0.1 70.3)',
+    'color-success': 'oklch(0.479 0.1 151.8)',
+    'color-hover': 'oklch(0.201 0.022 301.1 / 0.05)',
+    'color-active': 'oklch(0.201 0.022 301.1 / 0.09)',
+    'color-selected': 'oklch(0.946 0.027 304.8)',
+    radius: '10px',
     font: FONT,
     'font-mono': FONT_MONO,
   },
   dark: {
-    'color-bg': '#1c1c20',
-    'color-fg': '#ececef',
-    'color-muted': '#9a9aa5',
-    'color-border': '#2f2f36',
-    'color-accent': '#a594ff',
-    'color-danger': '#f97066',
-    radius: '8px',
+    'color-bg': 'oklch(0.19 0.012 300)',
+    'color-bg-sunken': 'oklch(0.157 0.009 296.9)',
+    'color-fg': 'oklch(0.961 0.007 304.2)',
+    'color-fg-weak': 'oklch(0.879 0.016 302.5)',
+    'color-muted': 'oklch(0.835 0.018 300)',
+    'color-border': 'oklch(0.343 0.025 298.2)',
+    'color-border-strong': 'oklch(0.392 0.021 304.3)',
+    'color-accent': 'oklch(0.845 0.085 300)',
+    'color-danger': 'oklch(0.82 0.09 27)',
+    'color-warning': 'oklch(0.84 0.12 69.6)',
+    'color-success': 'oklch(0.8 0.12 151.9)',
+    'color-hover': 'oklch(1 0 0 / 0.06)',
+    'color-active': 'oklch(1 0 0 / 0.1)',
+    'color-selected': 'oklch(0.565 0.194 300.3 / 0.18)',
+    radius: '10px',
     font: FONT,
     'font-mono': FONT_MONO,
   },
 };
+
+/**
+ * Where each token comes from in `@holistics/anfra-design`: the custom property a host that uses
+ * it has on its page. One mapping, so every such host hands plugin UI the same theme.
+ */
+export const DESIGN_TOKENS: Readonly<Record<ThemeToken, string>> = {
+  'color-bg': '--anfra-color-background-default',
+  'color-bg-sunken': '--anfra-color-background-secondary-default',
+  'color-fg': '--anfra-color-text-default',
+  'color-fg-weak': '--anfra-color-text-weak',
+  'color-muted': '--anfra-color-text-placeholder',
+  'color-border': '--anfra-color-border-default',
+  'color-border-strong': '--anfra-color-border-strong',
+  'color-accent': '--anfra-color-text-highlight-default',
+  'color-danger': '--anfra-color-text-danger-default',
+  'color-warning': '--anfra-color-text-warning-default',
+  'color-success': '--anfra-color-text-success-default',
+  'color-hover': '--anfra-color-background-hover',
+  'color-active': '--anfra-color-background-active',
+  'color-selected': '--anfra-color-background-interactive-highlight-default',
+  radius: '--anfra-radius-lg',
+  font: '--anfra-font-sans',
+  'font-mono': '--anfra-font-mono',
+};
+
+/**
+ * A theme from a page that wears `@holistics/anfra-design`: each token read from its custom
+ * property (`DESIGN_TOKENS`), as `getComputedStyle(document.documentElement)` has it. A host calls
+ * it again when its scheme changes.
+ */
+export function designTheme (scheme: ThemeScheme, style: Pick<CSSStyleDeclaration, 'getPropertyValue'>): ThemeInput {
+  const tokens: Partial<ThemeTokens> = {};
+  for (const name of THEME_TOKENS) {
+    const value = style.getPropertyValue(DESIGN_TOKENS[name]).trim();
+    if (value) tokens[name] = value;
+  }
+  return { scheme, tokens };
+}
 
 // A token's value goes into a style attribute: no way out of its declaration, nor a URL to fetch.
 const UNSAFE_VALUE = /[;{}<>]|url\(|expression\(|@import|\\/i;
