@@ -12,7 +12,7 @@
   --anfra-type-mono-label: 400 0.75rem/1rem var(--anfra-font-mono);
 
   /* Shapes: the smaller the thing, the smaller the corner. */
-  --anfra-radius-md: 6px; /* menu items, nav items, chips, tooltips */
+  --anfra-radius-md: 6px; /* nav items, chips, tooltips */
   --anfra-radius-lg: 10px; /* buttons, fields, alerts */
   --anfra-radius-xl: 14px; /* cards, popovers, dialogs, the panel */
   --anfra-radius-pill: 9999px; /* status pills and counters only */
