@@ -1,53 +1,29 @@
+/*
+ * appserve's names for @holistics/anfra-design's Tier 2 tokens (imported in main.ts), which hold
+ * every colour and both themes: dark applies under [data-theme="dark"] on <html>. Add a colour as
+ * a token in web/design first, never here.
+ */
 :root {
-  --shell: #f6f6f7;
-  --bg: #ffffff;
-  --hover: #ececee;
-  --selected: #e8e8ec;
-  --border: #e4e4e7;
-  --text: #18181b;
-  --muted: #71717a;
-  --accent: #5b3df5;
-  --accent-bg: #efecfe;
-  --danger: #c4261d;
-  --danger-bg: #fdecea;
-  --ok: #16a34a;
-  --shadow: 0 8px 24px rgb(0 0 0 / 12%), 0 1px 3px rgb(0 0 0 / 8%);
-  --radius: 8px;
+  --shell: var(--anfra-color-background-base-default);
+  --bg: var(--anfra-color-background-default);
+  --hover: var(--anfra-color-background-hover);
+  --selected: var(--anfra-color-background-active);
+  --border: var(--anfra-color-border-default);
+  --border-strong: var(--anfra-color-border-strong);
+  --text: var(--anfra-color-text-default);
+  --text-weak: var(--anfra-color-text-weak);
+  --muted: var(--anfra-color-text-placeholder);
+  --accent: var(--anfra-color-background-highlight-default);
+  --accent-text: var(--anfra-color-text-highlight-default);
+  --accent-bg: var(--anfra-color-background-interactive-highlight-default);
+  --on-accent: var(--anfra-color-text-on-fill);
+  --focus: var(--anfra-color-focus-ring-default);
+  --danger: var(--anfra-color-text-danger-default);
+  --danger-bg: var(--anfra-color-background-danger-secondary-default);
+  --ok: var(--anfra-color-icon-success-default);
+  --shadow: var(--anfra-e2);
+  --radius: var(--anfra-radius-lg);
   color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --shell: #151518;
-    --bg: #1c1c20;
-    --hover: #26262b;
-    --selected: #2d2d33;
-    --border: #2f2f36;
-    --text: #ececef;
-    --muted: #9a9aa5;
-    --accent: #a594ff;
-    --accent-bg: #2a2548;
-    --danger: #f97066;
-    --danger-bg: #3a1f1d;
-    --ok: #4ade80;
-    --shadow: 0 8px 24px rgb(0 0 0 / 50%), 0 1px 3px rgb(0 0 0 / 40%);
-  }
-}
-
-:root[data-theme="dark"] {
-  --shell: #151518;
-  --bg: #1c1c20;
-  --hover: #26262b;
-  --selected: #2d2d33;
-  --border: #2f2f36;
-  --text: #ececef;
-  --muted: #9a9aa5;
-  --accent: #a594ff;
-  --accent-bg: #2a2548;
-  --danger: #f97066;
-  --danger-bg: #3a1f1d;
-  --ok: #4ade80;
-  --shadow: 0 8px 24px rgb(0 0 0 / 50%), 0 1px 3px rgb(0 0 0 / 40%);
 }
 
 :root[data-theme="light"] { color-scheme: light; }
@@ -57,7 +33,7 @@
 
 body {
   margin: 0;
-  font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: var(--anfra-type-body);
   background: var(--shell);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -67,9 +43,9 @@ button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.4; }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
-code { font-size: 12px; color: var(--muted); }
+code { font: var(--anfra-type-mono-label); color: var(--muted); }
 
 .icon { flex: none; }
 
@@ -114,7 +90,7 @@ code { font-size: 12px; color: var(--muted); }
   height: 24px;
   border-radius: 6px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .brand .palette-open { margin-left: auto; flex: none; }
@@ -140,7 +116,7 @@ code { font-size: 12px; color: var(--muted); }
   color: var(--muted);
 }
 
-.search:focus-within { border-color: var(--accent); }
+.search:focus-within { border-color: var(--accent-text); }
 
 .search input {
   flex: 1;
@@ -155,7 +131,7 @@ code { font-size: 12px; color: var(--muted); }
 .search input::placeholder { color: var(--muted); }
 
 .search kbd {
-  font: 11px/1 ui-monospace, monospace;
+  font: 11px/1 var(--anfra-font-mono);
   padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -194,7 +170,7 @@ code { font-size: 12px; color: var(--muted); }
 .tree .caret.open { transform: rotate(90deg); }
 
 .tree .app.selected { background: var(--selected); font-weight: 600; }
-.tree .app.selected .kind { color: var(--accent); }
+.tree .app.selected .kind { color: var(--accent-text); }
 
 .notice { margin: 8px; color: var(--muted); }
 .notice.error { color: var(--danger); }
@@ -244,7 +220,7 @@ code { font-size: 12px; color: var(--muted); }
   padding: 0 8px 0 6px;
   border-radius: 10px;
   background: var(--accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -293,7 +269,7 @@ code { font-size: 12px; color: var(--muted); }
 }
 
 .icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.icon-button.active { background: var(--accent-bg); color: var(--accent); }
+.icon-button.active { background: var(--selected); color: var(--accent-text); }
 
 .breadcrumb {
   display: flex;
@@ -444,7 +420,7 @@ code { font-size: 12px; color: var(--muted); }
   width: 100%;
   min-height: 0;
   border: 0;
-  background: #fff;
+  background: #fff; /* the Data App's own page: white, whatever the theme */
 }
 
 .empty-state {
@@ -571,5 +547,5 @@ code { font-size: 12px; color: var(--muted); }
 .palette-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-on { margin-left: 8px; padding: 0 6px; border-radius: 4px; background: var(--accent-bg); color: var(--accent); font-size: 11px; font-weight: 600; }
 .palette-hint { flex: none; font-size: 12px; }
-.palette-entry kbd { flex: none; padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font: 11px ui-monospace, monospace; }
+.palette-entry kbd { flex: none; padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font: 11px var(--anfra-font-mono); }
 .palette-empty { margin: 16px 8px; color: var(--muted); }
