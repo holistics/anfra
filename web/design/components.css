@@ -237,7 +237,7 @@
   height: calc(100% - 1px);
   padding: 2px 6px;
   border: 1px solid transparent;
-  border-radius: var(--anfra-radius-lg);
+  border-radius: calc(var(--anfra-radius-lg) - 3px); /* nested in the list: its radius less its padding */
   background: transparent;
   color: var(--anfra-color-text-weak);
   font: var(--anfra-type-label);

@@ -241,7 +241,7 @@ Depth comes from tone and hairlines: paper behind, white in front, 1px rules bet
 
 ## Shapes
 
-Soft, not round. Controls and surfaces nest by radius: the smaller the thing, the smaller the corner.
+Soft, not round. Controls and surfaces nest by radius: the smaller the thing, the smaller the corner. A thing nested in a padded container takes the container's radius less the padding, so the two corners stay concentric: a tab in its list is 10 − 3 = 7px.
 
 - `--anfra-radius-md` {rounded.md}: menu items, nav items, chips, tooltips.
 - `--anfra-radius-lg` {rounded.lg}: buttons, fields, alerts.
