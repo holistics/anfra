@@ -1,0 +1,11 @@
+/*
+ * Inter for all text, Geist Mono for code and names written in code. Bundled, never loaded from a
+ * CDN: an on-prem install, or `anfra serve` on a laptop, may be offline.
+ */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/geist-mono';
+
+:root {
+  --anfra-font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --anfra-font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+}

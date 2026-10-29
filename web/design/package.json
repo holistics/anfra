@@ -1,0 +1,35 @@
+{
+  "name": "@holistics/anfra-design",
+  "version": "0.14.1",
+  "description": "anfra's design tokens, type and rules: one design language for anfra core (appserve, the SDK's plugin UI) and anfra Cloud",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holistics/anfra.git",
+    "directory": "web/design"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.css",
+    "./index.css": "./index.css",
+    "./tokens.css": "./tokens.css",
+    "./fonts.css": "./fonts.css",
+    "./type.css": "./type.css",
+    "./DESIGN.md": "./DESIGN.md",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.css",
+    "tokens.css",
+    "fonts.css",
+    "type.css",
+    "DESIGN.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0"
+  }
+}

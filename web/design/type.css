@@ -1,0 +1,28 @@
+/*
+ * The type roles (DESIGN.md, Typography) as `font` shorthands, for hosts without Tailwind:
+ * `font: var(--anfra-type-body)`. A screen uses three sizes, 20, 14 and 12px. Shape and spacing
+ * sit here too, so plain CSS has every scale DESIGN.md names.
+ */
+:root {
+  --anfra-type-title: 600 1.25rem/1.75rem var(--anfra-font-sans);
+  --anfra-type-heading: 600 0.875rem/1.25rem var(--anfra-font-sans);
+  --anfra-type-body: 400 0.875rem/1.25rem var(--anfra-font-sans);
+  --anfra-type-label: 500 0.875rem/1.25rem var(--anfra-font-sans);
+  --anfra-type-caption: 400 0.75rem/1rem var(--anfra-font-sans);
+  --anfra-type-mono-label: 400 0.75rem/1rem var(--anfra-font-mono);
+
+  /* Shapes: the smaller the thing, the smaller the corner. */
+  --anfra-radius-md: 6px; /* menu items, nav items, chips, tooltips */
+  --anfra-radius-lg: 10px; /* buttons, fields, alerts */
+  --anfra-radius-xl: 14px; /* cards, popovers, dialogs, the panel */
+  --anfra-radius-pill: 9999px; /* status pills and counters only */
+
+  /* Spacing, on a 4px unit. */
+  --anfra-space-unit: 4px;
+  --anfra-control-height: 32px;
+  --anfra-panel-inset: 8px;
+
+  /* Motion: under 300ms on a control. */
+  --anfra-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --anfra-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
