@@ -107,14 +107,15 @@
 .a-button[data-size="icon-sm"] { width: 28px; height: 28px; }
 .a-button[data-size="icon-lg"] { width: 36px; height: 36px; }
 
-/* Input: shadcn's Input. Focus shows on its own border, violet and doubled, never an outline. */
+/* Input: shadcn's Input, edged as an outline button is. Focus shows on its own border, violet and
+   doubled, never an outline. */
 .a-input {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
   height: 32px;
   padding: 4px 10px;
-  border: 1px solid var(--anfra-color-border-field);
+  border: 1px solid var(--anfra-color-border-strong); /* the outline button's edge; darker on hover */
   border-radius: var(--anfra-radius-lg);
   background: transparent;
   color: var(--anfra-color-text-default);
@@ -273,7 +274,7 @@
   border-radius: var(--anfra-radius-xl);
   background: var(--anfra-color-background-raised-default);
   color: var(--anfra-color-text-default);
-  box-shadow: var(--anfra-e2), 0 0 0 1px var(--anfra-color-border-strong);
+  box-shadow: var(--anfra-e2); /* its edge is e2's ring, not a border */
 }
 .a-menu-item {
   position: relative;
