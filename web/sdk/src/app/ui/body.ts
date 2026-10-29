@@ -66,10 +66,10 @@ const STYLES = `
 .part { position: fixed; inset: 0; width: auto; height: auto; margin: 0; padding: 0; border: 0; overflow: visible; background: none; pointer-events: none; }
 .surface, .backdrop { pointer-events: auto; }
 .surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); background: var(--anfra-color-bg, oklch(1 0 0));
-  border: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); border-radius: var(--anfra-radius, 8px);
+  border: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); border-radius: calc(var(--anfra-radius, 10px) + 4px); /* a surface: the controls' radius plus 4px, anfra-design's xl */
   box-shadow: 0 8px 24px oklch(0 0 0 / 18%), 0 1px 3px oklch(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
 .menu { min-width: 180px; max-width: 320px; padding: 4px; outline: none; }
-.menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: var(--anfra-radius, 10px); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 /* One highlight, as a native menu has: the focused entry, which the pointer and the arrows both move. */
 .menu button:focus { outline: none; background: color-mix(in srgb, var(--anfra-color-accent, oklch(0.484 0.181 298.1)) 14%, transparent); }
 .menu button[aria-disabled="true"] { color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); cursor: default; }
