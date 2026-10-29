@@ -1,4 +1,5 @@
-/* Everything a host needs: the fonts, the tokens and the type roles. */
+/* Everything a host needs: the fonts, the tokens, the type roles and the class layer. */
 @import './fonts.css';
 @import './tokens.css';
 @import './type.css';
+@import './components.css';
