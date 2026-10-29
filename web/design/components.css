@@ -61,11 +61,11 @@
 .a-button[data-variant="outline"]:is(:active, [aria-expanded="true"], [aria-pressed="true"]) { background-color: var(--anfra-color-background-active); }
 
 .a-button[data-variant="secondary"] {
-  background-color: var(--anfra-color-background-secondary-default);
+  background-color: var(--anfra-color-background-fill-default);
   color: var(--anfra-color-text-default);
 }
 @media (hover: hover) {
-  .a-button[data-variant="secondary"]:hover { background-color: var(--anfra-color-background-active); }
+  .a-button[data-variant="secondary"]:hover { background-color: var(--anfra-color-background-fill-hover); }
 }
 .a-button[data-variant="secondary"]:is(:active, [aria-expanded="true"]) { background-color: var(--anfra-color-background-active); }
 
@@ -224,13 +224,10 @@
   height: 32px;
   padding: 3px;
   border-radius: var(--anfra-radius-lg);
-  background: var(--anfra-color-background-secondary-default);
+  background: var(--anfra-color-background-fill-default); /* a tint of its ground, so it reads on the panel and in a well */
   color: var(--anfra-color-text-weak);
   box-sizing: border-box;
 }
-/* A list in a well (background-secondary-default) would lose its track to the ground: it takes the
-   pressed layer instead, which reads on any ground. */
-.a-tabs[data-ground="secondary"] { background: var(--anfra-color-background-active); }
 /* Small: a 24px list for a toggle in a dense row, its track 2px. */
 .a-tabs[data-size="sm"] {
   height: 24px;
@@ -267,7 +264,7 @@
 }
 .a-tab:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
 .a-tab:is([aria-selected="true"], [aria-pressed="true"]) {
-  background: var(--anfra-color-background-default);
+  background: var(--anfra-color-background-fill-selected);
   color: var(--anfra-color-text-default);
   box-shadow: var(--anfra-e1);
 }

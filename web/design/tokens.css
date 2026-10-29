@@ -125,6 +125,13 @@
     --anfra-ink-a5
   ); /* Neutral hover layer (works on paper and on white) */
   --anfra-color-background-active: var(--anfra-ink-a9); /* Neutral pressed layer; open trigger */
+  --anfra-color-background-fill-default: var(
+    --anfra-ink-a4
+  ); /* A control's rest fill (secondary button, tab track): a tint of its ground, on white or in a well */
+  --anfra-color-background-fill-hover: var(--anfra-ink-a8); /* Hover on a filled control */
+  --anfra-color-background-fill-selected: var(
+    --anfra-ink-0
+  ); /* The open tab, raised off its track */
   --anfra-color-background-disabled: var(
     --anfra-ink-a4
   ); /* Disabled control fill (all variants, never violet) */
@@ -261,6 +268,11 @@
   ); /* was ink-875 (= nav hover color) */
   --anfra-color-background-hover: var(--anfra-white-a6);
   --anfra-color-background-active: var(--anfra-white-a10);
+  /* Not a swap of the light values: on dark a control is lighter than its ground, and the open tab
+     lighter than its track, since lighter reads as closer. White layers lift from any ground. */
+  --anfra-color-background-fill-default: var(--anfra-white-a4);
+  --anfra-color-background-fill-hover: var(--anfra-white-a8);
+  --anfra-color-background-fill-selected: var(--anfra-white-a8); /* on the track's a4: two steps up */
   --anfra-color-background-disabled: var(--anfra-white-a4);
   --anfra-color-background-inverted-default: var(--anfra-ink-100);
   --anfra-color-background-interactive-highlight-default: var(--anfra-violet-a18);
