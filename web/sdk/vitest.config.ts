@@ -13,5 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // anfra-design's class layer, which plugin tabs import as text (`?raw`): vitest leaves out CSS it doesn't process.
+    css: { include: [/[\\/]design[\\/]components\.css/] },
   },
 });
