@@ -10,6 +10,7 @@ import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
 import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
+import { designTheme } from '@holistics/anfra-sdk/common';
 import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
   allApps, filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
@@ -160,25 +161,8 @@ function storedTheme (): 'light' | 'dark' {
 }
 const theme = ref(storedTheme());
 watch(theme, (value) => { document.documentElement.dataset.theme = value; }, { immediate: true });
-// The plugins' UI follows the shell: its scheme, and its own colours as the SDK's tokens.
-const pluginTheme = computed<ThemeInput>(() => {
-  const scheme = theme.value;
-  const style = getComputedStyle(document.documentElement);
-  const read = (name: string) => style.getPropertyValue(name).trim() || undefined;
-  return {
-    scheme,
-    tokens: {
-      'color-bg': read('--bg'),
-      'color-fg': read('--text'),
-      'color-muted': read('--muted'),
-      'color-border': read('--border'),
-      'color-accent': read('--accent'),
-      'color-danger': read('--danger'),
-      radius: read('--radius'),
-      font: getComputedStyle(document.body).fontFamily || undefined,
-    },
-  };
-});
+// The plugins' UI follows the shell: its scheme, and anfra-design's tokens as the SDK's.
+const pluginTheme = computed<ThemeInput>(() => designTheme(theme.value, getComputedStyle(document.documentElement)));
 function toggleTheme (): void {
   theme.value = theme.value === 'dark' ? 'light' : 'dark';
   try {
