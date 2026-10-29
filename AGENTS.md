@@ -5,6 +5,10 @@
 - Read [docs/designs/philosophy.md](docs/designs/philosophy.md): what belongs in anfra core, and the guidelines a change should follow. The other [design docs](docs/README.md) cover each part; read the one for the part you change.
 - [DEVELOPMENT.md](DEVELOPMENT.md) says how to set up, run, test and release.
 
+## UI
+
+anfra's screens (appserve and the SDK's plugin UI) wear `@holistics/anfra-design` (`web/design`), the design package anfra Cloud shares. Before any UI change, read its [DESIGN.md](web/design/DESIGN.md): the rules, and the tokens for colour, type, radius and spacing. Take values from the tokens rather than writing them; if one is missing, add it to the package first.
+
 ## Checks
 
 Run what CI runs before you finish:
