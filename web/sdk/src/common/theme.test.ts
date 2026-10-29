@@ -67,4 +67,28 @@ describe('resolveTheme', () => {
     }
     expect(resolveTheme({ scheme: 'light', tokens: { font: '"Inter", sans-serif' } }).tokens.font).toBe('"Inter", sans-serif');
   });
+
+  it('mixes a newer token from the older ones a host sets, and keeps one it sets', () => {
+    const { tokens } = resolveTheme({ scheme: 'light', tokens: { 'color-fg': '#111', 'color-bg': '#fff', 'color-accent': '#4f46e5', 'color-active': '#ddd' } });
+    expect(tokens['color-selected']).toBe('color-mix(in srgb, #4f46e5 14%, transparent)');
+    expect(tokens['color-hover']).toBe('color-mix(in srgb, #111 7%, transparent)');
+    expect(tokens['color-bg-sunken']).toBe('color-mix(in srgb, #111 4%, #fff)');
+    expect(tokens['color-active']).toBe('#ddd');
+    expect(tokens['color-success']).toBe(DEFAULT_TOKENS.light['color-success']);
+  });
+
+  it('keeps anfra\'s newer tokens for a host that sets none of their sources', () => {
+    expect(resolveTheme({ scheme: 'dark', tokens: { font: 'Inter' } }).tokens['color-selected']).toBe(DEFAULT_TOKENS.dark['color-selected']);
+  });
+
+  it('gives a host that wears anfra-design its own tokens, unmixed', () => {
+    const style = { getPropertyValue: (name: string) => ({ '--anfra-color-text-default': '#222', '--anfra-color-background-hover': '#eee' } as Record<string, string>)[name] ?? '' };
+    const { tokens } = resolveTheme(designTheme('light', style));
+    expect(tokens['color-hover']).toBe('#eee');
+  });
+
+  it('survives a second pass, as a frame resolves what the host resolved', () => {
+    const once = resolveTheme({ scheme: 'light', tokens: { 'color-fg': '#111', 'color-accent': '#4f46e5' } });
+    expect(resolveTheme(once)).toEqual(once);
+  });
 });
