@@ -1,5 +1,50 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_TOKENS, resolveTheme } from './theme';
+import {
+  DEFAULT_TOKENS, DESIGN_TOKENS, THEME_TOKENS, designTheme, resolveTheme,
+} from './theme';
+
+/** Each custom property `@holistics/anfra-design` sets, resolved through its var()s, per scheme. */
+function designValues (): Record<'light' | 'dark', Map<string, string>> {
+  const files = ['tokens.css', 'fonts.css', 'type.css']
+    .map((file) => readFileSync(resolve(__dirname, '../../../design', file), 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/@import[^;]+;/g, '');
+  const light = new Map<string, string>();
+  const dark = new Map<string, string>();
+  for (const [, selector, body] of files.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const into = selector!.includes('dark') ? dark : light;
+    for (const [, name, value] of body!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) into.set(name!, value!.trim().replace(/\s+/g, ' '));
+  }
+  const resolved = (scheme: Map<string, string>) => {
+    const read = (name: string): string => (scheme.get(name) ?? light.get(name) ?? '')
+      .replace(/var\(\s*(--[\w-]+)\s*\)/g, (_, inner: string) => read(inner))
+      .replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+    return new Map([...light.keys()].map((name) => [name, read(name)]));
+  };
+  return { light: resolved(light), dark: resolved(new Map([...light, ...dark])) };
+}
+
+describe('DEFAULT_TOKENS', () => {
+  it('are anfra-design\'s tokens, resolved, in each scheme', () => {
+    const design = designValues();
+    for (const scheme of ['light', 'dark'] as const) {
+      for (const name of THEME_TOKENS) {
+        expect(DEFAULT_TOKENS[scheme][name], `${scheme} ${name}`).toBe(design[scheme].get(DESIGN_TOKENS[name]));
+      }
+    }
+  });
+});
+
+describe('designTheme', () => {
+  it('reads each token from its anfra-design property, leaving out what the page lacks', () => {
+    const page: Record<string, string> = { '--anfra-color-background-default': ' oklch(1 0 0) ', '--anfra-color-text-highlight-default': 'violet' };
+    const theme = designTheme('dark', { getPropertyValue: (name: string) => page[name] ?? '' });
+    expect(theme).toEqual({ scheme: 'dark', tokens: { 'color-bg': 'oklch(1 0 0)', 'color-accent': 'violet' } });
+  });
+});
 
 describe('resolveTheme', () => {
   it('fills the scheme\'s defaults under the tokens set', () => {
