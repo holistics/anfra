@@ -268,7 +268,7 @@ Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has 
 | `.a-input` | Input | `aria-invalid="true"` for an error; a field with an icon is a `label.a-input` around the icon and a bare `input` |
 | `.a-badge` | Badge | `data-variant` default, secondary, outline, destructive, warning, success |
 | `.a-pill` | StatusPill | `data-tone` neutral, highlight, success, warning, danger |
-| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
+| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; `data-ground="secondary"` on a list in a well; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
 | `.a-menu`, `.a-menu-item`, `.a-menu-label`, `.a-menu-separator`, `.a-menu-shortcut` | DropdownMenu | `data-variant="destructive"` on an item; `data-highlighted` for a keyboard highlight |
 | `.a-tooltip` | TooltipContent | |
 | `.a-kbd` | Kbd | |
@@ -300,6 +300,7 @@ A change to a Cloud component's look is a change to its class here, in the same 
 
 - **Current nav item**: on the paper, a white chip with a violet icon; in a nav inside the panel (tabs, settings), `background-active` and weight 500. Both carry `aria-current="page"` or `aria-selected`.
 - **Alerts**: a tinted container with an icon and the body role.
+- **A control on its own fill**: a control whose rest fill is the ground it sits on steps up a layer, so it keeps its edge: a tab list in a well (`background-secondary-default`) takes `background-active` for its track.
 - **Badges and status pills**: caption at 500, a label or an icon always beside the color.
 - **Tooltips**: inverse ink (`background-inverted-default`, `text-inverted-default`), the caption role, `--anfra-radius-md`.
 
