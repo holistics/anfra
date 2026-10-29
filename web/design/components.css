@@ -107,6 +107,8 @@
 .a-button[data-size="icon-xs"] svg { width: 12px; height: 12px; }
 .a-button[data-size="icon-sm"] { width: 28px; height: 28px; }
 .a-button[data-size="icon-lg"] { width: 36px; height: 36px; }
+/* Under 32px, lg would read as a pill: small controls take md. */
+.a-button:is([data-size="xs"], [data-size="sm"], [data-size="icon-xs"], [data-size="icon-sm"]) { border-radius: var(--anfra-radius-md); }
 
 /* Input: shadcn's Input, edged as an outline button is. Focus shows on its own border, violet and
    doubled, never an outline. A field with an icon is a label.a-input around the icon and a bare input. */
@@ -233,11 +235,11 @@
 .a-tabs[data-size="sm"] {
   height: 24px;
   padding: 2px;
-  border-radius: var(--anfra-radius-lg);
+  border-radius: var(--anfra-radius-md); /* under 32px, a control takes md */
 }
 .a-tabs[data-size="sm"] .a-tab {
   padding: 0 6px;
-  border-radius: calc(var(--anfra-radius-lg) - 2px); /* nested in the list: its radius less its padding */
+  border-radius: calc(var(--anfra-radius-md) - 2px); /* nested in the list: its radius less its padding */
   font: var(--anfra-type-caption);
   font-weight: 500;
 }

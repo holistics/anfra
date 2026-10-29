@@ -243,8 +243,8 @@ Depth comes from tone and hairlines: paper behind, white in front, 1px rules bet
 
 Soft, not round. Controls and surfaces nest by radius: the smaller the thing, the smaller the corner.
 
-- `--anfra-radius-md` {rounded.md}: nav items, chips, tooltips.
-- `--anfra-radius-lg` {rounded.lg}: buttons, fields, alerts.
+- `--anfra-radius-md` {rounded.md}: nav items, chips, tooltips, and controls under 32px (xs and sm buttons, the small tab list).
+- `--anfra-radius-lg` {rounded.lg}: buttons, fields, alerts, at 32px and up.
 - `--anfra-radius-xl` {rounded.xl}: cards, popovers, dialogs, the panel.
 - `--anfra-radius-pill` {rounded.pill}: status pills and counters only, never buttons.
 
@@ -253,7 +253,7 @@ Soft, not round. Controls and surfaces nest by radius: the smaller the thing, th
 | Part, in its container | Gap | Radius |
 | --- | --- | --- |
 | A tab in its list | 3px | `lg` − 3 = 7px |
-| A tab in a small list (`data-size="sm"`) | 2px | `lg` − 2 = 8px |
+| A tab in a small list (`data-size="sm"`) | 2px | `md` − 2 = 4px |
 | A menu item in its menu, a palette entry in the palette | 4px | `xl` − 4 = 10px |
 | A key hint in a field | 6px | `lg` − 6 = 4px |
 

@@ -598,12 +598,13 @@ code.wrap { overflow-wrap: anywhere; }
 .a-button.link { height: auto; padding: 0; }
 .toolbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--anfra-color-border); }
 /* A search box: the class layer's Input around its icon and field, at a toolbar's height. */
-.search { flex: 1; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; color: var(--anfra-color-muted); }
+.search { flex: 1; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: var(--anfra-radius-md); color: var(--anfra-color-muted); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--anfra-color-fg); font: inherit; font-size: 12px; }
 .search input::placeholder { color: var(--anfra-color-muted); }
-/* A filter's choices: the class layer's Tabs, at a toolbar's height. */
+/* A filter's choices: the class layer's Tabs, at a toolbar's height. Under 32px, a control takes md. */
 .segments.a-tabs { flex: none; }
-.segments.a-tabs:not([data-size]) { height: 28px; }
+.segments.a-tabs:not([data-size]) { height: 28px; border-radius: var(--anfra-radius-md); }
+.segments.a-tabs:not([data-size]) .a-tab { border-radius: calc(var(--anfra-radius-md) - 3px); }
 .segments .a-tab { padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 500; }
 .row-action-wrap { flex: none; display: inline-flex; }
 .spacer { flex: 1; }
