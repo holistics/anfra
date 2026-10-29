@@ -210,6 +210,28 @@ describe('shortcuts', () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards the host\'s own keys too, and presses each it gets back on the frame element', () => {
+    const { mounted: app } = host([plugin()], { keys: ['Meta+K'] });
+    const posted: { name?: string, payload?: unknown }[] = [];
+    vi.spyOn(app.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { posted.push(message as never); });
+    const fromFrame = (data: unknown) => window.dispatchEvent(new MessageEvent('message', { data, source: app.frame.contentWindow }));
+    fromFrame({ type: 'anfra:ready' });
+    expect(posted.find((message) => message.name === 'anfra.shortcuts')?.payload).toEqual(['alt+shift+s', 'meta+k']);
+    const pressed: KeyboardEvent[] = [];
+    const onKeydown = (event: KeyboardEvent) => pressed.push(event);
+    window.addEventListener('keydown', onKeydown);
+    fromFrame({ type: 'anfra:event', name: 'anfra.shortcut', payload: 'meta+k' });
+    fromFrame({ type: 'anfra:event', name: 'anfra.shortcut', payload: 'meta+j' });
+    window.removeEventListener('keydown', onKeydown);
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0]).toMatchObject({ key: 'k', code: 'KeyK', metaKey: true, ctrlKey: false, target: app.frame });
+  });
+
+  it('refuses a key that isn\'t one, and one a command has', () => {
+    expect(() => host([plugin()], { keys: ['Meta'] })).toThrow("Key 'Meta' isn't a key combination.");
+    expect(() => host([plugin()], { keys: ['Shift+Alt+S'] })).toThrow("Key 'Shift+Alt+S' is the shortcut of command 'notes.save'.");
+  });
+
   it('refuses a forwarded key whose command\'s call is the host\'s alone, which a key on the host\'s page runs', async () => {
     const save = vi.fn(() => 'saved');
     const { mounted: app } = host([plugin(save)]);

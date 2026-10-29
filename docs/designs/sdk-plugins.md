@@ -235,7 +235,7 @@ A plugin's contributions are named under it (`inspect.toggle`); the host's own (
 
 The runtime leaves right-click alone until something offers an entry, and always when the page handled the event itself (it prevented the default), with Shift (the browser's menu), and on a block marked `data-anfra-menu="off"`. One menu, modal or popover is open at a time; frame halves open the other two with `kernel.modal` and `kernel.popover`, drawn by the runtime (backdrop, focus, Escape, scroll lock, placement) with the plugin's content in its own shadow root. What draws all three is the kernel's UI body, sent on first use like a plugin's.
 
-**Shortcuts**: a command's `shortcut` runs it from the host's page (`mounted.handleKeydown(event)`, from the host's own key handler) and from inside the frame, which forwards the combinations the host registered (`anfra.shortcuts`, `anfra.shortcut`). A key the page handled itself (`preventDefault`) is left to it.
+**Shortcuts**: a command's `shortcut` runs it from the host's page (`mounted.handleKeydown(event)`, from the host's own key handler) and from inside the frame, which forwards the combinations the host registered (`anfra.shortcuts`, `anfra.shortcut`). A key the page handled itself (`preventDefault`) is left to it. A host's own keys, which no command has (a command palette's `Meta+K`), go in `createHost({ keys })`: the frame forwards them too, and the host gets each as a `keydown` on the frame element, so its page's key handler sees it as if pressed there.
 
 ## The frame side
 
