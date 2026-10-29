@@ -464,75 +464,86 @@ onBeforeUnmount(() => {
   <div class="shell" :class="{ 'sidebar-closed': !sidebarOpen, narrow }">
     <div v-if="narrow && sidebarOpen" class="backdrop" @click="sidebarOpen = false" />
     <nav class="sidebar" aria-label="Data Apps" :inert="!sidebarOpen">
-      <div class="brand">
-        <Logo />
-        <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
-        <button
-          type="button"
-          class="icon-button palette-open"
-          :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
-          :title="`Command palette (${PALETTE_SHORTCUT})`"
-          data-testid="palette-open"
-          @click="paletteOpen = true"
-        >
-          <Icon name="command" />
-        </button>
+      <div class="sidebar-header">
+        <div class="brand">
+          <Logo />
+          <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
+          <button
+            type="button"
+            class="a-button palette-open"
+            data-variant="ghost"
+            data-size="icon-sm"
+            :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
+            :title="`Command palette (${PALETTE_SHORTCUT})`"
+            data-testid="palette-open"
+            @click="paletteOpen = true"
+          >
+            <Icon name="command" />
+          </button>
+        </div>
+        <label class="search">
+          <Icon name="search" />
+          <input
+            ref="searchInput"
+            v-model="search"
+            type="search"
+            placeholder="Search apps"
+            aria-label="Search Data Apps"
+            data-testid="search"
+            @keydown="onSearchKeydown"
+          >
+          <kbd v-if="!search" class="a-kbd" aria-hidden="true">/</kbd>
+        </label>
       </div>
-      <label class="search">
-        <Icon name="search" />
-        <input
-          ref="searchInput"
-          v-model="search"
-          type="search"
-          placeholder="Search apps"
-          aria-label="Search Data Apps"
-          data-testid="search"
-          @keydown="onSearchKeydown"
-        >
-        <kbd v-if="!search" aria-hidden="true">/</kbd>
-      </label>
       <div class="tree-scroll">
-        <p v-if="loadError" class="notice error" role="alert">{{ loadError }}</p>
-        <p v-else-if="loaded && entries.length === 0" class="notice empty" data-testid="empty-state">
-          No Data Apps yet. Add a Data App definition, an <code>.html</code> file, to the repo's
-          <code>apps/</code> directory.
-        </p>
-        <p v-else-if="searching && filtered.length === 0" class="notice" data-testid="no-matches">No matches</p>
-        <AppTree
-          v-else
-          :entries="filtered"
-          :selected="selected?.path"
-          :collapsed="collapsed"
-          :force-open="searching"
-          @select="select"
-          @toggle="toggleFolder"
-        />
+        <div class="sidebar-group">
+          <div class="a-nav-label">Data Apps</div>
+          <p v-if="loadError" class="notice error" role="alert">{{ loadError }}</p>
+          <p v-else-if="loaded && entries.length === 0" class="notice empty" data-testid="empty-state">
+            No Data Apps yet. Add a Data App definition, an <code>.html</code> file, to the repo's
+            <code>apps/</code> directory.
+          </p>
+          <p v-else-if="searching && filtered.length === 0" class="notice" data-testid="no-matches">No matches</p>
+          <AppTree
+            v-else
+            :entries="filtered"
+            :selected="selected?.path"
+            :collapsed="collapsed"
+            :force-open="searching"
+            @select="select"
+            @toggle="toggleFolder"
+          />
+        </div>
       </div>
       <div class="sidebar-footer">
         <div class="footer-status">
           <p
-            class="status"
+            class="status a-pill"
             data-testid="anfra-status"
             :data-status="health"
+            :data-tone="health === 'up' ? 'success' : health === 'unknown' ? undefined : 'danger'"
             :title="health === 'up' && version ? `anfra is running on version ${version.current}` : undefined"
             role="status"
           >
-            <span class="dot" aria-hidden="true" />{{ statusLabel }}
+            {{ statusLabel }}
           </p>
           <span
             v-if="version?.latest && health !== 'unreachable'"
-            class="update-badge"
+            class="update-badge a-pill"
+            data-tone="highlight"
             data-testid="update-badge"
             role="note"
             :aria-label="updateHint"
             :title="updateHint"
           >
-            <Icon name="update" />Update
+            Update
           </span>
         </div>
         <button
           type="button"
-          class="icon-button"
+          class="a-button"
+          data-variant="ghost"
+          data-size="icon-sm"
           :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
           :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
           data-testid="theme-toggle"
@@ -547,23 +558,33 @@ onBeforeUnmount(() => {
       <header class="viewer-header">
         <button
           type="button"
-          class="icon-button"
+          class="a-button"
+          data-variant="ghost"
+          data-size="icon-sm"
           :aria-label="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
-          :aria-expanded="sidebarOpen"
           title="Toggle sidebar"
           data-testid="sidebar-toggle"
           @click="sidebarOpen = !sidebarOpen"
         >
           <Icon name="sidebar" />
         </button>
-        <nav class="breadcrumb" aria-label="Breadcrumb">
-          <template v-for="crumb in crumbs" :key="crumb.path">
-            <button type="button" class="crumb" data-testid="crumb" :data-crumb="crumb.path" @click="revealFolder(crumb.path)">
+        <!-- As anfra Cloud's app page: the app, then the folders it is in. -->
+        <Icon v-if="selected" name="app" class="title-icon" />
+        <h2 class="current" data-testid="viewer-title">{{ title }}</h2>
+        <nav v-if="crumbs.length" class="breadcrumb" aria-label="Folder">
+          <template v-for="(crumb, i) in crumbs" :key="crumb.path">
+            <span v-if="i" class="sep" aria-hidden="true">/</span>
+            <button
+              type="button"
+              class="crumb"
+              data-testid="crumb"
+              :data-crumb="crumb.path"
+              :title="`Show ${crumb.name} in the sidebar`"
+              @click="revealFolder(crumb.path)"
+            >
               {{ crumb.name }}
             </button>
-            <Icon name="chevron" class="sep" />
           </template>
-          <h2 class="current" data-testid="viewer-title">{{ title }}</h2>
         </nav>
         <div class="actions">
           <div v-if="problems.length" class="problems">
@@ -588,7 +609,9 @@ onBeforeUnmount(() => {
           </div>
           <button
             type="button"
-            class="icon-button"
+            class="a-button"
+            data-variant="ghost"
+            data-size="icon-sm"
             aria-label="Reload Data App"
             title="Reload Data App"
             data-testid="reload"
@@ -601,8 +624,9 @@ onBeforeUnmount(() => {
             v-for="command in toolbarCommands"
             :key="command.id"
             type="button"
-            class="icon-button"
-            :class="{ active: commandState(command).pressed }"
+            class="a-button"
+            data-variant="ghost"
+            data-size="icon-sm"
             :aria-label="command.title"
             :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${command.shortcut})` : command.title)"
             :data-testid="`command-${command.id}`"
@@ -615,7 +639,9 @@ onBeforeUnmount(() => {
           <div v-for="menu in overflowMenus" :key="menu.icon" class="more">
             <button
               type="button"
-              class="icon-button"
+              class="a-button"
+              data-variant="ghost"
+              data-size="icon-sm"
               :aria-label="menu.label"
               :title="menu.label"
               :data-testid="`more-${menu.icon}`"
@@ -626,11 +652,12 @@ onBeforeUnmount(() => {
             >
               <Icon :name="menu.icon" />
             </button>
-            <div v-if="moreOpen === menu.icon" class="menu" role="menu" :data-testid="`more-${menu.icon}-menu`">
+            <div v-if="moreOpen === menu.icon" class="menu a-menu" role="menu" :data-testid="`more-${menu.icon}-menu`">
               <button
                 v-for="command in menu.commands"
                 :key="command.id"
                 type="button"
+                class="a-menu-item"
                 role="menuitem"
                 :title="commandState(command).disabled"
                 :disabled="!!commandState(command).disabled"
