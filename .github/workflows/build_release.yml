@@ -10,8 +10,8 @@
 # workflow_dispatch: on a tag it releases that tag, on a branch it's a test build
 # (artifacts only, no release).
 #
-# A release also publishes the SDK to npm, as @holistics/anfra-sdk at the same version
-# (the sdk job).
+# A release also publishes the SDK and the design package to npm, as @holistics/anfra-sdk and
+# @holistics/anfra-design at the same version (the sdk job).
 name: Build anfra release
 
 on:
@@ -193,8 +193,9 @@ jobs:
           path: release/anfra-*
           if-no-files-found: error
 
-  # The SDK, published to npm as @holistics/anfra-sdk at the release's version, once the release
-  # is out. Any other build only packs it, so a broken package shows before a release does.
+  # The SDK and the design package, published to npm as @holistics/anfra-sdk and
+  # @holistics/anfra-design at the release's version, once the release is out. Any other build
+  # only packs them, so a broken package shows before a release does.
   #
   # npm takes the publish from this workflow over OIDC, with no token (trusted publishing), and
   # records the package's provenance. npm checks the workflow that started the run, so the
@@ -220,16 +221,20 @@ jobs:
       - run: npm install -g npm@11
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:sdk
-      - name: Publish the SDK, or pack it
-        working-directory: web/sdk
+      - name: Publish the SDK and the design package, or pack them
         run: |
-          if [ "$IS_RELEASE" != true ]; then npm pack --dry-run; exit 0; fi
-          name="$(jq -r .name package.json)"
-          version="$(jq -r .version package.json)"
-          if npm view "$name@$version" version >/dev/null 2>&1; then
-            echo "$name@$version is already on npm"; exit 0
-          fi
-          # A prerelease (1.2.0-rc.1) must not become what `npm install` picks.
-          tag=latest
-          case "$version" in *-*) tag=next ;; esac
-          npm publish --tag "$tag"
+          for pkg in web/sdk web/design; do
+            (
+              cd "$pkg"
+              if [ "$IS_RELEASE" != true ]; then npm pack --dry-run; exit 0; fi
+              name="$(jq -r .name package.json)"
+              version="$(jq -r .version package.json)"
+              if npm view "$name@$version" version >/dev/null 2>&1; then
+                echo "$name@$version is already on npm"; exit 0
+              fi
+              # A prerelease (1.2.0-rc.1) must not become what `npm install` picks.
+              tag=latest
+              case "$version" in *-*) tag=next ;; esac
+              npm publish --tag "$tag"
+            )
+          done

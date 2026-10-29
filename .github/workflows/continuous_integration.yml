@@ -102,11 +102,14 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - name: the SDK's version is the release's
+      - name: the SDK's and the design package's versions are the release's
         run: |
-          sdk="$(jq -r .version web/sdk/package.json)" release="$(yq .version manifest.yml)"
-          test "$sdk" = "$release" \
-            || { echo "web/sdk/package.json version $sdk != manifest.yml version $release: pnpm bump sets both" >&2; exit 1; }
+          release="$(yq .version manifest.yml)"
+          for pkg in web/sdk web/design; do
+            version="$(jq -r .version "$pkg/package.json")"
+            test "$version" = "$release" \
+              || { echo "$pkg/package.json version $version != manifest.yml version $release: pnpm bump sets them all" >&2; exit 1; }
+          done
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @holistics/anfra-sdk typecheck
       - name: build, as a release does
