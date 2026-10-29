@@ -253,6 +253,7 @@ Soft, not round. Controls and surfaces nest by radius: the smaller the thing, th
 | Part, in its container | Gap | Radius |
 | --- | --- | --- |
 | A tab in its list | 3px | `lg` − 3 = 7px |
+| A tab in a small list (`data-size="sm"`) | 2px | `lg` − 2 = 8px |
 | A menu item in its menu, a palette entry in the palette | 4px | `xl` − 4 = 10px |
 | A key hint in a field | 6px | `lg` − 6 = 4px |
 
@@ -268,7 +269,7 @@ Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has 
 | `.a-input` | Input | `aria-invalid="true"` for an error; a field with an icon is a `label.a-input` around the icon and a bare `input` |
 | `.a-badge` | Badge | `data-variant` default, secondary, outline, destructive, warning, success |
 | `.a-pill` | StatusPill | `data-tone` neutral, highlight, success, warning, danger |
-| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; `data-ground="secondary"` on a list in a well; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
+| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; `data-size="sm"` for a 24px list with a 2px track; `data-ground="secondary"` on a list in a well; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
 | `.a-menu`, `.a-menu-item`, `.a-menu-label`, `.a-menu-separator`, `.a-menu-shortcut` | DropdownMenu | `data-variant="destructive"` on an item; `data-highlighted` for a keyboard highlight |
 | `.a-tooltip` | TooltipContent | |
 | `.a-kbd` | Kbd | |

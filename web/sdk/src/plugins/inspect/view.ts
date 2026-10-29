@@ -602,7 +602,8 @@ code.wrap { overflow-wrap: anywhere; }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--anfra-color-fg); font: inherit; font-size: 12px; }
 .search input::placeholder { color: var(--anfra-color-muted); }
 /* A filter's choices: the class layer's Tabs, at a toolbar's height. */
-.segments.a-tabs { flex: none; height: 28px; }
+.segments.a-tabs { flex: none; }
+.segments.a-tabs:not([data-size]) { height: 28px; }
 .segments .a-tab { padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 500; }
 .row-action-wrap { flex: none; display: inline-flex; }
 .spacer { flex: 1; }

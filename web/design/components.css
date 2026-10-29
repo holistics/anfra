@@ -229,6 +229,18 @@
 /* A list in a well (background-secondary-default) would lose its track to the ground: it takes the
    pressed layer instead, which reads on any ground. */
 .a-tabs[data-ground="secondary"] { background: var(--anfra-color-background-active); }
+/* Small: a 24px list for a toggle in a dense row, its track 2px. */
+.a-tabs[data-size="sm"] {
+  height: 24px;
+  padding: 2px;
+  border-radius: var(--anfra-radius-lg);
+}
+.a-tabs[data-size="sm"] .a-tab {
+  padding: 0 6px;
+  border-radius: calc(var(--anfra-radius-lg) - 2px); /* nested in the list: its radius less its padding */
+  font: var(--anfra-type-caption);
+  font-weight: 500;
+}
 .a-tab {
   position: relative;
   box-sizing: border-box;
