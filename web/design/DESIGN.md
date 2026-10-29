@@ -241,12 +241,22 @@ Depth comes from tone and hairlines: paper behind, white in front, 1px rules bet
 
 ## Shapes
 
-Soft, not round. Controls and surfaces nest by radius: the smaller the thing, the smaller the corner. A thing nested in a padded container takes the container's radius less the padding, so the two corners stay concentric: a tab in its list is 10 − 3 = 7px.
+Soft, not round. Controls and surfaces nest by radius: the smaller the thing, the smaller the corner.
 
-- `--anfra-radius-md` {rounded.md}: menu items, nav items, chips, tooltips.
+- `--anfra-radius-md` {rounded.md}: nav items, chips, tooltips.
 - `--anfra-radius-lg` {rounded.lg}: buttons, fields, alerts.
 - `--anfra-radius-xl` {rounded.xl}: cards, popovers, dialogs, the panel.
 - `--anfra-radius-pill` {rounded.pill}: status pills and counters only, never buttons.
+
+**Nested corners are concentric.** A part that sits in a container's corner, closer to its edge than the container's radius, takes the container's radius less the gap between them, written as that `calc()` so it follows the tokens. A part flush with the edge takes the container's radius; a part further in than the radius takes its own from the scale. The gap is even on the sides the part is near, so the track around it is too.
+
+| Part, in its container | Gap | Radius |
+| --- | --- | --- |
+| A tab in its list | 3px | `lg` − 3 = 7px |
+| A menu item in its menu, a palette entry in the palette | 4px | `xl` − 4 = 10px |
+| A key hint in a field | 6px | `lg` − 6 = 4px |
+
+`components.test.mjs` holds the class layer's pairs to this.
 
 ## Components
 
