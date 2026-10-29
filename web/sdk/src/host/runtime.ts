@@ -17,7 +17,9 @@ import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
-import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
+import {
+  eventShortcut, isTyping, normalizeShortcut, shortcutEvent,
+} from '../common/shortcut';
 import {
   commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
@@ -421,18 +423,8 @@ export function createHost (options: HostOptions): Host {
       /** Press one of the host's own keys, forwarded from the frame, on the frame element. */
       const pressKey = (shortcut: unknown) => {
         if (typeof shortcut !== 'string' || !ownKeys.has(shortcut)) return;
-        const parts = shortcut.split('+');
-        const key = parts.pop()!;
-        const code = /^[a-z]$/.test(key) ? `Key${key.toUpperCase()}` : /^[0-9]$/.test(key) ? `Digit${key}` : '';
         frame.dispatchEvent(new (win as typeof globalThis).KeyboardEvent('keydown', {
-          key,
-          code,
-          ctrlKey: parts.includes('ctrl'),
-          altKey: parts.includes('alt'),
-          shiftKey: parts.includes('shift'),
-          metaKey: parts.includes('meta'),
-          bubbles: true,
-          cancelable: true,
+          ...shortcutEvent(shortcut), bubbles: true, cancelable: true,
         }));
       };
       const commandOf = (id: string) => {

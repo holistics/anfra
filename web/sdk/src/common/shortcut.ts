@@ -36,3 +36,24 @@ export function eventShortcut (event: KeyboardEvent): string {
     event.ctrlKey && 'ctrl', event.altKey && 'alt', event.shiftKey && 'shift', event.metaKey && 'meta', key,
   ].filter(Boolean).join('+');
 }
+
+// The keys whose event names them in words, by their name in a combination.
+const NAMED_KEYS = new Map(['Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'Insert', 'Home', 'End', 'PageUp', 'PageDown',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`)]
+  .map((name) => [name.toLowerCase(), name]));
+
+/**
+ * The key event a combination makes, as `eventShortcut` reads it back: `key` and `code` as a browser
+ * sets them (`Escape`, `K` with Shift, `KeyK`), so a listener matching either sees the key it expects.
+ */
+export function shortcutEvent (shortcut: string): KeyboardEventInit {
+  const parts = shortcut.split('+');
+  const name = parts.pop()!;
+  const shiftKey = parts.includes('shift');
+  const named = NAMED_KEYS.get(name);
+  const key = /^[a-z]$/.test(name) && shiftKey ? name.toUpperCase() : named ?? name;
+  const code = /^[a-z]$/.test(name) ? `Key${name.toUpperCase()}` : /^[0-9]$/.test(name) ? `Digit${name}` : named ?? '';
+  return {
+    key, code, ctrlKey: parts.includes('ctrl'), altKey: parts.includes('alt'), shiftKey, metaKey: parts.includes('meta'),
+  };
+}
