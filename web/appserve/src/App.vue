@@ -462,12 +462,13 @@ onBeforeUnmount(() => {
           type="button"
           class="search"
           aria-haspopup="dialog"
+          aria-label="Search apps and commands"
           :aria-keyshortcuts="IS_MAC ? 'Meta+K' : 'Control+K'"
           data-testid="palette-open"
           @click="paletteOpen = true"
         >
           <Icon name="search" />
-          <span class="search-label">Search apps and commands</span>
+          <span class="search-label">Search</span>
           <kbd class="a-kbd" aria-hidden="true">{{ PALETTE_SHORTCUT }}</kbd>
         </button>
       </div>
