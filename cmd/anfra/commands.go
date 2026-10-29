@@ -337,6 +337,7 @@ func invoke(ctx context.Context, c command.Command, args map[string]any) ([]byte
 		return nil, fmt.Errorf("encode args: %w", err)
 	}
 	if srv, ok := findServer(ctx, repo.Resolve(repoDir)); ok {
+		warnIfOtherVersion(os.Stderr, srv)
 		return callServe(ctx, srv.URL, c.Name(), input)
 	}
 

@@ -18,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/command/status"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/exports"
+	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/holistics/anfra/shared/routine"
@@ -140,6 +141,40 @@ func TestFindServer(t *testing.T) {
 	removeRuntime(r, "i-1")
 	if _, ok := readRuntime(runtimePath(r)); ok {
 		t.Error("did not remove its own runtime file")
+	}
+}
+
+// Every repo's running server is listed, for `anfra update` to name: only those
+// that answer.
+func TestRunningServers(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	h, r := handler(t)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	if err := writeRuntime(r, runtimeFile{URL: srv.URL, RepoID: r.ID, RepoDir: r.Dir, InstanceID: "i-1", Version: "0.1.0"}); err != nil {
+		t.Fatal(err)
+	}
+	dead := repo.Resolve(t.TempDir())
+	if err := writeRuntime(dead, runtimeFile{URL: "http://127.0.0.1:1", RepoID: dead.ID, RepoDir: dead.Dir, InstanceID: "i-2"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := runningServers(context.Background()); len(got) != 1 || got[0].RepoDir != r.Dir || got[0].Version != "0.1.0" {
+		t.Errorf("running servers = %+v, want the one that answers", got)
+	}
+}
+
+// A command forwarded to a server of another version says so, as a warning; to
+// one of this version, nothing.
+func TestWarnIfOtherVersion(t *testing.T) {
+	var out strings.Builder
+	warnIfOtherVersion(&out, runtimeFile{Version: meta.Version})
+	if out.Len() != 0 {
+		t.Errorf("warned of a server of this version: %q", out.String())
+	}
+	warnIfOtherVersion(&out, runtimeFile{Version: "0.13.3"})
+	if got := out.String(); !strings.HasPrefix(got, "---\nwarning:\n    code: server_version_mismatch\n") ||
+		!strings.Contains(got, "anfra 0.13.3, not this anfra's "+meta.Version) {
+		t.Errorf("warning =\n%s", got)
 	}
 }
 

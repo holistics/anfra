@@ -66,6 +66,10 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 		return err
 	}
 	fmt.Printf("Updated anfra %s -> %s.\n", meta.Version, rel.Version)
+	// A running server keeps the binary it started with.
+	for _, srv := range runningServers(ctx) {
+		fmt.Printf("`anfra serve` in %s still runs anfra %s: restart it to run %s.\n", srv.RepoDir, srv.Version, rel.Version)
+	}
 	return nil
 }
 
