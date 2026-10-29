@@ -102,9 +102,14 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
   white-space: nowrap;
 }
 
-/* The search field: an .a-input with an icon and a key hint inside it. */
+/* The search: a button that opens the command palette, drawn as an .a-input with an icon and the
+   palette's key hint inside it. */
 .search {
   display: flex;
+  width: 100%;
+  font: var(--anfra-type-body);
+  text-align: left;
+  cursor: pointer;
   align-items: center;
   gap: 8px;
   height: 32px;
@@ -119,7 +124,8 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 @media (hover: hover) {
   .search:hover { border-color: var(--anfra-color-border-hover); }
 }
-.search:focus-within {
+.search:focus-visible {
+  outline: none;
   border-color: var(--anfra-color-border-highlight-strong);
   box-shadow: inset 0 0 0 1px var(--anfra-color-border-highlight-strong);
 }
@@ -127,18 +133,14 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 /* The key hint sits 6px inside the field's edge, so its corner is the field's less 6px. */
 .search .a-kbd { border-radius: calc(var(--anfra-radius-lg) - 6px); }
 
-.search input {
+.search-label {
   flex: 1;
   min-width: 0;
-  border: 0;
-  outline: 0;
-  background: none;
-  color: var(--text);
-  appearance: none;
+  overflow: hidden;
+  color: var(--anfra-color-text-placeholder);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.search input::-webkit-search-cancel-button { appearance: none; }
-.search input::placeholder { color: var(--muted); }
 
 .tree-scroll {
   flex: 1;
