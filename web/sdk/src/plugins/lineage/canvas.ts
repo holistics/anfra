@@ -5,7 +5,7 @@
  * a new shape is laid out and fitted to the view, and a card that changes size is laid out again
  * in place.
  */
-import { h, icon, replace, type Children } from '../inspect/view';
+import { control, h, icon, replace, type Children } from '../inspect/view';
 import {
   crossFilterLoops, curve, layout, layoutKey, shapeOf, type Box,
 } from './layout';
@@ -59,9 +59,9 @@ export function createCanvas (doc: Document, options: CanvasOptions): Canvas {
   world.append(svg, cardsLayer);
   const view = { x: 0, y: 0, k: 1 };
   const controls = h(doc, 'div', { class: 'controls' },
-    h(doc, 'button', { type: 'button', class: 'row-action', 'data-tip': 'Zoom in', 'aria-label': 'Zoom in', onclick: () => zoomBy(1.25) }, icon(doc, 'plus')),
-    h(doc, 'button', { type: 'button', class: 'row-action', 'data-tip': 'Zoom out', 'aria-label': 'Zoom out', onclick: () => zoomBy(0.8) }, icon(doc, 'minus')),
-    h(doc, 'button', { type: 'button', class: 'row-action', 'data-tip': 'Fit to view', 'aria-label': 'Fit to view', 'data-testid': 'lineage-fit', onclick: () => fit(true) }, icon(doc, 'fit')));
+    h(doc, 'button', { type: 'button', ...control('row-action'), 'data-tip': 'Zoom in', 'aria-label': 'Zoom in', onclick: () => zoomBy(1.25) }, icon(doc, 'plus')),
+    h(doc, 'button', { type: 'button', ...control('row-action'), 'data-tip': 'Zoom out', 'aria-label': 'Zoom out', onclick: () => zoomBy(0.8) }, icon(doc, 'minus')),
+    h(doc, 'button', { type: 'button', ...control('row-action'), 'data-tip': 'Fit to view', 'aria-label': 'Fit to view', 'data-testid': 'lineage-fit', onclick: () => fit(true) }, icon(doc, 'fit')));
   const element = h(doc, 'div', { class: 'canvas', 'data-testid': 'lineage-canvas' }, world, controls);
 
   const cards = new Map<string, HTMLElement>();

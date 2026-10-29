@@ -18,7 +18,7 @@ import { QUERIES_TAB, type QueriesFilter, type RevealTarget } from '../model/typ
 import { stateOf } from '../state';
 import { PLUGIN_VERSION } from '../../version';
 import {
-  type Children, collapsible, drawTab, fields, h, icon, link, note, popover, trustBars,
+  type Children, badge, collapsible, control, drawTab, fields, h, icon, link, note, popover, trustBars,
 } from '../view';
 
 /** How many issues the list shows before "Show all". */
@@ -30,14 +30,10 @@ const TICK_MS = 30_000;
 const CSS = `
 .overview { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
 .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.statusbar .pop-trigger.pill, .count { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 2px 9px; font-variant-numeric: tabular-nums; }
-.count { border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--hover); color: var(--anfra-color-fg); }
+.statusbar .pop-trigger { gap: 5px; cursor: pointer; }
+.count { border: 0; font-variant-numeric: tabular-nums; cursor: pointer; }
 .count:hover { filter: brightness(0.95); }
-.count.error { background: var(--danger-bg); color: var(--anfra-color-danger); }
-.count.executing { background: color-mix(in srgb, var(--run) 16%, transparent); color: var(--run); }
-.count.dirty { background: var(--warn-bg); color: var(--warn); }
-.count .dot { width: 6px; height: 6px; }
-.dot.dirty { background: var(--warn); }
+.count.executing::before { animation: pulse 1.2s ease-in-out infinite; }
 .tile { padding: 12px 14px; border-radius: 10px; background: var(--subtle); min-width: 0; }
 .eyebrow { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--anfra-color-muted); }
 .eyebrow strong { color: var(--anfra-color-fg); }
@@ -101,27 +97,29 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
   function statusBar (apps: InspectedApp[]): HTMLElement {
     const counts = queryCounts(apps);
     const items = [
-      { n: counts.success, label: 'ok', dot: 'success', filter: 'all' },
-      { n: counts.error, label: 'error', dot: 'error', filter: 'errors' },
-      { n: counts.executing, label: 'running', dot: 'executing', filter: 'all' },
-      { n: counts.idle, label: 'idle', dot: 'idle', filter: 'all' },
-      { n: counts.dirty + counts.dirtyControls, label: 'dirty', dot: 'dirty', filter: 'dirty' },
+      { n: counts.success, label: 'ok', dot: 'success', tone: 'success', filter: 'all' },
+      { n: counts.error, label: 'error', dot: 'error', tone: 'danger', filter: 'errors' },
+      { n: counts.executing, label: 'running', dot: 'executing', tone: 'highlight', filter: 'all' },
+      { n: counts.idle, label: 'idle', dot: 'idle', tone: undefined, filter: 'all' },
+      { n: counts.dirty + counts.dirtyControls, label: 'dirty', dot: 'dirty', tone: 'warning', filter: 'dirty' },
     ] as const;
     const shown = items.filter((item) => item.n > 0);
     const trust = apps.length ? apps.map(appTrust).reduce((lowest, t) => (t.level < lowest.level ? t : lowest)) : undefined;
     return h(doc, 'div', { class: 'statusbar', 'data-testid': 'status-bar' },
       trust && popover(doc, [h(doc, 'span', { class: `tone-${trust.tone}` }, `L${trust.level}`), TRUST_LEVELS[trust.level].name], () => trustLevels(trust), {
-        class: 'pop-trigger pill', 'data-key': 'status:trust', 'data-testid': 'status-trust', 'aria-label': `Trust level ${trust.level}: ${TRUST_LEVELS[trust.level].name}`,
+        ...badge('neutral', 'pop-trigger'), 'data-key': 'status:trust', 'data-testid': 'status-trust', 'aria-label': `Trust level ${trust.level}: ${TRUST_LEVELS[trust.level].name}`,
       }),
-      shown.length === 0 && h(doc, 'span', { class: 'pill', 'data-testid': 'status-none' }, 'No queries'),
+      shown.length === 0 && h(doc, 'span', { class: 'a-pill', 'data-testid': 'status-none' }, 'No queries'),
       shown.map((item) => h(doc, 'button', {
         type: 'button',
-        class: `count ${item.dot}`,
+        // A status pill: its dot is the pill's own.
+        class: `a-pill count ${item.dot}`,
+        'data-tone': item.tone,
         'data-tip': 'Show in Queries',
         'data-key': `status:${item.label}`,
         'data-testid': `status-${item.label}`,
         onclick: () => showQueries(item.filter),
-      }, h(doc, 'span', { class: `dot ${item.dot}` }), `${item.n} ${item.label}`)));
+      }, `${item.n} ${item.label}`)));
   }
 
   function trustCard (app: InspectedApp, label: string | undefined): HTMLElement {
@@ -222,14 +220,14 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
           ], show, { 'data-tip': targets.length ? `Applies to ${targets.join(', ')}` : 'Applies to no query', 'data-key': `change:${change.app}/${change.name}` }),
           usageOf(structure, 'control', change.app, change.name) && h(doc, 'button', {
             type: 'button',
-            class: 'row-action',
+            ...control('row-action'),
             'data-tip': 'Highlight on the page',
             'aria-label': 'Highlight on the page',
             'data-testid': 'change-locate',
             onclick: () => panel.locate({ app: change.app, kind: 'control', name: change.name }),
           }, icon(doc, 'locate')),
           h(doc, 'button', {
-            type: 'button', class: 'row-action', 'data-tip': 'Show in Queries', 'aria-label': 'Show in Queries', 'data-testid': 'change-show', onclick: show,
+            type: 'button', ...control('row-action'), 'data-tip': 'Show in Queries', 'aria-label': 'Show in Queries', 'data-testid': 'change-show', onclick: show,
           }, icon(doc, 'query')));
       }))), { class: 'tile' });
   }

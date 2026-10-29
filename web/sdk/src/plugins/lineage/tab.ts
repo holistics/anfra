@@ -8,7 +8,7 @@ import type { LineageResult, StructureNode } from '../../common/types';
 import type { TabContext } from '../../host/contributions';
 import { findNode } from '../inspect/model/format';
 import {
-  h, icon, popover, replace, STYLES, tooltips, type Children, type IconName,
+  h, icon, control, popover, replace, STYLES, tooltips, type Children, type IconName,
 } from '../inspect/view';
 import { createCanvas, type Canvas } from './canvas';
 import {
@@ -86,7 +86,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
   function card (node: LineageGraphNode): Children {
     const onPage = (node.kind === 'block' || node.kind === 'query' || node.kind === 'control') && node.structureKey !== undefined;
     const action = (label: string, name: IconName, run: () => void, testid: string) => h(doc, 'button', {
-      type: 'button', class: 'row-action', 'data-tip': label, 'aria-label': label, 'data-testid': testid,
+      type: 'button', ...control('row-action'), 'data-tip': label, 'aria-label': label, 'data-testid': testid,
       onclick: (event: Event) => {
         event.stopPropagation();
         run();
@@ -137,12 +137,12 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
       state.changed();
     };
     const row = (shown: boolean, onclick: () => void, badge: Children, label: string, count: string, testid: string) => h(doc, 'button', {
-      type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(shown), 'data-testid': testid, onclick,
+      type: 'button', class: 'a-menu-item', role: 'menuitemcheckbox', 'aria-checked': String(shown), 'data-testid': testid, onclick,
     }, badge, label, h(doc, 'span', { class: 'count' }, count), icon(doc, shown ? 'eye' : 'hidden'));
     const draw = () => [
       h(doc, 'div', { class: 'ltools' },
         h(doc, 'select', {
-          class: 'preset',
+          class: 'a-input preset',
           'aria-label': 'Preset',
           'data-testid': 'lineage-preset',
           onchange: (event: Event) => {
@@ -158,7 +158,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
         h(doc, 'div', { class: 'menu-wrap' },
           h(doc, 'button', {
             type: 'button',
-            class: 'tool',
+            ...control('tool'),
             'aria-haspopup': 'menu',
             'aria-expanded': String(menu === where),
             'data-testid': 'lineage-show',
@@ -167,7 +167,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
               redraw();
             },
           }, icon(doc, hiddenTotal > 0 ? 'hidden' : 'eye'), 'Show', hiddenTotal > 0 && h(doc, 'span', { class: 'muted' }, `${hiddenTotal} hidden`)),
-          menu === where && h(doc, 'div', { class: 'menu', role: 'menu', popover: 'manual', 'data-testid': 'lineage-show-menu' },
+          menu === where && h(doc, 'div', { class: 'a-menu menu', role: 'menu', popover: 'manual', 'data-testid': 'lineage-show-menu' },
             LINEAGE_KINDS.filter((kind) => counts[kind]).map((kind) => row(
               !view.hidden.has(kind), () => toggle(kind),
               h(doc, 'span', { class: `badge kind-${kind}`, 'aria-hidden': 'true' }, icon(doc, KIND_ICONS[kind])),
@@ -183,9 +183,9 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
             ))),
         h(doc, 'span', { class: 'spacer' }),
         loading && h(doc, 'span', { class: 'dot executing', role: 'img', 'aria-label': 'Tracing', 'data-tip': 'Tracing the fields through the catalog…' }),
-        popover(doc, icon(doc, 'help'), legend, { class: 'pop-trigger row-action', 'aria-label': 'What the arrows mean' }),
+        popover(doc, icon(doc, 'help'), legend, { ...control('row-action', 'pop-trigger'), 'aria-label': 'What the arrows mean' }),
         where === 'panel' && h(doc, 'button', {
-          type: 'button', class: 'row-action', 'data-tip': 'Open in a large view', 'aria-label': 'Open in a large view', 'data-testid': 'lineage-expand',
+          type: 'button', ...control('row-action'), 'data-tip': 'Open in a large view', 'aria-label': 'Open in a large view', 'data-testid': 'lineage-expand',
           onclick: () => {
             menu = undefined;
             expanded.open();
@@ -196,7 +196,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
         h(doc, 'span', { class: 'focus-chip' },
           h(doc, 'span', { class: 'focus-label' }, `${KIND_LABELS[focused.kind]}: ${focused.label}`),
           h(doc, 'button', {
-            type: 'button', class: 'row-action', 'aria-label': 'Show everything', 'data-testid': 'lineage-unfocus',
+            type: 'button', ...control('row-action'), 'aria-label': 'Show everything', 'data-testid': 'lineage-unfocus',
             onclick: () => {
               view.focus = undefined;
               state.changed();
@@ -256,7 +256,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
       h(doc, 'div', {},
         h(doc, 'h3', {}, 'Lineage'),
         h(doc, 'p', { class: 'muted' }, "From the page's blocks to the database tables. Click a card to follow its path.")),
-      h(doc, 'button', { type: 'button', class: 'row-action', 'aria-label': 'Close', 'data-testid': 'lineage-close', onclick: () => expanded.close() }, icon(doc, 'close'))),
+      h(doc, 'button', { type: 'button', ...control('row-action'), 'aria-label': 'Close', 'data-testid': 'lineage-close', onclick: () => expanded.close() }, icon(doc, 'close'))),
     largeSurface.head,
     largeSurface.canvas.element) as HTMLDialogElement;
   const expanded = {
@@ -327,7 +327,7 @@ export default function lineageTab (root: ShadowRoot, context: TabContext): () =
         icon(doc, 'info'),
         h(doc, 'span', {}, 'Nothing you picked is drawn here: it holds no query or control, or the current filter or focus hides it.'),
         h(doc, 'button', {
-          type: 'button', class: 'row-action', 'aria-label': 'Dismiss',
+          type: 'button', ...control('row-action'), 'aria-label': 'Dismiss',
           onclick: () => {
             missed = false;
             redraw();
@@ -401,12 +401,12 @@ const LINEAGE_STYLES = `
 /* Toolbar */
 .ltoolbar { flex: none; position: relative; z-index: 3; padding: 8px 14px; border-bottom: 1px solid var(--anfra-color-border); }
 .ltools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.preset { min-width: 0; max-width: 180px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); padding: 3px 6px; font: inherit; font-size: 12px; }
+.preset { width: auto; min-width: 0; max-width: 180px; height: 24px; padding: 0 6px; background: var(--anfra-color-bg); font-size: 12px; line-height: 16px; }
 .menu-wrap { position: relative; }
-.menu { position: fixed; inset: auto; margin: 0; z-index: 10; min-width: 220px; max-height: calc(100vh - 16px); overflow: auto; color: var(--anfra-color-fg); padding: 4px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); box-shadow: 0 6px 20px oklch(0 0 0 / 0.15); }
-.menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 4px; background: none; padding: 4px 8px; font-size: 12px; text-align: left; }
-.menu button:hover { background: var(--hover); }
-.menu button[aria-checked="false"] { color: var(--anfra-color-muted); }
+/* The class layer's Menu, placed in the top layer. */
+.menu { position: fixed; inset: auto; margin: 0; z-index: 10; min-width: 220px; max-height: calc(100vh - 16px); border: 0; }
+.menu .a-menu-item { gap: 8px; cursor: pointer; }
+.menu .a-menu-item[aria-checked="false"] { color: var(--anfra-color-muted); }
 .menu button[aria-checked="false"] .badge { background: var(--hover); color: var(--anfra-color-muted); }
 .menu .badge { width: 16px; height: 16px; }
 .menu .badge .icon { width: 12px; height: 12px; }
