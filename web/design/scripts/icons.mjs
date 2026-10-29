@@ -9,7 +9,8 @@ import { createRequire } from 'node:module';
 const ICONS = {
   // Places and things
   folder: 'folder',
-  app: 'layout-grid',
+  'folder-open': 'folder-open',
+  app: 'layout-dashboard',
   database: 'database',
   dataset: 'layers',
   model: 'box',
