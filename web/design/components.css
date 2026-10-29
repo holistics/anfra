@@ -14,6 +14,7 @@
 /* Button: shadcn's Button. Variants default (filled), outline, secondary, ghost, destructive, link;
    sizes xs, sm, default, lg, and icon-xs, icon-sm, icon, icon-lg (square). */
 .a-button {
+  box-sizing: border-box;
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -227,6 +228,7 @@
 }
 .a-tab {
   position: relative;
+  box-sizing: border-box;
   display: inline-flex;
   flex: 1;
   align-items: center;
@@ -246,7 +248,7 @@
 @media (hover: hover) {
   .a-tab:hover { color: var(--anfra-color-text-default); }
 }
-.a-tab:disabled { pointer-events: none; color: var(--anfra-color-text-disabled); }
+.a-tab:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
 .a-tab[aria-selected="true"] {
   background: var(--anfra-color-background-default);
   color: var(--anfra-color-text-default);
