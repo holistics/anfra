@@ -454,10 +454,12 @@ type ValidationReport struct {
 }
 
 // ValidateAMLResult mirrors the sidecar's aml.validate result: files that failed
-// to compile, plus the validator suite's findings.
+// to compile, plus the validator suite's findings. UnmatchedPaths are the
+// request's Paths that selected no AML file (anfra-node 0.12.0 on; nil before).
 type ValidateAMLResult struct {
-	CompileErrors []CompileError     `json:"compileErrors"`
-	Reports       []ValidationReport `json:"reports"`
+	CompileErrors  []CompileError     `json:"compileErrors"`
+	Reports        []ValidationReport `json:"reports"`
+	UnmatchedPaths []string           `json:"unmatchedPaths"`
 }
 
 // ValidateAML validates an AML repo (compile + validator suite) for the selected
