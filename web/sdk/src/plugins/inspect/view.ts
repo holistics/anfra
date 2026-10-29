@@ -589,7 +589,7 @@ button:disabled { cursor: default; }
   --subtle: var(--anfra-color-bg-sunken);
   --accent-bg: var(--anfra-color-selected);
   --danger-bg: color-mix(in srgb, var(--anfra-color-danger) 14%, transparent);
-  --ok: var(--anfra-color-success); --warn: var(--anfra-color-warning); --run: light-dark(#0284c7, #38bdf8);
+  --ok: var(--anfra-color-success); --warn: var(--anfra-color-warning); --run: light-dark(oklch(0.588 0.139 242), oklch(0.754 0.139 232.7));
   --warn-bg: color-mix(in srgb, var(--warn) 16%, transparent); --ok-bg: color-mix(in srgb, var(--ok) 16%, transparent); }
 .body { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 16px; }
 .body.split { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
@@ -628,7 +628,7 @@ code.wrap { overflow-wrap: anywhere; }
 .segments button { border: 0; border-radius: 6px; background: none; padding: 2px 8px; font-size: 12px; font-weight: 500; color: var(--anfra-color-muted); white-space: nowrap; }
 .segments button:hover { color: var(--anfra-color-fg); }
 /* The selected one is raised, in ink: violet is for links, selection and focus. */
-.segments button[aria-pressed="true"] { background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 0 0 1px var(--anfra-color-border), 0 1px 2px rgb(0 0 0 / 0.08); }
+.segments button[aria-pressed="true"] { background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 0 0 1px var(--anfra-color-border), 0 1px 2px oklch(0 0 0 / 0.08); }
 .row-action { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted); }
 .row-action:hover:not(:disabled) { background: var(--hover); color: var(--anfra-color-accent); }
 .row-action:disabled { opacity: 0.4; cursor: default; }
@@ -668,7 +668,7 @@ code.wrap { overflow-wrap: anywhere; }
 /* Popovers */
 .pop-trigger { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 4px; color: inherit; }
 /* Plain tooltips are one line of text or a few, with their line breaks; rich ones lay out their own. */
-.tooltip { position: fixed; inset: auto; margin: 0; z-index: 10; width: max-content; max-width: 280px; padding: 5px 8px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px rgb(0 0 0 / 0.15); font: 12px/1.45 var(--anfra-font); white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; }
+.tooltip { position: fixed; inset: auto; margin: 0; z-index: 10; width: max-content; max-width: 280px; padding: 5px 8px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px oklch(0 0 0 / 0.15); font: 12px/1.45 var(--anfra-font); white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; }
 .tooltip.rich { max-width: 340px; padding: 8px 10px; white-space: normal; }
 /* Code */
 .code { margin-top: 6px; border: 1px solid var(--anfra-color-border); border-radius: 6px; overflow: hidden; position: relative; }
@@ -680,15 +680,15 @@ code.wrap { overflow-wrap: anywhere; }
 .code-corner { position: absolute; top: 2px; right: 2px; }
 .code-text { margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px; font-size: 12px; line-height: 1.5; background: var(--subtle); }
 .code-empty { margin: 0; padding: 8px 10px; font-size: 12px; color: var(--anfra-color-muted); background: var(--subtle); }
-.tok-kw { color: light-dark(#6d28d9, #c4b5fd); font-weight: 600; } .tok-str { color: light-dark(#047857, #6ee7b7); }
-.tok-key { color: light-dark(#0f766e, #5eead4); }
+.tok-kw { color: light-dark(oklch(0.491 0.241 292.6), oklch(0.811 0.101 293.6)); font-weight: 600; } .tok-str { color: light-dark(oklch(0.508 0.105 165.6), oklch(0.845 0.13 165)); }
+.tok-key { color: light-dark(oklch(0.511 0.086 186.4), oklch(0.855 0.125 181.1)); }
 /* An AQL string, shown across its lines: the text stays the JSON, escapes and all, so a copy of
    it is too; the line breaks and the indent under its key are generated, which a copy leaves out. */
 .json-nl { opacity: 0.45; }
 .json-br::after { content: "\\A" attr(data-indent); white-space: pre; }
 /* The indent every line of the AQL shares: kept in the text, so the copy is exact, but not shown. */
 .json-dedent { font-size: 0; }
-.tok-num { color: light-dark(#b45309, #fcd34d); } .tok-com { color: var(--anfra-color-muted); font-style: italic; } .tok-fn { color: light-dark(#1d4ed8, #93c5fd); }
+.tok-num { color: light-dark(oklch(0.555 0.146 49), oklch(0.879 0.153 91.6)); } .tok-com { color: var(--anfra-color-muted); font-style: italic; } .tok-fn { color: light-dark(oklch(0.488 0.217 264.4), oklch(0.809 0.096 251.8)); }
 /* Tables */
 .table-wrap { overflow: auto; max-height: 320px; border: 1px solid var(--anfra-color-border); border-radius: 6px; }
 table { border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%; }
@@ -706,8 +706,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .node .label, .node .app { color: var(--anfra-color-muted); overflow: hidden; text-overflow: ellipsis; }
 .node.problem .name { color: var(--anfra-color-danger); }
 .kind { flex: none; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.kind.container { background: color-mix(in srgb, light-dark(#7c3aed, #a78bfa) 18%, transparent); color: light-dark(#7c3aed, #a78bfa); }
-.kind.block { background: color-mix(in srgb, light-dark(#2563eb, #93c5fd) 18%, transparent); color: light-dark(#2563eb, #93c5fd); }
+.kind.container { background: color-mix(in srgb, light-dark(oklch(0.541 0.247 293), oklch(0.709 0.159 293.5)) 18%, transparent); color: light-dark(oklch(0.541 0.247 293), oklch(0.709 0.159 293.5)); }
+.kind.block { background: color-mix(in srgb, light-dark(oklch(0.546 0.215 262.9), oklch(0.809 0.096 251.8)) 18%, transparent); color: light-dark(oklch(0.546 0.215 262.9), oklch(0.809 0.096 251.8)); }
 .kind.query { background: var(--ok-bg); color: var(--ok); }
 .kind.control { background: var(--warn-bg); color: var(--warn); }
 /* The actions keep their place and sit in the row's height, so showing them moves nothing. */

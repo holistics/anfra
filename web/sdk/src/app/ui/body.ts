@@ -67,7 +67,7 @@ const STYLES = `
 .surface, .backdrop { pointer-events: auto; }
 .surface { position: fixed; z-index: 1; color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); background: var(--anfra-color-bg, oklch(1 0 0));
   border: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); border-radius: var(--anfra-radius, 8px);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 18%), 0 1px 3px rgb(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
+  box-shadow: 0 8px 24px oklch(0 0 0 / 18%), 0 1px 3px oklch(0 0 0 / 10%); font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); }
 .menu { min-width: 180px; max-width: 320px; padding: 4px; outline: none; }
 .menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 /* One highlight, as a native menu has: the focused entry, which the pointer and the arrows both move. */
@@ -75,7 +75,7 @@ const STYLES = `
 .menu button[aria-disabled="true"] { color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); cursor: default; }
 .menu .reason { display: block; font-size: 11px; color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); }
 .menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); }
-.backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 40%); }
+.backdrop { position: fixed; inset: 0; background: oklch(0 0 0 / 40%); }
 .modal { display: flex; flex-direction: column; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); }
 .modal.sm { width: 360px; } .modal.md { width: 560px; } .modal.lg { width: 860px; }
 .modal.full { width: calc(100vw - 32px); height: calc(100vh - 32px); }
