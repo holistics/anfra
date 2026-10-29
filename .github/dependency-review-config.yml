@@ -30,3 +30,7 @@ allow-licenses:
 allow-dependencies-licenses:
   # Code is MIT; CC-BY-3.0 applies to the README's Go gopher artwork.
   - pkg:golang/github.com/sahilm/fuzzy
+  # OFL-1.1 fonts (Inter, Geist Mono) that @holistics/anfra-design bundles. The OFL
+  # lets a font ship with any software; only a modified font must stay under it.
+  - pkg:npm/@fontsource-variable/geist-mono
+  - pkg:npm/@fontsource-variable/inter
