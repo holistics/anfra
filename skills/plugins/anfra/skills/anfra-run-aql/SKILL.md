@@ -36,6 +36,3 @@ whole result to a file. To answer a question, ask the query for what you need
 ## Writing correct queries
 Use [](../anfra-aql/) (syntax, functions, gotchas) and [](../anfra-write-aql/) (workflow) to
 write the query, and [](../anfra-validate-aql/) to type-check it before running.
-
----
-anfra skills 0.4.5

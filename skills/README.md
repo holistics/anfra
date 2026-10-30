@@ -163,4 +163,4 @@ More plugins (e.g. for consumers/explorers) may be added to this marketplace ove
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for working on these skills and releasing them.
+The skills are developed in [holistics/anfra](https://github.com/holistics/anfra), under `skills/`, and released with anfra: see its [DEVELOPMENT.md](https://github.com/holistics/anfra/blob/main/DEVELOPMENT.md#the-skills). Changes made here are overwritten by the next release.

@@ -59,12 +59,22 @@ What CI runs (`.github/workflows/continuous_integration.yml`), in two commands:
 
 ```sh
 make check      # lint, type-check, and check the API contract is fresh: no tests, no build
-make test       # the Go tests, then the web workspace's
+make test       # the Go tests, then the web workspace's, then the skills'
 ```
 
 `make check` runs golangci-lint at the version `tools/go.mod` pins, which must match the one CI's workflow pins; `go mod tidy --diff`; `scripts/openapi.sh diff`; the SDK's generated types against the spec; and both web packages' typechecks. It builds the SDK's type declarations, which the frontend's typecheck reads, and nothing else. CI also builds the frontend (`pnpm build:web`) and checks that a breaking change to the API is declared by a commit.
 
 Some Go tests run commands against real sidecars (`internal/app/sidecars_test.go`), and the dev warehouse (`docker compose -f docker-compose.dev.yml up -d postgres`). They skip themselves unless `ANFRA_NODE_BIN` and `ANFRA_CANAL_QUERY_BIN` are both set, and `make test` then says so. `make test-sidecars` runs the Go tests with them, against the pinned sidecars or your own; `make test` runs them too when `.env.local` names both, after checking their versions.
+
+### The skills
+
+The anfra skills' source is in `skills/`: the `anfra` plugin, its marketplaces for each agent, and the README that people install from. `pnpm skills:check`, which `make test` runs, checks them: each skill's front matter, the links between them, the session hook's tests, and the facade's build and publish.
+
+- **The source carries no version.** The build writes it into the manifests, and the stamp at the end of each skill, when a release publishes them. A skill in `skills/` must not end with a stamp.
+- **To see what a release would publish:** `pnpm skills:build --version 0.0.0 --source dev --out /tmp/anfra-skills`.
+- **Commits** that change them take the `skills` scope.
+
+See [where the skills live](docs/designs/agent-setup.md#where-the-skills-live).
 
 ### When the API changes
 
@@ -81,7 +91,7 @@ Commit both. CI refuses a stale one, and a breaking change that no commit declar
 
 Commit messages are checked by commitlint, in a git hook and in CI: the rules, types and scopes are in `commitlint.config.mjs`. `pnpm commit` writes one interactively.
 
-A release is a version bump merged to main: `pnpm bump <version>` updates `manifest.yml`, the SDK's version and `CHANGELOG.md`, and the release workflows tag, build and publish: the binaries, the image, and the SDK on npm. See [release](docs/designs/release.md).
+A release is a version bump merged to main: `pnpm bump <version>` updates `manifest.yml`, the SDK's version and `CHANGELOG.md`, and the release workflows tag, build and publish: the binaries, the image, the SDK on npm, and the skills to [holistics/anfra-skills](https://github.com/holistics/anfra-skills), when they changed. See [release](docs/designs/release.md).
 
 The Docker image is built from release binaries; the `Dockerfile`'s header says how to build it locally.
 

@@ -4,7 +4,7 @@ import { resolve, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { glob } from 'glob'
 import matter from 'gray-matter'
-import { pluginVersion, stampedVersion } from './stamp.js'
+import { stampedVersion } from './stamp.mjs'
 
 const RED = '\x1b[31m'
 const YELLOW = '\x1b[33m'
@@ -41,17 +41,9 @@ for (const file of files) {
     }
   }
 
-  // plugins/<plugin>/skills/…/SKILL.md ends with its plugin's version.
-  const plugin = rel.split('/').slice(0, 2).join('/')
-  const want = pluginVersion(resolve(REPO_ROOT, plugin))
+  // The build stamps the facade's copy; a stamp in the source would be stale.
   const got = stampedVersion(content)
-  if (got !== want) {
-    errs.push(
-      got
-        ? `stamped ${got}, but ${plugin} is ${want}: pnpm bump writes the stamp`
-        : `missing the stamp at its end ("---" then "anfra skills ${want}"), which pnpm bump writes`,
-    )
-  }
+  if (got) errs.push(`ends with a stamp ("anfra skills ${got}"): the source carries none, the build writes it`)
 
   if (errs.length) fileErrors.push({ rel, errs })
 }

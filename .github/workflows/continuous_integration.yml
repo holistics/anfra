@@ -120,6 +120,9 @@ jobs:
           pnpm --filter @holistics/anfra-sdk generate
           git diff --exit-code -- web/sdk/src/api/schema.d.ts \
             || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter @holistics/anfra-sdk generate" >&2; exit 1; }
+      # The anfra skills: their front matter and links, the hook's tests, and the facade's build and
+      # publish (docs/designs/agent-setup.md#releasing-the-skills).
+      - run: pnpm skills:check
 
   # Dependencies this PR adds or changes (Go + pnpm), via GitHub's dependency graph;
   # config in .github/dependency-review-config.yml. The action runs twice so the
