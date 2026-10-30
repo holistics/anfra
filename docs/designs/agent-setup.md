@@ -90,7 +90,7 @@ How to install or update the skills for an agent anfra doesn't install into is n
 
 ### `AGENTS.md`
 
-Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `AGENTS.md`, since the block belongs to the repo. Outside a repo it touches no files of the repo. `anfra init` calls the same code.
+Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `AGENTS.md`, since the block belongs to the repo. Outside one, it leaves `AGENTS.md` alone and its report says so: `skipped: this folder isn't an anfra repo (no .anfra/). Run `anfra init` here to set it up, with the anfra block.` That includes an AML repo that never ran `init`: anfra needs `.anfra/` there anyway, for its data sources. `anfra init` calls the same code.
 
 - **The block** sits between `<!-- anfra:begin -->` and `<!-- anfra:end -->`. Setup adds it to an existing `AGENTS.md`, or creates the file. It replaces only that block, and refuses a symlink, as `init` does for `.gitignore`.
 - **`CLAUDE.md`:** when the repo has one, setup adds `@AGENTS.md` to it. Claude Code reads `AGENTS.md` only when no `CLAUDE.md` exists.
@@ -146,7 +146,7 @@ Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then pri
 ```
 Restart Claude Code, or run /reload-plugins, to load it.
 Codex: failed: `codex plugin add anfra@anfra-skills`: exit status 1
-To update a copy of the skills, see https://github.com/holistics/anfra-skills#updating-and-removing.
+To update the skills in a folder, see https://github.com/holistics/anfra-skills#updating-and-removing.
 ```
 
 - **The restart note,** for each agent it installed into.
@@ -165,13 +165,13 @@ It exits non-zero when any install failed, or when an agent named with `--agent`
 $ anfra agent setup --check
 Latest anfra skills: 0.4.5, from GitHub (checked today)
 
-Agents:
+Agents found:
   Claude Code     plugin, skills  plugin 0.4.4; ~/.claude/skills
   Cursor          skills          ~/.agents/skills, ~/.cursor/skills, ~/.claude/skills
   GitHub Copilot  skills          ~/.agents/skills, ~/.copilot/skills
   OpenCode        none            see https://github.com/holistics/anfra-skills#opencode
 
-Skills:
+Skills found:
   Claude Code plugin  behind  0.4.4
   ~/.agents/skills    mixed   anfra-aql, anfra-write-aql at 0.4.4; 6 skills at 0.4.5
   ~/.cursor/skills    latest  0.4.5
@@ -182,8 +182,6 @@ Deprecated skills, from before 0.15.0:
   ~/.claude/skills
   ~/.cursor/skills
 Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
-
-anfra only looks in the folders above, so a copy somewhere else won't be shown.
 
 Run `anfra agent setup` to install or update them.
 ```
@@ -377,7 +375,10 @@ anfra skills 0.15.0 are out: the Claude Code plugin and ~/.agents/skills are beh
 anfra skills 0.15.0 are out: the Claude Code plugin and ~/.agents/skills are behind, and 2 more things need attention. Run `anfra agent setup`.
 ~/.cursor/skills has deprecated anfra skills. Run `anfra agent setup`.
 This repo's AGENTS.md block is out of date. Run `anfra agent setup`.
+Your coding agents have no anfra skills. Run `anfra agent setup` to install them.
 ```
+
+The last says nothing is installed: only when a coding agent is detected on the machine, the plugins have been recorded at least once and none is installed, and no folder the agents read has the skills. Without an agent, as in CI, or before the plugins are known, it stays quiet.
 
 - **What it reads:** the plugins as the background check or setup last recorded them; the copies, in the folders the agents read; and the `AGENTS.md` block of the repo it runs in. No network and no agent CLI, so it's cheap enough after any command.
 - **Where it shows:**
@@ -522,6 +523,7 @@ The rule is in [commands and API](commands-and-api.md#deprecation-before-removal
 
 ### Later
 
+- **`anfra init` in an existing AML repo** creates `models/`, `datasets/` and `apps/` with a `.gitkeep` each, which clutters a repo with its own layout. It could create them only when the repo has no AML yet.
 - **Cursor's plugin,** once it can be tested in Cursor. Meanwhile Cursor users get the skills alone, as the README's Cursor section offers. The test answers four questions, each deciding one change:
   1. Does Cursor load the plugin's `skills/`, as its docs' "discovered from their default directories" suggests? If not, the manifest names the path.
   2. Where does a plugin's hooks file go, and does the manifest have to name it? The docs don't say.

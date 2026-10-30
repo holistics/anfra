@@ -116,6 +116,8 @@ func Attention(env Env, repoDir string) string {
 	case len(others) > 0:
 		line = strings.ToUpper(others[0][:1]) + others[0][1:]
 		more--
+	case noSkills(env, repoDir):
+		return "Your coding agents have no anfra skills. Run `anfra agent setup` to install them."
 	default:
 		return ""
 	}
@@ -126,6 +128,23 @@ func Attention(env Env, repoDir string) string {
 		line += fmt.Sprintf(", and %d more things need attention", more)
 	}
 	return line + ". Run `anfra agent setup`."
+}
+
+// noSkills reports whether the agents on this machine have no anfra skills: a
+// coding agent is detected, the plugins have been recorded at least once and
+// none is installed, and no folder the agents read has any. Without an agent,
+// or before the plugins are known, it can't tell, and says false.
+func noSkills(env Env, repoDir string) bool {
+	s := readState()
+	if s.CheckedAt.IsZero() || len(s.Plugins) > 0 || len(Copies(env, repoDir)) > 0 {
+		return false
+	}
+	for _, a := range Known {
+		if a.Detected(env) {
+			return true
+		}
+	}
+	return false
 }
 
 // Notice is Attention, at most once a day: "" when it printed less than a day

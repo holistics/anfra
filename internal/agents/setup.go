@@ -20,6 +20,9 @@ type Options struct {
 	// block, and whose copies of the skills the check looks for too; "" outside
 	// one.
 	RepoDir string
+	// NotRepo: setup runs in a folder that isn't an anfra repo, so it leaves its
+	// AGENTS.md alone, and the report says so.
+	NotRepo bool
 	Out     io.Writer
 }
 
@@ -65,7 +68,7 @@ func Setup(ctx context.Context, env Env, o Options) error {
 
 	fmt.Fprintln(o.Out)
 	if report(ctx, env, o, agents, blockNote) {
-		notes = append(notes, "To update a copy of the skills, see "+readmeURL+"#updating-and-removing.")
+		notes = append(notes, "To update the skills in a folder, see "+readmeURL+"#updating-and-removing.")
 	}
 	if len(notes) > 0 {
 		fmt.Fprintln(o.Out)
@@ -239,7 +242,7 @@ func report(ctx context.Context, env Env, o Options, agents []Agent, blockNote s
 		agentRows = append(agentRows, [3]string{a.Name, strings.Join(how, ", "), strings.Join(details, "; ")})
 	}
 
-	fmt.Fprintln(o.Out, "\nAgents:")
+	fmt.Fprintln(o.Out, "\nAgents found:")
 	printRows(o.Out, agentRows)
 
 	var deprecated []string
@@ -253,9 +256,9 @@ func report(ctx context.Context, env Env, o Options, agents []Agent, blockNote s
 			deprecated = append(deprecated, c.Dir)
 		}
 	}
-	fmt.Fprintln(o.Out, "\nSkills:")
+	fmt.Fprintln(o.Out, "\nSkills found:")
 	if len(skills) == 0 {
-		fmt.Fprintln(o.Out, "  none found")
+		fmt.Fprintln(o.Out, "  none. Run `anfra agent setup` to install them in your agents.")
 	}
 	var skillRows [][3]string
 	for _, r := range skills {
@@ -289,7 +292,10 @@ func report(ctx context.Context, env Env, o Options, agents []Agent, blockNote s
 		}
 	}
 
-	fmt.Fprintln(o.Out, "\nanfra only looks in the folders above, so a copy somewhere else won't be shown.")
+	if o.NotRepo {
+		fmt.Fprintln(o.Out, "\nAGENTS.md:")
+		fmt.Fprintln(o.Out, "  skipped: this folder isn't an anfra repo (no .anfra/). Run `anfra init` here to set it up, with the anfra block.")
+	}
 	return copiesBehind
 }
 

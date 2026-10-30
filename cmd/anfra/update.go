@@ -183,7 +183,8 @@ func maybeNotifyUpdate(invoked string) {
 		fmt.Fprintln(os.Stderr, "\n"+notice)
 	}
 	// What of the agents' skills needs attention, at most once a day; not after
-	// agent setup (or its former name), which has just reported it all.
+	// agent setup (or its former name), which has just reported it all. For a
+	// person at a terminal, like the update notice.
 	if stderrIsInteractive() && invoked != "setup" && invoked != "install" {
 		if line := agents.Notice(agents.System(), repoDirIfAny()); line != "" {
 			fmt.Fprintln(os.Stderr, "\n"+line)

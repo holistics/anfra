@@ -70,6 +70,8 @@ func newAgentSetupCmd(use, deprecated string) *cobra.Command {
 			o := agents.Options{Agents: ids, Out: cmd.OutOrStdout()}
 			if dir, ok := anfraRepoDir(); ok {
 				o.RepoDir = dir
+			} else {
+				o.NotRepo = true
 			}
 			if check {
 				return agents.Check(cmd.Context(), agents.System(), o)
