@@ -104,6 +104,7 @@ This is an anfra repo.
 
 - Use the anfra skills for work in this repo. They know anfra's languages and commands, so you'll work more
   accurately and efficiently with them than from memory.
+- Docs: anfra at https://anfra.ai/docs, AML and AQL at https://amql.org/docs.
 
 Keeping the skills working:
 
