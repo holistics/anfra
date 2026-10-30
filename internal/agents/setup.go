@@ -167,7 +167,7 @@ func status(versions map[string][]string, latest string, known bool) (string, st
 
 // renamedIn is the skills release that gave their names the anfra- prefix:
 // skills of the names from before it are deprecated.
-const renamedIn = "0.5.0"
+const renamedIn = "0.15.0"
 
 // Check reports what setup would act on, without changing anything, as
 // report does.

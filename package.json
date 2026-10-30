@@ -15,7 +15,9 @@
     "dev:appserve": "pnpm --filter anfra-appserve dev",
     "test:appserve": "pnpm --filter anfra-appserve test",
     "test:design": "pnpm --filter @holistics/anfra-design test",
-    "test:web": "pnpm test:design && pnpm test:sdk && pnpm test:appserve"
+    "test:web": "pnpm test:design && pnpm test:sdk && pnpm test:appserve",
+    "skills:check": "node skills/scripts/validate-frontmatter.mjs && bash skills/scripts/validate-links.sh --ignore-removals && bash skills/scripts/test.sh",
+    "skills:build": "node skills/scripts/build.mjs"
   },
   "config": {
     "commitizen": {
@@ -29,6 +31,8 @@
     "commitizen": "^4.3.1",
     "conventional-changelog-cli": "^5.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
+    "glob": "^13.0.6",
+    "gray-matter": "^4.0.3",
     "husky": "^9.1.7"
   },
   "packageManager": "pnpm@10.22.0",

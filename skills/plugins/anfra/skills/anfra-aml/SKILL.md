@@ -63,6 +63,3 @@ dataset ([](../anfra-write-aql/)).
 * [](../anfra-aql/) — AQL knowledge (field/metric definitions are AQL).
 * [](../anfra-write-aql/) — write and run queries against a dataset.
 * [](../anfra-validate-aql/) — validate AML/AQL before relying on it.
-
----
-anfra skills 0.4.5

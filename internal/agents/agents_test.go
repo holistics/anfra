@@ -210,7 +210,7 @@ Skills:
   Claude Code plugin  behind  0.4.5
   ~/.agents/skills    latest  0.4.6
 
-Deprecated skills, from before 0.5.0:
+Deprecated skills, from before 0.15.0:
   ~/.claude/skills
 Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
 

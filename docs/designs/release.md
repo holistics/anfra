@@ -50,6 +50,15 @@ To cut a release, on a branch:
 - **Trusted publishing.** npm takes the publish from the workflow over OIDC, with no token, and records the package's provenance. It is configured on the package's settings on npmjs.com, naming this repository and a workflow. npm checks the workflow that started the run: `build_release.yml`, which a tag push starts. There is no npm token, and the package's settings disallow tokens, so only this workflow, or a maintainer with two-factor authentication, can publish.
 - **Any other build** packs it without publishing, so a broken package shows before a release does.
 
+## The skills
+
+The anfra skills' source is `skills/`; `build_release.yml`'s `skills` job publishes them to [holistics/anfra-skills](https://github.com/holistics/anfra-skills), the facade every agent installs from, after the binaries ([agent setup](agent-setup.md#releasing-the-skills)).
+
+- **The release's version, only when they changed.** The job rebuilds what the facade holds, with the parameters it recorded (`.build.json`), and compares. The same tree publishes nothing; a different one is built at this release's version, committed, tagged `anfra-v<version>`, and pushed (`skills/scripts/publish.sh`). A re-run publishes nothing again.
+- **The build writes the versions.** The manifests' versions and each skill's stamp come from the build (`skills/scripts/build.mjs`), not from `skills/`, so `pnpm bump` doesn't touch the skills.
+- **A deploy key,** `ANFRA_SKILLS_DEPLOY_KEY`, with write access to the facade and allowed past its branch protection, does the push.
+- **Any other build** reports what a release would publish, without pushing.
+
 ## Versions
 
 A release's version is `manifest.yml`'s, injected at build time (`internal/meta.Version`). Any other build is one from source, and says which: the release it comes after, then, as semver build metadata, the commit and whether the tree was dirty, as Go records them in the binary: `<base>+<commit>`, or `<base>+<commit>.dirty` (`internal/meta/version.go`). `make build` and `make dev` inject the base from `manifest.yml`; a bare `go build` reports `0.0.0+<commit>`.

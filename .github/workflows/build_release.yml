@@ -11,7 +11,8 @@
 # (artifacts only, no release).
 #
 # A release also publishes the SDK and the design package to npm, as @holistics/anfra-sdk and
-# @holistics/anfra-design at the same version (the sdk job).
+# @holistics/anfra-design at the same version (the sdk job), and the anfra skills to their
+# facade, holistics/anfra-skills, when they changed (the skills job).
 name: Build anfra release
 
 on:
@@ -238,3 +239,42 @@ jobs:
               npm publish --tag "$tag"
             )
           done
+
+  # The anfra skills, published to their facade, holistics/anfra-skills, once the release's
+  # binaries are out (docs/designs/agent-setup.md#releasing-the-skills): at the release's version,
+  # only when what's published changed. Any other build only reports what a release would do.
+  #
+  # The push uses a deploy key on holistics/anfra-skills (ANFRA_SKILLS_DEPLOY_KEY), with write
+  # access and allowed past its branch protection. A re-run publishes nothing again: the facade
+  # then holds this build.
+  skills:
+    needs: assemble
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/checkout@v4
+        with:
+          repository: holistics/anfra-skills
+          path: facade
+          fetch-depth: 1
+          # A release pushes as the deploy key; any other build only reads the public repo.
+          ssh-key: ${{ startsWith(github.ref, 'refs/tags/') && secrets.ANFRA_SKILLS_DEPLOY_KEY || '' }}
+      - name: Publish the skills, or report what a release would publish
+        run: |
+          version="$(yq '.version' manifest.yml)"
+          if [ "$IS_RELEASE" != true ]; then
+            bash skills/scripts/publish.sh facade "$version" "$GITHUB_SHA"; exit 0
+          fi
+          git -C facade config user.name "anfra release"
+          git -C facade config user.email "anfra-release@users.noreply.github.com"
+          bash skills/scripts/publish.sh facade "$version" "$GITHUB_SHA" --commit
+          if git -C facade rev-parse -q --verify "refs/tags/anfra-v$version" >/dev/null; then
+            git -C facade push origin HEAD:main "refs/tags/anfra-v$version"
+          fi

@@ -121,13 +121,13 @@ The block is committed, so cloud agents get it too. It stays short and leaves th
 
 ### Skill names
 
-Every skill's name starts with `anfra-` (`anfra-aql`, `anfra-write-aql`, …), from the skills' 0.5.0. The reasons are in the research's [What this means](../research/skills-install.md#what-this-means), under "Names clash across vendors":
+Every skill's name starts with `anfra-` (`anfra-aql`, `anfra-write-aql`, …), from the first release that ships them from anfra (step 7), which `renamedIn` names. The reasons are in the research's [What this means](../research/skills-install.md#what-this-means), under "Names clash across vendors":
 
 - **Shared folders hold skills by name.** `npx skills` installs into folders several agents read, such as `~/.agents/skills`, one folder per skill name. Other vendors use our old names too: Holistics' `holistics-development` plugin has `aql`, `write-aql`, `run-aql`, `validate-aql` and `lookup-values`. Two skills of one name overwrite each other there, silently, whichever was installed last. Inside a plugin, names don't clash, but most agents get the skills alone ([Each agent's route](#each-agents-route)).
 - **It's what other vendors do.** Supabase (`supabase-*`), Vercel (`vercel-*`), Expo (`expo-*`) and Stripe (`stripe-*`) name their skills after themselves ([Vendor CLIs that install skills](../research/skills-install.md#vendor-clis-that-install-skills)).
 - **The source is renamed, not the installed copy.** The spec requires a skill's folder to match its `name`, and the skills refer to one another about 45 times. Renaming at install time would mean rewriting their text on every machine.
 - **The prefix marks our skills.** `--check` takes a folder's `anfra-*` skills as a copy, and reads each one's stamp ([The check report](#the-check-report)). Before it, anfra could only guess a folder was ours from one skill name that no other vendor used.
-- **Copies of the old names stay behind.** A plugin update replaces its skills, but a copy installed with `npx skills` before 0.5.0 keeps its old folders, which an agent loads next to the new ones. `--check` lists them under "Deprecated skills", and the skills repo's README gives the command that removes them.
+- **Copies of the old names stay behind.** A plugin update replaces its skills, but a copy installed with `npx skills` before the rename keeps its old folders, which an agent loads next to the new ones. `--check` lists them under "Deprecated skills", and the skills repo's README gives the command that removes them.
 - **The cost:** in Claude Code, a plugin's skills are shown as `<plugin>:<skill>`, so `anfra:aql` becomes `anfra:anfra-aql`. Stripe's plugin shows the same.
 - **The `aql-writer` agent keeps its name.** Agents come only through plugins, which namespace them, so it never shares a folder with another vendor's.
 
@@ -178,7 +178,7 @@ Skills:
   ~/.copilot/skills   behind  0.4.4
   .claude/skills      behind  no version
 
-Deprecated skills, from before 0.5.0:
+Deprecated skills, from before 0.15.0:
   ~/.claude/skills
   ~/.cursor/skills
 Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
@@ -199,6 +199,34 @@ Run `anfra agent setup` to install or update them.
   - the agents' CLIs, for the plugins' installed versions, as setup itself does: their answer is current, and setup runs them anyway.
 
   It uses no network of its own.
+
+## Where the skills live
+
+The skills' source lives in anfra's repo, under `skills/`, and ships in anfra's releases. [holistics/anfra-skills](https://github.com/holistics/anfra-skills) stays the facade every route installs from: Claude Code's and Codex's marketplaces, `npx skills`, and the raw manifest anfra reads for the latest version. Nobody edits the facade: anfra's release writes it.
+
+The reasons are maintenance:
+
+- **One place for what refers to what.** Commands, the `AGENTS.md` block and the skills that name them change in one pull request, rather than across two repos kept in step by hand.
+- **Breaking changes ship in order.** A command's change and the skill text that uses it are one release: the binaries first, then the skills. With two release cycles, they'd need two releases in the right order, and skills that name a new flag could reach users before the binary that has it.
+
+The code still treats the skills' version as separate from anfra's: the stamp and [the check](#the-check) compare skills with skills, never with the binary. So the release cycles can split again later, as a change to the pipeline alone.
+
+### Releasing the skills
+
+- **One release train, one version.** An anfra release publishes the skills at anfra's version, when they changed (below). Sentry's CLI does the same: its plugin sits in its repo, and its release sets the plugin's version to the CLI's.
+- **The build** (`skills/scripts/build.mjs`) writes the facade's tree from `skills/`: it copies the plugin, the marketplace files and the README, and writes the version into the manifests and [the stamp](#the-skills-stamp). The source in `skills/` carries no version and no stamp, so a release changes nothing in it.
+- **The build is a function of its source and its parameters.** Every input other than the source, such as the version or the anfra commit, is a parameter, never read from the environment or the clock. The build records its parameters in the facade (`.build.json`). Everything in the facade comes from the build.
+- **Skipped when unchanged.** The publish job, after the release's binaries:
+  1. clones the facade (`git clone --depth 1`), which it needs to push anyway;
+  2. reruns the current build with the parameters the facade recorded, and compares the result with the facade's tree;
+  3. if they're the same, publishes nothing: the facade, and so the latest skills version, stay as they were;
+  4. if they differ, builds with this release's version, then commits `release: <version>`, tags `anfra-v<version>`, and pushes with a deploy key allowed past the facade's branch protection.
+
+  So anything that changes the output counts, the build script included, and nothing else does, such as tests or validators. A hand-edit to the facade shows as a difference too, and the next release overwrites it. The first publish has nothing to compare with, and publishes.
+- **The skills' version is the anfra release that last changed them.** Versions skip releases (0.15.0, then 0.17.0), and only releases that change the skills nudge anyone to update them.
+- **One changelog:** anfra's `CHANGELOG.md`, with the skills' changes under the `skills` commit scope. The facade's README links there.
+
+Later: `anfra update` updating the plugins too, so a release that changes the skills takes one command for plugin users.
 
 ## Versions
 
@@ -223,7 +251,7 @@ So the version comes from the copy in use: `anfra version --skills <version>`, w
 
 ### The skills' stamp
 
-The skills repo keeps one version for all its skills: the `version` in its plugin manifests, bumped on every release. Claude Code needs that bump to see an update. The repo's build writes it at the end of each `SKILL.md`'s body, under a rule:
+The skills have one version for all of them: the `version` in their plugin manifests, which Claude Code needs to change to see an update. The build writes it into the facade's copy, at publish time, at the end of each `SKILL.md`'s body, under a rule:
 
 ```markdown
 …the skill's last paragraph.
@@ -234,7 +262,7 @@ anfra skills 0.16.0
 
 - **The rule** sets the line apart as metadata, not part of the skill's last instruction.
 - **The blank line before the rule** is required: a `---` directly under text makes that text a heading.
-- **The shape is fixed:** the file ends with `---` and then `anfra skills <version>`. anfra and the hook match exactly that, and the skills repo's test checks it.
+- **The shape is fixed:** the file ends with `---` and then `anfra skills <version>`. anfra and the hook match exactly that, and the build's test checks it.
 - **Not an HTML comment,** which GitHub would hide: no agent documents passing comments to the model, and the agent needs to see the line.
 
 That stamp is all a skill carries: a few tokens, with no instructions. The instruction to use it is in the [`AGENTS.md` block](#agentsmd) and the [`agent-setup` skill](#the-agent-setup-skill). The same line serves anfra, the session hook, and the agent, which reads only the body: whether frontmatter reaches the model isn't documented.
@@ -345,8 +373,8 @@ Optional, and only if phase 1 turns out not to be enough. Phase 1 can't tell a m
 One line says what of the skills needs attention, and to run `anfra agent setup`. It names the first two things behind, and counts the rest:
 
 ```
-anfra skills 0.5.0 are out: the Claude Code plugin and ~/.agents/skills are behind. Run `anfra agent setup`.
-anfra skills 0.5.0 are out: the Claude Code plugin and ~/.agents/skills are behind, and 2 more things need attention. Run `anfra agent setup`.
+anfra skills 0.15.0 are out: the Claude Code plugin and ~/.agents/skills are behind. Run `anfra agent setup`.
+anfra skills 0.15.0 are out: the Claude Code plugin and ~/.agents/skills are behind, and 2 more things need attention. Run `anfra agent setup`.
 ~/.cursor/skills has deprecated anfra skills. Run `anfra agent setup`.
 This repo's AGENTS.md block is out of date. Run `anfra agent setup`.
 ```
@@ -399,7 +427,7 @@ The work spans two repos: anfra, and [anfra-skills](https://github.com/holistics
 
 ### 1. Skills repo: the stamp and the README
 
-- **The stamp:** `scripts/bump.js` already sets every manifest's `version` in lockstep. It also writes the [stamp](#the-skills-stamp), a rule and `anfra skills <version>`, at the end of each `SKILL.md`'s body, replacing an existing one. A test checks that every skill ends with the stamp in that shape, matching `.claude-plugin/plugin.json`.
+- **The stamp** (superseded by step 7, where the build writes it at publish time): `scripts/bump.js` already sets every manifest's `version` in lockstep. It also writes the [stamp](#the-skills-stamp), a rule and `anfra skills <version>`, at the end of each `SKILL.md`'s body, replacing an existing one. A test checks that every skill ends with the stamp in that shape, matching `.claude-plugin/plugin.json`.
 - **The README:**
   - a section for each agent in anfra's list, anchored by its id, giving the install methods in order: plugin first, then the skills alone;
   - an `#other-agents` section, with the same order in general terms;
@@ -434,7 +462,7 @@ The plugins' installed versions aren't here: listing them takes the agents' CLIs
 - **`--check`,** reporting without changing anything, as [The check report](#the-check-report) describes: the plugins through the agents' CLIs, the copies in the folders the agents read, by their `anfra-*` skills' stamps, and the deprecated copies of the old names.
 - **Only the agent CLIs it installs through run:** the system's commands are built by literal name (`claude`, `codex`), whatever reaches them.
 - **`anfra skills install`** becomes an alias, printing "This command is deprecated. Use `anfra agent setup` instead."
-- **The docs that named the old command:** anfra's `README.md` quickstart and `install.sh`'s next steps say `anfra agent setup`. Their prompts name the skills by their new names (`anfra-build-data-app`, `anfra-setup-repo`), which ship with the skills' 0.5.0.
+- **The docs that named the old command:** anfra's `README.md` quickstart and `install.sh`'s next steps say `anfra agent setup`. Their prompts name the skills by their new names (`anfra-build-data-app`, `anfra-setup-repo`), which ship with the first release from anfra (step 7).
 
 The tests fake the machine: the home folder, the CLIs on the `PATH`, and what the agents' CLIs answer.
 
@@ -457,22 +485,33 @@ This comes after steps 3 and 4, since the block names `version --skills` and `ag
 - **The background check twice a day:** its cache lasts 12 hours.
 - **`anfra update` doesn't update plugins:** setup is the one place that acts on the skills.
 
-### 7. Skills repo: the hook
+### 7. Move the skills into anfra
 
-`hooks/check-update.sh`:
+As [Where the skills live](#where-the-skills-live) describes:
+
+1. **Import the skills repo into `skills/`, with its history:** each commit rewritten (`git filter-branch`) so its files were always under `skills/`, and its scope renamed to `skills`, so `git log` and `blame` follow it, and anfra's commitlint passes it. Up to the rename (`7253b0d`): the unshipped 0.5.0 bump is left out, as the first release from anfra, 0.15.0, ships the rename, and `renamedIn` is 0.15.0.
+2. **Tooling in anfra:** the `skills` commit scope; the validators (front matter, links, and no stamp in the source) and the hook's tests in `make test` and CI (`pnpm skills:check`), with their Node dependencies in anfra's root `package.json`. The skills repo's `bump.js`, `tag-release.sh`, changelog config and git hooks go.
+3. **The build:** `skills/scripts/build.mjs`, taking the version and the source commit as parameters, writing them to `.build.json`. Its test builds twice and compares, to keep it deterministic.
+4. **The publish job,** in `build_release.yml` after the binaries, with the skip. Needs a deploy key with write access to the facade, allowed past its branch protection, stored in anfra as the secret `ANFRA_SKILLS_DEPLOY_KEY`: an admin sets it up.
+5. **The facade's README** says it's generated from `holistics/anfra/skills`, and that changes go there.
+6. **Docs:** [release](release.md) gets the publish step, and `DEVELOPMENT.md` the skills' checks.
+
+### 8. anfra: the session hook and the setup skill
+
+`skills/plugins/anfra/hooks/check-update.sh`:
 - read the stamp from `${CLAUDE_PLUGIN_ROOT}`;
 - run `anfra version --skills <version>`, and if anfra rejects the flag, run plain `anfra version` as today;
 - add the hints to the session's context.
 
 `anfra-setup-repo`'s `SKILL.md`: its line "`anfra skills install` installs these skills…" names `anfra agent setup` instead.
 
-This waits for the anfra release that has steps 3 and 4: the hook and the skill name commands that must exist.
+After step 7, in `skills/`. The hook and the skill name commands of steps 3 and 4, and ship in the same release, so the order takes care of itself.
 
-### 8. Skills repo: Cursor's plugin
+### 9. anfra: Cursor's plugin
 
 A hooks file in Cursor's format, and paths in its manifest if Cursor needs them. Then a test of the plugin, installed from Cursor's UI. If it can't be made to work, the README's Cursor section gives the skills method.
 
-### 9. Policy: deprecation
+### 10. Policy: deprecation
 
 Add the rule to [commands and API](commands-and-api.md), for every command and flag: each keeps working, with a deprecation warning, for at least one minor release before it's removed or changed.
 - **Ops** already need a breaking change declared, through CI's contract check. This adds the warning period before it.

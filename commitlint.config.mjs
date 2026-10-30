@@ -33,6 +33,8 @@ export default {
         'appserve',
         'design',
 
+        'skills',
+
         'meta',
         'deps',
       ],
