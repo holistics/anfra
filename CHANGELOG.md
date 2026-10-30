@@ -1,3 +1,14 @@
+## [0.16.0](https://github.com/holistics/anfra/compare/v0.15.1...v0.16.0) (2026-10-30)
+
+### Features
+
+* bump anfra-node to 0.12.0 ([91b1dd3](https://github.com/holistics/anfra/commit/91b1dd3779bc93182ff496f6b8d855a5bcf341fc))
+
+### Security
+
+* **cli:** refuse a symlinked .gitignore in anfra init ([d1105db](https://github.com/holistics/anfra/commit/d1105db101a6f0b9e2d6b97157a33abfbd91a3d8))
+* put sidecar sockets in a private temp directory ([11f8af1](https://github.com/holistics/anfra/commit/11f8af1b5b86776c806ae980044d3b9935e7b07a))
+* run canal-query on a unix socket ([1625681](https://github.com/holistics/anfra/commit/1625681cf13288ae4490a6040e1d1e7fa1d50e6d))
 ## [0.15.1](https://github.com/holistics/anfra/compare/v0.15.0...v0.15.1) (2026-10-30)
 
 ### Features
