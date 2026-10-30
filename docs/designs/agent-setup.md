@@ -100,7 +100,12 @@ Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `
 <!-- anfra:begin -->
 ## anfra
 
-This is an anfra repo. Use the anfra skills to work in it.
+This is an anfra repo.
+
+- Use the anfra skills for work in this repo. They know anfra's languages and commands, so you'll work more
+  accurately and efficiently with them than from memory.
+
+Keeping the skills working:
 
 - Once per session, before your first anfra command, run `anfra version --skills <version>`, with the version
   from the `anfra skills` line at the end of an anfra skill you've loaded, or `--skills unknown` if it has no such
