@@ -56,7 +56,7 @@ The anfra skills' source is `skills/`; `build_release.yml`'s `skills` job publis
 
 - **The release's version, only when they changed.** The job rebuilds what the facade holds, with the parameters it recorded (`.build.json`), and compares. The same tree publishes nothing; a different one is built at this release's version, committed, tagged `anfra-v<version>`, and pushed (`skills/scripts/publish.sh`). A re-run publishes nothing again.
 - **The build writes the versions.** The manifests' versions and each skill's stamp come from the build (`skills/scripts/build.mjs`), not from `skills/`, so `pnpm bump` doesn't touch the skills.
-- **A deploy key,** `ANFRA_SKILLS_DEPLOY_KEY`, with write access to the facade and allowed past its branch protection, does the push.
+- **A GitHub App** with Contents: write on the facade, allowed past its branch protection, does the push, with a token the job makes from `ANFRA_SKILLS_DEPLOYER_APP_ID` and `ANFRA_SKILLS_DEPLOYER_KEY`.
 - **Any other build** reports what a release would publish, without pushing.
 
 ## Versions
