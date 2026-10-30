@@ -32,3 +32,6 @@ it with actionable skills such as [](../write-aql/), [](../validate-aql/), etc.
      frame the problem), `TECHNIQUES.md` (AQL idioms), `GOTCHAS.md` (pitfalls;
      entries marked `[silent]` fail with **no** validation error — a
      wrong-but-valid result — so look these up proactively).
+
+---
+anfra skills 0.4.5

@@ -247,3 +247,6 @@ thing, and check that the agreed result still holds.
 * [](../aml/) — add the fields and metrics an app needs.
 * [](../write-aql/) — write and validate the queries.
 * [](../setup-repo/) — set up the repo and its data source first.
+
+---
+anfra skills 0.4.5

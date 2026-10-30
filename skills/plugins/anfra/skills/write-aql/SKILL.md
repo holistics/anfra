@@ -45,3 +45,6 @@ Prefer writing the AQL yourself. You can instead hand it to a sub-agent — an `
 * [](../lookup-values/) — verify exact filter values before filtering.
 * [](../validate-aql/) — validate a query or expression before running it.
 * [](../run-aql/) — run a validated query and get its result.
+
+---
+anfra skills 0.4.5
