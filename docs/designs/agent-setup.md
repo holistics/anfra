@@ -36,16 +36,16 @@ There's no `anfra agent uninstall`. anfra keeps no install state of its own: eve
 
 `--agent` takes [`npx skills`](https://github.com/vercel-labs/skills)' agent ids (`claude-code`, `codex`, `cursor`, `opencode`, `github-copilot`, …), one or more. For an agent `npx skills` doesn't list, we pick an id in the same form: lowercase, hyphenated.
 
-Without `--agent`, setup takes the agents it detects, either from their CLI on the `PATH` or from their home folder, the way `npx skills` detects them (`~/.claude`, `~/.codex`, `~/.config/opencode`, …). At a terminal it first shows a multi-select with the detected agents checked. If it detects no agent, it fails and lists the ids.
+Without `--agent`, setup takes the agents it detects, either from their CLI on the `PATH` or from their home folder, the way `npx skills` detects them (`~/.claude`, `~/.codex`, `~/.config/opencode`, …). If it detects no agent, it fails and lists the ids. It asks nothing: `--agent` picks a subset, as the CLI has no multi-select prompt yet.
 
-`--scope user` (the default) or `--scope project`, as today. Codex installs plugins only at user scope.
+It installs per user, for every project. The former `anfra skills install --scope project`, which wrote the plugin into a repo's `.claude/settings.json`, isn't carried over: the alias refuses it and names `anfra agent setup`. A committed project setting reaches no cloud agent either, as [Cloud agents](#cloud-agents) says.
 
 ### Each agent's route
 
 | Agent | Route | What it gets |
 |---|---|---|
 | Claude Code | anfra runs its CLI: `claude plugin marketplace add`, `marketplace update`, `plugin install` (as today) | Skills, `aql-writer`, hooks |
-| Codex | anfra runs its CLI: `codex plugin marketplace add`, `marketplace upgrade`, `plugin add` (as today), at user scope only | Skills, hooks |
+| Codex | anfra runs its CLI: `codex plugin marketplace add`, `marketplace upgrade`, `plugin add` (as today) | Skills, hooks |
 | Every other agent, Cursor included | anfra installs nothing. It points at the skills repo's install section for that agent | Whatever that method installs |
 
 A route that installs runs the agent's own CLI, so new features and fixes in that CLI reach us without changes here. Run again, setup updates what it installed.
@@ -114,6 +114,18 @@ This is an anfra repo: models in AML, queries in AQL, run with the `anfra` CLI. 
 
 The block is committed, so cloud agents get it too. It stays short and leaves the details to the skills repo and the [`agent-setup` skill](#the-agent-setup-skill).
 
+### Skill names
+
+Every skill's name starts with `anfra-` (`anfra-aql`, `anfra-write-aql`, …), from the skills' 0.5.0. The reasons are in the research's [What this means](../research/skills-install.md#what-this-means), under "Names clash across vendors":
+
+- **Shared folders hold skills by name.** `npx skills` installs into folders several agents read, such as `~/.agents/skills`, one folder per skill name. Other vendors use our old names too: Holistics' `holistics-development` plugin has `aql`, `write-aql`, `run-aql`, `validate-aql` and `lookup-values`. Two skills of one name overwrite each other there, silently, whichever was installed last. Inside a plugin, names don't clash, but most agents get the skills alone ([Each agent's route](#each-agents-route)).
+- **It's what other vendors do.** Supabase (`supabase-*`), Vercel (`vercel-*`), Expo (`expo-*`) and Stripe (`stripe-*`) name their skills after themselves ([Vendor CLIs that install skills](../research/skills-install.md#vendor-clis-that-install-skills)).
+- **The source is renamed, not the installed copy.** The spec requires a skill's folder to match its `name`, and the skills refer to one another about 45 times. Renaming at install time would mean rewriting their text on every machine.
+- **The prefix marks our skills.** `--check` takes a folder's `anfra-*` skills as a copy, and reads each one's stamp ([The check report](#the-check-report)). Before it, anfra could only guess a folder was ours from one skill name that no other vendor used.
+- **Copies of the old names stay behind.** A plugin update replaces its skills, but a copy installed with `npx skills` before 0.5.0 keeps its old folders, which an agent loads next to the new ones. `--check` lists them under "Deprecated skills", and the skills repo's README gives the command that removes them.
+- **The cost:** in Claude Code, a plugin's skills are shown as `<plugin>:<skill>`, so `anfra:aql` becomes `anfra:anfra-aql`. Stripe's plugin shows the same.
+- **The `aql-writer` agent keeps its name.** Agents come only through plugins, which namespace them, so it never shares a folder with another vendor's.
+
 ### Duplicates are accepted
 
 Agents read each other's folders, so a skill can load twice. For example, Codex reads both its plugin and `~/.agents/skills`, and Cursor reads `~/.claude/skills`. The research's [What this means](../research/skills-install.md#what-this-means) has the full table. Setup removes nothing and leaves out no agent to avoid a duplicate:
@@ -137,33 +149,46 @@ It exits non-zero when any install failed, or when an agent named with `--agent`
 
 ### The check report
 
-`anfra agent setup --check` changes nothing. It reports the same agents setup would act on, then every copy of the skills it can see, listed by where it is, not by agent, since one folder can serve several agents. In an anfra repo, it also reports the `AGENTS.md` block:
+`anfra agent setup --check` changes nothing. It has three sections, and in an anfra repo (step 5) a fourth, for the `AGENTS.md` block:
 
 ```
 $ anfra agent setup --check
-Agents:
-  Claude Code   plugin, user scope   0.15.0   behind
-  Codex         plugin               0.16.0   current
-  OpenCode      not installed        see https://github.com/holistics/anfra-skills#opencode
+Latest anfra skills: 0.4.5, from GitHub (checked today)
 
-anfra skills found (latest 0.16.0, checked today):
-  ~/.agents/skills   0.14.1   behind
-  .claude/skills     0.16.0   current
+Agents:
+  Claude Code     plugin, skills  plugin 0.4.4; ~/.claude/skills
+  Cursor          skills          ~/.agents/skills, ~/.cursor/skills, ~/.claude/skills
+  GitHub Copilot  skills          ~/.agents/skills, ~/.copilot/skills
+  OpenCode        none            see https://github.com/holistics/anfra-skills#opencode
+
+Skills:
+  Claude Code plugin  behind  0.4.4
+  ~/.agents/skills    mixed   anfra-aql, anfra-write-aql at 0.4.4; 6 skills at 0.4.5
+  ~/.cursor/skills    latest  0.4.5
+  ~/.copilot/skills   behind  0.4.4
+  .claude/skills      behind  no version
+
+Deprecated skills, from before 0.5.0:
+  ~/.claude/skills
+  ~/.cursor/skills
+Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
+
 anfra only looks in the folders above, so a copy somewhere else won't be shown.
 
-AGENTS.md: the anfra block is out of date.
-
-Run `anfra agent setup` to fix these.
+Run `anfra agent setup` to install or update them.
 ```
 
-- **The block's state** is a comparison of its content with what this anfra would write, as Convex does with its `AGENTS.md` section. The block has no version stamp.
-- **A copy with no stamp** is listed as "no version, older than the stamp", so behind.
+- **The heading** says where the latest version comes from and when it was checked: "checked today", a date, or "not known yet".
+- **Agents** says where each agent's skills come from: `plugin`, `skills` (copies in the folders it reads), both, or `none`, with where to install from. It shows duplicates, such as a plugin and a copy in one agent. Which folders each agent reads is data in the agent list, from the agents' docs.
+- **Skills** lists each plugin and each copy, by where it is, as `latest`, `behind` or `mixed`, with its version, or which skills are at which version, oldest first. A copy is a folder's `anfra-*` skills, each read for its own stamp, so a partial install is found too. A skill with no stamp is `behind`, with `no version`. Against an unknown latest, the status is `unknown`.
+- **Deprecated skills** are copies of the names from before the `anfra-` prefix (`aml`, `aql`, …), found by their old `setup-repo` skill when its text names anfra. An agent loads them next to the new names. The section appears only when there are some, with the README's cleanup steps once.
 - **The list of copies** doesn't decide whether the skills in use fit, since it can't tell which copy is in use. That's [the check](#the-check)'s job.
 - **What it reads:**
-  - the skill folders anfra knows, such as `~/.agents/skills`, `.agents/skills`, `~/.claude/skills` and `.claude/skills`, and each copy's stamp line;
-  - the background check's cache, for the latest skills version and the plugins' installed versions.
+  - the skills folders the known agents read, at home and in the repo, and each `anfra-*` skill's stamp line;
+  - the background check's cache, for the latest skills version;
+  - the agents' CLIs, for the plugins' installed versions, as setup itself does: their answer is current, and setup runs them anyway.
 
-  It uses no network and runs no agent CLI.
+  It uses no network of its own.
 
 ## Versions
 
@@ -244,7 +269,7 @@ hints:
 
 `hints` are for agents. `update` keeps its shape, `available` included, since it's an existing contract, and the session hook's parsing of `available: true` still works.
 
-Without `--skills`, the answer is today's, plus `hints` when anfra is behind, so agents that already run plain `anfra version`, such as the `setup-repo` skill, get that hint too:
+Without `--skills`, the answer is today's, plus `hints` when anfra is behind, so agents that already run plain `anfra version`, such as the `anfra-setup-repo` skill, get that hint too:
 
 ```
 $ anfra version
@@ -356,6 +381,7 @@ The work spans two repos: anfra, and [anfra-skills](https://github.com/holistics
   - a section for each agent in anfra's list, anchored by its id, giving the install methods in order: plugin first, then the skills alone;
   - an `#other-agents` section, with the same order in general terms;
   - update and removal steps for each route.
+- **The names:** every skill is renamed with an `anfra-` prefix (`anfra-aql`, `anfra-write-aql`, …), with the references between them. Other vendors' skills share names such as `aql`, and `npx skills` installs into shared folders, where two skills of one name overwrite each other. The prefix also tells anfra's skills apart in a folder. The README says how to remove a copy of the old names, which an agent would load next to the new ones.
 
 ### 2. anfra: the background check learns the skills
 
@@ -379,7 +405,7 @@ The plugins' installed versions aren't here: listing them takes the agents' CLIs
 `cmd/anfra/agent.go` replaces `cmd/anfra/skills.go`:
 
 - **The agent list:** for each agent, its id, how it's detected (a CLI on the `PATH`, or a home folder), its route, and its README anchor. Claude Code and Codex keep today's steps.
-- **Selection:** `--agent`, else the detected agents, shown as a multi-select at a terminal.
+- **Selection:** `--agent`, else the detected agents.
 - **The report and exit code,** as [described above](#the-report-and-exit-code).
 - **`--check`,** reporting without changing anything, using the copies-found list from the cache and the known folders.
 - **`anfra skills install`** becomes an alias, printing a deprecation note.
@@ -426,6 +452,10 @@ Add the rule to [commands and API](commands-and-api.md), for every command and f
 - **More plugins,** in the [order described above](#more-plugins-in-order). Each lands in the README first, then in setup's agent list.
 - **Phase 2's compatibility map,** if phase 1 isn't enough.
 - **Claude Code's auto-update,** once an [open question](#open-questions) is settled.
+- **Missing and extra skills in a copy.** `--check` reports only the `anfra-*` skills a folder has. A partial install (`npx skills add … -s anfra-write-aql`), a skill a newer release added, or one it removed goes unnoticed. The fix:
+  - the skills repo's build writes the release's list of skills next to its manifest, such as `plugins/anfra/skills.json` (`{"version": …, "skills": […]}`), checked against the folders;
+  - the background check fetches that file in place of `plugin.json`, still one request, and caches the list with the version;
+  - `--check` compares each copy with it: a copy at the latest version that lacks skills is `partial`, and a copy that's behind says what it's missing; a skill no longer in the release is listed as extra. A plugin can't be partial, since its agent installs it whole.
 
 ## Not doing
 
