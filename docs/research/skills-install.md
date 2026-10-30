@@ -198,21 +198,21 @@ Paths are written one way throughout: user paths from `~`, project paths from th
 
 **Project scope**
 
-| Agent | Skills | Subagents | Hooks | MCP servers |
-|---|---|---|---|---|
-| Claude Code | `.claude/skills`, and in subfolders | `.claude/agents` | `.claude/settings.json` | `.mcp.json`, approved before use |
-| Copilot in VS Code | `.github/skills`, `.agents/skills`; compat: `.claude/skills` | `.github/agents`; compat: `.claude/agents` | `.github/hooks/<name>.json`, `.github/copilot/settings.json`; compat: `.claude/settings.json` | `.vscode/mcp.json` (key `servers`); `.mcp.json` behind an experimental setting |
-| Copilot CLI | `.github/skills`, `.agents/skills`; compat: `.claude/skills` | `.github/agents` | `.github/hooks/<name>.json` | `.mcp.json`, `.github/mcp.json`, after the user trusts the folder |
-| Codex | `.agents/skills`, from the working directory up to the repo root | `.codex/agents` | `.codex/hooks.json` | `.codex/config.toml`, in trusted projects only |
-| Cursor | `.agents/skills`, `.cursor/skills`; compat: `.claude/skills`, `.codex/skills` | `.cursor/agents`; compat: `.claude/agents`, `.codex/agents` | `.cursor/hooks.json` | `.cursor/mcp.json` |
-| Antigravity | `.agents/skills`; `.agent/skills`, kept for backward compatibility | `.agents/agents` (App and CLI) | `.agents/hooks.json` | `.agents/mcp_config.json` |
-| OpenCode | `.opencode/skills`, `.agents/skills`; compat: `.claude/skills`; up to the git root | `.opencode/agents` | Code in a plugin, in `.opencode/plugins` | `opencode.json`, under `mcp` |
-| Junie | `.junie/skills`, `.agents/skills` (trusted projects only); offers to import `.claude/skills`, `.cursor/skills`, `.codex/skills` | `.junie/agents`, `.agents` itself; offers to import `.claude/agents`, `.cursor/agents`, `.codex/agents` | `.junie/config.json`, ignored by default | `.junie/mcp/mcp.json` |
-| Windsurf: Cascade | `.devin/skills`, `.windsurf/skills`, `.agents/skills`; compat: `.claude/skills`, if reading Claude Code's config is turned on | None | `.devin/hooks.json`, else `.windsurf/hooks.json` | None |
-| Windsurf: Devin Local | Not checked separately | `.devin/agents`, `.agents/agents` | `.devin/hooks.v1.json`, `.devin/config.json`; compat: `.claude/settings.json` | `.devin/mcp_config.json` |
-| Warp | `.agents/skills`, `.warp/skills`; compat: the same eight folders as at user scope, from the working directory up to the repo root | None | Not documented | `.warp/.mcp.json`; compat: `.mcp.json`, `.codex/config.toml`, `.agents/.mcp.json`; approved before use |
-| Cline | `.cline/skills`, `.clinerules/skills`, `.agents/skills`; compat: `.claude/skills` | `.cline/agents` | Code in an SDK plugin, in `.cline/plugins` | Not documented |
-| Gemini CLI | `.gemini/skills`, `.agents/skills` | `.gemini/agents` | `.gemini/settings.json` | `.gemini/settings.json` |
+| Agent | Skills | Subagents | Hooks | MCP servers | Plugins |
+|---|---|---|---|---|---|
+| Claude Code | `.claude/skills`, and in subfolders | `.claude/agents` | `.claude/settings.json` | `.mcp.json`, approved before use | A reference: `claude plugin install --scope project` and `marketplace add --scope project` write `enabledPlugins` and `extraKnownMarketplaces` to `.claude/settings.json`; each user's copy goes to their own plugin cache, once they trust the folder |
+| Copilot in VS Code | `.github/skills`, `.agents/skills`; compat: `.claude/skills` | `.github/agents`; compat: `.claude/agents` | `.github/hooks/<name>.json`, `.github/copilot/settings.json`; compat: `.claude/settings.json` | `.vscode/mcp.json` (key `servers`); `.mcp.json` behind an experimental setting | Not checked: plugin locations and marketplaces are VS Code settings, which may be workspace settings |
+| Copilot CLI | `.github/skills`, `.agents/skills`; compat: `.claude/skills` | `.github/agents` | `.github/hooks/<name>.json` | `.mcp.json`, `.github/mcp.json`, after the user trusts the folder | None: user scope only, per the `npx plugins` README |
+| Codex | `.agents/skills`, from the working directory up to the repo root | `.codex/agents` | `.codex/hooks.json` | `.codex/config.toml`, in trusted projects only | None: user scope only (`~/.codex/config.toml`) |
+| Cursor | `.agents/skills`, `.cursor/skills`; compat: `.claude/skills`, `.codex/skills` | `.cursor/agents`; compat: `.claude/agents`, `.codex/agents` | `.cursor/hooks.json` | `.cursor/mcp.json` | Not checked |
+| Antigravity | `.agents/skills`; `.agent/skills`, kept for backward compatibility | `.agents/agents` (App and CLI) | `.agents/hooks.json` | `.agents/mcp_config.json` | The files: a plugin folder copied into `.agents/plugins` (IDE). The CLI installs to the user's folder |
+| OpenCode | `.opencode/skills`, `.agents/skills`; compat: `.claude/skills`; up to the git root | `.opencode/agents` | Code in a plugin, in `.opencode/plugins` | `opencode.json`, under `mcp` | Code, in `.opencode/plugins` |
+| Junie | `.junie/skills`, `.agents/skills` (trusted projects only); offers to import `.claude/skills`, `.cursor/skills`, `.codex/skills` | `.junie/agents`, `.agents` itself; offers to import `.claude/agents`, `.cursor/agents`, `.codex/agents` | `.junie/config.json`, ignored by default | `.junie/mcp/mcp.json` | A reference: installs recorded in `.junie/extensions.json`, with the content cached under `~/.junie/extensions` |
+| Windsurf: Cascade | `.devin/skills`, `.windsurf/skills`, `.agents/skills`; compat: `.claude/skills`, if reading Claude Code's config is turned on | None | `.devin/hooks.json`, else `.windsurf/hooks.json` | None | None |
+| Windsurf: Devin Local | Not checked separately | `.devin/agents`, `.agents/agents` | `.devin/hooks.v1.json`, `.devin/config.json`; compat: `.claude/settings.json` | `.devin/mcp_config.json` | None: `devin plugins install` is user scope |
+| Warp | `.agents/skills`, `.warp/skills`; compat: the same eight folders as at user scope, from the working directory up to the repo root | None | Not documented | `.warp/.mcp.json`; compat: `.mcp.json`, `.codex/config.toml`, `.agents/.mcp.json`; approved before use | None |
+| Cline | `.cline/skills`, `.clinerules/skills`, `.agents/skills`; compat: `.claude/skills` | `.cline/agents` | Code in an SDK plugin, in `.cline/plugins` | Not documented | Code, in `.cline/plugins` (`cline plugin install --cwd`) |
+| Gemini CLI | `.gemini/skills`, `.agents/skills` | `.gemini/agents` | `.gemini/settings.json` | `.gemini/settings.json` | Not checked |
 
 **Hook events we use**
 
@@ -309,44 +309,6 @@ Beyond these: `npx skills` lists about 80 agents in 65 rows. Only 13 rows use `.
   - OpenCode's `permission.skill: deny` matches by name, so it hides both copies.
   - Claude Code's `skillOverrides` doesn't apply to plugin skills.
 
-### References: how others do it
-
-#### `npx skills`
-
-[vercel-labs/skills](https://github.com/vercel-labs/skills), 1.7.4, tested on our repo:
-
-- **It finds our eight skills** through `.claude-plugin/marketplace.json`; the repo needs no change.
-- **One copy, linked per agent.** It installs one copy in `~/.agents/skills` (a project's `.agents/skills` without `-g`) and links agents with their own folder to it, such as `~/.claude/skills`. `--copy` copies instead.
-- **It runs without prompts:** `add holistics/anfra-skills -g -a <agents…> --skill '*' -y --json`.
-- **It pins a version:** `holistics/anfra-skills#anfra-v0.2.1` installs that tag, and `update` keeps it on that tag.
-- **It records what it installed:** `~/.agents/.skill-lock.json` for a user install, `skills-lock.json` for a project (committable). An update checks GitHub's tree hashes, in under a second.
-- **It finds installed agents** by looking for their config folders (`~/.config/opencode`, …).
-- **Skills only:** no hooks, no subagents.
-- **Exit codes:** without `--json`, a failed write still exits 0. With `--json` it exits 1 and gives each skill a `status`, `"failed"` with the error.
-- **`check` installs updates:** in 1.7.4 it is the same command as `update`, despite its docs, and exits 0 whether or not there were updates.
-- **Requirements:** Node ≥ 22.20. It sends telemetry unless `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` is set.
-
-#### `npx plugins`
-
-[vercel-labs/plugins](https://github.com/vercel-labs/plugins), 1.3.5, tested on our repo:
-
-- **Its targets:** Claude Code, Cursor, Codex, Grok Build, Kimi Code, Copilot CLI, VS Code. Not OpenCode.
-- **It finds our plugin:** 8 skills, 1 agent, hooks.
-- **Claude Code:** it registers the marketplace through Claude Code, installs `anfra@anfra-skills`, and turns on auto-update by writing `known_marketplaces.json` directly.
-- **Codex, with no Codex on the machine:** it wrote `~/.codex/config.toml` (enabling `anfra@plugins-cli`, while the files went under `anfra-skills`) and a plugin cache, printed "Done", and exited 0.
-- **Missing:** no `--json`, no update command, no pinning in its help.
-
-#### Skills only, without plugins or hooks
-
-- **[Supabase](https://supabase.com/docs/guides/ai-tools/ai-skills) and [Convex](https://docs.convex.dev/ai/agent-skills)** document `npx skills add`, into the project by default.
-- **[Expo](https://docs.expo.dev/skills/) and [Cloudflare](https://flaviocopes.com/cloud-platform-plugins-ai-coding-agents/)** offer a Claude Code / Codex plugin, which adds their MCP servers, and `npx skills` for the rest. The user picks one.
-- **[`gh skill`](https://github.blog/changelog/2026-04-16-manage-agent-skills-with-github-cli/)** (GitHub CLI 2.90+, preview) pins with `@tag` or `--pin`, and writes where a skill came from into its `SKILL.md` frontmatter, which `gh skill update` reads. This is from GitHub's changelog and the [Arch man page](https://man.archlinux.org/man/gh-skill-install.1.en), not GitHub's own manual.
-- **Nobody found writes hooks into agents' own config files, or ties the skills' version to their CLI's.** Likely reasons:
-  - Editing a user's hook config to run commands on every edit looks like what malware does; plugins come with approve and uninstall.
-  - Each agent's hook format differs and changes.
-  - Hooks added by hand get left behind on uninstall.
-  - Most vendors' extras are MCP servers, and the skills carry most of the value.
-
 ### Approaches
 
 There are two decisions:
@@ -408,7 +370,7 @@ Today's `anfra skills install` is roughly A, without the two parts that would ma
     | Cursor | `~/.cursor/hooks.json`, optional, since it means editing the user's file |
 - **For:** no duplicates; hooks almost everywhere.
 - **Against:**
-  - **It would be our own practice.** No vendor found writes hooks into agents' config files (see [References](#skills-only-without-plugins-or-hooks)). A CLI that adds commands to run on every edit in a user's hook config, or drops code into an agent's plugin folder, does what malware does. Users and security tools may see it as intrusive.
+  - **It would be our own practice.** Only TanStack Intent was found writing hooks into agents' config files, through a separate, opt-in command; vendors with hooks otherwise ship them in a plugin (see [References](#skills-only-without-plugins-or-hooks)). A CLI that adds commands to run on every edit in a user's hook config, or drops code into an agent's plugin folder, does what malware does. Users and security tools may see it as intrusive.
     - Codex asks the user to trust such hooks before they run; Cursor's and OpenCode's docs mention no such step.
     - It would need to ask before writing, list every file it wrote, and remove them all on uninstall.
     - The hooks-only Codex plugin is the exception: it goes through Codex's own plugin system.
@@ -511,3 +473,150 @@ The two can be combined: the npx tools first, a Go fallback when Node is missing
 - How much per-agent routing is worth the risk of falling behind the agents: how much to delegate.
 - Which agents read `AGENTS.md`, besides Claude Code.
 - Which agents our users actually use, to choose which hooks are worth maintaining.
+
+## References
+
+How other tools install skills and keep them current. The three installers were tested on `holistics/anfra-skills` in throwaway home directories, on 2026-10-28 and 2026-10-29. The vendor CLIs were read from their source code and docs.
+
+### Skill installers
+
+#### `npx skills`
+
+[vercel-labs/skills](https://github.com/vercel-labs/skills), 1.7.4.
+
+**Installing:**
+- **It finds our eight skills** through `.claude-plugin/marketplace.json`; the repo needs no change.
+- **One copy, linked per agent.** It installs one copy in `~/.agents/skills` (a project's `.agents/skills` without `-g`), and links agents with their own folder to it, such as `~/.claude/skills`. `--copy` copies instead.
+- **It finds installed agents** by looking for their config folders (`~/.config/opencode`, …).
+- **It runs without prompts:** `add holistics/anfra-skills -g -a <agents…> --skill '*' -y --json`.
+- **It pins a version:** `holistics/anfra-skills#anfra-v0.2.1` installs that tag.
+- **Skills only:** no hooks, no subagents.
+- **Exit codes:** without `--json`, a failed write still exits 0. With `--json` it exits 1 and gives each skill a `status`, `"failed"` with the error.
+- **Requirements:** Node ≥ 22.20. It sends telemetry unless `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` is set.
+
+**Updating:**
+- **Its record is a lock file per scope:** `~/.agents/.skill-lock.json` for a user install, `skills-lock.json` for a project (committable). Each entry holds the source, the `ref`, the skill's path and a hash of its folder (GitHub's tree hash).
+- **`update` asks GitHub for each skill's folder hash and reinstalls those that changed,** in under a second. `check` and `upgrade` are the same command in 1.7.4, despite its docs saying `check` only reports.
+- **A skill installed at a `#ref` stays on that ref.** It never moves to a newer tag; run `add` again with the new tag.
+- **Exit codes:** 1 only when an update fails; 0 whether or not anything was updated. So it can't answer "are updates available?".
+- **No background check or notice:** nothing says the skills are behind.
+- **Links update once:** agents linked to the shared copy see an update to it at once.
+- **`experimental_sync`** links skills from npm dependencies, so they update with the package. That suits tools distributed through npm, not a Go binary.
+
+#### `npx plugins`
+
+[vercel-labs/plugins](https://github.com/vercel-labs/plugins), 1.3.5.
+
+**Installing:**
+- **Its targets:** Claude Code, Cursor, Codex, Grok Build, Kimi Code, Copilot CLI, VS Code, detected by their CLI on the `PATH`. Not OpenCode.
+- **It finds our plugin:** 8 skills, 1 agent, hooks.
+- **Claude Code:** it registers the marketplace through Claude Code, and installs `anfra@anfra-skills`.
+- **Codex, with no Codex on the machine:** it wrote `~/.codex/config.toml` (enabling `anfra@plugins-cli`, while the files went under `anfra-skills`) and a plugin cache, printed "Done", and exited 0.
+- **Missing:** no `--json`, no pinning in its help.
+
+**Updating:**
+- **No update command.** Running `add` again refreshes the marketplace and reinstalls ("Marketplace updated").
+- **Auto-update for Claude Code only.** On a new install for Claude Code, and for Cursor outside Windows, it asks "Enable auto-updates? [Y/n]". Yes is the default, and `-y` answers yes. It then writes `"autoUpdate": true` into `~/.claude/plugins/known_marketplaces.json` (`setAutoUpdate` in its `dist/index.js`).
+- **Other targets** keep whatever update mechanism the agent has; it adds none.
+
+#### `gh skill`
+
+GitHub CLI 2.103.3, in preview. Sources: its help, and [`install.go`](https://github.com/cli/cli/blob/v2.103.3/pkg/cmd/skills/install/install.go).
+
+**Installing:**
+- **It finds our eight skills** ("found 8 skill(s) using the plugins/ convention"); the repo needs no change.
+- **Agents are chosen, never detected.**
+  - `--agent` takes one agent, so several agents need one run each.
+  - At a terminal, without `--agent`, it shows a multi-select of the ~50 agents it knows, with only GitHub Copilot pre-selected.
+  - Non-interactively, without `--agent`, it installs for GitHub Copilot only.
+  - The default scope is project.
+- **A folder per agent, not one shared folder.** For OpenCode it wrote `~/.config/opencode/skills`, OpenCode's own folder, and for Codex `~/.agents/skills`. Agents chosen in the same run that share a folder get one copy.
+- **No de-duplication across runs.** Installing for OpenCode and then for Codex left both copies, and OpenCode reads both folders, so it loads every skill twice. It neither removed nor reported the first copy, and exited 0.
+- **Installing again for the same agent refuses:** "skills already installed … (use --force to overwrite)", exit 1. Re-running `install` doesn't upgrade.
+- **Its record lives in the skill itself.** It rewrites each `SKILL.md`'s frontmatter: it re-serializes the YAML, changing key order and indentation, and adds `metadata.github-repo`, `github-path`, `github-ref` and `github-tree-sha`, plus `github-pinned` when pinned.
+- **It also writes `npx skills`' lock file** (`~/.agents/.skill-lock.json`, v3, keyed `anfra/aml`).
+- **Cosmetic bug:** the summary listing printed after installing says "(could not read directory)" for each skill; the files are all there.
+
+**Updating:**
+- **`update` compares each skill's `github-tree-sha` with the remote tree,** scanning every agent's folders in both scopes.
+- **Exit codes:**
+  - `--dry-run`: 0, even with updates available.
+  - Non-interactive without `--all`: lists the updates and exits 1, which a script can detect.
+  - `--all`: applies them and exits 0.
+- **A pinned skill is never updated,** not even to a newer tag. `--unpin` releases it, to the latest.
+- **Unpinned, a skill installed at a tag updates to the latest, not the next tag.** Its docs say "latest" means the newest GitHub Release, then the default branch. `anfra-skills` has no Releases, so it went to `main`.
+- **Skills without its metadata are skipped,** `npx skills`' installs included, with a notice, although it writes `npx skills`' lock file itself.
+- **`--force`** downloads again and overwrites local edits.
+
+### Vendor CLIs that install skills
+
+Researched from source and docs on 2026-10-29. Supabase, Mastra and Vercel's skills route only point to `npx skills add`.
+
+| CLI | What it writes, where | Content from | Tied to the CLI's version? | Updates | Plugin | Hooks | Subagents | MCP |
+|---|---|---|---|---|---|---|---|---|
+| [Sentry](https://github.com/getsentry/cli/blob/main/packages/cli/src/lib/agent-skills.ts) `sentry cli setup` | Its skill, in `~/.agents/skills` and/or `~/.claude/skills`, only where those folders already exist | Built into the binary | Yes, exactly | Rewrites it on every CLI upgrade, silently and atomically; `--no-agent-skills` opts out, remembered | Published separately¹ | No | No | Plugin only |
+| [Stripe](https://github.com/stripe/stripe-cli/blob/master/pkg/agentskills/agentskills.go) `stripe agent setup` | Plugin, skills, MCP for Claude Code, Codex, Cursor; skills in one shared `.agents/skills` | Downloaded from `docs.stripe.com/.well-known/skills` | No, the latest | `--status` compares file hashes with the remote; run again, `--force` to reinstall. A Go reimplementation of `npx skills add` | Installs it² | Yes, in the plugin | Yes, in the plugin | Yes, in the plugin |
+| [Nx](https://github.com/nrwl/nx/tree/master/packages/nx/src/ai) `nx configure-ai-agents` | A marked block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`; MCP config; a marketplace entry for Claude Code; skills in `.agents` and per-agent folders | Clones `nrwl/nx-ai-agents-config` at its latest commit, run by the latest Nx from npm | No, the latest | Prints "Your AI agent configuration is outdated" after each `nx run` outside CI; `--check` exits non-zero for CI | Installs it³ | No | Yes | Yes |
+| Convex `npx convex ai-files` | Guidelines, a marked block in `AGENTS.md` and `CLAUDE.md`, skills copied per agent | Guidelines from its server; skills by running `npx skills add … --copy` | No, the latest | sha256 hashes in a state file; `convex dev` warns when out of date; `ai-files update` | Published separately⁴ | Cursor plugin only | No | Plugins only |
+| [Laravel Boost](https://laravel.com/docs/13.x/boost) `boost:install`, `boost:update` | Guidelines in `CLAUDE.md` or `AGENTS.md`, MCP config, skills copied per agent, `boost.json` | Bundled in the package and in each vendor package | Yes, per installed package version | `boost:update`, suggested in composer's `post-update-cmd`; removes skills that no longer apply | Published separately⁵ | No | Marketplace only | Yes |
+| [TanStack Intent](https://github.com/TanStack/intent) | A marked block in `AGENTS.md` mapping tasks to `node_modules/<pkg>/skills`; copies nothing | Inside each library's npm package | Yes, by construction | Updates with the package | No | Yes, written directly⁶ | No | No |
+| [Angular CLI](https://github.com/angular/angular-cli/tree/main/packages/schematics/angular/ai-config) `ng generate ai-config` | A best-practices file per tool, MCP config | A bundled template | Yes | None; skips an existing file | No | No | No | Yes |
+| [Vercel CLI](https://vercel.com/docs/cli/agent) `vercel agent init` | A marked block in `AGENTS.md`, or `CLAUDE.md` when run from Claude Code | Not documented | Not documented | Run again | `vercel setup` installs it⁷ | Yes, in the plugin | Yes, in the plugin | Yes, in the plugin |
+| [Atlassian TWG](https://developer.atlassian.com/cloud/twg-cli/agents/skills/) `twg skills install`, `refresh` | A canonical copy in `~/.agents/skills`, plus per-agent copies | A baseline bundled in the CLI; `refresh` pulls from the user's profiles | The baseline is | `refresh` | Published separately⁸ | No | No | Plugin only |
+
+The Plugin, Hooks, Subagents and MCP columns cover what the vendor ships for coding agents, through the setup command or a plugin it publishes, checked in their repos on 2026-10-29 (Atlassian from its docs only):
+
+1. **Sentry:** [getsentry/sentry-for-ai](https://github.com/getsentry/sentry-for-ai) builds plugins for Claude Code, Codex, Cursor, Copilot and others, carrying Sentry's hosted MCP server. `sentry cli setup` doesn't install them.
+2. **Stripe:** `stripe agent setup` runs `claude plugin install stripe@claude-plugins-official` and `codex plugin add`, and tells Cursor users to run `/add-plugin stripe`. The Claude Code plugin ([stripe/ai](https://github.com/stripe/ai)) has hooks on `SessionStart`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch` and `UserPromptSubmit` (asking for Stripe feedback, and guiding Stripe CLI setup), a `company-researcher` subagent, and `.mcp.json`. The Codex and Cursor builds weren't checked.
+3. **Nx:** writes `extraKnownMarketplaces` and `enabledPlugins` for its Claude Code plugin ([nrwl/nx-ai-agents-config](https://github.com/nrwl/nx-ai-agents-config), "skills, subagents, and an MCP server"). For other agents the CLI copies the `ci-monitor-subagent` and writes MCP config directly.
+4. **Convex:** [convex-agent-plugins](https://github.com/convex/convex-agent-plugins) (Cursor, with `beforeShellExecution` and `stop` hooks) and [convex-codex-plugin](https://github.com/convex/convex-codex-plugin); no Claude Code plugin found. `ai-files` installs neither.
+5. **Laravel:** the [laravel/agent-skills](https://github.com/laravel/agent-skills) marketplace (Claude Code, Cursor), with a `laravel-simplifier` subagent. Boost doesn't install it; it writes MCP config per agent itself.
+6. **TanStack Intent:** only through a separate, opt-in `intent hooks install`, not `intent install`. It writes hooks into Claude Code's and Codex's config: `SessionStart` lists the skills, and `PreToolUse` blocks edit tools until `intent list` or `intent load` has run. Copilot at user scope only; none for Cursor.
+7. **Vercel:** `vercel agent init` writes only `AGENTS.md` or `CLAUDE.md`. `vercel setup` installs the [vercel-plugin](https://github.com/vercel/vercel-plugin) for Claude Code (`vercel@claude-plugins-official`), Codex and OpenCode, with hooks on `SessionStart`, `PostToolUse` and `SessionEnd`, three subagents (`ai-architect`, `deployment-expert`, `performance-optimizer`), and MCP.
+8. **Atlassian:** [atlassian-mcp-server](https://github.com/atlassian/atlassian-mcp-server) has Claude Code and Cursor plugin manifests carrying its Rovo MCP server. The TWG CLI's source wasn't checked.
+
+Patterns:
+- **Shared instruction files get a marked block.** Nx, Convex, Boost, Vercel and Intent replace only their own `<!-- … start -->…<!-- … end -->` block in `AGENTS.md` or `CLAUDE.md`, or append one. Only Angular skips an existing file.
+- **Folders a tool manages are deleted and copied again.** Several moved from symlinks to copies: Convex, for Windows, and Boost, for its own skills.
+- **Three ways to match the tool's version:**
+  - Content built into the binary or package, and rewritten on upgrade: Sentry, Angular, TWG's baseline.
+  - Content shipped inside the library and read from there, so it can't drift: Intent, Boost's vendor packages.
+  - Deliberately the latest from the network, whatever version is installed: Nx, Convex, Stripe.
+- **Hooks and subagents come through plugins.** Stripe and Vercel get theirs onto a machine by installing their own plugin. Only TanStack Intent writes hooks into agents' config itself, and only through a separate, opt-in command. Most CLIs install skills, instructions and MCP, nothing more.
+- **Staleness checks compare hashes,** where they exist. The notice rides on a command users already run: `nx run`, `convex dev`, composer updates, Sentry's upgrade.
+
+### Skills only, without plugins or hooks
+
+- **[Supabase](https://supabase.com/docs/guides/ai-tools/ai-skills) and [Convex](https://docs.convex.dev/ai/agent-skills)** document `npx skills add`, into the project by default.
+- **[Expo](https://docs.expo.dev/skills/) and [Cloudflare](https://flaviocopes.com/cloud-platform-plugins-ai-coding-agents/)** offer a Claude Code / Codex plugin, which adds their MCP servers, and `npx skills` for the rest. The user picks one.
+- **Almost nobody writes hooks into agents' own config files.** The one exception found is TanStack Intent's opt-in `intent hooks install`, for Claude Code, Codex and Copilot. Others with hooks ship them in a plugin (Stripe, Vercel, Convex's Cursor plugin). Likely reasons:
+  - Editing a user's hook config to run commands on every edit looks like what malware does; plugins come with approve and uninstall.
+  - Each agent's hook format differs and changes.
+  - Hooks added by hand get left behind on uninstall.
+  - Most vendors' extras are MCP servers, and the skills carry most of the value.
+
+### Plugins at project scope
+
+A repo can ask for a plugin in two ways: commit a reference that each user's agent fetches, or commit the plugin's files (see the Plugins column of the [project scope table](#what-each-agent-supports)).
+
+- **A reference: Claude Code and Junie only.**
+  - Claude Code writes `enabledPlugins` and `extraKnownMarketplaces` to `.claude/settings.json`; each teammate is offered the plugin when they trust the folder. Today's `anfra skills install --scope project` does this.
+  - Junie records the install in `.junie/extensions.json`.
+- **The files:** Antigravity's `.agents/plugins`, and OpenCode's and Cline's plugin code. A copy in the repo goes stale until someone updates and commits it, and can duplicate a user install.
+- **None:** Codex, Copilot CLI and Devin Local install plugins per user only. Per its README, `npx plugins` has project scope only where the agent does.
+
+For a project, then, the options are:
+- Claude Code's and Junie's references;
+- skills committed to `.agents/skills`, which nearly every agent reads in a project;
+- the `AGENTS.md` pointer, which has each user's agent install the skills itself.
+
+### What applies to us
+
+- **No installer avoids duplicates.** `npx skills`, `npx plugins` and `gh skill` each install per agent without knowing that agents read each other's folders, and none cleans up what an earlier run left. Avoiding duplicates is anfra's job, if it's done at all (approach D).
+- **Pinning doesn't follow versions.** A pinned or ref'd install never moves to a newer tag in `npx skills` or `gh skill`; an unpinned one goes to the latest, not to the next tag. Skills that follow anfra's version need anfra's own logic: install the tag for the running version, and reinstall on `anfra update`. No tool's update command does it.
+- **Version records in frontmatter get rewritten.** `gh skill` re-serializes the YAML of every skill it installs. That supports keeping our version in a separate `anfra.json`.
+- **Each part of the plan has a precedent:**
+  - skills rewritten for the CLI's own version on upgrade: Sentry;
+  - the install done in Go: Stripe;
+  - a notice on a command users already run: Nx, Convex;
+  - a marked block in `AGENTS.md`: Nx, Convex, Boost, Vercel, Intent.

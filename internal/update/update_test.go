@@ -2,9 +2,14 @@ package update
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/meta"
 )
@@ -98,5 +103,123 @@ func TestAssetName(t *testing.T) {
 	}
 	if name == "" {
 		t.Fatal("assetName returned empty name with no error")
+	}
+}
+
+// fakeGitHub serves the latest release, through the API, and the skills'
+// manifest, as a raw file with the status and body given. It points apiBase,
+// rawBase and anfra's folder at the test's.
+func fakeGitHub(t *testing.T, manifestStatus int, manifest string) {
+	t.Helper()
+	asset, err := assetName()
+	if err != nil {
+		t.Skip(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/holistics/anfra/releases/latest":
+			fmt.Fprintf(w, `{"tag_name": "v9.0.0", "assets": [{"name": %q, "url": "https://example.com/a"}]}`, asset+".gz")
+		case "/holistics/anfra-skills/main/plugins/anfra/.claude-plugin/plugin.json":
+			w.WriteHeader(manifestStatus)
+			fmt.Fprint(w, manifest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	oldAPI, oldRaw := apiBase, rawBase
+	apiBase, rawBase = srv.URL, srv.URL
+	t.Cleanup(func() { apiBase, rawBase = oldAPI, oldRaw })
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	for _, k := range []string{"ANFRA_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
+		t.Setenv(k, "")
+	}
+}
+
+func TestLatestSkills(t *testing.T) {
+	fakeGitHub(t, http.StatusOK, `{"name": "anfra", "version": "0.4.5"}`)
+	if got, err := LatestSkills(context.Background()); err != nil || got != "0.4.5" {
+		t.Errorf("got %q, %v", got, err)
+	}
+
+	for name, tc := range map[string]struct {
+		status   int
+		manifest string
+	}{
+		"not found":     {http.StatusNotFound, `{}`},
+		"not a version": {http.StatusOK, `{"version": "0.4"}`},
+		"no version":    {http.StatusOK, `{"name": "anfra"}`},
+		"not JSON":      {http.StatusOK, `version: 0.4.5`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fakeGitHub(t, tc.status, tc.manifest)
+			if got, err := LatestSkills(context.Background()); err == nil {
+				t.Errorf("got %q, want an error", got)
+			}
+		})
+	}
+}
+
+// Refresh caches both checks; the skills' failing is cached as unknown, never
+// as a version, and doesn't stop anfra's.
+func TestRefreshCachesTheSkills(t *testing.T) {
+	fakeGitHub(t, http.StatusOK, `{"version": "0.4.5"}`)
+	if err := Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if latest, at, ok := CachedSkills(); !ok || latest != "0.4.5" || time.Since(at) > time.Minute {
+		t.Errorf("skills: %q, %v, %v", latest, at, ok)
+	}
+	if r := Cached(); r == nil || r.Version != "9.0.0" {
+		t.Errorf("anfra: %+v", r)
+	}
+	if Stale() {
+		t.Error("stale right after a refresh")
+	}
+
+	// anfra update records anfra's check alone, and keeps the skills'.
+	RecordCheck(&Release{Version: "9.0.1", Tag: "v9.0.1"})
+	if latest, _, ok := CachedSkills(); !ok || latest != "0.4.5" {
+		t.Errorf("skills after RecordCheck: %q, %v", latest, ok)
+	}
+
+	fakeGitHub(t, http.StatusNotFound, `{}`)
+	if err := Refresh(context.Background()); err == nil {
+		t.Error("a failed skills check: got no error")
+	}
+	if latest, _, ok := CachedSkills(); ok {
+		t.Errorf("a failed check is cached as %q", latest)
+	}
+	if r := Cached(); r == nil || r.Version != "9.0.0" {
+		t.Errorf("anfra's check after the skills' failed: %+v", r)
+	}
+	if Stale() {
+		t.Error("a failed skills check is retried on every command")
+	}
+}
+
+// A cache from before the skills' check is stale, so the next background
+// refresh fills it in.
+func TestACacheWithoutTheSkillsIsStale(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	writeCache(&cache{CheckedAt: time.Now(), LatestVersion: "9.0.0", LatestTag: "v9.0.0"})
+	if !Stale() {
+		t.Error("not stale")
+	}
+	if _, _, ok := CachedSkills(); ok {
+		t.Error("skills known")
+	}
+}
+
+// serve's Check goes by anfra's own check: skills never checked don't send it
+// to GitHub again.
+func TestCheckIgnoresTheSkills(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	old := apiBase
+	apiBase = "http://127.0.0.1:1" // nothing listens: a lookup would fail
+	t.Cleanup(func() { apiBase = old })
+	writeCache(&cache{CheckedAt: time.Now(), LatestVersion: "9.0.0", LatestTag: "v9.0.0"})
+	if r, err := Check(context.Background()); err != nil || r.Version != "9.0.0" {
+		t.Errorf("got %+v, %v; want the cached release", r, err)
 	}
 }

@@ -10,6 +10,7 @@ package update
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,8 +34,14 @@ const (
 	// Release tags are v<version>; those up to 0.8.0 were anfra-v<version>.
 	tagPrefix       = "v"
 	legacyTagPrefix = "anfra-v"
-	apiBase         = "https://api.github.com"
 	userAgent       = "anfra-cli"
+
+	// The anfra skills' latest version is their plugin manifest's on the skills
+	// repo's main: the skills repo bumps every manifest in lockstep on each
+	// release (docs/designs/agent-setup.md).
+	skillsRepo     = "holistics/anfra-skills"
+	skillsManifest = "plugins/anfra/.claude-plugin/plugin.json"
+	skillsRef      = "main"
 
 	// How long a cached update check stays fresh (matches gh/deno's 24h).
 	checkTTL = 24 * time.Hour
@@ -43,6 +50,13 @@ const (
 	// download is a large binary (sidecars are embedded), so it gets much longer.
 	lookupTimeout   = 30 * time.Second
 	downloadTimeout = 10 * time.Minute
+)
+
+// apiBase is GitHub's API, and rawBase where it serves a repo's files, which a
+// test points at its own server.
+var (
+	apiBase = "https://api.github.com"
+	rawBase = "https://raw.githubusercontent.com"
 )
 
 // Release is the latest release plus the asset for the running platform.
@@ -153,6 +167,33 @@ func Latest(ctx context.Context) (*Release, error) {
 		return nil, fmt.Errorf("release %s has no asset %q", rel.TagName, want)
 	}
 	return out, nil
+}
+
+// LatestSkills fetches the latest anfra skills version: the version in the
+// skills repo's plugin manifest on main. It is a file GitHub serves from its
+// CDN, not its API, so it doesn't count against the API's rate limit, which
+// everyone behind one address shares (60 an hour, anonymous). Anonymous, then
+// with a token if that is refused, as the release lookup.
+func LatestSkills(ctx context.Context) (string, error) {
+	url := fmt.Sprintf("%s/%s/%s/%s", rawBase, skillsRepo, skillsRef, skillsManifest)
+	resp, err := get(ctx, url, "application/json", lookupTimeout)
+	if err != nil {
+		return "", fmt.Errorf("check the latest anfra skills: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("check the latest anfra skills: GitHub returned %s", resp.Status)
+	}
+	var m struct {
+		Version string `json:"version"`
+	}
+	if err := jsonkit.UnmarshalRead(io.LimitReader(resp.Body, 1<<20), &m); err != nil {
+		return "", fmt.Errorf("check the latest anfra skills: decode %s: %w", skillsManifest, err)
+	}
+	if semver.Canonical("v"+m.Version) != "v"+m.Version {
+		return "", fmt.Errorf("check the latest anfra skills: %q in %s is not a version", m.Version, skillsManifest)
+	}
+	return m.Version, nil
 }
 
 // IsNewer reports whether the latest version is newer than the running one, so
@@ -276,10 +317,17 @@ func humanBytes(n int64) string {
 
 // --- cached background check (for the "update available" notice) ---
 
+// cache is the last background check: anfra's latest release, and the anfra
+// skills' latest version, each with when it was checked. They are checked
+// together, but `anfra update` records anfra's alone.
 type cache struct {
 	CheckedAt     time.Time `json:"checked_at"`
 	LatestVersion string    `json:"latest_version"`
 	LatestTag     string    `json:"latest_tag"`
+	// SkillsLatest is "" when the last fetch failed: a failure is cached as
+	// unknown, never as a version, so it can't pass for current.
+	SkillsLatest    string    `json:"skills_latest,omitempty"`
+	SkillsCheckedAt time.Time `json:"skills_checked_at,omitzero"`
 }
 
 func cachePath() (string, error) {
@@ -315,27 +363,51 @@ func writeCache(c *cache) {
 	}
 }
 
-// Stale reports whether the cached check is missing or older than the TTL.
+// Stale reports whether the cached check, of anfra or of the skills, is missing
+// or older than the TTL.
 func Stale() bool {
 	c, ok := readCache()
-	return !ok || time.Since(c.CheckedAt) > checkTTL
+	return !ok || time.Since(c.CheckedAt) > checkTTL || time.Since(c.SkillsCheckedAt) > checkTTL
 }
 
-// Refresh runs a live check and updates the cache. Called from the detached
-// background refresh (see cmd/anfra), never in a command's hot path.
+// Refresh runs a live check, of anfra and of the skills, and updates the cache.
+// One failing doesn't stop the other. Called from the detached background
+// refresh (see cmd/anfra), never in a command's hot path.
 func Refresh(ctx context.Context) error {
 	rel, err := Latest(ctx)
-	if err != nil {
-		return err
+	if err == nil {
+		RecordCheck(rel)
 	}
-	RecordCheck(rel)
-	return nil
+	skills, serr := LatestSkills(ctx)
+	c, _ := readCache()
+	if c == nil {
+		c = &cache{}
+	}
+	c.SkillsLatest, c.SkillsCheckedAt = skills, time.Now()
+	writeCache(c)
+	return errors.Join(err, serr)
 }
 
 // RecordCheck stores an already-fetched release in the cache (no network), so a
-// foreground check refreshes the notice cache without a second request.
+// foreground check refreshes the notice cache without a second request. It
+// keeps the skills' check as it was.
 func RecordCheck(r *Release) {
-	writeCache(&cache{CheckedAt: time.Now(), LatestVersion: r.Version, LatestTag: r.Tag})
+	c, _ := readCache()
+	if c == nil {
+		c = &cache{}
+	}
+	c.CheckedAt, c.LatestVersion, c.LatestTag = time.Now(), r.Version, r.Tag
+	writeCache(c)
+}
+
+// CachedSkills is the latest anfra skills version from the cached check, and
+// when it was checked; false when it wasn't, or the fetch failed. No network.
+func CachedSkills() (latest string, checkedAt time.Time, ok bool) {
+	c, found := readCache()
+	if !found || c.SkillsLatest == "" {
+		return "", time.Time{}, false
+	}
+	return c.SkillsLatest, c.SkillsCheckedAt, true
 }
 
 // Cached returns the latest release from the cached check (no network), or nil
@@ -352,8 +424,9 @@ func Cached() *Release {
 // live lookup, which it caches. For a long-running process (serve), which can
 // afford the request off its hot path; a short command uses Cached and Refresh.
 func Check(ctx context.Context) (*Release, error) {
-	if r := Cached(); r != nil && !Stale() {
-		return r, nil
+	// anfra's check alone: serve doesn't check the skills.
+	if c, ok := readCache(); ok && c.LatestVersion != "" && time.Since(c.CheckedAt) <= checkTTL {
+		return &Release{Version: c.LatestVersion, Tag: c.LatestTag}, nil
 	}
 	r, err := Latest(ctx)
 	if err != nil {
