@@ -214,10 +214,10 @@ fi
 echo "${bold}Next steps${reset}"
 echo
 echo "  ${green}1${reset}  ${bold}Install the agent skills${reset}"
-echo "     ${dim}Claude Code, Codex and Cursor need them to set up projects,${reset}"
+echo "     ${dim}Your agents need them to set up projects,${reset}"
 echo "     ${dim}model data and build apps with Anfra.${reset}"
 echo
-echo "       \$ ${bold}anfra skills install${reset}"
+echo "       \$ ${bold}anfra agent setup${reset}"
 echo
 echo "  ${green}2${reset}  ${bold}Create a project${reset}"
 echo
@@ -231,7 +231,7 @@ echo
 echo "  ${green}4${reset}  ${bold}Build an app${reset}"
 echo "     Open the project in your coding agent and ask:"
 echo
-echo "       ${bold}\"Use the build-data-app skill. Look at my orders data and build${reset}"
+echo "       ${bold}\"Use the anfra-build-data-app skill. Look at my orders data and build${reset}"
 echo "       ${bold}a revenue overview: monthly trend and revenue by region.${reset}"
 echo "       ${bold}Clicking a region should filter the trend.\"${reset}"
 echo
@@ -247,7 +247,7 @@ echo "  ${green}»${reset}  ${bold}Shortcut${reset}"
 echo "     Your coding agent can do steps 2 and 3 for you. Open an"
 echo "     empty folder in it and ask:"
 echo
-echo "       ${bold}\"Use the setup-repo skill to set up Anfra and connect my warehouse.\"${reset}"
+echo "       ${bold}\"Use the anfra-setup-repo skill to set up Anfra and connect my warehouse.\"${reset}"
 echo
 echo "${dim}──────────────────────────────────────────────────────────────${reset}"
 echo "${bold}Docs${reset}      https://docs.anfra.ai"
