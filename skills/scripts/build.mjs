@@ -18,8 +18,8 @@ import { stamped } from './stamp.mjs'
 const SKILLS = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 // What the facade holds, from skills/: the marketplaces each agent reads, the
-// plugins, and the README.
-const PUBLISHED = ['.claude-plugin', '.cursor-plugin', '.agents', 'plugins', 'README.md']
+// plugins, the README and the changelog.
+const PUBLISHED = ['.claude-plugin', '.cursor-plugin', '.agents', 'plugins', 'README.md', 'CHANGELOG.md']
 
 const { values } = parseArgs({
   options: { version: { type: 'string' }, source: { type: 'string' }, out: { type: 'string' } },

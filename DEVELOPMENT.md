@@ -72,7 +72,7 @@ The anfra skills' source is in `skills/`: the `anfra` plugin, its marketplaces f
 
 - **The source carries no version.** The build writes it into the manifests, and the stamp at the end of each skill, when a release publishes them. A skill in `skills/` must not end with a stamp.
 - **To see what a release would publish:** `pnpm skills:build --version 0.0.0 --source dev --out /tmp/anfra-skills`.
-- **Commits** that change them take the `skills` scope.
+- **Commits** that change them take the `skills` scope. `pnpm bump` writes them into `skills/CHANGELOG.md` too, which is published with the skills.
 
 See [where the skills live](docs/designs/agent-setup.md#where-the-skills-live).
 
