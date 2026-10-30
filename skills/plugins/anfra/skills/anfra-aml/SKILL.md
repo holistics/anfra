@@ -1,5 +1,5 @@
 ---
-name: aml
+name: anfra-aml
 description: Write and edit AML — the declarative modeling language for models, fields, relationships, and datasets in an AMQL repo. Use whenever you need to create or change a model, dataset, relationship, or field definition.
 ---
 
@@ -45,7 +45,7 @@ types) and a high-level data profile (row counts, cardinality, null rates, value
 ranges, key uniqueness) so you can model the data in AML more accurately and
 effectively — e.g. pick the right primary key, field types, and relationship
 direction. **Never** use it to answer data questions; those go through AQL against a
-dataset ([](../write-aql/)).
+dataset ([](../anfra-write-aql/)).
 
 ## Best practices
 * **Always define a model's primary key** — mark the identifying `dimension` with `primary_key: true`. Relationships and correct aggregation rely on it.
@@ -56,13 +56,13 @@ dataset ([](../write-aql/)).
 1. **Model first.** Create/extend the `*.model.aml`: set `type`, `data_source_name`, `table_name` (or `query`), and define its `dimension`s and `measure`s. Check `data_model.aml` and the model example for exact syntax.
 2. **Relationships.** Define relationships between the models you'll join.
 3. **Dataset.** Create/extend the `*.dataset.aml`: list the `models` and `relationships`, and add any cross-model dataset-level `metric`s.
-4. **Validate** with [](../validate-aql/) — run `anfra validate` (whole repo, or specific files) and fix any diagnostics.
-5. **Query** the dataset with [](../write-aql/).
+4. **Validate** with [](../anfra-validate-aql/) — run `anfra validate` (whole repo, or specific files) and fix any diagnostics.
+5. **Query** the dataset with [](../anfra-write-aql/).
 
 ## Related skills
-* [](../aql/) — AQL knowledge (field/metric definitions are AQL).
-* [](../write-aql/) — write and run queries against a dataset.
-* [](../validate-aql/) — validate AML/AQL before relying on it.
+* [](../anfra-aql/) — AQL knowledge (field/metric definitions are AQL).
+* [](../anfra-write-aql/) — write and run queries against a dataset.
+* [](../anfra-validate-aql/) — validate AML/AQL before relying on it.
 
 ---
 anfra skills 0.4.5

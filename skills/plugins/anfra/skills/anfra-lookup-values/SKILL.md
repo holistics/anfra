@@ -1,5 +1,5 @@
 ---
-name: lookup-values
+name: anfra-lookup-values
 description: Verify the exact stored values of a field before filtering on them, guarding against case sensitivity, abbreviations, and typos. Use before writing any filter whose literal values you aren't 100% sure match the data.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: aql
+name: anfra-aql
 description: Core AQL (Analytic Query Language) knowledge — syntax, semantics, functions, worked examples, and gotchas. Use whenever you need to write, read, or debug AQL yourself.
 ---
 
@@ -7,7 +7,7 @@ description: Core AQL (Analytic Query Language) knowledge — syntax, semantics,
 
 AQL is Analytic Querying Language for data analytics. This skill is
 the knowledge base you consult while authoring AQL. It doesn't run queries — pair
-it with actionable skills such as [](../write-aql/), [](../validate-aql/), etc.
+it with actionable skills such as [](../anfra-write-aql/), [](../anfra-validate-aql/), etc.
 
 ## How to use these references
 **AQL is not SQL — don't write it from general or SQL knowledge.** Read the core lessons *before* writing your first AQL; then pull in the specific per-function docs and examples your task needs (that part is on-demand — you needn't read everything).

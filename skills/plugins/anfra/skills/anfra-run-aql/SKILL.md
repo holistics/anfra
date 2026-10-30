@@ -1,5 +1,5 @@
 ---
-name: run-aql
+name: anfra-run-aql
 description: Run an AQL query against a dataset and return its result rows (or compile it to SQL). Use to execute a validated AQL query and get data.
 ---
 
@@ -18,7 +18,7 @@ anfra query compile --dataset <uname> '<query>'
 ```
 
 An invalid query fails (exit 1) and prints its diagnostics; fix it with
-[](../validate-aql/).
+[](../anfra-validate-aql/).
 
 ## How many rows come back
 `anfra query` (and the MCP query tool) answers one page: the first 10,000 rows,
@@ -34,8 +34,8 @@ whole result to a file. To answer a question, ask the query for what you need
 > Replace this command for other runtimes if needed.
 
 ## Writing correct queries
-Use [](../aql/) (syntax, functions, gotchas) and [](../write-aql/) (workflow) to
-write the query, and [](../validate-aql/) to type-check it before running.
+Use [](../anfra-aql/) (syntax, functions, gotchas) and [](../anfra-write-aql/) (workflow) to
+write the query, and [](../anfra-validate-aql/) to type-check it before running.
 
 ---
 anfra skills 0.4.5

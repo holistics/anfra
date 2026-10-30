@@ -1,5 +1,5 @@
 ---
-name: build-data-app
+name: anfra-build-data-app
 description: Build or change an Anfra Data App — one self-contained HTML file in the repo's `apps/` that queries datasets, and can trace fields' lineage, through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for a dashboard, report, page or interactive analysis over the repo's datasets.
 ---
 
@@ -36,7 +36,7 @@ dataset metric its bare name. A measure is already aggregated: select it as it i
 in `sum()`. Read labels and descriptions: they carry the modeler's caveats on grain, fan-out and
 which date to use. For a metric's definition, read its `*.dataset.aml`.
 
-If a number the app needs has no field or metric, add it to the AML with the [](../aml/) skill
+If a number the app needs has no field or metric, add it to the AML with the [](../anfra-aml/) skill
 rather than computing it in JavaScript.
 
 ## 2. Agree on the design
@@ -106,7 +106,7 @@ In every look:
 
 ## 3. Write and check the queries
 
-A query's `aql` is AQL: write it with the [](../aql/) and [](../write-aql/) skills. A Data App adds
+A query's `aql` is AQL: write it with the [](../anfra-aql/) and [](../anfra-write-aql/) skills. A Data App adds
 four rules, because the SDK does not run your AQL as written: it sends it with the reader's state
 (filter values, the cross-filter selection, sorts, date drills, the page), which anfra applies to
 the query's `explore { }` before it runs.
@@ -244,9 +244,9 @@ requested change the same way: restate it if it changes what a number means, cha
 thing, and check that the agreed result still holds.
 
 ## Related skills
-* [](../aml/) — add the fields and metrics an app needs.
-* [](../write-aql/) — write and validate the queries.
-* [](../setup-repo/) — set up the repo and its data source first.
+* [](../anfra-aml/) — add the fields and metrics an app needs.
+* [](../anfra-write-aql/) — write and validate the queries.
+* [](../anfra-setup-repo/) — set up the repo and its data source first.
 
 ---
 anfra skills 0.4.5

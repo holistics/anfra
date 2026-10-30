@@ -1,5 +1,5 @@
 ---
-name: setup-repo
+name: anfra-setup-repo
 description: Set up a new Anfra repo — install the anfra CLI if needed, run `anfra init`, connect a data source, and get a first model and dataset validated and queried. Use when starting an Anfra project, connecting a database, or when a repo has no `.anfra/` config yet.
 ---
 
@@ -80,7 +80,7 @@ entry and run it again. The file is read on every command, so there is nothing t
 
 ## 4. Model the data
 
-Use the [](../aml/) skill: study the tables with `anfra query --lang sql --data-source <name>`
+Use the [](../anfra-aml/) skill: study the tables with `anfra query --lang sql --data-source <name>`
 (schema and a data profile, never data questions), write a model per table in `models/`, their
 relationships, and a dataset in `datasets/` that bundles them, each with `data_source_name: '<name>'`.
 
@@ -91,21 +91,21 @@ anfra show            # the datasets, as AQL sees them
 
 ## 5. Query it
 
-Run one representative AQL query against the dataset with [](../run-aql/), and check a number
+Run one representative AQL query against the dataset with [](../anfra-run-aql/), and check a number
 against a direct SQL query on the source (a row count, a total). Validation proves the AML is
 well-formed, not that the numbers are right.
 
 ## Then
 
 - `anfra serve` serves the repo's Data Apps at `http://127.0.0.1:7878/apps/`: build one with
-  [](../build-data-app/).
+  [](../anfra-build-data-app/).
 - `anfra ingest`, then `anfra search <words>`, finds models, fields and metrics by meaning.
 - `anfra skills install` installs these skills into the user's coding agents.
 
 ## Related skills
-* [](../aml/) — write the models, relationships and datasets.
-* [](../run-aql/) — query a dataset.
-* [](../build-data-app/) — build a Data App on the datasets.
+* [](../anfra-aml/) — write the models, relationships and datasets.
+* [](../anfra-run-aql/) — query a dataset.
+* [](../anfra-build-data-app/) — build a Data App on the datasets.
 
 ---
 anfra skills 0.4.5

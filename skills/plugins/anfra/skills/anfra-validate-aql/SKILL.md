@@ -1,5 +1,5 @@
 ---
-name: validate-aql
+name: anfra-validate-aql
 description: Validate an AQL query (or a single expression) without running it. Use to type-check AQL before running or presenting it.
 ---
 
@@ -23,7 +23,7 @@ not only a whole `explore`.
 > Replace this command for other runtimes if needed.
 
 ## Writing valid queries
-Use [](../aql/) (syntax, functions, gotchas) and [](../write-aql/) (workflow) to
+Use [](../anfra-aql/) (syntax, functions, gotchas) and [](../anfra-write-aql/) (workflow) to
 write correct AQL and to fix whatever validation reports.
 
 ---
