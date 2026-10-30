@@ -10,8 +10,8 @@ import { PLUGIN_VERSION } from '../version';
 import { OVERVIEW_TAB } from './model/types';
 import { dropState, stateOf } from './state';
 
-const tab = (id: string, title: string, icon: string, order: number, load: () => Promise<{ default: TabContribution['mount'] }>): TabContribution => ({
-  id, title, icon, order, mount: async (root, context) => (await load()).default(root, context),
+const tab = (id: string, title: string, icon: string, order: number, load: () => Promise<{ default: TabContribution['mount'] }>, selection?: TabContribution['selection']): TabContribution => ({
+  id, title, icon, order, selection, mount: async (root, context) => (await load()).default(root, context),
 });
 
 export function inspectPlugin (): Plugin {
@@ -42,7 +42,7 @@ export function inspectPlugin (): Plugin {
         tab('overview', 'Overview', 'overview', 10, () => import('./tabs/overview')),
         tab('data', 'Data', 'table', 20, () => import('./tabs/data')),
         tab('queries', 'Queries', 'query', 30, () => import('./tabs/queries')),
-        tab('structure', 'Structure', 'tree', 40, () => import('./tabs/structure')),
+        tab('structure', 'Structure', 'tree', 40, () => import('./tabs/structure'), 'pick'),
         tab('declaration', 'Declaration', 'code', 50, () => import('./tabs/declaration')),
       ],
     },

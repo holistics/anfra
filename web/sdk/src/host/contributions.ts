@@ -10,12 +10,19 @@ import type { Panel } from './panel';
 import type { Theme } from '../common/theme';
 import type { MenuTarget, MenuTargetKind } from '../common/menu';
 
-/** What running a command does: make a call, or open the panel at a tab (toggling it). */
+/** What a `{ panel }` command does to the panel: `pick` turns pick mode on, or off again. */
+export type PanelVerb = 'pick';
+
+/** What running a command does: make a call, open the panel at a tab (toggling it), or drive the panel. */
 export type CommandRun =
   /** A call by its full name, made as the command's plugin (or the host), about the mount. */
   | { call: string, request?: unknown }
   /** Open the panel at this tab, by its full id, with `target` (a node's key) selected if given. */
-  | { tab: string, target?: string | null };
+  | { tab: string, target?: string | null }
+  /** One of the panel's own verbs, run on the mount's panel. */
+  | { panel: PanelVerb };
+
+const PANEL_VERBS: ReadonlySet<string> = new Set<PanelVerb>(['pick']);
 
 /** How a command shows right now. */
 export interface CommandState {
@@ -38,8 +45,11 @@ export interface CommandContribution {
   title: string;
   /** A short name for an icon (`inspect`, `download`, `comment`), which the host maps to its own. */
   icon?: string;
-  /** A hint for the host: `primary` for its action bar, `overflow` for a menu. A host may ignore it. */
-  placement?: 'primary' | 'overflow';
+  /**
+   * A hint for the host: `primary` for its action bar, `overflow` for a menu, `panel` for the panel's
+   * tab strip, before the tabs, while the panel is open. A host may ignore it.
+   */
+  placement?: 'primary' | 'overflow' | 'panel';
   /** A key combination, `Alt+Shift+I`: modifiers (`Ctrl`, `Alt`, `Shift`, `Meta`) then a key. */
   shortcut?: string;
   run: CommandRun;
@@ -57,7 +67,8 @@ export interface CommandContribution {
   /**
    * How it shows now, read again on each change the plugin signals (`MountContext.commandsChanged`)
    * and on each change to the panel. Unless given, a command that opens a tab is pressed while the
-   * panel shows one of its plugin's tabs (or that tab, for the host's own).
+   * panel shows one of its plugin's tabs (or that tab, for the host's own), and a `pick` one while
+   * the panel is picking.
    */
   state?: (context: CommandStateContext, target?: MenuTarget) => CommandState;
 }
@@ -92,6 +103,12 @@ export interface TabContribution {
   /** Lower comes first; ties keep install order (the host's own last). */
   order?: number;
   /**
+   * The tab shows the panel's selected node. `pick`: a pick opens the panel here (the first such tab).
+   * `true`: a pick started here stays, but lands elsewhere. The built-in Pick command is there only
+   * while some tab says either.
+   */
+  selection?: boolean | 'pick';
+  /**
    * Draw the tab into `root`, a shadow root the host owns, with any framework or none: the host's
    * styles don't reach in, and the tab's don't reach out. What it returns runs when the tab is
    * taken down. Load what is heavy from here, so a host that never shows the tab never loads it.
@@ -111,7 +128,22 @@ export interface Tab extends TabContribution {
 
 export type Contribution = { kind: 'command', command: Command } | { kind: 'tab', tab: Tab };
 
-/** Every plugin's contributions, then the host's own, under full ids, as the filter keeps them. */
+/**
+ * The SDK's own command, before every plugin's: pick a node on the page, from the panel's strip. A
+ * host drops it with its filter, like any contribution.
+ */
+export const PANEL_PICK: Command = {
+  id: 'panel.pick',
+  title: 'Pick an element (Esc stops)',
+  icon: 'pick',
+  placement: 'panel',
+  run: { panel: 'pick' },
+};
+
+/**
+ * Every plugin's contributions, then the host's own, under full ids, as the filter keeps them; the
+ * SDK's Pick first, while a tab kept shows the selection.
+ */
 export function installContributions (
   plugins: readonly { name: string, host?: { commands?: readonly CommandContribution[], tabs?: readonly TabContribution[] } }[],
   own: { commands?: readonly CommandContribution[], tabs?: readonly TabContribution[] },
@@ -119,7 +151,7 @@ export function installContributions (
 ): { commands: Command[], tabs: Tab[] } {
   const commands: Command[] = [];
   const tabs: Tab[] = [];
-  const ids = new Set<string>();
+  const ids = new Set<string>([PANEL_PICK.id]);
   const unique = (kind: string, id: string) => {
     if (typeof id !== 'string' || id === '') throw new Error(`A ${kind} needs an id.`);
     if (ids.has(id)) throw new Error(`Two contributions are named '${id}'.`);
@@ -141,15 +173,22 @@ export function installContributions (
     unique('command', command.id);
     commands.push({ ...command });
   }
+  for (const command of commands) {
+    if ('panel' in command.run && !PANEL_VERBS.has(command.run.panel)) {
+      throw new Error(`Command '${command.id}' runs '${String(command.run.panel)}' on the panel, which it can't do.`);
+    }
+  }
   for (const tab of own.tabs ?? []) {
     unique('tab', tab.id);
     tabs.push({ ...tab });
   }
   const order = new Map(tabs.map((tab, index) => [tab, index]));
   tabs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || order.get(a)! - order.get(b)!);
+  const kept = keep ? tabs.filter((tab) => keep({ kind: 'tab', tab })) : tabs;
+  if (kept.some((tab) => tab.selection)) commands.unshift({ ...PANEL_PICK });
   return {
     commands: keep ? commands.filter((command) => keep({ kind: 'command', command })) : commands,
-    tabs: keep ? tabs.filter((tab) => keep({ kind: 'tab', tab })) : tabs,
+    tabs: kept,
   };
 }
 
@@ -169,5 +208,6 @@ export function commandState (command: Command, context: CommandStateContext, ta
       && (command.plugin ? shown.startsWith(`${command.plugin}.`) : shown === command.run.tab);
     return { pressed };
   }
+  if ('panel' in command.run) return { pressed: context.panel.picking };
   return {};
 }

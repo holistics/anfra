@@ -32,12 +32,12 @@ describe('Structure', () => {
     expect(byTestId(root, 'node-0.1')?.getAttribute('aria-selected')).toBe('true');
   });
 
-  it('turns pick mode on from its toolbar', async () => {
-    harness = await inspect({ tab: 'inspect.structure' });
+  it('has no Pick of its own: the panel\'s Pick, run from another tab, lands here', async () => {
+    harness = await inspect({ tab: 'inspect.data' });
+    await harness.mounted.run('panel.pick');
+    expect(harness.mounted.panel).toMatchObject({ tab: 'inspect.structure', picking: true });
     const { root } = await harness.tab('inspect.structure');
-    byTestId(root, 'pick')!.click();
-    expect(harness.mounted.panel.picking).toBe(true);
-    expect(byTestId(root, 'pick')?.getAttribute('aria-pressed')).toBe('true');
+    expect(byTestId(root, 'pick')).toBeNull();
   });
 
   it('shows a query in Queries', async () => {

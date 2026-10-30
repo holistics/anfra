@@ -203,10 +203,11 @@ function onAppUnmounted (mounted: MountedDataApp): void {
 const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? false));
 // The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones in a menu
 // per icon, so render's downloads are one Download button; the palette has them all. Not those for
-// the menu on the page (`target`), which the frame shows there.
+// the menu on the page (`target`), which the frame shows there, nor the panel's, in its strip.
 const ICONS = ['inspect', 'download', 'table', 'copy', 'reload'] as const;
 const chromeCommands = computed(() => runtime.value?.commands.filter((command) => !command.target) ?? []);
-const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow'));
+const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow' && command.placement !== 'panel'));
+const panelCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'panel'));
 // An overflow command with no icon appserve draws goes in a More menu of its own.
 const MENU_LABELS: Partial<Record<typeof ICONS[number], string>> = { download: 'Download' };
 const overflowMenus = computed(() => {
@@ -391,7 +392,9 @@ function onKeydown (event: KeyboardEvent): void {
   }
   if (event.key === 'Escape') {
     problemsOpen.value = false;
-    app.value?.panel.hide();
+    // Picking, Escape only ends the pick, as it does with focus in the frame; again, it closes the panel.
+    if (app.value?.panel.picking) app.value.panel.pick(false);
+    else app.value?.panel.hide();
   }
 }
 
@@ -668,7 +671,14 @@ onBeforeUnmount(() => {
           <div v-if="narrow" class="backdrop" @click="app.panel.hide()" />
           <div class="inspect-dock" :style="{ width: `${inspectWidth}px` }">
             <div class="resize-handle" role="separator" aria-orientation="vertical" @pointerdown.prevent="startResize" />
-            <PluginPanel :panel="app.panel" :tabs="runtime.tabs" :version="panelVersion" />
+            <PluginPanel
+              :panel="app.panel"
+              :tabs="runtime.tabs"
+              :commands="panelCommands"
+              :command-state="commandState"
+              :version="panelVersion"
+              @run="runCommand"
+            />
           </div>
         </template>
       </div>

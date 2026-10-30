@@ -1,27 +1,33 @@
 <script setup lang="ts">
-// The panel's chrome: the plugins' tabs as a tab strip, and the open tab drawn by its plugin. What
-// each tab shows, and the panel's state (the tab, the node selected, pick mode), are the SDK's;
-// this only places them. Tabs that don't fit go behind a More tabs button, as in a browser's
+// The panel's chrome: the panel's commands (Pick) and the plugins' tabs as a tab strip, and the
+// open tab drawn by its plugin. What each tab shows, and the panel's state (the tab, the node
+// selected, pick mode), are the SDK's; this only places them. Tabs that don't fit go behind a More tabs button, as in a browser's
 // devtools, the selected one always staying in the strip.
 import {
   computed, nextTick, onBeforeUnmount, onMounted, ref, watch,
 } from 'vue';
-import type { Panel, Tab } from '@holistics/anfra-sdk/host';
+import type { Command, CommandState, Panel, Tab } from '@holistics/anfra-sdk/host';
 import Icon from './Icon.vue';
 import { fitTabs } from './tabFit';
 
 const props = defineProps<{
   panel: Panel,
   tabs: readonly Tab[],
+  // The commands placed in the strip, before the tabs, as icon buttons.
+  commands: readonly Command[],
+  commandState: (command: Command) => CommandState,
   // Bumped on each change to the panel, so the strip follows it.
   version: number,
 }>();
+const emit = defineEmits<{ run: [command: Command] }>();
 
 // The icon appserve draws for each icon a tab names; a tab naming another has none.
 const TAB_ICONS: Record<string, InstanceType<typeof Icon>['$props']['name']> = {
   overview: 'overview', table: 'sheet', query: 'database', lineage: 'lineage', tree: 'tree', code: 'code',
 };
 const tabIcon = (tab: Tab) => (tab.icon ? TAB_ICONS[tab.icon] : undefined);
+const COMMAND_ICONS: Record<string, InstanceType<typeof Icon>['$props']['name']> = { pick: 'pick' };
+const commandIcon = (command: Command) => (command.icon ? COMMAND_ICONS[command.icon] : undefined) ?? 'app';
 
 const content = ref<HTMLElement>();
 let unmountTab: (() => void) | undefined;
@@ -106,6 +112,23 @@ onBeforeUnmount(() => {
 <template>
   <aside class="plugin-panel" aria-label="Panel" data-testid="plugin-panel">
     <header class="panel-header">
+      <div v-if="commands.length" class="panel-commands">
+        <button
+          v-for="command in commands"
+          :key="command.id"
+          type="button"
+          class="icon-button"
+          :class="{ active: commandState(command).pressed }"
+          :aria-label="command.title"
+          :title="commandState(command).disabled ?? command.title"
+          :aria-pressed="commandState(command).pressed ?? false"
+          :disabled="!!commandState(command).disabled"
+          :data-testid="`command-${command.id}`"
+          @click="emit('run', command)"
+        >
+          <Icon :name="commandIcon(command)" />
+        </button>
+      </div>
       <div ref="bar" class="panel-tabbar">
         <div class="panel-tabs" role="tablist">
           <button

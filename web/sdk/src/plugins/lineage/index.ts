@@ -30,6 +30,7 @@ export function lineagePlugin (backend: Pick<Backend, 'lineage'>): Plugin {
         icon: 'lineage',
         // Between `inspect`'s Queries (30) and Structure (40).
         order: 35,
+        selection: true,
         mount: async (root, context) => (await import('./tab')).default(root, context),
       }],
     },

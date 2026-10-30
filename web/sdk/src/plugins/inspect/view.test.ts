@@ -22,27 +22,27 @@ describe('tooltips', () => {
     harness = await inspect({ tab: 'inspect.structure' });
     const { root } = await harness.tab('inspect.structure');
     vi.useFakeTimers();
-    const pick = byTestId(root, 'pick')!;
-    over(pick);
+    const problems = root.querySelector('.toolbar .pill')!;
+    over(problems);
     expect(tooltip(root).hidden).toBe(true);
     vi.advanceTimersByTime(300);
     expect(tooltip(root).hidden).toBe(false);
-    expect(tooltip(root).textContent).toBe('Click a part of the page to select it here. Esc stops.');
-    expect(pick.getAttribute('aria-describedby')).toBe(tooltip(root).id);
-    out(pick);
+    expect(tooltip(root).textContent).toBe('Problems in the markup');
+    expect(problems.getAttribute('aria-describedby')).toBe(tooltip(root).id);
+    out(problems);
     expect(tooltip(root).hidden).toBe(true);
-    expect(pick.hasAttribute('aria-describedby')).toBe(false);
+    expect(problems.hasAttribute('aria-describedby')).toBe(false);
   });
 
   it('shows the next one at once while the last has just gone, and hides on Escape', async () => {
     harness = await inspect({ tab: 'inspect.structure' });
     const { root } = await harness.tab('inspect.structure');
     vi.useFakeTimers();
-    over(byTestId(root, 'pick')!);
+    const query = byTestId(root, 'node-0.0')!.querySelector<HTMLElement>('[data-testid="show-in-queries"]')!;
+    over(query);
     vi.advanceTimersByTime(300);
-    out(byTestId(root, 'pick')!);
-    const problems = root.querySelector('.toolbar .pill')!;
-    over(problems);
+    out(query);
+    over(root.querySelector('.toolbar .pill')!);
     expect(tooltip(root).textContent).toBe('Problems in the markup');
     root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(tooltip(root).hidden).toBe(true);

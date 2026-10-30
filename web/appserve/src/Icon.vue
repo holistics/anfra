@@ -28,6 +28,8 @@ const PATHS = {
   lineage: 'M9 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M3 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M15 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9 M12 12v3',
   tree: 'M21 12h-8 M21 6H8 M21 18h-8 M3 6v4c0 1.1.9 2 2 2h3 M3 10v6c0 1.1.9 2 2 2h3',
   code: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
+  // The panel's commands.
+  pick: 'M4 4l7 16 2-7 7-2z',
 } as const;
 
 defineProps<{ name: keyof typeof PATHS }>();
