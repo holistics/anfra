@@ -129,7 +129,7 @@ func TestAuthStatusExplainsDamagedCredentials(t *testing.T) {
 	if err == nil {
 		t.Fatal("damaged credentials accepted")
 	}
-	printError(&diagnostics, err)
+	printError(&diagnostics, err, "")
 	for _, want := range []string{path, "move the file aside", "anfra auth login for each organization", "does not revoke server access"} {
 		if !strings.Contains(diagnostics.String(), want) {
 			t.Fatalf("missing %q in %s", want, &diagnostics)

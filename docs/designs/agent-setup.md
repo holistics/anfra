@@ -397,9 +397,29 @@ Each channel reaches a different set of agents:
 | The plugin's session hook (`check-update.sh`) | Claude Code and Codex | It already runs `anfra version` for the update notice. It adds `--skills`, with the version from its own stamp line, or alone if there's none, and puts the hints in the session's context when there are any |
 | The `AGENTS.md` block | Agents in a repo where setup or `init` wrote it, cloud agents included | See [`AGENTS.md`](#agentsmd) |
 | The `agent-setup` skill | An agent setting up or updating the skills, or hitting a version mismatch | See [below](#the-agent-setup-skill) |
+| A failing command's error | An agent running anfra, anywhere, that keeps failing | See [below](#after-repeated-failures) |
 | The notice after a command | People, at a terminal | [The attention line](#the-attention-line), at most once a day |
 
-An agent without a session hook and outside a repo with the block hears nothing until a command fails and it loads the `agent-setup` skill. Phase 2's stderr line would reach it sooner, but only for the copies anfra can see.
+An agent without a session hook and outside a repo with the block hears nothing until its commands fail repeatedly, and then only that it has no skills. Phase 2's stderr line would reach it sooner, but only for the copies anfra can see.
+
+### After repeated failures
+
+An agent with no anfra skills keeps failing at anfra's commands. After the third failure within a minute, the error's `help` gets a line for it, after the usage line when there's one. `help` stays one string, one piece of advice a line, so its readers don't break:
+
+```yaml
+error:
+    code: validation_failed
+    scope: user
+    message: …
+    help: The anfra skills aren't installed for your coding agents. They know anfra's commands and languages, so run `anfra agent setup`, then ask the user to restart you.
+```
+
+- **Which failures count:** those the caller can fix, scoped `user` or `client`, such as invalid AQL or AML, an unknown command or flag, or a bad argument. A server or sidecar failure doesn't.
+- **Where:** off a terminal only, so a person's typos never trigger it, and never in CI or with `ANFRA_NO_UPDATE_NOTIFIER`.
+- **When it says anything:** only when an agent is detected on the machine and no skills are installed: no plugin recorded, and none in a folder the agents read. When the plugins were never recorded, it can't be sure, and says "If the anfra skills aren't installed for you, run `anfra agent setup`…".
+- **Once per streak:** a success ends the streak, and a new streak can hint again.
+- **The count** is in `~/.anfra/agents-failures.json`, apart from the plugins' record, which the background check rewrites. It's written only when a command fails; a success removes it.
+- **The CLI only:** an MCP or HTTP caller of `anfra serve` gets the core API's error, which stays the same on every host.
 
 ### The `agent-setup` skill
 

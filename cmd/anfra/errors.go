@@ -4,9 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -34,7 +38,7 @@ func (e *commandError) Unwrap() error { return e.err }
 // CLI's own, for whoever fixes the call: each violation's arg, the flag or
 // positional the user typed, and help, the command's --help. A shown cause is
 // in message, as it is over HTTP (see main for when causes are shown).
-func printError(w io.Writer, err error) {
+func printError(w io.Writer, err error, hint string) {
 	ce, _ := errors.AsType[*commandError](err)
 	if ce != nil {
 		err = ce.err
@@ -59,10 +63,40 @@ func printError(w io.Writer, err error) {
 	if v := mapValue(e, "request_id"); v != nil && v.Value == "" {
 		deleteKey(e, "request_id") // a command run here has none
 	}
+	// help is what helps whoever fixes the call, one piece of advice a line: the
+	// command's usage, when a violation names an arg, and hint.
+	var help []string
 	if ce != nil && nameArgs(mapValue(e, "details"), ce.args) {
-		setKey(e, "help", fmt.Sprintf("Run `%s --help` for usage.", ce.path))
+		help = append(help, fmt.Sprintf("Run `%s --help` for usage.", ce.path))
+	}
+	if hint != "" {
+		help = append(help, hint)
+	}
+	if len(help) > 0 {
+		setKey(e, "help", strings.Join(help, "\n"))
 	}
 	writeDoc(w, "error", e)
+}
+
+// failureHint records a failure the caller could fix, off a terminal and
+// outside CI, and is what its error should hint: an agent that keeps failing at
+// anfra's commands without the skills is nudged to set them up
+// (agents.Failed). "" otherwise.
+func failureHint(err error) string {
+	if stderrIsInteractive() || os.Getenv("CI") != "" || updateNotifyDisabled() {
+		return ""
+	}
+	if ce, ok := errors.AsType[*commandError](err); ok {
+		err = ce.err
+	}
+	scope := apperr.From(err).Code.Scope()
+	if re, ok := errors.AsType[*remoteError](err); ok {
+		scope = re.resp.Scope
+	}
+	if scope != apperr.User && scope != apperr.Client {
+		return ""
+	}
+	return agents.Failed(agents.System(), repoDirIfAny(), time.Now())
 }
 
 // printWarning shows a problem that did not stop the command, such as an

@@ -71,7 +71,7 @@ func compareSkills(inUse string, known *command.SkillsInfo, now time.Time, hints
 		s.Version = inUse
 	}
 	if known == nil || known.Latest == "" {
-		return s, append(hints, "The latest anfra skills version isn't known yet: anfra checks in the background, at most daily.")
+		return s, append(hints, "The latest anfra skills version isn't known yet: anfra checks in the background, twice a day.")
 	}
 	s.Latest = known.Latest
 	if now.Sub(known.CheckedAt) > staleAfter {

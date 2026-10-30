@@ -11,6 +11,7 @@ import (
 
 	"github.com/holistics/anfra/internal/envflag"
 
+	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/spf13/cobra"
@@ -26,7 +27,7 @@ func main() {
 	// anfra's switches are 1 or 0. Refuse any other value before anything reads
 	// one, so a typo stops the command instead of silently meaning the opposite.
 	if err := envflag.Validate(); err != nil {
-		printError(os.Stderr, settingRefused(err)) // the user's setting, said as it is: not anfra's failure
+		printError(os.Stderr, settingRefused(err), "") // the user's setting, said as it is: not anfra's failure
 		os.Exit(1)
 	}
 
@@ -56,6 +57,7 @@ func main() {
 	// the notice keeps until a command succeeds.
 	if executed != nil && err == nil {
 		maybeNotifyUpdate(executed.Name())
+		agents.Succeeded() // ends a streak of failures (agents.Failed)
 	}
 
 	flush()
@@ -66,7 +68,7 @@ func main() {
 	if errors.As(err, &ec) {
 		os.Exit(ec.code) // result already rendered; exit quietly
 	}
-	printError(os.Stderr, err)
+	printError(os.Stderr, err, failureHint(err))
 	os.Exit(1)
 }
 
