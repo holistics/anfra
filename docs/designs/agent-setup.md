@@ -224,7 +224,7 @@ The code still treats the skills' version as separate from anfra's: the stamp an
 
   So anything that changes the output counts, the build script included, and nothing else does, such as tests or validators. A hand-edit to the facade shows as a difference too, and the next release overwrites it. The first publish has nothing to compare with, and publishes.
 - **The skills' version is the anfra release that last changed them.** Versions skip releases (0.15.0, then 0.17.0), and only releases that change the skills nudge anyone to update them.
-- **One changelog:** anfra's `CHANGELOG.md`, with the skills' changes under the `skills` commit scope. The facade's README links there.
+- **The skills' changelog,** `skills/CHANGELOG.md`, continues the skills repo's (0.0.1 to 0.4.5). `pnpm bump` writes its entry from the commits that changed `skills/` (conventional-changelog's `--commit-path`), only when there are some, and the build publishes it with the skills, so the facade has it next to the README. anfra's `CHANGELOG.md` lists the same commits under the `skills` scope. The first entry, 0.15.0, is trimmed by hand once: the imported history is reachable from it.
 
 Later: `anfra update` updating the plugins too, so a release that changes the skills takes one command for plugin users.
 

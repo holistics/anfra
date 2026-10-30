@@ -41,6 +41,7 @@ check "every manifest has the version" test "$versions_ok" = 1
 
 check "the parameters are recorded" bash -c "node -e 'const b=require(process.argv[1]); process.exit(b.version===\"0.15.0\" && b.source===\"abc123\" ? 0 : 1)' '$tmp/a/.build.json'"
 check "the README says where it comes from" grep -q "holistics/anfra/tree/abc123/skills" "$tmp/a/README.md"
+check "the changelog is published" test -s "$tmp/a/CHANGELOG.md"
 check "the source is left as it was" bash -c "! grep -rq '^anfra skills ' '$skills/plugins' && ! grep -rq '\"version\"' '$skills/plugins' '$skills/.claude-plugin'"
 
 exit "$failed"
