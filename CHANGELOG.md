@@ -1,3 +1,24 @@
+## [0.14.2](https://github.com/holistics/anfra/compare/v0.14.1...v0.14.2) (2026-10-30)
+
+### Features
+
+* **appserve:** wear @holistics/anfra-design's tokens, fonts and type ([0530e9a](https://github.com/holistics/anfra/commit/0530e9a8d3624df9ccd53a151c2a80888d559db8))
+* **design:** add @holistics/anfra-design, one design language for core and Cloud ([77b2790](https://github.com/holistics/anfra/commit/77b27904fcd9ba2ca00253faf4aa045e0026a430))
+* **sdk.common:** give plugin UI anfra-design's tokens, and one mapping to them ([5125a4a](https://github.com/holistics/anfra/commit/5125a4a40e8f3232a1f9117b9dd95bdaf9845015))
+* **sdk.host:** move pick into the panel's strip as a panel command ([7a4312f](https://github.com/holistics/anfra/commit/7a4312fe37a8074ac7df531a1252e2bda9adba25))
+* **sdk:** draw inspect's states with the theme's hover, sunken, selected and status tokens ([a8ef627](https://github.com/holistics/anfra/commit/a8ef62791dbc7b7d41bb0d3bf73e81280fcb878f))
+
+### Bug Fixes
+
+* **appserve:** draw the palette's on mark in the accent's text colour ([8220549](https://github.com/holistics/anfra/commit/8220549013891db669c2f55e120da8d287e46658))
+* **design:** give type.css every spacing scale DESIGN.md names ([04ac184](https://github.com/holistics/anfra/commit/04ac18415710ff256360072a988d029d92bf6ed9))
+* **sdk.app:** fall back to anfra-design's light colours in the app's menus and modals ([9dc2e61](https://github.com/holistics/anfra/commit/9dc2e61c8a200f13c00e81437b071ebc6f6aa885))
+* **sdk.app:** round the plugin layer's surfaces at xl, the theme radius plus 4px ([a7ab76f](https://github.com/holistics/anfra/commit/a7ab76f7fe830b0a1865291b960c55a000658455))
+* **sdk.common:** mix the newer theme tokens from a host's older ones ([b66aaf6](https://github.com/holistics/anfra/commit/b66aaf6ac3e88e14670db50c78c42369d18203da))
+
+### Security
+
+* bump vitest to 4.1.12 for @vitest/mocker (W44) ([d351b47](https://github.com/holistics/anfra/commit/d351b474a00f50b0444f56e831568eff26f82d25))
 ## [0.14.1](https://github.com/holistics/anfra/compare/v0.14.0...v0.14.1) (2026-10-28)
 
 ### Bug Fixes
