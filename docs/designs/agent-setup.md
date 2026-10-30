@@ -362,7 +362,7 @@ The work spans two repos: anfra, and [anfra-skills](https://github.com/holistics
 In `internal/update`:
 
 - **The cache** gains the latest skills version, and when it was checked. That time is the skills' own: `anfra update` records anfra's check alone.
-- **`Refresh`,** which `__update-check` runs, fetches `plugins/anfra/.claude-plugin/plugin.json` from the skills repo's `main` (`LatestSkills`), from `raw.githubusercontent.com` rather than GitHub's API: the API allows 60 anonymous calls an hour, shared by everyone behind one address. It reuses `get` and `authToken`. One check failing doesn't stop the other.
+- **`Refresh`,** which `__update-check` runs, fetches `plugins/anfra/.claude-plugin/plugin.json` from the skills repo's `main` (`LatestSkills`), from `raw.githubusercontent.com` rather than GitHub's API: the API allows 60 anonymous calls an hour, shared by everyone behind one address. It reuses `get`. One check failing doesn't stop the other.
 - **A failure is cached as unknown,** never as a version, so a failed fetch can't count as "current".
 - **`serve`'s hourly `Check`** goes by anfra's check alone, so it never asks GitHub for anfra's release because of the skills.
 
