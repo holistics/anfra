@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/shared/jsonkit"
 
@@ -372,8 +373,16 @@ func Notice(r *Release) string {
 	return fmt.Sprintf("anfra %s is available (you have %s). Run `anfra update`.", r.Version, meta.Version)
 }
 
-// CachedNotice returns a one-line "update available" message from the cached
-// check, or "" if none is available / the cache says we're current.
-func CachedNotice() string {
-	return Notice(Cached())
+// Banner is Notice set apart for an interactive terminal: a heading, the version
+// change, and the command to run, rendered with styles (the zero value is plain).
+// "" when r is not newer than the running version.
+func Banner(r *Release, styles cliui.TerminalStyles) string {
+	if r == nil || !r.IsNewer() {
+		return ""
+	}
+	return fmt.Sprintf("%s  %s → %s\n  Run %s to install.",
+		styles.Warning.Inherit(styles.Heading).Render("▲ Update available"),
+		styles.Muted.Render(meta.Version),
+		styles.Success.Inherit(styles.Heading).Render(cliui.SafeText(r.Version)),
+		styles.Code.Render("`anfra update`"))
 }
