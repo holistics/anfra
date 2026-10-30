@@ -50,7 +50,7 @@ A sidecar anfra does not spawn (`ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL`) gets 
 
 ## Sockets and ports
 
-anfra-node listens on a Unix socket in the temp dir, `anfra-<pid>.sock` (`internal/sidecar/anfranode/anfranode.go`): per anfra process, so several repos' servers do not collide, and in the temp dir because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. canal-query listens on one beside it, `anfra-<pid>-canal-query.sock`, for the same reasons (`internal/sidecar/canalquery/canalquery.go`); it replaces a file left by one that is gone, and removes it when it stops. Neither listens on a port, so neither is reachable from another machine, and no other process can take its address between anfra choosing it and the sidecar listening on it.
+A spawned sidecar listens on a Unix socket, `<name>.sock`, in a directory of its own that its supervisor makes in the temp dir and removes when it stops (`sidecar.SocketPath`, `internal/sidecar/socket.go`). In the temp dir, because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. A directory of its own, with a random name and open to this user only, because the temp dir is shared with every user on the host: a path another user could guess, they could take first, and the sidecar would fail to start, or anfra would send its requests, and the credentials in them, to that user's process. A new directory per sidecar also keeps several anfra processes' sidecars apart. Neither sidecar listens on a port, so neither is reachable from another machine.
 
 ## One-shot and warm
 
