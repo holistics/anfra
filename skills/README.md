@@ -129,6 +129,11 @@ The skills give your agent the knowledge to work with anfra. The plugin adds the
 
 Each skill ends with its version (`anfra skills <version>`), so you and anfra can tell which version you have.
 
+The skills' names now start with `anfra-`. A copy installed with `npx skills` before the rename keeps its old folders next to the new ones, so your agent loads both. Remove the old ones:
+```bash
+npx skills remove -g -y aml aql build-data-app lookup-values run-aql setup-repo validate-aql write-aql
+```
+
 ## Plugins
 
 ### `anfra`
@@ -136,14 +141,14 @@ Develop analytics with Anfra.
 
 | Skill | What it does |
 |---|---|
-| `aql` | Core AQL knowledge base (lessons, per-function reference docs, worked examples). |
-| `write-aql` | Author and validate an AQL query to answer a data question. |
-| `validate-aql` | Type-check an AQL query or expression without running it. |
-| `run-aql` | Run a validated AQL query and return rows (or compile it to SQL). |
-| `lookup-values` | Verify a field's exact stored values before filtering. |
-| `aml` | Write and edit AML models, fields, relationships, and datasets. |
-| `setup-repo` | Set up a new Anfra repo: `anfra init`, connect a data source, a first model and dataset. |
-| `build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve`. |
+| `anfra-aql` | Core AQL knowledge base (lessons, per-function reference docs, worked examples). |
+| `anfra-write-aql` | Author and validate an AQL query to answer a data question. |
+| `anfra-validate-aql` | Type-check an AQL query or expression without running it. |
+| `anfra-run-aql` | Run a validated AQL query and return rows (or compile it to SQL). |
+| `anfra-lookup-values` | Verify a field's exact stored values before filtering. |
+| `anfra-aml` | Write and edit AML models, fields, relationships, and datasets. |
+| `anfra-setup-repo` | Set up a new Anfra repo: `anfra init`, connect a data source, a first model and dataset. |
+| `anfra-build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve`. |
 
 | Agent | What it does |
 |---|---|

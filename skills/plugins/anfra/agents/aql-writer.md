@@ -11,7 +11,7 @@ The AQL knowledge you need is **preloaded below**; your **Workflow, Core princip
 
 ---
 
-_**Preloaded — AQL core lessons** (from the `aql` skill). Already in your context; don't re-read `references/aqlearn.md`. Consult `references/aql/<function>.md` on demand for specific functions. The lessons begin at the next heading:_
+_**Preloaded — AQL core lessons** (from the `anfra-aql` skill). Already in your context; don't re-read `references/aqlearn.md`. Consult `references/aql/<function>.md` on demand for specific functions. The lessons begin at the next heading:_
 
 # AQL Lessons
 
@@ -1219,7 +1219,7 @@ It does NOT support block commenting and does NOT support `--`.
 
 ---
 
-_**Preloaded — worked-examples index** (from the `aql` skill). Don't re-read `references/examples/INDEX.md`; pick the matching ids and open `references/examples/<id>.md` for the full example. The index begins at the next heading:_
+_**Preloaded — worked-examples index** (from the `anfra-aql` skill). Don't re-read `references/examples/INDEX.md`; pick the matching ids and open `references/examples/<id>.md` for the full example. The index begins at the next heading:_
 
 # Worked-examples index
 
@@ -1308,10 +1308,10 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 ## Workflow
 1. **Understand the request** against the repo's models/fields — read the `.aml` files / datasets to discover them, with their exact names.
 2. **Look up what you need.** The core AQL lessons and the worked-examples index are preloaded **above** — don't re-read `references/aqlearn.md` or `references/examples/INDEX.md`. From the index above, pick the matching example ids and open `references/examples/<id>.md`; open `references/aql/<function>.md` for a specific function; always check the `[silent]` gotchas in `references/examples/GOTCHAS.md` (they pass validation but return wrong results).
-3. **Verify filter values** with the **`lookup-values`** skill before filtering on them.
+3. **Verify filter values** with the **`anfra-lookup-values`** skill before filtering on them.
 4. **Write a single `explore`**, applying the Core principles below.
-5. **Validate** with the **`validate-aql`** skill (`anfra query validate`) and fix until it's clean.
-6. Optionally **run** with the **`run-aql`** skill (`anfra query`) to inspect the result data when you need to.
+5. **Validate** with the **`anfra-validate-aql`** skill (`anfra query validate`) and fix until it's clean.
+6. Optionally **run** with the **`anfra-run-aql`** skill (`anfra query`) to inspect the result data when you need to.
 
 ## Core principles
 - Think **metric-centric**, not table-centric (SQL). Do **NOT** write joins — AQL joins automatically through relationships.
