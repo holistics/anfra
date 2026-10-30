@@ -220,7 +220,7 @@ The code still treats the skills' version as separate from anfra's: the stamp an
   1. clones the facade (`git clone --depth 1`), which it needs to push anyway;
   2. reruns the current build with the parameters the facade recorded, and compares the result with the facade's tree;
   3. if they're the same, publishes nothing: the facade, and so the latest skills version, stay as they were;
-  4. if they differ, builds with this release's version, then commits `release: <version>`, tags `anfra-v<version>`, and pushes with a deploy key allowed past the facade's branch protection.
+  4. if they differ, builds with this release's version, then commits `release: <version>`, tags `anfra-v<version>`, and pushes with a GitHub App's token, allowed past the facade's branch protection.
 
   So anything that changes the output counts, the build script included, and nothing else does, such as tests or validators. A hand-edit to the facade shows as a difference too, and the next release overwrites it. The first publish has nothing to compare with, and publishes.
 - **The skills' version is the anfra release that last changed them.** Versions skip releases (0.15.0, then 0.17.0), and only releases that change the skills nudge anyone to update them.
@@ -492,7 +492,7 @@ As [Where the skills live](#where-the-skills-live) describes:
 1. **Import the skills repo into `skills/`, with its history:** each commit rewritten (`git filter-branch`) so its files were always under `skills/`, and its scope renamed to `skills`, so `git log` and `blame` follow it, and anfra's commitlint passes it. Up to the rename (`7253b0d`): the unshipped 0.5.0 bump is left out, as the first release from anfra, 0.15.0, ships the rename, and `renamedIn` is 0.15.0.
 2. **Tooling in anfra:** the `skills` commit scope; the validators (front matter, links, and no stamp in the source) and the hook's tests in `make test` and CI (`pnpm skills:check`), with their Node dependencies in anfra's root `package.json`. The skills repo's `bump.js`, `tag-release.sh`, changelog config and git hooks go.
 3. **The build:** `skills/scripts/build.mjs`, taking the version and the source commit as parameters, writing them to `.build.json`. Its test builds twice and compares, to keep it deterministic.
-4. **The publish job,** in `build_release.yml` after the binaries, with the skip. Needs a deploy key with write access to the facade, allowed past its branch protection, stored in anfra as the secret `ANFRA_SKILLS_DEPLOY_KEY`: an admin sets it up.
+4. **The publish job,** in `build_release.yml` after the binaries, with the skip. Pushes with a token from a GitHub App with Contents: write on the facade, allowed past its branch protection (`ANFRA_SKILLS_DEPLOYER_APP_ID`, `ANFRA_SKILLS_DEPLOYER_KEY`).
 5. **The facade's README** says it's generated from `holistics/anfra/skills`, and that changes go there.
 6. **Docs:** [release](release.md) gets the publish step, and `DEVELOPMENT.md` the skills' checks.
 

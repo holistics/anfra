@@ -244,9 +244,9 @@ jobs:
   # binaries are out (docs/designs/agent-setup.md#releasing-the-skills): at the release's version,
   # only when what's published changed. Any other build only reports what a release would do.
   #
-  # The push uses a deploy key on holistics/anfra-skills (ANFRA_SKILLS_DEPLOY_KEY), with write
-  # access and allowed past its branch protection. A re-run publishes nothing again: the facade
-  # then holds this build.
+  # The push uses a token of a GitHub App with Contents: write on holistics/anfra-skills, allowed
+  # past its branch protection (ANFRA_SKILLS_DEPLOYER_APP_ID, ANFRA_SKILLS_DEPLOYER_KEY). A re-run
+  # publishes nothing again: the facade then holds this build.
   skills:
     needs: assemble
     runs-on: ubuntu-latest
@@ -259,13 +259,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+      # A release pushes as the App; any other build only reads the public repo.
+      - id: deployer
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ANFRA_SKILLS_DEPLOYER_APP_ID }}
+          private-key: ${{ secrets.ANFRA_SKILLS_DEPLOYER_KEY }}
+          owner: holistics
+          repositories: anfra-skills
       - uses: actions/checkout@v4
         with:
           repository: holistics/anfra-skills
           path: facade
           fetch-depth: 1
-          # A release pushes as the deploy key; any other build only reads the public repo.
-          ssh-key: ${{ startsWith(github.ref, 'refs/tags/') && secrets.ANFRA_SKILLS_DEPLOY_KEY || '' }}
+          token: ${{ steps.deployer.outputs.token || github.token }}
       - name: Publish the skills, or report what a release would publish
         run: |
           version="$(yq '.version' manifest.yml)"
