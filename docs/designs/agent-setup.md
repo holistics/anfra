@@ -499,9 +499,12 @@ As [Where the skills live](#where-the-skills-live) describes:
 ### 8. anfra: the session hook and the setup skill
 
 `skills/plugins/anfra/hooks/check-update.sh`:
-- read the stamp from `${CLAUDE_PLUGIN_ROOT}`;
-- run `anfra version --skills <version>`, and if anfra rejects the flag, run plain `anfra version` as today;
-- add the hints to the session's context.
+- read the stamp from its own plugin's `anfra-setup-repo/SKILL.md`, found from the hook's own path, so it works in any agent that runs it;
+- run `anfra version --skills <version>`, and put the hints in the session's context, after "anfra says:", with what to do with them: mention them once, and run the commands only if the user asks;
+- in Claude Code (`CLAUDE_PLUGIN_ROOT` is set), fill in `<your id>` as `claude-code`;
+- when anfra rejects the flag, or the skills have no stamp, as in a checkout of `skills/`, run plain `anfra version` and give today's update notice.
+
+Its tests run the source's hook for the plain path, and the facade's build of it, stamped, for `--skills`.
 
 `anfra-setup-repo`'s `SKILL.md`: its line "`anfra skills install` installs these skills…" names `anfra agent setup` instead.
 
