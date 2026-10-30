@@ -107,7 +107,6 @@ See [designs/release.md](../designs/release.md#updates).
 |---|---|
 | `ANFRA_NO_UPDATE_NOTIFIER` | `1`: no update checks or notices. |
 | `ANFRA_AUTO_UPDATE` | `1`: install a newer release in the background, instead of only noticing it. |
-| `ANFRA_GITHUB_TOKEN` (or `GH_TOKEN`, `GITHUB_TOKEN`) | A GitHub token, used only when an anonymous request for releases is refused. The first one set is used. |
 | `CI` | When set, anfra never starts a background update check. CI systems set it. |
 
 ### Publishing and login

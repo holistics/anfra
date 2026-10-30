@@ -106,19 +106,22 @@ func TestAssetName(t *testing.T) {
 	}
 }
 
-// fakeGitHub serves the latest release, through the API, and the skills'
-// manifest, as a raw file with the status and body given. It points apiBase,
-// rawBase and anfra's folder at the test's.
+// fakeGitHub serves the latest release, v9.0.0, as GitHub's site does, and the
+// skills' manifest, as a raw file with the status and body given. It points
+// the bases and anfra's folder at the test's.
 func fakeGitHub(t *testing.T, manifestStatus int, manifest string) {
 	t.Helper()
 	asset, err := assetName()
 	if err != nil {
 		t.Skip(err)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/repos/holistics/anfra/releases/latest":
-			fmt.Fprintf(w, `{"tag_name": "v9.0.0", "assets": [{"name": %q, "url": "https://example.com/a"}]}`, asset+".gz")
+		case "/holistics/anfra/releases/latest":
+			http.Redirect(w, r, srv.URL+"/holistics/anfra/releases/tag/v9.0.0", http.StatusFound)
+		case "/holistics/anfra/releases/download/v9.0.0/" + asset + ".gz":
+			http.Redirect(w, r, "https://objects.example.com/anfra", http.StatusFound)
 		case "/holistics/anfra-skills/main/plugins/anfra/.claude-plugin/plugin.json":
 			w.WriteHeader(manifestStatus)
 			fmt.Fprint(w, manifest)
@@ -127,13 +130,8 @@ func fakeGitHub(t *testing.T, manifestStatus int, manifest string) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	oldAPI, oldRaw := apiBase, rawBase
-	apiBase, rawBase = srv.URL, srv.URL
-	t.Cleanup(func() { apiBase, rawBase = oldAPI, oldRaw })
+	setBases(t, srv.URL)
 	t.Setenv("ANFRA_HOME", t.TempDir())
-	for _, k := range []string{"ANFRA_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
-		t.Setenv(k, "")
-	}
 }
 
 func TestLatestSkills(t *testing.T) {
@@ -215,11 +213,59 @@ func TestACacheWithoutTheSkillsIsStale(t *testing.T) {
 // to GitHub again.
 func TestCheckIgnoresTheSkills(t *testing.T) {
 	t.Setenv("ANFRA_HOME", t.TempDir())
-	old := apiBase
-	apiBase = "http://127.0.0.1:1" // nothing listens: a lookup would fail
-	t.Cleanup(func() { apiBase = old })
+	setBases(t, "http://127.0.0.1:1") // nothing listens: a lookup would fail
 	writeCache(&cache{CheckedAt: time.Now(), LatestVersion: "9.0.0", LatestTag: "v9.0.0"})
 	if r, err := Check(context.Background()); err != nil || r.Version != "9.0.0" {
 		t.Errorf("got %+v, %v; want the cached release", r, err)
+	}
+}
+
+// setBases points GitHub's site and raw files at base, for the test.
+func setBases(t *testing.T, base string) {
+	t.Helper()
+	oldWeb, oldRaw := webBase, rawBase
+	webBase, rawBase = base, base
+	t.Cleanup(func() { webBase, rawBase = oldWeb, oldRaw })
+}
+
+// Latest reads the tag from the site's redirect, and the asset's download
+// from its fixed path, with no API call.
+func TestLatestFromTheSite(t *testing.T) {
+	fakeGitHub(t, http.StatusOK, `{"version": "0.4.5"}`)
+	r, err := Latest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset, _ := assetName()
+	if r.Tag != "v9.0.0" || r.Version != "9.0.0" || r.AssetURL != webBase+"/holistics/anfra/releases/download/v9.0.0/"+asset+".gz" {
+		t.Errorf("got %+v", r)
+	}
+}
+
+// A release whose asset for this platform isn't uploaded yet isn't the latest.
+func TestLatestWithoutTheAsset(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/holistics/anfra/releases/latest" {
+			http.Redirect(w, r, srv.URL+"/holistics/anfra/releases/tag/v9.0.0", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	setBases(t, srv.URL)
+	if _, err := Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "anfra 9.0.0 has no build for this platform") {
+		t.Errorf("got %v, want no build", err)
+	}
+}
+
+// A latest-release page that points at no release says so, naming the page.
+func TestLatestWithoutARelease(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	setBases(t, srv.URL)
+	_, err := Latest(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "check for a newer anfra: "+srv.URL+"/holistics/anfra/releases/latest answered 404 Not Found, without pointing at a release") {
+		t.Errorf("got %v", err)
 	}
 }

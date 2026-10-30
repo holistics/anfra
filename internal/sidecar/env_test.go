@@ -12,7 +12,7 @@ func TestChildEnv(t *testing.T) {
 	environ := []string{
 		"HOME=/home/me",
 		"AWS_PROFILE=prod",
-		"ANFRA_GITHUB_TOKEN=secret",    // anfra's own
+		"ANFRA_HOME=/home/me/.anfra",   // anfra's own
 		"ANFRA_CANAL_QUERY_URL=",       // anfra's own, though about the sidecar
 		"PPROF_ADDR=localhost:6060",    // per process
 		"OTEL_SERVICE_NAME=anfra-prod", // per process
