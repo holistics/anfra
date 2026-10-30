@@ -28,7 +28,8 @@ check "it's committed" "release: 0.15.0" "$(git -C "$facade" log -1 --format=%s)
 check "and tagged" "anfra-v0.15.0" "$(git -C "$facade" tag)"
 check "the old content is gone" "This repo is published from" "$(head -1 "$facade/README.md")"
 
-out=$(bash "$publish" "$facade" 0.16.0 bbb --commit)
+# A relative facade path, as the release passes.
+out=$(cd "$tmp" && bash "$publish" facade 0.16.0 bbb --commit)
 check "an unchanged release publishes nothing" "unchanged since 0.15.0: nothing to publish" "$out"
 check "and commits nothing" "release: 0.15.0" "$(git -C "$facade" log -1 --format=%s)"
 

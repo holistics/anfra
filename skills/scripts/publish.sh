@@ -27,8 +27,10 @@ trap 'rm -rf "$tmp"' EXIT
 tree() { (cd "$1" && find . -path ./.git -prune -o -type f -print | LC_ALL=C sort | xargs -d '\n' sha256sum); }
 
 if [ -f "$facade/.build.json" ]; then
-  was_version=$(node -e 'console.log(require(process.argv[1]).version)' "$facade/.build.json")
-  was_source=$(node -e 'console.log(require(process.argv[1]).source)' "$facade/.build.json")
+  # By path: require() would take a relative "facade/.build.json" for a package.
+  read_build() { node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]])' "$facade/.build.json" "$1"; }
+  was_version=$(read_build version)
+  was_source=$(read_build source)
   node "$build" --version "$was_version" --source "$was_source" --out "$tmp/was" >/dev/null
   if [ "$(tree "$tmp/was")" = "$(tree "$facade")" ]; then
     echo "The anfra skills are unchanged since $was_version: nothing to publish."
