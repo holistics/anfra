@@ -11,6 +11,7 @@ import (
 	"github.com/holistics/anfra/internal/envflag"
 
 	"github.com/holistics/anfra/internal/agents"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
@@ -61,6 +62,7 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	}
 	if checkOnly {
 		fmt.Printf("Update available: anfra %s (you have %s). Run `anfra update` to install.\n", rel.Version, meta.Version)
+		showReleaseNotes(ctx, meta.Version, rel.Version)
 		return nil
 	}
 
@@ -74,12 +76,31 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	if err := update.Apply(ctx, rel, progress); err != nil {
 		return err
 	}
-	fmt.Printf("Updated anfra %s -> %s.\n", meta.Version, rel.Version)
+	s := cliui.NewTerminalStyles(os.Stdout)
+	fmt.Printf("%s Updated anfra %s → %s\n", s.Success.Render("✓"),
+		s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
 	// A running server keeps the binary it started with.
 	for _, srv := range runningServers(ctx) {
 		fmt.Printf("`anfra serve` in %s still runs anfra %s: restart it to run %s.\n", srv.RepoDir, srv.Version, rel.Version)
 	}
+	showReleaseNotes(ctx, meta.Version, rel.Version)
 	return nil
+}
+
+// maxNotes caps how many releases' notes showReleaseNotes prints; the earlier
+// ones are a link away.
+const maxNotes = 3
+
+// showReleaseNotes prints what the releases after from, up to and including to,
+// changed, newest first. Best-effort: when the notes can't be fetched, it
+// points to them instead, and never fails the command.
+func showReleaseNotes(ctx context.Context, from, to string) {
+	notes, err := update.ReleaseNotes(ctx, from, to)
+	if err != nil || len(notes) == 0 {
+		fmt.Printf("See what changed: %s\n", update.ReleasesURL)
+		return
+	}
+	update.RenderNotes(os.Stdout, notes, maxNotes, cliui.NewTerminalStyles(os.Stdout), cliui.Width(os.Stdout))
 }
 
 // newUpdateCheckCmd is a hidden command run detached in the background to

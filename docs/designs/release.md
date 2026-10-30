@@ -72,4 +72,6 @@ Build metadata leaves the version's order alone, and a release never carries any
 
 A running `anfra serve` keeps the version it started with, and so do the commands forwarded to it, until it is restarted. `anfra update` names each server still running another version, and a command forwarded to a server of another version than its CLI's writes a `server_version_mismatch` warning before its answer (`warnIfOtherVersion` in `cmd/anfra/runtime.go`). An MCP client, which talks to the server alone, gets no such warning.
 
+After an update, or with `--check` before one, `anfra update` prints what the new version brings: the changelog of each release since the running one, the skipped ones included, read from `CHANGELOG.md` at the new version's tag, of which each release's notes are a section, rather than from GitHub's rate-limited API (`internal/update/notes.go`). It shows the newest three and links to the rest. The notes are best-effort: when they can't be fetched, it prints a link to the releases instead, and the update still succeeds.
+
 None of this applies to a build from source: it was built on purpose, and a release would replace it with something else. It is never told of updates, and `anfra update` refuses to replace it.
