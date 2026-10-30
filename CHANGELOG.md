@@ -1,3 +1,16 @@
+## [0.15.1](https://github.com/holistics/anfra/compare/v0.15.0...v0.15.1) (2026-10-30)
+
+### Features
+
+* **cli:** show release notes after anfra update ([44b615f](https://github.com/holistics/anfra/commit/44b615f9571a20889d6d64222868e1f4c77a0e75))
+* inject skills notice into help after multiple errors ([7d17a40](https://github.com/holistics/anfra/commit/7d17a4097c529350954259b7bc2f85e3bb8d39fa))
+* mention docs in AGENTS.md ([5fef3a6](https://github.com/holistics/anfra/commit/5fef3a6dfee4e2c0f43218377a591abdc83ed00f))
+* **shared:** support request-scoped stateless MCP serving ([15cab4c](https://github.com/holistics/anfra/commit/15cab4c7e1cb3ce2a155e9eca7ec2d652e74bd42))
+* various improvements to agent setup ([b72cfd4](https://github.com/holistics/anfra/commit/b72cfd46dd4779a7cebe2d5e806af9593189293d))
+
+### Performance Improvements
+
+* **shared:** reuse the stateless MCP HTTP handler ([5513c75](https://github.com/holistics/anfra/commit/5513c7591768cddb341a99bdf60ef3045011a691))
 ## [0.15.0](https://github.com/holistics/anfra/compare/v0.14.2...v0.15.0) (2026-10-30)
 
 ### ⚠ BREAKING CHANGES

@@ -1,6 +1,6 @@
 {
   "name": "@holistics/anfra-design",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "anfra's design tokens, type and rules: one design language for anfra core (appserve, the SDK's plugin UI) and anfra Cloud",
   "license": "Apache-2.0",
   "repository": {
