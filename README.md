@@ -82,10 +82,10 @@ The installer puts `anfra` in `~/.anfra/bin` and adds it to your `PATH`. Works o
 Open a new terminal, then install the skills that teach your coding agent to build with anfra:
 
 ```sh
-anfra skills install
+anfra agent setup
 ```
 
-This installs them into Claude Code and Codex; add `--agent cursor` for Cursor. For other agents, run `npx skills add holistics/anfra-skills`.
+It installs them into Claude Code and Codex, and tells you how to install them in any other coding agent it finds.
 
 #### 2. Create a project and connect a warehouse
 
@@ -102,7 +102,7 @@ Replace the placeholders in `.anfra/data_sources.yml` with your warehouse creden
 
 Open the project in your coding agent and ask for an app:
 
-> Use the build-data-app skill. Look at my orders data and build a revenue overview: monthly trend and revenue by region. Clicking a region should filter the trend.
+> Use the anfra-build-data-app skill. Look at my orders data and build a revenue overview: monthly trend and revenue by region. Clicking a region should filter the trend.
 
 With no models yet, the agent defines the datasets and metrics it needs as code in `models/` and `datasets/`, then builds the app in `apps/`.
 
