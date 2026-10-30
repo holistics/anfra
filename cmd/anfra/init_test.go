@@ -130,6 +130,7 @@ func sampleArchive(t *testing.T) []byte {
 	add(&tar.Header{Name: top + "models/ecommerce/orders.model.aml"}, "Model orders {}\n")
 	add(&tar.Header{Name: top + "datasets/ecommerce/ecommerce.dataset.aml"}, "Dataset ecommerce {}\n")
 	add(&tar.Header{Name: top + "data/ecommerce.duckdb"}, "duckdb")
+	add(&tar.Header{Name: top + "apps/ecommerce/overview.html"}, "<html></html>\n")
 	add(&tar.Header{Name: top + "wiki/ecommerce/metrics.md"}, "# Definitions\n")
 	add(&tar.Header{Name: top + "AGENTS.md"}, "# Agent instructions\n")
 	add(&tar.Header{Name: top + "README.md"}, "# Sample\n")
@@ -164,7 +165,7 @@ func TestInitWithSample(t *testing.T) {
 	if err := initRepo(context.Background(), dir, &out, initChoice{sample: true}); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"models/ecommerce/orders.model.aml", "datasets/ecommerce/ecommerce.dataset.aml", "data/ecommerce.duckdb", "wiki/ecommerce/metrics.md", "AGENTS.md"} {
+	for _, f := range []string{"models/ecommerce/orders.model.aml", "datasets/ecommerce/ecommerce.dataset.aml", "data/ecommerce.duckdb", "apps/ecommerce/overview.html", "wiki/ecommerce/metrics.md", "AGENTS.md"} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("%s: %v", f, err)
 		}

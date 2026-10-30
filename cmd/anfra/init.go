@@ -83,6 +83,7 @@ var (
 	sampleFiles = []string{
 		"models/ecommerce/*.model.aml",
 		"datasets/ecommerce/*.dataset.aml",
+		"apps/ecommerce/*.html",
 		"data/ecommerce.duckdb",
 		"wiki/ecommerce/*.md",
 		"AGENTS.md",
@@ -100,7 +101,8 @@ const sampleQuestion = "Include the e-commerce sample project?"
 // an agent, is to ask its user.
 const sampleOffer = `
 Sample available: an e-commerce project (6 models, a dataset with 8 metrics,
-a small DuckDB file, business definitions) to try anfra on right away.
+a small DuckDB file, a Data App, business definitions) to try anfra on
+right away.
 Not added: nobody was asked. If you are an agent, ask the user whether to
 include it. If they agree, run:
   anfra init%s --with-sample
@@ -121,8 +123,8 @@ func newInitCmd() *cobra.Command {
 			"  .gitignore                       + .anfra/data_sources.yml\n\n" +
 			"It never changes an existing file, so it is safe to run in a repo that has some of these already.\n\n" +
 			"Sample project: --with-sample also adds an e-commerce sample (6 models, a dataset with 8 metrics,\n" +
-			"a small DuckDB file, business definitions in wiki/ecommerce/ and an AGENTS.md), downloaded from\n" +
-			"github.com/" + sampleRepo + ", and points data_sources.yml at its DuckDB file.\n" +
+			"a small DuckDB file, a Data App, business definitions in wiki/ecommerce/ and an AGENTS.md),\n" +
+			"downloaded from github.com/" + sampleRepo + ", and points data_sources.yml at its DuckDB file.\n" +
 			"In a terminal, init asks whether to add it (default no). Without one it never asks and never adds it.\n\n" +
 			"Agents: do not pass --with-sample on your own. Ask the user in chat whether to include the sample,\n" +
 			"and run `anfra init --with-sample` only if they agree.",
@@ -224,7 +226,8 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 	}
 	fmt.Fprint(out, "  anfra validate\n"+
 		"  anfra show ecommerce\n"+
-		"  anfra query -d ecommerce 'products | group(products.category) | select(products.category, revenue)'\n")
+		"  anfra query -d ecommerce 'products | group(products.category) | select(products.category, revenue)'\n"+
+		"  anfra serve    # then open the ecommerce Data App\n")
 	for _, f := range files {
 		if strings.HasPrefix(f.path, "wiki/ecommerce/") {
 			fmt.Fprintln(out, "wiki/ecommerce/ has the sample's business rules: read it before writing queries.")
