@@ -51,6 +51,8 @@ export interface HostOptions {
    * The host's own keys, beside its commands' shortcuts: `Meta+K` for its command palette. Pressed
    * while focus is in a Data App, the frame forwards them, and the host gets each as a `keydown` on
    * the frame element, which bubbles to the handlers on its page as a key pressed there would.
+   * A Data App that binds one of these keys itself keeps it by calling `preventDefault()`; one that
+   * doesn't gets its own handler and the host's both.
    */
   keys?: readonly string[];
   /**
