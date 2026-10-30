@@ -1,6 +1,6 @@
 {
   "name": "@holistics/anfra-sdk",
-  "version": "0.14.2",
+  "version": "0.15.0",
   "description": "Data Apps on anfra: the authoring layer (app), what hosts one (host), anfra's plugins (plugins), the core API client (api), and their shared contract (common)",
   "license": "Apache-2.0",
   "repository": {

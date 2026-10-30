@@ -1,3 +1,20 @@
+## [0.15.0](https://github.com/holistics/anfra/compare/v0.14.2...v0.15.0) (2026-10-30)
+
+### ⚠ BREAKING CHANGES
+
+* **skills:** prefix skill names with anfra- to prevent collision with global agent skills
+
+### Features
+
+* **skills:** prefer writing AQL by self ([9334ad8](https://github.com/holistics/anfra/commit/9334ad8a05e7176953eff1a3a9ffade03a881dd2))
+* **skills:** prefix skill names with anfra- to prevent collision with global agent skills ([bc70675](https://github.com/holistics/anfra/commit/bc706756ea13952e5513713792efe8eace5b5c81))
+* **skills:** stamp versions in skills ([c489a9b](https://github.com/holistics/anfra/commit/c489a9bfd3866f785f47d58f8c009be871290828))
+* **skills:** update installation README ([bd5a582](https://github.com/holistics/anfra/commit/bd5a58298bfe0d68e664d38a6acb245f931bf45e))
+* **skills:** use new agent check commands ([53f07d2](https://github.com/holistics/anfra/commit/53f07d264f6186246b4161109d3ab39502dd0adb))
+
+### Build
+
+* move skills build to anfra repo ([225363f](https://github.com/holistics/anfra/commit/225363f6af7f3e49ce6f8fff5c497bb9d5ab1cef))
 ## [0.4.5](https://github.com/holistics/anfra-skills/compare/anfra-v0.4.4...anfra-v0.4.5) (2026-10-28)
 
 ### Features
