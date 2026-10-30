@@ -1,6 +1,6 @@
 # Agent setup
 
-> Status: proposed. The findings behind it are in [skills install](../research/skills-install.md); this doc says what we build.
+> Status: built, steps 1–8 and 10 of the [implementation plan](#implementation-plan); Cursor's plugin and the rest of [Later](#later) aren't. The first release to ship it is anfra 0.15.0, which also first publishes the skills to their facade. The findings behind it are in [skills install](../research/skills-install.md).
 
 anfra's skills, `aql-writer` subagent and hooks live in [holistics/anfra-skills](https://github.com/holistics/anfra-skills), published as a Claude Code plugin marketplace. `anfra skills install` (`cmd/anfra/skills.go`) installs that plugin into Claude Code and Codex, and has three problems:
 
@@ -510,18 +510,23 @@ Its tests run the source's hook for the plain path, and the facade's build of it
 
 After step 7, in `skills/`. The hook and the skill name commands of steps 3 and 4, and ship in the same release, so the order takes care of itself.
 
-### 9. anfra: Cursor's plugin
+### 9. Deferred: Cursor's plugin
 
-A hooks file in Cursor's format, and paths in its manifest if Cursor needs them. Then a test of the plugin, installed from Cursor's UI. If it can't be made to work, the README's Cursor section gives the skills method.
+Moved to [Later](#later): it needs a test in Cursor, which installs plugins only from its UI, and the docs leave too much unsaid to write it blind.
 
 ### 10. Policy: deprecation
 
-Add the rule to [commands and API](commands-and-api.md), for every command and flag: each keeps working, with a deprecation warning, for at least one minor release before it's removed or changed.
+The rule is in [commands and API](commands-and-api.md#deprecation-before-removal), for every command and flag: each keeps working, with a deprecation warning, for at least one minor release before it's removed or changed.
 - **Ops** already need a breaking change declared, through CI's contract check. This adds the warning period before it.
 - **CLI-only commands,** such as `update`, `init` and `agent setup`, aren't in the contract, so the rule is their only protection.
 
 ### Later
 
+- **Cursor's plugin,** once it can be tested in Cursor. Meanwhile Cursor users get the skills alone, as the README's Cursor section offers. The test answers four questions, each deciding one change:
+  1. Does Cursor load the plugin's `skills/`, as its docs' "discovered from their default directories" suggests? If not, the manifest names the path.
+  2. Where does a plugin's hooks file go, and does the manifest have to name it? The docs don't say.
+  3. What does a plugin hook get on stdin, and does `additional_context` reach the agent? Cursor documents both for `~/.cursor/hooks.json`, not for plugins. Our two scripts read Claude Code's input (`cwd`) and write its output (`hookSpecificOutput`), so they'd need a Cursor variant: `sessionStart` for the update notice, `postToolUse` for AML validation.
+  4. Does it load `agents/aql-writer.md`? No default folder for agents is documented.
 - **The [`agent-setup` skill](#the-agent-setup-skill),** once the commands it describes are released and in use.
 - **More plugins,** in the [order described above](#more-plugins-in-order). Each lands in the README first, then in setup's agent list.
 - **Phase 2's compatibility map,** if phase 1 isn't enough.
