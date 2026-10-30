@@ -237,7 +237,7 @@ One density for every screen, on a 4px unit {spacing.unit}.
 
 ## Elevation & Depth
 
-Depth comes from tone and hairlines: paper behind, white in front, 1px rules between. Shadows are neutral ink, never colored, and only two exist: `--anfra-e1` for a resting card, `--anfra-e2` for what floats (menus, popovers, dialogs). On dark, both become a border.
+Depth comes from tone and hairlines: paper behind, white in front, 1px rules between. Shadows are neutral ink, never colored, and only two exist: `--anfra-e1` for a resting card, `--anfra-e2` for what floats (menus, popovers, dialogs). `--anfra-e2` carries its own edge, a translucent 1px ring, so a menu needs no border and reads on any ground. On dark, a shadow doesn't show: e1 becomes a border and e2 a translucent white ring.
 
 ## Shapes
 
@@ -250,7 +250,21 @@ Soft, not round. Controls and surfaces nest by radius: the smaller the thing, th
 
 ## Components
 
-Each host builds these from its own toolkit (Cloud: shadcn-vue; appserve and the SDK: plain HTML and CSS), and each looks the same.
+Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has no component library, so it uses the class layer, `components.css`: each class draws what the shadcn component of its name draws in Cloud, from the same Tier 2 tokens. Variants and sizes are data attributes, as in shadcn.
+
+| Class | Cloud's component | Variants |
+| --- | --- | --- |
+| `.a-button` | Button | `data-variant` default, outline, secondary, ghost, destructive, link; `data-size` xs, sm, default, lg, icon, icon-xs, icon-sm, icon-lg |
+| `.a-input` | Input | `aria-invalid="true"` for an error |
+| `.a-badge` | Badge | `data-variant` default, secondary, outline, destructive, warning, success |
+| `.a-pill` | StatusPill | `data-tone` neutral, highlight, success, warning, danger |
+| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; the open tab is `aria-selected="true"` |
+| `.a-menu`, `.a-menu-item`, `.a-menu-label`, `.a-menu-separator`, `.a-menu-shortcut` | DropdownMenu | `data-variant="destructive"` on an item; `data-highlighted` for a keyboard highlight |
+| `.a-tooltip` | TooltipContent | |
+| `.a-kbd` | Kbd | |
+| `.a-nav-label`, `.a-nav-item`, `.a-tree`, `.a-tree-row` | SidebarGroupLabel, SidebarMenuButton, SidebarMenuSub, SidebarMenuSubButton | `data-size="sm"` on a nav item; the current page is `aria-current="page"` |
+
+A change to a Cloud component's look is a change to its class here, in the same release.
 
 ### Buttons
 
@@ -268,7 +282,7 @@ Each host builds these from its own toolkit (Cloud: shadcn-vue; appserve and the
 
 ### Fields
 
-- **Rest**: white, `border-field`, the body role, `text-placeholder` for the placeholder.
+- **Rest**: white, `border-strong` (the outline button's edge), the body role, `text-placeholder` for the placeholder. **Hover**: `border-hover`. A checkbox or a switch track keeps `border-field`, its 3:1 boundary.
 - **Focus**: no outline; the border turns violet (`border-highlight-strong`) and doubles to 2px.
 - **Error**: the border is red (`border-danger-strong`) at rest and on focus, never violet. The message is `text-danger-default` under the field and clears as soon as the user types again.
 
@@ -281,7 +295,7 @@ Each host builds these from its own toolkit (Cloud: shadcn-vue; appserve and the
 
 ### Icons
 
-Lucide, at 16px in controls and 14px in dense rows, `currentColor`, never filled. Core draws the same icons from their path data, so it carries no icon library.
+Lucide, at 16px in controls and 14px in dense rows, `currentColor`, a 2px round stroke, never filled. Core draws the same icons from their path data, so it carries no icon library: `@holistics/anfra-design/icons` exports `ICONS`, each icon's path data on a 24px grid, by the name it has in anfra (`sidebar`, `lineage`, `type-date`), generated from lucide by `scripts/icons.mjs`. To add one, add its name and lucide's to that script and run `pnpm --filter @holistics/anfra-design icons`.
 
 ### Logo
 
@@ -317,9 +331,9 @@ The product shows the logomark only: violet on light, the inverse on dark (`--an
 
 ## Implementation
 
-- **Package**: `@holistics/anfra-design`, released with anfra at its version. `index.css` imports `fonts.css`, `tokens.css` and `type.css`.
+- **Package**: `@holistics/anfra-design`, released with anfra at its version. `index.css` imports `fonts.css`, `tokens.css`, `type.css` and `components.css`; `icons` is a module.
 - **anfra Cloud** imports it in `web/src/main.css` and maps Tier 2 onto Tailwind and shadcn's aliases there.
 - **appserve** imports it in `web/appserve/src/style.css`; its stylesheet uses Tier 2 tokens only.
 - **The SDK's plugin UI** reads the theme a host passes (`--anfra-color-bg` and the rest, `web/sdk/src/common/theme.ts`); a host takes those from Tier 2.
 - **To change a rule or a token**: a PR here, with `tokens.css` and this file in step; then each host takes the release. A rule for one page goes in that page's spec, not here.
-- **Checks**: `pnpm --filter @holistics/anfra-design test` (every reference resolves, dark redefines only Tier 2, only Tier 1 holds raw colors); `npx @google/design.md lint web/design/DESIGN.md`.
+- **Checks**: `pnpm --filter @holistics/anfra-design test` (every reference resolves, dark redefines only Tier 2, only Tier 1 holds raw colors, the class layer reads only Tier 2, `icons.js` is what the script writes); `npx @google/design.md lint web/design/DESIGN.md`.

@@ -1,0 +1,421 @@
+/*
+ * The class layer: anfra's components as plain CSS, for UI that has no Vue or React to draw
+ * shadcn with (appserve, the SDK's plugin tabs). Each class draws what anfra Cloud's shadcn
+ * component of the same name draws, variant for variant, on the Tier 2 tokens alone, so a token
+ * change reaches both. Variants and sizes are data attributes:
+ *
+ *   <button class="a-button" data-variant="outline" data-size="sm">Save</button>
+ *
+ * A page that uses it wears tokens.css and type.css too (index.css has all three). A shadow root
+ * gets the tokens from its page, or from a host that sets them on it (the SDK does, from its theme).
+ * Hover applies only where there is one, as Tailwind's hover: does.
+ */
+
+/* Button: shadcn's Button. Variants default (filled), outline, secondary, ghost, destructive, link;
+   sizes xs, sm, default, lg, and icon-xs, icon-sm, icon, icon-lg (square). */
+.a-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--anfra-radius-lg);
+  background-clip: padding-box;
+  background-color: var(--anfra-color-background-highlight-default);
+  color: var(--anfra-color-text-on-fill);
+  font: var(--anfra-type-label);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: background-color 160ms var(--anfra-ease-out), border-color 160ms var(--anfra-ease-out),
+    color 160ms var(--anfra-ease-out), scale 160ms var(--anfra-ease-out);
+}
+.a-button svg { flex-shrink: 0; width: 16px; height: 16px; pointer-events: none; }
+.a-button:active:not([aria-haspopup]) { scale: 0.97; transition-duration: 90ms; }
+.a-button:is(:disabled, [aria-disabled="true"]) {
+  pointer-events: none;
+  border-color: var(--anfra-color-border-disabled);
+  background-color: var(--anfra-color-background-disabled);
+  color: var(--anfra-color-text-disabled);
+}
+.a-button[aria-invalid="true"] { border-color: var(--anfra-color-border-danger-strong); }
+.a-button:active { background-color: var(--anfra-color-background-highlight-active); }
+@media (hover: hover) {
+  .a-button:hover { background-color: var(--anfra-color-background-highlight-hover); }
+}
+
+.a-button[data-variant="outline"] {
+  border-color: var(--anfra-color-border-strong);
+  background-color: var(--anfra-color-background-default);
+  color: var(--anfra-color-text-default);
+}
+@media (hover: hover) {
+  .a-button[data-variant="outline"]:hover { border-color: var(--anfra-color-border-hover); background-color: var(--anfra-color-background-default); }
+}
+.a-button[data-variant="outline"]:is(:active, [aria-expanded="true"]) { background-color: var(--anfra-color-background-active); }
+
+.a-button[data-variant="secondary"] {
+  background-color: var(--anfra-color-background-secondary-default);
+  color: var(--anfra-color-text-default);
+}
+@media (hover: hover) {
+  .a-button[data-variant="secondary"]:hover { background-color: var(--anfra-color-background-active); }
+}
+.a-button[data-variant="secondary"]:is(:active, [aria-expanded="true"]) { background-color: var(--anfra-color-background-active); }
+
+.a-button[data-variant="ghost"] { background-color: transparent; color: var(--anfra-color-text-weak); }
+@media (hover: hover) {
+  .a-button[data-variant="ghost"]:hover { background-color: var(--anfra-color-background-hover); color: var(--anfra-color-text-default); }
+}
+.a-button[data-variant="ghost"]:active { background-color: var(--anfra-color-background-active); }
+.a-button[data-variant="ghost"]:is([aria-expanded="true"], [aria-pressed="true"]) {
+  background-color: var(--anfra-color-background-active);
+  color: var(--anfra-color-text-default);
+}
+.a-button[data-variant="ghost"]:is(:disabled, [aria-disabled="true"]) { border-color: transparent; background-color: transparent; }
+
+.a-button[data-variant="destructive"] {
+  background-color: var(--anfra-color-background-danger-default);
+  color: var(--anfra-color-text-on-fill);
+}
+@media (hover: hover) {
+  .a-button[data-variant="destructive"]:hover { background-color: var(--anfra-color-background-danger-hover); }
+}
+.a-button[data-variant="destructive"]:active { background-color: var(--anfra-color-background-danger-hover); }
+
+.a-button[data-variant="link"] { background-color: transparent; color: var(--anfra-color-text-link-default); text-underline-offset: 4px; }
+@media (hover: hover) {
+  .a-button[data-variant="link"]:hover { background-color: transparent; color: var(--anfra-color-text-link-hover); text-decoration: underline; }
+}
+.a-button[data-variant="link"]:active { background-color: transparent; }
+.a-button[data-variant="link"]:is(:disabled, [aria-disabled="true"]) { border-color: transparent; background-color: transparent; }
+
+.a-button[data-size="xs"] { gap: 4px; height: 24px; padding: 0 8px; font: var(--anfra-type-caption); font-weight: 500; }
+.a-button[data-size="xs"] svg { width: 12px; height: 12px; }
+.a-button[data-size="sm"] { gap: 4px; height: 28px; padding: 0 10px; font: var(--anfra-type-caption); font-weight: 500; }
+.a-button[data-size="sm"] svg { width: 14px; height: 14px; }
+.a-button[data-size="lg"] { height: 36px; }
+.a-button:is([data-size="icon"], [data-size="icon-xs"], [data-size="icon-sm"], [data-size="icon-lg"]) { padding: 0; }
+.a-button[data-size="icon"] { width: 32px; }
+.a-button[data-size="icon-xs"] { width: 24px; height: 24px; }
+.a-button[data-size="icon-xs"] svg { width: 12px; height: 12px; }
+.a-button[data-size="icon-sm"] { width: 28px; height: 28px; }
+.a-button[data-size="icon-lg"] { width: 36px; height: 36px; }
+
+/* Input: shadcn's Input, edged as an outline button is. Focus shows on its own border, violet and
+   doubled, never an outline. */
+.a-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--anfra-color-border-strong); /* the outline button's edge; darker on hover */
+  border-radius: var(--anfra-radius-lg);
+  background: transparent;
+  color: var(--anfra-color-text-default);
+  font: var(--anfra-type-body);
+  outline: none;
+  transition: border-color 160ms var(--anfra-ease-out);
+}
+.a-input::placeholder { color: var(--anfra-color-text-placeholder); }
+@media (hover: hover) {
+  .a-input:hover { border-color: var(--anfra-color-border-hover); }
+}
+.a-input:read-only { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
+.a-input:disabled {
+  cursor: not-allowed;
+  border-color: var(--anfra-color-border-disabled);
+  background: var(--anfra-color-background-disabled);
+  color: var(--anfra-color-text-disabled);
+}
+.a-input:focus-visible {
+  border-color: var(--anfra-color-border-highlight-strong);
+  box-shadow: inset 0 0 0 1px var(--anfra-color-border-highlight-strong);
+}
+.a-input[aria-invalid="true"],
+.a-input[aria-invalid="true"]:focus-visible {
+  border-color: var(--anfra-color-border-danger-strong);
+}
+.a-input[aria-invalid="true"]:focus-visible { box-shadow: inset 0 0 0 1px var(--anfra-color-border-danger-strong); }
+
+/* Badge: shadcn's Badge, a label in a pill. Variants default (filled), secondary, outline,
+   destructive, warning, success. */
+.a-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: fit-content;
+  height: 20px;
+  padding: 2px 8px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--anfra-radius-pill);
+  background: var(--anfra-color-background-highlight-default);
+  color: var(--anfra-color-text-on-fill);
+  font: var(--anfra-type-caption);
+  font-weight: 500;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.a-badge svg { width: 12px; height: 12px; pointer-events: none; }
+.a-badge[data-variant="secondary"] {
+  border-color: var(--anfra-color-border-default);
+  background: var(--anfra-color-background-info-secondary-default);
+  color: var(--anfra-color-text-info-default);
+}
+.a-badge[data-variant="outline"] { border-color: var(--anfra-color-border-strong); background: transparent; color: var(--anfra-color-text-default); }
+.a-badge[data-variant="destructive"] {
+  border-color: var(--anfra-color-border-danger-default);
+  background: var(--anfra-color-background-danger-secondary-default);
+  color: var(--anfra-color-text-danger-default);
+}
+.a-badge[data-variant="warning"] {
+  border-color: var(--anfra-color-border-warning-default);
+  background: var(--anfra-color-background-warning-secondary-default);
+  color: var(--anfra-color-text-warning-default);
+}
+.a-badge[data-variant="success"] {
+  border-color: var(--anfra-color-border-success-default);
+  background: var(--anfra-color-background-success-secondary-default);
+  color: var(--anfra-color-text-success-default);
+}
+
+/* Status pill: Cloud's StatusPill, a state as a dot and a label. Tones neutral (the default),
+   highlight, success, warning, danger; the label always says it, never the colour alone. */
+.a-pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--anfra-radius-pill);
+  background: var(--anfra-color-background-active);
+  color: var(--anfra-color-text-weak);
+  font: var(--anfra-type-caption);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.a-pill::before { content: ""; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.a-pill[data-tone="highlight"] { background: var(--anfra-color-background-highlight-secondary-default); color: var(--anfra-color-text-highlight-default); }
+.a-pill[data-tone="success"] { background: var(--anfra-color-background-success-secondary-default); color: var(--anfra-color-text-success-default); }
+.a-pill[data-tone="warning"] { background: var(--anfra-color-background-warning-secondary-default); color: var(--anfra-color-text-warning-default); }
+.a-pill[data-tone="danger"] { background: var(--anfra-color-background-danger-secondary-default); color: var(--anfra-color-text-danger-default); }
+
+/* Tabs: shadcn's TabsList and TabsTrigger. A segmented list by default; data-variant="line" for an
+   underline. The open tab is aria-selected="true". */
+.a-tabs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  height: 32px;
+  padding: 3px;
+  border-radius: var(--anfra-radius-lg);
+  background: var(--anfra-color-background-secondary-default);
+  color: var(--anfra-color-text-weak);
+  box-sizing: border-box;
+}
+.a-tab {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: calc(100% - 1px);
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--anfra-radius-lg);
+  background: transparent;
+  color: var(--anfra-color-text-weak);
+  font: var(--anfra-type-label);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.a-tab svg { flex-shrink: 0; width: 16px; height: 16px; pointer-events: none; }
+@media (hover: hover) {
+  .a-tab:hover { color: var(--anfra-color-text-default); }
+}
+.a-tab:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
+.a-tab[aria-selected="true"] {
+  background: var(--anfra-color-background-default);
+  color: var(--anfra-color-text-default);
+  box-shadow: var(--anfra-e1);
+}
+.a-tabs[data-variant="line"] { border-radius: 0; background: transparent; }
+.a-tabs[data-variant="line"] .a-tab[aria-selected="true"] { background: transparent; box-shadow: none; }
+.a-tabs[data-variant="line"] .a-tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -5px;
+  height: 2px;
+  background: var(--anfra-color-background-inverted-default);
+  opacity: 0;
+}
+.a-tabs[data-variant="line"] .a-tab[aria-selected="true"]::after { opacity: 1; }
+
+/* Menu: shadcn's DropdownMenuContent and its parts. An item is highlighted on hover, on focus, or
+   with data-highlighted (a menu that moves a highlight by keyboard). */
+.a-menu {
+  box-sizing: border-box;
+  min-width: 128px;
+  padding: 4px;
+  overflow: hidden auto;
+  border-radius: var(--anfra-radius-xl);
+  background: var(--anfra-color-background-raised-default);
+  color: var(--anfra-color-text-default);
+  box-shadow: var(--anfra-e2); /* its edge is e2's ring, not a border */
+}
+.a-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--anfra-radius-md);
+  background: transparent;
+  color: inherit;
+  font: var(--anfra-type-body);
+  text-align: left;
+  cursor: default;
+  user-select: none;
+  outline: none;
+  box-sizing: border-box;
+}
+.a-menu-item svg { flex-shrink: 0; width: 16px; height: 16px; pointer-events: none; }
+.a-menu-item:is(:focus-visible, [data-highlighted]) { background: var(--anfra-color-background-hover); color: var(--anfra-color-text-default); }
+@media (hover: hover) {
+  .a-menu-item:hover { background: var(--anfra-color-background-hover); color: var(--anfra-color-text-default); }
+}
+.a-menu-item:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
+.a-menu-item:is(:disabled, [aria-disabled="true"]) svg { color: var(--anfra-color-icon-disabled); }
+.a-menu-item[data-variant="destructive"],
+.a-menu-item[data-variant="destructive"] svg { color: var(--anfra-color-text-danger-default); }
+.a-menu-item[data-variant="destructive"]:is(:focus-visible, [data-highlighted]) { background: var(--anfra-color-background-danger-secondary-default); }
+@media (hover: hover) {
+  .a-menu-item[data-variant="destructive"]:hover { background: var(--anfra-color-background-danger-secondary-default); }
+}
+.a-menu-label { padding: 4px 6px; color: var(--anfra-color-text-placeholder); font: var(--anfra-type-caption); font-weight: 500; }
+.a-menu-separator { height: 1px; margin: 4px -4px; border: 0; background: var(--anfra-color-border-default); }
+.a-menu-shortcut { margin-left: auto; color: var(--anfra-color-text-placeholder); font: var(--anfra-type-caption); letter-spacing: 0.1em; }
+
+/* Tooltip: shadcn's TooltipContent, inverted. */
+.a-tooltip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 320px;
+  padding: 6px 12px;
+  border-radius: var(--anfra-radius-md);
+  background: var(--anfra-color-background-inverted-default);
+  color: var(--anfra-color-text-inverted-default);
+  font: var(--anfra-type-caption);
+}
+
+/* Kbd: a key, as a menu's shortcut or a field's hint shows it. */
+.a-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--anfra-radius-md);
+  background: var(--anfra-color-background-active);
+  color: var(--anfra-color-text-weak);
+  font: var(--anfra-type-caption);
+  font-weight: 500;
+  box-sizing: border-box;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Sidebar: shadcn's SidebarGroupLabel, SidebarMenuButton (.a-nav-item), SidebarMenuSub (.a-tree) and
+   SidebarMenuSubButton (.a-tree-row). The current page is aria-current="page" (or data-active): a
+   raised chip with a hairline, and a violet icon. */
+.a-nav-label {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--anfra-radius-md);
+  color: var(--anfra-color-text-placeholder);
+  font: var(--anfra-type-caption);
+  font-weight: 500;
+}
+.a-nav-item,
+.a-tree-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--anfra-radius-md);
+  background: transparent;
+  color: var(--anfra-color-text-weak);
+  font: var(--anfra-type-body);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.a-nav-item { height: 32px; padding: 8px; }
+.a-nav-item[data-size="sm"] { height: 28px; font: var(--anfra-type-caption); }
+.a-tree-row { height: 28px; padding: 0 8px; }
+.a-nav-item > :last-child,
+.a-tree-row > :last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.a-nav-item svg,
+.a-tree-row svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--anfra-color-icon-weak); }
+@media (hover: hover) {
+  .a-nav-item:hover,
+  .a-tree-row:hover { background: var(--anfra-color-background-hover); color: var(--anfra-color-text-default); }
+}
+.a-nav-item:active,
+.a-tree-row:active { background: var(--anfra-color-background-active); color: var(--anfra-color-text-default); }
+.a-nav-item:is(:disabled, [aria-disabled="true"]),
+.a-tree-row:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
+.a-nav-item:is([aria-current="page"], [data-active]),
+.a-tree-row:is([aria-current="page"], [data-active]) {
+  background: var(--anfra-color-background-current-default);
+  color: var(--anfra-color-text-default);
+  box-shadow: inset 0 0 0 1px var(--anfra-color-border-weak);
+}
+.a-nav-item:is([aria-current="page"], [data-active]) { font-weight: 500; }
+.a-nav-item:is([aria-current="page"], [data-active]) svg,
+.a-tree-row:is([aria-current="page"], [data-active]) svg { color: var(--anfra-color-icon-highlight-default); }
+.a-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin: 0 14px;
+  padding: 2px 10px;
+  border-left: 1px solid var(--anfra-color-border-default);
+  translate: 1px 0;
+}
+.a-tree .a-tree-row { translate: -1px 0; }
+
+/* Focus: one 2px violet outline, offset 3px, on every control here but a field and a menu item. */
+:is(.a-button, .a-tab, .a-nav-item, .a-tree-row):focus-visible {
+  outline: 2px solid var(--anfra-color-focus-ring-default);
+  outline-offset: 3px;
+}

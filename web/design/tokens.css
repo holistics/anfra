@@ -229,10 +229,12 @@
   --anfra-color-focus-ring-default: var(--anfra-violet-600); /* 2px focus outline, offset 3px */
 
   /* Elevation (light): shadows. */
-  --anfra-e1: 0 1px 0 rgb(24 20 31 / 0.04), 0 1px 2px rgb(24 20 31 / 0.06);
+  --anfra-e1: 0 1px 0 oklch(0.201 0.022 301.1 / 0.04), 0 1px 2px oklch(0.201 0.022 301.1 / 0.06);
+  /* A floating surface (menu, popover): a translucent 1px ring for its edge, so one token reads on
+     any ground, then a tight layer and a soft one for its lift. */
   --anfra-e2:
-    0 1px 0 rgb(24 20 31 / 0.03), 0 18px 40px -18px rgb(24 20 31 / 0.28),
-    0 2px 6px -2px rgb(24 20 31 / 0.08);
+    0 0 0 1px oklch(0.201 0.022 301.1 / 0.08), 0 1px 3px oklch(0.201 0.022 301.1 / 0.06),
+    0 18px 40px -18px oklch(0.201 0.022 301.1 / 0.28), 0 2px 6px -2px oklch(0.201 0.022 301.1 / 0.08);
 
   /* Motion (DESIGN.md §10). Unchanged. */
   --anfra-t-press: 90ms;
@@ -316,7 +318,8 @@
 
   --anfra-color-focus-ring-default: var(--anfra-violet-500);
 
-  /* A shadow does not show on dark: lift with a border instead (DESIGN.md §6). */
+  /* A shadow does not show on dark: lift with a ring instead (DESIGN.md §6). e2's is translucent
+     white, so it reads the same on every dark ground. */
   --anfra-e1: 0 0 0 1px var(--anfra-color-border-default);
-  --anfra-e2: 0 0 0 1px var(--anfra-color-border-strong);
+  --anfra-e2: 0 0 0 1px var(--anfra-white-a10);
 }
