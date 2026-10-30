@@ -25,3 +25,6 @@ not only a whole `explore`.
 ## Writing valid queries
 Use [](../aql/) (syntax, functions, gotchas) and [](../write-aql/) (workflow) to
 write correct AQL and to fix whatever validation reports.
+
+---
+anfra skills 0.4.5

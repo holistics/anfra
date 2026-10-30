@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import semver from 'semver'
+import { stampSkills } from './stamp.js'
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const [, , path, version] = process.argv
@@ -75,6 +76,10 @@ if (!bumpedAny) {
   console.error(`No plugin manifest found under ${path}`)
   process.exit(1)
 }
+
+// Each skill ends with the version, for anfra to compare with the latest.
+const stampedCount = await stampSkills(resolve(REPO_ROOT, path), version)
+console.log(`Stamped ${stampedCount} skills with ${version}`)
 
 // Write context for conventional-changelog
 const contextFile = '/tmp/anfra-skills-bump-context.json'

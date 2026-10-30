@@ -41,3 +41,6 @@ anfra query --dataset <uname> "unique(products.type) | where(products.type ilike
 ## If nothing matches
 If you can't find the concept in any field, ask the user to clarify rather than
 guessing a value.
+
+---
+anfra skills 0.4.5

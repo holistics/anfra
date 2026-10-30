@@ -4,6 +4,7 @@ import { resolve, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { glob } from 'glob'
 import matter from 'gray-matter'
+import { pluginVersion, stampedVersion } from './stamp.js'
 
 const RED = '\x1b[31m'
 const YELLOW = '\x1b[33m'
@@ -38,6 +39,18 @@ for (const file of files) {
       errs.push(`invalid YAML${loc}: ${e.reason ?? e.message}`)
       errs.push(`hint: quote values that contain colons — description: "text: more text"`)
     }
+  }
+
+  // plugins/<plugin>/skills/…/SKILL.md ends with its plugin's version.
+  const plugin = rel.split('/').slice(0, 2).join('/')
+  const want = pluginVersion(resolve(REPO_ROOT, plugin))
+  const got = stampedVersion(content)
+  if (got !== want) {
+    errs.push(
+      got
+        ? `stamped ${got}, but ${plugin} is ${want}: pnpm bump writes the stamp`
+        : `missing the stamp at its end ("---" then "anfra skills ${want}"), which pnpm bump writes`,
+    )
   }
 
   if (errs.length) fileErrors.push({ rel, errs })
