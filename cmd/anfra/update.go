@@ -105,6 +105,17 @@ func knownUpdate() *command.UpdateInfo {
 	return &command.UpdateInfo{Latest: r.Version, Available: r.IsNewer()}
 }
 
+// knownSkills is the latest anfra skills version from the cached check, for
+// the version command to compare with; nil when nothing has been checked yet,
+// or the check failed. No network.
+func knownSkills() *command.SkillsInfo {
+	latest, at, ok := update.CachedSkills()
+	if !ok {
+		return nil
+	}
+	return &command.SkillsInfo{Latest: latest, CheckedAt: at}
+}
+
 // checkUpdates announces a newer release while serve runs: at startup and then
 // once the cache Check reads has gone stale, daily, so a server left up for days
 // still hears of one. It is a periodic routine's run, checked hourly: a fresh

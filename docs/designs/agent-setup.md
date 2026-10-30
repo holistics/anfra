@@ -103,7 +103,7 @@ Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `
 This is an anfra repo: models in AML, queries in AQL, run with the `anfra` CLI. Use the anfra skills for this work.
 
 - Once per session, before your first anfra command, run `anfra version --skills <version>`, with the version from
-  the `anfra skills` line at the end of an anfra skill you've loaded, or `--skills` alone if the skill has no such
+  the `anfra skills` line at the end of an anfra skill you've loaded, or `--skills unknown` if the skill has no such
   line, and follow its hints. If anfra doesn't know
   `--skills`, it's out of date: ask the user to run `anfra update`.
 - If the anfra skills aren't available to you, run `anfra agent setup --agent <your id>` and follow what it says,
@@ -235,7 +235,7 @@ hints:
 - **A skills version newer than the cached latest** only means the cache is old. anfra then reports that version as `latest`, since it's the newest it has seen, so it counts as current.
 - **Incomplete information is said:**
   - with no check run yet, `skills.latest` is absent, and a hint says "latest not known yet";
-  - when the last check is more than two days old, for example when offline, the answer gives its date (`checked: 2026-10-03`).
+  - when the last check is more than two days old, for example when offline, the answer gives its date (`skills.checked: 2026-10-03`).
 
 `skills.latest` is never older than `skills.version`, so a program needs no version comparison:
 - `latest` absent: not known yet;
@@ -258,10 +258,10 @@ hints:
 
 It has no `skills`, and `hints` is absent when there's nothing to act on.
 
-`--skills` with no version means the version in use isn't known, for example because a copy installed before the stamp existed has no stamp line. The answer is plain `version`'s, plus `skills.latest` and a hint to see the installed copies:
+`--skills unknown` means the version in use isn't known, for example because a copy installed before the stamp existed has no stamp line. The answer is plain `version`'s, plus `skills.latest` and a hint to see the installed copies:
 
 ```
-$ anfra version --skills
+$ anfra version --skills unknown
 version: 0.15.2
 update:
   latest: 0.15.2
@@ -274,7 +274,7 @@ hints:
 
 anfra doesn't guess that these skills are behind: a missing stamp can have other causes, such as a copy someone edited, or an agent that didn't find the line. `anfra agent setup --check` shows the facts: a copy it finds with no stamp is listed as older than the stamp, so behind.
 
-As an op, the input tells the two apart: `skills` missing is plain `version`, and `skills: ""` means the version isn't known. On the CLI, `--skills` takes an optional value.
+`unknown` is a value rather than a bare `--skills`: a flag with an optional value would read `--skills 0.16.0` as `--skills` followed by a stray argument, and an op's input can't tell an empty value from a missing one.
 
 Today's hook keeps working, with one constraint on field order:
 - It reads `version:` and `available:` at a line's start, and a hint line starts with `- anfra`, so neither can match by mistake.
@@ -332,7 +332,7 @@ A new skill in the skills repo, its description covering:
 
 It carries the detail no other skill does:
 
-- **The check:** run `anfra version --skills <version>`, with the version from the stamp line, or `--skills` alone if there's none, and what each hint means.
+- **The check:** run `anfra version --skills <version>`, with the version from the stamp line, or `--skills unknown` if there's none, and what each hint means.
 - **For an anfra too old to know `--skills`:** anfra is behind, so ask the user to run `anfra update`.
 - **The agent ids** `anfra agent setup --agent` takes, so an agent can find its own. Without `--agent`, setup covers every agent it detects, which also includes this one.
 - **Each route's install and update commands,** and the order to prefer them in, matching the README, for when setup fails.
@@ -370,9 +370,9 @@ The plugins' installed versions aren't here: listing them takes the agents' CLIs
 
 ### 3. anfra: `version --skills`
 
-- **`status.Version`** (`internal/command/status`) takes an input with an optional `skills`, in place of `NoInput`, telling missing (plain `version`) from empty (version not known). On the CLI, `--skills` takes an optional value. Its result gains `skills` (`version`, and `latest`, never older than `version`), `checked` when the cache is more than two days old, and `hints`. `update` keeps its shape.
+- **`status.Version`** (`internal/command/status`) takes an input with an optional `skills`, a version or `unknown`, in place of `NoInput`. Its result gains `skills` (`version`; `latest`, never older than `version`; and `checked` when the cache is more than two days old) and `hints`. `update` keeps its shape.
 - **`CommandContext`** gains a function that reports the cached skills version, set in `cmd/anfra/host.go` next to `knownUpdate`. So the op reads only the cache, the same way it reads `Update` today.
-- **Tests** cover: both sides current; each side behind; a patch release behind, which gets the same hint as a minor; nothing cached; a stale cache; a skills version newer than the cached latest; `--skills` with no version; no `--skills` at all.
+- **Tests** cover: both sides current; each side behind; a patch release behind, which gets the same hint as a minor; nothing cached; a stale cache; a skills version newer than the cached latest; `--skills unknown`; no `--skills` at all.
 
 ### 4. anfra: `anfra agent setup`
 
