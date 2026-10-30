@@ -96,6 +96,8 @@ cd my-project
 
 This creates the `models/`, `datasets/`, and `apps/` folders and a `.anfra/data_sources.yml` config file, which is added to `.gitignore` so your credentials stay out of Git.
 
+To try anfra before connecting a warehouse, run `anfra init my-project --with-sample` instead. It adds an e-commerce sample from [holistics/anfra-sample-ecommerce](https://github.com/holistics/anfra-sample-ecommerce): models, a dataset and a small DuckDB file to query right away. In a terminal, a plain `anfra init` asks whether to add it.
+
 Replace the placeholders in `.anfra/data_sources.yml` with your warehouse credentials. See [Data sources](https://docs.anfra.ai/docs/self-hosted/data-sources) for Snowflake, BigQuery, ClickHouse and the others.
 
 #### 3. Ask your agent for an app
