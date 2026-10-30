@@ -472,6 +472,9 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
   border-bottom: 1px solid var(--border);
 }
 
+/* The panel's commands (Pick), before the tabs. */
+.panel-commands { flex: none; display: flex; align-items: center; gap: 2px; margin-right: 2px; }
+.panel-commands .icon-button { width: 28px; height: 28px; }
 .panel-tabbar { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; }
 .panel-tabs { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
 /* Every tab, unseen, for its width: what decides which fit. */

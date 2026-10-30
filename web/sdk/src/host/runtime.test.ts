@@ -359,13 +359,13 @@ describe('middleware', () => {
 describe('the host\'s side', () => {
   it('calls a host half, or the frame half when no host half answers', async () => {
     const watch = vi.fn(() => 'ok');
-    const panel = definePlugin({ name: 'panel', version: '1', host: { calls: { watch } } });
-    mount([corePlugin(backend()), panel]);
-    await expect(mounted!.call('panel.watch', true)).resolves.toBe('ok');
+    const viewer = definePlugin({ name: 'viewer', version: '1', host: { calls: { watch } } });
+    mount([corePlugin(backend()), viewer]);
+    await expect(mounted!.call('viewer.watch', true)).resolves.toBe('ok');
     expect(watch).toHaveBeenCalledWith(true, expect.objectContaining({ caller: { kind: 'host' }, mount: expect.anything() }));
 
-    const drawn = mounted!.call('panel.draw', { block: 'a' });
-    expect(replies).toEqual([{ type: 'anfra:call', id: 1, name: 'panel.draw', request: { block: 'a' } }]);
+    const drawn = mounted!.call('viewer.draw', { block: 'a' });
+    expect(replies).toEqual([{ type: 'anfra:call', id: 1, name: 'viewer.draw', request: { block: 'a' } }]);
     fromFrame({ type: 'anfra:result', id: 1, ok: false, error: { name: 'ValidationError', message: 'No block a.' } });
     await expect(drawn).rejects.toBeInstanceOf(ValidationError);
   });

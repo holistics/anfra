@@ -15,7 +15,9 @@ describe('inspect', () => {
   it('opens the panel at Overview from its command, and lists its five tabs in order', async () => {
     harness = await inspect();
     expect(harness.host.tabs.map((t) => t.id)).toEqual(['inspect.overview', 'inspect.data', 'inspect.queries', 'inspect.structure', 'inspect.declaration']);
-    expect(harness.host.commands[0]).toMatchObject({ id: 'inspect.toggle', shortcut: 'Alt+Shift+I' });
+    // The SDK's Pick first, since Structure shows the selection.
+    expect(harness.host.commands.map((c) => c.id)).toEqual(['panel.pick', 'inspect.toggle']);
+    expect(harness.host.commands[1]).toMatchObject({ id: 'inspect.toggle', shortcut: 'Alt+Shift+I' });
     expect(harness.mounted.panel).toMatchObject({ open: true, tab: 'inspect.overview' });
   });
 

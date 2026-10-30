@@ -148,6 +148,70 @@ describe('contributions', () => {
   });
 });
 
+describe('the panel\'s Pick', () => {
+  // A plugin whose one tab shows the selection.
+  const shown = () => definePlugin({
+    name: 'shown',
+    version: '1',
+    host: { tabs: [{ id: 'tree', title: 'Tree', order: 3, selection: true, mount: () => {} }] },
+  });
+
+  it('is the first command while a tab shows the selection, for the panel\'s strip', () => {
+    expect(host([notes()]).runtime.commands.map((c) => c.id)).toEqual(['notes.save', 'notes.open']);
+    const { runtime } = host([notes(), shown()]);
+    expect(runtime.commands[0]).toMatchObject({ id: 'panel.pick', placement: 'panel', run: { panel: 'pick' } });
+    expect(runtime.commands[0].plugin).toBeUndefined();
+  });
+
+  it('is left out when the filter keeps no tab that shows the selection, or drops it by id', () => {
+    expect(host([notes(), shown()], { contributions: (c) => c.kind !== 'tab' || c.tab.id !== 'shown.tree' }).runtime.commands.map((c) => c.id))
+      .not.toContain('panel.pick');
+    expect(host([notes(), shown()], { contributions: (c) => c.kind !== 'command' || c.command.id !== 'panel.pick' }).runtime.commands.map((c) => c.id))
+      .toEqual(['notes.save', 'notes.open']);
+  });
+
+  it('toggles pick mode, pressed while on, and opens the panel at a tab that shows what is picked', async () => {
+    const { mounted: app } = host([notes(), shown()]);
+    expect(app.commandState('panel.pick')).toEqual({ pressed: false });
+    await app.run('panel.pick');
+    expect(app.panel).toMatchObject({ open: true, tab: 'shown.tree', picking: true });
+    expect(app.commandState('panel.pick')).toEqual({ pressed: true });
+    await app.run('panel.pick');
+    expect(app.panel).toMatchObject({ open: true, picking: false });
+  });
+
+  it('lands a pick on a `pick` tab before an earlier `true` one, and keeps it on either', () => {
+    const lands = definePlugin({
+      name: 'lands',
+      version: '1',
+      host: { tabs: [{ id: 'tree', title: 'Tree', order: 4, selection: 'pick', mount: () => {} }] },
+    });
+    const { mounted: app } = host([notes(), shown(), lands]);
+    app.panel.show('notes.list');
+    app.panel.pick(true);
+    expect(app.panel.tab).toBe('lands.tree');
+    app.panel.pick(false);
+    app.panel.show('shown.tree');
+    app.panel.pick(true);
+    expect(app.panel.tab).toBe('shown.tree');
+  });
+
+  it('moves a pick off a tab that doesn\'t show the selection, and stays on one that does', () => {
+    const { mounted: app } = host([notes(), shown()]);
+    app.panel.show('notes.list');
+    app.panel.pick(true);
+    expect(app.panel.tab).toBe('shown.tree');
+    app.panel.pick(false);
+    app.panel.pick(true);
+    expect(app.panel.tab).toBe('shown.tree');
+  });
+
+  it('refuses a panel command it has no verb for, and a plugin named `panel`', () => {
+    expect(() => host([], { commands: [{ id: 'zoom', title: 'Zoom', run: { panel: 'zoom' as never } }] })).toThrow("Command 'zoom' runs 'zoom' on the panel, which it can't do.");
+    expect(() => definePlugin({ name: 'panel', version: '1' })).toThrow("'panel' is reserved for the SDK");
+  });
+});
+
 describe('the theme', () => {
   it('sets its tokens on a tab\'s element, and follows each change', () => {
     const plugin = definePlugin({

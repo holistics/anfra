@@ -183,15 +183,9 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
     const structure = panel.snapshot?.structure;
     const selected = structure && panel.selection !== null ? findNode(structure.nodes, panel.selection) : undefined;
     const problems = structure ? countProblems(structure.nodes) : 0;
+    // Pick is the panel's own command, in the host's strip; the toolbar shows only what's wrong.
+    head.hidden = problems === 0;
     replace(doc, head,
-      h(doc, 'button', {
-        type: 'button',
-        class: 'tool',
-        'aria-pressed': String(panel.picking),
-        'data-tip': 'Click a part of the page to select it here. Esc stops.',
-        'data-testid': 'pick',
-        onclick: () => panel.pick(!panel.picking),
-      }, icon(doc, 'pick'), 'Pick'),
       problems > 0 && h(doc, 'span', { class: 'pill error', 'data-tip': 'Problems in the markup' }, plural(problems, 'problem')));
     // A node selected elsewhere (a pick, a link): its ancestors open, so it can be seen.
     if (structure && panel.selection !== null && panel.selection !== revealed) {

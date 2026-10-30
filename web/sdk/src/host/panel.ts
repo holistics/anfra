@@ -63,7 +63,10 @@ export interface Panel {
   highlight: (node: string | null) => void;
   /** Scroll a node, or an entity wherever it is drawn, into view, and hold the highlight on it. */
   locate: (target: LocateTarget) => void;
-  /** Turn pick mode on or off. A pick selects the node and ends the mode; Escape in the frame ends it. */
+  /**
+   * Turn pick mode on or off. A pick selects the node and ends the mode; Escape in the frame ends it.
+   * Turned on, the panel opens, at a tab a pick lands on unless it shows the selection already.
+   */
   pick: (on: boolean) => void;
   /** Each change to any of the above. Returns the function that stops listening. */
   subscribe: (listener: () => void) => () => void;
@@ -89,6 +92,10 @@ export interface PanelState {
 export interface PanelOptions {
   /** The installed tabs' ids, in order. */
   tabs: () => readonly string[];
+  /** Those of them that show the selection, in order: where a pick may stay. */
+  selectionTabs: () => readonly string[];
+  /** Those a pick lands on, in order; the first of `selectionTabs` when none. */
+  pickTabs: () => readonly string[];
   /** Draw a tab into an element; the runtime's, since a tab needs its contribution and its calls. */
   mountTab: (panel: Panel, id: string, element: HTMLElement) => () => void;
 }
@@ -162,9 +169,13 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
       mount.emit('anfra.locate', target);
     },
     pick (on) {
-      if (on && !open) {
+      if (on) {
         setOpen(true);
-        tab = known(tab);
+        // Where a pick can be seen: this tab if it shows the selection, else the first a pick lands on.
+        const current = known(tab);
+        if (current === undefined || !options.selectionTabs().includes(current)) {
+          tab = options.pickTabs()[0] ?? options.selectionTabs()[0] ?? current;
+        } else tab = current;
       }
       setPicking(on === true);
       changed();

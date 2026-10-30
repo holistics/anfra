@@ -217,6 +217,8 @@ export function createHost (options: HostOptions): Host {
   let theme = resolveTheme(options.theme);
   const themeListeners = new Set<(next: Theme) => void>();
   const tabIds = tabs.map((tab) => tab.id);
+  const selectionTabIds = tabs.filter((tab) => tab.selection).map((tab) => tab.id);
+  const pickTabIds = tabs.filter((tab) => tab.selection === 'pick').map((tab) => tab.id);
   // Which kinds of target the host's own menu commands are for: the frame listens only when asked.
   const menuKinds = [...new Set(commands.flatMap((command) => (command.target ? [command.target] : [])))];
   // The chrome's commands by shortcut: a menu command runs only with its target, so has none.
@@ -355,6 +357,8 @@ export function createHost (options: HostOptions): Host {
 
       const panelState = createPanel(context, {
         tabs: () => tabIds,
+        selectionTabs: () => selectionTabIds,
+        pickTabs: () => pickTabIds,
         mountTab (panel, id, element) {
           const tab = tabs.find((candidate) => candidate.id === id);
           if (!tab) throw new Error(`No tab '${id}' is installed.`);
@@ -459,6 +463,10 @@ export function createHost (options: HostOptions): Host {
           // A toggle: pressed, it closes the panel, whichever of its tabs shows.
           else if (pressed) panelState.panel.hide();
           else panelState.panel.show(command.run.tab);
+          return null;
+        }
+        if ('panel' in command.run) {
+          panelState.panel.pick(!panelState.panel.picking);
           return null;
         }
         const request = target ? { ...(command.run.request as object | undefined ?? {}), target } : command.run.request ?? null;
