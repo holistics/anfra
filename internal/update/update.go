@@ -44,8 +44,9 @@ const (
 	skillsManifest = "plugins/anfra/.claude-plugin/plugin.json"
 	skillsRef      = "main"
 
-	// How long a cached update check stays fresh (matches gh/deno's 24h).
-	checkTTL = 24 * time.Hour
+	// How long a cached update check stays fresh: half a day, so a release, of
+	// anfra or of the skills, is noticed within it.
+	checkTTL = 12 * time.Hour
 
 	// Per-request timeouts: the release lookup is a small JSON response; the asset
 	// download is a large binary (sidecars are embedded), so it gets much longer.

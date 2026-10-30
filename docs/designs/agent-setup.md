@@ -12,16 +12,16 @@ The design in short:
 
 - **Install:** a plugin wherever an agent's CLI installs one. Every other agent is pointed at the skills repo, whose README gives each agent's best install method, a plugin first when the agent supports one. Duplicates are accepted. In an anfra repo, setup also writes the anfra block in `AGENTS.md`.
 - **Versions:** both the binary and the skills are nudged to their latest, decoupled from each other. Each skill states its version, and anfra says when either side is behind. A map of which anfra each skills version needs is an optional [phase 2](#phase-2-a-compatibility-map).
-- **Updates:** `anfra update` updates both the binary and the plugins anfra installed. Hints reach the agent through the session hook, `AGENTS.md` and an `agent-setup` skill.
+- **Updates:** `anfra update` updates the binary, and `anfra agent setup`, run again, the skills; `anfra update` and a daily notice say when the skills need it. Hints reach the agent through the session hook, `AGENTS.md` and an `agent-setup` skill.
 
 ## Commands
 
 | Question | Command |
 |---|---|
 | Where do I stand? Offline and cheap, for agents and hooks, once per session | `anfra version --skills <version>` |
-| Make everything current: the binary, and the plugins anfra installed | `anfra update` |
-| What would `anfra update` change? Asked fresh | `anfra update --check` |
-| Install or repair the skills for my agents | `anfra agent setup` |
+| Update anfra itself | `anfra update` |
+| Is a newer anfra out? Asked fresh | `anfra update --check` |
+| Install, update or repair the skills for my agents | `anfra agent setup` |
 | What state is each agent in, and the `AGENTS.md` block? | `anfra agent setup --check` |
 
 `anfra skills install` is kept as an alias of `anfra agent setup` for now, with a deprecation note.
@@ -136,14 +136,19 @@ Agents read each other's folders, so a skill can load twice. For example, Codex 
 
 ### The report and exit code
 
-Setup ends with one line per selected agent, giving one of these results:
+Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then prints the [check report](#the-check-report) of the state it leaves: the same sections, so there's one format to read. After it come setup's own notes, each only when it applies:
 
-- installed, with the version;
-- already current;
-- not installed, with where to install it from;
-- failed, with the step that failed and its error.
+```
+Restart Claude Code, or run /reload-plugins, to load it.
+Codex: failed: `codex plugin add anfra@anfra-skills`: exit status 1
+To update a copy of the skills, see https://github.com/holistics/anfra-skills#updating-and-removing.
+```
 
-It never says "installed" for an agent it only pointed at the repo. In an anfra repo, one more line says whether it wrote or refreshed the `AGENTS.md` block.
+- **The restart note,** for each agent it installed into.
+- **A failed step,** or an agent whose CLI isn't on the `PATH`.
+- **The pointer for copies,** when a copy is behind: setup updates plugins, not copies.
+
+The `AGENTS.md` section says when setup just wrote the block: `the anfra block is up-to-date (setup just wrote it)`.
 
 It exits non-zero when any install failed, or when an agent named with `--agent` ends up not installed. An agent that was only detected and got pointed at the repo doesn't fail the run. Otherwise anyone with a second agent's folder would see setup fail on every run.
 
@@ -253,7 +258,7 @@ hints:
   - anfra skills 0.15.0 are behind the latest, 0.16.0: run `anfra agent setup --agent <your id>`.
 ```
 
-- **anfra is behind:** the hint is `anfra update`, which the agent asks the user to run, since it replaces the binary in use. It updates the plugins too, so no separate skills step follows.
+- **anfra is behind:** the hint is `anfra update`, which the agent asks the user to run, since it replaces the binary in use. It ends by saying when the skills need `anfra agent setup` too.
 - **The skills are behind:** the hint is `anfra agent setup --agent <your id>`. Setup is the one command to give, whatever the agent: for an agent it doesn't install into, it points at the README. When anfra later installs into more agents, such as Junie once its plugin route is tested, the hint stays the same, and no skill, `AGENTS.md` block or README needs rewriting.
 - **Any version older than the latest** gets the same hint, on either side, whether it's a patch or a minor release behind.
 - **Both current:** no hints.
@@ -319,20 +324,33 @@ Optional, and only if phase 1 turns out not to be enough. Phase 1 can't tell a m
 
 ## Updates
 
-- **The background check** is the existing daily `__update-check` (`internal/update`), extended to:
-  - fetch the latest skills version: the `version` in the skills repo's plugin manifest on `main`;
-  - list installed plugins and their versions, through `claude plugin list --json` and `codex plugin list --marketplace anfra-skills --json`.
+`anfra agent setup` is the one place that acts on the skills, and reports them. Everything else only points at it.
 
-  Agent CLIs start slowly (Claude Code's starts Node), so they run here, in `anfra update` and in `anfra agent setup` only, never on an ordinary command.
-- **`anfra update`** replaces the binary when a newer one is out, then updates each plugin anfra installed, even when the binary was already current: `claude plugin marketplace update anfra-skills` and `claude plugin update anfra@anfra-skills`, and Codex's `plugin marketplace upgrade`.
-  - At a terminal it says what it will run first.
-  - It ends by saying that updated skills load after the agent restarts.
-  - `--no-skills` skips the plugins.
-  - There's no `--skills` for the plugins alone: running `anfra agent setup` again does that.
-  - `ANFRA_AUTO_UPDATE` updates only the binary: it doesn't run other tools' CLIs in the background.
-- **`anfra update --check`** reports what `anfra update` would change, asked fresh: the latest release from GitHub, the latest skills version, and the installed plugins' versions from their CLIs.
-- **The `AGENTS.md` block** is committed, so `anfra update` never edits it: that would put a change the user didn't ask for into their repo. When the block is out of date, `update` says so and names `anfra agent setup`.
-- **Every other copy,** such as one installed by `npx skills`, is updated as the skills repo's README says for its agent, never by anfra. The hints say to run `anfra agent setup`, which points there for such an agent.
+- **`anfra update`** updates only the binary: it never runs an agent's CLI. Running `anfra agent setup` again updates the plugins. `anfra update`, and its `--check`, end with [the attention line](#the-attention-line) when something needs it.
+- **The background check** is the existing `__update-check`, now twice a day (its cache lasts 12 hours, for anfra's release and the skills' alike):
+  - it fetches the latest skills version: the `version` in the skills repo's plugin manifest on `main`;
+  - it records the installed plugins and their versions, through `claude plugin list --json` and `codex plugin list --marketplace anfra-skills --json`, in `~/.anfra/agents-check.json`. Setup records them too, after it acts, so the notice is current after it.
+
+  Agent CLIs start slowly (Claude Code's starts Node), so they run here and in `anfra agent setup` only, never on an ordinary command.
+- **The `AGENTS.md` block** is committed, so only `anfra agent setup` and `anfra init` write it, never `anfra update`: that would put a change the user didn't ask for into their repo.
+- **Every other copy,** such as one installed by `npx skills`, is updated as the skills repo's README says for its agent, never by anfra. Setup's report points there.
+
+### The attention line
+
+One line says what of the skills needs attention, and to run `anfra agent setup`. It names the first two things behind, and counts the rest:
+
+```
+anfra skills 0.5.0 are out: the Claude Code plugin and ~/.agents/skills are behind. Run `anfra agent setup`.
+anfra skills 0.5.0 are out: the Claude Code plugin and ~/.agents/skills are behind, and 2 more things need attention. Run `anfra agent setup`.
+~/.cursor/skills has deprecated anfra skills. Run `anfra agent setup`.
+This repo's AGENTS.md block is out of date. Run `anfra agent setup`.
+```
+
+- **What it reads:** the plugins as the background check or setup last recorded them; the copies, in the folders the agents read; and the `AGENTS.md` block of the repo it runs in. No network and no agent CLI, so it's cheap enough after any command.
+- **Where it shows:**
+  - at the end of `anfra update` and `anfra update --check`;
+  - as the notice after a command at a terminal, at most once a day, not after `anfra agent setup` itself. It respects `ANFRA_NO_UPDATE_NOTIFIER`. Agents get no notice: the session hook and the `AGENTS.md` block are theirs.
+- **Its limits:** the plugins' versions are up to 12 hours old, so an update made in the agent's own CLI shows only after the next check. Outside an anfra repo it can't see any repo's block.
 
 Claude Code's own auto-update is off for our marketplace, because it's a third-party one. See [Open questions](#open-questions).
 
@@ -345,7 +363,7 @@ Each channel reaches a different set of agents:
 | The plugin's session hook (`check-update.sh`) | Claude Code and Codex | It already runs `anfra version` for the update notice. It adds `--skills`, with the version from its own stamp line, or alone if there's none, and puts the hints in the session's context when there are any |
 | The `AGENTS.md` block | Agents in a repo where setup or `init` wrote it, cloud agents included | See [`AGENTS.md`](#agentsmd) |
 | The `agent-setup` skill | An agent setting up or updating the skills, or hitting a version mismatch | See [below](#the-agent-setup-skill) |
-| The terminal notice | People | Extends today's update notice: newer skills are available, from the cache |
+| The notice after a command | People, at a terminal | [The attention line](#the-attention-line), at most once a day |
 
 An agent without a session hook and outside a repo with the block hears nothing until a command fails and it loads the `agent-setup` skill. Phase 2's stderr line would reach it sooner, but only for the copies anfra can see.
 
@@ -426,13 +444,13 @@ In `internal/agents` (`agentsmd.go`), used by setup and `anfra init` alike:
 
 This comes after steps 3 and 4, since the block names `version --skills` and `agent setup`.
 
-### 6. anfra: `anfra update` covers the skills
+### 6. anfra: what needs attention, and where it shows
 
-- **After the binary,** update the plugins anfra installed, even when the binary is already current. Say first what it will run, at a terminal, and end with the restart note.
-- **`--no-skills`.**
-- **`--check`** reports the plugins too, asked fresh from their CLIs.
-- **A stale `AGENTS.md` block:** say so and name `anfra agent setup`. Never edit the block.
-- **The terminal notice** (`update.Notice`) also says when newer skills are out. That needs the plugins' installed versions, so the background check also lists them, through the agents' CLIs, for whichever agents are on the `PATH`.
+- **Setup's report** reuses the check report, then its own notes, as [described above](#the-report-and-exit-code).
+- **The attention line** (`agents.Attention`), as [described above](#the-attention-line), at the end of `anfra update` and its `--check`, and as the notice after a command, at most once a day (`agents.Notice`).
+- **The plugins recorded** (`agents.RecordPlugins`, `~/.anfra/agents-check.json`), by the background check and by setup, for the line to read without starting the agents' CLIs.
+- **The background check twice a day:** its cache lasts 12 hours.
+- **`anfra update` doesn't update plugins:** setup is the one place that acts on the skills.
 
 ### 7. Skills repo: the hook
 

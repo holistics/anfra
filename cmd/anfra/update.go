@@ -10,6 +10,7 @@ import (
 
 	"github.com/holistics/anfra/internal/envflag"
 
+	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
@@ -18,13 +19,21 @@ import (
 
 // newUpdateCmd is the manual self-update command (like `gh`/`deno upgrade`):
 // check the latest GitHub release and, unless --check, replace this binary.
+// It ends by saying when the agents' skills need attention, which `anfra agent
+// setup` handles (docs/designs/agent-setup.md).
 func newUpdateCmd() *cobra.Command {
 	var checkOnly bool
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update anfra to the latest release (use --check to only report)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runUpdate(cmd.Context(), checkOnly)
+			if err := runUpdate(cmd.Context(), checkOnly); err != nil {
+				return err
+			}
+			if line := agents.Attention(agents.System(), repoDirIfAny()); line != "" {
+				fmt.Printf("\n%s\n", line)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "only check for an update; do not install")
@@ -80,7 +89,11 @@ func newUpdateCheckCmd() *cobra.Command {
 		Use:    "__update-check",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return update.Refresh(cmd.Context())
+			err := update.Refresh(cmd.Context())
+			// The plugins installed, for the notice to read without asking the
+			// agents' CLIs, which start slowly.
+			agents.RecordPlugins(cmd.Context(), agents.System())
+			return err
 		},
 	}
 }
@@ -168,6 +181,13 @@ func maybeNotifyUpdate(invoked string) {
 	// the skills' session hook stays current. CI spawns nothing.
 	if stderrIsInteractive() && notice != "" {
 		fmt.Fprintln(os.Stderr, "\n"+notice)
+	}
+	// What of the agents' skills needs attention, at most once a day; not after
+	// agent setup (or its former name), which has just reported it all.
+	if stderrIsInteractive() && invoked != "setup" && invoked != "install" {
+		if line := agents.Notice(agents.System(), repoDirIfAny()); line != "" {
+			fmt.Fprintln(os.Stderr, "\n"+line)
+		}
 	}
 	if update.Stale() && os.Getenv("CI") == "" {
 		spawnDetached("__update-check")

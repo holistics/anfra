@@ -82,6 +82,12 @@ func newAgentSetupCmd(use, deprecated string) *cobra.Command {
 	return cmd
 }
 
+// repoDirIfAny is the current directory when it is an anfra repo, else "".
+func repoDirIfAny() string {
+	dir, _ := anfraRepoDir()
+	return dir
+}
+
 // anfraRepoDir is the current directory, when it is an anfra repo.
 func anfraRepoDir() (string, bool) {
 	dir, err := os.Getwd()

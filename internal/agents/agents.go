@@ -60,8 +60,8 @@ type pluginRoute struct {
 // Installed is an installed copy of the plugin: its version, and the scope the
 // agent reports it at (user, project, …). anfra installs for the user only.
 type Installed struct {
-	Version string
-	Scope   string
+	Version string `json:"version"`
+	Scope   string `json:"scope"`
 }
 
 // Known are the agents anfra knows, in the order setup reports them. Each has a
