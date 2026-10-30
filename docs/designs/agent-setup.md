@@ -90,7 +90,7 @@ How to install or update the skills for an agent anfra doesn't install into is n
 
 ### `AGENTS.md`
 
-Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `AGENTS.md`, whatever the scope, since the block belongs to the repo. Outside a repo it touches no files of the repo. `anfra init` calls the same code.
+Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `AGENTS.md`, since the block belongs to the repo. Outside a repo it touches no files of the repo. `anfra init` calls the same code.
 
 - **The block** sits between `<!-- anfra:begin -->` and `<!-- anfra:end -->`. Setup adds it to an existing `AGENTS.md`, or creates the file. It replaces only that block, and refuses a symlink, as `init` does for `.gitignore`.
 - **`CLAUDE.md`:** when the repo has one, setup adds `@AGENTS.md` to it. Claude Code reads `AGENTS.md` only when no `CLAUDE.md` exists.
@@ -100,12 +100,12 @@ Run in an anfra repo (one with `.anfra`), setup also writes the anfra block in `
 <!-- anfra:begin -->
 ## anfra
 
-This is an anfra repo: models in AML, queries in AQL, run with the `anfra` CLI. Use the anfra skills for this work.
+This is an anfra repo. Use the anfra skills to work in it.
 
-- Once per session, before your first anfra command, run `anfra version --skills <version>`, with the version from
-  the `anfra skills` line at the end of an anfra skill you've loaded, or `--skills unknown` if the skill has no such
-  line, and follow its hints. If anfra doesn't know
-  `--skills`, it's out of date: ask the user to run `anfra update`.
+- Once per session, before your first anfra command, run `anfra version --skills <version>`, with the version
+  from the `anfra skills` line at the end of an anfra skill you've loaded, or `--skills unknown` if it has no such
+  line. Follow the hints it prints. If anfra doesn't know `--skills`, it's out of date: ask the user to run
+  `anfra update`.
 - If the anfra skills aren't available to you, run `anfra agent setup --agent <your id>` and follow what it says,
   then ask the user to restart you. If that fails, install them as https://github.com/holistics/anfra-skills says
   for the agent you are.
@@ -402,20 +402,27 @@ The plugins' installed versions aren't here: listing them takes the agents' CLIs
 
 ### 4. anfra: `anfra agent setup`
 
-`cmd/anfra/agent.go` replaces `cmd/anfra/skills.go`:
+`internal/agents` holds the logic, and `cmd/anfra/agent.go` replaces `cmd/anfra/skills.go`:
 
-- **The agent list:** for each agent, its id, how it's detected (a CLI on the `PATH`, or a home folder), its route, and its README anchor. Claude Code and Codex keep today's steps.
-- **Selection:** `--agent`, else the detected agents.
+- **The agent list:** for each agent, its id, how it's detected (a CLI on the `PATH`, or a home folder, including one an environment variable names), its route, the skills folders it reads at home and in a repo, and its README anchor. Claude Code and Codex keep today's steps, and Claude Code's add `plugin update`, so running setup again upgrades.
+- **Per user only:** no `--scope`. The `skills install` alias keeps a hidden `--scope` only to refuse `project`, naming `anfra agent setup`.
+- **Selection:** `--agent`, else the detected agents. No prompt.
 - **The report and exit code,** as [described above](#the-report-and-exit-code).
-- **`--check`,** reporting without changing anything, using the copies-found list from the cache and the known folders.
-- **`anfra skills install`** becomes an alias, printing a deprecation note.
+- **`--check`,** reporting without changing anything, as [The check report](#the-check-report) describes: the plugins through the agents' CLIs, the copies in the folders the agents read, by their `anfra-*` skills' stamps, and the deprecated copies of the old names.
+- **Only the agent CLIs it installs through run:** the system's commands are built by literal name (`claude`, `codex`), whatever reaches them.
+- **`anfra skills install`** becomes an alias, printing "This command is deprecated. Use `anfra agent setup` instead."
+- **The docs that named the old command:** anfra's `README.md` quickstart and `install.sh`'s next steps say `anfra agent setup`. Their prompts name the skills by their new names (`anfra-build-data-app`, `anfra-setup-repo`), which ship with the skills' 0.5.0.
 
-The tests extend today's: `skillsEnv` already fakes the `PATH` and the agent CLIs.
+The tests fake the machine: the home folder, the CLIs on the `PATH`, and what the agents' CLIs answer.
 
 ### 5. anfra: the `AGENTS.md` block
 
-- **Writing the block:** add or replace the marked block, refuse a symlink, add `@AGENTS.md` to an existing `CLAUDE.md`. Shared by `anfra init` and setup, beside `init`'s `ignoreLine`.
-- **Setup runs it** in an anfra repo, and `--check` compares the block with what this anfra would write.
+In `internal/agents` (`agentsmd.go`), used by setup and `anfra init` alike:
+
+- **Writing the block:** add it to `AGENTS.md`, creating the file, or replace the marked block that's there; add `@AGENTS.md` to an existing `CLAUDE.md`, and create none. A symlink is refused, as it would write outside the repo.
+- **Setup** writes it in an anfra repo, with one line after the agents: `wrote the anfra block`, `…, and @AGENTS.md in CLAUDE.md`, `the anfra block is up-to-date`, or `failed: …`, which fails the run.
+- **`--check`** adds an `AGENTS.md:` section: the block is `up-to-date`, `out of date` (other than what this anfra writes) or `missing`, and `CLAUDE.md doesn't import it (@AGENTS.md)` when that's so.
+- **`anfra init`** lists `AGENTS.md`, as `created` when it wrote the block or the import, else `kept`.
 
 This comes after steps 3 and 4, since the block names `version --skills` and `agent setup`.
 
@@ -434,7 +441,9 @@ This comes after steps 3 and 4, since the block names `version --skills` and `ag
 - run `anfra version --skills <version>`, and if anfra rejects the flag, run plain `anfra version` as today;
 - add the hints to the session's context.
 
-This waits for the anfra release that has steps 3 and 4: the hook names commands that must exist.
+`anfra-setup-repo`'s `SKILL.md`: its line "`anfra skills install` installs these skills…" names `anfra agent setup` instead.
+
+This waits for the anfra release that has steps 3 and 4: the hook and the skill name commands that must exist.
 
 ### 8. Skills repo: Cursor's plugin
 

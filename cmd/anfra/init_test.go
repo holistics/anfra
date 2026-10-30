@@ -13,7 +13,7 @@ import (
 
 var initFiles = []string{
 	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".anfra/context_sources.yml",
-	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", ".gitignore",
+	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", ".gitignore", "AGENTS.md",
 }
 
 func TestInitSetsUpARepo(t *testing.T) {

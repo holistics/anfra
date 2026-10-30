@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
 )
@@ -65,8 +66,10 @@ func newInitCmd() *cobra.Command {
 			"  .anfra/data_sources.yml.example  the same, without credentials, to commit\n" +
 			"  .anfra/context_sources.yml       what anfra ingest reads for anfra search\n" +
 			"  models/, datasets/, apps/        AML models, AML datasets, Data Apps\n" +
-			"  .gitignore                       + .anfra/data_sources.yml\n\n" +
-			"It never changes an existing file, so it is safe to run in a repo that has some of these already.",
+			"  .gitignore                       + .anfra/data_sources.yml\n" +
+			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
+			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
+			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -107,6 +110,11 @@ func initRepo(dir string, out io.Writer) error {
 		steps = append(steps, initStep{d + "/.gitkeep", writeNew(nil, 0o644)})
 	}
 	steps = append(steps, initStep{".gitignore", ignoreLine(sources)})
+	// The block agent setup writes too: what tells agents to use the skills.
+	steps = append(steps, initStep{"AGENTS.md", func(string) (bool, error) {
+		wroteBlock, wroteImport, err := agents.WriteBlock(dir)
+		return wroteBlock || wroteImport, err
+	}})
 
 	for _, s := range steps {
 		created, err := s.do(filepath.Join(dir, s.path))
