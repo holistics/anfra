@@ -8,13 +8,15 @@ import Icon from './Icon.vue';
 import Logo from './Logo.vue';
 import PluginPanel from './PluginPanel.vue';
 import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
+import Keys from './Keys.vue';
+import { IS_MAC, keyLabels } from './shortcut';
 import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { designTheme } from '@holistics/anfra-sdk/common';
 import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
-  allApps, filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
+  allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from './catalog';
 import * as server from './server';
 
@@ -144,10 +146,6 @@ function onNarrowChange (): void {
   sidebarOpen.value = !narrow.value;
 }
 
-const search = ref('');
-const searchInput = ref<HTMLInputElement>();
-const filtered = computed(() => filterEntries(entries.value, search.value));
-const searching = computed(() => search.value.trim() !== '');
 
 const THEME_KEY = 'anfra-appserve:theme';
 function systemTheme (): 'light' | 'dark' {
@@ -315,7 +313,6 @@ function reload (): void {
 // Breadcrumb folders: open the sidebar, expand the folder and bring it into view.
 async function revealFolder (path: string): Promise<void> {
   sidebarOpen.value = true;
-  search.value = '';
   const next = new Set(collapsed.value);
   next.delete(path);
   setCollapsed(next);
@@ -340,23 +337,22 @@ watch(selectedPath, () => {
 
 // The command palette: the shell's own commands, the plugins', and every Data App to open.
 const paletteOpen = ref(false);
-const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-const PALETTE_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
+const PALETTE_SHORTCUT = IS_MAC ? 'Meta+K' : 'Ctrl+K';
 const paletteEntries = computed<PaletteEntry[]>(() => {
   const noApp = selected.value ? undefined : 'Open a Data App first';
-  const plugins = chromeCommands.value.map((command) => {
+  const plugins = chromeCommands.value.map((command): PaletteEntry => {
     const state = commandState(command);
     return {
-      id: `command:${command.id}`, title: command.title, group: 'Data App', shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
+      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
     };
   });
   return [
     ...plugins,
-    { id: 'reload', title: 'Reload Data App', group: 'Data App', disabled: noApp },
-    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View' },
-    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View' },
-    ...allApps(entries.value).map((entry) => ({
-      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', disabled: entry.path === selected.value?.path ? 'Open now' : undefined,
+    { id: 'reload', title: 'Reload Data App', group: 'Data App', icon: 'reload', disabled: noApp },
+    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: 'sidebar' },
+    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View', icon: theme.value === 'dark' ? 'sun' : 'moon' },
+    ...allApps(entries.value).map((entry): PaletteEntry => ({
+      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: 'app', disabled: entry.path === selected.value?.path ? 'Already open' : undefined,
     })),
   ];
 });
@@ -388,8 +384,7 @@ function onKeydown (event: KeyboardEvent): void {
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
   if (event.key === '/' && !typing && !event.metaKey && !event.ctrlKey) {
     event.preventDefault();
-    sidebarOpen.value = true;
-    void nextTick(() => searchInput.value?.focus());
+    paletteOpen.value = true;
   }
   if (event.key === 'Escape') {
     problemsOpen.value = false;
@@ -397,12 +392,6 @@ function onKeydown (event: KeyboardEvent): void {
     if (app.value?.panel.picking) app.value.panel.pick(false);
     else app.value?.panel.hide();
   }
-}
-
-function onSearchKeydown (event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return;
-  if (search.value) search.value = '';
-  else (event.target as HTMLElement).blur();
 }
 
 function onDocumentClick (event: MouseEvent): void {
@@ -468,32 +457,21 @@ onBeforeUnmount(() => {
         <div class="brand">
           <Logo />
           <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
-          <button
-            type="button"
-            class="a-button palette-open"
-            data-variant="ghost"
-            data-size="icon-sm"
-            :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
-            :title="`Command palette (${PALETTE_SHORTCUT})`"
-            data-testid="palette-open"
-            @click="paletteOpen = true"
-          >
-            <Icon name="command" />
-          </button>
         </div>
-        <label class="search">
+        <!-- The one search: the command palette, which finds Data Apps by name as well as commands. -->
+        <button
+          type="button"
+          class="search"
+          aria-haspopup="dialog"
+          aria-label="Search apps and commands"
+          :aria-keyshortcuts="IS_MAC ? 'Meta+K' : 'Control+K'"
+          data-testid="palette-open"
+          @click="paletteOpen = true"
+        >
           <Icon name="search" />
-          <input
-            ref="searchInput"
-            v-model="search"
-            type="search"
-            placeholder="Search apps"
-            aria-label="Search Data Apps"
-            data-testid="search"
-            @keydown="onSearchKeydown"
-          >
-          <kbd v-if="!search" class="a-kbd" aria-hidden="true">/</kbd>
-        </label>
+          <span class="search-label">Search</span>
+          <Keys :combo="PALETTE_SHORTCUT" />
+        </button>
       </div>
       <div class="tree-scroll">
         <div class="sidebar-group">
@@ -503,13 +481,11 @@ onBeforeUnmount(() => {
             No Data Apps yet. Add a Data App definition, an <code>.html</code> file, to the repo's
             <code>apps/</code> directory.
           </p>
-          <p v-else-if="searching && filtered.length === 0" class="notice" data-testid="no-matches">No matches</p>
           <AppTree
             v-else
-            :entries="filtered"
+            :entries="entries"
             :selected="selected?.path"
             :collapsed="collapsed"
-            :force-open="searching"
             @select="select"
             @toggle="toggleFolder"
           />
@@ -628,7 +604,7 @@ onBeforeUnmount(() => {
             data-variant="ghost"
             data-size="icon-sm"
             :aria-label="command.title"
-            :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${command.shortcut})` : command.title)"
+            :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title)"
             :data-testid="`command-${command.id}`"
             :aria-pressed="commandState(command).pressed ?? false"
             :disabled="!selected || !!commandState(command).disabled"

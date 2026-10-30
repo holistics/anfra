@@ -2,12 +2,16 @@
 // The command palette: every command the shell offers, its own and the plugins', found by typing
 // and run with Enter. What each entry does, and whether it can run, the shell decides.
 import { computed, nextTick, ref, watch } from 'vue';
+import type { IconName } from '@holistics/anfra-design/icons';
 import Icon from './Icon.vue';
+import Keys from './Keys.vue';
 
 export interface PaletteEntry {
   id: string;
   title: string;
   group: string;
+  // Lucide's, as the command's button draws it.
+  icon?: IconName;
   // A key combination shown beside it.
   shortcut?: string;
   // Why it can't run now; it shows, greyed, and Enter skips it.
@@ -43,6 +47,17 @@ const groups = computed(() => {
 
 watch(query, () => { active.value = Math.max(0, shown.value.findIndex((entry) => !entry.disabled)); });
 void nextTick(() => input.value?.focus());
+
+// Whether the list runs on past its top or bottom edge, where it fades out.
+const above = ref(false);
+const below = ref(false);
+function measure (): void {
+  const el = list.value;
+  if (!el) return;
+  above.value = el.scrollTop > 1;
+  below.value = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+}
+watch(shown, () => nextTick(measure), { immediate: true });
 
 function move (step: number): void {
   const count = shown.value.length;
@@ -86,8 +101,8 @@ function onKeydown (event: KeyboardEvent): void {
           ref="input"
           v-model="query"
           type="text"
-          placeholder="Type a command"
-          aria-label="Type a command"
+          placeholder="Search apps and commands"
+          aria-label="Search apps and commands"
           role="combobox"
           aria-controls="palette-list"
           aria-expanded="true"
@@ -95,25 +110,28 @@ function onKeydown (event: KeyboardEvent): void {
           @keydown="onKeydown"
         >
       </label>
-      <div id="palette-list" ref="list" class="palette-list" role="listbox">
+      <div id="palette-list" ref="list" class="palette-list" role="listbox" :data-more-above="above || undefined" :data-more-below="below || undefined" @scroll.passive="measure">
         <p v-if="!shown.length" class="palette-empty">No commands match.</p>
-        <section v-for="[group, items] in groups" :key="group" role="group" :aria-label="group">
-          <h3>{{ group }}</h3>
+        <section v-for="([group, items], g) in groups" :key="group" role="group" :aria-labelledby="`palette-group-${g}`">
+          <div :id="`palette-group-${g}`" class="a-menu-label">{{ group }}</div>
           <div
             v-for="{ entry, index } in items"
             :key="entry.id"
-            class="palette-entry"
+            class="a-menu-item palette-entry"
             role="option"
             :aria-selected="index === active"
+            :data-highlighted="index === active || undefined"
             :aria-disabled="!!entry.disabled"
             :title="entry.disabled"
             :data-testid="`palette-${entry.id}`"
             @pointermove="!entry.disabled && (active = index)"
             @click="run(entry)"
           >
-            <span class="palette-title">{{ entry.title }}<span v-if="entry.pressed" class="palette-on">on</span></span>
+            <Icon v-if="entry.icon" :name="entry.icon" />
+            <span class="palette-title">{{ entry.title }}</span>
+            <span v-if="entry.pressed" class="a-badge" data-variant="secondary">On</span>
             <span v-if="entry.disabled" class="palette-hint">{{ entry.disabled }}</span>
-            <kbd v-else-if="entry.shortcut">{{ entry.shortcut }}</kbd>
+            <Keys v-else-if="entry.shortcut" :combo="entry.shortcut" />
           </div>
         </section>
       </div>
