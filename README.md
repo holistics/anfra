@@ -8,7 +8,7 @@
 <p align="center"><b>Open-source framework for building trusted custom BI apps</b></p>
 
 <p align="center">
-  <a href="https://anfra.ai">Website</a> · <a href="https://docs.anfra.ai">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
+  <a href="https://anfra.ai">Website</a> · <a href="https://anfra.ai/docs">Docs</a> · <a href="https://demo.anfra.ai/">Live demos</a> · <a href="#quickstart">Quickstart</a>
 </p>
 
 <p align="center">
@@ -77,7 +77,7 @@ Replace the text in brackets with the app you want, or leave it and the agent wi
 curl -fsSL https://anfra.ai/install.sh | bash
 ```
 
-The installer puts `anfra` in `~/.anfra/bin` and adds it to your `PATH`. Works on macOS and Linux; see [Installation](https://docs.anfra.ai/docs/self-hosted/installation) for other options.
+The installer puts `anfra` in `~/.anfra/bin` and adds it to your `PATH`. Works on macOS and Linux; see [Installation](https://anfra.ai/docs/local-dev/installation) for other options.
 
 Open a new terminal, then install the skills that teach your coding agent to build with anfra:
 
@@ -96,7 +96,7 @@ cd my-project
 
 This creates the `models/`, `datasets/`, and `apps/` folders and a `.anfra/data_sources.yml` config file, which is added to `.gitignore` so your credentials stay out of Git.
 
-Replace the placeholders in `.anfra/data_sources.yml` with your warehouse credentials. See [Data sources](https://docs.anfra.ai/docs/self-hosted/data-sources) for Snowflake, BigQuery, ClickHouse and the others.
+Replace the placeholders in `.anfra/data_sources.yml` with your warehouse credentials. See [Data sources](https://anfra.ai/docs/local-dev/data-sources) for Snowflake, BigQuery, ClickHouse and the others.
 
 #### 3. Ask your agent for an app
 
@@ -184,7 +184,7 @@ GROUP BY
   1
 ```
 
-The page never wrote that SQL, and `revenue` means the same thing in every app that uses it. See the [Semantic UI guide](https://docs.anfra.ai/docs/sdk) for queries, controls, and interaction mappings.
+The page never wrote that SQL, and `revenue` means the same thing in every app that uses it. See the [Semantic UI guide](https://anfra.ai/docs/reference/semantic-ui) for queries, controls, and interaction mappings.
 
 ## anfra OSS vs anfra Cloud (coming soon)
 
@@ -286,10 +286,10 @@ anfra is built by the team behind Holistics, and AMQL is the semantic layer Holi
 
 ## Learn more
 
-- [Concepts](https://docs.anfra.ai/docs/concepts/data-models): models, datasets, dimensions, and metrics
-- [Semantic UI](https://docs.anfra.ai/docs/sdk): queries, controls, interaction mappings, and inspect
-- [CLI reference](https://docs.anfra.ai/docs/self-hosted/cli)
-- [Installation](https://docs.anfra.ai/docs/self-hosted/installation)
+- [Concepts](https://anfra.ai/docs/overview/concepts): models, datasets, dimensions, and metrics
+- [Semantic UI](https://anfra.ai/docs/reference/semantic-ui): queries, controls, interaction mappings, and inspect
+- [CLI reference](https://anfra.ai/docs/reference/cli)
+- [Installation](https://anfra.ai/docs/local-dev/installation)
 - [anfra.ai](https://anfra.ai): product overview
 
 ## About the team
