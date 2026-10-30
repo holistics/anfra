@@ -5,8 +5,6 @@ package canalquery
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/holistics/anfra/internal/sidecar"
 )
@@ -54,10 +52,10 @@ func (c *Sidecar) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("resolve canal-query binary: %w", err)
 	}
-	// UDS paths are capped at ~108 bytes (sun_path), so keep it short and in the
-	// temp dir; per-pid so multiple repos don't collide. canal-query replaces a
-	// file left by one that is gone, and removes it when it stops.
-	c.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("anfra-%d-canal-query.sock", os.Getpid()))
+	c.socketPath, err = sidecar.SocketPath(Name)
+	if err != nil {
+		return err
+	}
 
 	proc, err := sidecar.StartProcess(sidecar.ProcSpec{
 		Name: Name,
@@ -95,13 +93,11 @@ func (c *Sidecar) Start(ctx context.Context) error {
 // Client returns the query client for the spawned canal-query.
 func (c *Sidecar) Client() *Client { return c.client }
 
-// Close stops canal-query and removes its socket file, which one killed before
-// it could leaves. A no-op for an external one, which this process never owned.
+// Close stops canal-query and removes its socket, which one killed before it
+// could leaves. A no-op for an external one, which this process never owned.
 func (c *Sidecar) Close() {
 	if c.proc != nil {
 		c.proc.Close()
 	}
-	if c.socketPath != "" {
-		_ = os.Remove(c.socketPath)
-	}
+	sidecar.RemoveSocket(c.socketPath)
 }

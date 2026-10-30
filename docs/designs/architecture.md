@@ -95,7 +95,7 @@ Two places, with different owners.
     └── catalog/               the local search catalog
 ```
 
-Keeping state out of the repo means a repo never fills with generated files, and the same repo checked out twice gets separate state. A unix socket path has a short length limit, so anfra-node's socket goes in the system temp folder instead, named per process (`internal/sidecar/anfranode`).
+Keeping state out of the repo means a repo never fills with generated files, and the same repo checked out twice gets separate state. A unix socket path has a short length limit, so the sidecars' sockets go in the system temp folder instead, each in a private directory with a random name ([sidecars.md](sidecars.md#sockets-and-ports)).
 
 ## Logs and telemetry
 
