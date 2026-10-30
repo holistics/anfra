@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestAttention(t *testing.T) {
@@ -85,5 +86,33 @@ func TestRecordPlugins(t *testing.T) {
 	}
 	if _, err := os.Stat(statePath()); err != nil {
 		t.Error(err)
+	}
+}
+
+// The agents have no skills: said only when an agent is detected and the
+// plugins have been recorded, so a machine without agents, or one not checked
+// yet, hears nothing.
+func TestAttentionWithNoSkills(t *testing.T) {
+	const want = "Your coding agents have no anfra skills. Run `anfra agent setup` to install them."
+
+	env := newFakeEnv(t, "opencode")
+	cacheSkills(t, "0.15.0")
+	if got := Attention(env.Env, ""); got != "" {
+		t.Errorf("plugins not recorded yet: %q", got)
+	}
+	writeState(state{CheckedAt: time.Now()})
+	if got := Attention(env.Env, ""); got != want {
+		t.Errorf("got %q", got)
+	}
+	writeSkill(t, filepath.Join(env.Home, ".agents/skills"), "anfra-aql", stamped("0.15.0"))
+	if got := Attention(env.Env, ""); got != "" {
+		t.Errorf("with skills in a folder: %q", got)
+	}
+
+	env = newFakeEnv(t) // no agent on this machine
+	cacheSkills(t, "0.15.0")
+	writeState(state{CheckedAt: time.Now()})
+	if got := Attention(env.Env, ""); got != "" {
+		t.Errorf("no agent: %q", got)
 	}
 }

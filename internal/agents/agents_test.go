@@ -196,17 +196,17 @@ func TestCheckReports(t *testing.T) {
 	writeSkill(t, filepath.Join(env.Home, ".agents/skills"), "anfra-aql", stamped("0.4.6"))
 	writeSkill(t, filepath.Join(env.Home, ".claude/skills"), "setup-repo", "Run `anfra version`.\n")
 	var out bytes.Buffer
-	if err := Check(context.Background(), env.Env, Options{Out: &out}); err != nil {
+	if err := Check(context.Background(), env.Env, Options{NotRepo: true, Out: &out}); err != nil {
 		t.Fatal(err)
 	}
 	want := `Latest anfra skills: 0.4.6, from GitHub (checked today)
 
-Agents:
+Agents found:
   Claude Code  plugin, skills  plugin 0.4.5; ~/.claude/skills
   Codex        skills          ~/.agents/skills
   OpenCode     skills          ~/.agents/skills, ~/.claude/skills
 
-Skills:
+Skills found:
   Claude Code plugin  behind  0.4.5
   ~/.agents/skills    latest  0.4.6
 
@@ -214,7 +214,8 @@ Deprecated skills, from before 0.15.0:
   ~/.claude/skills
 Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
 
-anfra only looks in the folders above, so a copy somewhere else won't be shown.
+AGENTS.md:
+  skipped: this folder isn't an anfra repo (no .anfra/). Run ` + "`anfra init`" + ` here to set it up, with the anfra block.
 
 Run ` + "`anfra agent setup`" + ` to install or update them.
 `
@@ -335,5 +336,17 @@ func TestCheckReportsTheAgentsBlock(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); err == nil {
 		t.Error("check wrote AGENTS.md")
+	}
+}
+
+// With nothing installed, the report says how to install them.
+func TestCheckWithNoSkills(t *testing.T) {
+	env := newFakeEnv(t, "opencode")
+	var out bytes.Buffer
+	if err := Check(context.Background(), env.Env, Options{Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Skills found:\n  none. Run `anfra agent setup` to install them in your agents.\n") {
+		t.Errorf("report:\n%s", out.String())
 	}
 }
