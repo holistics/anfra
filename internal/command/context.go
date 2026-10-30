@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/dataperm"
@@ -76,6 +77,17 @@ type CommandContext struct {
 	// report: nil when the host does not check for updates (one that embeds the
 	// engine, or a user who opted out), and a nil result when it knows none yet.
 	Update func() *UpdateInfo
+	// Skills reports the latest anfra skills version the host knows of, for
+	// version to compare the skills in use with: nil when the host does not
+	// check, and a nil result when it knows none yet.
+	Skills func() *SkillsInfo
+}
+
+// SkillsInfo is the latest anfra skills version the host knows of, and when it
+// checked.
+type SkillsInfo struct {
+	Latest    string
+	CheckedAt time.Time
 }
 
 // ResolveDataSources is how the invocation reaches the repo's data sources: the

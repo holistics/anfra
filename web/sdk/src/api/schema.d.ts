@@ -204,7 +204,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Print the anfra version */
+        /** Print the anfra version, and say when anfra or the anfra skills are behind */
         post: operations["core.version"];
         delete?: never;
         options?: never;
@@ -872,6 +872,11 @@ export interface components {
             "canal-query": string;
             node: string;
         };
+        SkillsResult: {
+            checked?: string;
+            latest?: string;
+            version?: string;
+        };
         StatusResult: {
             server?: components["schemas"]["ServerInfo"];
             sidecars?: components["schemas"]["SidecarHealth"];
@@ -953,7 +958,13 @@ export interface components {
             type: string;
             validator: string;
         };
+        VersionInput: {
+            /** @description the version of the anfra skills in use, from the line ending each skill (anfra skills <version>), or unknown when a skill has no such line; adds the latest skills version to the answer */
+            skills?: string;
+        };
         VersionResult: {
+            hints?: string[];
+            skills?: components["schemas"]["SkillsResult"];
             update?: components["schemas"]["UpdateInfo"];
             version: string;
         };
@@ -1666,7 +1677,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NoInput"];
+                "application/json": components["schemas"]["VersionInput"];
             };
         };
         responses: {
