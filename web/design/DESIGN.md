@@ -285,7 +285,7 @@ Lucide, at 16px in controls and 14px in dense rows, `currentColor`, never filled
 
 ### Logo
 
-The product shows the logomark only: violet on light, the inverse on dark, at the top of the sidebar. Never set the mark beside typed "anfra".
+The product shows the logomark only: violet on light, the inverse on dark (`--anfra-color-icon-logo`), at the top of the sidebar. Never set the mark beside typed "anfra".
 
 ## Do's and Don'ts
 

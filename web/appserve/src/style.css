@@ -84,13 +84,10 @@ code { font: var(--anfra-type-mono-label); color: var(--muted); }
 }
 
 .brand .logo {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--on-accent);
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: var(--anfra-color-icon-logo);
 }
 
 .brand .palette-open { margin-left: auto; flex: none; }
