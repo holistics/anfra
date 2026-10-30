@@ -41,13 +41,17 @@ data_sources:
     #   require_ssl: true
 `
 
-// contextSourcesTemplate points anfra ingest at the repo's own AML, for
-// anfra search. The path is relative to the config directory.
-const contextSourcesTemplate = `# What anfra ingest reads into the local catalog that anfra search searches.
-sources:
-  - name: aml
-    type: aml
-    path: ..
+// contextSourcesTemplate lists no context sources: anfra-node always reads
+// the repo's own AML, and skips an entry of type aml. It shows the kind of
+// entry that does something, another project to search, commented out.
+const contextSourcesTemplate = `# anfra search always reads this repo's AML. List other projects here
+# to search them too. Supported types: dbt, lookml. A path is relative to
+# the repo.
+sources: []
+#  - name: analytics
+#    type: dbt
+#    local:
+#      path: ../dbt-project   # needs target/manifest.json (run dbt compile)
 `
 
 // initLayout is the folders a repo keeps its files in: AML models and
