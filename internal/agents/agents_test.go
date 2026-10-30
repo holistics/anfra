@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/holistics/anfra/internal/home"
 )
 
 // fakeEnv is a machine with the given CLIs on its PATH, an empty home, and the
@@ -24,6 +26,8 @@ type fakeEnv struct {
 }
 
 func newFakeEnv(t *testing.T, onPath ...string) *fakeEnv {
+	// anfra's own folder too: setup records what it installed there.
+	t.Setenv("ANFRA_HOME", t.TempDir())
 	f := &fakeEnv{lists: map[string]string{}}
 	f.Env = Env{
 		Home:   t.TempDir(),
@@ -77,8 +81,10 @@ func TestSetupInstallsIntoEachAgentFound(t *testing.T) {
 	if !slices.Equal(env.ran, want) {
 		t.Errorf("ran:\n%s\nwant:\n%s", strings.Join(env.ran, "\n"), strings.Join(want, "\n"))
 	}
-	if !strings.Contains(out.String(), "installed anfra 0.4.5. Restart Claude Code") {
-		t.Errorf("the report doesn't give the version installed:\n%s", out.String())
+	for _, want := range []string{"Claude Code  plugin  plugin 0.4.5", "\nRestart Claude Code, or run /reload-plugins, to load it.\n"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the report lacks %q:\n%s", want, out.String())
+		}
 	}
 }
 
@@ -94,12 +100,9 @@ func TestSetupPointsOtherAgentsAtTheReadme(t *testing.T) {
 		t.Errorf("ran %v", env.ran)
 	}
 	report := out.String()
-	want := "OpenCode  not installed: ask OpenCode to install the anfra plugin, or the skills if it takes no plugin, as https://github.com/holistics/anfra-skills#opencode says"
+	want := "OpenCode  none  see https://github.com/holistics/anfra-skills#opencode"
 	if !strings.Contains(report, want) {
 		t.Errorf("report:\n%s\nwant a line:\n%s", report, want)
-	}
-	if strings.Contains(report, "installed anfra") {
-		t.Errorf("an agent only pointed at the README is reported as installed:\n%s", report)
 	}
 
 	// Named, it fails the run: the agent asked for has no plugin.
@@ -139,7 +142,7 @@ func TestSetupWithoutTheAgentsCLI(t *testing.T) {
 	if err := Setup(context.Background(), env.Env, Options{Out: &out}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "its CLI `claude` is not on your PATH") {
+	if !strings.Contains(out.String(), "Claude Code: not installed, as its CLI `claude` is not on your PATH.") {
 		t.Errorf("report:\n%s", out.String())
 	}
 	if err := Setup(context.Background(), env.Env, Options{Agents: []string{"claude-code"}, Out: &out}); err == nil {
@@ -176,7 +179,7 @@ func TestSetupReportsAFailedStep(t *testing.T) {
 	if err := Setup(context.Background(), env.Env, Options{Out: &out}); err == nil {
 		t.Error("a failed step: got no error")
 	}
-	if !strings.Contains(out.String(), "failed: `claude plugin install anfra@anfra-skills --scope user`") {
+	if !strings.Contains(out.String(), "Claude Code: failed: `claude plugin install anfra@anfra-skills --scope user`") {
 		t.Errorf("report:\n%s", out.String())
 	}
 	if !slices.Contains(env.ran, "codex plugin add anfra@anfra-skills") {
@@ -187,14 +190,8 @@ func TestSetupReportsAFailedStep(t *testing.T) {
 // Check reports where each agent's skills come from, each plugin and copy
 // against the cached latest, and the deprecated copies, and changes nothing.
 func TestCheckReports(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("ANFRA_HOME", home)
-	now := time.Now().Format(time.RFC3339)
-	cache := fmt.Sprintf(`{"checked_at": %q, "latest_version": "9.0.0", "latest_tag": "v9.0.0", "skills_latest": "0.4.6", "skills_checked_at": %q}`, now, now)
-	if err := os.WriteFile(filepath.Join(home, "update-check.json"), []byte(cache), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	env := newFakeEnv(t, "claude", "opencode", "codex")
+	cacheSkills(t, "0.4.6")
 	env.lists["claude"] = claudeList
 	writeSkill(t, filepath.Join(env.Home, ".agents/skills"), "anfra-aql", stamped("0.4.6"))
 	writeSkill(t, filepath.Join(env.Home, ".claude/skills"), "setup-repo", "Run `anfra version`.\n")
@@ -241,6 +238,17 @@ func TestPluginLists(t *testing.T) {
 	}
 }
 
+// cacheSkills puts latest in the background check's cache, as the latest
+// skills version, checked now.
+func cacheSkills(t *testing.T, latest string) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	cache := fmt.Sprintf(`{"checked_at": %q, "latest_version": "9.0.0", "latest_tag": "v9.0.0", "skills_latest": %q, "skills_checked_at": %q}`, now, latest, now)
+	if err := os.WriteFile(filepath.Join(home.Dir(), "update-check.json"), []byte(cache), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // writeSkill writes the skill named name, with content, into the skills
 // folder dir.
 func writeSkill(t *testing.T, dir, name, content string) {
@@ -275,5 +283,57 @@ func TestSystemRunsOnlyTheAgentCLIs(t *testing.T) {
 		if _, err := agentCommand(context.Background(), a.plugin.bin, nil); err != nil {
 			t.Errorf("%s's CLI %q isn't allowed: %v", a.Name, a.plugin.bin, err)
 		}
+	}
+}
+
+// In an anfra repo, setup writes the AGENTS.md block and reports it; a
+// symlinked AGENTS.md fails the run.
+func TestSetupWritesTheAgentsBlock(t *testing.T) {
+	env := newFakeEnv(t, "opencode")
+	repoDir := t.TempDir()
+	var out bytes.Buffer
+	if err := Setup(context.Background(), env.Env, Options{RepoDir: repoDir, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "AGENTS.md:\n  the anfra block is up-to-date (setup just wrote it)\n") {
+		t.Errorf("report:\n%s", out.String())
+	}
+	out.Reset()
+	if err := Setup(context.Background(), env.Env, Options{RepoDir: repoDir, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "AGENTS.md:\n  the anfra block is up-to-date\n") {
+		t.Errorf("report:\n%s", out.String())
+	}
+
+	linked := t.TempDir()
+	if err := os.Symlink(filepath.Join(t.TempDir(), "x.md"), filepath.Join(linked, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := Setup(context.Background(), env.Env, Options{RepoDir: linked, Out: &out}); err == nil {
+		t.Error("a symlinked AGENTS.md: got no error")
+	}
+	if !strings.Contains(out.String(), "AGENTS.md: failed: AGENTS.md is not a regular file") {
+		t.Errorf("report:\n%s", out.String())
+	}
+}
+
+// In an anfra repo, check reports the block, and the import CLAUDE.md lacks.
+func TestCheckReportsTheAgentsBlock(t *testing.T) {
+	env := newFakeEnv(t, "opencode")
+	repoDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoDir, "CLAUDE.md"), []byte("# Notes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Check(context.Background(), env.Env, Options{RepoDir: repoDir, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\nAGENTS.md:\n  the anfra block is missing\n  CLAUDE.md doesn't import it (@AGENTS.md)\n") {
+		t.Errorf("report:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); err == nil {
+		t.Error("check wrote AGENTS.md")
 	}
 }
