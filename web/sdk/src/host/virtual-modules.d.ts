@@ -20,3 +20,9 @@ declare module 'anfra-sdk:body/*' {
   const body: string;
   export default body;
 }
+
+/** A file's text, bundled (`tsup.config.ts`'s `raw`): anfra-design's class layer, for plugin tabs. */
+declare module '*?raw' {
+  const text: string;
+  export default text;
+}

@@ -12,7 +12,7 @@ import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
 import { stateOf, type InspectState } from '../state';
 import {
-  collapsible, columnIcon, drawTab, filterIndicator, flash, h, icon, lineageButton, note, table, trustIndicator,
+  badge, collapsible, columnIcon, control, drawTab, filterIndicator, flash, h, icon, lineageButton, note, table, trustIndicator,
 } from '../view';
 
 const CSS = `
@@ -99,7 +99,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
       setSearch('');
     },
   }) as HTMLInputElement;
-  const head = h(doc, 'div', { class: 'search-bar' }, h(doc, 'label', { class: 'search' }, icon(doc, 'search'), input));
+  const head = h(doc, 'div', { class: 'search-bar' }, h(doc, 'label', { class: 'a-input search' }, icon(doc, 'search'), input));
   const setSearch = (text: string) => {
     search = text;
     input.value = text;
@@ -142,7 +142,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
         h(doc, 'span', { 'data-tip': returned.toLocaleString() }, formatAgo(returned)),
         canExport && h(doc, 'button', {
           type: 'button',
-          class: 'row-action',
+          ...control('row-action'),
           'data-tip': 'Download CSV',
           'aria-label': 'Download CSV',
           'data-testid': 'download-csv',
@@ -156,14 +156,14 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
     const active = [...declaredFilters(declaration?.aql), ...queryInputs(app, name)].filter(isActive);
     return collapsible(doc, `table:${key}`, [
       h(doc, 'span', { class: 'name' }, name),
-      query.state === 'error' && h(doc, 'span', { class: 'pill error' }, "couldn't load"),
+      query.state === 'error' && h(doc, 'span', { ...badge('error') }, "couldn't load"),
       h(doc, 'span', { class: 'spacer' }),
       filterIndicator(doc, active),
       trustIndicator(doc, queryTrust(declaration, query)),
       hasLineage && lineageButton(doc, panel, entityNodeKey(panel.snapshot?.structure?.nodes ?? [], 'query', index, name)),
       h(doc, 'button', {
         type: 'button',
-        class: 'row-action',
+        ...control('row-action'),
         'data-tip': 'Query',
         'aria-label': 'Query',
         'data-testid': 'show-query',

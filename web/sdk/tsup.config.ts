@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { build, type Plugin } from 'esbuild';
 import { defineConfig } from 'tsup';
 
@@ -54,6 +55,24 @@ const scripts: Plugin = {
   },
 };
 
+/** `<file>?raw`: the file's text, as Vite (and so vitest) has it too. */
+const raw: Plugin = {
+  name: 'anfra-sdk-raw',
+  setup (b) {
+    b.onResolve({ filter: /\?raw$/ }, async (args) => {
+      const resolved = await b.resolve(args.path.slice(0, -'?raw'.length), { kind: args.kind, resolveDir: args.resolveDir, importer: args.importer });
+      if (resolved.errors.length) return { errors: resolved.errors };
+      // Kept as `?raw`, so tsup's own CSS loader, which takes any path ending .css, leaves it.
+      return { path: `${resolved.path}?raw`, namespace: 'anfra-sdk-raw' };
+    });
+    b.onLoad({ filter: /.*/, namespace: 'anfra-sdk-raw' }, async (args) => ({
+      contents: `export default ${JSON.stringify(await readFile(args.path.slice(0, -'?raw'.length), 'utf8'))};`,
+      loader: 'js',
+      watchFiles: [args.path.slice(0, -'?raw'.length)],
+    }));
+  },
+};
+
 export default defineConfig((options) => ({
   entry: {
     common: 'src/common/index.ts',
@@ -72,5 +91,5 @@ export default defineConfig((options) => ({
   target: 'es2020',
   // `build` loads esbuild only when it runs, from the plugin author's own install.
   external: ['esbuild'],
-  esbuildPlugins: [scripts],
+  esbuildPlugins: [scripts, raw],
 }));

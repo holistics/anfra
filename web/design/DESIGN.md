@@ -204,8 +204,9 @@ The same word is a different color for each scope: `--anfra-color-text-weak`, `-
 - **Status** is restrained red, amber and green; info is neutral ink, never blue or violet. A status always has a label or an icon, and never fills a large surface: `background-{danger,warning,success,info}-secondary-default` behind `text-{s}-default`.
 - **Disabled** is `background-disabled` and `text-disabled`, plus `border-disabled` on a control with a border. Never lower the opacity instead.
 - **Neutral states** are `background-hover` and `background-active`; they work on paper and on white.
+- **Fills**: a filled control (the secondary button, a tab list's track) rests on `background-fill-default` and hovers on `background-fill-hover`; the open tab is `background-fill-selected`. A fill is a tint of whatever it sits on, so the same control reads on the panel, a card or a well.
 - **Errors**: `text-danger-default` {colors.error-text} for error text; `background-danger-default` {colors.error} is the solid fill, never text.
-- **Dark** redefines Tier 2 only, under `.dark` or `[data-theme="dark"]` on `<html>`. A host follows the system by default; light and dark are choices, stored per device.
+- **Dark** redefines Tier 2 only, under `.dark` or `[data-theme="dark"]` on `<html>`. A host follows the system by default; light and dark are choices, stored per device. Dark is its own set of surfaces, not the light values swapped: see Elevation.
 
 ## Typography
 
@@ -239,14 +240,33 @@ One density for every screen, on a 4px unit {spacing.unit}.
 
 Depth comes from tone and hairlines: paper behind, white in front, 1px rules between. Shadows are neutral ink, never colored, and only two exist: `--anfra-e1` for a resting card, `--anfra-e2` for what floats (menus, popovers, dialogs). `--anfra-e2` carries its own edge, a translucent 1px ring, so a menu needs no border and reads on any ground. On dark, a shadow doesn't show: e1 becomes a border and e2 a translucent white ring.
 
+**On dark, lighter is closer.** Each layer up is a step lighter: the chrome (`ink-1000`), the panel (`ink-925`), a card (`ink-875`), what floats (`ink-825`). A well is recessed, so it is darker than the panel it sits in. A control is not: its fill is a translucent white over its ground, so a secondary button or a tab list's track is lighter than the ground under it, and the open tab lighter again. In light the same fills are a translucent ink, a tint just darker than the ground, since nothing is lighter than white; there the open tab is white, raised by e1.
+
+| Role | Light | Dark |
+| --- | --- | --- |
+| A control's fill (`background-fill-default`) | ink 4% over the ground | white 4% over the ground |
+| Hover on it (`background-fill-hover`) | ink 8% | white 8% |
+| The open tab (`background-fill-selected`) | white, e1 | white 8% over the track, e1 |
+
 ## Shapes
 
 Soft, not round. Controls and surfaces nest by radius: the smaller the thing, the smaller the corner.
 
-- `--anfra-radius-md` {rounded.md}: menu items, nav items, chips, tooltips.
-- `--anfra-radius-lg` {rounded.lg}: buttons, fields, alerts.
+- `--anfra-radius-md` {rounded.md}: nav items, chips, tooltips, and controls under 32px (xs and sm buttons, the small tab list).
+- `--anfra-radius-lg` {rounded.lg}: buttons, fields, alerts, at 32px and up.
 - `--anfra-radius-xl` {rounded.xl}: cards, popovers, dialogs, the panel.
 - `--anfra-radius-pill` {rounded.pill}: status pills and counters only, never buttons.
+
+**Nested corners are concentric.** A part that sits in a container's corner, closer to its edge than the container's radius, takes the container's radius less the gap between them, written as that `calc()` so it follows the tokens. A part flush with the edge takes the container's radius; a part further in than the radius takes its own from the scale. The gap is even on the sides the part is near, so the track around it is too.
+
+| Part, in its container | Gap | Radius |
+| --- | --- | --- |
+| A tab in its list | 3px | `lg` − 3 = 7px |
+| A tab in a small list (`data-size="sm"`) | 2px | `md` − 2 = 4px |
+| A menu item in its menu, a palette entry in the palette | 4px | `xl` − 4 = 10px |
+| A key hint in a field | 6px | `lg` − 6 = 4px |
+
+`components.test.mjs` holds the class layer's pairs to this.
 
 ## Components
 
@@ -255,10 +275,10 @@ Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has 
 | Class | Cloud's component | Variants |
 | --- | --- | --- |
 | `.a-button` | Button | `data-variant` default, outline, secondary, ghost, destructive, link; `data-size` xs, sm, default, lg, icon, icon-xs, icon-sm, icon-lg |
-| `.a-input` | Input | `aria-invalid="true"` for an error |
+| `.a-input` | Input | `aria-invalid="true"` for an error; a field with an icon is a `label.a-input` around the icon and a bare `input` |
 | `.a-badge` | Badge | `data-variant` default, secondary, outline, destructive, warning, success |
 | `.a-pill` | StatusPill | `data-tone` neutral, highlight, success, warning, danger |
-| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; the open tab is `aria-selected="true"` |
+| `.a-tabs`, `.a-tab` | TabsList, TabsTrigger | `data-variant="line"` on the list; `data-size="sm"` for a 24px list with a 2px track; the open tab is `aria-selected="true"`, or `aria-pressed="true"` in a group of toggles |
 | `.a-menu`, `.a-menu-item`, `.a-menu-label`, `.a-menu-separator`, `.a-menu-shortcut` | DropdownMenu | `data-variant="destructive"` on an item; `data-highlighted` for a keyboard highlight |
 | `.a-tooltip` | TooltipContent | |
 | `.a-kbd` | Kbd | |
@@ -290,6 +310,7 @@ A change to a Cloud component's look is a change to its class here, in the same 
 
 - **Current nav item**: on the paper, a white chip with a violet icon; in a nav inside the panel (tabs, settings), `background-active` and weight 500. Both carry `aria-current="page"` or `aria-selected`.
 - **Alerts**: a tinted container with an icon and the body role.
+- **A control keeps its edge on any ground**: a control's fill is translucent (`background-fill-*`), never a surface color, so a tab list or a secondary button in a well (`background-secondary-default`) still stands off it.
 - **Badges and status pills**: caption at 500, a label or an icon always beside the color.
 - **Tooltips**: inverse ink (`background-inverted-default`, `text-inverted-default`), the caption role, `--anfra-radius-md`.
 

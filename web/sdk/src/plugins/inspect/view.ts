@@ -11,6 +11,8 @@ import type { QueryInput } from './model/inputs';
 import { tokenize, type Lang } from './model/highlight';
 import { plural } from './model/format';
 import { LEVELS, TRUST_LEVELS, type Trust } from './model/trust';
+import { ICONS, type IconName } from '@holistics/anfra-design/icons';
+import { COMPONENT_STYLES } from './components';
 
 export type Child = Node | string | false | null | undefined;
 export type Children = Child | readonly Children[];
@@ -36,73 +38,49 @@ export function replace (doc: Document, element: Element, ...children: Children[
   element.replaceChildren(...h(doc, 'div', {}, ...children).childNodes);
 }
 
-// Hand-drawn 24px stroke icons, as appserve draws them.
-const PATHS = {
-  close: 'M6 6l12 12 M18 6L6 18',
-  copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
-  check: 'M5 12l5 5 9-10',
-  table: 'M4 5h16v14H4z M4 10h16 M4 15h16 M10 10v9',
-  download: 'M12 4v11 M7 10l5 5 5-5 M5 20h14',
-  pick: 'M4 4l7 16 2-7 7-2z',
-  chevron: 'M9 6l6 6-6 6',
-  filter: 'M4 6h16 M7 12h10 M10 18h4',
-  info: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 11v6 M12 7.5v.5',
-  locate: 'M12 3v4 M12 17v4 M3 12h4 M17 12h4 M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z',
-  query: 'M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3z M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6 M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3',
-  tree: 'M5 4v16 M5 8h6 M5 16h6 M13 6h6v4h-6z M13 14h6v4h-6z',
-  search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M16 16l4 4',
-  // Lineage: a card per kind, and the canvas's tools.
-  lineage: 'M9 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M3 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M15 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9 M12 12v3',
-  control: 'M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4',
-  block: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
-  metric: 'M18 5H6l6 7-6 7h12',
-  dimension: 'M3 17L17 3l4 4L7 21z M7 13l2 2 M10 10l2 2 M13 7l2 2',
-  dataset: 'M4 8l8-4 8 4-8 4z M4 12l8 4 8-4 M4 16l8 4 8-4',
-  model: 'M4 7l8-4 8 4v10l-8 4-8-4z M4 7l8 4 8-4 M12 11v10',
-  focus: 'M4 8V4h4 M16 4h4v4 M20 16v4h-4 M8 20H4v-4 M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',
-  expand: 'M14 4h6v6 M10 20H4v-6 M20 4l-7 7 M4 20l7-7',
-  help: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6 M12 17v.5',
-  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',
-  hidden: 'M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.9 M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6 M9.9 9.9a3 3 0 0 0 4.2 4.2',
-  plus: 'M12 5v14 M5 12h14',
-  minus: 'M5 12h14',
-  fit: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',
-  code: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
-} as const;
+export type { IconName };
 
-export type IconName = keyof typeof PATHS;
-
-export function icon (doc: Document, name: IconName): SVGElement {
+/** A lucide icon, as anfra Cloud draws it: 14px, stroked in the text's colour. */
+export function icon (doc: Document, name: IconName, size = 14): SVGElement {
   const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
   for (const [key, value] of Object.entries({
-    class: 'icon', viewBox: '0 0 24 24', width: '14', height: '14', fill: 'none', stroke: 'currentColor',
-    'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+    class: 'icon', viewBox: '0 0 24 24', width: String(size), height: String(size), fill: 'none', stroke: 'currentColor',
+    'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
   })) svg.setAttribute(key, value);
   const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', PATHS[name]);
+  path.setAttribute('d', ICONS[name]);
   svg.append(path);
   return svg;
 }
 
-// A column's icon: Σ for a metric, its semantic type's for a dimension. Drawn as the kit's icons are.
-export const TYPE_PATHS: Record<string, string> = {
-  metric: 'M17 5H7l6 7-6 7h10',
-  text: 'M5 7V5h14v2 M12 5v14 M9 19h6',
-  number: 'M5 9h14 M5 15h14 M10 4L8 20 M16 4l-2 16',
-  date: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4',
-  datetime: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4 M12 13v3h3',
-  truefalse: 'M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z M8 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z',
-  bit: 'M6 5v6 M12 5h4v6h-4z M6 13h4v6H6z M16 13v6',
-  json: 'M9 4c-2 0-3 1-3 3v2c0 1.5-1 3-2 3 1 0 2 1.5 2 3v2c0 2 1 3 3 3 M15 4c2 0 3 1 3 3v2c0 1.5 1 3 2 3-1 0-2 1.5-2 3v2c0 2-1 3-3 3',
-  unknown: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7 M12 17v.5',
-};
-
+/** A column's icon: Σ for a metric, its semantic type's for a dimension. */
 export function columnIcon (doc: Document, column: Pick<ColumnMeta, 'isMeasure' | 'semantic_type'>): SVGElement {
-  const svg = icon(doc, 'info');
-  svg.querySelector('path')!.setAttribute('d', column.isMeasure ? TYPE_PATHS.metric! : TYPE_PATHS[column.semantic_type] ?? TYPE_PATHS.unknown!);
-  svg.setAttribute('width', '12');
-  svg.setAttribute('height', '12');
-  return svg;
+  const type = `type-${column.semantic_type}`;
+  return icon(doc, column.isMeasure ? 'metric' : type in ICONS ? type as IconName : 'type-unknown', 12);
+}
+
+/** The tabs' controls, as anfra Cloud's inspect panel draws them with shadcn's Button. */
+const CONTROLS = {
+  'row-action': ['ghost', 'icon-xs'],
+  tool: ['outline', 'xs'],
+  link: ['link', 'xs'],
+} as const;
+
+/**
+ * A control's attributes: the class layer's Button (`components.ts`) in its variant and size.
+ * `kind`, and `extra`, stay classes, for the tab's own rules and for tests.
+ */
+export function control (kind: keyof typeof CONTROLS, extra = ''): Attributes {
+  const [variant, size] = CONTROLS[kind];
+  return { class: `a-button ${kind} ${extra}`.trim(), 'data-variant': variant, 'data-size': size };
+}
+
+/** The tabs' label tones, as the class layer's Badge variants. */
+const BADGES = { neutral: 'secondary', warn: 'warning', error: 'destructive', ok: 'success' } as const;
+
+/** A label's attributes: the class layer's Badge, `pill` and its tone kept as classes. */
+export function badge (tone: keyof typeof BADGES = 'neutral', extra = ''): Attributes {
+  return { class: `a-badge pill ${tone === 'neutral' ? '' : tone} ${extra}`.replace(/\s+/g, ' ').trim(), 'data-variant': BADGES[tone] };
 }
 
 /** Copy text from the host page; whether it worked. */
@@ -176,14 +154,15 @@ export function copyButton (doc: Document, className: string, text: () => string
 
 /** A small icon button that copies, with its label as tooltip. */
 export function copyIcon (doc: Document, label: string, text: () => string, attributes: Record<string, string> = {}): HTMLElement {
-  return copyButton(doc, 'row-action', text, { idle: icon(doc, 'copy'), done: icon(doc, 'check') }, { 'data-tip': label, 'aria-label': label, ...attributes });
+  const { class: className, ...rest } = control('row-action');
+  return copyButton(doc, String(className), text, { idle: icon(doc, 'copy'), done: icon(doc, 'check') }, { ...rest as Record<string, string>, 'data-tip': label, 'aria-label': label, ...attributes });
 }
 
 /** A link-styled button: the tabs' cross-links. */
 export function link (doc: Document, label: Children, onclick: () => void, attributes: Attributes = {}): HTMLElement {
   return h(doc, 'button', {
     type: 'button',
-    class: 'link',
+    ...control('link'),
     ...attributes,
     onclick: (event: Event) => {
       event.stopPropagation();
@@ -200,7 +179,7 @@ export function link (doc: Document, label: Children, onclick: () => void, attri
 export function lineageButton (doc: Document, panel: Panel, node: string | undefined): HTMLElement {
   const button = h(doc, 'button', {
     type: 'button',
-    class: 'row-action',
+    ...control('row-action'),
     'aria-label': 'Show in Lineage',
     'data-tip': node === undefined ? undefined : 'Show in Lineage',
     'data-testid': 'show-in-lineage',
@@ -317,6 +296,8 @@ export function tooltips (root: ShadowRoot): Tooltips {
     anchor = element;
     replace(doc, box, rich ? rich() : text);
     box.classList.toggle('rich', !!rich);
+    // A plain one is the class layer's Tooltip; a rich one lays out more than a line, on a raised card.
+    box.classList.toggle('a-tooltip', !rich);
     box.hidden = false;
     if (!box.matches(':popover-open')) box.showPopover?.();
     element.setAttribute('aria-describedby', box.id);
@@ -576,8 +557,11 @@ function keepFlashes (body: HTMLElement): void {
   }
 }
 
-/** The tabs' stylesheet, on the host's tokens. Fixed colours only for meaning (states, tones, kinds), each with a dark variant. */
-export const STYLES = `
+/**
+ * The tabs' stylesheet: the class layer, then the tabs' own rules, on the host's tokens. Fixed
+ * colours only for meaning (states, tones, kinds), each with a dark variant.
+ */
+export const STYLES = `${COMPONENT_STYLES}
 :host { display: block; height: 100%; color: var(--anfra-color-fg); background: var(--anfra-color-bg); font: 13px/1.45 var(--anfra-font); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -607,31 +591,21 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .card header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .flash { animation: flash 1.2s ease-out; }
 @keyframes flash { from { box-shadow: inset 0 0 0 2px var(--anfra-color-accent); background: var(--accent-bg); } }
-.pill { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--hover); color: var(--anfra-color-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
-.pill.warn { background: var(--warn-bg); color: var(--warn); }
-.pill.success, .pill.ok { background: var(--ok-bg); color: var(--ok); }
-.pill.error { background: var(--danger-bg); color: var(--anfra-color-danger); }
-.pill.accent { background: var(--accent-bg); color: var(--anfra-color-accent); }
 .tone-ok { color: var(--ok); } .tone-warn { color: var(--warn); } .tone-error { color: var(--anfra-color-danger); }
 code.wrap { overflow-wrap: anywhere; }
 .error-text { margin: 6px 0 0; color: var(--anfra-color-danger); overflow-wrap: anywhere; }
-.link { border: 0; border-radius: 4px; background: none; padding: 2px 6px; color: var(--anfra-color-accent); font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
-.link:hover:not(:disabled) { background: var(--hover); }
-.link:disabled { color: var(--anfra-color-muted); }
+/* A cross-link sits in a line of text: the class layer's link Button, at the text's height. */
+.a-button.link { height: auto; padding: 0; }
 .toolbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--anfra-color-border); }
-.tool { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: none; padding: 3px 10px; font-size: 12px; }
-.tool:hover:not(:disabled) { background: var(--hover); }
-.tool[aria-pressed="true"] { border-color: var(--anfra-color-accent); color: var(--anfra-color-accent); background: var(--accent-bg); }
-.search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--anfra-color-border); border-radius: 6px; color: var(--anfra-color-muted); }
+/* A search box: the class layer's Input around its icon and field, at a toolbar's height. */
+.search { flex: 1; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: var(--anfra-radius-md); color: var(--anfra-color-muted); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--anfra-color-fg); font: inherit; font-size: 12px; }
-.segments { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--hover); }
-.segments button { border: 0; border-radius: 6px; background: none; padding: 2px 8px; font-size: 12px; font-weight: 500; color: var(--anfra-color-muted); white-space: nowrap; }
-.segments button:hover { color: var(--anfra-color-fg); }
-/* The selected one is raised, in ink: violet is for links, selection and focus. */
-.segments button[aria-pressed="true"] { background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 0 0 1px var(--anfra-color-border), 0 1px 2px oklch(0 0 0 / 0.08); }
-.row-action { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--anfra-color-muted); }
-.row-action:hover:not(:disabled) { background: var(--hover); color: var(--anfra-color-accent); }
-.row-action:disabled { opacity: 0.4; cursor: default; }
+.search input::placeholder { color: var(--anfra-color-muted); }
+/* A filter's choices: the class layer's Tabs, at a toolbar's height. Under 32px, a control takes md. */
+.segments.a-tabs { flex: none; }
+.segments.a-tabs:not([data-size]) { height: 28px; border-radius: var(--anfra-radius-md); }
+.segments.a-tabs:not([data-size]) .a-tab { border-radius: calc(var(--anfra-radius-md) - 3px); }
+.segments .a-tab { padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 500; }
 .row-action-wrap { flex: none; display: inline-flex; }
 .spacer { flex: 1; }
 /* Collapsibles */
@@ -666,16 +640,18 @@ code.wrap { overflow-wrap: anywhere; }
 .dot.executing, .dot.pending { background: var(--run); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 /* Popovers */
-.pop-trigger { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 4px; color: inherit; }
-/* Plain tooltips are one line of text or a few, with their line breaks; rich ones lay out their own. */
-.tooltip { position: fixed; inset: auto; margin: 0; z-index: 10; width: max-content; max-width: 280px; padding: 5px 8px; border: 1px solid var(--anfra-color-border); border-radius: 6px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 6px 20px oklch(0 0 0 / 0.15); font: 12px/1.45 var(--anfra-font); white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; }
-.tooltip.rich { max-width: 340px; padding: 8px 10px; white-space: normal; }
+.pop-trigger:not(.a-button, .a-badge) { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 4px; color: inherit; }
+/* Plain tooltips are one line of text or a few, with their line breaks (.a-tooltip); rich ones lay out their own, on a raised card. */
+.tooltip { position: fixed; inset: auto; margin: 0; z-index: 10; border: 0; white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; }
+.tooltip.rich { width: max-content; max-width: 340px; padding: 8px 10px; border-radius: 10px; background: var(--anfra-color-bg); color: var(--anfra-color-fg); box-shadow: 0 0 0 1px var(--anfra-color-border), 0 12px 32px -12px oklch(0 0 0 / 0.3); font: 12px/1.45 var(--anfra-font); white-space: normal; }
 /* Code */
 .code { margin-top: 6px; border: 1px solid var(--anfra-color-border); border-radius: 6px; overflow: hidden; position: relative; }
 .code-head { display: flex; align-items: center; gap: 2px; padding: 0 4px; border-bottom: 1px solid var(--anfra-color-border); background: var(--subtle); }
-.code-tab { border: 0; border-bottom: 2px solid transparent; background: none; padding: 5px 6px; font-size: 12px; color: var(--anfra-color-muted); }
-.code-tab[aria-selected="true"] { color: var(--anfra-color-fg); border-bottom-color: var(--anfra-color-accent); }
-.code-tab:disabled { opacity: 0.5; }
+.code-tab { border: 0; border-bottom: 2px solid transparent; background: none; padding: 6px; font-size: 12px; font-weight: 500; color: var(--anfra-color-fg-weak); }
+.code-tab:hover:not(:disabled) { color: var(--anfra-color-fg); }
+/* As the class layer's line Tabs: the open one underlined in ink. */
+.code-tab[aria-selected="true"] { color: var(--anfra-color-fg); border-bottom-color: var(--anfra-color-fg); }
+.code-tab:disabled { color: var(--anfra-color-muted); opacity: 0.6; }
 .code-tab-wrap { display: inline-flex; }
 .code-corner { position: absolute; top: 2px; right: 2px; }
 .code-text { margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px; font-size: 12px; line-height: 1.5; background: var(--subtle); }

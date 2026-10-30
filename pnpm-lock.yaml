@@ -87,6 +87,9 @@ importers:
         specifier: ^0.17.0
         version: 0.17.0
     devDependencies:
+      '@holistics/anfra-design':
+        specifier: workspace:*
+        version: link:../design
       '@types/node':
         specifier: ^22.20.4
         version: 22.20.5

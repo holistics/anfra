@@ -58,14 +58,14 @@
 @media (hover: hover) {
   .a-button[data-variant="outline"]:hover { border-color: var(--anfra-color-border-hover); background-color: var(--anfra-color-background-default); }
 }
-.a-button[data-variant="outline"]:is(:active, [aria-expanded="true"]) { background-color: var(--anfra-color-background-active); }
+.a-button[data-variant="outline"]:is(:active, [aria-expanded="true"], [aria-pressed="true"]) { background-color: var(--anfra-color-background-active); }
 
 .a-button[data-variant="secondary"] {
-  background-color: var(--anfra-color-background-secondary-default);
+  background-color: var(--anfra-color-background-fill-default);
   color: var(--anfra-color-text-default);
 }
 @media (hover: hover) {
-  .a-button[data-variant="secondary"]:hover { background-color: var(--anfra-color-background-active); }
+  .a-button[data-variant="secondary"]:hover { background-color: var(--anfra-color-background-fill-hover); }
 }
 .a-button[data-variant="secondary"]:is(:active, [aria-expanded="true"]) { background-color: var(--anfra-color-background-active); }
 
@@ -107,9 +107,11 @@
 .a-button[data-size="icon-xs"] svg { width: 12px; height: 12px; }
 .a-button[data-size="icon-sm"] { width: 28px; height: 28px; }
 .a-button[data-size="icon-lg"] { width: 36px; height: 36px; }
+/* Under 32px, lg would read as a pill: small controls take md. */
+.a-button:is([data-size="xs"], [data-size="sm"], [data-size="icon-xs"], [data-size="icon-sm"]) { border-radius: var(--anfra-radius-md); }
 
 /* Input: shadcn's Input, edged as an outline button is. Focus shows on its own border, violet and
-   doubled, never an outline. */
+   doubled, never an outline. A field with an icon is a label.a-input around the icon and a bare input. */
 .a-input {
   box-sizing: border-box;
   width: 100%;
@@ -128,14 +130,14 @@
 @media (hover: hover) {
   .a-input:hover { border-color: var(--anfra-color-border-hover); }
 }
-.a-input:read-only { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
-.a-input:disabled {
+.a-input:is([readonly], :has(input[readonly])) { border-color: var(--anfra-color-border-strong); background: var(--anfra-color-background-secondary-default); }
+.a-input:is(:disabled, :has(input:disabled)) {
   cursor: not-allowed;
   border-color: var(--anfra-color-border-disabled);
   background: var(--anfra-color-background-disabled);
   color: var(--anfra-color-text-disabled);
 }
-.a-input:focus-visible {
+.a-input:is(:focus-visible, :has(:focus-visible)) {
   border-color: var(--anfra-color-border-highlight-strong);
   box-shadow: inset 0 0 0 1px var(--anfra-color-border-highlight-strong);
 }
@@ -213,7 +215,7 @@
 .a-pill[data-tone="danger"] { background: var(--anfra-color-background-danger-secondary-default); color: var(--anfra-color-text-danger-default); }
 
 /* Tabs: shadcn's TabsList and TabsTrigger. A segmented list by default; data-variant="line" for an
-   underline. The open tab is aria-selected="true". */
+   underline. The open tab is aria-selected="true", or aria-pressed="true" in a group of toggles (a filter). */
 .a-tabs {
   display: inline-flex;
   align-items: center;
@@ -222,9 +224,21 @@
   height: 32px;
   padding: 3px;
   border-radius: var(--anfra-radius-lg);
-  background: var(--anfra-color-background-secondary-default);
+  background: var(--anfra-color-background-fill-default); /* a tint of its ground, so it reads on the panel and in a well */
   color: var(--anfra-color-text-weak);
   box-sizing: border-box;
+}
+/* Small: a 24px list for a toggle in a dense row, its track 2px. */
+.a-tabs[data-size="sm"] {
+  height: 24px;
+  padding: 2px;
+  border-radius: var(--anfra-radius-md); /* under 32px, a control takes md */
+}
+.a-tabs[data-size="sm"] .a-tab {
+  padding: 0 6px;
+  border-radius: calc(var(--anfra-radius-md) - 2px); /* nested in the list: its radius less its padding */
+  font: var(--anfra-type-caption);
+  font-weight: 500;
 }
 .a-tab {
   position: relative;
@@ -234,10 +248,10 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: calc(100% - 1px);
+  height: 100%; /* shadcn's is 1px short, which leaves the track 3.5px above and below and 3px at the sides */
   padding: 2px 6px;
   border: 1px solid transparent;
-  border-radius: var(--anfra-radius-lg);
+  border-radius: calc(var(--anfra-radius-lg) - 3px); /* nested in the list: its radius less its padding */
   background: transparent;
   color: var(--anfra-color-text-weak);
   font: var(--anfra-type-label);
@@ -249,13 +263,13 @@
   .a-tab:hover { color: var(--anfra-color-text-default); }
 }
 .a-tab:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
-.a-tab[aria-selected="true"] {
-  background: var(--anfra-color-background-default);
+.a-tab:is([aria-selected="true"], [aria-pressed="true"]) {
+  background: var(--anfra-color-background-fill-selected);
   color: var(--anfra-color-text-default);
   box-shadow: var(--anfra-e1);
 }
 .a-tabs[data-variant="line"] { border-radius: 0; background: transparent; }
-.a-tabs[data-variant="line"] .a-tab[aria-selected="true"] { background: transparent; box-shadow: none; }
+.a-tabs[data-variant="line"] .a-tab:is([aria-selected="true"], [aria-pressed="true"]) { background: transparent; box-shadow: none; }
 .a-tabs[data-variant="line"] .a-tab::after {
   content: "";
   position: absolute;
@@ -264,7 +278,7 @@
   background: var(--anfra-color-background-inverted-default);
   opacity: 0;
 }
-.a-tabs[data-variant="line"] .a-tab[aria-selected="true"]::after { opacity: 1; }
+.a-tabs[data-variant="line"] .a-tab:is([aria-selected="true"], [aria-pressed="true"])::after { opacity: 1; }
 
 /* Menu: shadcn's DropdownMenuContent and its parts. An item is highlighted on hover, on focus, or
    with data-highlighted (a menu that moves a highlight by keyboard). */
@@ -286,7 +300,7 @@
   width: 100%;
   padding: 4px 6px;
   border: 0;
-  border-radius: var(--anfra-radius-md);
+  border-radius: calc(var(--anfra-radius-xl) - 4px); /* nested in the menu: its radius less its padding */
   background: transparent;
   color: inherit;
   font: var(--anfra-type-body);
