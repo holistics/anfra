@@ -59,7 +59,7 @@ Open an empty folder in Claude Code, Codex or Cursor and paste:
 ```text
 Set up anfra (https://github.com/holistics/anfra) in this folder and build this app on my data: [describe the app, for example "a weekly revenue dashboard by product and region", or leave this and I'll pick from your suggestions].
 
-1. Install the CLI with `curl -fsSL https://anfra.ai/install.sh | bash`. It goes to `~/.anfra/bin/anfra`; use that full path if `anfra` isn't found. Then run `anfra skills install`. If the anfra skills aren't available to you in this session yet, read them from https://github.com/holistics/anfra-skills instead.
+1. Install the CLI with `curl -fsSL https://anfra.ai/install.sh | bash`. It goes to `~/.anfra/bin/anfra`; use that full path if `anfra` isn't found. Then run `anfra agent setup`. If the anfra skills aren't available to you in this session yet, read them from https://github.com/holistics/anfra-skills instead.
 2. Run `anfra init` here. Ask me which database to connect, then fill in `.anfra/data_sources.yml` with placeholders for passwords and keys. Let me enter those myself, and don't print them.
 3. If I didn't describe an app above, look at the tables, suggest two or three apps I could build, and wait for me to pick one.
 4. Model only the tables and metrics that app needs in `models/` and `datasets/`, and run `anfra validate` until it passes.
