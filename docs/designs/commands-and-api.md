@@ -51,6 +51,15 @@ A command or flag keeps working, with a deprecation warning, for at least one mi
 - **An op** still needs its breaking change declared, through the contract check above. The warning period comes before it.
 - **A CLI-only command,** such as `update`, `init` or `agent setup`, is in no contract, so this rule is its only protection. `anfra skills install`, now `anfra agent setup`, is kept as an alias that says so.
 
+### Asking without acting
+
+A command that changes something offers ways to ask about it without changing it. Each answers a different question, so it takes a different form:
+
+- **`status` describes the state of a thing.** Read-only, cheap, safe to run any time: "what is the situation?" It exits 0 whatever the state, unless judging the state is its job (`anfra status` exits non-zero when the server isn't healthy). `anfra status`, `anfra auth status`.
+- **`<action> --check` is the action's preflight.** It does everything the action would up to its first change, then reports what the action would do: "what would happen if I ran this?" It exits non-zero when the action would fail. `anfra update --check`, `anfra agent setup --check`.
+
+anfra has no `--dry-run`. Other tools use the name for both an offline look and an online preflight, so it says nothing about how far a command goes.
+
 ### Public and internal ops
 
 *Decided 2026-10-14, not built; anfra-cloud's `framework/api_framework.md` has the design.*

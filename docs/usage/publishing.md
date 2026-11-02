@@ -69,7 +69,7 @@ After selection and successful credential loading, it saves `org.url` before pub
 preserving other config. A later publish failure leaves that destination configured.
 Without a terminal, provide a destination and matching stored credentials; there is no
 automatic selection or browser launch. `--yes` only skips overwrite confirmation.
-`--dry-run` lists local files without authentication or config writes.
+`--list` lists local files without authentication or config writes. It was `--dry-run`, which still works for now, with a warning.
 
 ## Refresh and recovery
 

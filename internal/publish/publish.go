@@ -32,8 +32,9 @@ type Options struct {
 	Message string
 	// SetOrg is an org's address to record as the repo's, and publish to.
 	SetOrg string
-	// DryRun lists the files and stops.
-	DryRun bool
+	// List lists the files and the destination, and stops: offline, without
+	// authentication or config writes.
+	List bool
 	// Yes publishes without asking, though the repo was last published elsewhere.
 	Yes bool
 	// CreateDataSources adds the data sources the repo uses and the org lacks
@@ -92,7 +93,7 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 			p.Note("%d other files in this folder are not part of the repo: a publish carries .aml files and Data Apps under %s/.", leftOut, repoformat.AppsDir)
 		}
 	}
-	if o.DryRun {
+	if o.List {
 		for _, f := range files {
 			fmt.Fprintln(env.Out, f)
 		}

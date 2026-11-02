@@ -502,7 +502,7 @@ func TestSetOrg(t *testing.T) {
 	s, url := newServer(t)
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a"})
-	if _, _, err := run(t, dir, Options{SetOrg: url, DryRun: true}, never(t)); err != nil {
+	if _, _, err := run(t, dir, Options{SetOrg: url, List: true}, never(t)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(repoconfig.Path(dir)); err == nil {
@@ -529,7 +529,7 @@ func refuse(w http.ResponseWriter, status int, code string) {
 // Destination writes happen only after explicit selection and successful
 // credential loading, but before any remote publish work.
 func TestFirstPublishDestinationOrdering(t *testing.T) {
-	for _, scenario := range []string{"success", "cancel", "credential failure", "config failure", "publish failure", "dry run"} {
+	for _, scenario := range []string{"success", "cancel", "credential failure", "config failure", "publish failure", "list"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, address := newServer(t)
 			org, err := cloudapi.ParseOrg(address)
@@ -577,13 +577,13 @@ func TestFirstPublishDestinationOrdering(t *testing.T) {
 				}
 				return nil
 			}
-			err = Run(context.Background(), dir, Options{DryRun: scenario == "dry run"}, env)
-			success := scenario == "success" || scenario == "dry run"
+			err = Run(context.Background(), dir, Options{List: scenario == "list"}, env)
+			success := scenario == "success" || scenario == "list"
 			if (err == nil) != success {
 				t.Fatalf("result: %v", err)
 			}
-			if scenario == "dry run" && (selected != 0 || loaded != 0) {
-				t.Fatal("dry run selected org/authenticated")
+			if scenario == "list" && (selected != 0 || loaded != 0) {
+				t.Fatal("list selected org/authenticated")
 			}
 			after, readErr := os.ReadFile(repoconfig.Path(dir))
 			if readErr != nil {
@@ -628,7 +628,7 @@ func TestConfiguredPublishNeverSubstitutesStoredOrg(t *testing.T) {
 }
 
 func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
-	for _, scenario := range []string{"same org", "switch org", "cancel", "credentials still missing", "dry run"} {
+	for _, scenario := range []string{"same org", "switch org", "cancel", "credentials still missing", "list"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
 			linked, _ := cloudapi.ParseOrg("https://cloud.example.com/o/acme")
@@ -673,11 +673,11 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 				}
 				return validated
 			}
-			err := Run(context.Background(), dir, Options{Yes: true, DryRun: scenario == "dry run"}, env)
+			err := Run(context.Background(), dir, Options{Yes: true, List: scenario == "list"}, env)
 			switch scenario {
-			case "dry run":
+			case "list":
 				if err != nil || recovered || loaded != 0 {
-					t.Fatalf("dry run authenticated: %v", err)
+					t.Fatalf("list authenticated: %v", err)
 				}
 			case "cancel":
 				if !errors.Is(err, context.Canceled) {

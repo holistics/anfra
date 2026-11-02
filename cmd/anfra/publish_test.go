@@ -21,7 +21,7 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func TestPublishNonInteractiveAndDryRun(t *testing.T) {
+func TestPublishNonInteractiveAndList(t *testing.T) {
 	t.Chdir(t.TempDir())
 	seedLoginInventory(t, "https://bi.example.com/o/stored")
 	t.Setenv("ANFRA_CLOUD_SESSION", "obsolete-hook-must-not-work")
@@ -52,20 +52,26 @@ func TestPublishNonInteractiveAndDryRun(t *testing.T) {
 			t.Fatalf("noninteractive prompt: %s", output.String())
 		}
 	}
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"publish", "--dry-run"})
-	var out bytes.Buffer
-	cmd.SetIn(strings.NewReader(""))
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	if err := cmd.Execute(); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "orders.aml") {
-		t.Fatal(out.String())
-	}
-	if _, err := os.Stat(repoconfig.Path(".")); !os.IsNotExist(err) {
-		t.Fatal("dry run wrote config")
+	// --dry-run is --list's former name: the same, and says so.
+	for _, flag := range []string{"--list", "--dry-run"} {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"publish", flag})
+		var out bytes.Buffer
+		cmd.SetIn(strings.NewReader(""))
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "orders.aml") {
+			t.Fatalf("%s: %s", flag, out.String())
+		}
+		if deprecated := strings.Contains(out.String(), "--dry-run has been deprecated, use --list"); deprecated != (flag == "--dry-run") {
+			t.Fatalf("%s: deprecation note %v: %s", flag, deprecated, out.String())
+		}
+		if _, err := os.Stat(repoconfig.Path(".")); !os.IsNotExist(err) {
+			t.Fatalf("%s wrote config", flag)
+		}
 	}
 }
 

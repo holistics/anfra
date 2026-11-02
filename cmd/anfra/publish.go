@@ -31,14 +31,14 @@ func newPublishCmd() *cobra.Command {
 			"Which files: the repo's own, its .aml files and its Data Apps (everything under apps/), wherever they\n" +
 			"are in the folder, except under a dot-folder or node_modules. Nothing else is published: not .anfra/\n" +
 			"(data_sources.yml holds credentials), nor a .env, notes or build output beside the repo. .gitignore does\n" +
-			"not apply: it says what belongs in git, not what is published. --dry-run lists the files and stops.\n\n" +
+			"not apply: it says what belongs in git, not what is published. --list lists the files and stops.\n\n" +
 			"Where to: the org's address on its server, https://<server>/o/<org>, kept in .anfra/config.yml\n" +
 			"(org.url) and committed, so everyone publishes to the same org. --set-org sets it, and publishes there.\n" +
 			"Without a destination, an interactive terminal offers stored logins or new authentication.\n" +
 			"If the destination needs authentication, log in or choose another org here. Changing\n" +
 			"the destination requires confirmation before updating .anfra/config.yml.\n" +
 			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n" +
-			"--yes skips overwrite confirmation only. --dry-run never authenticates or writes configuration.",
+			"--yes skips overwrite confirmation only. --list never authenticates or writes configuration.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
@@ -77,7 +77,11 @@ func newPublishCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVarP(&o.Message, "message", "m", "", "what this publish is, for the org's history of the repo (default: in a git repo, HEAD's commit)")
 	f.StringVar(&o.SetOrg, "set-org", "", "set the org the repo publishes to, by its address, https://<server>/o/<org> (.anfra/config.yml org.url), and publish there")
-	f.BoolVar(&o.DryRun, "dry-run", false, "list the files that would be published, and stop")
+	f.BoolVar(&o.List, "list", false, "list the files that would be published, and where to, and stop: offline")
+	// --dry-run was --list's name; a dry run elsewhere goes as far as the server
+	// (docs/designs/commands-and-api.md#deprecation-before-removal).
+	f.BoolVar(&o.List, "dry-run", false, "list the files that would be published, and stop")
+	_ = f.MarkDeprecated("dry-run", "use --list")
 	f.BoolVar(&o.CreateDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server. DuckDB ones, files on this machine, are never sent")
 	f.BoolVarP(&o.Yes, "yes", "y", false, "publish without asking, though the repo was last published elsewhere (needed without a terminal)")
 	return cmd
