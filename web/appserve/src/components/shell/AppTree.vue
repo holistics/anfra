@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import type { CatalogEntry } from './catalog';
-import Icon from './Icon.vue';
+import { ChevronRight, Folder, FolderOpen, LayoutDashboard } from '@lucide/vue';
+import type { CatalogEntry } from '@/lib/catalog';
+import { cn } from '@/lib/utils';
+import {
+  sidebarMenu, sidebarMenuButton, sidebarMenuSub, sidebarMenuSubButton,
+} from './sidebar-menu';
 
 const props = defineProps<{
   entries: CatalogEntry[];
@@ -15,25 +19,27 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [path: string], toggle: [path: string] }>();
 
 const open = (path: string) => props.forceOpen || !props.collapsed.has(path);
-// As in anfra Cloud's sidebar: a menu button at the top, a sub-menu button in a folder.
-const row = () => (props.depth ? 'a-tree-row' : 'a-nav-item');
+const button = () => (props.depth ? sidebarMenuSubButton : sidebarMenuButton);
+const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-button');
 </script>
 
 <template>
-  <ul class="tree" :class="{ 'a-tree': depth }" role="group">
-    <li v-for="entry in entries" :key="entry.path">
+  <!-- A tree indents on the left only: no sub-menu keeps its own right inset. -->
+  <ul :class="depth ? cn(sidebarMenuSub, 'mr-0 pr-0') : sidebarMenu" role="group">
+    <li v-for="entry in entries" :key="entry.path" class="relative">
       <template v-if="entry.kind === 'folder'">
         <button
           type="button"
-          class="folder"
-          :class="row()"
+          :data-slot="slot()"
+          :class="cn(button(), 'group/folder')"
           :aria-expanded="open(entry.path)"
           :data-folder="entry.path"
           @click="emit('toggle', entry.path)"
         >
-          <Icon :name="open(entry.path) ? 'folder-open' : 'folder'" />
-          <span class="name">{{ entry.name }}</span>
-          <Icon name="chevron" class="caret" :class="{ open: open(entry.path) }" />
+          <FolderOpen v-if="open(entry.path)" />
+          <Folder v-else />
+          <span class="truncate">{{ entry.name }}</span>
+          <ChevronRight class="ml-auto transition-transform duration-160 ease-anfra-out group-aria-expanded/folder:rotate-90" />
         </button>
         <AppTree
           v-if="open(entry.path) && entry.children.length"
@@ -49,14 +55,15 @@ const row = () => (props.depth ? 'a-tree-row' : 'a-nav-item');
       <button
         v-else
         type="button"
-        class="app"
-        :class="[row(), { selected: entry.path === selected }]"
+        :data-slot="slot()"
+        :class="button()"
+        :data-active="entry.path === selected || undefined"
         :aria-current="entry.path === selected ? 'page' : undefined"
         :data-app="entry.path"
         :title="entry.path"
         @click="emit('select', entry.path)"
       >
-        <Icon name="app" /><span class="name">{{ entry.label }}</span>
+        <LayoutDashboard /><span>{{ entry.label }}</span>
       </button>
     </li>
   </ul>

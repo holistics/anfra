@@ -8,7 +8,7 @@ import { createHost, type Host, type MountedDataApp } from '@holistics/anfra-sdk
 import {
   corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin,
 } from '@holistics/anfra-sdk/plugins';
-import { api, definition } from './server';
+import { api, definition } from '@/lib/server';
 
 const props = defineProps<{
   path: string,
@@ -64,7 +64,6 @@ onMounted(async () => {
       user: props.reader,
       title: 'Data App',
     });
-    mounted.frame.classList.add('data-app');
     mounted.frame.dataset.testid = 'data-app-frame';
     mounted.frame.addEventListener('load', () => emit('load'));
     emit('mounted', runtime, mounted);
@@ -84,5 +83,6 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="container" class="data-app-container" />
+  <!-- The frame fills it: the Data App's own page, white whatever the theme. -->
+  <div ref="container" class="flex min-h-0 min-w-0 flex-1 [&>iframe]:min-h-0 [&>iframe]:w-full [&>iframe]:min-w-0 [&>iframe]:flex-1 [&>iframe]:border-0 [&>iframe]:bg-white" />
 </template>

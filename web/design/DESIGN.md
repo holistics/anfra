@@ -194,7 +194,7 @@ Colors are in `tokens.css`, in two tiers, after the Holistics Design System. A h
 | --- | --- | --- |
 | 1 Primitives | `--anfra-{ink,paper,violet,red,amber,green,white,black}-{step}`, OKLCH | Tier 2 only |
 | 2 Semantic | `--anfra-color-{scope}-{semantic}-{state}`, scope = `background`, `text`, `icon`, `border`, `focus-ring` | Every component, in every host |
-| 3 Host aliases | Cloud: Tailwind's `text-weak`, `bg-hover`, shadcn's `--primary`. appserve: its stylesheet | That host's components |
+| 3 Host aliases | Tailwind's `text-weak`, `bg-hover`, shadcn's `--primary`, in Cloud and appserve alike | That host's components |
 
 The same word is a different color for each scope: `--anfra-color-text-weak`, `--anfra-color-background-hover`, `--anfra-color-border-strong`, `--anfra-color-icon-weak`. Below, a token is named without its `--anfra-color-` prefix.
 
@@ -251,7 +251,7 @@ Soft, not round. Controls and surfaces nest by radius: the smaller the thing, th
 
 ## Components
 
-Cloud builds these with shadcn-vue. Core (appserve and the SDK's plugin UI) has no component library, so it uses the class layer, `components.css`: each class draws what the shadcn component of its name draws in Cloud, from the same Tier 2 tokens. Variants and sizes are data attributes, as in shadcn.
+Cloud and appserve build these with shadcn-vue (appserve's are in `web/appserve/src/components/ui`). The SDK's plugin panel is framework-free DOM in shadow roots, with no component library, so it uses the class layer, `components.css`: each class draws what the shadcn component of its name draws in Cloud, from the same Tier 2 tokens. Variants and sizes are data attributes, as in shadcn.
 
 | Class | Cloud's component | Variants |
 | --- | --- | --- |
@@ -296,7 +296,7 @@ A change to a Cloud component's look is a change to its class here, in the same 
 
 ### Icons
 
-Lucide, at 16px in controls and 14px in dense rows, `currentColor`, a 2px round stroke, never filled. Core draws the same icons from their path data, so it carries no icon library: `@holistics/anfra-design/icons` exports `ICONS`, each icon's path data on a 24px grid, by the name it has in anfra (`sidebar`, `lineage`, `type-date`), generated from lucide by `scripts/icons.mjs`. To add one, add its name and lucide's to that script and run `pnpm --filter @holistics/anfra-design icons`.
+Lucide, at 16px in controls and 14px in dense rows, `currentColor`, a 2px round stroke, never filled. Cloud and appserve import them from `@lucide/vue`. The SDK's plugin panel, framework-free, draws the same icons from their path data, so it carries no icon library: `@holistics/anfra-design/icons` exports `ICONS`, each icon's path data on a 24px grid, by the name it has in anfra (`sidebar`, `lineage`, `type-date`), generated from lucide by `scripts/icons.mjs`. To add one, add its name and lucide's to that script and run `pnpm --filter @holistics/anfra-design icons`.
 
 ### Logo
 
@@ -334,7 +334,7 @@ The product shows the logomark only: violet on light, the inverse on dark (`--an
 
 - **Package**: `@holistics/anfra-design`, released with anfra at its version. `index.css` imports `fonts.css`, `tokens.css`, `type.css` and `components.css`; `icons` is a module.
 - **anfra Cloud** imports it in `web/src/main.css` and maps Tier 2 onto Tailwind and shadcn's aliases there.
-- **appserve** imports it in `web/appserve/src/style.css`; its stylesheet uses Tier 2 tokens only.
+- **appserve** imports `fonts.css`, `tokens.css` and `type.css` in `web/appserve/src/main.ts`, and maps Tier 2 onto Tailwind and shadcn's aliases in `web/appserve/src/theme.css`, as Cloud does; it doesn't import the class layer.
 - **The SDK's plugin UI** reads the theme a host passes (`--anfra-color-bg` and the rest, `web/sdk/src/common/theme.ts`); a host takes those from Tier 2.
 - **To change a rule or a token**: a PR here, with `tokens.css` and this file in step; then each host takes the release. A rule for one page goes in that page's spec, not here.
 - **Checks**: `pnpm --filter @holistics/anfra-design test` (every reference resolves, dark redefines only Tier 2, only Tier 1 holds raw colors, the class layer reads only Tier 2, `icons.js` is what the script writes); `npx @google/design.md lint web/design/DESIGN.md`.

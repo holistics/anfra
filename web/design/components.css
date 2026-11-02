@@ -1,6 +1,7 @@
 /*
- * The class layer: anfra's components as plain CSS, for UI that has no Vue or React to draw
- * shadcn with (appserve, the SDK's plugin tabs). Each class draws what anfra Cloud's shadcn
+ * The class layer: anfra's components as plain CSS, for framework-free UI that has no Vue or React
+ * to draw shadcn with: the SDK's plugin panel, DOM in shadow roots. A Vue app (appserve, anfra
+ * Cloud) uses the shadcn-vue components instead. Each class draws what anfra Cloud's shadcn
  * component of the same name draws, variant for variant, on the Tier 2 tokens alone, so a token
  * change reaches both. Variants and sizes are data attributes:
  *
