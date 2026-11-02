@@ -23,7 +23,7 @@ const products_detail = [
 @tag('1️⃣ Trust/Endorsed')
 Dataset demo_ecommerce {
   label: '[Demo] Ecommerce Official (2025)'
-  description: @md
+  description: '''
 # Dataset Capabilities
 
 ## What this dataset can answer
@@ -44,7 +44,7 @@ Dataset demo_ecommerce {
   - Focus on merchant/category rankings.
 - Data Team
   - Be precise about definitions and grain.
-;;
+'''
   data_source_name: 'demodb'
   owner: 'user@company.com'
 
@@ -67,14 +67,14 @@ Dataset demo_ecommerce {
 
     relationship(ecommerce_users.city_id > ecommerce_cities.id, true),
     relationship(ecommerce_cities.country_code > ecommerce_countries.code, true),
-    relationship(ecommerce_merchants.city_id > ecommerce_cities.id, false), // optional: not all analyses need this
+    relationship(ecommerce_merchants.city_id > ecommerce_cities.id, false), // inactive: no query joins merchants to cities unless it enables this with with_relationships
 
     relationship(ecommerce_order_items.product_id > ecommerce_products.id, true),
     relationship(ecommerce_products.merchant_id > ecommerce_merchants.id, true),
     relationship(ecommerce_products.category_id > map_categories.category_id, true),
 
     relationship(ecommerce_orders.created_date > dim_dates.date_key, true),
-    relationship(ecommerce_users.sign_up_date > dim_dates.date_key, false), // optional: secondary date relationship
+    relationship(ecommerce_users.sign_up_date > dim_dates.date_key, false), // inactive: a second date for dim_dates; a metric by sign-up date enables it with with_relationships
     relationship(ecommerce_employees.merchant_id > ecommerce_merchants.id, true),
   ]
 
