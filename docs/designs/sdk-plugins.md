@@ -198,7 +198,7 @@ A plugin that forwards a call name or request the frame chose makes the call wit
 
 ### What crosses back
 
-When a call fails, the frame gets the error's class and message only for the SDK's classes (`ValidationError`, `QueryError`, `PermissionError`, `TransportError`), whose messages are written for an author. Any other error arrives as `QueryError: The call failed.`, because a message from a bug, a middleware or a library may hold a URL, an id or a server's error.
+When a call fails, the frame gets the error's class and message only for the SDK's classes (`ValidationError`, `QueryError`, `PermissionError`, `TransportError`), whose messages are written for an author, with the request's id and a `TransportError`'s status. Any other error arrives as `QueryError: The call failed.`, because a message from a bug, a middleware or a library may hold a URL, a resource's id or a server's error; the side that hides it logs the original to its own console first. See [errors.md](errors.md#in-a-data-app).
 
 A frame's event reaches the host only if a plugin declared it in `host.events`, and only in the form that plugin's check returns. The definition makes up an event's payload just as it makes up a call's request, and the plugin that owns the event checks its shape once, so each host's listeners don't have to.
 
