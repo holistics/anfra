@@ -17,6 +17,7 @@ import {
   allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from '@/lib/catalog';
 import { overflowMenus } from '@/lib/pluginUI';
+import { layerOpen } from '@/lib/layers';
 import * as server from '@/lib/server';
 
 const entries = ref<CatalogEntry[]>([]);
@@ -351,7 +352,7 @@ function onKeydown (event: KeyboardEvent): void {
     sidebarOpen.value = true;
     void nextTick(() => sidebar.value?.focusSearch());
   }
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && !layerOpen()) {
     // Picking, Escape only ends the pick, as it does with focus in the frame; again, it closes the panel.
     if (app.value?.panel.picking) app.value.panel.pick(false);
     else app.value?.panel.hide();
