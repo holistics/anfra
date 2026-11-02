@@ -4,13 +4,33 @@
  */
 import type { MountContext } from '../../host/plugin';
 import type { Panel } from '../../host/panel';
+import type { AppConsoleEvent, AppErrorEvent } from '../../common/runtimeErrors';
 import { createRequestLog, type RequestLog, type RequestRecorder } from './model/requests';
 import {
   DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type QueriesFilter, type RevealTarget,
 } from './model/types';
 
+/** A runtime error as the panel keeps it: the same one again counts up instead of filling the list. */
+export interface RuntimeEntry {
+  event: AppErrorEvent;
+  count: number;
+}
+
+/** How many runtime errors, and console lines, a mount keeps: the newest. */
+export const RUNTIME_LIMIT = 50;
+export const CONSOLE_LIMIT = 200;
+
 export interface InspectState {
   readonly requests: RequestLog;
+  /**
+   * The frame's runtime errors since it loaded, newest first, but a query's: the query's own state
+   * says whether it is failing now.
+   */
+  readonly errors: readonly RuntimeEntry[];
+  /** The frame's console lines, oldest first, when the host captures them. */
+  readonly console: readonly AppConsoleEvent[];
+  addError: (event: AppErrorEvent) => void;
+  addConsole: (event: AppConsoleEvent) => void;
   readonly record: RequestRecorder['record'];
   /**
    * Queries' search and filter, its open rows (`query:<app>/<name>`) and closed sections
@@ -51,8 +71,31 @@ function createState (): InspectState {
     try { listener(); } catch { /* one listener must not stop the others */ }
   });
   let nonce = 0;
+  const errors: RuntimeEntry[] = [];
+  const lines: AppConsoleEvent[] = [];
   const state: InspectState = {
     requests: recorder.log,
+    errors,
+    console: lines,
+    addError (event) {
+      if (event.kind === 'query') return;
+      const same = errors.find((entry) => entry.event.kind === event.kind && entry.event.message === event.message && entry.event.call === event.call);
+      if (same) {
+        same.count += 1;
+        same.event = event;
+        errors.splice(errors.indexOf(same), 1);
+        errors.unshift(same);
+      } else {
+        errors.unshift({ event, count: 1 });
+        errors.length = Math.min(errors.length, RUNTIME_LIMIT);
+      }
+      changed();
+    },
+    addConsole (event) {
+      lines.push(event);
+      if (lines.length > CONSOLE_LIMIT) lines.splice(0, lines.length - CONSOLE_LIMIT);
+      changed();
+    },
     record: recorder.record,
     queries: { search: '', filter: 'all', open: new Set(), closed: new Set() },
     data: { open: new Set() },

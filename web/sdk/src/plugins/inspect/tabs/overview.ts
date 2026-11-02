@@ -1,7 +1,8 @@
 /**
  * Overview: the tab the panel opens on. Is this app healthy, and where to look: a status bar of
- * the queries' states, a trust card per app, stat cards, the problems, what the reader changed, and
- * the environment the frame runs in. Every count and problem links to where it is.
+ * the queries' states, a trust card per app, stat cards, the problems (runtime errors among them),
+ * the console lines the host captured, what the reader changed, and the environment the frame runs
+ * in. Every count and problem links to where it is, or opens to its stack.
  */
 import type { InspectedApp } from '../../../common/types';
 import type { TabContext } from '../../../host/contributions';
@@ -56,6 +57,13 @@ const CSS = `
 .problem:hover { background: var(--hover); }
 .problem .mark { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; }
 .problem .mark.error { background: var(--anfra-color-danger); } .problem .mark.warn { background: var(--warn); }
+.problem .times { flex: none; margin-left: auto; font-size: 12px; color: var(--anfra-color-muted); font-variant-numeric: tabular-nums; }
+.problem-detail, .console > li { margin: 0; font-family: var(--anfra-font-mono); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.problem-detail { margin: 0 6px 6px 22px; padding: 6px 8px; border-radius: 6px; background: var(--subtle); color: var(--anfra-color-muted); }
+.console { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow: auto; }
+.console > li { display: flex; gap: 8px; padding: 2px 0; }
+.console > li.error { color: var(--anfra-color-danger); } .console > li.warn { color: var(--warn); }
+.console .at { flex: none; color: var(--anfra-color-muted); }
 .overview > h5 { margin: 6px 0 0; }
 .tile.collapsible { padding: 6px 12px; }
 .tile.collapsible > summary { font-weight: 500; }
@@ -79,6 +87,8 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
   const { panel, mount } = context;
   const state = stateOf(mount);
   let allProblems = false;
+  /** The runtime problems opened to their detail, by message. */
+  const opened = new Set<string>();
   const reveal = (target: RevealTarget) => state.reveal(panel, target);
   const showQueries = (filter: QueriesFilter) => reveal({ tab: QUERIES_TAB, filter });
 
@@ -169,7 +179,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
       h(doc, 'div', { class: 'stats three' },
         stat('problems', 'Problems', String(problems.length), problems.length ? `${plural(errors, 'error')} · ${plural(warnings, 'warning')}` : 'None found',
           // Failed queries are what Queries' Errors filter lists; warnings have no such list.
-          counts.error ? () => showQueries('errors') : first ? () => reveal(first.target) : undefined,
+          counts.error ? () => showQueries('errors') : first?.target ? () => reveal(first.target!) : undefined,
           errors ? 'error' : warnings ? 'warn' : undefined),
         stat('queries', 'Queries', String(counts.total), queries, () => showQueries('all'), counts.error ? 'error' : undefined),
         stat('controls', 'Controls', String(controls), unapplied ? `${unapplied} unapplied` : 'All applied', () => showQueries('all'), unapplied ? 'warn' : undefined)),
@@ -188,19 +198,41 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     const shown = allProblems ? problems : problems.slice(0, FIRST_PROBLEMS);
     return [
       h(doc, 'h5', {}, 'Problems'),
-      h(doc, 'ul', { class: 'problems', 'data-testid': 'problems' }, shown.map((problem, i) => h(doc, 'li', {},
-        h(doc, 'button', {
-          type: 'button',
-          class: 'problem',
-          'data-key': `problem:${i}`,
-          'data-testid': 'problem',
-          onclick: () => reveal(problem.target),
-        }, h(doc, 'span', { class: `mark ${problem.level}`, role: 'img', 'aria-label': problem.level === 'error' ? 'Error' : 'Warning' }), problem.message)))),
+      h(doc, 'ul', { class: 'problems', 'data-testid': 'problems' }, shown.map((problem, i) => {
+        const { target, detail } = problem;
+        const open = !target && !!detail && opened.has(problem.message);
+        return h(doc, 'li', {},
+          h(doc, 'button', {
+            type: 'button',
+            class: 'problem',
+            'data-key': `problem:${i}`,
+            'data-testid': 'problem',
+            'aria-expanded': !target && detail ? String(open) : undefined,
+            onclick: () => {
+              if (target) { reveal(target); return; }
+              if (!detail) return;
+              if (open) opened.delete(problem.message); else opened.add(problem.message);
+              tab.redraw();
+            },
+          },
+          h(doc, 'span', { class: `mark ${problem.level}`, role: 'img', 'aria-label': problem.level === 'error' ? 'Error' : 'Warning' }),
+          problem.message,
+          !!problem.count && h(doc, 'span', { class: 'times', 'aria-label': `${problem.count} times` }, `×${problem.count}`)),
+          open && h(doc, 'pre', { class: 'problem-detail', 'data-testid': 'problem-detail' }, detail));
+      })),
       problems.length > FIRST_PROBLEMS && link(doc, allProblems ? 'Show fewer' : `Show all ${problems.length}`, () => {
         allProblems = !allProblems;
         tab.redraw();
       }, { 'data-key': 'problems:all', 'data-testid': 'problems-all' }),
     ];
+  }
+
+  /** The frame's console lines, when the host captures them: collapsed, since they are not problems. */
+  function consoleLines (): Children {
+    const lines = state.console;
+    if (lines.length === 0) return undefined;
+    return collapsible(doc, 'console', ['Console', h(doc, 'span', { class: 'muted' }, plural(lines.length, 'line'))], () => h(doc, 'ul', { class: 'console', 'data-testid': 'console' },
+      lines.map((line) => h(doc, 'li', { class: line.level }, h(doc, 'span', { class: 'at' }, formatTime(line.at)), line.message))), { class: 'tile' });
   }
 
   /** What the reader changed from the app as declared: controls off their declared default. */
@@ -259,7 +291,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     const { snapshot } = panel;
     if (!snapshot) return note(doc, 'Waiting for the Data App…', { 'data-testid': 'inspect-waiting' });
     const { apps } = snapshot;
-    const problems = problemsOf(snapshot);
+    const problems = problemsOf(snapshot, undefined, state.errors);
     return h(doc, 'div', { class: 'overview' },
       statusBar(apps),
       apps.length === 0
@@ -267,6 +299,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
         : apps.map((app, index) => trustCard(app, apps.length > 1 ? `App ${index + 1}` : undefined)),
       stats(apps, problems, state.requests.entries()),
       problemsList(problems),
+      consoleLines(),
       changes(snapshot),
       environment(apps));
   }, { also: [state.subscribe] });

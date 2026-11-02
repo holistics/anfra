@@ -27,8 +27,13 @@ export function inspectPlugin (): Plugin {
         handle: (request, context, next) => (context.mount ? stateOf(context.mount).record(request, context, next) : next(request)),
       }],
       mount: (mount) => {
-        stateOf(mount);
-        return () => dropState(mount);
+        const state = stateOf(mount);
+        // Kept from the first, whether or not the panel is open: it lists them once it is.
+        const off = [mount.on('anfra.error', state.addError), mount.on('anfra.console', state.addConsole)];
+        return () => {
+          off.forEach((stop) => stop());
+          dropState(mount);
+        };
       },
       commands: [{
         id: 'toggle',
