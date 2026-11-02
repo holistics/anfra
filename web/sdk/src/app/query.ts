@@ -23,6 +23,8 @@ export class Query extends Observable {
   private readonly app: AppContext & Observable;
 
   private _state: QueryState = 'idle';
+  /** Its last run failed: not a `fetchMore`, whose failure leaves the pages already loaded to keep. */
+  private runFailed = false;
 
   private _result?: QueryResult;
 
@@ -158,10 +160,11 @@ export class Query extends Observable {
 
   /**
    * @internal Also when its last run failed, whatever its inputs: so `execute()` is the retry, of
-   * the failed queries only, even after a forced run (`refresh()`) failed with unchanged inputs.
+   * the failed queries only, even after a forced run (`refresh()`) failed with unchanged inputs. Not
+   * after a failed `fetchMore`: rerun, it would drop the pages already loaded; `fetchMore` is its retry.
    */
   shouldRun (force = false): boolean {
-    return force || this._state === 'error' || this.lastRunSignature === undefined || this.isDirty;
+    return force || this.runFailed || this.lastRunSignature === undefined || this.isDirty;
   }
 
   /** Stops the in-flight request for this query. The pending `execute()` resolves without it. */
@@ -242,6 +245,7 @@ export class Query extends Observable {
   markSuccess (result: QueryResult, signature: string, append: boolean): void {
     this._state = 'success';
     this._error = undefined;
+    if (!append) this.runFailed = false;
     this.lastRunSignature = signature;
     this.lastPageRows = result.rows.length;
 
@@ -255,8 +259,9 @@ export class Query extends Observable {
     this.notify();
   }
 
-  /** @internal */
-  markError (error: DataAppError): void {
+  /** @internal `page` when it is a `fetchMore` that failed, not a run. */
+  markError (error: DataAppError, page = false): void {
+    if (!page) this.runFailed = true;
     this._state = 'error';
     this._error = error;
     this.notify();

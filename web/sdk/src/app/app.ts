@@ -666,7 +666,7 @@ export class App extends Observable implements AppContext {
       query.rewindPage();
       if (isAbort(err)) return;
       const error = toDataAppError(err, query.name);
-      query.markError(error);
+      query.markError(error, true);
       throw error;
     } finally {
       if (query.controller === controller) query.controller = undefined;
