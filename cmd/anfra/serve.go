@@ -144,7 +144,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		var apps *appserve.Server
 		if !opts.noApps {
 			apps = appserve.New(appserve.Options{
-				RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger,
+				RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger, AppLogger: h.appLogger,
 				// make dev's Vite dev server, which serves the frontend from source.
 				DevFrontendURL: os.Getenv("ANFRA_APPSERVE_DEV_URL"),
 			})

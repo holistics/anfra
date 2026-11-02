@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -57,6 +58,9 @@ type hostContext struct {
 	// exportFiles are this process's exports' files: the one-shot CLI's, or the
 	// server's, which closes them when it stops.
 	exportFiles *exports.Files
+	// appLogger is where the repo's Data Apps' reports from the browser go: anfra.log, as
+	// "service":"app".
+	appLogger *slog.Logger
 }
 
 // withRepo resolves the repo and sets up host-aggregated logging, then runs fn
@@ -84,6 +88,7 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 	return fn(ctx, hostContext{
 		repo:        repo,
 		exportFiles: exports.New(exportLinkLife),
+		appLogger:   lg.App,
 		cfg: sidecar.Config{
 			RepoID:           repo.ID,
 			CompileCachePath: filepath.Join(repo.CacheDir(), "compile-cache"),

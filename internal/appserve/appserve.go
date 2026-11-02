@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
@@ -34,6 +35,9 @@ type Options struct {
 	// Watch turns live reload on: while a Data App is open, a change in the repo is an event.
 	Watch  bool
 	Logger *slog.Logger
+	// AppLogger is where the Data Apps' reports from the browser go (POST /appserve/log): anfra.log,
+	// as "service":"app". Without one, reports are taken and dropped.
+	AppLogger *slog.Logger
 	// DevFrontendURL, when set, is a Vite dev server serving the frontend from source (make dev):
 	// the pages redirect there, and it proxies the rest back. The built-in frontend, rebuilt only
 	// by `pnpm build:web`, would be stale.
@@ -45,6 +49,7 @@ type Server struct {
 	opts     Options
 	frontend http.Handler // nil: this binary was built without the appserve frontend
 	events   *broadcaster
+	reports  *limiter
 	dev      *url.URL // opts.DevFrontendURL, parsed; nil without a dev frontend
 	// live is live reload's state: the repo is watched while event streams are open.
 	live struct {
@@ -61,7 +66,7 @@ func New(opts Options) *Server {
 }
 
 func newServer(opts Options, built fs.FS) *Server {
-	s := &Server{opts: opts, events: newBroadcaster()}
+	s := &Server{opts: opts, events: newBroadcaster(), reports: newLimiter(time.Now)}
 	if opts.DevFrontendURL != "" {
 		if u, err := url.Parse(opts.DevFrontendURL); err == nil && u.Scheme != "" && u.Host != "" {
 			s.dev = u
@@ -85,6 +90,10 @@ func (s *Server) Close() { s.events.closeAll() }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	switch {
+	// The one write: a Data App's report, from the appserve page (anfra serve's guard has
+	// already refused another origin's, and a body not JSON).
+	case r.Method == http.MethodPost && p == "/appserve/log":
+		s.log(w, r)
 	case r.Method != http.MethodGet && r.Method != http.MethodHead:
 		httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "No such endpoint."))
 	case p == "/" || p == "/apps" || strings.HasPrefix(p, "/apps/"):

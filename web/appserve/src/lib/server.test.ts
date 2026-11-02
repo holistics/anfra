@@ -95,3 +95,20 @@ describe('version', () => {
     expect(await server.version()).toBeUndefined();
   });
 });
+
+describe('report', () => {
+  it("posts a Data App's runtime error to anfra serve's log, and never throws", async () => {
+    const posted = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', posted);
+    const event = {
+      kind: 'listener', message: 'echarts is not defined', at: '2026-11-02T00:00:00.000Z', mount: 1,
+    } as const;
+    server.report('sales.html', 'error', event);
+    expect(posted).toHaveBeenCalledWith('/appserve/log', expect.objectContaining({
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'sales.html', type: 'error', event }),
+    }));
+    posted.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    expect(() => server.report('sales.html', 'console', { level: 'warn', message: 'x', at: '', mount: 1 })).not.toThrow();
+    vi.unstubAllGlobals();
+  });
+});
