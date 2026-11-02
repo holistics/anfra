@@ -235,6 +235,18 @@ region.setCondition({ operator: 'is', values: [] });                // no filter
 region.reset();                                                     // back to the declared default
 ```
 
+Read a filter's value back instead of keeping your own copy, which drifts from the control:
+
+| Member | |
+| --- | --- |
+| `filter.condition` | The value now set, `{ operator, values, … }`: what the next `execute()` applies. |
+| `filter.appliedCondition` | The value its queries last ran with; `undefined` before the first `execute()`. |
+| `filter.isDirty` | `condition` differs from `appliedCondition`. |
+| `filter.subscribe(fn)` | Calls `fn` whenever its value changes, by the reader's input or by `setCondition()`/`reset()` from code. Returns an unsubscribe. |
+
+For example, highlight the row a filter is focused on by reading `region.condition.values` in the
+render function, and let a row click call `region.setCondition(…)` then `execute()`.
+
 Useful operators by type (the full list is in the SDK's `Operator` type):
 
 - any: `is`, `is_not`, `is_null`, `not_null`
