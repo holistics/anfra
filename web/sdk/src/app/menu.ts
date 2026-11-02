@@ -8,6 +8,7 @@ import type { MenuEntry, MenuTarget, MenuTargetKind, NodeTarget, RowsTarget } fr
 import type { StructureNode } from '../common/types';
 import type { FrameKernel } from './kernel';
 import { layerRoot } from './layer';
+import { reportError } from './reporting';
 import { ATTR } from './structure';
 import type { PopoverSide, Rect, UiBody } from './ui/body';
 
@@ -205,12 +206,18 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
         groups,
         onPick: (key) => {
           const action = found.map((group) => group.run.get(key)).find(Boolean);
-          Promise.resolve().then(action).catch((err: unknown) => (win as Window & typeof globalThis).console?.error('anfra: a menu item failed:', err));
+          Promise.resolve().then(action).catch((err: unknown) => {
+            (win as Window & typeof globalThis).console?.error('anfra: a menu item failed:', err);
+            reportError('uncaught', err);
+          });
         },
         onClose: () => { if (current === close) current = undefined; },
       });
       current = close;
-    })().catch((err: unknown) => (win as Window & typeof globalThis).console?.error('anfra: the menu failed to open:', err));
+    })().catch((err: unknown) => {
+      (win as Window & typeof globalThis).console?.error('anfra: the menu failed to open:', err);
+      reportError('uncaught', err);
+    });
     return true;
   }
 
@@ -241,6 +248,19 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     listen();
   });
 
+  /**
+   * A plugin's mount, its failure reported: the body (a script of its own) logs it and draws on,
+   * but has no reporter to tell the host.
+   */
+  const reported = (mount: (root: ShadowRoot) => void | (() => void)) => (root: ShadowRoot) => {
+    try {
+      return mount(root);
+    } catch (err) {
+      reportError('uncaught', err);
+      throw err;
+    }
+  };
+
   async function show<T extends { onClose?: () => void }> (input: T, draw: (body: UiBody, onClose: () => void) => () => void): Promise<Opened> {
     const body = await ui();
     closeCurrent();
@@ -260,7 +280,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
       listen();
     },
     modal: (input) => show(input, (body, onClose) => body.modal(root(), {
-      title: input.title, size: input.size, mount: input.mount, onClose,
+      title: input.title, size: input.size, mount: reported(input.mount), onClose,
     })),
     popover: (input) => show(input, (body, onClose) => {
       const { anchor } = input;
@@ -276,7 +296,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
         rect = () => ({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
       }
       return body.popover(root(), {
-        anchor: rect, side: input.side, mount: input.mount, dismiss: input.dismiss, closeButton: input.closeButton, onClose,
+        anchor: rect, side: input.side, mount: reported(input.mount), dismiss: input.dismiss, closeButton: input.closeButton, onClose,
       });
     }),
   };
