@@ -60,8 +60,9 @@ export function report (path: string, type: 'error' | 'console', event: AppError
   fetch('/appserve/log', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // Not keepalive: the page stays, and a browser caps keepalive bodies in flight at 64KB, so a
+    // burst of failures would lose the reports over it.
     body: JSON.stringify({ path, type, event }),
-    keepalive: true,
   }).catch(() => { /* the server is gone: nothing to tell */ });
 }
 

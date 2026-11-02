@@ -66,7 +66,8 @@ func New(opts Options) *Server {
 }
 
 func newServer(opts Options, built fs.FS) *Server {
-	s := &Server{opts: opts, events: newBroadcaster(), reports: newLimiter(time.Now)}
+	s := &Server{opts: opts, events: newBroadcaster()}
+	s.reports = newLimiter(time.Now, s.logDropped)
 	if opts.DevFrontendURL != "" {
 		if u, err := url.Parse(opts.DevFrontendURL); err == nil && u.Scheme != "" && u.Host != "" {
 			s.dev = u
