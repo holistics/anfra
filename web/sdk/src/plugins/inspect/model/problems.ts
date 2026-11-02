@@ -1,17 +1,49 @@
 /**
- * Everything wrong with the inspected frame, in one list: failed queries, wiring checks and
- * structure problems, most severe first, each with where it is.
+ * Everything wrong with the inspected frame, in one list: failed queries, the frame's other
+ * runtime errors, wiring checks and structure problems, most severe first, each with where it is.
  */
 import type { InspectedApp, StructureNode } from '../../../common/types';
 import type { Snapshot } from '../../../host/panel';
 import { type Check, wiringChecks } from './checks';
 import { handleFor } from './format';
 import type { RevealTarget } from './types';
+import type { RuntimeEntry } from '../state';
 
 export interface Problem {
   level: 'error' | 'warn';
   message: string;
-  target: RevealTarget;
+  /** Where it is; a runtime error with nowhere to go shows `detail` instead. */
+  target?: RevealTarget;
+  /** A runtime error's stack, the call that failed, its request id. */
+  detail?: string;
+  /** How many times a runtime error happened. */
+  count?: number;
+}
+
+const RUNTIME_LABELS = {
+  query: 'Query failed',
+  uncaught: 'Uncaught error',
+  listener: 'A subscribe() listener threw',
+  hidden: 'The host failed a call',
+} as const;
+
+/** A runtime error as a problem: to its query or control when it names one, else with its stack. */
+export function runtimeProblem (entry: RuntimeEntry, snapshot: Snapshot): Problem {
+  const { event, count } = entry;
+  const detail = [
+    event.call && `Call: ${event.call}`,
+    event.code && `Code: ${event.code}${event.scope ? ` (${event.scope})` : ''}`,
+    event.requestId && `Request: ${event.requestId}`,
+    event.stack,
+  ].filter(Boolean).join('\n');
+  const problem: Problem = { level: 'error', message: `${RUNTIME_LABELS[event.kind]}: ${event.message}` };
+  if (detail) problem.detail = detail;
+  if (count > 1) problem.count = count;
+  if (event.entity) {
+    const app = snapshot.apps.findIndex((a) => event.entity! in a.queries || event.entity! in a.controls);
+    if (app >= 0) problem.target = { entity: event.entity in snapshot.apps[app].queries ? 'query' : 'control', app, name: event.entity };
+  }
+  return problem;
 }
 
 /** Each structure node with problems, in tree order. */
@@ -33,9 +65,13 @@ export function appProblems (app: InspectedApp, index: number, checks = wiringCh
   return problems;
 }
 
-/** `checks` is each app's `wiringChecks`, by index, when already worked out. */
-export function problemsOf (snapshot: Snapshot, checks?: Check[][]): Problem[] {
+/**
+ * `checks` is each app's `wiringChecks`, by index, when already worked out; `runtime`, the frame's
+ * runtime errors, newest first, listed after the apps' own.
+ */
+export function problemsOf (snapshot: Snapshot, checks?: Check[][], runtime: readonly RuntimeEntry[] = []): Problem[] {
   const problems = snapshot.apps.flatMap((app, index) => appProblems(app, index, checks?.[index]));
+  problems.push(...runtime.map((entry) => runtimeProblem(entry, snapshot)));
   for (const node of problemNodes(snapshot.structure.nodes)) {
     for (const problem of node.problems) problems.push({ level: 'warn', message: `${handleFor(node)}: ${problem}`, target: { node: node.key } });
   }

@@ -119,6 +119,39 @@ describe('Overview', () => {
     expect(css).toMatch(/\.tile\.collapsible > summary \.muted \{[^}]*flex: none;[^}]*white-space: nowrap;/);
   });
 
+  it('lists the frame\'s runtime errors among the errors, counted, to their entity or open to their stack', async () => {
+    const root = await overview();
+    harness!.event('anfra.error', { kind: 'listener', message: 'echarts is not defined', stack: 'TypeError: echarts is not defined\n    at draw' });
+    harness!.event('anfra.error', { kind: 'listener', message: 'echarts is not defined', stack: 'TypeError: echarts is not defined\n    at draw' });
+    harness!.event('anfra.error', { kind: 'uncaught', message: 'No access.', code: 'forbidden', scope: 'user', entity: 'orders' });
+    harness!.event('anfra.error', { kind: 'query', message: 'not listed: the query says so', entity: 'orders' });
+    const problems = () => [...root.querySelectorAll<HTMLElement>('[data-testid="problem"]')];
+    await vi.waitFor(() => expect(problems()).toHaveLength(5));
+    expect(problems().slice(0, 4).map((p) => p.textContent)).toEqual([
+      'orders failed: Unknown field orders.status',
+      'Uncaught error: No access.',
+      'A subscribe() listener threw: echarts is not defined×2',
+      'month is mapped to no query, so it has no effect.',
+    ]);
+    expect(byTestId(root, 'stat-problems')?.querySelector('.stat-value')?.textContent).toBe('5');
+    problems()[2].click();
+    expect(byTestId(root, 'problem-detail')?.textContent).toBe('TypeError: echarts is not defined\n    at draw');
+    problems()[2].click();
+    expect(byTestId(root, 'problem-detail')).toBeNull();
+    problems()[1].click();
+    expect(harness!.mounted.panel.tab).toBe('inspect.queries');
+  });
+
+  it('keeps the frame\'s console lines in a section of their own, collapsed', async () => {
+    const root = await overview();
+    expect(root.querySelector('details[data-key="console"]')).toBeNull();
+    harness!.event('anfra.console', { level: 'warn', message: 'rows: 3', at: '2026-11-02T00:00:00.000Z' });
+    harness!.event('anfra.console', { level: 'error', message: 'oops', at: '2026-11-02T00:00:01.000Z' });
+    await vi.waitFor(() => expect(root.querySelector('details[data-key="console"]')?.textContent).toContain('2 lines'));
+    const details = await open(root, 'console');
+    expect([...details.querySelectorAll('.console > li')].map((li) => [li.className, li.lastChild?.textContent])).toEqual([['warn', 'rows: 3'], ['error', 'oops']]);
+  });
+
   it('lists the controls changed from the original, to highlight or show', async () => {
     const root = await overview();
     const details = await open(root, 'changes');

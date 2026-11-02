@@ -118,6 +118,8 @@ export interface Harness {
   posted: BridgeMessage[];
   /** Post a snapshot from the frame. */
   post: (snapshot: Snapshot) => void;
+  /** Send an event from the frame, by full name. */
+  event: (name: string, payload: unknown) => void;
   /** Make a call as the frame does, through the pipeline, so `inspect` logs it. */
   frameCall: (name: string, request: unknown) => Promise<unknown>;
   /** Draw a tab, by full id, once its code has loaded. */
@@ -136,13 +138,16 @@ export async function inspect (options: { snapshot?: Snapshot, tab?: string, sub
   const host = createHost({
     plugins: [corePlugin({ submitQuery, fieldSuggestions: vi.fn() } as never), inspectPlugin(), probe, ...(options.plugins ?? [])],
     frameScript: 'x',
+    onError: () => {},
+    captureConsole: true,
   });
   const mounted = host.mount({ container: document.body, definition: '', datasets: { sales: salesDataset }, user: options.user ?? testUser });
   const posted: BridgeMessage[] = [];
   vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { posted.push(message as BridgeMessage); });
-  const post = (snapshot: Snapshot) => window.dispatchEvent(new MessageEvent('message', {
-    data: { type: 'anfra:event', name: 'anfra.snapshot', payload: snapshot }, source: mounted.frame.contentWindow,
+  const event = (name: string, payload: unknown) => window.dispatchEvent(new MessageEvent('message', {
+    data: { type: 'anfra:event', name, payload }, source: mounted.frame.contentWindow,
   }));
+  const post = (snapshot: Snapshot) => event('anfra.snapshot', snapshot);
   await mounted.run('inspect.toggle');
   if (options.tab) mounted.panel.show(options.tab);
   post(options.snapshot ?? salesSnapshot());
@@ -166,7 +171,7 @@ export async function inspect (options: { snapshot?: Snapshot, tab?: string, sub
     await vi.waitFor(() => expect(element.shadowRoot?.querySelector('.pane')).not.toBeNull());
     return { root: element.shadowRoot!, unmount };
   };
-  return { host, mounted, state: stateOf(mount!), posted, post, frameCall, tab, unmount: () => mounted.unmount() };
+  return { host, mounted, state: stateOf(mount!), posted, post, event, frameCall, tab, unmount: () => mounted.unmount() };
 }
 
 /** The element with `data-testid="<id>"` under `root`. */
