@@ -77,7 +77,7 @@ is almost always right.
 | `app.createDateDrill(name, { default?, label? })` | Declares a date grain switch. See [Date drill](#date-drill). |
 | `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. |
 | `app.mapCrossFilter(fromQuery, toQuery)` | Rows selected in `fromQuery` filter `toQuery`. |
-| `await app.execute()` | Runs every query whose inputs changed. Resolves `{ succeeded, failed }`, never rejects. |
+| `await app.execute()` | Runs every query whose inputs changed, and every query whose last run failed: it is also the retry. Resolves `{ succeeded, failed }`, never rejects. |
 | `await app.refresh()` | Re-runs every query, whether or not its inputs changed. |
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
 | `app.hasChanges` | A control or the selection changed since the last execute: use for an "Apply" button. |
@@ -373,13 +373,27 @@ Every error is the API's error document: branch on `err.scope` (who must act) an
 | `result_too_large`, `page_too_large` | user | Too many rows or bytes: `details` holds the limit. | Aggregate, filter, or page (`pageSize`). |
 | `forbidden` / `unauthenticated` | user | This reader may not see it / their session is gone. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access" or "sign in again", not a failure. |
 | `invalid_request` | client | A call the app made wrong, which a plugin refused (`Anfra.lineage` with an empty list, `Anfra.render` of a missing block). | Fix the call it names. |
-| `connection_failed`, `internal_server_error`, `call_failed` | server | The server could not be reached or failed, or the host failed the call (`call_failed`: its cause is in the host page's console). | Show a retry. |
+| `connection_failed`, `internal_server_error`, `call_failed` | server | The server could not be reached or failed, or the host failed the call (`call_failed`: its cause is in `anfra serve`'s log and the host page's console). | Show "couldn't load" with a Retry that calls `app.execute()`. |
 
 Other codes are the host's own: treat them by `scope`. A query's error is stored on the query,
 never thrown; `fetchMore`, exports and plugin calls reject with one.
 
+One recipe for every block, in its render function:
+
 ```js
-if (query.error?.code === 'forbidden') showNoAccess();
-else if (query.error?.scope === 'server') showRetry();
-else showProblem(query.error.message);
+if (query.state === 'executing') showLoading();
+else if (query.state === 'error') {
+  const { code, scope, message } = query.error;
+  if (code === 'forbidden') showNoAccess();
+  else if (code === 'unauthenticated') showSignInAgain();
+  else if (scope === 'server') showRetry(() => app.execute()); // reruns only the failed queries
+  else showProblem(message);                                    // user or client: the message says what
+} else if (query.result.rows.length === 0) showEmpty();
+else draw(query.result);
 ```
+
+Never throw from a `subscribe()` listener, and guard a library that may load late. What you don't
+handle is still seen: every failed query, uncaught error or unhandled rejection, and listener
+exception is reported to the host, which on `anfra serve` lists it in the panel's Problems and
+writes it to its log (see the skill's "Run and check it"). An error you catch yourself (a
+`fetchMore` or export) is not reported: show it.
