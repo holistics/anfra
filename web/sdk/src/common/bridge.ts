@@ -22,6 +22,8 @@ export interface Provision {
   plugins: PluginInfo[];
   /** The host page's origin: where the frame posts, so nothing else can read its messages. */
   hostOrigin: string;
+  /** Whether the frame reports its `console.error` / `console.warn` lines (`anfra.console`). */
+  captureConsole?: boolean;
 }
 
 export const PROVISION_ELEMENT_ID = 'anfra-provision';

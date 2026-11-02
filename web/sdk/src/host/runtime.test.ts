@@ -6,7 +6,7 @@ import { forbidden } from '../common/errors';
 import type { Backend } from '../common/types';
 import { salesDataset, testUser } from '../app/testSupport';
 import { corePlugin } from '../plugins/core';
-import { createHost, type MountedDataApp } from './runtime';
+import { createHost, type HostOptions, type MountedDataApp } from './runtime';
 import { definePlugin, type CallContext, type Middleware, type Plugin } from './plugin';
 
 let replies: BridgeMessage[];
@@ -35,13 +35,16 @@ function backend (overrides: Partial<Backend> = {}): Backend {
 const query = { dataset: 'sales', aql: 'explore {}', input: { filters: [], conditions: [], sorts: [], dateDrills: [] } };
 
 /** Mount a frame on a host with these plugins, and catch what the host posts to it. */
-function mount (plugins: Plugin[], middleware: Middleware[] = []) {
-  const host = createHost({ plugins, middleware, frameScript: 'window.FRAME = 1;' });
+function mount (plugins: Plugin[], middleware: Middleware[] = [], options: Partial<HostOptions> = {}, title?: string) {
+  const host = createHost({
+    plugins, middleware, frameScript: 'window.FRAME = 1;', ...options,
+  });
   mounted = host.mount({
     container: document.body,
     definition: '<head></head><body>hi</body>',
     datasets: { sales: salesDataset },
     user: testUser,
+    title,
   });
   vi.spyOn(mounted.frame.contentWindow!, 'postMessage').mockImplementation((message: unknown) => { replies.push(message as BridgeMessage); });
   return { host, mounted };
@@ -417,5 +420,84 @@ describe('the host\'s side', () => {
     mounted = undefined;
     await expect(pending).rejects.toThrow(/unmounted/);
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runtime errors', () => {
+  const provisioned = () => JSON.parse(/<script[^>]*id="anfra-provision"[^>]*>([^<]*)<\/script>/.exec(mounted!.frame.srcdoc)![1]) as { captureConsole?: boolean };
+
+  it('reach the host\'s onError and the mount\'s listeners, checked, with the mount they came from', () => {
+    const onError = vi.fn();
+    mount([corePlugin(backend())], [], { onError }, 'Sales');
+    const heard = vi.fn();
+    mounted!.on('anfra.error', heard);
+    fromFrame({
+      type: 'anfra:event',
+      name: 'anfra.error',
+      payload: {
+        kind: 'query', code: 'query_failed', scope: 'user', message: 'boom', requestId: 'r1', entity: 'orders', at: '2026-11-02T00:00:00.000Z', stack: 'dropped', rows: [[1]],
+      },
+    });
+    const event = {
+      kind: 'query', code: 'query_failed', scope: 'user', message: 'boom', requestId: 'r1', entity: 'orders', at: '2026-11-02T00:00:00.000Z', mount: expect.any(Number), title: 'Sales',
+    };
+    expect(onError).toHaveBeenCalledWith(event);
+    expect(heard).toHaveBeenCalledWith(event);
+  });
+
+  it('drop what is not an error the frame may report, and cap what is', () => {
+    const onError = vi.fn();
+    mount([corePlugin(backend())], [], { onError });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'hidden', message: 'made up' } });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'other', message: 'x' } });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: 'boom' });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'x'.repeat(5000), stack: 's'.repeat(9000) } });
+    expect(onError).toHaveBeenCalledTimes(1);
+    const [event] = onError.mock.calls[0];
+    expect(event.message.length).toBeLessThan(2100);
+    expect(event.stack.length).toBeLessThan(4100);
+  });
+
+  it('include a call the host failed and hid from the frame, with what it hid', async () => {
+    const onError = vi.fn();
+    const leaky = definePlugin({
+      name: 'leaky', version: '1', host: { calls: { boom: { frame: true, handler: () => { throw new Error('connect ECONNREFUSED'); } } } },
+    });
+    mount([corePlugin(backend()), leaky], [], { onError });
+    call(1, 'leaky.boom');
+    await settle();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'hidden', code: 'call_failed', scope: 'server', message: 'connect ECONNREFUSED', call: 'leaky.boom', stack: expect.any(String),
+    }));
+    expect(replies[0]).toMatchObject({ ok: false, error: { message: 'The call failed.' } });
+  });
+
+  it('go to the console unless the host says where', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mount([corePlugin(backend())]);
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'listener', message: 'oops' } });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('oops'), expect.objectContaining({ kind: 'listener' }));
+  });
+
+  it('pass console lines on only when the host captures them, as the frame is told', () => {
+    mount([corePlugin(backend())], [], { captureConsole: false });
+    expect(provisioned().captureConsole).toBe(false);
+    const heard = vi.fn();
+    mounted!.on('anfra.console', heard);
+    fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'warn', message: 'rows: 1,2' } });
+    expect(heard).not.toHaveBeenCalled();
+    mounted!.unmount();
+
+    mount([corePlugin(backend())], [], { captureConsole: true });
+    expect(provisioned().captureConsole).toBe(true);
+    mounted!.on('anfra.console', heard);
+    fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'warn', message: 'careful' } });
+    fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'log', message: 'not this' } });
+    expect(heard.mock.calls).toEqual([[{ level: 'warn', message: 'careful', at: expect.any(String), mount: expect.any(Number) }]]);
+  });
+
+  it('capture console lines by default outside a production build', () => {
+    mount([corePlugin(backend())]);
+    expect(provisioned().captureConsole).toBe(true);
   });
 });

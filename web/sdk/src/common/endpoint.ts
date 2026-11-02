@@ -69,6 +69,11 @@ export interface EndpointHandlers {
   answer: (name: string, request: unknown, signal: AbortSignal) => Promise<unknown>;
   /** One of the other side's events. */
   event: (name: string, payload: unknown) => void;
+  /**
+   * A call this side failed for a reason the other side is not shown (it reads `call_failed`):
+   * where the original goes. This side's console, unless given.
+   */
+  hidden?: (name: string, err: unknown) => void;
 }
 
 export interface Endpoint {
@@ -97,9 +102,15 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
         // A cancelled call already rejected on the other side; there is no one left to answer.
         if (controller.signal.aborted || isAbortError(err)) return;
         const error = toBridgeError(err);
-        // The other side reads only that the call failed: this side's console keeps what failed.
-        // eslint-disable-next-line no-console -- the only place left to see a hidden error
-        if (!isDataAppError(err)) console.error(`anfra: '${name}' failed; the other side is told only that the call failed.`, err);
+        // The other side reads only that the call failed: this side keeps what failed.
+        if (!isDataAppError(err)) {
+          if (handlers.hidden) {
+            try { handlers.hidden(name, err); } catch { /* the answer is still owed */ }
+          } else {
+            // eslint-disable-next-line no-console -- the only place left to see a hidden error
+            console.error(`anfra: '${name}' failed; the other side is told only that the call failed.`, err);
+          }
+        }
         post({ type: 'anfra:result', id, ok: false, error });
       })
       .finally(() => {
