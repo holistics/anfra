@@ -1,0 +1,5 @@
+// Whether a layer (a menu, a dialog, a popover) is open: it takes Escape for itself, so the shell's
+// own use of Escape (ending a pick, closing the panel) waits. reka marks each open layer with
+// data-dismissable-layer, and appserve's own popovers wear the same mark. reka handles Escape on
+// window after the shell does, without marking the event, so the event alone can't tell.
+export const layerOpen = (doc: Document = document): boolean => doc.querySelector('[data-dismissable-layer]') !== null;

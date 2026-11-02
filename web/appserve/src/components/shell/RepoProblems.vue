@@ -34,6 +34,7 @@ function where (problem: server.AmlProblem): string {
       class="absolute top-9 right-0 z-10 max-h-[60vh] w-[min(480px,90vw)] overflow-auto rounded-[10px] border border-default bg-background px-3.5 py-3 shadow-e2"
       role="alert"
       data-testid="aml-banner"
+      data-dismissable-layer
     >
       <strong>The repo has {{ problems.length === 1 ? 'a problem' : `${problems.length} problems` }}.</strong>
       <span class="block text-placeholder">Queries may fail until it's fixed.</span>
