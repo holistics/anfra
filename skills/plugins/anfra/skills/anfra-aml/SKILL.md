@@ -30,6 +30,7 @@ the type definition.**
 * **Models** define data. A `TableModel` (`type: 'table'`) maps to a table; a `QueryModel` (`type: 'query'`) maps to a SQL query. Each has `dimension`s (attributes), `measure`s (aggregations), and optional `param`s.
 * **Reference fields with `r(...)`** — e.g. `r(users.country)` (model field), `r(ecommerce.revenue)` (dataset metric). `r(...)` is compile-time typechecked; prefer it over the legacy `ref('users','country')`.
 * **Relationships** connect models (`from` a many-side field `to` a one-side field). AQL uses them to join automatically — you never write joins in queries.
+* **A relationship's second argument is whether it is active**: `relationship(a.x > b.id, true)`. An inactive one (`false`) is not optional, it is off: no query joins through it unless an expression enables it with `with_relationships`. Mark one inactive only when it is a second route between models that already have one (a role-playing date). A metric that can only reach a dimension through an inactive relationship is not split by it: it repeats one value on every row, with no error. See [](../anfra-aql/references/aql/aql-multi-relationships.md) and [](../anfra-aql/references/aql/with_relationships.md).
 * **Datasets** bundle models + relationships and expose dataset-level `metric`s and `dimension`s. A dataset is what AQL queries target.
 * **`data_source_name`** on a model/dataset names a source configured in the repo's `.anfra/data_sources.yml` — data sources aren't defined in AML here.
 
