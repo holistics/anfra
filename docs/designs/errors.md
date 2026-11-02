@@ -200,9 +200,27 @@ Any other code (anfra's `result_too_large` and `page_too_large`, Cloud's own) is
 **What crosses the bridge.** The frame runs code anyone may write, so only the SDK's own errors cross with their fields, and only the fields the shape names (`common/endpoint.ts`): `context` as each step's `text`, never its params, which can name a dataset or a path; `details` only for a code the SDK knows the type of; a `scope` the SDK does not know as `server`. Anything else (a bug in the host, a middleware's error, a library's) crosses as `call_failed`, since its message may hold a URL, a resource's id or a server's error. Two rules keep that rare and findable:
 
 - **The SDK classifies its own failures.** A stream the server cut, or a line in it that is not an event (a proxy's error page), is `connection_failed` saying so (`api/stream.ts`, `api/backend.ts`), not an unclassified error. What remains `call_failed` is a real bug in the host.
-- **A hidden error is recorded where it was hidden.** The side that answers the call logs the original to its own console before answering `call_failed`: *every failure leaves a record*, in the page where it happened. On `anfra serve` that is the author's own browser.
+- **A hidden error is recorded where it was hidden.** The host reports the original as a runtime error before answering `call_failed` (below), and the frame logs one it hides to its own console: *every failure leaves a record*, in the page where it happened.
 
 **Fail only what failed.** A `subscribe()` listener is the definition's own code drawing what changed. An exception it throws is logged to the frame's console and stops nothing else: the other listeners still run, and the query whose change it was told of keeps its result (`app/observable.ts`). An author's bug can break its own drawing, never the app's data.
+
+**Every runtime error reaches the host.** What goes wrong while the app runs is reported to its host whether or not anyone inspects it (`app/reporting.ts`, `common/runtimeErrors.ts`), as one event, `anfra.error`, of four kinds:
+
+| Kind | What | Reported by |
+|---|---|---|
+| `query` | A query's run ended in `error` (`execute()`). | the frame |
+| `uncaught` | The definition's uncaught error or unhandled rejection, a `ValidationError` from a declaration no one caught included. | the frame |
+| `listener` | A `subscribe()` listener's exception. | the frame |
+| `hidden` | A call the host failed and showed the frame only as `call_failed`, with the original's message and stack. | the host |
+
+Each carries the error's shape (`code` and `scope` when it is one of the SDK's, `message`, `requestId`, `entity`), the time and the mount, and for `uncaught`, `listener` and `hidden` a truncated stack; never rows or a request's params. An error the app handled itself is not reported: a `fetchMore()` or an export rejects to its caller, and only reaches the host if no one catches it. The host checks each event, since the frame's word is not trusted: a frame cannot claim a `hidden` error, and each string is capped. The frame sends at most 120 events a minute, so a render loop that throws on every frame cannot flood its host.
+
+A host receives them in one callback, `createHost({ onError })`, which defaults to the page's console, and per mount as `mounted.on('anfra.error')`. A console line is not an error: the app's `console.error` and `console.warn` lines are `anfra.console`, sent only when the host captures them (`createHost({ captureConsole })`), since they can hold the app's data. Unset, a development build of the host's page captures them and a production build does not (`process.env.NODE_ENV`).
+
+Where they go is each host's choice. On `anfra serve`:
+
+- **The panel** lists them among its problems, with the static ones (markup and wiring found without running the app), the errors first; one naming a query or control links to it, any other opens to its stack. Console lines are in a section of their own.
+- **anfra.log**: the appserve page captures console lines and posts both to `POST /appserve/log`, which writes each with `"service":"app"` and the app's path ([data-apps.md](data-apps.md#appserve-what-anfra-serve-adds)). An agent reads them without a browser: `anfra status` names the log (`repo.logs`), and a `"service":"app"` line's `request_id` finds the server's line with the cause.
 
 ## At a platform's boundary
 
@@ -228,11 +246,9 @@ The cause travels apart from any text a host may make public. canal-query's `mes
 
 Where the code does not follow these rules yet:
 
-- **A host cannot route the errors it hides.** A host page logs an error the bridge hides to its console only; a host with its own error tracking cannot receive it. A `createHost` option for it, defaulting to the console, waits for a host that needs one.
 - **A Data App's errors say who must act, not whether to retry.** Scope `server` covers both a server that will be back and a bug; nothing yet tells an app to retry.
 - **A backend's own message reaches the frame as it is.** The SDK trusts what a backend puts in `message`: anfra's are written to be safe for callers, but another backend's may not be (a job's error log can hold SQL).
 - **An error loses its `entity` crossing the bridge.** The frame names it again where it can (a query's error, an export's), not for a plugin's own call.
-- **A Data App's failures need a console to see.** A throwing listener, and a hidden error, are logged to a browser console, which an agent driving the app headlessly cannot read. A way to read an app's query states and errors without one is not designed yet.
 - **OpenTelemetry's own messages are text lines on stderr.** Its SDK logs a problem it meets (an endpoint it cannot parse) through its own logger, before the repo's log exists, so a YAML or JSON parser refuses the stream there.
 
 Related: [commands-and-api.md](commands-and-api.md) (how ops are defined and published), [engine.md](engine.md) (the boundary platforms translate at), [security.md](security.md) (why causes are hidden by default).

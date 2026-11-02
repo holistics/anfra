@@ -199,9 +199,11 @@ A plugin that forwards a call name or request the frame chose makes the call wit
 
 ### What crosses back
 
-When a call fails, the frame gets the error only if it is one of the SDK's (`DataAppError`, `ValidationError`), in the API's shape (code, scope, message, the request's id), and only the fields that shape names. Any other error arrives as `call_failed`, because a message from a bug, a middleware or a library may hold a URL, a resource's id or a server's error; the side that hides it logs the original to its own console first. A plugin refuses a malformed call with `invalid_request`. See [errors.md](errors.md#in-a-data-app).
+When a call fails, the frame gets the error only if it is one of the SDK's (`DataAppError`, `ValidationError`), in the API's shape (code, scope, message, the request's id), and only the fields that shape names. Any other error arrives as `call_failed`, because a message from a bug, a middleware or a library may hold a URL, a resource's id or a server's error; the host reports the original as a `hidden` runtime error first, and the frame logs one it hides to its console. A plugin refuses a malformed call with `invalid_request`. See [errors.md](errors.md#in-a-data-app).
 
 A frame's event reaches the host only if a plugin declared it in `host.events`, and only in the form that plugin's check returns. The definition makes up an event's payload just as it makes up a call's request, and the plugin that owns the event checks its shape once, so each host's listeners don't have to.
+
+The kernel's own events are checked by the runtime. Two are for every host: `anfra.error`, each runtime error of the app (a failed query, an uncaught error, a listener's exception, and a call the host hid), and `anfra.console`, its `console.error` and `console.warn` lines, sent only when the host captures them. A host reads them per mount with `mounted.on`, or every mount's errors with `createHost({ onError })`, the console unless given; `createHost({ captureConsole })` turns the console lines on, which a production build leaves off unless told. See [errors.md](errors.md#in-a-data-app).
 
 ### Middleware
 
