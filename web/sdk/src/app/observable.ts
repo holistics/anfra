@@ -31,7 +31,16 @@ export class Observable implements NotificationTarget {
    * entity's changes through one subscription. Subclasses call the protected `notify` instead.
    */
   notifyChange (): void {
-    this.listeners.forEach((listener) => listener());
+    this.listeners.forEach((listener) => {
+      // A listener is the app's own code, drawing what changed. Its bug must break only its own
+      // drawing: thrown on, it would stop the other listeners and fail the query that changed.
+      try {
+        listener();
+      } catch (err) {
+        // eslint-disable-next-line no-console -- the author's bug, shown where they debug
+        console.error('anfra: a subscribe() listener threw; the queries carry on.', err);
+      }
+    });
     this.parent?.notifyChange();
   }
 
