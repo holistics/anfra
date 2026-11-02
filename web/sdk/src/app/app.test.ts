@@ -520,4 +520,26 @@ describe('retry', () => {
     await app.execute();
     expect(submitQuery).not.toHaveBeenCalled();
   });
+
+  it('keeps the loaded pages when a fetchMore failed: execute() does not rerun it', async () => {
+    let failing = false;
+    const submitQuery = vi.fn(async () => {
+      if (failing) throw new Error('warehouse down');
+      return { values: [['1'], ['2']], columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }], meta: { page: 1, pageSize: 2, numRows: 2 } };
+    });
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: { submitQuery, fieldSuggestions: async () => [] } as Backend }).createApp();
+    const revenue = app.createQuery('revenue', { dataset: 'sales', aql: 'explore { measures { total: orders | sum(orders.amount) } }', pageSize: 2 });
+    await app.execute();
+    await revenue.fetchMore();
+    expect(revenue.result?.rows).toHaveLength(4);
+    failing = true;
+    await expect(revenue.fetchMore()).rejects.toThrow();
+    expect(revenue.state).toBe('error');
+
+    failing = false;
+    submitQuery.mockClear();
+    await app.execute();
+    expect(submitQuery).not.toHaveBeenCalled();
+    expect(revenue.result?.rows).toHaveLength(4);
+  });
 });
