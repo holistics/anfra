@@ -70,12 +70,12 @@ describe('Overview', () => {
 
   it('draws the stat cards', async () => {
     const root = await overview();
-    expect(byTestId(root, 'stat-issues')?.querySelector('.stat-detail')?.textContent).toBe('1 error · 2 warnings');
+    expect(byTestId(root, 'stat-problems')?.querySelector('.stat-detail')?.textContent).toBe('1 error · 2 warnings');
     expect(byTestId(root, 'stat-queries')?.querySelector('.stat-detail')?.textContent).toBe('1 ok · 1 failed');
     expect(byTestId(root, 'stat-controls')?.querySelector('.stat-detail')?.textContent).toBe('All applied');
     expect(byTestId(root, 'stat-last-request')?.querySelector('.stat-detail')?.textContent).toBe('Nothing has run yet');
     expect(byTestId<HTMLButtonElement>(root, 'stat-last-request')?.disabled).toBe(true);
-    byTestId(root, 'stat-issues')!.click();
+    byTestId(root, 'stat-problems')!.click();
     expect(harness!.state.queries.filter).toBe('errors');
   });
 
@@ -91,12 +91,12 @@ describe('Overview', () => {
     expect(harness!.state.queries.open.has('query:0/revenue')).toBe(true);
   });
 
-  it('lists the issues, errors first, five until "Show all"', async () => {
+  it('lists the problems, errors first, five until "Show all"', async () => {
     const snapshot = salesSnapshot();
     const extra: StructureNode[] = [2, 3, 4].map((i) => ({ key: String(i), kind: 'block', id: `b${i}`, problems: [`Problem ${i}.`], children: [] }));
     snapshot.structure.nodes.push(...extra);
     const root = await overview({ snapshot });
-    const messages = () => [...root.querySelectorAll('[data-testid="issue"]')].map((issue) => issue.textContent);
+    const messages = () => [...root.querySelectorAll('[data-testid="problem"]')].map((problem) => problem.textContent);
     expect(messages()).toEqual([
       'orders failed: Unknown field orders.status',
       'month is mapped to no query, so it has no effect.',
@@ -104,10 +104,10 @@ describe('Overview', () => {
       'data-anfra-block="b2": Problem 2.',
       'data-anfra-block="b3": Problem 3.',
     ]);
-    byTestId(root, 'issues-all')!.click();
+    byTestId(root, 'problems-all')!.click();
     expect(messages()).toHaveLength(6);
-    expect(byTestId(root, 'issues-all')?.textContent).toBe('Show fewer');
-    root.querySelectorAll<HTMLElement>('[data-testid="issue"]')[2]!.click();
+    expect(byTestId(root, 'problems-all')?.textContent).toBe('Show fewer');
+    root.querySelectorAll<HTMLElement>('[data-testid="problem"]')[2]!.click();
     expect(harness!.mounted.panel.tab).toBe('inspect.structure');
     expect(harness!.mounted.panel.selection).toBe('1');
   });

@@ -5,7 +5,7 @@ import {
 import { changesOf } from './changes';
 import { dedent } from './format';
 import { declaredFilters, isActive, queryInputs } from './inputs';
-import { issuesOf, queryCounts } from './issues';
+import { problemsOf, queryCounts } from './problems';
 import { attributeRequests, type RequestEntry } from './requests';
 import { appTrust, queryTrust } from './trust';
 
@@ -51,12 +51,12 @@ describe('changes', () => {
   });
 });
 
-describe('issues', () => {
+describe('problems', () => {
   it('lists failed queries, then wiring warnings and markup problems', () => {
-    const issues = issuesOf(salesSnapshot());
-    expect(issues.map((issue) => issue.level)).toEqual(['error', 'warn', 'warn']);
-    expect(issues[0]).toMatchObject({ message: 'orders failed: Unknown field orders.status', target: { entity: 'query', app: 0, name: 'orders' } });
-    expect(issues[2]).toMatchObject({ target: { node: '1' } });
+    const problems = problemsOf(salesSnapshot());
+    expect(problems.map((problem) => problem.level)).toEqual(['error', 'warn', 'warn']);
+    expect(problems[0]).toMatchObject({ message: 'orders failed: Unknown field orders.status', target: { entity: 'query', app: 0, name: 'orders' } });
+    expect(problems[2]).toMatchObject({ target: { node: '1' } });
   });
 
   it('counts queries by state, and what is dirty', () => {

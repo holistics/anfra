@@ -64,7 +64,7 @@ describe('Declaration', () => {
     app.declaration = { ...app.declaration, dateDrills: {}, mappings: [...app.declaration.mappings, { kind: 'crossFilter', id: 'c2', from: { kind: 'query', name: 'revenue' }, to: { kind: 'query', name: 'orders' } }] };
     harness = await inspect({ tab: TAB, snapshot: salesSnapshot([app]) });
     const { root } = await harness.tab(TAB);
-    expect(byTestId(root, 'checks-none')?.textContent).toBe('No issues found.');
+    expect(byTestId(root, 'checks-none')?.textContent).toBe('No problems found.');
   });
 
   it('shows the declaration as its JSON, the text the same as JSON.stringify writes it', async () => {

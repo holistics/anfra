@@ -8,7 +8,7 @@ import { type Check, wiringChecks } from './checks';
 import { handleFor } from './format';
 import type { RevealTarget } from './types';
 
-export interface Issue {
+export interface Problem {
   level: 'error' | 'warn';
   message: string;
   target: RevealTarget;
@@ -20,27 +20,27 @@ export function problemNodes (nodes: StructureNode[]): StructureNode[] {
 }
 
 /** `checks` is the app's `wiringChecks`, when already worked out. */
-export function appIssues (app: InspectedApp, index: number, checks = wiringChecks(app)): Issue[] {
-  const issues: Issue[] = [];
+export function appProblems (app: InspectedApp, index: number, checks = wiringChecks(app)): Problem[] {
+  const problems: Problem[] = [];
   for (const [name, query] of Object.entries(app.queries)) {
     if (query.state !== 'error') continue;
-    issues.push({ level: 'error', message: `${name} failed: ${query.error?.message ?? 'no message'}`, target: { entity: 'query', app: index, name } });
+    problems.push({ level: 'error', message: `${name} failed: ${query.error?.message ?? 'no message'}`, target: { entity: 'query', app: index, name } });
   }
   checks.forEach((check, i) => {
     if (check.level === 'info') return;
-    issues.push({ level: check.level, message: check.message, target: { check: i, app: index } });
+    problems.push({ level: check.level, message: check.message, target: { check: i, app: index } });
   });
-  return issues;
+  return problems;
 }
 
 /** `checks` is each app's `wiringChecks`, by index, when already worked out. */
-export function issuesOf (snapshot: Snapshot, checks?: Check[][]): Issue[] {
-  const issues = snapshot.apps.flatMap((app, index) => appIssues(app, index, checks?.[index]));
+export function problemsOf (snapshot: Snapshot, checks?: Check[][]): Problem[] {
+  const problems = snapshot.apps.flatMap((app, index) => appProblems(app, index, checks?.[index]));
   for (const node of problemNodes(snapshot.structure.nodes)) {
-    for (const problem of node.problems) issues.push({ level: 'warn', message: `${handleFor(node)}: ${problem}`, target: { node: node.key } });
+    for (const problem of node.problems) problems.push({ level: 'warn', message: `${handleFor(node)}: ${problem}`, target: { node: node.key } });
   }
   // Stable: errors first, each level in the order found.
-  return [...issues.filter((i) => i.level === 'error'), ...issues.filter((i) => i.level === 'warn')];
+  return [...problems.filter((p) => p.level === 'error'), ...problems.filter((p) => p.level === 'warn')];
 }
 
 /**
