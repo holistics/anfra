@@ -496,3 +496,28 @@ describe('listeners', () => {
     error.mockRestore();
   });
 });
+
+describe('retry', () => {
+  it('reruns only the failed queries on execute(), even after a refresh failed with nothing changed', async () => {
+    let failing = false;
+    const submitQuery = vi.fn(async () => {
+      if (failing) throw new Error('warehouse down');
+      return { values: [['1']], columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }], meta: { page: 1, pageSize: 1000, numRows: 1 } };
+    });
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: { submitQuery, fieldSuggestions: async () => [] } as Backend }).createApp();
+    const revenue = monthlyRevenue(app);
+    await app.execute();
+    failing = true;
+    await app.refresh();
+    expect(revenue.state).toBe('error');
+
+    failing = false;
+    submitQuery.mockClear();
+    expect(await app.execute()).toEqual({ succeeded: ['revenue'], failed: [] });
+    expect(submitQuery).toHaveBeenCalledTimes(1);
+    expect(revenue.state).toBe('success');
+    submitQuery.mockClear();
+    await app.execute();
+    expect(submitQuery).not.toHaveBeenCalled();
+  });
+});

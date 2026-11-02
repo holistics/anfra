@@ -156,9 +156,12 @@ export class Query extends Observable {
     return this.lastRunSignature !== undefined && this.signature() !== this.lastRunSignature;
   }
 
-  /** @internal */
+  /**
+   * @internal Also when its last run failed, whatever its inputs: so `execute()` is the retry, of
+   * the failed queries only, even after a forced run (`refresh()`) failed with unchanged inputs.
+   */
   shouldRun (force = false): boolean {
-    return force || this.lastRunSignature === undefined || this.isDirty;
+    return force || this._state === 'error' || this.lastRunSignature === undefined || this.isDirty;
   }
 
   /** Stops the in-flight request for this query. The pending `execute()` resolves without it. */
