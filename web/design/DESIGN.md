@@ -204,6 +204,7 @@ The same word is a different color for each scope: `--anfra-color-text-weak`, `-
 - **Status** is restrained red, amber and green; info is neutral ink, never blue or violet. A status always has a label or an icon, and never fills a large surface: `background-{danger,warning,success,info}-secondary-default` behind `text-{s}-default`.
 - **Disabled** is `background-disabled` and `text-disabled`, plus `border-disabled` on a control with a border. Never lower the opacity instead.
 - **Neutral states** are `background-hover` and `background-active`; they work on paper and on white.
+- **Fills**: a filled control (the secondary button, a tab list's track) rests on `background-fill-default` and hovers on `background-fill-hover`; the open tab is `background-fill-selected`. A fill is a tint of whatever it sits on, so the same control reads on the panel, a card or a well.
 - **Errors**: `text-danger-default` {colors.error-text} for error text; `background-danger-default` {colors.error} is the solid fill, never text.
 - **Dark** redefines Tier 2 only, under `.dark` or `[data-theme="dark"]` on `<html>`. A host follows the system by default; light and dark are choices, stored per device.
 
