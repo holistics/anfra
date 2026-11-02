@@ -167,6 +167,10 @@ for it:
   `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A` gives what follows `sha384-`.
   Load fonts from `@fontsource` on jsDelivr, as the example does, rather than Google Fonts' CSS,
   which differs per browser and so cannot be hashed.
+- **A library may load after the SDK's first notification.** Keep library `<script>`s plain
+  (no `defer`, `async` or `type="module"` for one a render function calls), and still guard the
+  call: a render function that finds the library missing (`typeof echarts === 'undefined'`)
+  returns, and the next notification draws.
 - `localStorage`, `sessionStorage` and cookies throw: keep state in variables. This includes
   Basecoat's theme switcher, which stores the mode: follow `prefers-color-scheme`, or the host's
   own mode with `Anfra.theme` ([references/api.md](references/api.md#environment)), instead.
@@ -231,7 +235,9 @@ against what they expected, with that console. Read errors against
 as that target's `error` or an empty diagram); a
 `QueryError` carries anfra's message about the AQL, or names the bad entry (`filters[0].field`).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
-explains it. If you could not check the interface, say so rather than claiming it works.
+explains it. When the server failed a query, its full cause is in `anfra serve`'s log, on its
+stderr and in `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log`: find the line by the error's
+`requestId`. A bare "The call failed." was a host-side error, logged in the host page's console. If you could not check the interface, say so rather than claiming it works.
 
 ## 6. Hand over
 
