@@ -112,6 +112,13 @@ describe('Overview', () => {
     expect(harness!.mounted.panel.selection).toBe('1');
   });
 
+  it('wraps a long change, and keeps the count beside the title on one line', async () => {
+    const root = await overview();
+    const css = [...root.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+    expect(css).toMatch(/\.a-button\.link \{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/);
+    expect(css).toMatch(/\.tile\.collapsible > summary \.muted \{[^}]*flex: none;[^}]*white-space: nowrap;/);
+  });
+
   it('lists the controls changed from the original, to highlight or show', async () => {
     const root = await overview();
     const details = await open(root, 'changes');

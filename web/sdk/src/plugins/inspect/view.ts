@@ -595,7 +595,8 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 code.wrap { overflow-wrap: anywhere; }
 .error-text { margin: 6px 0 0; color: var(--anfra-color-danger); overflow-wrap: anywhere; }
 /* A cross-link sits in a line of text: the class layer's link Button, at the text's height. */
-.a-button.link { height: auto; padding: 0; }
+/* A cross-link can hold long text (a changed value, a name): it wraps, as plain text does. */
+.a-button.link { height: auto; padding: 0; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .toolbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--anfra-color-border); }
 /* A search box: the class layer's Input around its icon and field, at a toolbar's height. */
 .search { flex: 1; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: var(--anfra-radius-md); color: var(--anfra-color-muted); }
