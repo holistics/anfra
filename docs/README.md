@@ -36,6 +36,24 @@ Findings and options for work not yet designed.
 |---|---|
 | [skills install](research/skills-install.md) | Installing the anfra skills into every coding agent, keeping them current, and what each agent supports. |
 
+## Implementations
+
+Plans for work being built: the steps, their order, and where each stands.
+
+| Doc | Covers |
+|---|---|
+| [revamp query result data types](implementations/revamp-query-result-data-types.md) | Encoded values (every number a string) and each column's semantic, Arrow and database types, across canal-query, amql, the core and the SDK. |
+
+## Todos
+
+Work known or agreed, not built yet.
+
+| Doc | Covers |
+|---|---|
+| [backlog](todos/backlog.md) | Work known to be needed, not yet scheduled: what, why, and where to start. |
+| [check before push](todos/check-pre-push.md) | Running `make check` from a pre-push hook, to catch what would fail CI. |
+| [publish status and check](todos/publish-status-and-check.md) | `anfra publish status` and `anfra publish --check`: asking about a publish without publishing. |
+
 ## Usage
 
 How to run and build on anfra: embedding the engine, running the Docker image, configuring a setup. See [usage/](usage/README.md).
