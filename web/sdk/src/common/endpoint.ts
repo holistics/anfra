@@ -86,7 +86,11 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
       .catch((err: unknown) => {
         // A cancelled call already rejected on the other side; there is no one left to answer.
         if (controller.signal.aborted || isAbortError(err)) return;
-        post({ type: 'anfra:result', id, ok: false, error: toBridgeError(err) });
+        const error = toBridgeError(err);
+        // The other side reads only that the call failed: this side's console keeps what failed.
+        // eslint-disable-next-line no-console -- the only place left to see a hidden error
+        if (!SDK_ERRORS.has((err as Error | undefined)?.name ?? '')) console.error(`anfra: '${name}' failed; the other side is told only that the call failed.`, err);
+        post({ type: 'anfra:result', id, ok: false, error });
       })
       .finally(() => {
         if (inFlight.get(id) === controller) inFlight.delete(id);
