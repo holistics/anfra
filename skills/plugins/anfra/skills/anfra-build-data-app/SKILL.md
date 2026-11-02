@@ -236,9 +236,10 @@ against what they expected, with that console. Read errors against
 target's `error` or an empty diagram); `query_invalid` carries anfra's diagnostics for the AQL, with
 their lines, and `validation_failed` names the bad entry (`filters[0].field`).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
-explains it. When the server fails a query, its full cause is in `anfra serve`'s log, on its
-stderr and in `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log`: find the line by the error's
-`requestId`. A bare "The call failed." is a host-side error, logged in the host page's console. If you could not check the interface, say so rather than claiming it works.
+explains it. When the server fails a query, its full cause is in `anfra serve`'s log: on its
+stderr, and in the file `anfra status` prints as `repo.logs`. Find the line by the error's
+`requestId`. A bare "The call failed." is a host-side error, logged in the host page's console.
+If you could not check the interface, say so rather than claiming it works.
 
 ## 6. Hand over
 
