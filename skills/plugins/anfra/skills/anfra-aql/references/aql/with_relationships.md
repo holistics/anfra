@@ -11,6 +11,9 @@ with_relationships(measure, relationship, ...)
 ```aml title="Examples"
 // Activate the relationship between order_items and products
 sum(order_items.revenue) | with_relationships(order_items.product_id > products.id)
+
+// The same, by the relationship's name
+sum(order_items.revenue) | with_relationships('order_items_products')
 ```
 
 **Input**
@@ -18,6 +21,7 @@ sum(order_items.revenue) | with_relationships(order_items.product_id > products.
 - `relationship` (**repeatable**): A relationship that you want to activate. It comes in 2 forms:
   - `model1.column1 > model2.column2` (many-to-one). E.g. `order_items.product_id > products.id`
   - `model1.column1 - model2.column2` (one-to-one). E.g. `merchants.admin_id - users.id`
+  - The relationship's name, as a text literal, for one declared as a `Relationship` block: `'orders_customers'`, or `relationship('orders_customers', true)`. The only form that reaches a relationship the short forms cannot write (a composite key, a `where` predicate, a `many_to_many`).
 
   <div style={{padding: 5}}></div>
 
