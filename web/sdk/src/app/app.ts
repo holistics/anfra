@@ -4,7 +4,7 @@ import {
   Control, DateDrillControl, Filter,
 } from './controls';
 import { CrossFilter, Mapping, type Edge } from './mapping';
-import { DataAppError, ValidationError } from '../common/errors';
+import { DataAppError, ValidationError, isDataAppError } from '../common/errors';
 import {
   assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
 } from './validation';
@@ -145,10 +145,14 @@ function selectionKey (selection: Selection | undefined): string {
 /**
  * A query's or an export's error, naming its query. Errors crossing the bridge lose their entity, so
  * it is put back here. A backend that rejects with anything but the SDK's error failed in a way
- * nobody classified: `call_failed`, the server's to answer for, its message kept out of the app.
+ * nobody classified: `call_failed`, the server's to answer for, its message kept out of the app
+ * and logged to the console instead.
  */
 function toDataAppError (err: unknown, entity: string, failed = 'The query failed.'): DataAppError {
-  if (err instanceof DataAppError) return err.about(entity);
+  if (isDataAppError(err)) return err.about(entity);
+  // The app reads only that the call failed: the console keeps what failed.
+  // eslint-disable-next-line no-console -- the only place left to see a hidden error
+  console.error(`anfra: '${entity}' failed; the app is told only that it failed.`, err);
   return new DataAppError({
     code: 'call_failed', scope: 'server', message: failed, entity, cause: err,
   });
