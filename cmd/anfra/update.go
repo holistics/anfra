@@ -79,11 +79,15 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	s := cliui.NewTerminalStyles(os.Stdout)
 	fmt.Printf("%s Updated anfra %s → %s\n", s.Success.Render("✓"),
 		s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
-	// A running server keeps the binary it started with.
-	for _, srv := range runningServers(ctx) {
-		fmt.Printf("`anfra serve` in %s still runs anfra %s: restart it to run %s.\n", srv.RepoDir, srv.Version, rel.Version)
-	}
 	showReleaseNotes(ctx, meta.Version, rel.Version)
+	// A running server keeps the binary it started with: last, so the notes
+	// don't bury it.
+	for _, srv := range runningServers(ctx) {
+		if srv.Version != rel.Version {
+			printWarning(os.Stderr, "server_version_mismatch", fmt.Sprintf(
+				"`anfra serve` %s is still running for %s. Restart it to run %s.", srv.Version, srv.RepoDir, rel.Version))
+		}
+	}
 	return nil
 }
 

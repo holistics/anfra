@@ -325,6 +325,13 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 	return deliver(ctx, c, body, d)
 }
 
+// cliLocal are the core commands the CLI runs itself while the repo's server
+// runs: their answer is about the anfra running them, so forwarded they would
+// report the server's facts as this CLI's (docs/designs/cli-vs-warm-server.md).
+var cliLocal = map[string]bool{
+	"version": true, // this anfra's version, and its update and skills checks
+}
+
 // invoke runs a command as runCommand does, and returns its answer's body rather
 // than showing it: for a command that runs another (publish runs validate).
 func invoke(ctx context.Context, c command.Command, args map[string]any) ([]byte, error) {
@@ -337,8 +344,11 @@ func invoke(ctx context.Context, c command.Command, args map[string]any) ([]byte
 		return nil, fmt.Errorf("encode args: %w", err)
 	}
 	if srv, ok := findServer(ctx, repo.Resolve(repoDir)); ok {
-		warnIfOtherVersion(os.Stderr, srv)
-		return callServe(ctx, srv.URL, c.Name(), input)
+		forward := !cliLocal[c.Name()]
+		warnIfOtherVersion(os.Stderr, srv, forward)
+		if forward {
+			return callServe(ctx, srv.URL, c.Name(), input)
+		}
 	}
 
 	var body []byte
