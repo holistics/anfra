@@ -39,9 +39,11 @@ export function runtimeProblem (entry: RuntimeEntry, snapshot: Snapshot): Proble
   const problem: Problem = { level: 'error', message: `${RUNTIME_LABELS[event.kind]}: ${event.message}` };
   if (detail) problem.detail = detail;
   if (count > 1) problem.count = count;
-  if (event.entity) {
-    const app = snapshot.apps.findIndex((a) => event.entity! in a.queries || event.entity! in a.controls);
-    if (app >= 0) problem.target = { entity: event.entity in snapshot.apps[app].queries ? 'query' : 'control', app, name: event.entity };
+  const { entity } = event;
+  if (entity) {
+    // Own names only: an entity the frame calls 'constructor' is no query.
+    const app = snapshot.apps.findIndex((a) => Object.hasOwn(a.queries, entity) || Object.hasOwn(a.controls, entity));
+    if (app >= 0) problem.target = { entity: Object.hasOwn(snapshot.apps[app].queries, entity) ? 'query' : 'control', app, name: entity };
   }
   return problem;
 }
