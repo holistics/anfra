@@ -1,0 +1,302 @@
+/*
+ * appserve's Tailwind theme: the type roles, Tier 2 per property (bg-hover, text-weak, border-field,
+ * icon-weak) and the shadcn aliases (Tier 3) its components use. Tiers 1 and 2 themselves come from
+ * @holistics/anfra-design (main.ts), light and under [data-theme="dark"] on <html>, so no color is
+ * defined here.
+ * web/design/DESIGN.md says which token to use for what.
+ */
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is([data-theme="dark"] *));
+
+/* Tailwind v4 already scopes hover: to (hover: hover), so a tap leaves no hover behind. */
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --font-heading: var(--font-sans);
+}
+
+/*
+ * Type: one size per role, named for the role (DESIGN.md "Type scale"). Each class sets size and
+ * line height, and the weight where the role has its own. Keep TYPE_ROLES in src/lib/utils.ts in
+ * step.
+ */
+@theme {
+  /* Tailwind's own sizes (text-xs ... text-9xl) are off: a size is a role. Font sizes only, not --text-color-*. */
+  --text-xs: initial;
+  --text-sm: initial;
+  --text-base: initial;
+  --text-lg: initial;
+  --text-xl: initial;
+  --text-2xl: initial;
+  --text-3xl: initial;
+  --text-4xl: initial;
+  --text-5xl: initial;
+  --text-6xl: initial;
+  --text-7xl: initial;
+  --text-8xl: initial;
+  --text-9xl: initial;
+  --text-title: 1.25rem; /* 20px: the one heading of a page or step */
+  --text-title--line-height: 1.75rem;
+  --text-title--font-weight: 600; /* also a dialog's title */
+  --text-body: 0.875rem; /* 14px: descriptions, field text, alerts, rows */
+  --text-body--line-height: 1.25rem;
+  --text-heading: 0.875rem; /* 14px semibold: section headings, card titles */
+  --text-heading--line-height: 1.25rem;
+  --text-heading--font-weight: 600;
+  --text-label: 0.875rem; /* 14px medium: buttons, links, field labels, names */
+  --text-label--line-height: 1.25rem;
+  --text-label--font-weight: 500;
+  --text-caption: 0.75rem; /* 12px: dividers, notes under a button, badges, roles, timestamps */
+  --text-caption--line-height: 1rem;
+  --text-code: 1.25rem; /* 20px: the 6-digit code field only */
+  --text-code--line-height: 1.75rem;
+}
+
+@utility icon-* {
+  color: --value(--icon-color-*);
+}
+
+@theme inline {
+  /* Tier 2, per property (HDS grammar). bg-*, text-*, border-*, icon-* */
+  --background-color-default: var(--anfra-color-background-default);
+  --background-color-base-default: var(--anfra-color-background-base-default);
+  --background-color-secondary-default: var(--anfra-color-background-secondary-default);
+  --background-color-card-default: var(--anfra-color-background-card-default);
+  --background-color-raised-default: var(--anfra-color-background-raised-default);
+  --background-color-current-default: var(--anfra-color-background-current-default);
+  --background-color-hover: var(--anfra-color-background-hover);
+  --background-color-active: var(--anfra-color-background-active);
+  --background-color-fill-default: var(--anfra-color-background-fill-default);
+  --background-color-fill-hover: var(--anfra-color-background-fill-hover);
+  --background-color-fill-selected: var(--anfra-color-background-fill-selected);
+  --background-color-disabled: var(--anfra-color-background-disabled);
+  --background-color-inverted-default: var(--anfra-color-background-inverted-default);
+  --background-color-interactive-highlight-default: var(
+    --anfra-color-background-interactive-highlight-default
+  );
+  --background-color-interactive-highlight-hover: var(
+    --anfra-color-background-interactive-highlight-hover
+  );
+  --background-color-interactive-overlay: var(--anfra-color-background-interactive-overlay);
+  --background-color-skeleton: var(--anfra-color-background-skeleton);
+  --background-color-highlight-default: var(--anfra-color-background-highlight-default);
+  --background-color-highlight-hover: var(--anfra-color-background-highlight-hover);
+  --background-color-highlight-active: var(--anfra-color-background-highlight-active);
+  --background-color-highlight-secondary-default: var(
+    --anfra-color-background-highlight-secondary-default
+  );
+  --background-color-highlight-secondary-hover: var(
+    --anfra-color-background-highlight-secondary-hover
+  );
+  --background-color-danger-default: var(--anfra-color-background-danger-default);
+  --background-color-danger-hover: var(--anfra-color-background-danger-hover);
+  --background-color-danger-secondary-default: var(
+    --anfra-color-background-danger-secondary-default
+  );
+  --background-color-warning-secondary-default: var(
+    --anfra-color-background-warning-secondary-default
+  );
+  --background-color-success-default: var(--anfra-color-background-success-default);
+  --background-color-success-secondary-default: var(
+    --anfra-color-background-success-secondary-default
+  );
+  --background-color-info-secondary-default: var(--anfra-color-background-info-secondary-default);
+  --text-color-default: var(--anfra-color-text-default);
+  --text-color-weak: var(--anfra-color-text-weak);
+  --text-color-placeholder: var(--anfra-color-text-placeholder);
+  --text-color-disabled: var(--anfra-color-text-disabled);
+  --text-color-highlight-default: var(--anfra-color-text-highlight-default);
+  --text-color-link-default: var(--anfra-color-text-link-default);
+  --text-color-link-hover: var(--anfra-color-text-link-hover);
+  --text-color-on-fill: var(--anfra-color-text-on-fill);
+  --text-color-inverted-default: var(--anfra-color-text-inverted-default);
+  --text-color-danger-default: var(--anfra-color-text-danger-default);
+  --text-color-warning-default: var(--anfra-color-text-warning-default);
+  --text-color-success-default: var(--anfra-color-text-success-default);
+  --text-color-info-default: var(--anfra-color-text-info-default);
+  --icon-color-default: var(--anfra-color-icon-default);
+  --icon-color-weak: var(--anfra-color-icon-weak);
+  --icon-color-hover: var(--anfra-color-icon-hover);
+  --icon-color-disabled: var(--anfra-color-icon-disabled);
+  --icon-color-highlight-default: var(--anfra-color-icon-highlight-default);
+  --icon-color-on-fill: var(--anfra-color-icon-on-fill);
+  --icon-color-inverted-default: var(--anfra-color-icon-inverted-default);
+  --icon-color-danger-default: var(--anfra-color-icon-danger-default);
+  --icon-color-warning-default: var(--anfra-color-icon-warning-default);
+  --icon-color-success-default: var(--anfra-color-icon-success-default);
+  --icon-color-info-default: var(--anfra-color-icon-info-default);
+  --border-color-default: var(--anfra-color-border-default);
+  --border-color-weak: var(--anfra-color-border-weak);
+  --border-color-strong: var(--anfra-color-border-strong);
+  --border-color-hover: var(--anfra-color-border-hover);
+  --border-color-field: var(--anfra-color-border-field);
+  --border-color-disabled: var(--anfra-color-border-disabled);
+  --border-color-highlight-default: var(--anfra-color-border-highlight-default);
+  --border-color-highlight-strong: var(--anfra-color-border-highlight-strong);
+  --border-color-danger-default: var(--anfra-color-border-danger-default);
+  --border-color-danger-strong: var(--anfra-color-border-danger-strong);
+  --border-color-warning-default: var(--anfra-color-border-warning-default);
+  --border-color-success-default: var(--anfra-color-border-success-default);
+  --outline-color-focus: var(--anfra-color-focus-ring-default);
+  --ring-color-focus: var(--anfra-color-focus-ring-default);
+  --ring-color-weak: var(--anfra-color-border-weak); /* current nav chip edge (ring-1 ring-inset) */
+  --ring-color-strong: var(
+    --anfra-color-border-strong
+  ); /* floating surface edge without layout shift */
+  --fill-inverted-default: var(--anfra-color-background-inverted-default);
+
+  /* Tier 3, shadcn aliases (names the components already use) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-current: var(--sidebar-current);
+  --color-sidebar-current-foreground: var(--sidebar-current-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Radius: brand scale 6 / 10 / 14 (anfra-landing DESIGN.md §5). Defined explicitly, not from --radius. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px; /* small controls inside UI: menu items, nav items, chips, kbd, inline code; controls under 32px */
+  --radius-lg: 10px; /* controls at 32px and up: buttons, inputs, icon buttons, alerts */
+  --radius-xl: 14px; /* surfaces: cards, popovers, dialogs, sheets, inset panel */
+  --radius-2xl: 16px; /* large raised surfaces only */
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
+  --radius-pill: 9999px; /* status pills and counters only, never buttons */
+  --radius-control: 10px;
+  --radius-card: 14px;
+
+  /* Elevation: neutral ink only (DESIGN.md §6). Tailwind's stock shadows map to e1/e2, so no custom shadow can appear. */
+  --shadow-e1: var(--anfra-e1);
+  --shadow-e2: var(--anfra-e2);
+  --shadow-2xs: var(--anfra-e1);
+  --shadow-xs: var(--anfra-e1);
+  --shadow-sm: var(--anfra-e1);
+  --shadow-md: var(--anfra-e2);
+  --shadow-lg: var(--anfra-e2);
+  --shadow-xl: var(--anfra-e2);
+  --shadow-2xl: var(--anfra-e2);
+
+  --ease-anfra-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-anfra-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ------------------------------------------------------------------ Tier 3: shadcn aliases (mode-independent) */
+:root {
+  --radius: 10px;
+
+  --background: var(--anfra-color-background-default);
+  --foreground: var(--anfra-color-text-default);
+  --card: var(--anfra-color-background-card-default);
+  --card-foreground: var(--anfra-color-text-default);
+  --popover: var(--anfra-color-background-raised-default);
+  --popover-foreground: var(--anfra-color-text-default);
+  --primary: var(--anfra-color-background-highlight-default);
+  --primary-foreground: var(--anfra-color-text-on-fill);
+  --primary-text: var(--anfra-color-text-highlight-default);
+  --secondary: var(--anfra-color-background-secondary-default);
+  --secondary-foreground: var(--anfra-color-text-default);
+  --muted: var(--anfra-color-background-secondary-default);
+  --muted-foreground: var(--anfra-color-text-placeholder);
+  --accent: var(
+    --anfra-color-background-hover
+  ); /* shadcn "accent" = neutral hover, NOT the brand accent */
+  --accent-foreground: var(--anfra-color-text-default);
+  --destructive: var(
+    --anfra-color-background-danger-default
+  ); /* fill only; for text use text-danger-default */
+  --border: var(--anfra-color-border-default);
+  --input: var(--anfra-color-border-field);
+  --ring: var(--anfra-color-focus-ring-default);
+
+  --sidebar: var(--anfra-color-background-base-default);
+  --sidebar-foreground: var(--anfra-color-text-weak);
+  --sidebar-primary: var(--anfra-color-background-highlight-default);
+  --sidebar-primary-foreground: var(--anfra-color-text-on-fill);
+  --sidebar-accent: var(--anfra-color-background-hover);
+  --sidebar-accent-foreground: var(--anfra-color-text-default);
+  --sidebar-current: var(--anfra-color-background-current-default);
+  --sidebar-current-foreground: var(--anfra-color-text-default);
+  --sidebar-border: var(--anfra-color-border-default);
+  --sidebar-ring: var(--anfra-color-focus-ring-default);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-sidebar text-body text-foreground antialiased;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+  /* A plain button, not a component, shows it can't be pressed by fading. */
+  button:disabled:not([data-slot]) {
+    opacity: 0.4;
+  }
+}
+
+/*
+ * Focus is a 2px violet outline drawn inside an element, so a row or a strip that clips its
+ * overflow still shows it; a control (a button, a nav row) has it 3px outside. Unlayered, so it
+ * wins over the components' outline-none utility.
+ */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+:is([data-slot='button'], [data-slot='sidebar-menu-button'], [data-slot='sidebar-menu-sub-button']):focus-visible {
+  outline-offset: 3px;
+}
+
+/* The palette's search is its one field, always focused, on a row of its own: its caret shows it. */
+[data-slot='command-input']:focus-visible {
+  outline: none;
+}
+
+/* A menu item shows focus with its highlight (focus:bg-accent), the one cue a list of options uses. */
+[data-slot='dropdown-menu-item']:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* While the panel's edge is pressed, the Data App's frame doesn't take the pointer. */
+[data-pressing] iframe {
+  pointer-events: none;
+}
