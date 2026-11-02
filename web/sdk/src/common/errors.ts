@@ -125,9 +125,29 @@ export class ValidationError extends DataAppError {
   }
 }
 
+/**
+ * True when `err` is one of the SDK's errors: this copy's (a subclass too), or another copy's, by
+ * name and shape. A host may load a plugin built against its own copy of the SDK, whose classes are
+ * not this copy's, so `instanceof` alone would miss its errors.
+ */
+export function isDataAppError (err: unknown): err is DataAppError {
+  if (err instanceof DataAppError) return true;
+  const e = err as DataAppError | undefined;
+  return e instanceof Error && (e.name === 'DataAppError' || e.name === 'ValidationError') && typeof e.code === 'string';
+}
+
 /** True when `err` is a `DataAppError` with `code`, whose `details` are then typed. */
 export function hasErrorCode<C extends ErrorCode> (err: unknown, code: C): err is DataAppError & { code: C, details?: ErrorDetails<C> } {
-  return err instanceof DataAppError && err.code === code;
+  return isDataAppError(err) && err.code === code;
+}
+
+/** Each step's text, without its params, which can name a dataset or a path. */
+export function contextOf (context: unknown): ErrorContextEntry[] | undefined {
+  if (!Array.isArray(context)) return undefined;
+  const entries = context
+    .filter((c) => typeof (c as ErrorContextEntry | undefined)?.text === 'string')
+    .map((c: ErrorContextEntry) => (typeof c.step === 'string' ? { step: c.step, text: c.text } : { text: c.text }));
+  return entries.length ? entries : undefined;
 }
 
 /** A call the app made wrong: a plugin's refusal. */

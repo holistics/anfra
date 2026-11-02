@@ -4,7 +4,7 @@
  * bootstrap before the definition runs (docs/designs/sdk-plugins.md).
  */
 import {
-  DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest,
+  DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest, isDataAppError,
 } from '../common/errors';
 import type { Endpoint } from '../common/endpoint';
 import type { App } from './app';
@@ -24,7 +24,7 @@ export const BODY_CALL = 'anfra.body';
 const BODY_GLOBAL = '__anfraBodyExports';
 
 export const KERNEL_ERRORS = {
-  DataAppError, ValidationError, invalidRequest, forbidden, connectionFailed, callFailed, fromHttpStatus, hasErrorCode,
+  DataAppError, ValidationError, invalidRequest, forbidden, connectionFailed, callFailed, fromHttpStatus, hasErrorCode, isDataAppError,
 } as const;
 
 export interface FrameKernel {

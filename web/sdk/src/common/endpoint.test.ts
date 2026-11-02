@@ -52,6 +52,15 @@ describe('an error crossing the bridge', () => {
     expect(fromBridgeError(crossing)).toMatchObject({ code: 'call_failed' });
   });
 
+  it("keeps a host's subclass of DataAppError, with its own code", () => {
+    class QuotaError extends DataAppError {
+      constructor () { super({ code: 'quota_exceeded', scope: 'user', message: 'The quota is used up.' }); }
+    }
+    expect(fromBridgeError(toBridgeError(new QuotaError()))).toMatchObject({
+      code: 'quota_exceeded', scope: 'user', message: 'The quota is used up.',
+    });
+  });
+
   it('keeps the helpers\' errors', () => {
     expect(fromBridgeError(toBridgeError(forbidden('No.')))).toMatchObject({ code: 'forbidden', scope: 'user' });
     expect(fromBridgeError(toBridgeError(connectionFailed('Cut.', 502)))).toMatchObject({ code: 'connection_failed', status: 502 });

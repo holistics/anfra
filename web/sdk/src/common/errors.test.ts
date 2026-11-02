@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DataAppError, GENERIC_CODES, ValidationError, fromHttpStatus, hasErrorCode, type ErrorDetails,
+  DataAppError, GENERIC_CODES, ValidationError, fromHttpStatus, hasErrorCode, isDataAppError, type ErrorDetails,
 } from './errors';
 import type { components } from '../api/schema';
 
@@ -29,6 +29,15 @@ describe('the shape', () => {
     expect(new ValidationError('No dataset sales.', 'revenue')).toMatchObject({
       name: 'ValidationError', code: 'declaration_invalid', scope: 'client', entity: 'revenue',
     });
+  });
+
+  it("recognises another SDK copy's errors by name and shape, and nothing else", () => {
+    // What a plugin built against its own copy of the SDK rejects with: not this copy's class.
+    const foreign = Object.assign(new Error('No.'), { name: 'DataAppError', code: 'forbidden', scope: 'user' });
+    expect(isDataAppError(foreign)).toBe(true);
+    expect(hasErrorCode(foreign, 'forbidden')).toBe(true);
+    expect(isDataAppError(Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' }))).toBe(false);
+    expect(isDataAppError({ name: 'DataAppError', code: 'forbidden' })).toBe(false);
   });
 
   it('names the entity an error is about without losing the rest', () => {

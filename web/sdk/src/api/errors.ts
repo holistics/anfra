@@ -1,5 +1,5 @@
 import {
-  DataAppError, fromHttpStatus, toScope, type ErrorContextEntry,
+  DataAppError, contextOf, fromHttpStatus, toScope,
 } from '../common/errors';
 
 /** The core API's error body, as every host answers it. */
@@ -40,14 +40,6 @@ function violationsOf (details: unknown): string | undefined {
  */
 function messageOf (body: ApiErrorBody): string {
   return diagnosticsOf(body.details) ?? violationsOf(body.details) ?? body.message;
-}
-
-function contextOf (context: ApiErrorBody['context']): ErrorContextEntry[] | undefined {
-  if (!Array.isArray(context)) return undefined;
-  const entries = context
-    .filter((c) => typeof c?.text === 'string')
-    .map((c) => (typeof c.step === 'string' ? { step: c.step, text: c.text as string } : { text: c.text as string }));
-  return entries.length ? entries : undefined;
 }
 
 /**
