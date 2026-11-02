@@ -7,3 +7,5 @@ onlyBuiltDependencies:
 overrides:
   fast-uri@<3.1.6: 3.1.8
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
+  # One lightningcss for the workspace: Tailwind's compiler pins 1.32.0, Vite brings 1.33.0.
+  '@tailwindcss/node>lightningcss': 1.33.0
