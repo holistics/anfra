@@ -6,7 +6,9 @@
  * The app model reports through `reportError`, which does nothing until a frame's bootstrap
  * installs a reporter: outside a frame (tests, an SDK used on its own page) nothing is sent.
  */
-import { MESSAGE_LIMIT, STACK_LIMIT, truncate, type AppErrorKind } from '../common/runtimeErrors';
+import {
+  MESSAGE_LIMIT, createBudget, describeError, truncate, type AppErrorKind,
+} from '../common/runtimeErrors';
 import type { FrameKernel } from './kernel';
 
 type Reporter = (kind: Exclude<AppErrorKind, 'hidden'>, err: unknown) => void;
@@ -18,25 +20,12 @@ export function reportError (kind: Exclude<AppErrorKind, 'hidden'>, err: unknown
   try { reporter?.(kind, err); } catch { /* reporting must not add a failure of its own */ }
 }
 
-/** How many events a frame sends in a minute, at most: a render loop that throws every frame must not flood its host. */
+/**
+ * How many runtime errors a frame sends in a minute, at most, and console lines apart from them: a
+ * render loop that throws or warns every frame must not flood its host, and its console lines must
+ * not crowd out its errors.
+ */
 export const EVENTS_PER_MINUTE = 120;
-
-/** The fields of an error that are reported: its shape, never a query's rows or a request's params. */
-export function describeError (kind: AppErrorKind, err: unknown): Record<string, unknown> {
-  const e = err as { message?: unknown, code?: unknown, scope?: unknown, requestId?: unknown, entity?: unknown, stack?: unknown } | null | undefined;
-  const isObject = typeof e === 'object' && e !== null;
-  const out: Record<string, unknown> = {
-    kind,
-    message: truncate(isObject && typeof e.message === 'string' ? e.message : String(err), MESSAGE_LIMIT),
-    at: new Date().toISOString(),
-  };
-  if (!isObject) return out;
-  for (const key of ['code', 'scope', 'requestId', 'entity'] as const) {
-    if (typeof e[key] === 'string') out[key] = e[key];
-  }
-  if (kind !== 'query' && typeof e.stack === 'string') out.stack = truncate(e.stack, STACK_LIMIT);
-  return out;
-}
 
 /** One console argument as text: an error's message, an object as JSON, as far as it goes. */
 function textOf (arg: unknown): string {
@@ -54,20 +43,15 @@ function textOf (arg: unknown): string {
  * reports, and, when `captureConsole`, its `console.error` and `console.warn` lines.
  */
 export function installReporting (own: FrameKernel, win: Window, captureConsole: boolean, now: () => number = Date.now): () => void {
-  let windowStart = now();
-  let sent = 0;
-  const allowed = () => {
-    const t = now();
-    if (t - windowStart >= 60_000) {
-      windowStart = t;
-      sent = 0;
-    }
-    sent += 1;
-    return sent <= EVENTS_PER_MINUTE;
-  };
+  // What is over a budget is still in the frame's own console, and how much of it is said there.
+  const dropped = (what: string) => (count: number) => (win as Window & typeof globalThis).console?.warn(
+    `anfra: ${count} ${what} over the ${EVENTS_PER_MINUTE} a minute a frame sends were not sent to the host.`,
+  );
+  const errors = createBudget(EVENTS_PER_MINUTE, dropped('runtime errors'), now);
+  const lines = createBudget(EVENTS_PER_MINUTE, dropped('console lines'), now);
 
   reporter = (kind, err) => {
-    if (allowed()) own.emit('error', describeError(kind, err));
+    if (errors.take()) own.emit('error', describeError(kind, err));
   };
 
   const onError = (event: ErrorEvent) => reportError('uncaught', event.error ?? event.message);
@@ -83,10 +67,11 @@ export function installReporting (own: FrameKernel, win: Window, captureConsole:
       originals[level] = original;
       console[level] = (...args: unknown[]) => {
         original.apply(console, args);
-        // The SDK's own notes (`anfra: …`) say what is reported as an error already.
+        // The SDK's own notes (`anfra: …`) say what it reports as an error already, through
+        // `reportError`: each one that writes such a note must also report it.
         if (typeof args[0] === 'string' && args[0].startsWith('anfra:')) return;
         try {
-          if (allowed()) own.emit('console', { level, message: truncate(args.map(textOf).join(' '), MESSAGE_LIMIT), at: new Date().toISOString() });
+          if (lines.take()) own.emit('console', { level, message: truncate(args.map(textOf).join(' '), MESSAGE_LIMIT), at: new Date().toISOString() });
         } catch { /* a line that cannot be sent is still in the frame's console */ }
       };
     }
@@ -94,6 +79,8 @@ export function installReporting (own: FrameKernel, win: Window, captureConsole:
 
   return () => {
     reporter = undefined;
+    errors.dispose();
+    lines.dispose();
     win.removeEventListener('error', onError);
     win.removeEventListener('unhandledrejection', onRejection);
     for (const [level, original] of Object.entries(originals)) console[level as 'error' | 'warn'] = original;
