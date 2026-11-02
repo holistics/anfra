@@ -4,7 +4,7 @@
  * their own `post`; neither knows postMessage beyond that.
  */
 import {
-  DataAppError, ValidationError, callFailed, toScope, type ErrorContextEntry,
+  DataAppError, ValidationError, callFailed, contextOf, isDataAppError, toScope,
 } from './errors';
 import type { BridgeError, BridgeMessage } from './bridge';
 
@@ -25,15 +25,6 @@ export function isAbortError (err: unknown): boolean {
 const DETAILED_CODES: ReadonlySet<string> = new Set([
   'query_invalid', 'validation_failed', 'invalid_request', 'result_too_large', 'page_too_large',
 ]);
-
-/** Each step's text, without its params, which can name a dataset or a path. */
-function contextOf (context: unknown): ErrorContextEntry[] | undefined {
-  if (!Array.isArray(context)) return undefined;
-  const entries = context
-    .filter((c) => typeof (c as ErrorContextEntry | undefined)?.text === 'string')
-    .map((c: ErrorContextEntry) => (typeof c.step === 'string' ? { step: c.step, text: c.text } : { text: c.text }));
-  return entries.length ? entries : undefined;
-}
 
 /**
  * The fields of an SDK error that may cross, in the API's shape. `details` only for a code the SDK
@@ -60,16 +51,7 @@ function crossing (name: string, e: {
  * `call_failed`, since its message may hold what the frame must not see (a URL, an id, a stack).
  */
 export function toBridgeError (err: unknown): BridgeError {
-  return isSdkError(err) ? crossing(err.name, err) : crossing('DataAppError', callFailed());
-}
-
-/**
- * One of the SDK's errors, by name and shape rather than `instanceof`: a host may load a plugin
- * built against its own copy of the SDK, whose classes are not this copy's.
- */
-function isSdkError (err: unknown): err is DataAppError {
-  const e = err as DataAppError | undefined;
-  return e instanceof Error && (e.name === 'DataAppError' || e.name === 'ValidationError') && typeof e.code === 'string';
+  return isDataAppError(err) ? crossing(err.name, err) : crossing('DataAppError', callFailed());
 }
 
 /** The SDK's error a crossed error is, checked again on this side. */
@@ -117,7 +99,7 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
         const error = toBridgeError(err);
         // The other side reads only that the call failed: this side's console keeps what failed.
         // eslint-disable-next-line no-console -- the only place left to see a hidden error
-        if (!isSdkError(err)) console.error(`anfra: '${name}' failed; the other side is told only that the call failed.`, err);
+        if (!isDataAppError(err)) console.error(`anfra: '${name}' failed; the other side is told only that the call failed.`, err);
         post({ type: 'anfra:result', id, ok: false, error });
       })
       .finally(() => {
