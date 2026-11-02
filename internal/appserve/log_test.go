@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -107,7 +108,8 @@ func TestLogRefuses(t *testing.T) {
 func TestLogRateLimit(t *testing.T) {
 	s, buf := logged(t)
 	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
-	s.reports = newLimiter(func() time.Time { return now })
+	s.reports = newLimiter(func() time.Time { return now }, s.logDropped)
+	s.reports.afterFunc = func(time.Duration, func()) {}
 	report := func(path string) {
 		post(s, `{"path":"`+path+`","type":"error","event":{"kind":"uncaught","message":"again"}}`)
 	}
@@ -124,5 +126,52 @@ func TestLogRateLimit(t *testing.T) {
 	got := lines(t, buf)
 	if len(got) != 2 || got[0]["msg"] != "app.reports_dropped" || got[0]["dropped"] != float64(7) || got[1]["msg"] != "app.error" {
 		t.Errorf("after the minute: %v", got)
+	}
+}
+
+// A flood that stops still has its drops logged, when its minute is over.
+func TestLogRateLimitFloodStops(t *testing.T) {
+	s, buf := logged(t)
+	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	s.reports = newLimiter(func() time.Time { return now }, s.logDropped)
+	var timers []func()
+	var waits []time.Duration
+	s.reports.afterFunc = func(d time.Duration, f func()) {
+		waits = append(waits, d)
+		timers = append(timers, f)
+	}
+	now = now.Add(10 * time.Second)
+	for range reportsPerMinute + 3 {
+		post(s, `{"path":"sales.html","type":"error","event":{"kind":"uncaught","message":"again"}}`)
+	}
+	if len(timers) != 1 || waits[0] != time.Minute {
+		t.Fatalf("timers %d, waits %v; want one, for the window's minute", len(timers), waits)
+	}
+	buf.Reset()
+	timers[0]()
+	got := lines(t, buf)
+	if len(got) != 1 || got[0]["msg"] != "app.reports_dropped" || got[0]["dropped"] != float64(3) {
+		t.Errorf("at the minute's end: %v", got)
+	}
+	if len(s.reports.windows) != 0 {
+		t.Errorf("the window is kept: %v", s.reports.windows)
+	}
+}
+
+// Windows whose minute is over are forgotten, so paths a page makes up do not pile up.
+func TestLogRateLimitForgets(t *testing.T) {
+	s, _ := logged(t)
+	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	s.reports = newLimiter(func() time.Time { return now }, s.logDropped)
+	for i := range 50 {
+		post(s, `{"path":"made-up-`+strconv.Itoa(i)+`.html","type":"console","event":{"level":"warn","message":"x"}}`)
+	}
+	if n := len(s.reports.windows); n != 50 {
+		t.Fatalf("%d windows, want 50", n)
+	}
+	now = now.Add(time.Minute)
+	post(s, `{"path":"sales.html","type":"console","event":{"level":"warn","message":"x"}}`)
+	if n := len(s.reports.windows); n != 1 {
+		t.Errorf("%d windows after a minute, want 1", n)
 	}
 }
