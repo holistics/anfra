@@ -20,7 +20,7 @@ await Anfra.render({ format: 'pdf' });                       // the whole app
   the extension is added), `pixelRatio` (default: the screen's, at least 2).
 - Resolves once the file is saved, with `{ filename, format, width, height, blob, omitted }`.
   `omitted` lists the images left blank, by URL; tell the reader when it isn't empty.
-- Rejects with a `ValidationError` naming the node: no element marked with that id, both a block
+- Rejects with an `invalid_request` error naming the node: no element marked with that id, both a block
   and a container, or a picture too large for a canvas.
 - It draws at once, what is on the page: `await app.execute()` first if results may be stale.
 - A PDF is one page holding the picture, not a printed document: its text isn't selectable.

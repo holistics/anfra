@@ -32,8 +32,8 @@ const { results: [revenue, country] } = await Anfra.lineage([
   lineage to draw, so show it as a source column (its model's `table_name` and the column) rather
   than as "not found".
 - **The promise rejects** when the call itself is wrong or fails: an empty list or a target
-  without a non-empty `parent` and `child` (`ValidationError`), an unreachable server
-  (`TransportError`), a reader refused (`PermissionError`). It rejects, rather
+  without a non-empty `parent` and `child` (`invalid_request`), an unreachable server
+  (`connection_failed`), a reader refused (`forbidden`). It rejects, rather
   than throws, so the `try`/`catch` around the `await` sees it.
 - **Options**: `limit` / `offset` page the matched entities; `diagram.total` counts them over every
   page, so `diagram.matched.length < diagram.total` means there are more. `signal` cancels: the

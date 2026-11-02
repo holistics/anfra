@@ -58,7 +58,7 @@ How you name a field **to the SDK** (in `createFilter` and `mapControl`):
 `model.field` for a model field, a bare `name` for a dataset-level metric. Names come from
 `Anfra.datasets`, never from labels. A filter's `field` is checked at once (a `ValidationError`
 with a "did you mean"); a `mapControl` field is not checked until the query runs, so a typo there
-arrives as a `QueryError`.
+arrives as the query's `query_invalid` error.
 
 ## App
 
@@ -245,7 +245,7 @@ Useful operators by type (the full list is in the SDK's `Operator` type):
 - boolean: `is_true`, `is_false`
 
 `matches_user_attribute` and the `transform_pop_*` operators are not supported on anfra; a query
-they reach fails with a `QueryError`.
+they reach fails with a `query_invalid` error.
 
 A condition with no values (or `operator: 'none'`) sends nothing: the query runs unfiltered. Give a
 filter a starting value with `default: { operator, values }`.
@@ -262,7 +262,7 @@ anfra finds every dimension of the query built directly on that exact field and 
 grain, so:
 
 - Map to the **field reference** (`orders.created_at`), never the dimension's alias. A field no
-  dimension is built on fails the query with a `QueryError`.
+  dimension is built on fails the query with a `query_invalid` error.
 - The dimension must be **aliased**, and can be the raw field (`period: orders.created_at`) or
   already truncated (`period: date_trunc(orders.created_at, "month")` or
   `period: orders.created_at | month()`); the drill overrides any of them. A computed dimension
@@ -333,16 +333,35 @@ chart.on('contextmenu', (p) => {
 
 ## Errors
 
-| Class | When | What to do |
-| --- | --- | --- |
-| `ValidationError` | Thrown synchronously while declaring: unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. A plugin's call may reject with one: `Anfra.lineage` for an empty or malformed target list. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
-| `QueryError` | Stored on `query.error`: anfra rejected the AQL, a mapped field or operator, or the query failed. | Read the message, which names the AQL problem or the bad entry (`filters[0].field`); fix the AQL or the mapping. |
-| `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
-| `TransportError` | Network or session problem. | Show a retry. |
+Every error is the API's error document: branch on `err.scope` (who must act) and `err.code`
+(what happened), never on `err.name` or the message.
 
-Every error has `entity`, the query or control name it concerns. An error the server answered
-also has `requestId`: the id `anfra serve`'s log names that request by, where the full cause is.
-A failure that only says "The call failed." was an error on the host's side, logged in the host
-page's console. Check the class with `err.name`
-(`'PermissionError'`), since the classes themselves aren't exposed as globals. Plugins reject with
-these classes too: see each one's reference.
+| Field | |
+| --- | --- |
+| `scope` | `'user'`: the reader's input or rights refused it. `'client'`: the app's own code is wrong. `'server'`: the server or the host failed; nothing in the app fixes it. |
+| `code` | What happened: one of the codes below, or the host's own. |
+| `message` | Why, for a person. For a refused query it lists each diagnostic with its line. |
+| `details` | Facts to act on, by code: `query_invalid`'s `diagnostics` (`message`, `line`, `column`), `validation_failed`'s `violations` (`field`, `message`), `result_too_large`'s and `page_too_large`'s limits. |
+| `entity` | The query or control it concerns. |
+| `requestId` | The id `anfra serve`'s log names the request by, where the full cause is. |
+| `status` | The HTTP status, when the server answered one. |
+
+| Code | Scope | When | What to do |
+| --- | --- | --- | --- |
+| `declaration_invalid` | client | Thrown synchronously while declaring (a `ValidationError`): unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
+| `query_invalid` | user | Stored on `query.error`: anfra refused the AQL, a mapped field or an operator. | Read `details.diagnostics` (or the message); fix the AQL or the mapping. |
+| `validation_failed` | user | anfra refused part of the request: `details.violations` names each field (`filters[0].field`). | Fix that entry. |
+| `query_failed` | user | The query ran and its data source failed it. | Read the message; it is the data source's. |
+| `result_too_large`, `page_too_large` | user | Too many rows or bytes: `details` holds the limit. | Aggregate, filter, or page (`pageSize`). |
+| `forbidden` / `unauthenticated` | user | This reader may not see it / their session is gone. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access" or "sign in again", not a failure. |
+| `invalid_request` | client | A call the app made wrong, which a plugin refused (`Anfra.lineage` with an empty list, `Anfra.render` of a missing block). | Fix the call it names. |
+| `connection_failed`, `internal_server_error`, `call_failed` | server | The server could not be reached or failed, or the host failed the call (`call_failed`: its cause is in the host page's console). | Show a retry. |
+
+Other codes are the host's own: treat them by `scope`. A query's error is stored on the query,
+never thrown; `fetchMore`, exports and plugin calls reject with one.
+
+```js
+if (query.error?.code === 'forbidden') showNoAccess();
+else if (query.error?.scope === 'server') showRetry();
+else showProblem(query.error.message);
+```
