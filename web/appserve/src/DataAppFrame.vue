@@ -43,6 +43,8 @@ function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: str
         plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin()],
         allowOrigins,
         theme: props.theme,
+        // The command palette's keys (App.vue), so they open it with focus in the Data App too.
+        keys: ['Meta+K', 'Ctrl+K'],
       }),
     };
   }

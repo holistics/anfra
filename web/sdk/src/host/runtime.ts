@@ -17,7 +17,9 @@ import { provisionDocument } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
-import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
+import {
+  eventShortcut, isTyping, normalizeShortcut, shortcutEvent,
+} from '../common/shortcut';
 import {
   commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
@@ -45,6 +47,14 @@ export interface HostOptions {
   commands?: readonly CommandContribution[];
   /** The host's own tabs, beside the plugins': ids as given, unique among all. */
   tabs?: readonly TabContribution[];
+  /**
+   * The host's own keys, beside its commands' shortcuts: `Meta+K` for its command palette. Pressed
+   * while focus is in a Data App, the frame forwards them, and the host gets each as a `keydown` on
+   * the frame element, which bubbles to the handlers on its page as a key pressed there would.
+   * A Data App that binds one of these keys itself keeps it by calling `preventDefault()`; one that
+   * doesn't gets its own handler and the host's both.
+   */
+  keys?: readonly string[];
   /**
    * Which contributions, the plugins' and the host's own, the host shows: what it returns false for
    * is left out everywhere (`host.commands`, `host.tabs`, the panel). A plugin's calls stay, so a host
@@ -232,6 +242,15 @@ export function createHost (options: HostOptions): Host {
     if (other) throw new Error(`Commands '${other}' and '${command.id}' have the same shortcut, '${command.shortcut}'.`);
     byShortcut.set(shortcut, command.id);
   }
+  const ownKeys = new Set<string>();
+  for (const key of options.keys ?? []) {
+    const shortcut = normalizeShortcut(key);
+    if (!shortcut) throw new Error(`Key '${key}' isn't a key combination.`);
+    const command = byShortcut.get(shortcut);
+    if (command) throw new Error(`Key '${key}' is the shortcut of command '${command}'.`);
+    ownKeys.add(shortcut);
+  }
+  const forwarded = [...byShortcut.keys(), ...ownKeys];
   let nextMount = 1;
 
   /**
@@ -342,7 +361,7 @@ export function createHost (options: HostOptions): Host {
           // The panel's own, from the kernel.
           if (name === 'anfra.snapshot') { panelState.snapshot(payload); return; }
           if (name === 'anfra.picked') { panelState.picked(payload); return; }
-          if (name === 'anfra.shortcut') { runShortcut(payload, 'key'); return; }
+          if (name === 'anfra.shortcut') { if (!runShortcut(payload, 'key')) pressKey(payload); return; }
           // Only what a plugin declared, as its check let it through: the frame is untrusted.
           const check = events.get(name);
           if (!check || !listeners.has(name)) return;
@@ -407,6 +426,13 @@ export function createHost (options: HostOptions): Host {
         runCommand(id, undefined, from).catch(() => { /* a disabled command says why in its state, not here */ });
         return true;
       };
+      /** Press one of the host's own keys, forwarded from the frame, on the frame element. */
+      const pressKey = (shortcut: unknown) => {
+        if (typeof shortcut !== 'string' || !ownKeys.has(shortcut)) return;
+        frame.dispatchEvent(new (win as typeof globalThis).KeyboardEvent('keydown', {
+          ...shortcutEvent(shortcut), bubbles: true, cancelable: true,
+        }));
+      };
       const commandOf = (id: string) => {
         const command = commands.find((candidate) => candidate.id === id);
         if (!command) throw new Error(`No command '${id}' is installed.`);
@@ -419,7 +445,7 @@ export function createHost (options: HostOptions): Host {
         if (message?.type === 'anfra:ready') {
           context.emit('anfra.theme', theme);
           if (menuKinds.length) context.emit('anfra.menu', { kinds: menuKinds });
-          if (byShortcut.size) context.emit('anfra.shortcuts', [...byShortcut.keys()]);
+          if (forwarded.length) context.emit('anfra.shortcuts', forwarded);
           panelState.ready();
           readyListeners.forEach((listener) => listener());
           return;
