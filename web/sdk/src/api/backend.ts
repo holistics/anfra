@@ -1,4 +1,4 @@
-import { QueryError, TransportError } from '../common/errors';
+import { DataAppError, connectionFailed, invalidRequest } from '../common/errors';
 import type {
   Backend, BackendExportRequest, BackendLineageRequest, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue,
   DatasetDescriptor, ExportResult, FieldSuggestionsRequest, LineageResult,
@@ -67,10 +67,12 @@ function toColumns (columns: Column[]): ColumnMeta[] {
   return columns.map((column) => {
     const { semantic_type: semanticType, arrow_type: arrowType, db_type: dbType } = column;
     if (semanticType === undefined || arrowType === undefined || dbType === undefined) {
-      throw new QueryError(
-        `The server answered column '${column.name}' without its types (semantic_type, arrow_type, db_type), `
-        + 'which a Data App decides by: the server is older than this SDK.',
-      );
+      throw new DataAppError({
+        code: 'internal_server_error',
+        scope: 'server',
+        message: `The server answered column '${column.name}' without its types (semantic_type, arrow_type, db_type), `
+          + 'which a Data App decides by: the server is older than this SDK.',
+      });
     }
     return { ...column, semantic_type: semanticType, arrow_type: arrowType, db_type: dbType };
   });
@@ -83,7 +85,7 @@ async function callCoreAPI<T> (call: () => Promise<{ data?: T, error?: unknown, 
     result = await call();
   } catch (err) {
     if (isAbort(err)) throw err;
-    throw new TransportError(`The server could not be reached: ${(err as Error).message}`);
+    throw connectionFailed(`The server could not be reached: ${(err as Error).message}`);
   }
   const { data, error, response } = result;
   if (!data) throw toSdkError(response.status, (error as { error?: ApiErrorBody } | undefined)?.error);
@@ -99,7 +101,7 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
   const stream = await callCoreAPI(() => client.POST('/core.query', {
     body, signal, parseAs: 'stream', headers: { Accept: 'application/x-ndjson' },
   }));
-  if (!stream) throw new TransportError('The server answered the query with no body.');
+  if (!stream) throw connectionFailed('The server answered the query with no body.');
   const result: QueryResult = { sql: '', columns: [], result: { fields: [], records: [] }, has_more: false, timings: { steps: [], end_ms: 0 } };
   try {
     await readEvents<QueryEvent>(stream, (event) => {
@@ -123,7 +125,7 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
     });
   } catch (err) {
     if (isAbort(err) || !(err instanceof Error) || err.name !== 'TypeError') throw err;
-    throw new TransportError(`The connection to the server failed: ${err.message}`);
+    throw connectionFailed(`The connection to the server failed: ${err.message}`);
   }
   return result;
 }
@@ -169,7 +171,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
       const model = options.datasets?.[request.dataset]?.data_models.find((m) => m.name === request.model);
       const field = model?.fields.find((f) => f.name === request.field);
       if (!field) {
-        throw new QueryError(`Unknown field ${request.model}.${request.field} in dataset ${request.dataset}.`);
+        throw invalidRequest(`Unknown field ${request.model}.${request.field} in dataset ${request.dataset}.`);
       }
       const ref = `${request.model}.${request.field}`;
       const q = request.q.trim();

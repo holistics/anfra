@@ -52,7 +52,7 @@ describe('Queries', () => {
     const { root } = await harness.tab(QUERIES);
     const row = byTestId<HTMLDetailsElement>(root, 'query-0/orders')!;
     expect(row.open).toBe(false);
-    expect(byTestId(row, 'query-error')?.textContent).toBe('QueryError: Unknown field orders.status');
+    expect(byTestId(row, 'query-error')?.textContent).toBe('query_invalid (user): Unknown field orders.status');
   });
 
   it('narrows by search and filter, and keeps both across a remount of the tab', async () => {

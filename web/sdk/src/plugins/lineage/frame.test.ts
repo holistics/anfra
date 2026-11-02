@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ValidationError } from '../../common/errors';
 import type { LineageResult } from '../../common/types';
 import { stubBackend } from '../../app/testSupport';
 import { testFrame } from '../../app/testFrame';
@@ -42,7 +41,7 @@ describe('Anfra.lineage', () => {
     [[]], ['orders.amount'], [['orders.amount']], [{ parent: 'orders' }], [[amount, { parent: 'orders', child: ' ' }]],
   ])('refuses %j, asking nothing', async (targets) => {
     const { stub, sdk: anfra } = sdk();
-    await expect(anfra.lineage!(targets as never)).rejects.toThrowError(ValidationError);
+    await expect(anfra.lineage!(targets as never)).rejects.toMatchObject({ code: 'invalid_request', scope: 'client' });
     expect(stub.calls).toEqual([]);
   });
 

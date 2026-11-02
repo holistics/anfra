@@ -12,7 +12,7 @@
  * escape is U+2028 and U+2029, which are legal raw inside a JSON string but terminate a line in
  * AQL's lexer — those two are escaped by hand.
  *
- * Nothing here validates the *grammar*. A bad expression surfaces as a `QueryError` at execute,
+ * Nothing here validates the *grammar*. A bad expression surfaces as a `query_invalid` error at execute,
  * the same way an author's own AQL body does; see docs/adr/0001.
  */
 

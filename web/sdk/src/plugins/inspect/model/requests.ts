@@ -216,7 +216,7 @@ export function createRequestLog ({ limit = 200, previewRows = 20 }: RecordOptio
         settle(id, {
           status: context.signal.aborted ? 'aborted' : 'error',
           durationMs: durationMs(),
-          error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+          error: describeError(err),
         });
         throw err;
       }
@@ -279,4 +279,11 @@ export function attributeRequests (entries: readonly RequestEntry[], apps: Inspe
     }
   }
   return { byQuery, other };
+}
+
+/** A failed call, as the request log shows it: an SDK error by its code, any other by its name. */
+function describeError (err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const { code } = err as { code?: unknown };
+  return `${typeof code === 'string' ? code : err.name}: ${err.message}`;
 }

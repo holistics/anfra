@@ -15,7 +15,7 @@ export default function setup (kernel: FrameKernel): void {
     const list: LineageTarget[] = Array.isArray(targets) ? [...targets] : [targets as LineageTarget];
     const named = (s: unknown) => typeof s === 'string' && s.trim() !== '';
     if (list.length === 0 || list.some((t) => typeof t !== 'object' || t === null || !named(t.parent) || !named(t.child))) {
-      return Promise.reject(new kernel.errors.ValidationError(
+      return Promise.reject(kernel.errors.invalidRequest(
         "Anfra.lineage() takes a target or an array of targets, each by its parent and its name in it, such as { parent: 'ecommerce', child: 'revenue' }.",
       ));
     }

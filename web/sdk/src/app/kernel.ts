@@ -4,7 +4,7 @@
  * bootstrap before the definition runs (docs/designs/sdk-plugins.md).
  */
 import {
-  DataAppError, PermissionError, QueryError, TransportError, ValidationError,
+  DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest,
 } from '../common/errors';
 import type { Endpoint } from '../common/endpoint';
 import type { App } from './app';
@@ -24,7 +24,7 @@ export const BODY_CALL = 'anfra.body';
 const BODY_GLOBAL = '__anfraBodyExports';
 
 export const KERNEL_ERRORS = {
-  DataAppError, ValidationError, QueryError, PermissionError, TransportError,
+  DataAppError, ValidationError, invalidRequest, forbidden, connectionFailed, callFailed, fromHttpStatus, hasErrorCode,
 } as const;
 
 export interface FrameKernel {
@@ -33,7 +33,7 @@ export interface FrameKernel {
   readonly window: Window;
   /** The SDK instance the definition gets as `Anfra`: its apps, datasets and user. */
   readonly sdk: Sdk;
-  /** The SDK's error classes: reject with these, so an author can tell them apart. */
+  /** The SDK's errors and the helpers that make them: reject with these, in the API's shape. */
   readonly errors: typeof KERNEL_ERRORS;
   /** The overlay every part of the SDK shows nodes with. */
   readonly overlay: Overlay;

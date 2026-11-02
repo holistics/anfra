@@ -7,7 +7,7 @@
 import { PROVISION_ELEMENT_ID } from '../common/bridge';
 import type { BridgeMessage, Provision } from '../common/bridge';
 import { createEndpoint } from '../common/endpoint';
-import { TransportError } from '../common/errors';
+import { invalidRequest } from '../common/errors';
 import type { Backend, BackendQueryResult } from '../common/types';
 import type { App } from './app';
 import { Control } from './controls';
@@ -36,7 +36,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   const endpoint = createEndpoint(post, {
     answer: async (name, request, signal) => {
       const handler = handlers.get(name);
-      if (!handler) throw new TransportError(`Nothing in this frame answers '${name}'.`);
+      if (!handler) throw invalidRequest(`Nothing in this frame answers '${name}'.`);
       return handler(request, signal);
     },
     event: (name, payload) => {

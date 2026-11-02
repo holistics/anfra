@@ -2,7 +2,7 @@ import {
   afterEach, beforeEach, describe, expect, it, vi,
 } from 'vitest';
 import type { BridgeMessage } from '../common/bridge';
-import { PermissionError, TransportError, ValidationError } from '../common/errors';
+import { forbidden } from '../common/errors';
 import type { Backend } from '../common/types';
 import { salesDataset, testUser } from '../app/testSupport';
 import { corePlugin } from '../plugins/core';
@@ -126,10 +126,10 @@ describe('the frame\'s calls', () => {
   });
 
   it('send a failure across as its error class by name', async () => {
-    mount([corePlugin(backend({ submitQuery: async () => { throw new PermissionError('Not yours.'); } }))]);
+    mount([corePlugin(backend({ submitQuery: async () => { throw forbidden('Not yours.'); } }))]);
     call(1, 'core.submitQuery', query);
     await settle();
-    expect(replies).toEqual([{ type: 'anfra:result', id: 1, ok: false, error: { name: 'PermissionError', message: 'Not yours.' } }]);
+    expect(replies).toEqual([{ type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'forbidden', scope: 'user', message: 'Not yours.' } }]);
   });
 
   it('reach only what a plugin let the frame call, and only what is installed', async () => {
@@ -141,8 +141,8 @@ describe('the frame\'s calls', () => {
     await settle();
     expect(handler).not.toHaveBeenCalled();
     expect(replies).toEqual([
-      { type: 'anfra:result', id: 1, ok: false, error: { name: 'PermissionError', message: "'agent.setKey' can't be called from a Data App." } },
-      { type: 'anfra:result', id: 2, ok: false, error: { name: 'TransportError', message: "Nothing on this host answers 'ingest.run'." } },
+      { type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'forbidden', scope: 'user', message: "'agent.setKey' can't be called from a Data App." } },
+      { type: 'anfra:result', id: 2, ok: false, error: { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: "Nothing on this host answers 'ingest.run'." } },
     ]);
   });
 
@@ -194,8 +194,8 @@ describe('the frame\'s calls', () => {
     call(2, 'core.submitQuery', query);
     await settle();
     expect(replies).toEqual([
-      { type: 'anfra:result', id: 1, ok: false, error: { name: 'QueryError', message: 'The call failed.' } },
-      { type: 'anfra:result', id: 2, ok: false, error: { name: 'QueryError', message: 'The call failed.' } },
+      { type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'call_failed', scope: 'server', message: 'The call failed.' } },
+      { type: 'anfra:result', id: 2, ok: false, error: { name: 'DataAppError', code: 'call_failed', scope: 'server', message: 'The call failed.' } },
     ]);
   });
 
@@ -206,7 +206,7 @@ describe('the frame\'s calls', () => {
     await settle();
     expect(replies).toEqual([
       { type: 'anfra:result', id: 1, ok: true, result: 'BODY' },
-      { type: 'anfra:result', id: 2, ok: false, error: { name: 'ValidationError', message: "No plugin 'core' with a frame body is installed." } },
+      { type: 'anfra:result', id: 2, ok: false, error: { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: "No plugin 'core' with a frame body is installed." } },
     ]);
   });
 });
@@ -241,7 +241,7 @@ describe('middleware', () => {
     };
     const quota: Middleware = {
       name: 'quota', match: 'core.*', handle: async (request, context, next) => {
-        if (context.name === 'core.fieldSuggestions') throw new PermissionError('Over quota.');
+        if (context.name === 'core.fieldSuggestions') throw forbidden('Over quota.');
         return next({ ...(request as object), tagged: true });
       },
     };
@@ -257,7 +257,7 @@ describe('middleware', () => {
     expect([...replies].sort((a, b2) => byId(a) - byId(b2))).toEqual([
       { type: 'anfra:result', id: 1, ok: true, result: { wrapped: 'from cache' } },
       { type: 'anfra:result', id: 2, ok: true, result: { wrapped: { columns: [], values: [[1]] } } },
-      { type: 'anfra:result', id: 3, ok: false, error: { name: 'PermissionError', message: 'Over quota.' } },
+      { type: 'anfra:result', id: 3, ok: false, error: { name: 'DataAppError', code: 'forbidden', scope: 'user', message: 'Over quota.' } },
     ]);
   });
 
@@ -337,7 +337,7 @@ describe('middleware', () => {
     await expect(mounted!.call('relay.forward', 'vault.key')).resolves.toBe('key');
     const byId = (r: BridgeMessage) => (r.type === 'anfra:result' ? r.id : 0);
     expect([...replies].sort((a, b) => byId(a) - byId(b))).toEqual([
-      { type: 'anfra:result', id: 1, ok: false, error: { name: 'PermissionError', message: "'vault.key' can't be called from a Data App." } },
+      { type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'forbidden', scope: 'user', message: "'vault.key' can't be called from a Data App." } },
       { type: 'anfra:result', id: 2, ok: true, result: { columns: [], values: [[1]] } },
       { type: 'anfra:result', id: 3, ok: true, result: 'key' },
     ]);
@@ -366,14 +366,14 @@ describe('the host\'s side', () => {
 
     const drawn = mounted!.call('viewer.draw', { block: 'a' });
     expect(replies).toEqual([{ type: 'anfra:call', id: 1, name: 'viewer.draw', request: { block: 'a' } }]);
-    fromFrame({ type: 'anfra:result', id: 1, ok: false, error: { name: 'ValidationError', message: 'No block a.' } });
-    await expect(drawn).rejects.toBeInstanceOf(ValidationError);
+    fromFrame({ type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: 'No block a.' } });
+    await expect(drawn).rejects.toMatchObject({ code: 'invalid_request', message: 'No block a.' });
   });
 
   it('calls with no frame on the host itself', async () => {
     const host = createHost({ plugins: [corePlugin(backend())] });
     await expect(host.call('core.submitQuery', query)).resolves.toEqual({ columns: [], values: [[1]] });
-    await expect(host.call('core.nothing')).rejects.toBeInstanceOf(TransportError);
+    await expect(host.call('core.nothing')).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
   it('sends the frame events, hears its events, and its readiness, until unmounted', () => {

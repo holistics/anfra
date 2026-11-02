@@ -71,7 +71,7 @@ export function salesApp (overrides: Partial<InspectedApp> = {}): InspectedApp {
         rowCount: 0,
         selectedRowCount: 0,
         signature: 'sig-orders',
-        error: { name: 'QueryError', message: 'Unknown field orders.status' },
+        error: { name: 'DataAppError', code: 'query_invalid', scope: 'user', message: 'Unknown field orders.status' },
       },
     },
     controls: {

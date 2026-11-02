@@ -2,7 +2,7 @@ import {
   describe, expect, it, vi,
 } from 'vitest';
 import { createSdk } from './sdk';
-import { PermissionError } from '../common/errors';
+import { forbidden } from '../common/errors';
 import {
   salesDataset, stubBackend, testUser, type StubOptions, textTypes, numberTypes,
 } from './testSupport';
@@ -170,32 +170,32 @@ describe('toInspectJSON', () => {
   });
 
   it('projects an error field by field, since a cloned one loses its own properties', async () => {
-    const sdk = build(new PermissionError('Nope'));
+    const sdk = build(forbidden('Nope'));
     const app = sdk.createApp();
     revenueApp(app);
     await app.execute();
 
     const { error } = app.toInspectJSON().queries.revenue;
-    // The class name is what tells a permission failure from a broken query, and it is the first
-    // thing lost when a DataAppError is cloned rather than projected.
-    expect(error).toMatchObject({ name: 'PermissionError', message: 'Nope' });
+    // The code and scope are what tell a permission failure from a broken query, and they are the
+    // first thing lost when a DataAppError is cloned rather than projected.
+    expect(error).toMatchObject({
+      name: 'DataAppError', code: 'forbidden', scope: 'user', message: 'Nope',
+    });
     // `cause` can hold whatever the backend threw, such as an AbortError; that need not cross a port.
     expect(error).not.toHaveProperty('cause');
   });
 
-  it('keeps `entity` when the error carries one', async () => {
-    // A QueryError names the query it is about. A PermissionError does not: it is raised by the
-    // backend, which does not know whose query it is. The snapshot nests errors under the query
-    // name either way, so the panel can always say which one failed. A plain Error from the
-    // backend is not a DataAppError at all, which is what routes it through `toDataAppError`'s
-    // fallback — the one path that stamps the query's own name onto it.
+  it('names the query an error is about', async () => {
+    // A backend does not know whose query it answers, and an error crossing the bridge loses its
+    // entity, so the app names the query on every error it stores. A plain Error from the backend
+    // is not a DataAppError at all: it is call_failed, named too.
     const sdk = build(new Error('not json'));
     const app = sdk.createApp();
     revenueApp(app);
     await app.execute();
 
     expect(app.toInspectJSON().queries.revenue.error).toMatchObject({
-      name: 'QueryError',
+      code: 'call_failed',
       entity: 'revenue',
     });
   });

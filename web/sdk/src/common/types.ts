@@ -180,7 +180,7 @@ Declaration
 
 /**
  * A query is a dataset and a raw AQL body — nothing else. The SDK does not parse or validate the
- * AQL: a syntax error, an unknown field, or an ambiguous name surfaces as a `QueryError` at
+ * AQL: a syntax error, an unknown field, or an ambiguous name surfaces as a `query_invalid` error at
  * execute, not as a `ValidationError` here. See docs/adr/0001.
  *
  * Everything the AQL text can say — dimensions, measures, adhoc fields, static filters, its own
@@ -499,7 +499,11 @@ Inspection
  */
 export interface InspectedError {
   name: string;
+  /** What happened, and who must act: the error's `code` and `scope`. */
+  code: string;
+  scope: string;
   message: string;
+  requestId?: string;
   /** The query or control the error is about. Lost if the error itself is cloned. */
   entity?: string;
   status?: number;
@@ -765,8 +769,9 @@ export type LineageCard = Schemas['DiagramCard'];
  * What the SDK sends queries to, supplied by the provisioner. Each call either resolves or
  * rejects; how the backend gets there (synchronously, as polled jobs, over a bridge) is its own
  * business. A call whose `signal` aborts may reject with an `AbortError`, and its result is
- * ignored either way. Reject with a `DataAppError` (`PermissionError`, `QueryError`, ...) to choose
- * the error an author sees; anything else surfaces as a `QueryError`.
+ * ignored either way. Reject with a `DataAppError` in the API's shape (`code`, `scope`, `message`,
+ * using the generic codes where they apply; `fromHttpStatus` maps an HTTP status) to choose the
+ * error an author sees; anything else surfaces as `call_failed`.
  */
 export interface Backend {
   submitQuery (request: BackendQueryRequest, signal: AbortSignal): Promise<BackendQueryResult>;

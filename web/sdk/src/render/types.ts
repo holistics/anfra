@@ -26,7 +26,7 @@ export interface Renderer {
   draw (target: Element | null, options: DrawOptions): Promise<Drawing>;
 }
 
-/** Why a rendering failed, in words an author can act on. The frame makes it a `ValidationError`. */
+/** Why a rendering failed, in words an author can act on. The frame makes it an `invalid_request` error. */
 export class RenderFailure extends Error {
   constructor (message: string) {
     super(message);

@@ -1,7 +1,6 @@
 import {
   beforeEach, describe, expect, it, vi,
 } from 'vitest';
-import { ValidationError } from '../../common/errors';
 import type { Rendering, RenderRequest } from '../../common/types';
 import { RenderFailure, type DrawOptions, type Renderer } from '../../render/types';
 import { testFrame } from '../../app/testFrame';
@@ -84,28 +83,27 @@ describe('Anfra.render, in the frame', () => {
     expect(skip(document.querySelector('[data-anfra-block="plain"]')!)).toBe(false);
   });
 
-  it('refuses what names nothing, or names it wrong, as a ValidationError', async () => {
+  it('refuses what names nothing, or names it wrong, as invalid_request', async () => {
     const { render } = setup();
-    const refusal = (request: RenderRequest) => render(request).catch((e: unknown) => e as ValidationError);
+    const refusal = (request: RenderRequest) => render(request).catch((e: unknown) => e);
 
     const missing = await refusal({ block: 'nope', format: 'png' });
-    expect(missing).toBeInstanceOf(ValidationError);
+    expect(missing).toMatchObject({ code: 'invalid_request', scope: 'client' });
     expect(missing).toMatchObject({ entity: 'nope', message: expect.stringMatching(/data-anfra-block="nope"/) });
     await expect(refusal({ block: 'trend', container: 'page', format: 'png' })).resolves.toMatchObject({ message: expect.stringMatching(/not both/) });
     await expect(refusal({ format: 'svg' as never })).resolves.toMatchObject({ message: expect.stringMatching(/'png' and 'pdf'/) });
-    await expect(refusal({ format: 'png', pixelRatio: 0 })).resolves.toBeInstanceOf(ValidationError);
+    await expect(refusal({ format: 'png', pixelRatio: 0 })).resolves.toMatchObject({ code: 'invalid_request' });
     expect(draw).not.toHaveBeenCalled();
     expect(saved).toEqual([]);
   });
 
-  it('turns a drawing that fails into a ValidationError naming the node, and saves nothing', async () => {
+  it('turns a drawing that fails into invalid_request naming the node, and saves nothing', async () => {
     draw.mockRejectedValueOnce(new RenderFailure('300×90000 px at pixelRatio 2 is over a canvas\'s limit.'));
     const { render } = setup();
 
     const err = await render({ block: 'trend', format: 'png' }).catch((e: unknown) => e);
 
-    expect(err).toBeInstanceOf(ValidationError);
-    expect(err).toMatchObject({ entity: 'trend', message: "300×90000 px at pixelRatio 2 is over a canvas's limit." });
+    expect(err).toMatchObject({ code: 'invalid_request', entity: 'trend', message: "300×90000 px at pixelRatio 2 is over a canvas's limit." });
     expect(saved).toEqual([]);
   });
 });
@@ -126,8 +124,8 @@ describe('Anfra.render, on the SDK', () => {
     expect(saved).toHaveLength(1);
   });
 
-  it('answers the host a refusal as a ValidationError', async () => {
+  it('answers the host a refusal as invalid_request', async () => {
     const { frame } = setup();
-    await expect(frame.call('render.draw', { block: 'nope', format: 'png' })).rejects.toBeInstanceOf(ValidationError);
+    await expect(frame.call('render.draw', { block: 'nope', format: 'png' })).rejects.toMatchObject({ code: 'invalid_request' });
   });
 });
