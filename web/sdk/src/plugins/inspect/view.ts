@@ -568,13 +568,15 @@ export const STYLES = `${COMPONENT_STYLES}
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: default; }
 :focus-visible { outline: 2px solid var(--anfra-color-accent); outline-offset: 1px; }
-.pane { height: 100%; display: flex; flex-direction: column; min-height: 0;
+/* The tabs' own colours, on the host: the tooltip sits beside the pane, not in it, and reads them too. */
+:host {
   --hover: var(--anfra-color-hover);
   --subtle: var(--anfra-color-bg-sunken);
   --accent-bg: var(--anfra-color-selected);
   --danger-bg: color-mix(in srgb, var(--anfra-color-danger) 14%, transparent);
   --ok: var(--anfra-color-success); --warn: var(--anfra-color-warning); --run: light-dark(oklch(0.588 0.139 242), oklch(0.754 0.139 232.7));
   --warn-bg: color-mix(in srgb, var(--warn) 16%, transparent); --ok-bg: color-mix(in srgb, var(--ok) 16%, transparent); }
+.pane { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 .body { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 16px; }
 .body.split { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 .body.split > .scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 16px; }
