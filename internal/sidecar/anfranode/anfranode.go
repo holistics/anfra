@@ -6,8 +6,6 @@ package anfranode
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/holistics/anfra/internal/sidecar"
 )
@@ -56,10 +54,10 @@ func (a *Sidecar) Start(ctx context.Context) error {
 		return fmt.Errorf("resolve anfra-node binary: %w", err)
 	}
 
-	// UDS paths are capped at ~108 bytes (sun_path), so keep it short and in the
-	// temp dir; per-pid so multiple repos don't collide.
-	a.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("anfra-%d.sock", os.Getpid()))
-	_ = os.Remove(a.socketPath)
+	a.socketPath, err = sidecar.SocketPath(Name)
+	if err != nil {
+		return err
+	}
 
 	env := []string{"ANFRA_REPO_ID=" + a.cfg.RepoID}
 	if a.cfg.CompileCachePath != "" {
@@ -98,13 +96,11 @@ func (a *Sidecar) Start(ctx context.Context) error {
 // Client returns the RPC client for the spawned sidecar.
 func (a *Sidecar) Client() *Client { return a.client }
 
-// Close stops the sidecar and removes its socket file. A no-op for an external
+// Close stops the sidecar and removes its socket. A no-op for an external
 // sidecar, which this process never owned.
 func (a *Sidecar) Close() {
 	if a.proc != nil {
 		a.proc.Close()
 	}
-	if a.socketPath != "" {
-		_ = os.Remove(a.socketPath)
-	}
+	sidecar.RemoveSocket(a.socketPath)
 }

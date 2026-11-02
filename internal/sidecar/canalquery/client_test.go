@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -296,4 +298,57 @@ func TestProgress(t *testing.T) {
 	if _, err := canal.Execute(context.Background(), statement); err != nil {
 		t.Errorf("without a Progress handler: %v", err)
 	}
+}
+
+// A Unix-socket client reaches the canal-query listening there, and still does
+// once a host wraps its transport, as tracing does.
+func TestClientUnix(t *testing.T) {
+	socketPath := filepath.Join(shortTempDir(t), "cq.sock")
+	l, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+		}
+	}))
+	_ = srv.Listener.Close()
+	srv.Listener = l
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	canal := NewClientUnix(socketPath, false)
+	if err := canal.WaitReady(context.Background()); err != nil {
+		t.Fatalf("WaitReady: %v", err)
+	}
+	if got, want := canal.BaseURL(), "unix:"+socketPath; got != want {
+		t.Errorf("BaseURL() = %q, want %q", got, want)
+	}
+	wrapped := 0
+	sidecar.Config{WrapTransport: func(_ string, rt http.RoundTripper) http.RoundTripper {
+		return roundTripFunc(func(r *http.Request) (*http.Response, error) { wrapped++; return rt.RoundTrip(r) })
+	}}.Wrap(Name, canal.http)
+	if err := canal.Health(context.Background()); err != nil {
+		t.Fatalf("Health after Wrap: %v", err)
+	}
+	if wrapped != 1 {
+		t.Errorf("the wrapped transport carried %d requests, want 1", wrapped)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// shortTempDir is a temp dir short enough for a Unix socket path (~108 bytes),
+// which t.TempDir() can exceed.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "anfra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }

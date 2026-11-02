@@ -18,7 +18,7 @@ import (
 
 var initFiles = []string{
 	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".anfra/context_sources.yml",
-	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", ".gitignore",
+	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", ".gitignore", "AGENTS.md",
 }
 
 func TestInitSetsUpARepo(t *testing.T) {
@@ -51,6 +51,26 @@ func TestInitSetsUpARepo(t *testing.T) {
 	ignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
 	if !strings.Contains(string(ignore), "\n.anfra/data_sources.yml\n") {
 		t.Errorf(".gitignore: %q", ignore)
+	}
+}
+
+// A symlinked .gitignore is not read by Git, and its target may be outside
+// the repo: init leaves it alone and says so.
+func TestInitRefusesASymlinkedGitignore(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "rc")
+	if err := os.WriteFile(outside, []byte("export X=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, ".gitignore")); err != nil {
+		t.Fatal(err)
+	}
+	err := initRepo(context.Background(), dir, &bytes.Buffer{}, initChoice{})
+	if err == nil || !strings.Contains(err.Error(), ".gitignore") {
+		t.Fatalf("err = %v, want one about .gitignore", err)
+	}
+	if got, _ := os.ReadFile(outside); string(got) != "export X=1\n" {
+		t.Errorf("the link's target changed: %q", got)
 	}
 }
 
@@ -189,6 +209,27 @@ func TestInitWithSample(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "Sample available") {
 		t.Errorf("offered the sample it added:\n%s", out.String())
+	}
+	// AGENTS.md has the sample's guidance, then the anfra block.
+	md, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if guide, block := strings.Index(string(md), "# Agent instructions"), strings.Index(string(md), "<!-- anfra:begin -->"); guide != 0 || block < 0 {
+		t.Errorf("AGENTS.md:\n%s", md)
+	}
+}
+
+// The repo's own AGENTS.md is kept: the sample's does not replace it.
+func TestInitWithSampleKeepsAgentsMD(t *testing.T) {
+	serveSample(t, http.StatusOK, sampleArchive(t))
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := initRepo(context.Background(), dir, &bytes.Buffer{}, initChoice{sample: true}); err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if !strings.HasPrefix(string(md), "# Mine\n") || strings.Contains(string(md), "Agent instructions") {
+		t.Errorf("AGENTS.md:\n%s", md)
 	}
 }
 

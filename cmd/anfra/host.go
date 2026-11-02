@@ -37,6 +37,7 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 	}
 	if !updateNotifyDisabled() {
 		cc.Update = knownUpdate
+		cc.Skills = knownSkills
 	}
 	return cc
 }

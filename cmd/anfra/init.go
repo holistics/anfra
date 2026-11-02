@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/publish"
@@ -120,8 +121,10 @@ func newInitCmd() *cobra.Command {
 			"  .anfra/data_sources.yml.example  the same, without credentials, to commit\n" +
 			"  .anfra/context_sources.yml       what anfra ingest reads for anfra search\n" +
 			"  models/, datasets/, apps/        AML models, AML datasets, Data Apps\n" +
-			"  .gitignore                       + .anfra/data_sources.yml\n\n" +
-			"It never changes an existing file, so it is safe to run in a repo that has some of these already.\n\n" +
+			"  .gitignore                       + .anfra/data_sources.yml\n" +
+			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
+			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
+			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n\n" +
 			"Sample project: --with-sample also adds an e-commerce sample (6 models, a dataset with 8 metrics,\n" +
 			"a small DuckDB file, a Data App, business definitions in wiki/ecommerce/ and an AGENTS.md),\n" +
 			"downloaded from github.com/" + sampleRepo + ", and points data_sources.yml at its DuckDB file.\n" +
@@ -188,6 +191,14 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 		steps = append(steps, initStep{d + "/.gitkeep", writeNew(nil, 0o644)})
 	}
 	steps = append(steps, initStep{".gitignore", ignoreLine(sources)})
+	// Whether AGENTS.md is init's own, so the sample may put its guidance in it.
+	_, statErr := os.Lstat(filepath.Join(dir, "AGENTS.md"))
+	ownAgentsMD := errors.Is(statErr, fs.ErrNotExist)
+	// The block agent setup writes too: what tells agents to use the skills.
+	steps = append(steps, initStep{"AGENTS.md", func(string) (bool, error) {
+		wroteBlock, wroteImport, err := agents.WriteBlock(dir)
+		return wroteBlock || wroteImport, err
+	}})
 	if err := runSteps(dir, out, steps); err != nil {
 		return err
 	}
@@ -211,6 +222,10 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 	fmt.Fprintf(out, "\nSample project, from %s@%s:\n", sampleRepo, commit)
 	steps = steps[:0]
 	for _, f := range files {
+		if f.path == "AGENTS.md" {
+			steps = append(steps, initStep{f.path, sampleAgentsMD(dir, f.content, ownAgentsMD)})
+			continue
+		}
 		steps = append(steps, initStep{f.path, writeNew(f.content, 0o644)})
 	}
 	if err := runSteps(dir, out, steps); err != nil {
@@ -235,6 +250,22 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 		}
 	}
 	return nil
+}
+
+// sampleAgentsMD writes the sample's AGENTS.md, followed by the anfra block,
+// in place of the AGENTS.md init wrote this run, which holds only that block.
+// The repo's own AGENTS.md is kept.
+func sampleAgentsMD(dir string, content []byte, own bool) func(path string) (bool, error) {
+	return func(path string) (bool, error) {
+		if !own {
+			return false, nil
+		}
+		if err := os.WriteFile(path, content, 0o644); err != nil { //nolint:gosec // G306: a committed doc
+			return false, err
+		}
+		_, _, err := agents.WriteBlock(dir)
+		return err == nil, err
+	}
 }
 
 func retryArg(dir string) string {
@@ -370,9 +401,15 @@ func writeNew(content []byte, perm fs.FileMode) func(path string) (bool, error) 
 }
 
 // ignoreLine adds pattern to a .gitignore, creating it, unless a line already
-// is that pattern. Reported as created when it adds the line.
+// is that pattern. Reported as created when it adds the line. A .gitignore
+// that is not a regular file is refused: Git does not follow a symlinked
+// one, so the line would not ignore anything, and writing through the link
+// would change a file outside the repo.
 func ignoreLine(pattern string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
+		if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+			return false, fmt.Errorf("not a regular file, which Git does not read: add %s to the repo's ignore rules yourself", pattern)
+		}
 		existing, err := os.ReadFile(path) //nolint:gosec // G304: the .gitignore of the repo being set up
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return false, err

@@ -28,13 +28,18 @@ type Printer struct {
 
 // NewPrinter prints to w, styled and wrapped when w is a terminal.
 func NewPrinter(w io.Writer) *Printer {
-	p := &Printer{w: w, Styles: NewTerminalStyles(w)}
+	return &Printer{w: w, Styles: NewTerminalStyles(w), width: Width(w)}
+}
+
+// Width is how wide to wrap text written to w: the terminal's width, capped at
+// maxWidth, or 0, no wrapping, when w isn't a terminal.
+func Width(w io.Writer) int {
 	if f, ok := w.(interface{ Fd() uintptr }); ok && terminalEnvironment() && term.IsTerminal(int(f.Fd())) {
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
-			p.width = min(width, maxWidth)
+			return min(width, maxWidth)
 		}
 	}
-	return p
+	return 0
 }
 
 // Section starts a group of lines under a heading, written with its first line:
@@ -123,7 +128,7 @@ func ChoiceName(choice string) string {
 // ask writes text after mark, wrapped under itself, leaving the cursor after it
 // for the answer.
 func (p *Printer) ask(mark, text string) {
-	lines := p.wrap(text, 2)
+	lines := Wrap(text, p.width, 2)
 	for i, l := range lines {
 		if i > 0 {
 			mark = "  "
@@ -156,7 +161,7 @@ func (p *Printer) line(mark string, s lipgloss.Style, text string) {
 // write writes text after mark, wrapping it under itself.
 func (p *Printer) write(mark string, s lipgloss.Style, text string) {
 	indent := strings.Repeat(" ", ansi.StringWidth(mark))
-	for i, l := range p.wrap(text, len(indent)) {
+	for i, l := range Wrap(text, p.width, len(indent)) {
 		if i > 0 {
 			mark = indent
 		}
@@ -165,9 +170,11 @@ func (p *Printer) write(mark string, s lipgloss.Style, text string) {
 	p.wrote = true
 }
 
-func (p *Printer) wrap(text string, indent int) []string {
-	if p.width > indent+20 {
-		text = ansi.Wrap(text, p.width-indent, "")
+// Wrap splits text into lines that fit width after an indent of that many
+// columns; 0, or a width too narrow to read, doesn't wrap.
+func Wrap(text string, width, indent int) []string {
+	if width > indent+20 {
+		text = ansi.Wrap(text, width-indent, "")
 	}
 	return strings.Split(text, "\n")
 }

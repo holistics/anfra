@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bump the anfra release version and regenerate CHANGELOG.md from conventional
-# commits. Review + commit the result and merge to main; tag_and_release.yml then
+# commits, and skills/CHANGELOG.md from those that changed the skills. Review + commit the result and merge to main; tag_and_release.yml then
 # tags `v<version>` (read from manifest.yml) and the assembler publishes it.
 #
 # Usage: pnpm bump <version>     e.g. pnpm bump 0.2.0
@@ -30,5 +30,19 @@ pnpm exec conventional-changelog \
   -i CHANGELOG.md -s \
   -t v
 
-echo "Bumped manifest.yml, web/sdk/package.json and web/design/package.json -> ${version} and updated CHANGELOG.md."
-echo "Review both, commit, and merge to main to cut v${version}."
+# The skills' own changelog, published with them to holistics/anfra-skills: an
+# entry only when a commit since the last release changed them.
+skills_note=""
+last="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+if [ -z "$last" ] || [ -n "$(git log --oneline "$last"..HEAD -- skills)" ]; then
+  pnpm exec conventional-changelog \
+    -n conventional-changelog.config.mjs \
+    -c "$ctx" \
+    -i skills/CHANGELOG.md -s \
+    -t v \
+    --commit-path skills
+  skills_note=" and skills/CHANGELOG.md"
+fi
+
+echo "Bumped manifest.yml, web/sdk/package.json and web/design/package.json -> ${version} and updated CHANGELOG.md${skills_note}."
+echo "Review them, commit, and merge to main to cut v${version}."

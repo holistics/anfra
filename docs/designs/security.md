@@ -58,7 +58,7 @@ The engine has no principal, role, policy or tenant. A platform decides whether 
 ## Local state and processes
 
 - The runtime file through which CLI calls find a running server (`serve.json`) is written owner-only, in an owner-only folder (`cmd/anfra/runtime.go`).
-- Sidecars run as child processes of anfra, under the same user, and stop with it ([sidecars.md](sidecars.md)).
+- Sidecars run as child processes of anfra, under the same user, and stop with it. Each listens on a Unix socket in a directory only that user can open, at a path no one else can guess, so another user on the host can neither reach it nor take its address first ([sidecars.md](sidecars.md#sockets-and-ports)).
 - The Docker image runs anfra as a non-root user, `anfra`, with tini as PID 1 (`Dockerfile`).
 
 ## What is not protected

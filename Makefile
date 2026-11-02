@@ -87,10 +87,11 @@ build-dev:
 # test-sidecars runs them against the pinned releases.
 REAL_SIDECARS = $(and $(ANFRA_NODE_BIN),$(ANFRA_CANAL_QUERY_BIN))
 
-test: ## Run the Go, SDK and frontend tests
+test: ## Run the Go, SDK, frontend and skills tests
 	$(if $(REAL_SIDECARS),scripts/sidecars.sh check)
 	go test ./...
 	pnpm test:web
+	pnpm skills:check
 	$(if $(REAL_SIDECARS),,@echo "WARNING: the real-sidecar tests were skipped: ANFRA_NODE_BIN and ANFRA_CANAL_QUERY_BIN are not both set. make test-sidecars runs them.")
 
 test-sidecars: ## Run the Go tests, those against real sidecars too (needs the dev warehouse: DEVELOPMENT.md)

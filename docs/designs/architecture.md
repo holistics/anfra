@@ -12,7 +12,7 @@ anfra is a Go program and two sidecar processes it talks to. Each sidecar exists
 | **anfra-node** (Node.js) | Supplies anfra with core functions that exist in Node.js. Today these are mainly the semantic layer's (compiling, validating and showing AML; compiling and validating AQL) and the local catalog's (ingest, search, lineage). | holistics-core `apps/anfra-node`; Go client in `internal/sidecar/anfranode` |
 | **canal-query** (Go) | Executes SQL against the warehouse, with connection pooling. | holistics/canal; Go client in `internal/sidecar/canalquery` |
 
-anfra talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on a loopback port (`internal/sidecar`). anfra-node also reaches canal-query directly when it writes the local catalog (`internal/ingest/ingest.go` passes it canal-query's address).
+anfra talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on another (`internal/sidecar`). The catalog commands also pass anfra-node canal-query's address (`internal/ingest/ingest.go`), `unix:<path>` for the one anfra spawns, for the catalog's database context sources to reach it. Those are off today, and anfra-node's query client cannot dial a socket yet: with them back, it fails on that address (`unknown scheme`) until it can.
 
 Only anfra reads `.anfra/data_sources.yml`. anfra-node receives each data source's name and type, which it needs for the SQL dialect; the connection, credentials included, goes to canal-query alone, with the query to run (`internal/datasource/datasource.go`).
 
@@ -42,7 +42,7 @@ flowchart LR
   serve --> reg
   engine --> reg
   reg -->|JSON-RPC, Unix socket| node
-  reg -->|HTTP, loopback| canal
+  reg -->|HTTP, Unix socket| canal
   node -->|catalog writes| canal
   canal --> wh
   node --> repo
@@ -62,7 +62,7 @@ Every command, on every surface, goes through the one registry (`internal/app`):
 
 **One-shot CLI.** `anfra query …` starts only the sidecars that command needs (each command declares them, `Needs` in `internal/command/command.go`), runs it, and stops them. Nothing stays behind but logs and caches.
 
-**`anfra serve`.** A long-running server for one repo, with both sidecars kept warm: anfra-node keeps the compiled program in memory, and canal-query pools warehouse connections. It serves the HTTP API, MCP and the Data App pages (`cmd/anfra/serve.go`). It records itself in the repo's runtime file (`serve.json`, under the repo's state folder), and while it runs, CLI commands in that repo find it there and are forwarded to it rather than starting sidecars of their own (`cmd/anfra/runtime.go`, `runCommand` in `cmd/anfra/commands.go`). A second `anfra serve` for the same repo refuses to start.
+**`anfra serve`.** A long-running server for one repo, with both sidecars kept warm: anfra-node keeps the compiled program in memory, and canal-query pools warehouse connections. It serves the HTTP API, MCP and the Data App pages (`cmd/anfra/serve.go`). It records itself in the repo's runtime file (`serve.json`, under the repo's state folder), and while it runs, CLI commands in that repo find it there and are forwarded to it rather than starting sidecars of their own (`cmd/anfra/runtime.go`, `runCommand` in `cmd/anfra/commands.go`). A server keeps the version it started with, so a CLI of another version warns that the command runs on that one ([release.md](release.md#updates)). A second `anfra serve` for the same repo refuses to start.
 
 **Embedded.** A platform imports the `engine` package and calls `Dispatch` in its own process. It runs the sidecars itself, with their own lifecycle and scaling, and connects to them by URL (`engine.Connect`): the engine never spawns processes in a platform's server. See [engine.md](engine.md).
 
@@ -95,7 +95,7 @@ Two places, with different owners.
     └── catalog/               the local search catalog
 ```
 
-Keeping state out of the repo means a repo never fills with generated files, and the same repo checked out twice gets separate state. A unix socket path has a short length limit, so anfra-node's socket goes in the system temp folder instead, named per process (`internal/sidecar/anfranode`).
+Keeping state out of the repo means a repo never fills with generated files, and the same repo checked out twice gets separate state. A unix socket path has a short length limit, so the sidecars' sockets go in the system temp folder instead, each in a private directory with a random name ([sidecars.md](sidecars.md#sockets-and-ports)).
 
 ## Logs and telemetry
 

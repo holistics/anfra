@@ -1325,6 +1325,16 @@ components:
         - node
         - canal-query
       type: object
+    SkillsResult:
+      additionalProperties: false
+      properties:
+        checked:
+          type: string
+        latest:
+          type: string
+        version:
+          type: string
+      type: object
     StatusResult:
       additionalProperties: false
       properties:
@@ -1444,9 +1454,10 @@ components:
       additionalProperties: false
       properties:
         globs:
-          description: optional file globs; report only diagnostics for matching files
+          description: optional file globs, at most 100; report only diagnostics for matching files
           items:
             type: string
+          maxItems: 100
           type: array
       type: object
     ValidationReport:
@@ -1477,9 +1488,22 @@ components:
         - severity
         - message
       type: object
+    VersionInput:
+      additionalProperties: false
+      properties:
+        skills:
+          description: the version of the anfra skills in use, from the line ending each skill (anfra skills <version>), or unknown when a skill has no such line; adds the latest skills version to the answer
+          type: string
+      type: object
     VersionResult:
       additionalProperties: false
       properties:
+        hints:
+          items:
+            type: string
+          type: array
+        skills:
+          $ref: "#/components/schemas/SkillsResult"
         update:
           $ref: "#/components/schemas/UpdateInfo"
         version:
@@ -2215,7 +2239,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NoInput"
+              $ref: "#/components/schemas/VersionInput"
         required: true
       responses:
         "200":
@@ -2257,7 +2281,7 @@ paths:
                   - error
                 type: object
           description: internal_server_error
-      summary: Print the anfra version
+      summary: Print the anfra version, and say when anfra or the anfra skills are behind
       x-destructive: false
       x-idempotent: true
       x-read-only: true

@@ -5,11 +5,15 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/holistics/anfra/internal/home"
+	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -90,26 +94,54 @@ type health struct {
 // command itself.
 func findServer(ctx context.Context, r repo.Local) (runtimeFile, bool) {
 	f, ok := readRuntime(runtimePath(r))
-	if !ok || f.RepoID != r.ID {
+	if !ok || f.RepoID != r.ID || !answers(ctx, f) {
 		return runtimeFile{}, false
 	}
+	return f, true
+}
+
+// runningServers are the servers running on this machine, every repo's: those
+// whose runtime file names a server that answers as it.
+func runningServers(ctx context.Context) []runtimeFile {
+	paths, _ := filepath.Glob(filepath.Join(home.Dir(), "repos", "*", "runtime", "serve.json"))
+	var servers []runtimeFile
+	for _, p := range paths {
+		if f, ok := readRuntime(p); ok && answers(ctx, f) {
+			servers = append(servers, f)
+		}
+	}
+	return servers
+}
+
+// answers reports whether the server f records answers as that server: this
+// repo, this instance.
+func answers(ctx context.Context, f runtimeFile) bool {
 	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.URL+"/health", nil)
 	if err != nil {
-		return runtimeFile{}, false
+		return false
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return runtimeFile{}, false
+		return false
 	}
 	defer resp.Body.Close()
 	var h health
-	if resp.StatusCode != http.StatusOK || jsonkit.UnmarshalRead(resp.Body, &h) != nil ||
-		h.RepoID != f.RepoID || h.InstanceID != f.InstanceID {
-		return runtimeFile{}, false
+	return resp.StatusCode == http.StatusOK && jsonkit.UnmarshalRead(resp.Body, &h) == nil &&
+		h.RepoID == f.RepoID && h.InstanceID == f.InstanceID
+}
+
+// warnIfOtherVersion warns that the repo's server, which runs the command, is
+// another anfra version than this one: a server keeps the version it started
+// with, through `anfra update`, until it is restarted.
+func warnIfOtherVersion(w io.Writer, srv runtimeFile) {
+	if srv.Version == meta.Version {
+		return
 	}
-	return f, true
+	printWarning(w, "server_version_mismatch", fmt.Sprintf(
+		"The command runs on this repo's `anfra serve`, which is anfra %s, not this anfra's %s. Restart `anfra serve` to run %s.",
+		srv.Version, meta.Version, meta.Version))
 }
 
 // holderOf is the repo whose server records addr (host:port) in its runtime

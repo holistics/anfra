@@ -50,6 +50,16 @@ To cut a release, on a branch:
 - **Trusted publishing.** npm takes the publish from the workflow over OIDC, with no token, and records the package's provenance. It is configured on the package's settings on npmjs.com, naming this repository and a workflow. npm checks the workflow that started the run: `build_release.yml`, which a tag push starts. There is no npm token, and the package's settings disallow tokens, so only this workflow, or a maintainer with two-factor authentication, can publish.
 - **Any other build** packs it without publishing, so a broken package shows before a release does.
 
+## The skills
+
+The anfra skills' source is `skills/`; `build_release.yml`'s `skills` job publishes them to [holistics/anfra-skills](https://github.com/holistics/anfra-skills), the facade every agent installs from, after the binaries ([agent setup](agent-setup.md#releasing-the-skills)).
+
+- **The release's version, only when they changed.** The job rebuilds what the facade holds, with the parameters it recorded (`.build.json`), and compares. The same tree publishes nothing; a different one is built at this release's version, committed, tagged `anfra-v<version>`, and pushed (`skills/scripts/publish.sh`). A re-run publishes nothing again.
+- **Their changelog,** `skills/CHANGELOG.md`, gets an entry from `pnpm bump` when a commit since the last release changed `skills/`, and is published with them.
+- **The build writes the versions.** The manifests' versions and each skill's stamp come from the build (`skills/scripts/build.mjs`), not from `skills/`, so `pnpm bump` doesn't touch the skills.
+- **A GitHub App** with Contents: write on the facade, allowed past its branch protection, does the push, with a token the job makes from `ANFRA_SKILLS_DEPLOYER_APP_ID` and `ANFRA_SKILLS_DEPLOYER_KEY`.
+- **Any other build** reports what a release would publish, without pushing.
+
 ## Versions
 
 A release's version is `manifest.yml`'s, injected at build time (`internal/meta.Version`). Any other build is one from source, and says which: the release it comes after, then, as semver build metadata, the commit and whether the tree was dirty, as Go records them in the binary: `<base>+<commit>`, or `<base>+<commit>.dirty` (`internal/meta/version.go`). `make build` and `make dev` inject the base from `manifest.yml`; a bare `go build` reports `0.0.0+<commit>`.
@@ -59,5 +69,9 @@ Build metadata leaves the version's order alone, and a release never carries any
 ## Updates
 
 `anfra update` replaces the running binary with the latest release, and anfra notices newer ones in the background: a cached check at most daily, a notice on an interactive terminal, an announcement from `serve` (`internal/update`, `cmd/anfra/update.go`). `ANFRA_NO_UPDATE_NOTIFIER` turns the notices off; `ANFRA_AUTO_UPDATE` applies updates in the background instead.
+
+A running `anfra serve` keeps the version it started with, and so do the commands forwarded to it, until it is restarted. `anfra update` names each server still running another version, and a command forwarded to a server of another version than its CLI's writes a `server_version_mismatch` warning before its answer (`warnIfOtherVersion` in `cmd/anfra/runtime.go`). An MCP client, which talks to the server alone, gets no such warning.
+
+After an update, or with `--check` before one, `anfra update` prints what the new version brings: the changelog of each release since the running one, the skipped ones included, read from `CHANGELOG.md` at the new version's tag, of which each release's notes are a section, rather than from GitHub's rate-limited API (`internal/update/notes.go`). It shows the newest three and links to the rest. The notes are best-effort: when they can't be fetched, it prints a link to the releases instead, and the update still succeeds.
 
 None of this applies to a build from source: it was built on purpose, and a release would replace it with something else. It is never told of updates, and `anfra update` refuses to replace it.

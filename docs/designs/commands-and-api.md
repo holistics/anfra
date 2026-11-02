@@ -44,6 +44,13 @@ Run `generate` after changing anything a command publishes: a command added, rem
 
 The document's version is the contract's, not the binary's: it does not change with every release.
 
+### Deprecation before removal
+
+A command or flag keeps working, with a deprecation warning, for at least one minor release before it is removed or changed. That is the default for every command, an op or not: people and their scripts call the CLI, and so do the anfra skills, whose copies on a machine can be a release or two behind the binary ([agent setup](agent-setup.md#deprecation)).
+
+- **An op** still needs its breaking change declared, through the contract check above. The warning period comes before it.
+- **A CLI-only command,** such as `update`, `init` or `agent setup`, is in no contract, so this rule is its only protection. `anfra skills install`, now `anfra agent setup`, is kept as an alias that says so.
+
 ### Public and internal ops
 
 *Decided 2026-10-14, not built; anfra-cloud's `framework/api_framework.md` has the design.*

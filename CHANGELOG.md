@@ -1,3 +1,57 @@
+## [0.16.0](https://github.com/holistics/anfra/compare/v0.15.1...v0.16.0) (2026-10-30)
+
+### Features
+
+* bump anfra-node to 0.12.0 ([91b1dd3](https://github.com/holistics/anfra/commit/91b1dd3779bc93182ff496f6b8d855a5bcf341fc))
+
+### Security
+
+* **cli:** refuse a symlinked .gitignore in anfra init ([d1105db](https://github.com/holistics/anfra/commit/d1105db101a6f0b9e2d6b97157a33abfbd91a3d8))
+* put sidecar sockets in a private temp directory ([11f8af1](https://github.com/holistics/anfra/commit/11f8af1b5b86776c806ae980044d3b9935e7b07a))
+* run canal-query on a unix socket ([1625681](https://github.com/holistics/anfra/commit/1625681cf13288ae4490a6040e1d1e7fa1d50e6d))
+## [0.15.1](https://github.com/holistics/anfra/compare/v0.15.0...v0.15.1) (2026-10-30)
+
+### Features
+
+* **cli:** show release notes after anfra update ([44b615f](https://github.com/holistics/anfra/commit/44b615f9571a20889d6d64222868e1f4c77a0e75))
+* inject skills notice into help after multiple errors ([7d17a40](https://github.com/holistics/anfra/commit/7d17a4097c529350954259b7bc2f85e3bb8d39fa))
+* mention docs in AGENTS.md ([5fef3a6](https://github.com/holistics/anfra/commit/5fef3a6dfee4e2c0f43218377a591abdc83ed00f))
+* **shared:** support request-scoped stateless MCP serving ([15cab4c](https://github.com/holistics/anfra/commit/15cab4c7e1cb3ce2a155e9eca7ec2d652e74bd42))
+* various improvements to agent setup ([b72cfd4](https://github.com/holistics/anfra/commit/b72cfd46dd4779a7cebe2d5e806af9593189293d))
+
+### Performance Improvements
+
+* **shared:** reuse the stateless MCP HTTP handler ([5513c75](https://github.com/holistics/anfra/commit/5513c7591768cddb341a99bdf60ef3045011a691))
+## [0.15.0](https://github.com/holistics/anfra/compare/v0.14.2...v0.15.0) (2026-10-30)
+
+### ⚠ BREAKING CHANGES
+
+* **skills:** prefix skill names with anfra- to prevent collision with global agent skills
+* **engine.validate:** core.validate refuses more than 100 globs (maxItems).
+
+### Features
+
+* anfra agent commands ([005608a](https://github.com/holistics/anfra/commit/005608a4b6385f2ebabecbe09f608bd59a53af70))
+* anfra version --skills ([08329f1](https://github.com/holistics/anfra/commit/08329f193f300ade377d3b44cb474dcb9b65a747))
+* **cli:** warn if anfra serve is running a different version ([e3fed0c](https://github.com/holistics/anfra/commit/e3fed0c94587b06c717855c7eda864a8a15fe266))
+* **engine.validate:** take at most 100 globs ([61b0b80](https://github.com/holistics/anfra/commit/61b0b80f8a8dc0fbad7000623f56125e2189bc2e))
+* fetch latest skills version ([2a16986](https://github.com/holistics/anfra/commit/2a1698607d3197188985387997a5db60611782c5))
+* set up AGENTS.md ([25d41c3](https://github.com/holistics/anfra/commit/25d41c3b71813821d623046ad4a8eb0fd3fa179c))
+* **skills:** prefer writing AQL by self ([9334ad8](https://github.com/holistics/anfra/commit/9334ad8a05e7176953eff1a3a9ffade03a881dd2))
+* **skills:** prefix skill names with anfra- to prevent collision with global agent skills ([bc70675](https://github.com/holistics/anfra/commit/bc706756ea13952e5513713792efe8eace5b5c81))
+* **skills:** stamp versions in skills ([c489a9b](https://github.com/holistics/anfra/commit/c489a9bfd3866f785f47d58f8c009be871290828))
+* **skills:** update installation README ([bd5a582](https://github.com/holistics/anfra/commit/bd5a58298bfe0d68e664d38a6acb245f931bf45e))
+* **skills:** use new agent check commands ([53f07d2](https://github.com/holistics/anfra/commit/53f07d264f6186246b4161109d3ab39502dd0adb))
+* update notices for skills ([173f990](https://github.com/holistics/anfra/commit/173f99068bd17987ac9ff43e220f168b7d3cc823))
+
+### Bug Fixes
+
+* **cli:** avoid using github api to avoid ratelimit, and fix related error messages ([a52d5f9](https://github.com/holistics/anfra/commit/a52d5f94bbf3bcf094fa58f68099f62c4de013aa))
+* validate now reports unmatched paths ([8a453ad](https://github.com/holistics/anfra/commit/8a453ad26c9233edaa5de4e46e4722c06349639e))
+
+### Build
+
+* move skills build to anfra repo ([225363f](https://github.com/holistics/anfra/commit/225363f6af7f3e49ce6f8fff5c497bb9d5ab1cef))
 ## [0.14.2](https://github.com/holistics/anfra/compare/v0.14.1...v0.14.2) (2026-10-30)
 
 ### Features

@@ -1,0 +1,23 @@
+{
+  "name": "anfra-skills",
+  "interface": {
+    "displayName": "Anfra Skills"
+  },
+  "metadata": {
+    "description": "Skills for working with Anfra — building and exploring analytics via AMQL and Data Apps."
+  },
+  "plugins": [
+    {
+      "name": "anfra",
+      "source": {
+        "source": "local",
+        "path": "./plugins/anfra"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Data & Analytics"
+    }
+  ]
+}

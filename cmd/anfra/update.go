@@ -10,6 +10,8 @@ import (
 
 	"github.com/holistics/anfra/internal/envflag"
 
+	"github.com/holistics/anfra/internal/agents"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
@@ -18,13 +20,21 @@ import (
 
 // newUpdateCmd is the manual self-update command (like `gh`/`deno upgrade`):
 // check the latest GitHub release and, unless --check, replace this binary.
+// It ends by saying when the agents' skills need attention, which `anfra agent
+// setup` handles (docs/designs/agent-setup.md).
 func newUpdateCmd() *cobra.Command {
 	var checkOnly bool
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update anfra to the latest release (use --check to only report)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runUpdate(cmd.Context(), checkOnly)
+			if err := runUpdate(cmd.Context(), checkOnly); err != nil {
+				return err
+			}
+			if line := agents.Attention(agents.System(), repoDirIfAny()); line != "" {
+				fmt.Printf("\n%s\n", line)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "only check for an update; do not install")
@@ -52,6 +62,7 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	}
 	if checkOnly {
 		fmt.Printf("Update available: anfra %s (you have %s). Run `anfra update` to install.\n", rel.Version, meta.Version)
+		showReleaseNotes(ctx, meta.Version, rel.Version)
 		return nil
 	}
 
@@ -65,8 +76,31 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	if err := update.Apply(ctx, rel, progress); err != nil {
 		return err
 	}
-	fmt.Printf("Updated anfra %s -> %s.\n", meta.Version, rel.Version)
+	s := cliui.NewTerminalStyles(os.Stdout)
+	fmt.Printf("%s Updated anfra %s → %s\n", s.Success.Render("✓"),
+		s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
+	// A running server keeps the binary it started with.
+	for _, srv := range runningServers(ctx) {
+		fmt.Printf("`anfra serve` in %s still runs anfra %s: restart it to run %s.\n", srv.RepoDir, srv.Version, rel.Version)
+	}
+	showReleaseNotes(ctx, meta.Version, rel.Version)
 	return nil
+}
+
+// maxNotes caps how many releases' notes showReleaseNotes prints; the earlier
+// ones are a link away.
+const maxNotes = 3
+
+// showReleaseNotes prints what the releases after from, up to and including to,
+// changed, newest first. Best-effort: when the notes can't be fetched, it
+// points to them instead, and never fails the command.
+func showReleaseNotes(ctx context.Context, from, to string) {
+	notes, err := update.ReleaseNotes(ctx, from, to)
+	if err != nil || len(notes) == 0 {
+		fmt.Printf("See what changed: %s\n", update.ReleasesURL)
+		return
+	}
+	update.RenderNotes(os.Stdout, notes, maxNotes, cliui.NewTerminalStyles(os.Stdout), cliui.Width(os.Stdout))
 }
 
 // newUpdateCheckCmd is a hidden command run detached in the background to
@@ -76,7 +110,11 @@ func newUpdateCheckCmd() *cobra.Command {
 		Use:    "__update-check",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return update.Refresh(cmd.Context())
+			err := update.Refresh(cmd.Context())
+			// The plugins installed, for the notice to read without asking the
+			// agents' CLIs, which start slowly.
+			agents.RecordPlugins(cmd.Context(), agents.System())
+			return err
 		},
 	}
 }
@@ -99,6 +137,17 @@ func knownUpdate() *command.UpdateInfo {
 		return nil
 	}
 	return &command.UpdateInfo{Latest: r.Version, Available: r.IsNewer()}
+}
+
+// knownSkills is the latest anfra skills version from the cached check, for
+// the version command to compare with; nil when nothing has been checked yet,
+// or the check failed. No network.
+func knownSkills() *command.SkillsInfo {
+	latest, at, ok := update.CachedSkills()
+	if !ok {
+		return nil
+	}
+	return &command.SkillsInfo{Latest: latest, CheckedAt: at}
 }
 
 // checkUpdates announces a newer release while serve runs: at startup and then
@@ -153,6 +202,14 @@ func maybeNotifyUpdate(invoked string) {
 	// the skills' session hook stays current. CI spawns nothing.
 	if stderrIsInteractive() && notice != "" {
 		fmt.Fprintln(os.Stderr, "\n"+notice)
+	}
+	// What of the agents' skills needs attention, at most once a day; not after
+	// agent setup (or its former name), which has just reported it all. For a
+	// person at a terminal, like the update notice.
+	if stderrIsInteractive() && invoked != "setup" && invoked != "install" {
+		if line := agents.Notice(agents.System(), repoDirIfAny()); line != "" {
+			fmt.Fprintln(os.Stderr, "\n"+line)
+		}
 	}
 	if update.Stale() && os.Getenv("CI") == "" {
 		spawnDetached("__update-check")

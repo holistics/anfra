@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -69,7 +71,7 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			printError(&out, &commandError{path: "anfra query", args: args, err: tc.err})
+			printError(&out, &commandError{path: "anfra query", args: args, err: tc.err}, "")
 			if out.String() != tc.want {
 				t.Errorf("got\n%s\nwant\n%s", out.String(), tc.want)
 			}
@@ -79,7 +81,7 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 	// Details that are not violations are shown as they are, with no help.
 	var out bytes.Buffer
 	printError(&out, &commandError{path: "anfra query", args: args, err: &remoteError{resp: apperr.Response{
-		Code: "query_invalid", Scope: apperr.User, Message: "The query is not valid.", Details: map[string]any{"diagnostics": []any{}}}}})
+		Code: "query_invalid", Scope: apperr.User, Message: "The query is not valid.", Details: map[string]any{"diagnostics": []any{}}}}}, "")
 	if want := "---\nerror:\n    code: query_invalid\n    scope: user\n    message: The query is not valid.\n    details:\n        diagnostics: []\n"; out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
@@ -90,7 +92,7 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 func TestStderrIsAYAMLStream(t *testing.T) {
 	var out bytes.Buffer
 	printWarning(&out, "telemetry_off", "telemetry is off: no: such endpoint")
-	printError(&out, apperr.New(apperr.NotFound, ""))
+	printError(&out, apperr.New(apperr.NotFound, ""), "")
 
 	dec := yaml.NewDecoder(&out)
 	var kinds []string
@@ -105,5 +107,32 @@ func TestStderrIsAYAMLStream(t *testing.T) {
 	}
 	if got := len(kinds); got != 2 || kinds[0] != "warning:telemetry_off" || kinds[1] != "error:not_found" {
 		t.Errorf("documents %v, want a warning then the error", kinds)
+	}
+}
+
+// A hint goes into help, after the usage line when there's one: one piece of
+// advice a line, in one string, so help keeps its type.
+func TestPrintErrorWithAHint(t *testing.T) {
+	var out bytes.Buffer
+	printError(&out, apperr.New(apperr.NotFound, "No such dataset."), "Run `anfra agent setup`.")
+	if want := "    help: Run `anfra agent setup`.\n"; !strings.HasSuffix(out.String(), want) {
+		t.Errorf("alone:\n%s", out.String())
+	}
+
+	out.Reset()
+	args := []command.Arg{{Name: "dataset", Type: command.ArgString}}
+	err := apperr.NewWith(apperr.ValidationFailed, "Some of the input is not valid.",
+		apperr.Violate(apperr.Violation{Field: "dataset", Code: "invalid", Message: "unknown"}))
+	printError(&out, &commandError{path: "anfra query", args: args, err: err}, "Run `anfra agent setup`.")
+	var doc struct {
+		Error struct {
+			Help string `yaml:"help"`
+		} `yaml:"error"`
+	}
+	if yerr := yaml.Unmarshal(bytes.TrimPrefix(out.Bytes(), []byte("---\n")), &doc); yerr != nil {
+		t.Fatal(yerr)
+	}
+	if want := "Run `anfra query --help` for usage.\nRun `anfra agent setup`."; doc.Error.Help != want {
+		t.Errorf("help = %q, want %q\n%s", doc.Error.Help, want, out.String())
 	}
 }

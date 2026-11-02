@@ -1,0 +1,27 @@
+{
+  "name": "anfra",
+  "description": "Skills for developing analytics with Anfra: setting up a repo and its data source, modeling data in AML, querying it with AQL, and building Data Apps.",
+  "author": {
+    "name": "Anfra"
+  },
+  "homepage": "https://anfra.ai",
+  "repository": "https://github.com/holistics/anfra-skills",
+  "keywords": [
+    "anfra",
+    "amql",
+    "aml",
+    "aql",
+    "analytics",
+    "modeling",
+    "data-apps"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Anfra",
+    "shortDescription": "Set up an Anfra repo, model data in AML, query it with AQL, and build Data Apps.",
+    "developerName": "Anfra",
+    "category": "Data & Analytics",
+    "websiteURL": "https://anfra.ai"
+  }
+}

@@ -10,9 +10,11 @@ package update
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,11 +35,18 @@ const (
 	// Release tags are v<version>; those up to 0.8.0 were anfra-v<version>.
 	tagPrefix       = "v"
 	legacyTagPrefix = "anfra-v"
-	apiBase         = "https://api.github.com"
 	userAgent       = "anfra-cli"
 
-	// How long a cached update check stays fresh (matches gh/deno's 24h).
-	checkTTL = 24 * time.Hour
+	// The anfra skills' latest version is their plugin manifest's on the skills
+	// repo's main: the skills repo bumps every manifest in lockstep on each
+	// release (docs/designs/agent-setup.md).
+	skillsRepo     = "holistics/anfra-skills"
+	skillsManifest = "plugins/anfra/.claude-plugin/plugin.json"
+	skillsRef      = "main"
+
+	// How long a cached update check stays fresh: half a day, so a release, of
+	// anfra or of the skills, is noticed within it.
+	checkTTL = 12 * time.Hour
 
 	// Per-request timeouts: the release lookup is a small JSON response; the asset
 	// download is a large binary (sidecars are embedded), so it gets much longer.
@@ -45,11 +54,18 @@ const (
 	downloadTimeout = 10 * time.Minute
 )
 
+// webBase is GitHub's site, and rawBase where it serves a repo's files, which
+// a test points at its own server.
+var (
+	webBase = "https://github.com"
+	rawBase = "https://raw.githubusercontent.com"
+)
+
 // Release is the latest release plus the asset for the running platform.
 type Release struct {
 	Version  string // e.g. "0.2.0" (the tag without its prefix)
 	Tag      string // e.g. "v0.2.0"
-	AssetURL string // GitHub API asset URL (octet-stream download) for this platform
+	AssetURL string // where this platform's asset downloads
 }
 
 // assetName maps the running platform to its release asset name (anfra-<target>),
@@ -69,52 +85,23 @@ func assetName() (string, error) {
 	}
 }
 
-// authToken returns a GitHub token from the environment, or "" for anonymous.
-// Used only as a fallback when an anonymous request is rejected (the repo/releases
-// are private until public distribution).
-func authToken() string {
-	for _, k := range []string{"ANFRA_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
-		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-// get does an anonymous GET; if it's rejected (401/403/404) and a token is
-// available, it retries authenticated. accept selects the response format;
-// timeout bounds the whole exchange (including reading the body).
-func get(ctx context.Context, url, accept string, timeout time.Duration) (*http.Response, error) {
-	client := &http.Client{Timeout: timeout}
-	do := func(token string) (*http.Response, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Accept", accept)
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-		req.Header.Set("User-Agent", userAgent)
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-		return client.Do(req)
-	}
-
-	resp, err := do("")
+// get does a GET, which timeout bounds as a whole, the body's read included.
+func get(ctx context.Context, url string, timeout time.Duration) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	// Anonymous rejected + a token on hand → retry authenticated (private repo).
-	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 {
-		if token := authToken(); token != "" {
-			resp.Body.Close()
-			return do(token)
-		}
-	}
-	return resp, nil
+	req.Header.Set("User-Agent", userAgent)
+	return (&http.Client{Timeout: timeout}).Do(req)
 }
 
 // Latest fetches the newest release and resolves the asset for this platform.
+//
+// It asks GitHub's site, not its API: the API allows 60 anonymous calls an
+// hour, shared by everyone behind one address, such as an office or CI. The
+// site's latest release redirects to its tag, and its asset downloads at a
+// fixed path. A release whose asset for this platform isn't there yet, as
+// while its build uploads, isn't the latest.
 func Latest(ctx context.Context) (*Release, error) {
 	base, err := assetName()
 	if err != nil {
@@ -123,36 +110,70 @@ func Latest(ctx context.Context) (*Release, error) {
 	// Release binaries are published gzip-compressed for transport (see the
 	// compression plan); Apply decompresses on the way in.
 	want := base + ".gz"
-	resp, err := get(ctx, fmt.Sprintf("%s/repos/%s/releases/latest", apiBase, repoSlug), "application/vnd.github+json", lookupTimeout)
+	page := fmt.Sprintf("%s/%s/releases/latest", webBase, repoSlug)
+	resp, err := noRedirect(ctx, http.MethodGet, page)
 	if err != nil {
-		return nil, fmt.Errorf("check latest release: %w", err)
+		return nil, fmt.Errorf("check for a newer anfra: %w", err)
+	}
+	resp.Body.Close()
+	_, tag, ok := strings.Cut(resp.Header.Get("Location"), "/releases/tag/")
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 || !ok || tag == "" || strings.Contains(tag, "/") {
+		return nil, fmt.Errorf("check for a newer anfra: %s answered %s, without pointing at a release", page, resp.Status)
+	}
+	if tag, err = url.PathUnescape(tag); err != nil {
+		return nil, fmt.Errorf("check for a newer anfra: %s pointed at a release tag that isn't one: %w", page, err)
+	}
+	asset := fmt.Sprintf("%s/%s/releases/download/%s/%s", webBase, repoSlug, url.PathEscape(tag), want)
+	head, err := noRedirect(ctx, http.MethodHead, asset)
+	if err != nil {
+		return nil, fmt.Errorf("check for a newer anfra: %w", err)
+	}
+	head.Body.Close()
+	if head.StatusCode >= 400 {
+		return nil, fmt.Errorf("anfra %s has no build for this platform (%s) yet: its release may still be uploading, so try again in a few minutes", tagVersion(tag), want)
+	}
+	return &Release{Tag: tag, Version: tagVersion(tag), AssetURL: asset}, nil
+}
+
+// noRedirect sends a request whose redirect the caller reads rather than
+// follows.
+func noRedirect(ctx context.Context, method, target string) (*http.Response, error) {
+	client := &http.Client{
+		Timeout:       lookupTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	return client.Do(req)
+}
+
+// LatestSkills fetches the latest anfra skills version: the version in the
+// skills repo's plugin manifest on main. It is a file GitHub serves from its
+// CDN, not its API, so it doesn't count against the API's rate limit, which
+// everyone behind one address shares (60 an hour, anonymous).
+func LatestSkills(ctx context.Context) (string, error) {
+	url := fmt.Sprintf("%s/%s/%s/%s", rawBase, skillsRepo, skillsRef, skillsManifest)
+	resp, err := get(ctx, url, lookupTimeout)
+	if err != nil {
+		return "", fmt.Errorf("check the latest anfra skills: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("check latest release: GitHub returned %s (set ANFRA_GITHUB_TOKEN if the repo is private)", resp.Status)
+		return "", fmt.Errorf("check the latest anfra skills: GitHub returned %s", resp.Status)
 	}
-
-	var rel struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
-			Name string `json:"name"`
-			URL  string `json:"url"`
-		} `json:"assets"`
+	var m struct {
+		Version string `json:"version"`
 	}
-	if err := jsonkit.UnmarshalRead(resp.Body, &rel); err != nil {
-		return nil, fmt.Errorf("decode release: %w", err)
+	if err := jsonkit.UnmarshalRead(io.LimitReader(resp.Body, 1<<20), &m); err != nil {
+		return "", fmt.Errorf("check the latest anfra skills: decode %s: %w", skillsManifest, err)
 	}
-	out := &Release{Tag: rel.TagName, Version: tagVersion(rel.TagName)}
-	for _, a := range rel.Assets {
-		if a.Name == want {
-			out.AssetURL = a.URL
-			break
-		}
+	if semver.Canonical("v"+m.Version) != "v"+m.Version {
+		return "", fmt.Errorf("check the latest anfra skills: %q in %s is not a version", m.Version, skillsManifest)
 	}
-	if out.AssetURL == "" {
-		return nil, fmt.Errorf("release %s has no asset %q", rel.TagName, want)
-	}
-	return out, nil
+	return m.Version, nil
 }
 
 // IsNewer reports whether the latest version is newer than the running one, so
@@ -183,7 +204,7 @@ func canonicalVersion(v string) string {
 // If progress is non-nil, download progress is rendered to it (a single, in-place
 // updated line); pass nil for a silent download (agents/CI).
 func Apply(ctx context.Context, r *Release, progress io.Writer) error {
-	resp, err := get(ctx, r.AssetURL, "application/octet-stream", downloadTimeout)
+	resp, err := get(ctx, r.AssetURL, downloadTimeout)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", r.Tag, err)
 	}
@@ -276,10 +297,17 @@ func humanBytes(n int64) string {
 
 // --- cached background check (for the "update available" notice) ---
 
+// cache is the last background check: anfra's latest release, and the anfra
+// skills' latest version, each with when it was checked. They are checked
+// together, but `anfra update` records anfra's alone.
 type cache struct {
 	CheckedAt     time.Time `json:"checked_at"`
 	LatestVersion string    `json:"latest_version"`
 	LatestTag     string    `json:"latest_tag"`
+	// SkillsLatest is "" when the last fetch failed: a failure is cached as
+	// unknown, never as a version, so it can't pass for current.
+	SkillsLatest    string    `json:"skills_latest,omitempty"`
+	SkillsCheckedAt time.Time `json:"skills_checked_at,omitzero"`
 }
 
 func cachePath() (string, error) {
@@ -315,27 +343,51 @@ func writeCache(c *cache) {
 	}
 }
 
-// Stale reports whether the cached check is missing or older than the TTL.
+// Stale reports whether the cached check, of anfra or of the skills, is missing
+// or older than the TTL.
 func Stale() bool {
 	c, ok := readCache()
-	return !ok || time.Since(c.CheckedAt) > checkTTL
+	return !ok || time.Since(c.CheckedAt) > checkTTL || time.Since(c.SkillsCheckedAt) > checkTTL
 }
 
-// Refresh runs a live check and updates the cache. Called from the detached
-// background refresh (see cmd/anfra), never in a command's hot path.
+// Refresh runs a live check, of anfra and of the skills, and updates the cache.
+// One failing doesn't stop the other. Called from the detached background
+// refresh (see cmd/anfra), never in a command's hot path.
 func Refresh(ctx context.Context) error {
 	rel, err := Latest(ctx)
-	if err != nil {
-		return err
+	if err == nil {
+		RecordCheck(rel)
 	}
-	RecordCheck(rel)
-	return nil
+	skills, serr := LatestSkills(ctx)
+	c, _ := readCache()
+	if c == nil {
+		c = &cache{}
+	}
+	c.SkillsLatest, c.SkillsCheckedAt = skills, time.Now()
+	writeCache(c)
+	return errors.Join(err, serr)
 }
 
 // RecordCheck stores an already-fetched release in the cache (no network), so a
-// foreground check refreshes the notice cache without a second request.
+// foreground check refreshes the notice cache without a second request. It
+// keeps the skills' check as it was.
 func RecordCheck(r *Release) {
-	writeCache(&cache{CheckedAt: time.Now(), LatestVersion: r.Version, LatestTag: r.Tag})
+	c, _ := readCache()
+	if c == nil {
+		c = &cache{}
+	}
+	c.CheckedAt, c.LatestVersion, c.LatestTag = time.Now(), r.Version, r.Tag
+	writeCache(c)
+}
+
+// CachedSkills is the latest anfra skills version from the cached check, and
+// when it was checked; false when it wasn't, or the fetch failed. No network.
+func CachedSkills() (latest string, checkedAt time.Time, ok bool) {
+	c, found := readCache()
+	if !found || c.SkillsLatest == "" {
+		return "", time.Time{}, false
+	}
+	return c.SkillsLatest, c.SkillsCheckedAt, true
 }
 
 // Cached returns the latest release from the cached check (no network), or nil
@@ -352,8 +404,9 @@ func Cached() *Release {
 // live lookup, which it caches. For a long-running process (serve), which can
 // afford the request off its hot path; a short command uses Cached and Refresh.
 func Check(ctx context.Context) (*Release, error) {
-	if r := Cached(); r != nil && !Stale() {
-		return r, nil
+	// anfra's check alone: serve doesn't check the skills.
+	if c, ok := readCache(); ok && c.LatestVersion != "" && time.Since(c.CheckedAt) <= checkTTL {
+		return &Release{Version: c.LatestVersion, Tag: c.LatestTag}, nil
 	}
 	r, err := Latest(ctx)
 	if err != nil {

@@ -22,4 +22,17 @@ const config = await createPreset({
   ],
 })
 
+// A BREAKING CHANGE footer runs to the end of the message, so a Co-Authored-By
+// trailer after it would land in the changelog as part of the note: drop those
+// trailers from the end of a note before it is written.
+const trailers = /(\n\s*Co-Authored-By: [^\n]*)+\s*$/i
+const transform = config.writer.transform
+config.writer.transform = (commit, context) => {
+  const out = transform(commit, context)
+  if (out?.notes) {
+    out.notes = out.notes.map((note) => ({ ...note, text: note.text.replace(trailers, '').trim() }))
+  }
+  return out
+}
+
 export default config
