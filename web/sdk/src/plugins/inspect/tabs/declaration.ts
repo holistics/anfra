@@ -82,7 +82,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
     return [
       h(doc, 'h5', {}, 'Checks', hint('Static checks on the declaration for mistakes the SDK reports late or never, such as cross-filters across datasets or controls mapped to no query. Click a row to jump to it.')),
       list.length === 0
-        ? note(doc, 'No issues found.', { 'data-testid': 'checks-none' })
+        ? note(doc, 'No problems found.', { 'data-testid': 'checks-none' })
         : h(doc, 'ul', { class: 'checks', 'data-testid': 'checks' }, list.map((check, i) => {
           const { mark, label, tone } = MARKS[check.level];
           return h(doc, 'li', { 'data-check': `${index}:${i}` },
@@ -158,7 +158,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
   }, { also: [state.subscribe] });
   root.append(h(doc, 'style', {}, CSS));
 
-  // A check linked to from elsewhere (Overview's issues): scrolled to and flashed, once per request.
+  // A check linked to from elsewhere (Overview's problems): scrolled to and flashed, once per request.
   // A reveal shows this tab before it tells its listeners, so it is looked for on the state's change,
   // the last redraw; a panel change looks again only for a check not drawn yet (no snapshot then).
   let seen = handled.get(state);

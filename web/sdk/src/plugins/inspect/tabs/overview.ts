@@ -1,7 +1,7 @@
 /**
  * Overview: the tab the panel opens on. Is this app healthy, and where to look: a status bar of
- * the queries' states, a trust card per app, stat cards, the issues, what the reader changed, and
- * the environment the frame runs in. Every count and issue links to where it is.
+ * the queries' states, a trust card per app, stat cards, the problems, what the reader changed, and
+ * the environment the frame runs in. Every count and problem links to where it is.
  */
 import type { InspectedApp } from '../../../common/types';
 import type { TabContext } from '../../../host/contributions';
@@ -9,7 +9,7 @@ import type { Snapshot } from '../../../host/panel';
 import { changesOf } from '../model/changes';
 import { formatAgo, formatTime, plural, usageOf } from '../model/format';
 import { controlTargets } from '../model/inputs';
-import { type Issue, issuesOf, queryCounts } from '../model/issues';
+import { type Problem, problemsOf, queryCounts } from '../model/problems';
 import { queriesOf, type RequestEntry } from '../model/requests';
 import {
   appTrust, LEVELS, TRUST_LEVELS, type Trust,
@@ -21,8 +21,8 @@ import {
   type Children, badge, collapsible, control, drawTab, fields, h, icon, link, note, popover, trustBars,
 } from '../view';
 
-/** How many issues the list shows before "Show all". */
-const FIRST_ISSUES = 5;
+/** How many problems the list shows before "Show all". */
+const FIRST_PROBLEMS = 5;
 
 /** How often "how long ago" moves on. */
 const TICK_MS = 30_000;
@@ -51,11 +51,11 @@ const CSS = `
 .stat:hover .go, .stat:focus-visible .go { opacity: 1; }
 .stat-value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stat-detail { width: 100%; font-size: 12px; color: var(--anfra-color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.issues { list-style: none; margin: 4px 0 0; padding: 0; }
-.issue { display: flex; align-items: flex-start; gap: 8px; width: 100%; border: 0; border-radius: 6px; background: none; padding: 5px 6px; text-align: left; overflow-wrap: anywhere; }
-.issue:hover { background: var(--hover); }
-.issue .mark { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; }
-.issue .mark.error { background: var(--anfra-color-danger); } .issue .mark.warn { background: var(--warn); }
+.problems { list-style: none; margin: 4px 0 0; padding: 0; }
+.problem { display: flex; align-items: flex-start; gap: 8px; width: 100%; border: 0; border-radius: 6px; background: none; padding: 5px 6px; text-align: left; overflow-wrap: anywhere; }
+.problem:hover { background: var(--hover); }
+.problem .mark { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; }
+.problem .mark.error { background: var(--anfra-color-danger); } .problem .mark.warn { background: var(--warn); }
 .overview > h5 { margin: 6px 0 0; }
 .tile.collapsible { padding: 6px 12px; }
 .tile.collapsible > summary { font-weight: 500; }
@@ -78,7 +78,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
   const doc = context.document;
   const { panel, mount } = context;
   const state = stateOf(mount);
-  let allIssues = false;
+  let allProblems = false;
   const reveal = (target: RevealTarget) => state.reveal(panel, target);
   const showQueries = (filter: QueriesFilter) => reveal({ tab: QUERIES_TAB, filter });
 
@@ -150,15 +150,15 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     onclick && h(doc, 'span', { class: 'go' }, icon(doc, 'chevron')));
   }
 
-  function stats (apps: InspectedApp[], issues: Issue[], requests: readonly RequestEntry[]): HTMLElement[] {
+  function stats (apps: InspectedApp[], problems: Problem[], requests: readonly RequestEntry[]): HTMLElement[] {
     const counts = queryCounts(apps);
-    const errors = issues.filter((issue) => issue.level === 'error').length;
-    const warnings = issues.length - errors;
+    const errors = problems.filter((problem) => problem.level === 'error').length;
+    const warnings = problems.length - errors;
     const controls = apps.reduce((n, app) => n + Object.keys(app.controls).length, 0);
     const unapplied = counts.dirtyControls;
     const last = requests.findLast((entry) => entry.call === 'core.submitQuery' && entry.status !== 'pending');
     const lastQuery = last?.aql && last.dataset ? queriesOf({ ...last, dataset: last.dataset, aql: last.aql }, apps)[0] : undefined;
-    const first = issues[0];
+    const first = problems[0];
     const queries = [
       `${counts.success} ok`,
       counts.error && `${counts.error} failed`,
@@ -167,7 +167,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     ].filter(Boolean).join(' · ');
     return [
       h(doc, 'div', { class: 'stats three' },
-        stat('issues', 'Issues', String(issues.length), issues.length ? `${plural(errors, 'error')} · ${plural(warnings, 'warning')}` : 'None found',
+        stat('problems', 'Problems', String(problems.length), problems.length ? `${plural(errors, 'error')} · ${plural(warnings, 'warning')}` : 'None found',
           // Failed queries are what Queries' Errors filter lists; warnings have no such list.
           counts.error ? () => showQueries('errors') : first ? () => reveal(first.target) : undefined,
           errors ? 'error' : warnings ? 'warn' : undefined),
@@ -183,23 +183,23 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     ];
   }
 
-  function issuesList (issues: Issue[]): Children {
-    if (issues.length === 0) return undefined;
-    const shown = allIssues ? issues : issues.slice(0, FIRST_ISSUES);
+  function problemsList (problems: Problem[]): Children {
+    if (problems.length === 0) return undefined;
+    const shown = allProblems ? problems : problems.slice(0, FIRST_PROBLEMS);
     return [
-      h(doc, 'h5', {}, 'Issues'),
-      h(doc, 'ul', { class: 'issues', 'data-testid': 'issues' }, shown.map((issue, i) => h(doc, 'li', {},
+      h(doc, 'h5', {}, 'Problems'),
+      h(doc, 'ul', { class: 'problems', 'data-testid': 'problems' }, shown.map((problem, i) => h(doc, 'li', {},
         h(doc, 'button', {
           type: 'button',
-          class: 'issue',
-          'data-key': `issue:${i}`,
-          'data-testid': 'issue',
-          onclick: () => reveal(issue.target),
-        }, h(doc, 'span', { class: `mark ${issue.level}`, role: 'img', 'aria-label': issue.level === 'error' ? 'Error' : 'Warning' }), issue.message)))),
-      issues.length > FIRST_ISSUES && link(doc, allIssues ? 'Show fewer' : `Show all ${issues.length}`, () => {
-        allIssues = !allIssues;
+          class: 'problem',
+          'data-key': `problem:${i}`,
+          'data-testid': 'problem',
+          onclick: () => reveal(problem.target),
+        }, h(doc, 'span', { class: `mark ${problem.level}`, role: 'img', 'aria-label': problem.level === 'error' ? 'Error' : 'Warning' }), problem.message)))),
+      problems.length > FIRST_PROBLEMS && link(doc, allProblems ? 'Show fewer' : `Show all ${problems.length}`, () => {
+        allProblems = !allProblems;
         tab.redraw();
-      }, { 'data-key': 'issues:all', 'data-testid': 'issues-all' }),
+      }, { 'data-key': 'problems:all', 'data-testid': 'problems-all' }),
     ];
   }
 
@@ -259,14 +259,14 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     const { snapshot } = panel;
     if (!snapshot) return note(doc, 'Waiting for the Data App…', { 'data-testid': 'inspect-waiting' });
     const { apps } = snapshot;
-    const issues = issuesOf(snapshot);
+    const problems = problemsOf(snapshot);
     return h(doc, 'div', { class: 'overview' },
       statusBar(apps),
       apps.length === 0
         ? note(doc, "This Data App hasn't created an SDK app.", { 'data-testid': 'no-apps' })
         : apps.map((app, index) => trustCard(app, apps.length > 1 ? `App ${index + 1}` : undefined)),
-      stats(apps, issues, state.requests.entries()),
-      issuesList(issues),
+      stats(apps, problems, state.requests.entries()),
+      problemsList(problems),
       changes(snapshot),
       environment(apps));
   }, { also: [state.subscribe] });

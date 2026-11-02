@@ -16,7 +16,7 @@ import {
 import {
   controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryInput,
 } from '../model/inputs';
-import { queryCounts } from '../model/issues';
+import { queryCounts } from '../model/problems';
 import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
 import type { QueriesFilter } from '../model/types';
