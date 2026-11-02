@@ -163,6 +163,32 @@ One error, rendered for each surface by the same pieces:
 - **The trace**: the span of each step it left, as above.
 - **The OpenAPI document**: each op lists the codes it can fail with, and the details type of each, so the contract is published, not only described.
 
+## In a Data App
+
+A Data App is a fourth surface, reached through the SDK rather than one of anfra's doors: its definition calls the core API through the host page, over the bridge ([data-apps.md](data-apps.md), [sdk-plugins.md](sdk-plugins.md)). The same principles hold, with the browser in place of a process.
+
+**Its readers.** The definition's own code, which decides what the person viewing the app sees; that person, who sees only what the code shows; and the agent or author building the app, who reads `query.error` to fix the next try, often with no console to look at.
+
+**Four classes, by who must act** (`common/errors.ts`). An error taxonomy is a public API, so there are four and no more:
+
+| Class | Means | Who acts |
+|---|---|---|
+| `ValidationError` | The definition declared something wrong: thrown synchronously, naming the line's value. | The author. |
+| `QueryError` | anfra refused or failed the query: its message is the core API's (`query_invalid`'s diagnostics, a violation's field). | The author. |
+| `PermissionError` | The reader may not see it. | The app: show "no access". |
+| `TransportError` | The server or the connection failed. | Nobody in the app: retry, or an operator. |
+
+`toSdkError` (`api/errors.ts`) maps the core API's error to one by code, and a code it does not know by scope, so a host that adds codes still lands each one somewhere sensible. A query's error is stored on the query, never thrown: one failed query must not blank the rest.
+
+**One request, one trail, into the frame.** Every error the server answered carries its `requestId`, kept when it crosses the bridge. With it, the person or agent who sees the error finds its line in the server's log, where the cause is whether or not it was shown. It is the one identifier allowed into the frame: it names a request, not anything in it, the server already sends it to every caller, and only someone who can read the log can turn it into anything.
+
+**What crosses the bridge.** The frame runs code anyone may write, so it gets an error's class and message only for the SDK's own classes, whose messages are written for an author (`common/endpoint.ts`). Anything else (a bug in the host, a middleware's error, a library's) crosses as `QueryError: The call failed.`, since its message may hold a URL, a resource's id or a server's error. Two rules keep that generic message rare and findable:
+
+- **The SDK classifies its own failures.** A stream the server cut, or a line in it that is not an event (a proxy's error page), is a `TransportError` saying so (`api/stream.ts`, `api/backend.ts`), not an unclassified error. What remains generic is a real bug in the host.
+- **A hidden error is recorded where it was hidden.** The side that answers the call logs the original to its own console before answering it as generic: *every failure leaves a record*, in the page where it happened. On `anfra serve` that is the author's own browser.
+
+**Fail only what failed.** A `subscribe()` listener is the definition's own code drawing what changed. An exception it throws is logged to the frame's console and stops nothing else: the other listeners still run, and the query whose change it was told of keeps its result (`app/observable.ts`). An author's bug can break its own drawing, never the app's data.
+
 ## At a platform's boundary
 
 A library's codes are its own contract, not its platform's. Where a platform calls the engine, it decides what each engine error means *to its own clients*: it translates the engine's codes to its own (`apperr.Translate`, which re-decides the scope), serves some of them as they are (`httpkit.Codes.Imported`), and lets the rest fail closed. The engine never decides a platform's status codes or messages. See [engine.md](engine.md).
@@ -189,6 +215,8 @@ Where the code does not follow these rules yet:
 
 - **Some of the CLI's own commands write for a person on stderr.** The commands the API also serves follow the rule for stderr. `publish`, `auth`, `init`, `update` and `skills`, which ask questions and show progress, write lines for a person there (`internal/cliui`), and `publish` writes `validate`'s answer to stderr before it refuses a repo with errors (`cmd/anfra/publish.go`): those diagnostics belong in the error's details, as `query_invalid` carries a query's.
 - **Some messages written for the user are left unclassified.** A damaged credentials file fails with a plain error naming the file and the fix (`internal/cliauth/credential_store.go`), so with causes hidden it shows only the generic message. A failure in the user's own state is the user's: it should be a formal error with that message.
+- **A host cannot route the errors it hides.** A host page logs an error the bridge hides to its console only; a host with its own error tracking cannot receive it. A `createHost` option for it, defaulting to the console, waits for a host that needs one.
+- **A Data App's failures need a console to see.** A throwing listener, and a hidden error, are logged to a browser console, which an agent driving the app headlessly cannot read. A way to read an app's query states and errors without one is not designed yet.
 - **OpenTelemetry's own messages are text lines on stderr.** Its SDK logs a problem it meets (an endpoint it cannot parse) through its own logger, before the repo's log exists, so a YAML parser refuses the stream there.
 
 Related: [commands-and-api.md](commands-and-api.md) (how ops are defined and published), [engine.md](engine.md) (the boundary platforms translate at), [security.md](security.md) (why causes are hidden by default).

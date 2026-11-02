@@ -107,3 +107,5 @@ Refuse early, in the process that can name the cause, with the input that caused
 ### Every failure leaves a record
 
 A failure that is ours is logged and traced in the process where it happened, a sidecar's included, whether or not its caller is shown the cause. What a caller sees is a choice made per deployment; what an operator can find is not ([errors.md](errors.md)).
+
+In a Data App, an error the bridge hides from the frame is logged in the console of the page that hides it, and every error the server answered carries the request's id, so a person or an agent can find its line in the log ([errors.md](errors.md#in-a-data-app)).
