@@ -173,7 +173,7 @@ A Data App is a fourth surface, reached through the SDK rather than one of anfra
 
 The one other class is `ValidationError`, for what the definition declares wrong. It is thrown synchronously, at the line that declared it, never comes from a backend, and has the same shape (`declaration_invalid`, scope `client`), so code that reads `scope` and `code` treats every error alike.
 
-**Generic codes, for every backend.** A backend that is not anfra's (Holistics hosts the SDK over its own API, with an HTTP status and a message but no envelope) cannot speak anfra's codes. So the SDK names the few cases an app must tell apart on any backend, and every backend uses them where they apply, as `apperr`'s generic codes serve every platform. Each reuses an anfra or Cloud code where one exists, so those backends pass their own errors through:
+**Generic codes, for every backend.** A backend that is not anfra's (a host that runs the SDK over its own API, with an HTTP status and a message but no envelope) cannot speak anfra's codes. So the SDK names the few cases an app must tell apart on any backend, and every backend uses them where they apply, as `apperr`'s generic codes serve every platform. Each reuses an anfra or Cloud code where one exists, so those backends pass their own errors through:
 
 | Code | Scope | Means |
 |---|---|---|
