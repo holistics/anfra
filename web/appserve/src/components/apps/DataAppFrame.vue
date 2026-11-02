@@ -8,7 +8,7 @@ import { createHost, type Host, type MountedDataApp } from '@holistics/anfra-sdk
 import {
   corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin, viewUnderlyingDataPlugin,
 } from '@holistics/anfra-sdk/plugins';
-import { api, definition } from '@/lib/server';
+import { api, definition, report } from '@/lib/server';
 
 const props = defineProps<{
   path: string,
@@ -43,6 +43,9 @@ function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: str
         plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin(), viewUnderlyingDataPlugin()],
         allowOrigins,
         theme: props.theme,
+        // anfra serve is a development tool, even released: the author's console lines are theirs
+        // to read, in the panel and in anfra.log.
+        captureConsole: true,
       }),
     };
   }
@@ -66,6 +69,10 @@ onMounted(async () => {
     });
     mounted.frame.dataset.testid = 'data-app-frame';
     mounted.frame.addEventListener('load', () => emit('load'));
+    // Into anfra.log, with this Data App's path: where an agent reads what went wrong.
+    const { path } = props;
+    mounted.on('anfra.error', (event) => report(path, 'error', event));
+    mounted.on('anfra.console', (event) => report(path, 'console', event));
     emit('mounted', runtime, mounted);
   } catch (err) {
     emit('error', (err as Error).message);

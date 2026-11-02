@@ -1,7 +1,9 @@
 // What the appserve frontend asks its server: the appserve backend's routes (/appserve/…), and the
 // core API (/api) through the Anfra SDK's client, as any client of anfra does.
 import { coreClient, loadDatasets } from '@holistics/anfra-sdk/api';
-import type { DatasetDescriptor, User } from '@holistics/anfra-sdk/common';
+import type {
+  AppConsoleEvent, AppErrorEvent, DatasetDescriptor, User,
+} from '@holistics/anfra-sdk/common';
 import type { CatalogEntry } from './catalog';
 
 export const api = coreClient('/api');
@@ -45,6 +47,22 @@ export async function definition (path: string): Promise<string> {
   const response = await fetch(`/appserve/files/${file}`);
   if (!response.ok) throw new Error(`Couldn't read ${path}: the server answered ${response.status}.`);
   return response.text();
+}
+
+/**
+ * Write a Data App's runtime error or console line to the repo's anfra.log, as "service":"app", so
+ * an agent reads it without a browser. Fire and forget: a report that can't be sent is still in
+ * this page's console and the panel.
+ */
+export function report (path: string, type: 'error', event: AppErrorEvent): void;
+export function report (path: string, type: 'console', event: AppConsoleEvent): void;
+export function report (path: string, type: 'error' | 'console', event: AppErrorEvent | AppConsoleEvent): void {
+  fetch('/appserve/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, type, event }),
+    keepalive: true,
+  }).catch(() => { /* the server is gone: nothing to tell */ });
 }
 
 /** Whether the server and its sidecars answer: core.status's state. */

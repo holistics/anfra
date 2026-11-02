@@ -23,7 +23,10 @@ import (
 //   - StdoutWriter: sink for forwarding sidecar stdout — discarded by default
 //     (banners / incidental noise), or host stdout if ANFRA_SIDECAR_STDOUT.
 type Logging struct {
-	Logger       *slog.Logger
+	Logger *slog.Logger
+	// App is the logger for what the repo's Data Apps report from the browser (appserve):
+	// the same stream as Logger, with "service":"app".
+	App          *slog.Logger
 	StderrWriter io.Writer
 	StdoutWriter io.Writer
 	LogPath      string
@@ -93,11 +96,13 @@ func Setup(logsDir, repo string, toStderr bool) (*Logging, error) {
 			return a
 		},
 	})
-	logger := slog.New(logkit.TraceHandler(handler)).With(
-		"service", "anfra-host",
-		"repo", repo,
-		"pid", os.Getpid(),
-	)
+	service := func(name string) *slog.Logger {
+		return slog.New(logkit.TraceHandler(handler)).With(
+			"service", name,
+			"repo", repo,
+			"pid", os.Getpid(),
+		)
+	}
 
-	return &Logging{Logger: logger, StderrWriter: stderrWriter, StdoutWriter: stdoutWriter, LogPath: logPath, closeFn: f.Close}, nil
+	return &Logging{Logger: service("anfra-host"), App: service("app"), StderrWriter: stderrWriter, StdoutWriter: stdoutWriter, LogPath: logPath, closeFn: f.Close}, nil
 }
