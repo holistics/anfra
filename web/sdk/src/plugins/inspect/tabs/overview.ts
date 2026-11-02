@@ -59,7 +59,7 @@ const CSS = `
 .overview > h5 { margin: 6px 0 0; }
 .tile.collapsible { padding: 6px 12px; }
 .tile.collapsible > summary { font-weight: 500; }
-.tile.collapsible > summary .muted { margin-left: auto; font-weight: normal; font-size: 12px; }
+.tile.collapsible > summary .muted { flex: none; margin-left: auto; font-weight: normal; font-size: 12px; white-space: nowrap; }
 .changes { list-style: none; margin: 0; padding: 0; }
 .change { display: flex; align-items: center; gap: 2px; padding: 3px 0; }
 .change > .link { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; color: var(--anfra-color-fg); font-size: 12px; text-align: left; }
