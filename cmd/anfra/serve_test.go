@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -93,14 +94,17 @@ func TestServeRoutes(t *testing.T) {
 }
 
 // status reports where the server is, when it runs in one.
-func TestStatusReportsTheServer(t *testing.T) {
-	h, _ := handler(t)
+func TestStatusReportsTheRepoAndServer(t *testing.T) {
+	h, r := handler(t)
 	var got status.StatusResult
 	if err := jsonkit.UnmarshalRead(do(h, http.MethodPost, "/api/core.status", `{}`).Body, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Server == nil || got.Server.URL != "http://127.0.0.1:7878" || got.Server.InstanceID != "i-1" {
-		t.Errorf("status = %+v, want the server's URL and instance", got)
+	if got.Server.URL != "http://127.0.0.1:7878" || got.Server.InstanceID != "i-1" || got.Server.Version != "dev" {
+		t.Errorf("status = %+v, want the server's URL, instance and version", got)
+	}
+	if got.Repo.ID != r.ID || got.Repo.Logs != filepath.Join(r.LogsDir(), "anfra.log") {
+		t.Errorf("status = %+v, want the repo's id and log file", got)
 	}
 }
 

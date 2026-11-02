@@ -49,6 +49,9 @@ func parseLevel(s string) slog.Level {
 	}
 }
 
+// FileName is the log's file, in a repo's logs directory.
+const FileName = "anfra.log"
+
 // Setup ensures logsDir exists, opens anfra.log there, and returns a host logger
 // (and the same Writer the sidecars' output is forwarded into). The envelope
 // ({ts, level, msg, service, repo, pid}) matches the Node sidecar's. Level
@@ -62,7 +65,7 @@ func Setup(logsDir, repo string, toStderr bool) (*Logging, error) {
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
 		return nil, err
 	}
-	logPath := filepath.Join(logsDir, "anfra.log")
+	logPath := filepath.Join(logsDir, FileName)
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, err

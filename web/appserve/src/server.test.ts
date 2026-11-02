@@ -68,9 +68,9 @@ describe('datasets', () => {
 
 describe('health', () => {
   it('is up, down, or unreachable', async () => {
-    answer('core.status', { state: 'healthy' });
+    answer('core.status', { repo: { id: 'r-1' }, server: { state: 'healthy' } });
     expect(await server.health()).toBe('up');
-    answer('core.status', { state: 'degraded' });
+    answer('core.status', { repo: { id: 'r-1' }, server: { state: 'degraded' } });
     expect(await server.health()).toBe('down');
     answer('core.status', {}, 503);
     expect(await server.health()).toBe('unreachable');

@@ -43,10 +43,10 @@ func TestStatusState(t *testing.T) {
 			}
 		})
 	}
-	if valid, _ := Status.Valid(StatusResult{State: StateDegraded}); valid {
+	if valid, _ := Status.Valid(StatusResult{Server: ServerStatus{State: StateDegraded}}); valid {
 		t.Error("degraded is valid")
 	}
-	if valid, _ := Status.Valid(StatusResult{State: StateHealthy}); !valid {
+	if valid, _ := Status.Valid(StatusResult{Server: ServerStatus{State: StateHealthy}}); !valid {
 		t.Error("healthy is invalid")
 	}
 }
