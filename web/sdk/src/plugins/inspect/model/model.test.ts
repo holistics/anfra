@@ -5,7 +5,7 @@ import {
 import { changesOf } from './changes';
 import { dedent } from './format';
 import { declaredFilters, isActive, queryInputs } from './inputs';
-import { problemsOf, queryCounts } from './problems';
+import { problemsOf, queryCounts, runtimeProblem } from './problems';
 import { attributeRequests, type RequestEntry } from './requests';
 import { appTrust, queryTrust } from './trust';
 
@@ -57,6 +57,13 @@ describe('problems', () => {
     expect(problems.map((problem) => problem.level)).toEqual(['error', 'warn', 'warn']);
     expect(problems[0]).toMatchObject({ message: 'orders failed: Unknown field orders.status', target: { entity: 'query', app: 0, name: 'orders' } });
     expect(problems[2]).toMatchObject({ target: { node: '1' } });
+  });
+
+  it('points a runtime error at its query, and only at a query the app has', () => {
+    const at = (entity: string) => runtimeProblem({ event: { kind: 'uncaught', message: 'x', entity, at: '', mount: 1 }, count: 1 }, salesSnapshot());
+    expect(at('orders').target).toEqual({ entity: 'query', app: 0, name: 'orders' });
+    expect(at('constructor').target).toBeUndefined();
+    expect(at('toString').target).toBeUndefined();
   });
 
   it('counts queries by state, and what is dirty', () => {
