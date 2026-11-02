@@ -5,13 +5,16 @@ package status
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"golang.org/x/mod/semver"
 
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/internal/repo"
 )
 
 // Version prints the anfra version and, given the version of the anfra skills
@@ -19,8 +22,10 @@ import (
 // on as hints (docs/designs/agent-setup.md). It reads only what the host
 // cached: no network, no files.
 var Version = command.Define(command.Def[VersionInput, VersionResult]{
-	Name:     "version",
-	Short:    "Print the anfra version, and say when anfra or the anfra skills are behind",
+	Name:  "version",
+	Short: "Print the anfra version, and say when anfra or the anfra skills are behind",
+	Long: "Print the anfra version, and say when anfra or the anfra skills are behind.\n\n" +
+		"For this repo's server, and whether it is running, see `anfra status`.",
 	ReadOnly: true,
 	Check:    checkVersion,
 	// No Needs: pure metadata, spawns nothing.
@@ -96,20 +101,25 @@ func newer(a, b string) bool {
 	return validVersion(a) && validVersion(b) && semver.Compare("v"+a, "v"+b) > 0
 }
 
-// Status reports whether a warm server is running and its sidecars are healthy.
+// Status reports the repo, and whether a warm server is running and its
+// sidecars are healthy.
 var Status = command.Define(command.Def[command.NoInput, StatusResult]{
-	Name:     "status",
-	Short:    "Report whether a warm server is running and its sidecars are healthy",
+	Name:  "status",
+	Short: "Report the repo, and whether a warm server is running and its sidecars are healthy",
+	Long: "Report the repo, and whether a warm server is running and its sidecars are healthy.\n\n" +
+		"For this anfra's own version, and whether it is behind, see `anfra version`.",
 	ReadOnly: true,
 	// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
 	// server) then honestly reports not_running instead of starting the
 	// sidecars just to declare them healthy.
 	Run: func(ctx context.Context, cc command.CommandContext, _ command.NoInput) (StatusResult, error) {
-		r := checkStatus(ctx, cc.Clients)
-		r.Server = cc.Server
+		r := StatusResult{Repo: repoStatus(cc.Repo), Server: checkStatus(ctx, cc.Clients)}
+		if s := cc.Server; s != nil {
+			r.Server.URL, r.Server.InstanceID, r.Server.Version = s.URL, s.InstanceID, s.Version
+		}
 		return r, nil
 	},
-	Valid: func(r StatusResult) bool { return r.State == StateHealthy },
+	Valid: func(r StatusResult) bool { return r.Server.State == StateHealthy },
 })
 
 // VersionInput is the version of the anfra skills in use, to compare.
@@ -149,12 +159,28 @@ type SkillsResult struct {
 	Checked string `json:"checked,omitempty"`
 }
 
-// StatusResult is the `status` result: the warm server's state and, when it is
-// running, where it is and its sidecars' health.
+// StatusResult is the `status` result: the repo, and its warm server.
 type StatusResult struct {
-	State    State               `json:"state" enum:"healthy,degraded,not_running"`
-	Server   *command.ServerInfo `json:"server,omitempty"`
-	Sidecars *SidecarHealth      `json:"sidecars,omitempty"`
+	Repo   RepoStatus   `json:"repo"`
+	Server ServerStatus `json:"server"`
+}
+
+// RepoStatus is the repo the command runs on.
+type RepoStatus struct {
+	ID string `json:"id" doc:"the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id>"`
+	// Logs is the repo's log file; absent for a repo with no directory (a
+	// managed repo), whose host keeps its logs.
+	Logs string `json:"logs,omitempty" doc:"the repo's log file: anfra's and its sidecars' log; absent for a managed repo"`
+}
+
+// ServerStatus is the warm server's state and, when it is running, where it is,
+// its version and its sidecars' health.
+type ServerStatus struct {
+	State      State          `json:"state" enum:"healthy,degraded,not_running"`
+	URL        string         `json:"url,omitempty"`
+	InstanceID string         `json:"instance_id,omitempty"`
+	Version    string         `json:"version,omitempty"`
+	Sidecars   *SidecarHealth `json:"sidecars,omitempty"`
 }
 
 // State is the warm server's state.
@@ -178,9 +204,9 @@ type SidecarHealth struct {
 // checkStatus reports the warm server's health. status spawns no sidecars, so in
 // one-shot mode (no warm server) both clients are nil → not_running; under a
 // warm server the clients are live and get health-checked.
-func checkStatus(ctx context.Context, c command.Clients) StatusResult {
+func checkStatus(ctx context.Context, c command.Clients) ServerStatus {
 	if c.Node == nil && c.CanalQuery == nil {
-		return StatusResult{State: StateNotRunning}
+		return ServerStatus{State: StateNotRunning}
 	}
 	sc := &SidecarHealth{Node: "ok", CanalQuery: "ok"}
 	if c.Node == nil {
@@ -197,5 +223,14 @@ func checkStatus(ctx context.Context, c command.Clients) StatusResult {
 	if sc.Node != "ok" || sc.CanalQuery != "ok" {
 		state = StateDegraded
 	}
-	return StatusResult{State: state, Sidecars: sc}
+	return ServerStatus{State: state, Sidecars: sc}
+}
+
+// repoStatus is r's id and, for a local repo, its log file.
+func repoStatus(r repo.Repo) RepoStatus {
+	s := RepoStatus{ID: r.ID()}
+	if local, ok := r.Local(); ok {
+		s.Logs = filepath.Join(local.LogsDir(), logging.FileName)
+	}
+	return s
 }

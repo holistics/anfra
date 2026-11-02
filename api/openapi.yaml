@@ -1054,6 +1054,18 @@ components:
         - type
         - id
       type: object
+    RepoStatus:
+      additionalProperties: false
+      properties:
+        id:
+          description: "the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id>"
+          type: string
+        logs:
+          description: "the repo's log file: anfra's and its sidecars' log; absent for a managed repo"
+          type: string
+      required:
+        - id
+      type: object
     RepoValidation:
       additionalProperties: false
       properties:
@@ -1154,19 +1166,25 @@ components:
             type: string
           type: array
       type: object
-    ServerInfo:
+    ServerStatus:
       additionalProperties: false
       properties:
         instance_id:
+          type: string
+        sidecars:
+          $ref: "#/components/schemas/SidecarHealth"
+        state:
+          enum:
+            - healthy
+            - degraded
+            - not_running
           type: string
         url:
           type: string
         version:
           type: string
       required:
-        - url
-        - instance_id
-        - version
+        - state
       type: object
     ShowDataset:
       additionalProperties: false
@@ -1338,18 +1356,13 @@ components:
     StatusResult:
       additionalProperties: false
       properties:
+        repo:
+          $ref: "#/components/schemas/RepoStatus"
         server:
-          $ref: "#/components/schemas/ServerInfo"
-        sidecars:
-          $ref: "#/components/schemas/SidecarHealth"
-        state:
-          enum:
-            - healthy
-            - degraded
-            - not_running
-          type: string
+          $ref: "#/components/schemas/ServerStatus"
       required:
-        - state
+        - repo
+        - server
       type: object
     StreamEnd:
       additionalProperties: false
@@ -2117,6 +2130,10 @@ paths:
       x-read-only: true
   /core.status:
     post:
+      description: |-
+        Report the repo, and whether a warm server is running and its sidecars are healthy.
+
+        For this anfra's own version, and whether it is behind, see `anfra version`.
       operationId: core.status
       requestBody:
         content:
@@ -2164,7 +2181,7 @@ paths:
                   - error
                 type: object
           description: internal_server_error
-      summary: Report whether a warm server is running and its sidecars are healthy
+      summary: Report the repo, and whether a warm server is running and its sidecars are healthy
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -2234,6 +2251,10 @@ paths:
       x-read-only: true
   /core.version:
     post:
+      description: |-
+        Print the anfra version, and say when anfra or the anfra skills are behind.
+
+        For this repo's server, and whether it is running, see `anfra status`.
       operationId: core.version
       requestBody:
         content:

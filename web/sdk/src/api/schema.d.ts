@@ -170,7 +170,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report whether a warm server is running and its sidecars are healthy */
+        /**
+         * Report the repo, and whether a warm server is running and its sidecars are healthy
+         * @description Report the repo, and whether a warm server is running and its sidecars are healthy.
+         *
+         *     For this anfra's own version, and whether it is behind, see `anfra version`.
+         */
         post: operations["core.status"];
         delete?: never;
         options?: never;
@@ -204,7 +209,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Print the anfra version, and say when anfra or the anfra skills are behind */
+        /**
+         * Print the anfra version, and say when anfra or the anfra skills are behind
+         * @description Print the anfra version, and say when anfra or the anfra skills are behind.
+         *
+         *     For this repo's server, and whether it is running, see `anfra status`.
+         */
         post: operations["core.version"];
         delete?: never;
         options?: never;
@@ -746,6 +756,12 @@ export interface components {
              */
             type: "warehouse_query";
         };
+        RepoStatus: {
+            /** @description the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id> */
+            id: string;
+            /** @description the repo's log file: anfra's and its sidecars' log; absent for a managed repo */
+            logs?: string;
+        };
         RepoValidation: {
             diagnostics: components["schemas"]["CompileError"][];
             reports: components["schemas"]["ValidationReport"][];
@@ -793,10 +809,13 @@ export interface components {
             /** @description search query */
             query?: string[];
         };
-        ServerInfo: {
-            instance_id: string;
-            url: string;
-            version: string;
+        ServerStatus: {
+            instance_id?: string;
+            sidecars?: components["schemas"]["SidecarHealth"];
+            /** @enum {string} */
+            state: "healthy" | "degraded" | "not_running";
+            url?: string;
+            version?: string;
         };
         ShowDataset: {
             description?: string;
@@ -878,10 +897,8 @@ export interface components {
             version?: string;
         };
         StatusResult: {
-            server?: components["schemas"]["ServerInfo"];
-            sidecars?: components["schemas"]["SidecarHealth"];
-            /** @enum {string} */
-            state: "healthy" | "degraded" | "not_running";
+            repo: components["schemas"]["RepoStatus"];
+            server: components["schemas"]["ServerStatus"];
         };
         StreamEnd: {
             error?: components["schemas"]["Response"];

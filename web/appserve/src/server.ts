@@ -54,7 +54,7 @@ export async function health (): Promise<Health> {
   try {
     const { data } = await api.POST('/core.status', { body: {} });
     if (!data) return 'unreachable';
-    return data.state === 'healthy' ? 'up' : 'down';
+    return data.server.state === 'healthy' ? 'up' : 'down';
   } catch {
     return 'unreachable';
   }
