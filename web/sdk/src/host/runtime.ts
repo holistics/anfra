@@ -3,7 +3,7 @@
  * frames mounted into it. One per page; every call, from a frame or from a plugin, is dispatched
  * through its one pipeline (docs/designs/sdk-plugins.md).
  */
-import { PermissionError, TransportError, ValidationError } from '../common/errors';
+import { DataAppError, forbidden, invalidRequest } from '../common/errors';
 import type { BridgeMessage, PluginInfo, Provision } from '../common/bridge';
 import { createEndpoint, type Endpoint } from '../common/endpoint';
 import type { DatasetDescriptor, User } from '../common/types';
@@ -176,7 +176,7 @@ export function createHost (options: HostOptions): Host {
       handler: (request: unknown) => {
         const plugin = (request as { plugin?: unknown } | null)?.plugin;
         const body = typeof plugin === 'string' ? bodies.get(plugin) : undefined;
-        if (body === undefined) throw new ValidationError(`No plugin '${String(plugin)}' with a frame body is installed.`);
+        if (body === undefined) throw invalidRequest(`No plugin '${String(plugin)}' with a frame body is installed.`);
         return body;
       },
     },
@@ -186,12 +186,12 @@ export function createHost (options: HostOptions): Host {
   const menus = new WeakMap<MountContext, { entries: (target: MenuTarget) => MenuEntry[], run: (id: string, target: MenuTarget) => Promise<unknown> }>();
   const menuOf = (mount: MountContext | undefined) => {
     const menu = mount && menus.get(mount);
-    if (!menu) throw new ValidationError('The menu is for a mounted Data App.');
+    if (!menu) throw invalidRequest('The menu is for a mounted Data App.');
     return menu;
   };
   const targetOf = (request: unknown): MenuTarget => {
     const target = checkTarget(request);
-    if (!target) throw new ValidationError('Not a menu target.');
+    if (!target) throw invalidRequest('Not a menu target.');
     return target;
   };
   answers.set('anfra.menu', {
@@ -204,7 +204,7 @@ export function createHost (options: HostOptions): Host {
       frame: true,
       handler: (request: unknown, { mount }) => {
         const id = (request as { id?: unknown } | null)?.id;
-        if (typeof id !== 'string') throw new ValidationError('Name the command to run.');
+        if (typeof id !== 'string') throw invalidRequest('Name the command to run.');
         return menuOf(mount).run(id, targetOf((request as { target?: unknown }).target));
       },
     },
@@ -240,12 +240,12 @@ export function createHost (options: HostOptions): Host {
    */
   function dispatch (name: string, request: unknown, callers: readonly Caller[], mount: MountContext | undefined, signal: AbortSignal, asOrigin = false): Promise<unknown> {
     const answer = answers.get(name);
-    if (!answer) return Promise.reject(new TransportError(`Nothing on this host answers '${name}'.`));
+    if (!answer) return Promise.reject(invalidRequest(`Nothing on this host answers '${name}'.`));
     const caller = callers[callers.length - 1];
     const origin = callers[0];
     // The frame itself, or, when asked, a plugin calling for a chain the frame started.
     if ((caller.kind === 'frame' || (asOrigin && origin.kind === 'frame')) && answer.definition.frame !== true) {
-      return Promise.reject(new PermissionError(`'${name}' can't be called from a Data App.`));
+      return Promise.reject(forbidden(`'${name}' can't be called from a Data App.`));
     }
     const chain = middleware.filter((m) => (typeof m.match === 'string' ? [m.match] : m.match).some((p) => matches(p, name)));
     const trace: string[] = [];
@@ -453,9 +453,9 @@ export function createHost (options: HostOptions): Host {
        */
       const runCommand = async (id: string, target?: MenuTarget, from: 'host' | 'menu' | 'key' = 'host'): Promise<unknown> => {
         const command = commandOf(id);
-        if (command.target && target?.kind !== command.target) throw new ValidationError(`'${id}' runs from the menu on the page, with a ${command.target} target.`);
+        if (command.target && target?.kind !== command.target) throw invalidRequest(`'${id}' runs from the menu on the page, with a ${command.target} target.`);
         const { disabled, pressed } = commandState(command, stateContext, target);
-        if (disabled) throw new PermissionError(disabled);
+        if (disabled) throw forbidden(disabled);
         if ('tab' in command.run) {
           const node = target ? (target.kind === 'node' ? target : target.node)?.node.key : undefined;
           const selected = node ?? command.run.target;
@@ -477,7 +477,7 @@ export function createHost (options: HostOptions): Host {
         entries: (target) => menuFor(target),
         // Picked in the frame: the command's call keeps the frame as its origin.
         run: (id, target) => {
-          if (!commandOf(id).target) return Promise.reject(new PermissionError(`'${id}' isn't a menu command.`));
+          if (!commandOf(id).target) return Promise.reject(forbidden(`'${id}' isn't a menu command.`));
           return runCommand(id, target, 'menu');
         },
       });
@@ -513,7 +513,7 @@ export function createHost (options: HostOptions): Host {
           commandListeners.clear();
           panelState.dispose();
           win.removeEventListener('message', onMessage);
-          endpoint.close(new ValidationError('The Data App was unmounted before the call finished.'));
+          endpoint.close(new DataAppError({ code: 'call_failed', scope: 'server', message: 'The Data App was unmounted before the call finished.' }));
           disposers.forEach((dispose) => dispose());
           listeners.clear();
           readyListeners.clear();

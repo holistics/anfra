@@ -56,7 +56,7 @@ function showControl (view: InspectState['queries'], app: InspectedApp, name: st
   return matches(view.search.trim().toLowerCase(), name, declaration?.label, field);
 }
 
-const errorText = (error: InspectedError) => `${error.name}${error.status !== undefined ? ` (${error.status})` : ''}: ${error.message}`;
+const errorText = (error: InspectedError) => `${error.code} (${error.scope}${error.status !== undefined ? `, ${error.status}` : ''}): ${error.message}`;
 
 const queriesText = (n: number) => (n === 1 ? '1 query' : `${n} queries`);
 

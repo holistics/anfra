@@ -42,23 +42,23 @@ function filenameFor (request: RenderRequest, doc: Document, apps: readonly App[
 }
 
 /** The element a request names, or null for the whole app; refuses what names nothing. */
-function targetOf (request: RenderRequest, doc: Document, { ValidationError }: FrameKernel['errors']): { element: Element | null, entity?: string } {
+function targetOf (request: RenderRequest, doc: Document, { invalidRequest }: FrameKernel['errors']): { element: Element | null, entity?: string } {
   if (request.block !== undefined && request.container !== undefined) {
-    throw new ValidationError('Render a block or a container, not both.', request.block);
+    throw invalidRequest('Render a block or a container, not both.', request.block);
   }
   if (request.format !== 'png' && request.format !== 'pdf') {
-    throw new ValidationError(`Can't render as '${String(request.format)}': the formats are 'png' and 'pdf'.`);
+    throw invalidRequest(`Can't render as '${String(request.format)}': the formats are 'png' and 'pdf'.`);
   }
   const { pixelRatio } = request;
   if (pixelRatio !== undefined && !(Number.isFinite(pixelRatio) && pixelRatio > 0)) {
-    throw new ValidationError(`pixelRatio ${String(pixelRatio)} is not a positive number.`);
+    throw invalidRequest(`pixelRatio ${String(pixelRatio)} is not a positive number.`);
   }
   const kind = request.block !== undefined ? 'block' : request.container !== undefined ? 'container' : undefined;
   if (!kind) return { element: null };
   const id = (request.block ?? request.container) as string;
   // Compared, not spliced into a selector: an id is the author's free text.
   const element = [...doc.querySelectorAll(`[${ATTR[kind]}]`)].find((el) => el.getAttribute(ATTR[kind]) === id);
-  if (!element) throw new ValidationError(`No element is marked ${ATTR[kind]}="${id}" on the page.`, id);
+  if (!element) throw invalidRequest(`No element is marked ${ATTR[kind]}="${id}" on the page.`, id);
   return { element, entity: id };
 }
 
@@ -72,7 +72,7 @@ function skip (element: Element): boolean {
  * once; `settle` is the host's way in, which waits for the page first.
  */
 export function createRender (win: Window, deps: RenderDeps): (request: RenderRequest) => Promise<Rendering> {
-  const { ValidationError } = deps.errors;
+  const { DataAppError, invalidRequest } = deps.errors;
   return async (request) => {
     const doc = win.document;
     const { element, entity } = targetOf(request ?? {} as RenderRequest, doc, deps.errors);
@@ -83,8 +83,8 @@ export function createRender (win: Window, deps: RenderDeps): (request: RenderRe
       await deps.saveFile({ blob: drawing.blob, filename });
       return { filename, format: request.format, ...drawing };
     } catch (err) {
-      if (err instanceof ValidationError && err.entity) throw err;
-      throw new ValidationError((err as Error)?.message || 'The rendering failed.', entity);
+      if (err instanceof DataAppError && err.entity) throw err;
+      throw invalidRequest((err as Error)?.message || 'The rendering failed.', entity);
     }
   };
 }
@@ -111,7 +111,7 @@ export default function setup (kernel: FrameKernel): void {
    * `Anfra.render()`: render the whole app, or one block or container of its structure by id, as a
    * PNG or a PDF, and have the host save it for the reader. What is drawn is what the page shows
    * now: `await app.execute()` first for fresh results. Elements marked `data-anfra-render="skip"`
-   * are left out. Rejects with a `ValidationError` naming what to fix.
+   * are left out. Rejects with an `invalid_request` error naming what to fix.
    */
   kernel.provide((request: RenderRequest) => render(request));
   // The host's rendering waits for the page first.

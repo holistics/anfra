@@ -363,7 +363,7 @@ describe('menu commands', () => {
     fromFrame({ type: 'anfra:call', id: 2, name: 'anfra.menu', request: { kind: 'node', node: 'x' } });
     await new Promise((resolve) => { setTimeout(resolve, 0); });
     expect(posted.find((m) => m.id === 1)?.result).toEqual([{ id: 'ask.ask', label: 'Ask AI' }, { id: 'ask.share', label: 'Share', disabled: 'Disabled by admin' }]);
-    expect(posted.find((m) => m.id === 2)).toMatchObject({ ok: false, error: { name: 'ValidationError' } });
+    expect(posted.find((m) => m.id === 2)).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
   });
 
   it('runs the one the reader picked with its target, started by the frame, and refuses a disabled one', async () => {
@@ -374,14 +374,14 @@ describe('menu commands', () => {
     await new Promise((resolve) => { setTimeout(resolve, 0); });
     expect(handler).toHaveBeenCalledWith({ tone: 'short', target: node }, expect.anything());
     expect(posted.find((m) => m.id === 1)?.result).toEqual([{ kind: 'frame' }, { kind: 'host' }, { kind: 'plugin', plugin: 'ask' }]);
-    expect(posted.find((m) => m.id === 2)).toMatchObject({ ok: false, error: { name: 'PermissionError', message: 'Disabled by admin' } });
+    expect(posted.find((m) => m.id === 2)).toMatchObject({ ok: false, error: { code: 'forbidden', message: 'Disabled by admin' } });
   });
 
   it('runs only menu commands from the frame, and a menu command only with its target', async () => {
     const { posted, fromFrame } = mountWith(notes());
     fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.run', request: { id: 'notes.save', target: node } });
     await new Promise((resolve) => { setTimeout(resolve, 0); });
-    expect(posted.find((m) => m.id === 1)).toMatchObject({ ok: false, error: { name: 'PermissionError' } });
+    expect(posted.find((m) => m.id === 1)).toMatchObject({ ok: false, error: { code: 'forbidden' } });
     mounted!.unmount();
     mountWith(ask());
     await expect(mounted!.run('ask.ask')).rejects.toThrow('runs from the menu on the page');

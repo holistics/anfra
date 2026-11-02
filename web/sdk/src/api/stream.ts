@@ -1,4 +1,4 @@
-import { TransportError } from '../common/errors';
+import { connectionFailed } from '../common/errors';
 import type { components } from './schema';
 import { toSdkError } from './errors';
 
@@ -23,7 +23,7 @@ export async function readEvents<E extends { type: string }> (
     try {
       event = JSON.parse(text) as E | StreamEnd;
     } catch {
-      throw new TransportError(`The server's answer is not one of its events: ${text.slice(0, 80)}`);
+      throw connectionFailed(`The server's answer is not one of its events: ${text.slice(0, 80)}`);
     }
     if (event.type === 'ping') return false;
     if (event.type === 'end') {
@@ -50,5 +50,5 @@ export async function readEvents<E extends { type: string }> (
   } finally {
     reader.releaseLock();
   }
-  throw new TransportError('The connection to the server was cut before the answer ended.');
+  throw connectionFailed('The connection to the server was cut before the answer ended.');
 }

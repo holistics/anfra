@@ -1,4 +1,4 @@
-import { TransportError } from '../common/errors';
+import { DataAppError } from '../common/errors';
 import type { DatasetDescriptor } from '../common/types';
 import type { CoreClient } from './client';
 import type { components } from './schema';
@@ -54,7 +54,7 @@ export interface LoadedDatasets {
 export async function loadDatasets (client: CoreClient, signal?: AbortSignal): Promise<LoadedDatasets> {
   const { data, error, response } = await client.POST('/core.show', { body: {}, signal });
   if (!data) throw toSdkError(response.status, (error as { error?: ApiErrorBody } | undefined)?.error);
-  if (data.object.kind !== 'repo') throw new TransportError(`core.show answered a ${data.object.kind}, not the repo.`);
+  if (data.object.kind !== 'repo') throw new DataAppError({ code: 'internal_server_error', scope: 'server', message: `core.show answered a ${data.object.kind}, not the repo.` });
   const datasets: Record<string, DatasetDescriptor> = {};
   data.object.datasets.filter((d) => d.models).forEach((d) => { datasets[d.fqn] = toDescriptor(d); });
   return { datasets, diagnostics: data.diagnostics };

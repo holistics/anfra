@@ -3,7 +3,7 @@
  * (`Anfra.render()`, or the host's `render.draw`) and saved for the reader from the host's page.
  * The renderer is the frame body: frames that never render don't carry it.
  */
-import { ValidationError } from '../../common/errors';
+import { invalidRequest } from '../../common/errors';
 import { definePlugin, type MountContext, type Plugin } from '../../host/plugin';
 import { PLUGIN_VERSION } from '../version';
 import setup from 'anfra-sdk:setup/render';
@@ -43,10 +43,10 @@ export function pictureFilename (filename: unknown, ext: string): string {
  */
 export async function saveBlob (doc: Document, request: SaveFileRequest): Promise<void> {
   const blob = request?.blob;
-  if (!(blob instanceof Blob)) throw new ValidationError('A rendering must be saved as a file.');
+  if (!(blob instanceof Blob)) throw invalidRequest('A rendering must be saved as a file.');
   const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
   const picture = PICTURES.find(({ signature }) => signature.every((byte, i) => head[i] === byte));
-  if (!picture) throw new ValidationError('Only a PNG or a PDF rendering can be saved.');
+  if (!picture) throw invalidRequest('Only a PNG or a PDF rendering can be saved.');
 
   const url = URL.createObjectURL(new Blob([blob], { type: picture.type }));
   const a = doc.createElement('a');
@@ -93,8 +93,8 @@ export function renderPlugin (options: RenderPluginOptions = {}): Plugin {
          */
         async download (request: unknown, { mount, call, signal }) {
           const state = mount && states.get(mount);
-          if (!mount || !state) throw new ValidationError('A rendering is drawn for a frame.');
-          if (state.rendering) throw new ValidationError('A picture is being drawn already.');
+          if (!mount || !state) throw invalidRequest('A rendering is drawn for a frame.');
+          if (state.rendering) throw invalidRequest('A picture is being drawn already.');
           state.rendering = true;
           mount.commandsChanged();
           try {
@@ -109,11 +109,11 @@ export function renderPlugin (options: RenderPluginOptions = {}): Plugin {
           frame: true,
           async handler (request: SaveFileRequest, { mount }) {
             const state = mount && states.get(mount);
-            if (!mount || !state) throw new ValidationError('A rendering is saved for a frame.');
+            if (!mount || !state) throw invalidRequest('A rendering is saved for a frame.');
             const now = Date.now();
             while (state.saves.length && now - state.saves[0] >= SAVE_WINDOW_MS) state.saves.shift();
             if (state.saving || state.saves.length >= SAVES_PER_WINDOW) {
-              throw new ValidationError('Too many files saved at once: try again in a few seconds.');
+              throw invalidRequest('Too many files saved at once: try again in a few seconds.');
             }
             state.saving = true;
             state.saves.push(now);

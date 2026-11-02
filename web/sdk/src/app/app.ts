@@ -4,9 +4,7 @@ import {
   Control, DateDrillControl, Filter,
 } from './controls';
 import { CrossFilter, Mapping, type Edge } from './mapping';
-import {
-  DataAppError, PermissionError, QueryError, TransportError, ValidationError,
-} from '../common/errors';
+import { DataAppError, ValidationError } from '../common/errors';
 import {
   assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
 } from './validation';
@@ -66,18 +64,19 @@ function superseded (query: Query, controller: AbortController): boolean {
 
 /**
  * A `DataAppError` does not survive a structured clone intact: `Error` clones as its base shape, so
- * the subclass prototype goes and `entity`, `status` and `cause` go with it. `entity` and `status`
- * are the useful half, so they are written out. `cause` is not: it holds whatever the backend
- * threw, which can be a `Response` or an `AbortError`, and neither can cross a port.
+ * the subclass prototype goes and its fields with it. The useful ones are written out. `cause` is
+ * not: it holds whatever the backend threw, which can be a `Response` or an `AbortError`, and
+ * neither can cross a port.
  */
 function inspectError (error: DataAppError): InspectedError {
   return {
     name: error.name,
+    code: error.code,
+    scope: error.scope,
     message: error.message,
     ...(error.entity ? { entity: error.entity } : {}),
-    ...(typeof (error as { status?: number }).status === 'number'
-      ? { status: (error as { status?: number }).status }
-      : {}),
+    ...(typeof error.status === 'number' ? { status: error.status } : {}),
+    ...(error.requestId ? { requestId: error.requestId } : {}),
     ...(error.stack ? { stack: error.stack } : {}),
   };
 }
@@ -143,28 +142,16 @@ function selectionKey (selection: Selection | undefined): string {
   });
 }
 
-function toDataAppError (err: unknown, entity: string): DataAppError {
-  if (err instanceof DataAppError) return err;
-  return new QueryError((err as Error)?.message ?? 'The query failed.', entity, err);
-}
-
 /**
- * An export's error, naming its query. Errors crossing the bridge lose their entity, and an export
- * has no state of its own to carry the name, so the author's `catch` is the only place it can go.
+ * A query's or an export's error, naming its query. Errors crossing the bridge lose their entity, so
+ * it is put back here. A backend that rejects with anything but the SDK's error failed in a way
+ * nobody classified: `call_failed`, the server's to answer for, its message kept out of the app.
  */
-function toExportError (err: unknown, entity: string): DataAppError {
-  if (err instanceof DataAppError && err.entity) return err;
-  const named = nameExportError(err, entity);
-  if (err instanceof DataAppError && err.requestId) named.requestId = err.requestId;
-  return named;
-}
-
-function nameExportError (err: unknown, entity: string): DataAppError {
-  const message = (err as Error | undefined)?.message || 'The export failed.';
-  if (err instanceof PermissionError) return new PermissionError(message, entity);
-  if (err instanceof TransportError) return new TransportError(message, err.status, entity);
-  if (err instanceof ValidationError) return new ValidationError(message, entity);
-  return new QueryError(message, entity, err);
+function toDataAppError (err: unknown, entity: string, failed = 'The query failed.'): DataAppError {
+  if (err instanceof DataAppError) return err.about(entity);
+  return new DataAppError({
+    code: 'call_failed', scope: 'server', message: failed, entity, cause: err,
+  });
 }
 
 export class App extends Observable implements AppContext {
@@ -661,7 +648,7 @@ export class App extends Observable implements AppContext {
       return await send(request, options.signal ?? new AbortController().signal);
     } catch (err) {
       if (isAbort(err)) throw err;
-      throw toExportError(err, query.name);
+      throw toDataAppError(err, query.name, 'The export failed.');
     }
   }
 

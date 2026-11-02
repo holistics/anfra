@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QueryError } from '../../common/errors';
+import { DataAppError } from '../../common/errors';
 import { stubBackend, textTypes, type StubOptions } from '../../app/testSupport';
 import { flush, testFrame } from '../../app/testFrame';
 import type { Query } from '../../app/query';
@@ -121,14 +121,14 @@ describe('query.export', () => {
   });
 
   it('changes nothing on the query, even when it fails', async () => {
-    const { app, query } = setup({ exportQuery: new QueryError('format_options.header: not an option of xlsx') });
+    const { app, query } = setup({ exportQuery: new DataAppError({ code: 'validation_failed', scope: 'user', message: 'format_options.header: not an option of xlsx' }) });
     await app.execute();
     const before = { state: query.state, result: query.result, error: query.error };
 
     const err = await query.export().catch((e: unknown) => e);
 
-    expect(err).toBeInstanceOf(QueryError);
-    expect((err as QueryError).entity).toBe('revenue');
+    expect(err).toBeInstanceOf(DataAppError);
+    expect(err).toMatchObject({ code: 'validation_failed', entity: 'revenue' });
     expect({ state: query.state, result: query.result, error: query.error }).toEqual(before);
   });
 

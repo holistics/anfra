@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PermissionError, QueryError, TransportError } from '../common/errors';
+import { DataAppError } from '../common/errors';
 import type { BackendQueryRequest, DatasetDescriptor, SemanticType } from '../common/types';
 import { coreApiBackend, SUGGESTION_LIMIT } from './backend';
 import { coreClient } from './client';
@@ -93,10 +93,12 @@ describe('coreApiBackend', () => {
   it("fails a query whose columns come without their types, which a Data App decides by", async () => {
     const { semantic_type: _, ...untyped } = answered.columns[0];
     const { client } = api(asStream({ ...answered, columns: [untyped] }));
-    await expect(coreApiBackend(client).submitQuery(request, signal)).rejects.toThrowError(
-      new QueryError("The server answered column 'status' without its types (semantic_type, arrow_type, db_type), "
-        + 'which a Data App decides by: the server is older than this SDK.'),
-    );
+    await expect(coreApiBackend(client).submitQuery(request, signal)).rejects.toMatchObject({
+      code: 'internal_server_error',
+      scope: 'server',
+      message: "The server answered column 'status' without its types (semantic_type, arrow_type, db_type), "
+        + 'which a Data App decides by: the server is older than this SDK.',
+    });
   });
 
   describe('an unpaged query', () => {
@@ -130,52 +132,54 @@ describe('coreApiBackend', () => {
       const failed = { type: 'end', status: 'failed', error: { code: 'result_too_large', scope: 'user', status: 422, message: 'Too many rows.', request_id: 'req_1' } };
       const { client } = api(streamed(...events.slice(0, 7), failed));
       const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
-      expect(err).toBeInstanceOf(QueryError);
-      expect(err.message).toBe('Too many rows.');
-      expect(err.requestId).toBe('req_1');
+      expect(err).toBeInstanceOf(DataAppError);
+      expect(err).toMatchObject({
+        code: 'result_too_large', scope: 'user', status: 422, message: 'Too many rows.', requestId: 'req_1',
+      });
     });
 
     it('fails with a transport error on a line that is not an event', async () => {
       const { client } = api({ events: `${JSON.stringify(events[0])}\n<html>Bad gateway</html>\n` });
       const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
-      expect(err).toBeInstanceOf(TransportError);
+      expect(err).toMatchObject({ code: 'connection_failed', scope: 'server' });
       expect(err.message).toMatch(/not one of its events/);
     });
 
     it('fails when the stream is cut before its end', async () => {
       const { client } = api(streamed(...events.slice(0, 7)));
       const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
-      expect(err).toBeInstanceOf(TransportError);
+      expect(err).toMatchObject({ code: 'connection_failed', scope: 'server' });
     });
 
     it('fails as an error response when refused before it starts', async () => {
       const { client } = api(fail(422, { code: 'validation_failed', scope: 'user', message: 'Invalid.', details: { violations: [{ field: 'dataset', message: 'Unknown dataset.' }] } }));
       const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
-      expect(err).toBeInstanceOf(QueryError);
-      expect(err.message).toBe('dataset: Unknown dataset.');
+      expect(err).toMatchObject({ code: 'validation_failed', scope: 'user', message: 'dataset: Unknown dataset.' });
+      expect(err.details).toEqual({ violations: [{ field: 'dataset', message: 'Unknown dataset.' }] });
     });
   });
 
   it.each([
-    ['an invalid query, as its diagnostics', fail(422, { code: 'query_invalid', scope: 'user', message: 'The query is invalid.', details: { valid: false, diagnostics: [{ message: 'No field x.', line: 1, column: 9 }] } }), QueryError, 'line 1:9: No field x.'],
-    ['an input entry refused, as its violation', fail(422, { code: 'validation_failed', scope: 'user', message: 'Some of the input is not valid.', details: { violations: [{ field: 'input.filters[0].field', message: 'Unknown field.' }] } }), QueryError, 'input.filters[0].field: Unknown field.'],
-    ['a data source failing', fail(422, { code: 'query_failed', scope: 'user', message: 'connection refused' }), QueryError, 'connection refused'],
-    ['a caller who may not see it', fail(403, { code: 'forbidden', scope: 'user', message: 'Not yours.' }), PermissionError, 'Not yours.'],
-    ['a sidecar down', fail(503, { code: 'sidecar_unavailable', scope: 'server', message: 'anfra-node is not responding.' }), TransportError, 'anfra-node is not responding.'],
-    ['a code this SDK does not know, by its scope', fail(500, { code: 'something_new', scope: 'server', message: 'Broke.' }), TransportError, 'Broke.'],
-    ['a server that cannot be reached', new TypeError('fetch failed'), TransportError, 'The server could not be reached: fetch failed'],
-  ])('fails %s', async (_name, answer, Kind, message) => {
-    const { client } = api(answer);
+    ['an invalid query, as its diagnostics', fail(422, { code: 'query_invalid', scope: 'user', message: 'The query is invalid.', details: { valid: false, diagnostics: [{ message: 'No field x.', line: 1, column: 9 }] } }), 'query_invalid', 'user', 'line 1:9: No field x.'],
+    ['an input entry refused, as its violation', fail(422, { code: 'validation_failed', scope: 'user', message: 'Some of the input is not valid.', details: { violations: [{ field: 'input.filters[0].field', message: 'Unknown field.' }] } }), 'validation_failed', 'user', 'input.filters[0].field: Unknown field.'],
+    ['a data source failing', fail(422, { code: 'query_failed', scope: 'user', message: 'connection refused' }), 'query_failed', 'user', 'connection refused'],
+    ['a caller who may not see it', fail(403, { code: 'forbidden', scope: 'user', message: 'Not yours.' }), 'forbidden', 'user', 'Not yours.'],
+    ['a sidecar down', fail(503, { code: 'sidecar_unavailable', scope: 'server', message: 'anfra-node is not responding.' }), 'sidecar_unavailable', 'server', 'anfra-node is not responding.'],
+    ['a code this SDK does not know, as it came', fail(409, { code: 'something_new', scope: 'user', message: 'Taken.' }), 'something_new', 'user', 'Taken.'],
+    ['a scope this SDK does not know, as the server\'s', fail(500, { code: 'broke', scope: 'Server', message: 'Broke.' }), 'broke', 'server', 'Broke.'],
+    ['a 401 without a body, as its status', { status: 401, body: {} }, 'unauthenticated', 'user', 'The server answered 401.'],
+    ['a server that cannot be reached', new TypeError('fetch failed'), 'connection_failed', 'server', 'The server could not be reached: fetch failed'],
+  ])('fails %s', async (_name, answer, code, scope, message) => {
+    const { client } = api(answer as Answer);
     const err = await coreApiBackend(client).submitQuery(request, signal).catch((e) => e);
-    expect(err).toBeInstanceOf(Kind);
-    expect(err.message).toBe(message);
+    expect(err).toBeInstanceOf(DataAppError);
+    expect(err).toMatchObject({ code, scope, message });
   });
 
   it("carries the request's id, for the server's log", async () => {
     const { client } = api(fail(500, { code: 'internal_server_error', scope: 'server', message: 'Broke.', request_id: 'req_9' }));
     const err = await coreApiBackend(client).submitQuery(request, signal).catch((e) => e);
-    expect(err).toBeInstanceOf(TransportError);
-    expect(err.requestId).toBe('req_9');
+    expect(err).toMatchObject({ code: 'internal_server_error', requestId: 'req_9' });
   });
 
   it('lets an abort through as it is', async () => {
@@ -203,7 +207,7 @@ describe('coreApiBackend', () => {
 
     it("maps the API's error to the SDK's", async () => {
       const { client } = api(fail(503, { code: 'anfra.sidecar_unavailable', scope: 'Server', message: 'this command requires the anfra-node sidecar' }));
-      await expect(coreApiBackend(client).lineage!({ targets: [{ parent: 'orders', child: 'amount' }] }, signal)).rejects.toThrowError(TransportError);
+      await expect(coreApiBackend(client).lineage!({ targets: [{ parent: 'orders', child: 'amount' }] }, signal)).rejects.toMatchObject({ code: 'anfra.sidecar_unavailable', scope: 'server' });
     });
   });
 
@@ -246,7 +250,7 @@ describe('coreApiBackend', () => {
     it('run only for a field the dataset defines, since it is spliced into AQL', async () => {
       const { client, sent } = api();
       await expect(coreApiBackend(client, { datasets }).fieldSuggestions({ dataset: 'sales', model: 'orders', field: 'x } } drop', q: '' }, signal))
-        .rejects.toThrow(QueryError);
+        .rejects.toMatchObject({ code: 'invalid_request', scope: 'client' });
       expect(sent).toEqual([]);
     });
   });
@@ -300,7 +304,7 @@ describe('coreApiBackend', () => {
         }),
       );
       const backend = coreApiBackend(client);
-      await expect(backend.exportQuery!(exportRequest, signal)).rejects.toThrow(TransportError);
+      await expect(backend.exportQuery!(exportRequest, signal)).rejects.toMatchObject({ code: 'exports_unavailable', scope: 'server', status: 500 });
       await expect(backend.exportQuery!(exportRequest, signal)).rejects.toThrow(/filename: a file name cannot hold control characters/);
     });
   });

@@ -1,5 +1,5 @@
 import {
-  PermissionError, QueryError, TransportError, type DataAppError,
+  DataAppError, fromHttpStatus, toScope, type ErrorContextEntry,
 } from '../common/errors';
 
 /** The core API's error body, as every host answers it. */
@@ -8,6 +8,8 @@ export interface ApiErrorBody {
   scope?: 'user' | 'client' | 'server' | string;
   message: string;
   details?: unknown;
+  context?: { step?: string, text?: string }[];
+  status?: number;
   /** The request's id, as the server's log names it. */
   request_id?: string;
 }
@@ -32,33 +34,36 @@ function violationsOf (details: unknown): string | undefined {
 }
 
 /**
- * The SDK error an API error is, by what a Data App author can do about it: a query to fix
- * (`QueryError`), something they may not see (`PermissionError`), or the server failing
- * (`TransportError`). A code this SDK does not know is read by its scope, so a host that adds codes
- * (anfra-cloud does) still lands each one somewhere sensible.
+ * The message, said from the details where those hold the facts: a refused query's diagnostics
+ * with their lines, a refused input's fields. Its own message is only its code's sentence ("The
+ * query is invalid."), and a message read alone must still say what is wrong.
  */
-export function toSdkError (status: number, body: ApiErrorBody | undefined): DataAppError {
-  const err = classify(status, body);
-  if (body?.request_id) err.requestId = body.request_id;
-  return err;
+function messageOf (body: ApiErrorBody): string {
+  return diagnosticsOf(body.details) ?? violationsOf(body.details) ?? body.message;
 }
 
-function classify (status: number, body: ApiErrorBody | undefined): DataAppError {
-  if (status === 401 || status === 403) return new PermissionError(body?.message ?? 'You may not see this.');
-  if (!body?.code) return new TransportError(`The server answered ${status}.`, status);
-  switch (body.code) {
-    case 'query_invalid':
-      return new QueryError(diagnosticsOf(body.details) ?? body.message);
-    case 'validation_failed':
-    case 'invalid_request':
-      return new QueryError(violationsOf(body.details) ?? body.message);
-    case 'query_failed':
-      return new QueryError(body.message);
-    case 'sidecar_unavailable':
-      return new TransportError(body.message, status);
-    default:
-      return body.scope === 'server' || status >= 500
-        ? new TransportError(body.message, status)
-        : new QueryError(body.message);
-  }
+function contextOf (context: ApiErrorBody['context']): ErrorContextEntry[] | undefined {
+  if (!Array.isArray(context)) return undefined;
+  const entries = context
+    .filter((c) => typeof c?.text === 'string')
+    .map((c) => (typeof c.step === 'string' ? { step: c.step, text: c.text as string } : { text: c.text as string }));
+  return entries.length ? entries : undefined;
+}
+
+/**
+ * The SDK error an API error is: the API's own document, passed through. Nothing is re-mapped, so a
+ * code a host adds (anfra Cloud does) reaches the app as it is, by its scope. A body without a code
+ * (a proxy's error page) is read by its status.
+ */
+export function toSdkError (status: number, body: ApiErrorBody | undefined): DataAppError {
+  if (!body?.code) return fromHttpStatus(status, body?.message || `The server answered ${status}.`, { requestId: body?.request_id });
+  return new DataAppError({
+    code: body.code,
+    scope: toScope(body.scope),
+    message: messageOf(body),
+    status: body.status ?? status,
+    details: body.details,
+    context: contextOf(body.context),
+    requestId: body.request_id,
+  });
 }

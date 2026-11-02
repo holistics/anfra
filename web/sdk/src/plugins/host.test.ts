@@ -183,8 +183,8 @@ describe('render', () => {
     save(2, 'not a blob', 'Sales.png');
     await answered(2);
     expect(replies).toEqual([
-      { type: 'anfra:result', id: 1, ok: false, error: { name: 'ValidationError', message: 'Only a PNG or a PDF rendering can be saved.' } },
-      { type: 'anfra:result', id: 2, ok: false, error: { name: 'ValidationError', message: 'A rendering must be saved as a file.' } },
+      { type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: 'Only a PNG or a PDF rendering can be saved.' } },
+      { type: 'anfra:result', id: 2, ok: false, error: { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: 'A rendering must be saved as a file.' } },
     ]);
     expect(clicked).toEqual([]);
   });
@@ -203,7 +203,7 @@ describe('render', () => {
       vi.setSystemTime(Date.now() + 10_000);
       save(8, png(), 'later');
       await answered(8);
-      const busy = { name: 'ValidationError', message: 'Too many files saved at once: try again in a few seconds.' };
+      const busy = { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: 'Too many files saved at once: try again in a few seconds.' };
       expect(replies.map((r) => (r.type === 'anfra:result' && !r.ok ? [r.id, r.error] : r.type === 'anfra:result' && r.id))).toEqual([
         [2, busy], 1, 3, 4, 5, 6, [7, busy], 8,
       ]);
@@ -217,7 +217,7 @@ describe('render', () => {
     mount();
     save(1, png(), 'x.png');
     await answered(1);
-    expect(replies).toEqual([{ type: 'anfra:result', id: 1, ok: false, error: { name: 'TransportError', message: "Nothing on this host answers 'render.save'." } }]);
+    expect(replies).toEqual([{ type: 'anfra:result', id: 1, ok: false, error: { name: 'DataAppError', code: 'invalid_request', scope: 'client', message: "Nothing on this host answers 'render.save'." } }]);
   });
 
   it('keeps the words of a name, drops what a file system or a reader would misread, and ends in the extension', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSdk } from '../sdk';
-import { PermissionError, QueryError, ValidationError } from '../../common/errors';
+import { ValidationError, forbidden } from '../../common/errors';
 import {
   salesDataset, stubBackend, testUser, type StubOptions, textTypes, numberTypes,
 } from '../testSupport';
@@ -212,7 +212,7 @@ describe('results', () => {
     expect(query.result?.debug).toEqual(debug);
   });
 
-  it('surfaces a backend failure as a QueryError carrying its message', async () => {
+  it('surfaces a failure nobody classified as call_failed, keeping its message out of the app', async () => {
     const { sdk } = build(new Error('Syntax error near ORDER'));
     const app = sdk.createApp();
     const query = revenueBy(app);
@@ -220,18 +220,22 @@ describe('results', () => {
     const summary = await app.execute();
 
     expect(summary.failed).toEqual(['revenue']);
-    expect(query.error).toBeInstanceOf(QueryError);
-    expect(query.error?.message).toBe('Syntax error near ORDER');
+    expect(query.error).toMatchObject({
+      code: 'call_failed', scope: 'server', message: 'The query failed.', entity: 'revenue',
+    });
+    expect(query.error?.cause).toEqual(new Error('Syntax error near ORDER'));
   });
 
-  it('keeps the DataAppError a backend chose, so a permission failure reads as one', async () => {
-    const { sdk } = build(new PermissionError('Not allowed'));
+  it('keeps the DataAppError a backend chose, naming its query', async () => {
+    const { sdk } = build(forbidden('Not allowed'));
     const app = sdk.createApp();
     const query = revenueBy(app);
 
     await app.execute();
 
-    expect(query.error).toBeInstanceOf(PermissionError);
+    expect(query.error).toMatchObject({
+      code: 'forbidden', scope: 'user', message: 'Not allowed', entity: 'revenue',
+    });
   });
 });
 

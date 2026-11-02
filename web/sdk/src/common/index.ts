@@ -4,7 +4,8 @@
  * Data App's frame.
  */
 export {
-  DataAppError, ValidationError, QueryError, PermissionError, TransportError,
+  DataAppError, ValidationError, GENERIC_CODES, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest,
+  type ApiErrorCode, type DataAppErrorInit, type ErrorCode, type ErrorContextEntry, type ErrorDetails, type ErrorScope, type FromHttpStatusOptions, type GenericCode,
 } from './errors';
 export { FILTER_AGGREGATIONS } from './aggregations';
 export { PROVISION_ELEMENT_ID } from './bridge';
