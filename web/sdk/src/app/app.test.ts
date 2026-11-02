@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSdk } from './sdk';
 import { ValidationError } from '../common/errors';
-import { salesDataset, stubBackend, testUser, textTypes } from './testSupport';
+import { numberTypes, salesDataset, stubBackend, testUser, textTypes } from './testSupport';
 import type { Backend } from '../common/types';
 import type { App } from './app';
 
@@ -469,5 +469,30 @@ describe('superseding a run', () => {
     // stranding the query as `executing` with nothing in flight to move it.
     expect(revenue.state).toBe('success');
     expect(revenue.result?.rows).toHaveLength(1);
+  });
+});
+
+describe('listeners', () => {
+  it("keeps a listener's bug out of the queries and the other listeners", async () => {
+    const app = createSdk({
+      datasets: { sales: salesDataset },
+      user: testUser,
+      backend: stubBackend({
+        submitQuery: { values: [['1']], columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }], meta: { page: 1, pageSize: 1000, numRows: 1 } },
+      }).backend,
+    }).createApp();
+    const revenue = monthlyRevenue(app);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let seen = 0;
+    app.subscribe(() => { throw new Error('echarts is not defined'); });
+    app.subscribe(() => { seen += 1; });
+
+    const summary = await app.execute();
+
+    expect(revenue.state).toBe('success');
+    expect(summary.failed).toEqual([]);
+    expect(seen).toBeGreaterThan(0);
+    expect(error).toHaveBeenCalledWith('anfra: a subscribe() listener threw; the queries carry on.', expect.any(Error));
+    error.mockRestore();
   });
 });
