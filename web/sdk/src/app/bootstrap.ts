@@ -20,7 +20,7 @@ import { createKernel, type FrameKernel, type KernelShared } from './kernel';
 import { Query } from './query';
 import { createSdk } from './sdk';
 import { installSandbox } from './sandbox';
-import { installReporting } from './reporting';
+import { installReporting, reportError } from './reporting';
 
 /** A plugin's frame setup, as the host's frame script hands it over: its name and its function. */
 export type PluginSetup = readonly [name: string, setup: ((kernel: FrameKernel) => void) | undefined];
@@ -39,6 +39,11 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
       const handler = handlers.get(name);
       if (!handler) throw invalidRequest(`Nothing in this frame answers '${name}'.`);
       return handler(request, signal);
+    },
+    // A plugin's answer that failed: the host reads only that the call failed, so it is reported here.
+    hidden: (name, err) => {
+      (win as Window & typeof globalThis).console?.error(`anfra: '${name}' failed; the host is told only that the call failed.`, err);
+      reportError('uncaught', err);
     },
     event: (name, payload) => {
       listeners.get(name)?.forEach((listener) => {
@@ -122,6 +127,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
     } catch (err) {
       // One broken plugin leaves the others, and the app, running.
       (win as Window & typeof globalThis).console?.error(`anfra: plugin '${name}' failed to set up:`, err);
+      reportError('uncaught', err);
     }
   }
 
