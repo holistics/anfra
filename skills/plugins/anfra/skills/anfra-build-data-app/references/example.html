@@ -247,12 +247,27 @@
       if (query.state === 'executing') {
         el.append(Object.assign(document.createElement('div'), { className: 'skeleton' }));
       } else if (query.state === 'error') {
+        // By who must act: the reader's access, the reader's input, or the server (retry).
+        const { code, scope, message } = query.error;
         const alert = Object.assign(document.createElement('div'), { className: 'alert' });
         alert.dataset.variant = 'destructive';
         const title = document.createElement('h2');
-        title.textContent = "Couldn't load this chart";
         const detail = document.createElement('section');
-        detail.textContent = query.error.message;
+        if (code === 'forbidden') {
+          title.textContent = "You don't have access to this chart";
+        } else if (code === 'unauthenticated') {
+          title.textContent = 'Sign in again to see this chart';
+        } else if (scope === 'server') {
+          title.textContent = "Couldn't load this chart";
+          // execute() reruns only the queries that failed.
+          const retry = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: 'Retry' });
+          retry.dataset.variant = 'outline';
+          retry.addEventListener('click', () => app.execute());
+          detail.append(retry);
+        } else {
+          title.textContent = "Couldn't load this chart";
+          detail.textContent = message;
+        }
         alert.append(title, detail);
         el.append(alert);
       } else if (query.state === 'success' && query.result.rows.length === 0) {
