@@ -79,7 +79,7 @@ is almost always right.
 | `app.mapCrossFilter(fromQuery, toQuery)` | Rows selected in `fromQuery` filter `toQuery`. |
 | `await app.execute()` | Runs every query whose inputs changed. Resolves `{ succeeded, failed }`, never rejects. |
 | `await app.refresh()` | Re-runs every query, whether or not its inputs changed. |
-| `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. |
+| `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
 | `app.hasChanges` | A control or the selection changed since the last execute: use for an "Apply" button. |
 | `app.selection` / `app.clearSelection()` | The current cross-filter selection. |
 | `app.abort()` | Cancels in-flight queries. |
@@ -340,6 +340,9 @@ chart.on('contextmenu', (p) => {
 | `PermissionError` | Stored on `query.error`: this reader can't see the data. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access", not a failure. |
 | `TransportError` | Network or session problem. | Show a retry. |
 
-Every error has `entity`, the query or control name it concerns. Check the class with `err.name`
+Every error has `entity`, the query or control name it concerns. An error the server answered
+also has `requestId`: the id `anfra serve`'s log names that request by, where the full cause is.
+A failure that only says "The call failed." was an error on the host's side, logged in the host
+page's console. Check the class with `err.name`
 (`'PermissionError'`), since the classes themselves aren't exposed as globals. Plugins reject with
 these classes too: see each one's reference.
