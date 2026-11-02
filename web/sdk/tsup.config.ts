@@ -15,8 +15,8 @@ async function buildScript (entry: string, globalName: string) {
     globalName,
     target: 'es2020',
     minify: true,
-    // Error classes name themselves by their class (`err.name === 'PermissionError'`), which
-    // an author checks: minified, they would be 'c'.
+    // Error classes name themselves by their class (`DataAppError`, `ValidationError`), and the
+    // bridge recognises another SDK copy's errors by that name: minified, they would be 'c'.
     keepNames: true,
     write: false,
     metafile: true,

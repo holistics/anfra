@@ -27,7 +27,7 @@ A plugin's name is lowercase letters, digits and dashes (`notes`, `acme-share`).
 ## 3. The host half
 
 ```ts
-import { ValidationError } from '@holistics/anfra-sdk/common';
+import { invalidRequest } from '@holistics/anfra-sdk/common';
 import { definePlugin, type FrameHalf, type Plugin } from '@holistics/anfra-sdk/host';
 
 export interface NotesStore {                                  // where notes live: the host's to decide
@@ -59,7 +59,7 @@ Each call is a handler, `(request, call) => answer`, named under the plugin: `li
 
 Set `frame: true` to let the frame make the call, and leave it out for a call only the host or another plugin makes. Whatever the frame may call, any definition may call too, because the frame is the definition's realm.
 
-Check every request, because the definition makes it up. In the example, `about()` and `text()` throw a `ValidationError` for anything that isn't a short string.
+Check every request, because the definition makes it up. In the example, `about()` and `text()` throw `invalidRequest(...)` for anything that isn't a short string.
 
 The handler's second argument, `call`, is the call's context:
 
@@ -73,7 +73,9 @@ The handler's second argument, `call`, is the call's context:
 
 ### Errors
 
-Throw one of the SDK's classes (`ValidationError`, `QueryError`, `PermissionError`, `TransportError`, from `@holistics/anfra-sdk/common`) for a failure the author should read. Any other error reaches the frame only as `QueryError: The call failed.`, which keeps a server's message, a URL or an id from leaking.
+Reject with a `DataAppError` for a failure the author should read. It has the API's error shape: a `code` saying what happened, a `scope` saying who must act (`user`, `client` or `server`), and a `message`. Make one with a helper from `@holistics/anfra-sdk/common`: `invalidRequest(message)` for a request the definition got wrong, `forbidden(message)` for something this reader may not do, and `fromHttpStatus(status, message)` for a backend's HTTP failure. For a code of your own, use `new DataAppError({ code, scope, message })`.
+
+Any other error reaches the frame only as `call_failed` ("The call failed.", scope `server`). This keeps a server's message, a URL or an id from leaking. The original is logged to the host page's console.
 
 ### Events
 
@@ -156,7 +158,7 @@ What the kernel gives a setup:
 | `layer()` | This plugin's shadow root in the plugin layer. Draw only here. |
 | `overlay`, `structure()` | The kernel's highlight overlay, and the page's structure (its marked blocks and containers). |
 | `body()` | The plugin's body, fetched and run on first use. |
-| `errors` | The SDK's error classes. Reject with these, so authors can tell them apart. |
+| `errors` | The SDK's error class, the helpers that make its errors (`invalidRequest`, `forbidden`, ...), `hasErrorCode` and `isDataAppError`. Reject with these, so authors can branch on `code` and `scope`. |
 | `window` | The frame's window. |
 
 Draw only in `layer()`. It is a shadow root, so the page's styles don't reach your UI and yours don't reach the page, and renderings leave it out. Never insert anything into the definition's markup.
@@ -245,7 +247,7 @@ Test the host half through a host runtime: `host.call(name, request)` runs the c
 const host = createHost({ plugins: [corePlugin(backend), createNotesPlugin(store, { setup: '' })] });
 
 await host.call('notes.add', { about: 'revenue', text: 'Q3 includes the refund.' });
-await expect(host.call('notes.add', { about: 'revenue', text: '' })).rejects.toBeInstanceOf(ValidationError);
+await expect(host.call('notes.add', { about: 'revenue', text: '' })).rejects.toMatchObject({ code: 'invalid_request' });
 ```
 
 Test the frame half in a test frame from `@holistics/anfra-sdk/testing`. It runs your setup on the real kernel and bridge, against a stand-in host whose answers you give.
@@ -272,7 +274,7 @@ expect(frame.events).toEqual([{ name: 'notes.viewed', payload: { about: 'revenue
 - [ ] Only the calls the frame needs have `frame: true`.
 - [ ] Every frame-callable handler checks its request, and every declared event checks its payload.
 - [ ] A handler that forwards a name or request the frame chose calls with `{ asOrigin: true }`.
-- [ ] Failures the author should read throw the SDK's error classes, since other errors reach the frame without their message.
+- [ ] Failures the author should read reject with a `DataAppError` (made by `invalidRequest`, `forbidden`, ...), since other errors reach the frame as `call_failed`, without their message.
 - [ ] The frame half draws only in `layer()`, sets text with `textContent`, and imports only types.
 - [ ] Anything to outlive the page is in a store the host passes in.
 - [ ] The host knows that installing the plugin trusts its host half with the whole page.
