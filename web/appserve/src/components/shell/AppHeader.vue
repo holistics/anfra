@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { commandIcon, type CommandMenu } from '@/lib/pluginUI';
 import type * as server from '@/lib/server';
+import { IS_MAC, keyLabels } from '@/lib/shortcut';
 import LoadingBar from './LoadingBar.vue';
 import RepoProblems from './RepoProblems.vue';
 
@@ -78,7 +79,7 @@ const emit = defineEmits<{
         variant="ghost"
         size="icon-sm"
         :aria-label="command.title"
-        :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${command.shortcut})` : command.title)"
+        :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title)"
         :data-testid="`command-${command.id}`"
         :aria-pressed="commandState(command).pressed ?? false"
         :disabled="!hasApp || !!commandState(command).disabled"

@@ -5,3 +5,4 @@ export { default as InlineCode } from './InlineCode.vue';
 export { default as LoadingBar } from './LoadingBar.vue';
 export { default as RepoProblems } from './RepoProblems.vue';
 export { default as Scrim } from './Scrim.vue';
+export { default as ShortcutKeys } from './ShortcutKeys.vue';

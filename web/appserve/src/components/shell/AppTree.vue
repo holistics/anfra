@@ -9,16 +9,15 @@ import {
 const props = defineProps<{
   entries: CatalogEntry[];
   selected?: string;
-  /** Folders the reader collapsed; ignored while `forceOpen` (a search is active). */
+  /** Folders the reader collapsed. */
   collapsed: Set<string>;
-  forceOpen: boolean;
   /** How deep this list is: the top is the sidebar's menu, below it each folder's sub-menu. */
   depth?: number;
 }>();
 
 const emit = defineEmits<{ select: [path: string], toggle: [path: string] }>();
 
-const open = (path: string) => props.forceOpen || !props.collapsed.has(path);
+const open = (path: string) => !props.collapsed.has(path);
 const button = () => (props.depth ? sidebarMenuSubButton : sidebarMenuButton);
 const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-button');
 </script>
@@ -46,7 +45,6 @@ const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-butt
           :entries="entry.children"
           :selected="selected"
           :collapsed="collapsed"
-          :force-open="forceOpen"
           :depth="(depth ?? 0) + 1"
           @select="emit('select', $event)"
           @toggle="emit('toggle', $event)"

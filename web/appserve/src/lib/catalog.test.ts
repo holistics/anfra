@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allApps, filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
+  allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from './catalog';
 
 const tree: CatalogEntry[] = [
@@ -33,17 +33,6 @@ describe('the Data App URL', () => {
     expect(findApp(tree, 'Home')?.label).toBe('Home');
     expect(findApp(tree, 'sales/deep/q 3')?.label).toBe('Q3');
     expect(findApp(tree, 'sales')).toBeUndefined();
-  });
-});
-
-describe('filterEntries', () => {
-  it('keeps the apps matching by label or path, and the folders leading to them', () => {
-    expect(filterEntries(tree, 'q3')).toEqual([
-      { ...tree[1], children: [{ ...(tree[1] as { children: CatalogEntry[] }).children[1] }] },
-    ]);
-    expect(filterEntries(tree, 'OVERVIEW').map((e) => e.path)).toEqual(['sales']);
-    expect(filterEntries(tree, '  ')).toBe(tree);
-    expect(filterEntries(tree, 'nothing')).toEqual([]);
   });
 });
 

@@ -2,6 +2,9 @@
 import {
   computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch,
 } from 'vue';
+import {
+  LayoutDashboard, Moon, PanelLeft, RefreshCw, Sun,
+} from '@lucide/vue';
 import CommandPalette, { type PaletteEntry } from '@/components/apps/CommandPalette.vue';
 import DataAppFrame from '@/components/apps/DataAppFrame.vue';
 import PluginPanel from '@/components/apps/PluginPanel.vue';
@@ -16,8 +19,8 @@ import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
   allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from '@/lib/catalog';
-import { overflowMenus } from '@/lib/pluginUI';
 import { layerOpen } from '@/lib/layers';
+import { commandIcon, overflowMenus } from '@/lib/pluginUI';
 import * as server from '@/lib/server';
 
 const entries = ref<CatalogEntry[]>([]);
@@ -122,8 +125,6 @@ function onNarrowChange (): void {
   narrow.value = narrowQuery.matches;
   sidebarOpen.value = !narrow.value;
 }
-
-const sidebar = ref<InstanceType<typeof AppSidebar>>();
 
 const THEME_KEY = 'anfra-appserve:theme';
 function systemTheme (): 'light' | 'dark' {
@@ -276,7 +277,6 @@ function reload (): void {
 // Breadcrumb folders: open the sidebar, expand the folder and bring it into view.
 async function revealFolder (path: string): Promise<void> {
   sidebarOpen.value = true;
-  sidebar.value?.clearSearch();
   const next = new Set(collapsed.value);
   next.delete(path);
   setCollapsed(next);
@@ -301,23 +301,21 @@ watch(selectedPath, () => {
 
 // The command palette: the shell's own commands, the plugins', and every Data App to open.
 const paletteOpen = ref(false);
-const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-const PALETTE_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 const paletteEntries = computed<PaletteEntry[]>(() => {
   const noApp = selected.value ? undefined : 'Open a Data App first';
-  const plugins = chromeCommands.value.map((command) => {
+  const plugins = chromeCommands.value.map((command): PaletteEntry => {
     const state = commandState(command);
     return {
-      id: `command:${command.id}`, title: command.title, group: 'Data App', shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
+      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
     };
   });
   return [
     ...plugins,
-    { id: 'reload', title: 'Reload Data App', group: 'Data App', disabled: noApp },
-    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View' },
-    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View' },
-    ...allApps(entries.value).map((entry) => ({
-      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', disabled: entry.path === selected.value?.path ? 'Open now' : undefined,
+    { id: 'reload', title: 'Reload Data App', group: 'Data App', icon: RefreshCw, disabled: noApp },
+    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: PanelLeft },
+    { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View', icon: theme.value === 'dark' ? Sun : Moon },
+    ...allApps(entries.value).map((entry): PaletteEntry => ({
+      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: LayoutDashboard, disabled: entry.path === selected.value?.path ? 'Already open' : undefined,
     })),
   ];
 });
@@ -349,8 +347,7 @@ function onKeydown (event: KeyboardEvent): void {
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
   if (event.key === '/' && !typing && !event.metaKey && !event.ctrlKey) {
     event.preventDefault();
-    sidebarOpen.value = true;
-    void nextTick(() => sidebar.value?.focusSearch());
+    paletteOpen.value = true;
   }
   if (event.key === 'Escape' && !layerOpen()) {
     // Picking, Escape only ends the pick, as it does with focus in the frame; again, it closes the panel.
@@ -416,7 +413,6 @@ onBeforeUnmount(() => {
   >
     <Scrim v-if="narrow && sidebarOpen" @click="sidebarOpen = false" />
     <AppSidebar
-      ref="sidebar"
       :open="sidebarOpen"
       :narrow="narrow"
       :repo-name="repoName"
@@ -428,7 +424,6 @@ onBeforeUnmount(() => {
       :health="health"
       :version="version"
       :theme="theme"
-      :palette-shortcut="PALETTE_SHORTCUT"
       @select="select"
       @toggle="toggleFolder"
       @open-palette="paletteOpen = true"
@@ -514,6 +509,6 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </main>
-    <CommandPalette v-if="paletteOpen" :entries="paletteEntries" @run="runPaletteEntry" @close="paletteOpen = false" />
+    <CommandPalette v-model:open="paletteOpen" :entries="paletteEntries" @run="runPaletteEntry" />
   </div>
 </template>
