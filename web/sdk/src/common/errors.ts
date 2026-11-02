@@ -10,6 +10,12 @@ export abstract class DataAppError extends Error {
   /** The query, control or dataset that caused this. */
   readonly entity?: string;
 
+  /**
+   * The id of the server request that failed, when a server answered with this error: the line to
+   * look for in its log. Absent for an error that never reached a server.
+   */
+  requestId?: string;
+
   constructor (message: string, entity?: string) {
     super(message);
     this.name = new.target.name;

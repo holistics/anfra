@@ -154,6 +154,12 @@ function toDataAppError (err: unknown, entity: string): DataAppError {
  */
 function toExportError (err: unknown, entity: string): DataAppError {
   if (err instanceof DataAppError && err.entity) return err;
+  const named = nameExportError(err, entity);
+  if (err instanceof DataAppError && err.requestId) named.requestId = err.requestId;
+  return named;
+}
+
+function nameExportError (err: unknown, entity: string): DataAppError {
   const message = (err as Error | undefined)?.message || 'The export failed.';
   if (err instanceof PermissionError) return new PermissionError(message, entity);
   if (err instanceof TransportError) return new TransportError(message, err.status, entity);
