@@ -87,7 +87,6 @@ var (
 		"apps/ecommerce/*.html",
 		"data/ecommerce.duckdb",
 		"wiki/ecommerce/*.md",
-		"AGENTS.md",
 	}
 )
 
@@ -126,7 +125,7 @@ func newInitCmd() *cobra.Command {
 			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
 			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n\n" +
 			"Sample project: --with-sample also adds an e-commerce sample (6 models, a dataset with 8 metrics,\n" +
-			"a small DuckDB file, a Data App, business definitions in wiki/ecommerce/ and an AGENTS.md),\n" +
+			"a small DuckDB file, a Data App, and business definitions in wiki/ecommerce/),\n" +
 			"downloaded from github.com/" + sampleRepo + ", and points data_sources.yml at its DuckDB file.\n" +
 			"In a terminal, init asks whether to add it (default no). Without one it never asks and never adds it.\n\n" +
 			"Agents: do not pass --with-sample on your own. Ask the user in chat whether to include the sample,\n" +
@@ -191,9 +190,6 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 		steps = append(steps, initStep{d + "/.gitkeep", writeNew(nil, 0o644)})
 	}
 	steps = append(steps, initStep{".gitignore", ignoreLine(sources)})
-	// Whether AGENTS.md is init's own, so the sample may put its guidance in it.
-	_, statErr := os.Lstat(filepath.Join(dir, "AGENTS.md"))
-	ownAgentsMD := errors.Is(statErr, fs.ErrNotExist)
 	// The block agent setup writes too: what tells agents to use the skills.
 	steps = append(steps, initStep{"AGENTS.md", func(string) (bool, error) {
 		wroteBlock, wroteImport, err := agents.WriteBlock(dir)
@@ -222,10 +218,6 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 	fmt.Fprintf(out, "\nSample project, from %s@%s:\n", sampleRepo, commit)
 	steps = steps[:0]
 	for _, f := range files {
-		if f.path == "AGENTS.md" {
-			steps = append(steps, initStep{f.path, sampleAgentsMD(dir, f.content, ownAgentsMD)})
-			continue
-		}
 		steps = append(steps, initStep{f.path, writeNew(f.content, 0o644)})
 	}
 	if err := runSteps(dir, out, steps); err != nil {
@@ -250,22 +242,6 @@ func initRepo(ctx context.Context, dir string, out io.Writer, choice initChoice)
 		}
 	}
 	return nil
-}
-
-// sampleAgentsMD writes the sample's AGENTS.md, followed by the anfra block,
-// in place of the AGENTS.md init wrote this run, which holds only that block.
-// The repo's own AGENTS.md is kept.
-func sampleAgentsMD(dir string, content []byte, own bool) func(path string) (bool, error) {
-	return func(path string) (bool, error) {
-		if !own {
-			return false, nil
-		}
-		if err := os.WriteFile(path, content, 0o644); err != nil { //nolint:gosec // G306: a committed doc
-			return false, err
-		}
-		_, _, err := agents.WriteBlock(dir)
-		return err == nil, err
-	}
 }
 
 func retryArg(dir string) string {

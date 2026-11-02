@@ -152,6 +152,7 @@ func sampleArchive(t *testing.T) []byte {
 	add(&tar.Header{Name: top + "data/ecommerce.duckdb"}, "duckdb")
 	add(&tar.Header{Name: top + "apps/ecommerce/overview.html"}, "<html></html>\n")
 	add(&tar.Header{Name: top + "wiki/ecommerce/metrics.md"}, "# Definitions\n")
+	add(&tar.Header{Name: top + "wiki/ecommerce/AGENTS.md"}, "# Maintaining the wiki\n")
 	add(&tar.Header{Name: top + "AGENTS.md"}, "# Agent instructions\n")
 	add(&tar.Header{Name: top + "README.md"}, "# Sample\n")
 	add(&tar.Header{Name: top + ".anfra/data_sources.yml"}, "data_sources: {}\n")
@@ -185,7 +186,7 @@ func TestInitWithSample(t *testing.T) {
 	if err := initRepo(context.Background(), dir, &out, initChoice{sample: true}); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"models/ecommerce/orders.model.aml", "datasets/ecommerce/ecommerce.dataset.aml", "data/ecommerce.duckdb", "apps/ecommerce/overview.html", "wiki/ecommerce/metrics.md", "AGENTS.md"} {
+	for _, f := range []string{"models/ecommerce/orders.model.aml", "datasets/ecommerce/ecommerce.dataset.aml", "data/ecommerce.duckdb", "apps/ecommerce/overview.html", "wiki/ecommerce/metrics.md", "wiki/ecommerce/AGENTS.md"} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("%s: %v", f, err)
 		}
@@ -210,25 +211,8 @@ func TestInitWithSample(t *testing.T) {
 	if strings.Contains(out.String(), "Sample available") {
 		t.Errorf("offered the sample it added:\n%s", out.String())
 	}
-	// AGENTS.md has the sample's guidance, then the anfra block.
-	md, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
-	if guide, block := strings.Index(string(md), "# Agent instructions"), strings.Index(string(md), "<!-- anfra:begin -->"); guide != 0 || block < 0 {
-		t.Errorf("AGENTS.md:\n%s", md)
-	}
-}
-
-// The repo's own AGENTS.md is kept: the sample's does not replace it.
-func TestInitWithSampleKeepsAgentsMD(t *testing.T) {
-	serveSample(t, http.StatusOK, sampleArchive(t))
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Mine\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := initRepo(context.Background(), dir, &bytes.Buffer{}, initChoice{sample: true}); err != nil {
-		t.Fatal(err)
-	}
-	md, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
-	if !strings.HasPrefix(string(md), "# Mine\n") || strings.Contains(string(md), "Agent instructions") {
+	// The repo's AGENTS.md is init's own: the sample's root AGENTS.md is not taken.
+	if md, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md")); strings.Contains(string(md), "Agent instructions") || !strings.Contains(string(md), "<!-- anfra:begin -->") {
 		t.Errorf("AGENTS.md:\n%s", md)
 	}
 }
