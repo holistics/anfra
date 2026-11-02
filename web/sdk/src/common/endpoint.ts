@@ -4,7 +4,7 @@
  * their own `post`; neither knows postMessage beyond that.
  */
 import {
-  PermissionError, QueryError, TransportError, ValidationError,
+  PermissionError, QueryError, TransportError, ValidationError, type DataAppError,
 } from './errors';
 import type { BridgeError, BridgeMessage } from './bridge';
 
@@ -27,9 +27,12 @@ const SDK_ERRORS: ReadonlySet<string> = new Set(['ValidationError', 'QueryError'
  * plain `QueryError`, since its message may hold what the frame must not see (a URL, an id, a stack).
  */
 export function toBridgeError (err: unknown): BridgeError {
-  const e = err as Error | undefined;
-  if (e instanceof Error && SDK_ERRORS.has(e.name)) return { name: e.name, message: e.message || 'The call failed.' };
-  return { name: 'QueryError', message: 'The call failed.' };
+  const e = err as (Error & { requestId?: unknown, status?: unknown }) | undefined;
+  if (!(e instanceof Error) || !SDK_ERRORS.has(e.name)) return { name: 'QueryError', message: 'The call failed.' };
+  const crossing: BridgeError = { name: e.name, message: e.message || 'The call failed.' };
+  if (typeof e.requestId === 'string') crossing.requestId = e.requestId;
+  if (typeof e.status === 'number') crossing.status = e.status;
+  return crossing;
 }
 
 /**
@@ -37,9 +40,15 @@ export function toBridgeError (err: unknown): BridgeError {
  * permission failure from a broken query. Any other name is the SDK's `QueryError`.
  */
 export function fromBridgeError (error: BridgeError | undefined): Error {
+  const err = rebuild(error);
+  if (typeof error?.requestId === 'string') err.requestId = error.requestId;
+  return err;
+}
+
+function rebuild (error: BridgeError | undefined): DataAppError {
   switch (error?.name) {
     case 'PermissionError': return new PermissionError(error.message);
-    case 'TransportError': return new TransportError(error.message);
+    case 'TransportError': return new TransportError(error.message, typeof error.status === 'number' ? error.status : undefined);
     case 'ValidationError': return new ValidationError(error.message);
     default: return new QueryError(error?.message || 'The call failed.');
   }

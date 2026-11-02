@@ -8,6 +8,8 @@ export interface ApiErrorBody {
   scope?: 'user' | 'client' | 'server' | string;
   message: string;
   details?: unknown;
+  /** The request's id, as the server's log names it. */
+  request_id?: string;
 }
 
 interface Diagnostic { message: string, line?: number, column?: number }
@@ -36,6 +38,12 @@ function violationsOf (details: unknown): string | undefined {
  * (anfra-cloud does) still lands each one somewhere sensible.
  */
 export function toSdkError (status: number, body: ApiErrorBody | undefined): DataAppError {
+  const err = classify(status, body);
+  if (body?.request_id) err.requestId = body.request_id;
+  return err;
+}
+
+function classify (status: number, body: ApiErrorBody | undefined): DataAppError {
   if (status === 401 || status === 403) return new PermissionError(body?.message ?? 'You may not see this.');
   if (!body?.code) return new TransportError(`The server answered ${status}.`, status);
   switch (body.code) {

@@ -132,6 +132,7 @@ describe('coreApiBackend', () => {
       const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
       expect(err).toBeInstanceOf(QueryError);
       expect(err.message).toBe('Too many rows.');
+      expect(err.requestId).toBe('req_1');
     });
 
     it('fails when the stream is cut before its end', async () => {
@@ -161,6 +162,13 @@ describe('coreApiBackend', () => {
     const err = await coreApiBackend(client).submitQuery(request, signal).catch((e) => e);
     expect(err).toBeInstanceOf(Kind);
     expect(err.message).toBe(message);
+  });
+
+  it("carries the request's id, for the server's log", async () => {
+    const { client } = api(fail(500, { code: 'internal_server_error', scope: 'server', message: 'Broke.', request_id: 'req_9' }));
+    const err = await coreApiBackend(client).submitQuery(request, signal).catch((e) => e);
+    expect(err).toBeInstanceOf(TransportError);
+    expect(err.requestId).toBe('req_9');
   });
 
   it('lets an abort through as it is', async () => {

@@ -26,10 +26,15 @@ export interface Provision {
 
 export const PROVISION_ELEMENT_ID = 'anfra-provision';
 
-/** An error as it crosses the bridge: the SDK's error class by name, and its message. */
+/**
+ * An error as it crosses the bridge: the SDK's error class by name, its message, and what a server
+ * said of it (the request's id, a transport failure's status).
+ */
 export interface BridgeError {
   name: string;
   message: string;
+  requestId?: string;
+  status?: number;
 }
 
 export type BridgeMessage =
