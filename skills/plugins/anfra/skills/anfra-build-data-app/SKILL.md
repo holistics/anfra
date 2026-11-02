@@ -226,10 +226,11 @@ the repo's problems (AML that does not compile, a data source not configured).
 If you can drive a browser, open the app, exercise every control and click, and read the console
 of the app's frame, not just the page. Otherwise ask the user to, and to report what they see
 against what they expected, with that console. Read errors against
-[references/api.md](references/api.md#errors): a `ValidationError` names a declaring line (or an
-`Anfra.lineage` call with an empty or malformed target list; an unknown field comes back
-as that target's `error` or an empty diagram); a
-`QueryError` carries anfra's message about the AQL, or names the bad entry (`filters[0].field`).
+[references/api.md](references/api.md#errors), by `code`: a `declaration_invalid` error
+(`ValidationError`) names a declaring line; `invalid_request` names a call made wrong (an
+`Anfra.lineage` call with an empty or malformed target list; an unknown field comes back as that
+target's `error` or an empty diagram); `query_invalid` carries anfra's diagnostics for the AQL, with
+their lines, and `validation_failed` names the bad entry (`filters[0].field`).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
 explains it. If you could not check the interface, say so rather than claiming it works.
 

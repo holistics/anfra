@@ -20,5 +20,5 @@ only the pages loaded.
   non-ASCII text), `signal` (an `AbortSignal` to cancel it; `query.abort()` does not).
 - Values are written raw: numbers with every digit, dates in ISO 8601, `null` as an empty cell.
 - A large result takes as long as the query does to run in full.
-- Rejects with the query's error classes, naming it in `entity`: a `QueryError` for a bad option,
-  a `TransportError` when the server can't be reached.
+- Rejects with the query's errors, naming it in `entity`: `validation_failed` for a bad option,
+  `connection_failed` when the server can't be reached.
