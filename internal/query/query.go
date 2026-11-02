@@ -223,7 +223,7 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 	}
 	req.Input, req.Pagination = run.Input, run.Pagination
 	if run.Timezone != "" {
-		req.Options.TimezoneRegion = run.Timezone
+		req.Options.TimezoneRegion = engineTimezone(run.Timezone)
 	}
 	res, err := node.CompileToSQL(ctx, req)
 	if err == nil {
@@ -307,4 +307,16 @@ func on(ds datasource.DataSource, st canalquery.Statement) (canalquery.Statement
 	st.DBSetting = ds.Settings
 	st.Unpooled = ds.Unpooled
 	return st, nil
+}
+
+// engineTimezone is tz as anfra-node can take it. anfra-node v0.12.0 fails to
+// compile any query in UTC or GMT, by those names in any case: it formats the
+// time in a zone it treats as fixed UTC with a Z where it reads an offset
+// (formatTime, packages/amql/src/utilities.ts in holistics-core). Etc/UTC is
+// the same zone and compiles. Drop this once the pinned anfra-node is fixed.
+func engineTimezone(tz string) string {
+	if strings.EqualFold(tz, "UTC") || strings.EqualFold(tz, "GMT") {
+		return "Etc/UTC"
+	}
+	return tz
 }
