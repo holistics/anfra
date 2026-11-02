@@ -300,3 +300,45 @@
 [data-pressing] iframe {
   pointer-events: none;
 }
+
+/*
+ * A list that runs on past its top or bottom edge (data-more-above, data-more-below) fades out
+ * there over 32px, on an eased curve so the fade has no hard start; the fade grows and shrinks as
+ * the list reaches the edge.
+ */
+@property --fade-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@utility fade-y {
+  transition:
+    --fade-top 160ms var(--anfra-ease-out),
+    --fade-bottom 160ms var(--anfra-ease-out);
+  --fade-mask: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0) 0,
+    rgb(0 0 0 / 0.16) calc(var(--fade-top) * 0.25),
+    rgb(0 0 0 / 0.5) calc(var(--fade-top) * 0.5),
+    rgb(0 0 0 / 0.84) calc(var(--fade-top) * 0.75),
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    rgb(0 0 0 / 0.84) calc(100% - var(--fade-bottom) * 0.75),
+    rgb(0 0 0 / 0.5) calc(100% - var(--fade-bottom) * 0.5),
+    rgb(0 0 0 / 0.16) calc(100% - var(--fade-bottom) * 0.25),
+    rgb(0 0 0 / 0) 100%
+  );
+  -webkit-mask-image: var(--fade-mask);
+  mask-image: var(--fade-mask);
+  &[data-more-above] {
+    --fade-top: 32px;
+  }
+  &[data-more-below] {
+    --fade-bottom: 32px;
+  }
+}

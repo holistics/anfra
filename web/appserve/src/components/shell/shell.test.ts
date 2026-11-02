@@ -4,7 +4,7 @@ import { mount, unmountAll } from '@/test/mount';
 import type { CatalogEntry } from '@/lib/catalog';
 import type { AmlProblem } from '@/lib/server';
 import {
-  AppHeader, AppSidebar, EmptyState, InlineCode, LoadingBar, RepoProblems, Scrim,
+  AppHeader, AppSidebar, EmptyState, InlineCode, LoadingBar, RepoProblems, Scrim, ShortcutKeys,
 } from '.';
 
 afterEach(unmountAll);
@@ -89,7 +89,6 @@ describe('AppSidebar', () => {
     health: 'up',
     version: { current: '0.16.0' },
     theme: 'light',
-    paletteShortcut: '⌘K',
   };
 
   it('names the repo, and says which anfra is running', async () => {
@@ -100,17 +99,9 @@ describe('AppSidebar', () => {
     expect(status.getAttribute('data-tone')).toBe('success');
   });
 
-  it('filters the Data Apps as the reader types, and says when none match', async () => {
+  it('lists every Data App', async () => {
     const { host } = await mount(AppSidebar, props);
-    const input = host.querySelector<HTMLInputElement>('[data-testid="search"]')!;
-    input.value = 'chu';
-    input.dispatchEvent(new Event('input'));
-    await nextTick();
-    expect([...host.querySelectorAll('[data-app]')].map((row) => row.getAttribute('data-app'))).toEqual(['churn']);
-    input.value = 'nothing';
-    input.dispatchEvent(new Event('input'));
-    await nextTick();
-    expect(host.querySelector('[data-testid="no-matches"]')).not.toBeNull();
+    expect([...host.querySelectorAll('[data-app]')].map((row) => row.getAttribute('data-app'))).toEqual(['sales', 'churn']);
   });
 
   it('marks the open Data App as the current page', async () => {
@@ -120,14 +111,25 @@ describe('AppSidebar', () => {
     expect(row.hasAttribute('data-active')).toBe(true);
   });
 
-  it('asks for the palette and the other theme', async () => {
+  it('searches in the palette, and asks for the other theme', async () => {
     const onOpenPalette = vi.fn();
     const onToggleTheme = vi.fn();
     const { host } = await mount(AppSidebar, { ...props, onOpenPalette, onToggleTheme });
-    host.querySelector<HTMLButtonElement>('[data-testid="palette-open"]')!.click();
+    const search = host.querySelector<HTMLButtonElement>('[data-testid="palette-open"]')!;
+    expect(search.getAttribute('aria-haspopup')).toBe('dialog');
+    search.click();
     host.querySelector<HTMLButtonElement>('[data-testid="theme-toggle"]')!.click();
     expect(onOpenPalette).toHaveBeenCalledOnce();
     expect(onToggleTheme).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ShortcutKeys', () => {
+  it('draws a combination as one key each', async () => {
+    const { host } = await mount(ShortcutKeys, { combo: 'Alt+Shift+I' });
+    const keys = [...host.querySelectorAll('[data-slot="kbd"]')].map((key) => key.textContent);
+    expect(keys).toHaveLength(3);
+    expect(keys.at(-1)).toBe('I');
   });
 });
 

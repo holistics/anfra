@@ -44,22 +44,6 @@ export function pathFromLocation (pathname: string): string | undefined {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
-/** Keep the apps whose label or path contains `query`, and the folders that lead to them. */
-export function filterEntries (entries: CatalogEntry[], query: string): CatalogEntry[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return entries;
-  const out: CatalogEntry[] = [];
-  for (const entry of entries) {
-    if (entry.kind === 'app') {
-      if (entry.label.toLowerCase().includes(needle) || entry.path.toLowerCase().includes(needle)) out.push(entry);
-    } else {
-      const children = filterEntries(entry.children, query);
-      if (children.length) out.push({ ...entry, children });
-    }
-  }
-  return out;
-}
-
 /** Every folder path that leads to an app, `sales/deep/x.html` -> `sales`, `sales/deep`. */
 export function folderPaths (appPath: string): string[] {
   const parts = appPath.split('/').slice(0, -1);

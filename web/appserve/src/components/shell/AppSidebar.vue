@@ -1,17 +1,15 @@
 <script setup lang="ts">
-// As anfra Cloud's inset sidebar.
-import {
-  CommandIcon, Moon, SearchIcon, Sun,
-} from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { Moon, SearchIcon, Sun } from '@lucide/vue';
+import { computed } from 'vue';
 import Logo from '@/components/Logo.vue';
 import { Button } from '@/components/ui/button';
-import { Kbd } from '@/components/ui/kbd';
 import { StatusPill } from '@/components/ui/status-pill';
-import { filterEntries, type CatalogEntry } from '@/lib/catalog';
+import type { CatalogEntry } from '@/lib/catalog';
 import type * as server from '@/lib/server';
+import { IS_MAC } from '@/lib/shortcut';
 import AppTree from './AppTree.vue';
 import InlineCode from './InlineCode.vue';
+import ShortcutKeys from './ShortcutKeys.vue';
 import { sidebarGroupLabel } from './sidebar-menu';
 
 const props = defineProps<{
@@ -26,7 +24,6 @@ const props = defineProps<{
   health: server.Health | 'unknown';
   version?: server.Version;
   theme: 'light' | 'dark';
-  paletteShortcut: string;
 }>();
 
 const emit = defineEmits<{
@@ -35,17 +32,6 @@ const emit = defineEmits<{
   openPalette: [];
   toggleTheme: [];
 }>();
-
-const search = ref('');
-const searchInput = ref<HTMLInputElement>();
-const filtered = computed(() => filterEntries(props.entries, search.value));
-const searching = computed(() => search.value.trim() !== '');
-
-function onSearchKeydown (event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return;
-  if (search.value) search.value = '';
-  else (event.target as HTMLElement).blur();
-}
 
 // A release version reads as v0.4.2; a local build's ("dev") as itself.
 const versionLabel = computed(() => {
@@ -66,11 +52,7 @@ const updateHint = computed(() => (props.version?.latest
   : ''));
 
 const notice = 'mx-2 text-caption';
-
-defineExpose({
-  focusSearch: () => searchInput.value?.focus(),
-  clearSearch: () => { search.value = ''; },
-});
+const paletteShortcut = IS_MAC ? 'Meta+K' : 'Ctrl+K';
 </script>
 
 <template>
@@ -88,34 +70,21 @@ defineExpose({
       <div class="flex h-8 items-center gap-1">
         <Logo class="mx-1.5 size-5 shrink-0 fill-(--anfra-color-icon-logo)" />
         <h1 class="min-w-0 flex-1 truncate px-1 text-label text-default" data-testid="brand">{{ repoName || 'anfra' }}</h1>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          :aria-label="`Command palette (${paletteShortcut})`"
-          :title="`Command palette (${paletteShortcut})`"
-          data-testid="palette-open"
-          @click="emit('openPalette')"
-        >
-          <CommandIcon />
-        </Button>
       </div>
-      <!-- The key hint sits 6px inside the field's edge, so its corner is the field's less 6px. -->
-      <label
-        class="flex h-8 items-center gap-2 rounded-lg border border-strong bg-background pr-[5px] pl-2.5 icon-weak transition-[border-color] duration-160 ease-anfra-out hover:border-hover focus-within:border-highlight-strong focus-within:shadow-[inset_0_0_0_1px_var(--anfra-color-border-highlight-strong)]"
+      <!-- Drawn as the search field; the key hint sits 6px inside its edge, so its corner is the field's less 6px. -->
+      <button
+        type="button"
+        class="flex h-8 w-full items-center gap-2 rounded-lg border border-strong bg-background pr-[5px] pl-2.5 text-left icon-weak outline-none! transition-[border-color] duration-160 ease-anfra-out hover:border-hover focus-visible:border-highlight-strong focus-visible:shadow-[inset_0_0_0_1px_var(--anfra-color-border-highlight-strong)]"
+        aria-haspopup="dialog"
+        aria-label="Search apps and commands"
+        :aria-keyshortcuts="paletteShortcut.replace('Ctrl', 'Control')"
+        data-testid="palette-open"
+        @click="emit('openPalette')"
       >
         <SearchIcon class="size-4 shrink-0" />
-        <input
-          ref="searchInput"
-          v-model="search"
-          type="search"
-          class="min-w-0 flex-1 appearance-none bg-transparent px-0.5 py-px text-default outline-none! placeholder:text-placeholder [&::-webkit-search-cancel-button]:appearance-none"
-          placeholder="Search apps"
-          aria-label="Search Data Apps"
-          data-testid="search"
-          @keydown="onSearchKeydown"
-        >
-        <Kbd v-if="!search" class="rounded-[calc(var(--radius-lg)-6px)]" aria-hidden="true">/</Kbd>
-      </label>
+        <span class="min-w-0 flex-1 truncate text-placeholder">Search</span>
+        <ShortcutKeys :combo="paletteShortcut" class="[&>[data-slot=kbd]]:rounded-[calc(var(--radius-lg)-6px)]" />
+      </button>
     </div>
     <div class="min-h-0 flex-1 overflow-y-auto">
       <div class="flex w-full min-w-0 flex-col p-2">
@@ -125,13 +94,11 @@ defineExpose({
           No Data Apps yet. Add a Data App definition, an <InlineCode>.html</InlineCode> file, to the repo's
           <InlineCode>apps/</InlineCode> directory.
         </p>
-        <p v-else-if="searching && filtered.length === 0" :class="[notice, 'text-placeholder']" data-testid="no-matches">No matches</p>
         <AppTree
           v-else
-          :entries="filtered"
+          :entries="entries"
           :selected="selected"
           :collapsed="collapsed"
-          :force-open="searching"
           @select="emit('select', $event)"
           @toggle="emit('toggle', $event)"
         />
