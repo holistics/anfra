@@ -6,6 +6,7 @@ import { RenderFailure, type DrawOptions, type Renderer } from '../../render/typ
 import { testFrame } from '../../app/testFrame';
 import { layerRoot, LAYER_ATTRIBUTE } from '../../app/layer';
 import type { SaveFileRequest } from './types';
+import { forbidden } from '../../common/errors';
 import setupRender from './frame';
 
 type Draw = Renderer['draw'];
@@ -105,6 +106,21 @@ describe('Anfra.render, in the frame', () => {
 
     expect(err).toMatchObject({ code: 'invalid_request', entity: 'trend', message: "300×90000 px at pixelRatio 2 is over a canvas's limit." });
     expect(saved).toEqual([]);
+  });
+
+  it("keeps the host's refusal to save as it is, naming the node", async () => {
+    const frame = testFrame({
+      setups: [['render', setupRender]],
+      answers: { 'render.save': async () => { throw forbidden('Downloads are turned off.'); } },
+      bodies: { render: { draw } },
+    });
+    frame.anfra.createApp({});
+
+    const err = await frame.anfra.render!({ block: 'trend', format: 'png' }).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({
+      code: 'forbidden', scope: 'user', entity: 'trend', message: 'Downloads are turned off.',
+    });
   });
 });
 
