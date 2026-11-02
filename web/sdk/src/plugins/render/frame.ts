@@ -72,7 +72,7 @@ function skip (element: Element): boolean {
  * once; `settle` is the host's way in, which waits for the page first.
  */
 export function createRender (win: Window, deps: RenderDeps): (request: RenderRequest) => Promise<Rendering> {
-  const { DataAppError, invalidRequest } = deps.errors;
+  const { isDataAppError, invalidRequest } = deps.errors;
   return async (request) => {
     const doc = win.document;
     const { element, entity } = targetOf(request ?? {} as RenderRequest, doc, deps.errors);
@@ -83,7 +83,8 @@ export function createRender (win: Window, deps: RenderDeps): (request: RenderRe
       await deps.saveFile({ blob: drawing.blob, filename });
       return { filename, format: request.format, ...drawing };
     } catch (err) {
-      if (err instanceof DataAppError && err.entity) throw err;
+      // The host's failure keeps its code and scope: an error that crossed the bridge names no entity.
+      if (isDataAppError(err)) throw err.entity || !entity ? err : err.about(entity);
       throw invalidRequest((err as Error)?.message || 'The rendering failed.', entity);
     }
   };
