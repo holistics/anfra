@@ -170,6 +170,8 @@
   box-sizing: border-box;
 }
 .a-badge svg { width: 12px; height: 12px; pointer-events: none; }
+/* A badge holding one icon or glyph is square, as wide as it is tall, so its padding is even. */
+.a-badge[data-size="icon"] { width: 20px; padding: 0; }
 .a-badge[data-variant="secondary"] {
   border-color: var(--anfra-color-border-default);
   background: var(--anfra-color-background-info-secondary-default);

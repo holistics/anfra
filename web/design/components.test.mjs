@@ -51,3 +51,10 @@ test('a part nested in a padded container keeps its corner concentric', () => {
     assert.equal(px(part.radius), px(container.radius) - px(container.padding), `${inner}'s radius is ${outer}'s less its padding`);
   }
 });
+
+test('a badge holding one icon is square', () => {
+  const body = (selector) => components.match(new RegExp(`(?:^|\\n)${selector.replace(/[.[\]"]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
+  const value = (selector, property) => body(selector).match(new RegExp(`(?:^|\\s)${property}:\\s*([^;]+);`))?.[1].trim();
+  assert.equal(value('.a-badge[data-size="icon"]', 'width'), value('.a-badge', 'height'));
+  assert.equal(value('.a-badge[data-size="icon"]', 'padding'), '0');
+});
