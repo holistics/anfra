@@ -60,3 +60,12 @@ describe('tooltips', () => {
     expect(tooltip(root).hidden).toBe(true);
   });
 });
+
+describe('the tabs\' colours', () => {
+  it('sit on the host, so the tooltip, beside the pane, has them too', async () => {
+    const { STYLES } = await import('./view');
+    const host = [...STYLES.matchAll(/:host \{([^}]*)\}/g)].map((m) => m[1]).join('');
+    for (const name of ['--ok', '--warn', '--hover', '--ok-bg', '--warn-bg', '--danger-bg']) expect(host).toContain(`${name}:`);
+    expect(STYLES.match(/\.pane \{([^}]*)\}/)?.[1]).not.toContain('--ok:');
+  });
+});
