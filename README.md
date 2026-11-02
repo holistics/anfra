@@ -1,3 +1,6 @@
 Screenshots for the ANF-68 pull requests (anfra core's UI matching anfra Cloud), referenced from their descriptions. Not code: this branch only holds images.
 
-`anf-68/ba/`: before and after shots, named `<state>-<scheme>-<view>.png`, where the state is `main`, `pr90`, `pr93`, `pr94`, `pr95`, `pr96`, `palette` (the sidebar search branch), `palette2` (with the palette's design pass; `palette2-mac` as a Mac draws its keys), `cloud-main` or `cloud-pr71`.
+- `anf-68/93-logo-*`: the logomark (#93).
+- `anf-68/class-layer-*`: the class layer, for framework-free surfaces (#94).
+- `anf-68/appserve-shadcn/`: appserve on shadcn-vue (#95, #97), `before-*` from main and `after-*` from the stack's tip, named `<state>-<scheme>-<view>.png`. Views: `shell` (a Data App open with the panel), `sidebar`, `panel`, `palette`, `narrow` and `narrow-sidebar` (a 700px window, where the sidebar is a sheet).
+- `anf-68/ba/cloud-*`: anfra Cloud, for comparison.
