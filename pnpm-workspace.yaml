@@ -5,5 +5,7 @@ onlyBuiltDependencies:
   - esbuild
 
 overrides:
-  fast-uri@<3.1.6: 3.1.8
+  # fast-uri: the `fast-uri@<3.1.6: 3.1.8` override was REMOVED in W45-2026 (ENG-3971,
+  # anfra-40..43): its 3.1.8 target became vulnerable (<3.1.9). The only requester, ajv@8.20.0,
+  # declares ^3.0.1, which admits 3.1.9 (newest 3.x); the relocked lock keeps it unaided (W35).
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
