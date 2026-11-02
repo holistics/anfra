@@ -39,7 +39,7 @@ export function toBridgeError (err: unknown): BridgeError {
  * Errors cross the bridge as { name, message }; rebuild the SDK's class so an author can tell a
  * permission failure from a broken query. Any other name is the SDK's `QueryError`.
  */
-export function fromBridgeError (error: BridgeError | undefined): Error {
+export function fromBridgeError (error: BridgeError | undefined): DataAppError {
   const err = rebuild(error);
   if (typeof error?.requestId === 'string') err.requestId = error.requestId;
   return err;
