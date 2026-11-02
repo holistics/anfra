@@ -126,3 +126,14 @@ func TestCompileRequestCarriesTheRepo(t *testing.T) {
 		}
 	}
 }
+
+func TestEngineTimezone(t *testing.T) {
+	for in, want := range map[string]string{
+		"UTC": "Etc/UTC", "utc": "Etc/UTC", "GMT": "Etc/UTC", "gmt": "Etc/UTC",
+		"Etc/UTC": "Etc/UTC", "Etc/GMT": "Etc/GMT", "Asia/Ho_Chi_Minh": "Asia/Ho_Chi_Minh",
+	} {
+		if got := engineTimezone(in); got != want {
+			t.Errorf("engineTimezone(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

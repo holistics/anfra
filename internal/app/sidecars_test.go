@@ -85,6 +85,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query export, SQL", valid, clients, Request{Command: "query.export", Args: map[string]any{"lang": "sql", "data_source": "demo", "query": "select id, name from products order by id"}}, ok, nil},
 		{"query, shaped", valid, clients, Request{Command: "query", Args: shaped(nil)}, ok, nil},
 		{"query compile, shaped", valid, clients, Request{Command: "query.compile", Args: shaped(nil)}, ok, nil},
+		{"query, in UTC", valid, clients, Request{Command: "query", Args: shaped(map[string]any{"timezone": "UTC"})}, ok, nil},
 		{"query, a Query Input entry anfra-node refuses", valid, clients, Request{Command: "query", Args: shaped(map[string]any{
 			"input": map[string]any{"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}})}, "", apperr.ValidationFailed},
 		{"query, a pivot paged", valid, clients, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "page_size": 2,
