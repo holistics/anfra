@@ -2,7 +2,7 @@
 // The command palette: every command the shell offers, its own and the plugins', found by typing
 // and run with Enter. What each entry does, and whether it can run, the shell decides.
 import { computed, nextTick, ref, watch } from 'vue';
-import Icon from './Icon.vue';
+import { SearchIcon } from '@lucide/vue';
 
 export interface PaletteEntry {
   id: string;
@@ -78,14 +78,15 @@ function onKeydown (event: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="palette-backdrop" @click.self="emit('close')">
-    <div class="palette" role="dialog" aria-label="Command palette" data-testid="command-palette">
-      <label class="palette-search">
-        <Icon name="search" />
+  <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/25 px-4 pt-[12vh] pb-4" @click.self="emit('close')">
+    <div class="flex max-h-[min(440px,76vh)] w-[min(560px,100%)] flex-col overflow-hidden rounded-xl border border-default bg-background shadow-e2" role="dialog" aria-label="Command palette" data-testid="command-palette">
+      <label class="flex shrink-0 items-center gap-2 border-b border-default px-3.5 text-placeholder">
+        <SearchIcon class="size-4 shrink-0" />
         <input
           ref="input"
           v-model="query"
           type="text"
+          class="h-[46px] flex-1 bg-transparent px-0.5 py-px text-[15px] text-default outline-none!"
           placeholder="Type a command"
           aria-label="Type a command"
           role="combobox"
@@ -95,14 +96,14 @@ function onKeydown (event: KeyboardEvent): void {
           @keydown="onKeydown"
         >
       </label>
-      <div id="palette-list" ref="list" class="palette-list" role="listbox">
-        <p v-if="!shown.length" class="palette-empty">No commands match.</p>
+      <div id="palette-list" ref="list" class="min-h-0 flex-1 overflow-auto p-1" role="listbox">
+        <p v-if="!shown.length" class="mx-2 my-4 text-placeholder">No commands match.</p>
         <section v-for="[group, items] in groups" :key="group" role="group" :aria-label="group">
-          <h3>{{ group }}</h3>
+          <h3 class="mx-2 mt-2 mb-1 text-[11px] font-semibold tracking-[0.04em] text-placeholder uppercase">{{ group }}</h3>
           <div
             v-for="{ entry, index } in items"
             :key="entry.id"
-            class="palette-entry"
+            class="flex cursor-pointer items-center gap-2 rounded-[calc(var(--radius-xl)-4px)] px-2.5 py-[7px] aria-disabled:cursor-default aria-disabled:text-placeholder aria-selected:bg-interactive-highlight-default"
             role="option"
             :aria-selected="index === active"
             :aria-disabled="!!entry.disabled"
@@ -111,9 +112,9 @@ function onKeydown (event: KeyboardEvent): void {
             @pointermove="!entry.disabled && (active = index)"
             @click="run(entry)"
           >
-            <span class="palette-title">{{ entry.title }}<span v-if="entry.pressed" class="palette-on">on</span></span>
-            <span v-if="entry.disabled" class="palette-hint">{{ entry.disabled }}</span>
-            <kbd v-else-if="entry.shortcut">{{ entry.shortcut }}</kbd>
+            <span class="min-w-0 flex-1 truncate">{{ entry.title }}<span v-if="entry.pressed" class="ml-2 rounded-sm bg-interactive-highlight-default px-1.5 text-[11px] font-semibold text-highlight-default">on</span></span>
+            <span v-if="entry.disabled" class="shrink-0 text-[12px]">{{ entry.disabled }}</span>
+            <kbd v-else-if="entry.shortcut" class="shrink-0 rounded-sm border border-default px-1.5 py-px font-mono text-[11px] leading-[normal] text-placeholder">{{ entry.shortcut }}</kbd>
           </div>
         </section>
       </div>

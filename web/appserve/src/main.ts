@@ -1,6 +1,9 @@
 import { createApp } from 'vue';
-import '@holistics/anfra-design';
+// Not anfra-design's index.css: its class layer is for the SDK's framework-free panel.
+import '@holistics/anfra-design/fonts.css';
+import '@holistics/anfra-design/tokens.css';
+import '@holistics/anfra-design/type.css';
+import './theme.css';
 import App from './App.vue';
-import './style.css';
 
 createApp(App).mount('#app');

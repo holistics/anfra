@@ -2,21 +2,22 @@
 import {
   computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch,
 } from 'vue';
-import AppTree from './AppTree.vue';
-import DataAppFrame from './DataAppFrame.vue';
-import Icon from './Icon.vue';
-import Logo from './Logo.vue';
-import PluginPanel from './PluginPanel.vue';
-import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
+import CommandPalette, { type PaletteEntry } from '@/components/apps/CommandPalette.vue';
+import DataAppFrame from '@/components/apps/DataAppFrame.vue';
+import PluginPanel from '@/components/apps/PluginPanel.vue';
+import {
+  AppHeader, AppSidebar, EmptyState, InlineCode, Scrim,
+} from '@/components/shell';
 import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { designTheme } from '@holistics/anfra-sdk/common';
 import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
-  allApps, filterEntries, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
-} from './catalog';
-import * as server from './server';
+  allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
+} from '@/lib/catalog';
+import { overflowMenus } from '@/lib/pluginUI';
+import * as server from '@/lib/server';
 
 const entries = ref<CatalogEntry[]>([]);
 const loaded = ref(false);
@@ -41,20 +42,6 @@ const frameError = ref<string>();
 // The anfra serving, and a newer release when the server knows of one.
 const version = ref<server.Version>();
 
-// A release version reads as v0.4.2; a local build's ("dev") as itself.
-const versionLabel = computed(() => {
-  const current = version.value?.current;
-  if (!current) return undefined;
-  return /^\d/.test(current) ? `v${current}` : current;
-});
-
-const statusLabel = computed(() => {
-  if (health.value === 'unreachable') return 'anfra server unreachable';
-  if (health.value === 'up') return versionLabel.value ? `anfra ${versionLabel.value}` : 'anfra is running';
-  if (health.value === 'down') return 'anfra is down';
-  return 'Checking anfra…';
-});
-
 async function checkHealth (): Promise<void> {
   const was = health.value;
   health.value = await server.health();
@@ -64,10 +51,6 @@ async function checkHealth (): Promise<void> {
     void loadVersion();
   }
 }
-
-const updateHint = computed(() => (version.value?.latest
-  ? `anfra ${version.value.latest} is available (you have ${version.value.current}). Run \`anfra update\`, then restart anfra serve.`
-  : ''));
 
 async function loadVersion (): Promise<void> {
   version.value = await server.version();
@@ -106,11 +89,6 @@ async function refreshAll (): Promise<void> {
   revision.value += 1;
 }
 
-function where (problem: server.AmlProblem): string {
-  if (!problem.file) return '';
-  return problem.line ? `${problem.file}:${problem.line}${problem.column ? `:${problem.column}` : ''}` : problem.file;
-}
-
 const COLLAPSED_KEY = 'anfra-appserve:collapsed-folders';
 function loadCollapsed (): Set<string> {
   try {
@@ -144,10 +122,7 @@ function onNarrowChange (): void {
   sidebarOpen.value = !narrow.value;
 }
 
-const search = ref('');
-const searchInput = ref<HTMLInputElement>();
-const filtered = computed(() => filterEntries(entries.value, search.value));
-const searching = computed(() => search.value.trim() !== '');
+const sidebar = ref<InstanceType<typeof AppSidebar>>();
 
 const THEME_KEY = 'anfra-appserve:theme';
 function systemTheme (): 'light' | 'dark' {
@@ -170,8 +145,6 @@ function toggleTheme (): void {
     window.localStorage.setItem(THEME_KEY, theme.value);
   } catch { /* the choice just doesn't persist */ }
 }
-
-const problemsOpen = ref(false);
 
 // The host runtime and the open Data App's mount, for the plugins' commands and its panel. The
 // panel belongs to one Data App: it closes when another is picked, and survives Reload.
@@ -205,27 +178,14 @@ const panelOpen = computed(() => (panelVersion.value, app.value?.panel.open ?? f
 // The commands for the header: a plugin's `primary` ones as buttons, its `overflow` ones in a menu
 // per icon, so render's downloads are one Download button; the palette has them all. Not those for
 // the menu on the page (`target`), which the frame shows there, nor the panel's, in its strip.
-const ICONS = ['inspect', 'download', 'table', 'copy', 'reload'] as const;
 const chromeCommands = computed(() => runtime.value?.commands.filter((command) => !command.target) ?? []);
 const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow' && command.placement !== 'panel'));
 const panelCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'panel'));
-// An overflow command with no icon appserve draws goes in a More menu of its own.
-const MENU_LABELS: Partial<Record<typeof ICONS[number], string>> = { download: 'Download' };
-const overflowMenus = computed(() => {
-  const menus = new Map<string, { icon: typeof ICONS[number] | 'more', label: string, commands: Command[] }>();
-  for (const command of chromeCommands.value.filter((candidate) => candidate.placement === 'overflow')) {
-    const icon = (ICONS as readonly string[]).includes(command.icon ?? '') ? command.icon as typeof ICONS[number] : 'more';
-    if (!menus.has(icon)) menus.set(icon, { icon, label: (icon !== 'more' && MENU_LABELS[icon]) || 'More actions', commands: [] });
-    menus.get(icon)!.commands.push(command);
-  }
-  return [...menus.values()];
-});
-const moreOpen = ref<string>();
+const menus = computed(() => overflowMenus(chromeCommands.value));
 function commandState (command: Command): { pressed?: boolean, disabled?: string } {
   void panelVersion.value;
   return app.value ? app.value.commandState(command.id) : { disabled: 'No Data App is open' };
 }
-const commandIcon = (command: Command) => (ICONS as readonly string[]).includes(command.icon ?? '') ? command.icon as typeof ICONS[number] : 'app';
 
 // A command's failure shows for a few seconds, out of the page's way; so does what a rendering
 // left out, so a blank in the saved picture isn't a surprise.
@@ -237,7 +197,6 @@ function showToast (text: string, error: boolean): void {
   toastTimer = setTimeout(() => { toast.value = undefined; }, 8000);
 }
 async function runCommand (command: Command): Promise<void> {
-  moreOpen.value = undefined;
   if (!app.value) return;
   try {
     const result = await app.value.run(command.id);
@@ -264,12 +223,13 @@ function loadWidth (): number {
 }
 const inspectWidth = ref(loadWidth());
 const dragging = ref(false);
+const viewerBody = ref<HTMLElement>();
 
 function startResize (event: PointerEvent): void {
   const handle = event.currentTarget as HTMLElement;
   handle.setPointerCapture(event.pointerId);
   dragging.value = true;
-  const body = handle.closest('.viewer-body')?.getBoundingClientRect();
+  const body = viewerBody.value?.getBoundingClientRect();
   const onMove = (move: PointerEvent): void => {
     if (!body) return;
     const max = Math.max(MIN_WIDTH, body.width - 240);
@@ -315,7 +275,7 @@ function reload (): void {
 // Breadcrumb folders: open the sidebar, expand the folder and bring it into view.
 async function revealFolder (path: string): Promise<void> {
   sidebarOpen.value = true;
-  search.value = '';
+  sidebar.value?.clearSearch();
   const next = new Set(collapsed.value);
   next.delete(path);
   setCollapsed(next);
@@ -389,25 +349,13 @@ function onKeydown (event: KeyboardEvent): void {
   if (event.key === '/' && !typing && !event.metaKey && !event.ctrlKey) {
     event.preventDefault();
     sidebarOpen.value = true;
-    void nextTick(() => searchInput.value?.focus());
+    void nextTick(() => sidebar.value?.focusSearch());
   }
   if (event.key === 'Escape') {
-    problemsOpen.value = false;
     // Picking, Escape only ends the pick, as it does with focus in the frame; again, it closes the panel.
     if (app.value?.panel.picking) app.value.panel.pick(false);
     else app.value?.panel.hide();
   }
-}
-
-function onSearchKeydown (event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return;
-  if (search.value) search.value = '';
-  else (event.target as HTMLElement).blur();
-}
-
-function onDocumentClick (event: MouseEvent): void {
-  if (!(event.target as HTMLElement).closest('.problems')) problemsOpen.value = false;
-  if (!(event.target as HTMLElement).closest('.more')) moreOpen.value = undefined;
 }
 
 function onPopState (): void {
@@ -435,7 +383,6 @@ let healthTimer: ReturnType<typeof setInterval> | undefined;
 onMounted(async () => {
   window.addEventListener('popstate', onPopState);
   window.addEventListener('keydown', onKeydown);
-  document.addEventListener('click', onDocumentClick);
   narrowQuery.addEventListener('change', onNarrowChange);
   void loadCatalog();
   void loadProblems();
@@ -452,7 +399,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('popstate', onPopState);
   window.removeEventListener('keydown', onKeydown);
-  document.removeEventListener('click', onDocumentClick);
   narrowQuery.removeEventListener('change', onNarrowChange);
   events?.close();
   clearInterval(healthTimer);
@@ -461,219 +407,69 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell" :class="{ 'sidebar-closed': !sidebarOpen, narrow }">
-    <div v-if="narrow && sidebarOpen" class="backdrop" @click="sidebarOpen = false" />
-    <nav class="sidebar" aria-label="Data Apps" :inert="!sidebarOpen">
-      <div class="sidebar-header">
-        <div class="brand">
-          <Logo />
-          <h1 data-testid="brand">{{ repoName || 'anfra' }}</h1>
-          <button
-            type="button"
-            class="a-button palette-open"
-            data-variant="ghost"
-            data-size="icon-sm"
-            :aria-label="`Command palette (${PALETTE_SHORTCUT})`"
-            :title="`Command palette (${PALETTE_SHORTCUT})`"
-            data-testid="palette-open"
-            @click="paletteOpen = true"
-          >
-            <Icon name="command" />
-          </button>
-        </div>
-        <label class="search">
-          <Icon name="search" />
-          <input
-            ref="searchInput"
-            v-model="search"
-            type="search"
-            placeholder="Search apps"
-            aria-label="Search Data Apps"
-            data-testid="search"
-            @keydown="onSearchKeydown"
-          >
-          <kbd v-if="!search" class="a-kbd" aria-hidden="true">/</kbd>
-        </label>
-      </div>
-      <div class="tree-scroll">
-        <div class="sidebar-group">
-          <div class="a-nav-label">Data Apps</div>
-          <p v-if="loadError" class="notice error" role="alert">{{ loadError }}</p>
-          <p v-else-if="loaded && entries.length === 0" class="notice empty" data-testid="empty-state">
-            No Data Apps yet. Add a Data App definition, an <code>.html</code> file, to the repo's
-            <code>apps/</code> directory.
-          </p>
-          <p v-else-if="searching && filtered.length === 0" class="notice" data-testid="no-matches">No matches</p>
-          <AppTree
-            v-else
-            :entries="filtered"
-            :selected="selected?.path"
-            :collapsed="collapsed"
-            :force-open="searching"
-            @select="select"
-            @toggle="toggleFolder"
-          />
-        </div>
-      </div>
-      <div class="sidebar-footer">
-        <div class="footer-status">
-          <p
-            class="status a-pill"
-            data-testid="anfra-status"
-            :data-status="health"
-            :data-tone="health === 'up' ? 'success' : health === 'unknown' ? undefined : 'danger'"
-            :title="health === 'up' && version ? `anfra is running on version ${version.current}` : undefined"
-            role="status"
-          >
-            {{ statusLabel }}
-          </p>
-          <span
-            v-if="version?.latest && health !== 'unreachable'"
-            class="update-badge a-pill"
-            data-tone="highlight"
-            data-testid="update-badge"
-            role="note"
-            :aria-label="updateHint"
-            :title="updateHint"
-          >
-            Update
-          </span>
-        </div>
-        <button
-          type="button"
-          class="a-button"
-          data-variant="ghost"
-          data-size="icon-sm"
-          :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-          :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-          data-testid="theme-toggle"
-          @click="toggleTheme"
-        >
-          <Icon :name="theme === 'dark' ? 'sun' : 'moon'" />
-        </button>
-      </div>
-    </nav>
+  <!-- The sidebar beside the viewer, 256px; closed, it slides to nothing. Narrow, the sidebar and the
+       panel float over the viewer instead, over a scrim. -->
+  <div
+    class="grid h-screen transition-[grid-template-columns] duration-180 ease-[ease]"
+    :class="narrow ? 'grid-cols-[minmax(0,1fr)]' : sidebarOpen ? 'grid-cols-[256px_minmax(0,1fr)]' : 'grid-cols-[0_minmax(0,1fr)]'"
+  >
+    <Scrim v-if="narrow && sidebarOpen" @click="sidebarOpen = false" />
+    <AppSidebar
+      ref="sidebar"
+      :open="sidebarOpen"
+      :narrow="narrow"
+      :repo-name="repoName"
+      :entries="entries"
+      :loaded="loaded"
+      :load-error="loadError"
+      :selected="selected?.path"
+      :collapsed="collapsed"
+      :health="health"
+      :version="version"
+      :theme="theme"
+      :palette-shortcut="PALETTE_SHORTCUT"
+      @select="select"
+      @toggle="toggleFolder"
+      @open-palette="paletteOpen = true"
+      @toggle-theme="toggleTheme"
+    />
 
-    <main class="viewer" data-testid="viewer">
-      <header class="viewer-header">
-        <button
-          type="button"
-          class="a-button"
-          data-variant="ghost"
-          data-size="icon-sm"
-          :aria-label="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
-          title="Toggle sidebar"
-          data-testid="sidebar-toggle"
-          @click="sidebarOpen = !sidebarOpen"
+    <main
+      class="relative my-2 mr-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-default bg-background"
+      :class="narrow || !sidebarOpen ? 'ml-2' : 'ml-0'"
+      data-testid="viewer"
+    >
+      <AppHeader
+        :sidebar-open="sidebarOpen"
+        :has-app="!!selected"
+        :title="title"
+        :crumbs="crumbs"
+        :problems="problems"
+        :loading="loading"
+        :commands="toolbarCommands"
+        :menus="menus"
+        :command-state="commandState"
+        @toggle-sidebar="sidebarOpen = !sidebarOpen"
+        @reveal-folder="revealFolder"
+        @reload="reload"
+        @run="runCommand"
+      />
+      <div
+        ref="viewerBody"
+        class="relative flex min-h-0 flex-1"
+        :class="dragging && 'cursor-col-resize select-none'"
+        :data-pressing="dragging || undefined"
+      >
+        <p
+          v-if="toast"
+          class="fixed right-4 bottom-4 z-20 max-w-[min(480px,90vw)] rounded-[8px] border px-3.5 py-2.5 shadow-e2"
+          :class="toast.error ? 'border-transparent bg-danger-secondary-default text-danger-default' : 'border-default bg-background'"
+          :role="toast.error ? 'alert' : 'status'"
+          data-testid="render-toast"
         >
-          <Icon name="sidebar" />
-        </button>
-        <!-- As anfra Cloud's app page: the app, then the folders it is in. -->
-        <Icon v-if="selected" name="app" class="title-icon" />
-        <h2 class="current" data-testid="viewer-title">{{ title }}</h2>
-        <nav v-if="crumbs.length" class="breadcrumb" aria-label="Folder">
-          <template v-for="(crumb, i) in crumbs" :key="crumb.path">
-            <span v-if="i" class="sep" aria-hidden="true">/</span>
-            <button
-              type="button"
-              class="crumb"
-              data-testid="crumb"
-              :data-crumb="crumb.path"
-              :title="`Show ${crumb.name} in the sidebar`"
-              @click="revealFolder(crumb.path)"
-            >
-              {{ crumb.name }}
-            </button>
-          </template>
-        </nav>
-        <div class="actions">
-          <div v-if="problems.length" class="problems">
-            <button
-              type="button"
-              class="badge"
-              data-testid="aml-badge"
-              :aria-expanded="problemsOpen"
-              @click="problemsOpen = !problemsOpen"
-            >
-              <Icon name="alert" />{{ problems.length === 1 ? '1 problem' : `${problems.length} problems` }}
-            </button>
-            <section v-if="problemsOpen" class="popover" role="alert" data-testid="aml-banner">
-              <strong>The repo has {{ problems.length === 1 ? 'a problem' : `${problems.length} problems` }}.</strong>
-              <span class="hint">Queries may fail until it's fixed.</span>
-              <ul>
-                <li v-for="(problem, i) in problems" :key="i">
-                  <code v-if="where(problem)">{{ where(problem) }}</code> {{ problem.message }}
-                </li>
-              </ul>
-            </section>
-          </div>
-          <button
-            type="button"
-            class="a-button"
-            data-variant="ghost"
-            data-size="icon-sm"
-            aria-label="Reload Data App"
-            title="Reload Data App"
-            data-testid="reload"
-            :disabled="!selected"
-            @click="reload"
-          >
-            <Icon name="reload" />
-          </button>
-          <button
-            v-for="command in toolbarCommands"
-            :key="command.id"
-            type="button"
-            class="a-button"
-            data-variant="ghost"
-            data-size="icon-sm"
-            :aria-label="command.title"
-            :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${command.shortcut})` : command.title)"
-            :data-testid="`command-${command.id}`"
-            :aria-pressed="commandState(command).pressed ?? false"
-            :disabled="!selected || !!commandState(command).disabled"
-            @click="runCommand(command)"
-          >
-            <Icon :name="commandIcon(command)" />
-          </button>
-          <div v-for="menu in overflowMenus" :key="menu.icon" class="more">
-            <button
-              type="button"
-              class="a-button"
-              data-variant="ghost"
-              data-size="icon-sm"
-              :aria-label="menu.label"
-              :title="menu.label"
-              :data-testid="`more-${menu.icon}`"
-              aria-haspopup="menu"
-              :aria-expanded="moreOpen === menu.icon"
-              :disabled="!selected"
-              @click="moreOpen = moreOpen === menu.icon ? undefined : menu.icon"
-            >
-              <Icon :name="menu.icon" />
-            </button>
-            <div v-if="moreOpen === menu.icon" class="menu a-menu" role="menu" :data-testid="`more-${menu.icon}-menu`">
-              <button
-                v-for="command in menu.commands"
-                :key="command.id"
-                type="button"
-                class="a-menu-item"
-                role="menuitem"
-                :title="commandState(command).disabled"
-                :disabled="!!commandState(command).disabled"
-                :data-testid="`command-${command.id}`"
-                @click="runCommand(command)"
-              >
-                {{ command.title }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div v-if="loading" class="progress" role="progressbar" aria-label="Loading Data App" data-testid="loading" />
-      </header>
-      <div class="viewer-body" :class="{ dragging }">
-        <p v-if="toast" class="toast" :class="{ error: toast.error }" :role="toast.error ? 'alert' : 'status'" data-testid="render-toast">{{ toast.text }}</p>
-        <p v-if="selected && frameError" class="notice error" role="alert" data-testid="frame-error">{{ frameError }}</p>
+          {{ toast.text }}
+        </p>
+        <p v-if="selected && frameError" class="m-2 text-danger-default" role="alert" data-testid="frame-error">{{ frameError }}</p>
         <DataAppFrame
           v-else-if="selected && datasets && reader"
           :key="`${selected.path}#${revision}`"
@@ -687,18 +483,24 @@ onBeforeUnmount(() => {
           @unmounted="onAppUnmounted"
           @error="frameError = $event"
         />
-        <div v-else-if="selectedPath && loaded" class="empty-state" data-testid="not-found">
-          <Icon name="app" />
-          <p>No Data App at <code>{{ selectedPath }}</code>.</p>
-        </div>
-        <div v-else class="empty-state">
-          <Icon name="app" />
-          <p>Pick a Data App on the left.</p>
-        </div>
+        <EmptyState v-else-if="selectedPath && loaded" data-testid="not-found">
+          No Data App at <InlineCode>{{ selectedPath }}</InlineCode>.
+        </EmptyState>
+        <EmptyState v-else>Pick a Data App on the left.</EmptyState>
         <template v-if="panelOpen && selected && app && runtime">
-          <div v-if="narrow" class="backdrop" @click="app.panel.hide()" />
-          <div class="inspect-dock" :style="{ width: `${inspectWidth}px` }">
-            <div class="resize-handle" role="separator" aria-orientation="vertical" @pointerdown.prevent="startResize" />
+          <Scrim v-if="narrow" @click="app.panel.hide()" />
+          <div
+            class="flex shrink-0 border-l border-default bg-background"
+            :class="narrow ? 'fixed inset-y-0 right-0 z-20 w-[min(380px,100vw)] shadow-e2' : 'relative'"
+            :style="narrow ? undefined : { width: `${inspectWidth}px` }"
+          >
+            <div
+              v-if="!narrow"
+              class="absolute inset-y-0 -left-[3px] z-2 w-1.5 cursor-col-resize touch-none hover:bg-interactive-highlight-default"
+              role="separator"
+              aria-orientation="vertical"
+              @pointerdown.prevent="startResize"
+            />
             <PluginPanel
               :panel="app.panel"
               :tabs="runtime.tabs"
