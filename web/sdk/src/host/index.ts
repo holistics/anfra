@@ -17,5 +17,6 @@ export {
   type TabContribution, type TabContext,
 } from './contributions';
 export { type Panel, type Snapshot } from './panel';
+export type { AppErrorEvent, AppErrorKind, AppConsoleEvent } from '../common/runtimeErrors';
 export { provisionDocument, composeFrameScript, type ProvisionOptions } from './provision';
 export { contentPolicy, checkOrigin, SCRIPT_ORIGINS } from './policy';

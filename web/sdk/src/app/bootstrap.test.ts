@@ -13,7 +13,7 @@ function frameFrom (hostOrigin: string) {
   const win = {
     parent,
     setTimeout,
-    addEventListener: (_type: string, listener: typeof onMessage) => { onMessage = listener; },
+    addEventListener: (type: string, listener: typeof onMessage) => { if (type === 'message') onMessage = listener; },
     document: {
       getElementById: (id: string) => (id === PROVISION_ELEMENT_ID ? { textContent: JSON.stringify(provision) } : null),
       querySelectorAll: () => [],

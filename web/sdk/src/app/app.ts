@@ -17,6 +17,7 @@ import { openRowsMenu } from './menu';
 import { applyExtensions, type EntityExtensions } from './extensions';
 import { markersFor } from './structure';
 import { overlayFor, scrollTo } from './overlay';
+import { reportError } from './reporting';
 import type { AppContext } from './internal';
 import type {
   Backend,
@@ -616,7 +617,11 @@ export class App extends Observable implements AppContext {
       } catch (err) {
         if (superseded(query, controller)) return;
         if (isAbort(err)) return;
-        query.markError(toDataAppError(err, query.name));
+        const error = toDataAppError(err, query.name);
+        query.markError(error);
+        // A failed run is the app's to show, and its host's to know of. A failed `fetchMore` is not
+        // reported here: it rejects, so the app handles it, or it is an unhandled rejection.
+        reportError('query', error);
         failed.push(query.name);
       } finally {
         if (query.controller === controller) query.controller = undefined;

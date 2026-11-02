@@ -8,6 +8,7 @@ export {
   type ApiErrorCode, type DataAppErrorInit, type ErrorCode, type ErrorContextEntry, type ErrorDetails, type ErrorScope, type FromHttpStatusOptions, type GenericCode,
 } from './errors';
 export { FILTER_AGGREGATIONS } from './aggregations';
+export type { AppErrorEvent, AppErrorKind, AppConsoleEvent } from './runtimeErrors';
 export { PROVISION_ELEMENT_ID } from './bridge';
 export {
   checkTarget, type MenuEntry, type MenuTarget, type MenuTargetKind, type NodeTarget, type RowsTarget, type TargetRect,

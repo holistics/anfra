@@ -20,6 +20,7 @@ import { createKernel, type FrameKernel, type KernelShared } from './kernel';
 import { Query } from './query';
 import { createSdk } from './sdk';
 import { installSandbox } from './sandbox';
+import { installReporting } from './reporting';
 
 /** A plugin's frame setup, as the host's frame script hands it over: its name and its function. */
 export type PluginSetup = readonly [name: string, setup: ((kernel: FrameKernel) => void) | undefined];
@@ -89,6 +90,8 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   // The kernel's own part, whatever plugins the host installs: what its panel needs of the frame,
   // and its theme, for the plugin layer and `Anfra.theme`.
   const own = createKernel('anfra', shared, { Query, Control });
+  // Before any plugin or the definition runs, so none of their errors is missed.
+  installReporting(own, win, provision.captureConsole === true);
   installInspection(own);
   shared.contentUi = installContentUi(own);
   own.on('theme', (theme: unknown) => {

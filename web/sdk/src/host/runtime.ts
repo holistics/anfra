@@ -6,6 +6,9 @@
 import { DataAppError, forbidden, invalidRequest } from '../common/errors';
 import type { BridgeMessage, PluginInfo, Provision } from '../common/bridge';
 import { createEndpoint, type Endpoint } from '../common/endpoint';
+import {
+  MESSAGE_LIMIT, STACK_LIMIT, checkConsoleEvent, checkErrorEvent, truncate, type AppErrorEvent,
+} from '../common/runtimeErrors';
 import type { DatasetDescriptor, User } from '../common/types';
 import type {
   CallContext, CallDefinition, Caller, CallOptions, EventCheck, HandlerCallOptions, HandlerContext, Middleware, MountContext, Plugin,
@@ -53,7 +56,36 @@ export interface HostOptions {
   contributions?: (contribution: Contribution) => boolean;
   /** The theme plugin UI follows: tabs, and frame halves in the plugin layer. Light defaults unless given. */
   theme?: ThemeInput;
+  /**
+   * Every mounted Data App's runtime errors: a query that failed, the app's uncaught errors, a
+   * listener's exception, and a call this host failed and hid from the frame. Each mount's also
+   * reach `mounted.on('anfra.error')`. `console.error` unless given.
+   */
+  onError?: (event: AppErrorEvent) => void;
+  /**
+   * Whether frames report their `console.error` / `console.warn` lines, as `anfra.console` on each
+   * mount. They can hold the app's data. Unless given, on in a development build of the host's page
+   * and off in a production one (`process.env.NODE_ENV`).
+   */
+  captureConsole?: boolean;
 }
+
+declare const process: { env: { NODE_ENV?: string } };
+
+/** The default for `captureConsole`: off only where the host's bundle says it is a production build. */
+export function developmentBuild (): boolean {
+  try {
+    // Written out in full, so the host's bundler replaces it.
+    return process.env.NODE_ENV !== 'production';
+  } catch {
+    return true; // no bundler, no process: nothing says it is a production build
+  }
+}
+
+const logError = (event: AppErrorEvent) => {
+  // eslint-disable-next-line no-console -- a host that says nothing else gets its page's console
+  console.error(`anfra: a Data App's ${event.kind} error${event.entity ? ` in '${event.entity}'` : ''}: ${event.message}`, event);
+};
 
 export interface MountOptions {
   /** Where the frame goes: it is appended to this element. */
@@ -160,6 +192,8 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
 export function createHost (options: HostOptions): Host {
   const plugins = [...options.plugins];
   const answers = install(plugins);
+  const onError = options.onError ?? logError;
+  const captureConsole = options.captureConsole ?? developmentBuild();
   const policy = contentPolicy(options.allowOrigins);
   const middleware = [
     ...(options.middleware ?? []),
@@ -336,9 +370,43 @@ export function createHost (options: HostOptions): Host {
         onReady: (listener) => listen(readyListeners, listener),
         commandsChanged,
       };
+      const mountInfo = { id: context.id, ...(mountOptions.title !== undefined ? { title: mountOptions.title } : {}) };
+      /** A runtime error of this mount: to the host's callback, and to this mount's listeners. */
+      const reportError = (event: AppErrorEvent) => {
+        try { onError(event); } catch { /* the host's sink failing must not stop the listeners */ }
+        deliver('anfra.error', event);
+      };
+      const deliver = (name: string, event: unknown) => listeners.get(name)?.forEach((listener) => {
+        try { listener(event); } catch { /* one listener must not stop the others */ }
+      });
       endpoint = createEndpoint(post, {
         answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
+        hidden: (name, err) => {
+          const e = err as { message?: unknown, stack?: unknown } | null | undefined;
+          reportError({
+            kind: 'hidden',
+            code: 'call_failed',
+            scope: 'server',
+            message: truncate(typeof e?.message === 'string' ? e.message : String(err), MESSAGE_LIMIT),
+            ...(typeof e?.stack === 'string' ? { stack: truncate(e.stack, STACK_LIMIT) } : {}),
+            call: name,
+            at: new Date().toISOString(),
+            mount: mountInfo.id,
+            ...(mountInfo.title !== undefined ? { title: mountInfo.title } : {}),
+          });
+        },
         event: (name, payload) => {
+          // The kernel's runtime errors and console lines: the frame's word, checked.
+          if (name === 'anfra.error') {
+            const event = checkErrorEvent(payload, mountInfo);
+            if (event) reportError(event);
+            return;
+          }
+          if (name === 'anfra.console') {
+            const event = captureConsole ? checkConsoleEvent(payload, mountInfo) : undefined;
+            if (event) deliver('anfra.console', event);
+            return;
+          }
           // The panel's own, from the kernel.
           if (name === 'anfra.snapshot') { panelState.snapshot(payload); return; }
           if (name === 'anfra.picked') { panelState.picked(payload); return; }
@@ -438,6 +506,7 @@ export function createHost (options: HostOptions): Host {
         user: mountOptions.user,
         plugins: infos,
         hostOrigin: win.location.origin,
+        captureConsole,
       };
       frame.srcdoc = provisionDocument(mountOptions.definition, {
         contentPolicy: policy,
