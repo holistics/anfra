@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -163,19 +164,89 @@ func TestRunningServers(t *testing.T) {
 	}
 }
 
-// A command forwarded to a server of another version says so, as a warning; to
-// one of this version, nothing.
+// A server of another version is warned of, saying whether the command runs on
+// it; one of this version, not at all.
 func TestWarnIfOtherVersion(t *testing.T) {
 	var out strings.Builder
-	warnIfOtherVersion(&out, runtimeFile{Version: meta.Version})
+	warnIfOtherVersion(&out, runtimeFile{Version: meta.Version}, true)
 	if out.Len() != 0 {
 		t.Errorf("warned of a server of this version: %q", out.String())
 	}
-	warnIfOtherVersion(&out, runtimeFile{Version: "0.13.3"})
-	if got := out.String(); !strings.HasPrefix(got, "---\nwarning:\n    code: server_version_mismatch\n") ||
-		!strings.Contains(got, "anfra 0.13.3, not this anfra's "+meta.Version) {
-		t.Errorf("warning =\n%s", got)
+	for forwarded, want := range map[bool]string{
+		true:  "This command runs on `anfra serve` 0.13.3, still running for this repo. Restart it to run " + meta.Version + ".",
+		false: "`anfra serve` 0.13.3 is still running for this repo. Restart it to run " + meta.Version + ".",
+	} {
+		out.Reset()
+		warnIfOtherVersion(&out, runtimeFile{Version: "0.13.3"}, forwarded)
+		if got := out.String(); !strings.HasPrefix(got, "---\nwarning:\n    code: server_version_mismatch\n") ||
+			!strings.Contains(got, want) {
+			t.Errorf("forwarded=%v: warning =\n%s", forwarded, got)
+		}
 	}
+}
+
+// While the repo's server runs, a command is forwarded to it, except a CLI-local
+// one, which the CLI answers itself; both warn of a server of another version.
+func TestInvokeForwardsAllButCLILocal(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	h, r := handler(t)
+	var mu sync.Mutex
+	var ops []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasPrefix(req.URL.Path, "/api/") {
+			mu.Lock()
+			ops = append(ops, strings.TrimPrefix(req.URL.Path, "/api/"))
+			mu.Unlock()
+		}
+		h.ServeHTTP(w, req)
+	}))
+	defer srv.Close()
+	if err := writeRuntime(r, runtimeFile{URL: srv.URL, RepoID: r.ID, RepoDir: r.Dir, InstanceID: "i-1", Version: "0.0.1"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(r.Dir)
+
+	warned := map[string]string{}
+	for _, name := range []string{"version", "status"} {
+		c, ok := app.Find(name)
+		if !ok {
+			t.Fatalf("no command %s", name)
+		}
+		warned[name] = captureStderr(t, func() {
+			if _, err := invoke(context.Background(), c, map[string]any{}); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+		})
+	}
+	if len(ops) != 1 || ops[0] != "core.status" {
+		t.Errorf("forwarded %v, want only core.status", ops)
+	}
+	if !strings.Contains(warned["version"], "`anfra serve` 0.0.1 is still running for this repo.") {
+		t.Errorf("version warned:\n%s", warned["version"])
+	}
+	if !strings.Contains(warned["status"], "This command runs on `anfra serve` 0.0.1") {
+		t.Errorf("status warned:\n%s", warned["status"])
+	}
+}
+
+// captureStderr is what fn writes to os.Stderr.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+	done := make(chan string)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
+	fn()
+	w.Close()
+	return <-done
 }
 
 // The default address moves aside for another repo's server; an explicit one

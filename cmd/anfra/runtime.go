@@ -132,16 +132,18 @@ func answers(ctx context.Context, f runtimeFile) bool {
 		h.RepoID == f.RepoID && h.InstanceID == f.InstanceID
 }
 
-// warnIfOtherVersion warns that the repo's server, which runs the command, is
-// another anfra version than this one: a server keeps the version it started
-// with, through `anfra update`, until it is restarted.
-func warnIfOtherVersion(w io.Writer, srv runtimeFile) {
+// warnIfOtherVersion warns that the repo's server is another anfra version than
+// this one: a server keeps the version it started with, through `anfra update`,
+// until it is restarted. forwarded says the command runs on that server.
+func warnIfOtherVersion(w io.Writer, srv runtimeFile, forwarded bool) {
 	if srv.Version == meta.Version {
 		return
 	}
-	printWarning(w, "server_version_mismatch", fmt.Sprintf(
-		"The command runs on this repo's `anfra serve`, which is anfra %s, not this anfra's %s. Restart `anfra serve` to run %s.",
-		srv.Version, meta.Version, meta.Version))
+	message := fmt.Sprintf("`anfra serve` %s is still running for this repo. Restart it to run %s.", srv.Version, meta.Version)
+	if forwarded {
+		message = fmt.Sprintf("This command runs on `anfra serve` %s, still running for this repo. Restart it to run %s.", srv.Version, meta.Version)
+	}
+	printWarning(w, "server_version_mismatch", message)
 }
 
 // holderOf is the repo whose server records addr (host:port) in its runtime
