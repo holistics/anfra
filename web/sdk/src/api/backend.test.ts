@@ -135,6 +135,13 @@ describe('coreApiBackend', () => {
       expect(err.requestId).toBe('req_1');
     });
 
+    it('fails with a transport error on a line that is not an event', async () => {
+      const { client } = api({ events: `${JSON.stringify(events[0])}\n<html>Bad gateway</html>\n` });
+      const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);
+      expect(err).toBeInstanceOf(TransportError);
+      expect(err.message).toMatch(/not one of its events/);
+    });
+
     it('fails when the stream is cut before its end', async () => {
       const { client } = api(streamed(...events.slice(0, 7)));
       const err = await coreApiBackend(client).submitQuery(unpaged, signal).catch((e) => e);

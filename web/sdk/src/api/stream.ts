@@ -19,7 +19,12 @@ export async function readEvents<E extends { type: string }> (
   let buffered = '';
   const line = (text: string): boolean => {
     if (!text.trim()) return false;
-    const event = JSON.parse(text) as E | StreamEnd;
+    let event: E | StreamEnd;
+    try {
+      event = JSON.parse(text) as E | StreamEnd;
+    } catch {
+      throw new TransportError(`The server's answer is not one of its events: ${text.slice(0, 80)}`);
+    }
     if (event.type === 'ping') return false;
     if (event.type === 'end') {
       const end = event as StreamEnd;
