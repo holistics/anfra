@@ -115,7 +115,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
         h(doc, 'span', { class: `kind ${node.kind}` }, node.kind),
         id && h(doc, 'span', { class: 'name' }, id),
         node.label && node.label !== id && h(doc, 'span', { class: 'label' }, node.label),
-        node.problems.length > 0 && h(doc, 'span', { ...badge('error'), 'aria-label': 'Problems' }, '!'),
+        node.problems.length > 0 && h(doc, 'span', { ...badge('error'), 'data-size': 'icon', 'aria-label': 'Problems' }, '!'),
         h(doc, 'span', { class: 'actions' },
           declared(node) && h(doc, 'button', {
             type: 'button',
