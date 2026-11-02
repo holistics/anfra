@@ -30,7 +30,7 @@ describe('declaration', () => {
     const app = sdk().createApp();
 
     // A query is a raw AQL body now: the SDK has no client-side field knowledge, so a syntax or
-    // field error surfaces as a QueryError at execute, not here.
+    // field error surfaces at execute as `query_invalid`, not here.
     expect(() => app.createQuery('q', { dataset: 'sales', aql: '' }))
       .toThrowError(/declares no AQL/);
     expect(() => app.createQuery('q', {} as never)).toThrow();
@@ -75,8 +75,8 @@ describe('declaration', () => {
 describe('mapping', () => {
   it('is always explicit, and carries the field verbatim — the SDK does not resolve it', () => {
     // A query is a raw AQL body now, so the SDK has no client-side way to check whether
-    // `options.field` resolves to anything on the target query. A typo surfaces as a QueryError at
-    // execute, not here. See docs/adr/0001.
+    // `options.field` resolves to anything on the target query. A typo surfaces as `query_invalid`
+    // at execute, not here. See docs/adr/0001.
     const app = sdk().createApp();
     const query = monthlyRevenue(app);
     const region = app.createFilter('region', { field: 'users.region' });
