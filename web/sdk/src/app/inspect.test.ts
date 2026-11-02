@@ -188,8 +188,11 @@ describe('toInspectJSON', () => {
   it('names the query an error is about', async () => {
     // A backend does not know whose query it answers, and an error crossing the bridge loses its
     // entity, so the app names the query on every error it stores. A plain Error from the backend
-    // is not a DataAppError at all: it is call_failed, named too.
-    const sdk = build(new Error('not json'));
+    // is not a DataAppError at all: it is call_failed, named too, and logged, since its message is
+    // kept out of the app.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const bug = new Error('not json');
+    const sdk = build(bug);
     const app = sdk.createApp();
     revenueApp(app);
     await app.execute();
@@ -198,6 +201,8 @@ describe('toInspectJSON', () => {
       code: 'call_failed',
       entity: 'revenue',
     });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("'revenue' failed"), bug);
+    logged.mockRestore();
   });
 });
 
