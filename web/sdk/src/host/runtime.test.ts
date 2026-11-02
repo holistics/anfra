@@ -472,6 +472,25 @@ describe('runtime errors', () => {
     expect(replies[0]).toMatchObject({ ok: false, error: { message: 'The call failed.' } });
   });
 
+  it('take so many from a mount a minute, whatever the frame sends', () => {
+    const onError = vi.fn();
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mount([corePlugin(backend())], [], { onError, captureConsole: true });
+    const heard = vi.fn();
+    mounted!.on('anfra.console', heard);
+    for (let i = 0; i < 130; i += 1) {
+      fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'flood' } });
+      fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'warn', message: 'flood' } });
+    }
+    expect(onError).toHaveBeenCalledTimes(120);
+    expect(heard).toHaveBeenCalledTimes(120);
+    mounted!.unmount();
+    mounted = undefined;
+    expect(warned).toHaveBeenCalledWith(expect.stringMatching(/^anfra: 10 runtime errors of a Data App/));
+    expect(warned).toHaveBeenCalledWith(expect.stringMatching(/^anfra: 10 console lines of a Data App/));
+    warned.mockRestore();
+  });
+
   it('go to the console unless the host says where', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     mount([corePlugin(backend())]);

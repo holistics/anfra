@@ -54,6 +54,66 @@ export function truncate (text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit)}… (truncated)`;
 }
 
+/** The fields of an error that are reported: its shape, never a query's rows or a request's params. */
+export function describeError (kind: AppErrorKind, err: unknown): Omit<AppErrorEvent, 'mount' | 'title'> {
+  const e = err as { message?: unknown, code?: unknown, scope?: unknown, requestId?: unknown, entity?: unknown, stack?: unknown } | null | undefined;
+  const isObject = typeof e === 'object' && e !== null;
+  const out: Omit<AppErrorEvent, 'mount' | 'title'> = {
+    kind,
+    message: truncate(isObject && typeof e.message === 'string' ? e.message : String(err), MESSAGE_LIMIT),
+    at: new Date().toISOString(),
+  };
+  if (!isObject) return out;
+  for (const key of ['code', 'scope', 'requestId', 'entity'] as const) {
+    const value = e[key];
+    if (typeof value === 'string') out[key] = value;
+  }
+  if (kind !== 'query' && typeof e.stack === 'string') out.stack = truncate(e.stack, STACK_LIMIT);
+  return out;
+}
+
+/**
+ * A budget of so many events a minute: `take()` says whether one more may go now. Those refused
+ * are counted, and `onDropped` told the count once their minute is over.
+ */
+export function createBudget (perMinute: number, onDropped: (count: number) => void = () => {}, now: () => number = Date.now): { take (): boolean, dispose (): void } {
+  let windowStart = now();
+  let taken = 0;
+  let dropped = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    timer = undefined;
+    const count = dropped;
+    dropped = 0;
+    if (count > 0) {
+      try { onDropped(count); } catch { /* telling must not fail the next event */ }
+    }
+  };
+  return {
+    take () {
+      const t = now();
+      if (t - windowStart >= 60_000) {
+        if (timer !== undefined) clearTimeout(timer);
+        flush();
+        windowStart = t;
+        taken = 0;
+      }
+      if (taken < perMinute) {
+        taken += 1;
+        return true;
+      }
+      dropped += 1;
+      // Said when the minute is over, whether or not another event comes.
+      if (timer === undefined) timer = setTimeout(flush, Math.max(0, windowStart + 60_000 - t));
+      return false;
+    },
+    dispose () {
+      if (timer !== undefined) clearTimeout(timer);
+      flush();
+    },
+  };
+}
+
 const str = (value: unknown, limit: number): string | undefined => (typeof value === 'string' ? truncate(value, limit) : undefined);
 const SHORT = 200;
 

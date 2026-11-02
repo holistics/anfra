@@ -85,13 +85,38 @@ describe('reporting', () => {
     expect(written).toHaveBeenCalledWith('rows', { n: 2 }, expect.any(Error));
   });
 
-  it('sends at most so many events a minute', () => {
+  it('sends at most so many events a minute, and says in the console how many were not', () => {
     let t = 0;
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const emit = install(false, () => t);
     for (let i = 0; i < EVENTS_PER_MINUTE + 5; i += 1) window.dispatchEvent(new ErrorEvent('error', { message: 'again' }));
     expect(emit).toHaveBeenCalledTimes(EVENTS_PER_MINUTE);
     t = 60_000;
     window.dispatchEvent(new ErrorEvent('error', { message: 'later' }));
     expect(emit).toHaveBeenCalledTimes(EVENTS_PER_MINUTE + 1);
+    expect(warned).toHaveBeenCalledWith(expect.stringMatching(/^anfra: 5 runtime errors over/));
+  });
+
+  it('says how many were not sent once the minute is over, even with nothing after', () => {
+    vi.useFakeTimers();
+    try {
+      const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      install(false, Date.now);
+      for (let i = 0; i < EVENTS_PER_MINUTE + 2; i += 1) window.dispatchEvent(new ErrorEvent('error', { message: 'again' }));
+      expect(warned).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(60_000);
+      expect(warned).toHaveBeenCalledWith(expect.stringMatching(/^anfra: 2 runtime errors over/));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps console lines from crowding out errors', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const emit = install(true, () => 0);
+    for (let i = 0; i < EVENTS_PER_MINUTE * 2; i += 1) console.warn('render');
+    window.dispatchEvent(new ErrorEvent('error', { error: new TypeError('real'), message: 'real' }));
+    expect(emit.mock.calls.filter(([name]) => name === 'console')).toHaveLength(EVENTS_PER_MINUTE);
+    expect(emit).toHaveBeenLastCalledWith('error', expect.objectContaining({ kind: 'uncaught', message: 'real' }));
   });
 });

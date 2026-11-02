@@ -7,7 +7,7 @@ import { DataAppError, forbidden, invalidRequest } from '../common/errors';
 import type { BridgeMessage, PluginInfo, Provision } from '../common/bridge';
 import { createEndpoint, type Endpoint } from '../common/endpoint';
 import {
-  MESSAGE_LIMIT, STACK_LIMIT, checkConsoleEvent, checkErrorEvent, truncate, type AppErrorEvent,
+  checkConsoleEvent, checkErrorEvent, createBudget, describeError, type AppErrorEvent,
 } from '../common/runtimeErrors';
 import type { DatasetDescriptor, User } from '../common/types';
 import type {
@@ -81,6 +81,12 @@ export function developmentBuild (): boolean {
     return true; // no bundler, no process: nothing says it is a production build
   }
 }
+
+/**
+ * How many runtime errors a mount takes in a minute, and console lines apart from them: the frame
+ * holds itself to as many, but it runs anyone's code, so the host holds it to them too.
+ */
+const EVENTS_PER_MINUTE = 120;
 
 const logError = (event: AppErrorEvent) => {
   // eslint-disable-next-line no-console -- a host that says nothing else gets its page's console
@@ -371,8 +377,15 @@ export function createHost (options: HostOptions): Host {
         commandsChanged,
       };
       const mountInfo = { id: context.id, ...(mountOptions.title !== undefined ? { title: mountOptions.title } : {}) };
+      const dropped = (what: string) => (count: number) => {
+        // eslint-disable-next-line no-console -- what is over the budget is said only here
+        console.warn(`anfra: ${count} ${what} of a Data App (mount ${mountInfo.id}) over the ${EVENTS_PER_MINUTE} a minute a host takes were dropped.`);
+      };
+      const errorBudget = createBudget(EVENTS_PER_MINUTE, dropped('runtime errors'));
+      const consoleBudget = createBudget(EVENTS_PER_MINUTE, dropped('console lines'));
       /** A runtime error of this mount: to the host's callback, and to this mount's listeners. */
       const reportError = (event: AppErrorEvent) => {
+        if (!errorBudget.take()) return;
         try { onError(event); } catch { /* the host's sink failing must not stop the listeners */ }
         deliver('anfra.error', event);
       };
@@ -382,15 +395,15 @@ export function createHost (options: HostOptions): Host {
       endpoint = createEndpoint(post, {
         answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
         hidden: (name, err) => {
-          const e = err as { message?: unknown, stack?: unknown } | null | undefined;
+          const { message, stack, at } = describeError('hidden', err);
           reportError({
             kind: 'hidden',
             code: 'call_failed',
             scope: 'server',
-            message: truncate(typeof e?.message === 'string' ? e.message : String(err), MESSAGE_LIMIT),
-            ...(typeof e?.stack === 'string' ? { stack: truncate(e.stack, STACK_LIMIT) } : {}),
+            message,
+            ...(stack !== undefined ? { stack } : {}),
             call: name,
-            at: new Date().toISOString(),
+            at,
             mount: mountInfo.id,
             ...(mountInfo.title !== undefined ? { title: mountInfo.title } : {}),
           });
@@ -404,7 +417,7 @@ export function createHost (options: HostOptions): Host {
           }
           if (name === 'anfra.console') {
             const event = captureConsole ? checkConsoleEvent(payload, mountInfo) : undefined;
-            if (event) deliver('anfra.console', event);
+            if (event && consoleBudget.take()) deliver('anfra.console', event);
             return;
           }
           // The panel's own, from the kernel.
@@ -581,6 +594,8 @@ export function createHost (options: HostOptions): Host {
           themeListeners.delete(sendTheme);
           commandListeners.clear();
           panelState.dispose();
+          errorBudget.dispose();
+          consoleBudget.dispose();
           win.removeEventListener('message', onMessage);
           endpoint.close(new DataAppError({ code: 'call_failed', scope: 'server', message: 'The Data App was unmounted before the call finished.' }));
           disposers.forEach((dispose) => dispose());
