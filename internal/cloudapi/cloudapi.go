@@ -141,7 +141,7 @@ type PublishOut struct {
 type Replaced struct {
 	Revision    string    `json:"revision"`
 	PublishedBy *Person   `json:"published_by,omitempty"`
-	PublishedAt time.Time `json:"published_at"`
+	PublishedAt time.Time `json:"published_at" pretty:",moment"`
 }
 
 // DataSource is a data source as the server shows it: never its connection.

@@ -117,7 +117,7 @@ func TestPublishWarnsAboutDuckDB(t *testing.T) {
 		if len(ask.asked) != 0 || s.tested != 0 || len(s.created) != 0 {
 			t.Errorf("create=%v: asked %q, tested %d, created %v; want none of it", create, ask.asked, s.tested, s.created)
 		}
-		if !strings.Contains(errOut, "! Data source local (duckdb) uses a local file") ||
+		if !strings.Contains(errOut, "data_source_local_file: Data source local (duckdb) uses a local file") ||
 			!strings.Contains(errOut, "Queries on the models using local fail until the org has them") {
 			t.Errorf("create=%v: said %q", create, errOut)
 		}
@@ -170,7 +170,7 @@ func TestPublishCreatesDataSourcesOnlyWhenAgreed(t *testing.T) {
 	if _, ok := s.created["warehouse"]; !ok {
 		t.Errorf("--create-data-sources: created %v", s.created)
 	}
-	if _, ok := s.created["dev"]; ok || !strings.Contains(errOut, "Skipping it: there is no terminal to choose") {
+	if _, ok := s.created["dev"]; ok || !strings.Contains(errOut, "data_source_unreachable: Data source dev (postgresql) is not reachable") {
 		t.Errorf("an unreachable one without a terminal: created %v; said %q", s.created, errOut)
 	}
 }
@@ -184,13 +184,13 @@ func TestPublishWithoutDataSourcePermissions(t *testing.T) {
 
 	s.forbidList = true
 	_, errOut, err := run(t, dir, Options{SetOrg: url, CreateDataSources: true}, never(t))
-	if err != nil || !strings.Contains(errOut, "An org admin can check it has dev, events, warehouse") {
+	if err != nil || !strings.Contains(errOut, "hint: Ask an org admin to check the org has dev, events, warehouse.") {
 		t.Errorf("listing refused: %v, said %q", err, errOut)
 	}
 	s.forbidList, s.forbidCreate = false, true
 	write(t, dir, map[string]string{"a.aml": "a2"})
 	_, errOut, err = run(t, dir, Options{SetOrg: url, CreateDataSources: true}, never(t))
-	if err != nil || !strings.Contains(errOut, "Only an org admin can add data sources: ask one to add dev, events, warehouse") || len(s.created) != 0 {
+	if err != nil || !strings.Contains(errOut, "hint: Ask an org admin to add dev, events, warehouse.") || len(s.created) != 0 {
 		t.Errorf("adding refused: %v, created %v, said %q", err, s.created, errOut)
 	}
 	if len(s.deployed) != 1 || string(s.blobs[s.deployed[0].OID]) != "a2" {

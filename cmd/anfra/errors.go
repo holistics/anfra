@@ -35,6 +35,13 @@ func commandFailedWith(msg string, details any) error {
 	return apperr.NewWith(commandFailed, msg, details)
 }
 
+// repoInvalid: the repo fails validation. Its details are validate's answer,
+// the diagnostics to fix. Any command refused for an invalid repo fails with
+// it; were an op to, it would move to the engine's namespace with its name and
+// details, so a client sees no change.
+var repoInvalid = apperr.DefinePublicCodeWith[jsontext.Value](cliNS, "repo_invalid", apperr.User,
+	"The repo has errors.")
+
 // remoteError is a running server's error: resp, decoded for its code and
 // scope, and raw, the error object as the body carried it, which printError
 // shows in its order.

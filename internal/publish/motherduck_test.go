@@ -151,8 +151,9 @@ func runWith(t *testing.T, dir string, o Options, ask Prompt, md MotherDuck, typ
 		typed = typed[1:]
 		return answer, true
 	}
-	err := Run(context.Background(), dir, o, env)
-	return errOut.String(), err
+	res, err := Run(context.Background(), dir, o, env)
+	_, said := saidBy(res, errOut)
+	return said, err
 }
 
 // One file is uploaded once, as a new database beside one of its name, which is
@@ -214,7 +215,7 @@ func TestDeclinedCopyTouchesNothing(t *testing.T) {
 		t.Errorf("err %v, calls %v, created %v; said %s", err, md.calls, s.created, errOut)
 	}
 	errOut, err = runWith(t, dir, Options{SetOrg: url}, never(t), nil)
-	if err != nil || len(s.created) != 0 || !strings.Contains(errOut, "Or run anfra publish in a terminal to upload it to MotherDuck") {
+	if err != nil || len(s.created) != 0 || !strings.Contains(errOut, "Or run `anfra publish` on a terminal to upload") {
 		t.Errorf("no terminal: err %v, created %v; said %s", err, s.created, errOut)
 	}
 }

@@ -15,14 +15,14 @@ import (
 // never published, as the org keeps its own, which an admin edits in Organization
 // settings. Apps that load from one work here and are blocked there. Nothing here
 // stops the publish, and nothing is said when the repo lists none.
-func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, p *cliui.Printer, dir string) {
+func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, t *told, p *cliui.Printer, dir string) {
 	conf, err := repoconfig.Read(dir)
 	if err != nil {
 		return // validation has said so
 	}
 	local, err := conf.AllowedOrigins()
 	if err != nil {
-		p.Warn("Not checking the org's allowed origins: %v", err)
+		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", err)
 		return
 	}
 	if len(local) == 0 {
@@ -32,7 +32,7 @@ func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, p *cliui.Pri
 	defer p.Section("")
 	have, err := c.ListAppOrigins(ctx)
 	if err != nil {
-		p.Warn("Not checking the org's allowed origins: %v", err)
+		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", err)
 		return
 	}
 	var lacking []string
@@ -48,7 +48,7 @@ func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, p *cliui.Pri
 	if len(lacking) > 1 {
 		it = "them"
 	}
-	p.Warn("The org does not allow %s, which this repo's Data Apps may load from (%s): apps loading from %s are blocked there.",
+	t.Warn("origin_not_allowed", "The org does not allow %s, which this repo's Data Apps may load from (%s): apps loading from %s are blocked there.",
 		strings.Join(lacking, ", "), repoconfig.Hint("apps", "allow_origins"), it)
-	p.Note("An org admin adds origins in Organization settings → Data Apps.")
+	t.Hint("Ask an org admin to allow %s in Organization settings → Data Apps.", strings.Join(lacking, ", "))
 }

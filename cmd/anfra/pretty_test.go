@@ -59,7 +59,7 @@ Agents:
 
 Copies:
   ~/.agents/skills:
-    Status:            mixed
+    Status:  mixed
     Versions:
       VERSION   SKILLS
       0.4.4     anfra-aql,anfra-write-aql

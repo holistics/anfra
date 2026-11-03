@@ -67,9 +67,6 @@ const (
 	// outputArtifact: something other than a result, such as a log or a file:
 	// --yaml and --json are refused for good.
 	outputArtifact = "artifact"
-	// noStructuredOutputYet: a CLI-only command that still writes prose, until
-	// it has a structured result (docs/implementations/cli-json.md, step 2).
-	noStructuredOutputYet = "no-structured-output-yet"
 )
 
 func annotate(cmd *cobra.Command, key, value string) {
@@ -99,16 +96,6 @@ func markArtifactOutput(cmd *cobra.Command, writes string) {
 	annotate(cmd, artifactDesc, writes)
 	for _, c := range cmd.Commands() {
 		markArtifactOutput(c, writes)
-	}
-}
-
-// markNoStructuredOutputYet marks cmd and the commands under it as writing
-// for a person alone, until they have a result.
-func markNoStructuredOutputYet(cmd *cobra.Command) {
-	annotate(cmd, outputKind, noStructuredOutputYet)
-	annotate(cmd, defaultFormat, formatPretty)
-	for _, c := range cmd.Commands() {
-		markNoStructuredOutputYet(c)
 	}
 }
 
@@ -170,14 +157,10 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 		case !output.json:
 			return nil
 		}
-		switch cmd.Annotations[outputKind] {
-		case outputStructured:
-			return nil
-		case outputArtifact:
+		if cmd.Annotations[outputKind] == outputArtifact {
 			return formatRefused(flag, cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", not structured output")
-		default:
-			return formatRefused(flag, cmd.CommandPath()+" doesn't write structured output yet; run it without "+flag)
 		}
+		return nil
 	}
 }
 
@@ -195,8 +178,6 @@ func describeOutput(cmd *cobra.Command) {
 	switch cmd.Annotations[outputKind] {
 	case outputArtifact:
 		rows = [][2]string{{cmd.Annotations[artifactDesc], ""}}
-	case noStructuredOutputYet:
-		rows = [][2]string{{"default", "the pretty format"}}
 	default:
 		if cmd.Annotations[defaultFormat] == formatPretty {
 			rows = [][2]string{{"default", "the pretty format"}, {"--yaml", "a YAML document"}}

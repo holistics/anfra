@@ -12,11 +12,10 @@ import (
 
 // selectFiles is the files a publish sends, slash-separated, relative to dir,
 // sorted: the repo's own, as repoformat.Publishable says, the same on every
-// machine, with or without git. leftOut counts the folder's other files, which
-// a publish does not carry. A symlink, or anything but a regular file, among
+// machine, with or without git. A symlink, or anything but a regular file, among
 // the repo's own is refused by name: never skipped, which would delete it on the
 // server, nor followed out of the repo.
-func selectFiles(dir string) (files []string, leftOut int, err error) {
+func selectFiles(dir string) (files []string, err error) {
 	var refused []string
 	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -35,7 +34,6 @@ func selectFiles(dir string) (files []string, leftOut int, err error) {
 		case d.IsDir():
 			return nil
 		case !repoformat.Publishable(rel):
-			leftOut++
 		case d.Type()&fs.ModeSymlink != 0:
 			refused = append(refused, rel+" (a symlink)")
 		case !d.Type().IsRegular():
@@ -46,11 +44,11 @@ func selectFiles(dir string) (files []string, leftOut int, err error) {
 		return nil
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if len(refused) > 0 {
-		return nil, 0, fmt.Errorf("a publish carries regular files only; replace these with the files themselves: %s", strings.Join(refused, ", "))
+		return nil, fmt.Errorf("a publish carries regular files only; replace these with the files themselves: %s", strings.Join(refused, ", "))
 	}
 	slices.Sort(files)
-	return files, leftOut, nil
+	return files, nil
 }

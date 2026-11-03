@@ -93,6 +93,7 @@ type mdCopy struct {
 	c     *cloudapi.Client
 	org   cloudapi.Org
 	p     *cliui.Printer
+	t     *told // the publish's warnings, hints and data sources created
 	ask   Prompt
 	input Input // nil: nobody to type a token or a name
 
@@ -128,16 +129,16 @@ func (m *mdCopy) offer(ctx context.Context, f duckdbFile, rest int) (created []s
 		names[i] = d.Name
 	}
 	if len(names) == 1 {
-		p.Warn("Data source %s (duckdb) uses a local file that the org's server can't read.", names[0])
+		m.t.Warn("data_source_local_file", "Data source %s (duckdb) uses a local file that the org's server can't read.", names[0])
 	} else {
-		p.Warn("Data sources %s (duckdb) use %s, a local file that the org's server can't read.", strings.Join(names, ", "), f.shown)
+		m.t.Warn("data_source_local_file", "Data sources %s (duckdb) use %s, a local file that the org's server can't read.", strings.Join(names, ", "), f.shown)
 	}
 	instead := func() {
-		p.Note("To use it on the org, load its data into a warehouse the server can reach, and add that to the org as %s.", strings.Join(names, ", "))
+		m.t.Hint("To use %s on the org, load its data into a warehouse the server can reach, and add that to the org as %s.", f.shown, strings.Join(names, ", "))
 	}
 	if m.md == nil {
 		instead()
-		p.Note("Or run anfra publish in a terminal to upload it to MotherDuck.")
+		m.t.Hint("Or run `anfra publish` on a terminal to upload %s to MotherDuck.", f.shown)
 		return nil, nil
 	}
 	if m.gaveUp {
@@ -177,7 +178,7 @@ func (m *mdCopy) offer(ctx context.Context, f duckdbFile, rest int) (created []s
 	}
 	for _, d := range f.sources {
 		copied := datasource.DataSource{Name: d.Name, DBType: "motherduck", Connection: map[string]any{"token": m.token.Secret, "dbname": name}}
-		done, err := createDataSource(ctx, m.c, copied, p, m.ask)
+		done, err := createDataSource(ctx, m.c, copied, p, m.t, m.ask)
 		if err != nil {
 			return created, err
 		}
@@ -531,7 +532,8 @@ func (m *mdCopy) finish(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 	if err := m.md.RevokeToken(ctx, m.session, m.status.User, m.token.ID); err != nil {
-		m.p.Warn("Could not revoke the unused MotherDuck token %q (%v). Revoke it in MotherDuck's settings.", m.token.Name, err)
+		m.t.Warn("token_not_revoked", "Could not revoke the unused MotherDuck token %q (%v): it can read all your MotherDuck databases.", m.token.Name, err)
+		m.t.Hint("Revoke the MotherDuck token %q in MotherDuck's settings.", m.token.Name)
 		return
 	}
 	m.p.Note("Revoked the unused MotherDuck token %q. The secret shown above no longer works.", m.token.Name)

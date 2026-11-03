@@ -108,8 +108,7 @@ func newRootCmd() *cobra.Command {
 	markArtifactOutput(serve, "a log, until it is stopped")
 	markArtifactOutput(updateCheck, "nothing: it checks in the background") // internal
 	update, agent, skills, initCmd, publish := newUpdateCmd(), newAgentCmd(), newSkillsCmd(), newInitCmd(), newPublishCmd()
-	markNoStructuredOutputYet(publish) // docs/implementations/cli-json.md, step 2
-	markInteractable(publish)
+
 	root.AddCommand(serve, newOpenAPICmd())
 	root.AddCommand(update, updateCheck)
 	root.AddCommand(agent, skills, initCmd)

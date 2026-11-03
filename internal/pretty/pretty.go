@@ -8,7 +8,10 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"maps"
+	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -111,6 +114,7 @@ type prettyField struct {
 	label    string
 	omit     bool // omitempty or omitzero: an empty one is left out of key/values
 	block    bool
+	tree     bool
 	moment   bool
 	truncate bool
 	tones    map[string]prettyStyle
@@ -151,6 +155,8 @@ func prettyFields(v reflect.Value) []prettyField {
 			switch key {
 			case "block":
 				f.block = true
+			case "tree":
+				f.tree = true
 			case "moment":
 				f.moment = true
 			case "truncate":
@@ -219,6 +225,12 @@ func prettyValueOf(f prettyField) prettyValue {
 	case v.Kind() == reflect.Slice || v.Kind() == reflect.Array:
 		elem := deref(v.Type().Elem())
 		switch {
+		case isScalar(elem) && f.tree:
+			var paths []string
+			for i := range v.Len() {
+				paths = append(paths, scalarCell(f, indirect(v.Index(i))).plain())
+			}
+			return prettyValue{kind: prettyBlock, lines: treeLines(paths, utf8Terminal())}
 		case isScalar(elem):
 			var lines []prettyCell
 			for i := range v.Len() {
@@ -410,6 +422,83 @@ func textLines(s string) []prettyCell {
 	return out
 }
 
+// treeNode is a folder of a tree: its folders and its files, by name.
+type treeNode struct {
+	dirs  map[string]*treeNode
+	files []string
+}
+
+// treeLines is paths drawn as tree draws them: each folder's folders first,
+// then its files, each sorted; a folder with one entry on its parent's line
+// (models/.gitkeep); the lines faint. Without utf8, in ASCII.
+func treeLines(paths []string, utf8 bool) []prettyCell {
+	root := &treeNode{dirs: map[string]*treeNode{}}
+	for _, p := range paths {
+		n := root
+		parts := strings.Split(p, "/")
+		for _, d := range parts[:len(parts)-1] {
+			if n.dirs[d] == nil {
+				n.dirs[d] = &treeNode{dirs: map[string]*treeNode{}}
+			}
+			n = n.dirs[d]
+		}
+		n.files = append(n.files, parts[len(parts)-1])
+	}
+	branch, last, pipe := "├── ", "└── ", "│   "
+	if !utf8 {
+		branch, last, pipe = "|-- ", "`-- ", "|   "
+	}
+	var out []prettyCell
+	var walk func(n *treeNode, prefix string)
+	walk = func(n *treeNode, prefix string) {
+		type entry struct {
+			name string
+			dir  *treeNode
+		}
+		var entries []entry
+		for _, d := range slices.Sorted(maps.Keys(n.dirs)) {
+			name, dir := d+"/", n.dirs[d]
+			// A folder of one entry joins it on one line.
+			for len(dir.files)+len(dir.dirs) == 1 {
+				if len(dir.files) == 1 {
+					name, dir = name+dir.files[0], nil
+					break
+				}
+				for sub, next := range dir.dirs {
+					name, dir = name+sub+"/", next
+				}
+			}
+			entries = append(entries, entry{name, dir})
+		}
+		for _, f := range slices.Sorted(slices.Values(n.files)) {
+			entries = append(entries, entry{f, nil})
+		}
+		for i, e := range entries {
+			mark, next := branch, pipe
+			if i == len(entries)-1 {
+				mark, next = last, "    "
+			}
+			out = append(out, prettyCell{{text: prefix + mark, style: styleMuted}, {text: e.name}})
+			if e.dir != nil {
+				walk(e.dir, prefix+next)
+			}
+		}
+	}
+	walk(root, "")
+	return out
+}
+
+// utf8Terminal reports whether the locale is UTF-8, for tree's lines.
+func utf8Terminal() bool {
+	for _, k := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
+		if v := os.Getenv(k); v != "" {
+			v = strings.ToUpper(v)
+			return strings.Contains(v, "UTF-8") || strings.Contains(v, "UTF8")
+		}
+	}
+	return false
+}
+
 // relativeTime is t as a person says it, from now: today, yesterday, n days
 // ago, or its date past a month.
 func relativeTime(t, now time.Time) string {
@@ -427,11 +516,18 @@ func relativeTime(t, now time.Time) string {
 	return t.Format("2 Jan 2006")
 }
 
-// titleCase is a json name as a label: its words capitalized.
+// acronyms are words a label writes in capitals.
+var acronyms = map[string]bool{"id": true, "url": true, "sql": true, "aql": true, "aml": true, "api": true, "json": true, "yaml": true, "md": true}
+
+// titleCase is a json name as a label: its words capitalized, acronyms in
+// capitals (checked_at → Checked At, org_url → Org URL).
 func titleCase(name string) string {
 	words := strings.Split(name, "_")
 	for i, w := range words {
-		if w != "" {
+		switch {
+		case acronyms[w]:
+			words[i] = strings.ToUpper(w)
+		case w != "":
 			words[i] = strings.ToUpper(w[:1]) + w[1:]
 		}
 	}
@@ -514,22 +610,19 @@ func (r prettyRenderer) doc(d prettyDoc) string {
 	return b.String()
 }
 
-// entries draws entries at indent: a value on its label's line, labels
-// aligned across the level, anything bigger under its label. At the top,
-// a blank line sets each bigger one apart.
+// entries draws entries at indent: a value on its label's line, anything
+// bigger under its label. Values align within a run of consecutive key/value
+// lines, as gofmt aligns a struct literal's fields: a nested section ends the
+// run. At the top, a blank line sets apart what has rows (a table, a list of
+// blocks, a text block); a section of key/values stays with its neighbours.
 func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, indent int, top bool) {
-	labelWidth := 0
-	for _, e := range entries {
-		if e.value.kind == prettyText || e.value.kind == prettyLines {
-			labelWidth = max(labelWidth, ansi.StringWidth(e.label)+1)
-		}
-	}
+	labelWidths := runLabelWidths(entries)
 	pad := strings.Repeat(" ", indent)
 	for i, e := range entries {
-		big := e.value.kind != prettyText && e.value.kind != prettyLines
-		if top && i > 0 && (big || entries[i-1].value.kind != prettyText && entries[i-1].value.kind != prettyLines) {
+		if top && i > 0 && (hasRows(e.value.kind) || hasRows(entries[i-1].value.kind)) {
 			b.WriteString("\n")
 		}
+		labelWidth := labelWidths[i]
 		label := e.label + ":"
 		switch e.value.kind {
 		case prettyText:
@@ -568,6 +661,35 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 			r.table(b, &prettyTable{rows: e.value.rows, truncate: -1}, indent+2)
 		}
 	}
+}
+
+// keyValue reports whether a value of kind goes on its label's line.
+func keyValue(kind prettyValueKind) bool { return kind == prettyText || kind == prettyLines }
+
+// hasRows reports whether a value of kind has rows, set apart at the top.
+func hasRows(kind prettyValueKind) bool {
+	return kind == prettyList || kind == prettyRows || kind == prettyBlock
+}
+
+// runLabelWidths is, for each key/value entry, the width its run's labels
+// align to: its longest label and colon.
+func runLabelWidths(entries []prettyEntry) []int {
+	widths := make([]int, len(entries))
+	for start := 0; start < len(entries); {
+		if !keyValue(entries[start].value.kind) {
+			start++
+			continue
+		}
+		end, width := start, 0
+		for ; end < len(entries) && keyValue(entries[end].value.kind); end++ {
+			width = max(width, ansi.StringWidth(entries[end].label)+1)
+		}
+		for i := start; i < end; i++ {
+			widths[i] = width
+		}
+		start = end
+	}
+	return widths
 }
 
 // fits reports whether t fits the terminal at indent, cutting its

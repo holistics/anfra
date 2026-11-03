@@ -11,7 +11,7 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | Errors and warnings on stderr | Done, deprecation notes included |
 | No questions, no notices | Done |
 | Every command's output kind, and the test holding every command to one | Done |
-| CLI-only commands' structured results | `openapi`, `update`, `agent setup` and `init`, with `message` and `hints`; `auth` with `--yaml` or `--json`, without `message` and `hints` yet; `publish` not started |
+| CLI-only commands' structured results | `openapi`, `update`, `agent setup`, `init` and `publish`, with `message` and `hints`; `auth` with `--yaml` or `--json`, without `message` and `hints` yet |
 | `--yaml`, and a CLI-only command's default, the pretty format | Done: `--yaml`, the defaults, the annotations, the help |
 | The prettifier's first views: `update`, `agent setup` and `init` | Built (`internal/pretty`) |
 | CLI-only commands' errors classified | Not started |
@@ -40,7 +40,7 @@ Tests: for a core command, `--json`'s stdout parses as JSON and equals the op's 
 
 ## 2. Artifacts marked, CLI-only commands structured, `--yaml`
 
-- **Every command has an output kind** (`cmd/anfra/output.go`): `markStructuredOutput` for core commands, `auth` and `openapi`; `markArtifactOutput` for `serve`, `completion`, `help` and the internal update check, refused for good with what they write instead; `markNoStructuredOutputYet` for `init`, `publish`, `update` and `agent setup`, refused with "doesn't write structured output yet". Done; step 2 empties the last kind and removes it.
+- **Every command has an output kind** (`cmd/anfra/output.go`): `markStructuredOutput` for core commands, `auth` and `openapi`; `markArtifactOutput` for `serve`, `completion`, `help` and the internal update check, refused for good with what they write instead; a third kind, no structured output yet, for the CLI-only commands until each had its result. Done; that kind is gone, now that every CLI-only command has one.
 - **A test holds every command to one** (`TestEveryCommandHasAnOutputKind`): it walks every runnable command of the root, and fails on one without a kind. A new command can't print prose unnoticed. Done.
 
 - **`--yaml`** joins `--json` on the root command: YAML, from any command. Both refused by an artifact.
@@ -55,8 +55,8 @@ Each CLI-only command's result has a shape the command defines (a Go type in `cm
 |---|---|
 | `update --check` | `anfra version`'s answer, checked now, and the changelog's link ([new state as output](../designs/commands-and-api.md#new-state-as-output)). |
 | `agent setup --check` | Each agent, and the copies of the skills found, with their versions. |
-| `publish --list` | The org (`url`; null when none is configured) and the files. The note on the folder's other files goes. |
-| `publish` | The org (`url`, `name`), the revision published, whether anything changed, what it replaced, and the data sources it created. Diagnostics from validation go in the error's details. |
+| `publish --list` | The org (`url`; null when none is configured) and the files, a tree in the pretty format. The note on the folder's other files goes. |
+| `publish` | The org (`url`, `name`, from the login), the revision published, whether anything changed, what it replaced, how many files, and the data sources it created. A repo that fails validation fails with `repo_invalid`, validate's answer its details. |
 | `update` | `anfra version`'s answer after the update, the version it replaced, and the changelog's link. Servers still running another version stay warnings, and the skills needing attention becomes one. |
 | `agent setup` | `agent setup --check`'s report after setup, and what setup did per agent: `installed`, `failed`, `cli_missing` or `instructions_only`, with a message. |
 | `init` | Its folder, and each file with whether init changed it (created it, or added to it). A failure partway carries the result as far as it got. |
@@ -79,6 +79,11 @@ What a program should know becomes a warning document, with a code; what exists 
 | `origins_not_checked` | "Not checking the org's allowed origins: …" |
 | `last_published_elsewhere` | "This repo was last published by X on Y: publishing replaces that version." |
 | `token_not_revoked` | "Could not revoke the unused MotherDuck token X…": a live credential left behind, though only the interactive flow makes one |
+| `data_source_unreachable` | "Data source X is not reachable from the org's server, so it wasn't created": without a terminal to choose to create it anyway |
+| `data_source_not_created` | "Data source X was not created: …": the server refused it |
+| `data_app_not_portable` | validate's Data App warnings: what in a Data App won't work in a host |
+
+Advice that was prose (`p.Note`: ask an admin, pass `--create-data-sources`, load a DuckDB file's data into a warehouse) is in the result's `hints`.
 
 ## 3. CLI-only commands' errors classified
 
