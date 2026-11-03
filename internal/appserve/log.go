@@ -188,6 +188,8 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 		httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, "A report names its Data App's path, and is an error, a console line or a mount."))
 		return
 	}
+	// Taken: what it says is a line of its own (or counted for one), so the request needs none.
+	httpkit.Unlogged(r.Context())
 	logger := s.opts.AppLogger
 	if logger == nil {
 		w.WriteHeader(http.StatusNoContent)

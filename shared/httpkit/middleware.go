@@ -92,6 +92,7 @@ type entry struct {
 	op       string
 	err      error
 	canceled bool
+	unlogged bool
 }
 
 type entryKey struct{}
@@ -118,6 +119,14 @@ func setError(ctx context.Context, err error) {
 func Canceled(ctx context.Context) {
 	if e := entryOf(ctx); e != nil {
 		e.canceled = true
+	}
+}
+
+// Unlogged says the request needs no log line of its own, since its handler wrote what it did
+// to the log: a report that is itself a line, say. A request that fails is logged all the same.
+func Unlogged(ctx context.Context) {
+	if e := entryOf(ctx); e != nil {
+		e.unlogged = true
 	}
 }
 
@@ -155,6 +164,9 @@ func logRequests(next http.Handler, logger *slog.Logger) http.Handler {
 		e := &entry{}
 		rec := &recorder{ResponseWriter: w}
 		next.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), entryKey{}, e)))
+		if e.unlogged && e.err == nil && !e.canceled && rec.status < http.StatusBadRequest {
+			return
+		}
 
 		attrs := []slog.Attr{
 			slog.Any(logkit.EventKey, eventRequest),

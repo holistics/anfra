@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/holistics/anfra/shared/apperr"
@@ -129,6 +130,31 @@ func TestCanceled(t *testing.T) {
 	}
 	if line["canceled"] != true || line["level"] != "INFO" {
 		t.Errorf("log line = %v", line)
+	}
+}
+
+// A request its handler says is logged already gets no line of its own, unless it failed.
+func TestUnlogged(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		handler http.HandlerFunc
+		lines   int
+	}{
+		{"taken", func(w http.ResponseWriter, r *http.Request) {
+			httpkit.Unlogged(r.Context())
+			w.WriteHeader(http.StatusNoContent)
+		}, 0},
+		{"refused", func(w http.ResponseWriter, r *http.Request) {
+			httpkit.Unlogged(r.Context())
+			httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, "No."))
+		}, 1},
+	} {
+		var logs bytes.Buffer
+		httpkit.Wrap(tc.handler, httpkit.Config{Logger: slog.New(slog.NewJSONHandler(&logs, nil)), Codes: testCodes}).
+			ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/appserve/log", nil))
+		if got := strings.Count(logs.String(), "\n"); got != tc.lines {
+			t.Errorf("%s: %d lines, want %d: %s", tc.name, got, tc.lines, logs.String())
+		}
 	}
 }
 
