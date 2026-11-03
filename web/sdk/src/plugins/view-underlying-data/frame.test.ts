@@ -146,7 +146,7 @@ describe('the modal', () => {
       [(1000).toLocaleString(), '1', '', '', ''],
       [(1001).toLocaleString(), '2', '', 'paid', ''],
     ]);
-    expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('Showing 2 rows');
+    expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('Showing the first 2 rows');
 
     const more = root.querySelector<HTMLButtonElement>('[data-testid="vud-more"]')!;
     expect(more.hidden).toBe(false);
@@ -154,7 +154,7 @@ describe('the modal', () => {
     await settle();
     expect(underlying[1].page).toBe(2);
     expect(root.querySelectorAll('tbody tr')).toHaveLength(3);
-    expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('Showing 3 rows');
+    expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('All 3 rows');
     expect(more.hidden).toBe(true);
   });
 
