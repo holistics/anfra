@@ -150,7 +150,7 @@ What the kernel gives a setup:
 | `provide(api)` | Adds `Anfra.<plugin>`. Once. |
 | `provideOnQuery(factory)`, `provideOnControl(factory)` | Adds `query.<plugin>` / `control.<plugin>` to every one, made the first time it is read. |
 | `call(name, request?, signal?)` | Makes a call by its full name (`notes.list`, `core.submitQuery`): any call the frame may make. |
-| `request(query)` | What a query runs with now: its dataset, AQL, input (mapped controls, the selection, the reader's sort, date drills) and timezone, as its own run is built. Change what you need and send it as `core.submitQuery` to run a variant of the query through the pipeline. |
+| `queryRequest(query)` | What a query runs with now: its dataset, AQL, input (mapped controls, the selection, the reader's sort, date drills) and timezone, as its own run is built. Change what you need and send it as `core.submitQuery` to run a variant of the query through the pipeline. |
 | `emit(name, payload?)` | Sends the host one of this plugin's events, by its short name. |
 | `handle(name, handler)` | Answers a call the host makes into the frame (`mounted.call('notes.focus')`). |
 | `on(name, listener)` | Listens to an event the host sends. |

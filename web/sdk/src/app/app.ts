@@ -505,7 +505,7 @@ export class App extends Observable implements AppContext {
   }
 
   /**
-   * @internal Backs the kernel's `request(query)`: what the query runs with now, from its applied
+   * @internal Backs the kernel's `queryRequest(query)`: what the query runs with now, from its applied
    * state, as `fetchPage` and `exportQuery` build theirs.
    */
   requestFor (query: Query): QueryRequest {

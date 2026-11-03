@@ -47,7 +47,7 @@ export interface FrameKernel {
    * behind the result on screen. For a plugin that runs a variant of the query: it changes what it
    * needs and sends it as `core.submitQuery`, through the pipeline like any query.
    */
-  request: (query: Query) => QueryRequest;
+  queryRequest: (query: Query) => QueryRequest;
   /** Make a host half's call, by its full name (`core.submitQuery`). */
   call: <T = unknown>(name: string, request?: unknown, signal?: AbortSignal) => Promise<T>;
   /** Send the host one of this plugin's events, by its name under the plugin. */
@@ -121,7 +121,7 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
       return overlayFor(win.document);
     },
     structure: () => buildStructure(win.document, sdk.apps),
-    request (query) {
+    queryRequest (query) {
       const app = sdk.apps.find((candidate) => candidate.queries[query?.name] === query);
       if (!app) throw new ValidationError(`Query '${String(query?.name)}' belongs to no app.`, query?.name);
       return app.requestFor(query);
