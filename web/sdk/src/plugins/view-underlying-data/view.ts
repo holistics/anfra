@@ -18,6 +18,8 @@ export interface ViewDeps {
 const STYLES = `
 :host { display: block; height: 100%; color: var(--anfra-color-text-default, var(--anfra-color-fg)); font: var(--anfra-type-body, 400 0.875rem/1.25rem var(--anfra-font, system-ui, sans-serif)); }
 * { box-sizing: border-box; }
+/* The class layer's buttons set their own display, which would outrank the attribute. */
+[hidden] { display: none !important; }
 .vud { display: flex; flex-direction: column; height: 100%; max-height: calc(100vh - 96px); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px 0; }
 .rows { flex: 1; min-height: 120px; margin: 12px 16px 0; overflow: auto; border: 1px solid var(--anfra-color-border-default, var(--anfra-color-border)); border-radius: var(--anfra-radius-lg, var(--anfra-radius, 10px)); }
@@ -54,6 +56,14 @@ export function display (value: unknown, column: ColumnMeta | undefined, format:
   }
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+/** How many rows the table holds: all there are, or the ones loaded so far. */
+export function countText (shown: number, hasMore: boolean): string {
+  if (!shown) return '';
+  const rows = `${shown.toLocaleString()} ${shown === 1 ? 'row' : 'rows'}`;
+  if (hasMore) return `Showing the first ${rows}`;
+  return shown === 1 ? 'The only row' : `All ${rows}`;
 }
 
 /** Draw the modal's content into `root`; what it returns stops what is in flight. */
@@ -138,7 +148,7 @@ export function view (root: ShadowRoot, deps: ViewDeps): () => void {
       const hasMore = result.meta?.hasMore ?? (result.values?.length ?? 0) >= PAGE_SIZE;
       state.hidden = shown > 0;
       state.textContent = 'No rows match this point.';
-      count.textContent = `Showing ${shown.toLocaleString()} ${shown === 1 ? 'row' : 'rows'}`;
+      count.textContent = countText(shown, hasMore);
       more.hidden = !hasMore;
     } catch (err) {
       if (isAbort(err) || controller.signal.aborted) return;
