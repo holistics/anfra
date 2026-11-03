@@ -6,7 +6,7 @@ import type {
 } from '@holistics/anfra-sdk/common';
 import { createHost, type Host, type MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
-  corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin,
+  corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin, viewUnderlyingDataPlugin,
 } from '@holistics/anfra-sdk/plugins';
 import { api, definition } from '@/lib/server';
 
@@ -40,7 +40,7 @@ function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: str
       datasets,
       origins,
       runtime: createHost({
-        plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin()],
+        plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin(), viewUnderlyingDataPlugin()],
         allowOrigins,
         theme: props.theme,
       }),
