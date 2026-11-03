@@ -1,7 +1,7 @@
 import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
-import { QueryError } from '../../common/errors';
+import { DataAppError } from '../../common/errors';
 import { flush, testFrame } from '../../app/testFrame';
 import { numberTypes, textTypes } from '../../app/testSupport';
 import ui from '../../app/ui/body';
@@ -223,7 +223,7 @@ describe('the modal', () => {
   });
 
   it('says what went wrong when the rows don\'t load', async () => {
-    const { app, query } = setup({ pages: [new QueryError('The warehouse is asleep.', 'revenue')] });
+    const { app, query } = setup({ pages: [new DataAppError({ code: 'internal_server_error', scope: 'server', message: 'The warehouse is asleep.', entity: 'revenue' })] });
     await app.execute();
     rightClick(query, { region: 'APAC', total: '1500', n: '3' }, 'total');
     await settle();
