@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -83,6 +85,31 @@ func TestLog(t *testing.T) {
 func jsonOf(v any) string {
 	b, _ := jsonkit.Marshal(v)
 	return string(b)
+}
+
+// A mount is an info line with the file's modification time, read by the server; a path that
+// names no Data App's file is not logged.
+func TestLogMounted(t *testing.T) {
+	s, buf := logged(t)
+	stamp := time.Date(2026, 11, 3, 5, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(s.opts.RepoDir, "apps", "sales.html"), stamp, stamp); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{
+		`{"path":"sales.html","type":"mounted"}`,
+		`{"path":"made/up.html","type":"mounted"}`,
+		`{"path":".hidden/private.html","type":"mounted"}`,
+		`{"path":"../models/orders.model.aml","type":"mounted"}`,
+	} {
+		if w := post(s, body); w.Code != http.StatusNoContent {
+			t.Fatalf("%s: %d %s", body, w.Code, w.Body)
+		}
+	}
+	got := lines(t, buf)
+	want := []map[string]any{{"level": "INFO", "msg": "app.mounted", "service": "app", "app": "sales.html", "modified": "2026-11-03T05:00:00Z"}}
+	if a, b := jsonOf(got), jsonOf(want); a != b {
+		t.Errorf("lines =\n  %s\nwant\n  %s", a, b)
+	}
 }
 
 // What is not a report is refused, and nothing logged.

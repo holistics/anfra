@@ -220,7 +220,7 @@ A host receives them in one callback, `createHost({ onError })`, which defaults 
 Where they go is each host's choice. On `anfra serve`:
 
 - **The panel** lists them among its problems, with the static ones (markup and wiring found without running the app), the errors first; one naming a query or control links to it, any other opens to its stack. Console lines are in a section of their own.
-- **anfra.log**: the appserve page captures console lines and posts both to `POST /appserve/log`, which writes each with `"service":"app"` and the app's path ([data-apps.md](data-apps.md#appserve-what-anfra-serve-adds)). An agent reads them without a browser: `anfra status` names the log (`repo.logs`), and a `"service":"app"` line's `request_id` finds the server's line with the cause.
+- **anfra.log**: the appserve page captures console lines and posts both to `POST /appserve/log`, which writes each with `"service":"app"` and the app's path ([data-apps.md](data-apps.md#appserve-what-anfra-serve-adds)). An agent reads them without a browser: `anfra status` names the log (`repo.logs`), each load of the app starts with an `app.mounted` line (the file's modification time), and a `"service":"app"` line's `request_id` finds the server's line with the cause.
 
 ## At a platform's boundary
 
