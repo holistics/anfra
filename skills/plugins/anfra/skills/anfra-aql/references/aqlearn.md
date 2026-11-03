@@ -1200,6 +1200,7 @@ AQL differs from SQL here. The explore drops a row when every measure in it is `
 
 * A metric alone does not show its empty groups. Next to another measure that is not `null`, the measure shows as `null`.
 * `count_if(cond)` gives `0` when the group has rows but none match `cond`. `count(x) | where(cond)` gives `null` there.
+* `+` and `-` treat a `null` operand as `0`, and give `null` only when every operand is `null`. `*` and `/` give `null` when any operand is `null`. See [operator.md](aql/operator.md#null-operands).
 
 =>
 * `cancelled_orders | coalesce(0)` to show `0` instead of `null`
