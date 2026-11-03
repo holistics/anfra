@@ -52,6 +52,11 @@ orders
 
 Notice that in the Table expression, we have to manually specify the `orders` table to query from. In the Explore expression, you don't have to do that as Holistics will automatically choose the right tables to query from based on the dimensions and measures you have chosen.
 
+### Rows where every measure is null
+The explore drops a row when every measure in it is `null`. A metric over a group with no rows gives `null`, not `0`. As a result, a metric alone does not show its empty groups. Next to another measure that is not `null`, the measure shows as `null`.
+
+To show `0`, pipe the metric into `coalesce(0)`. To keep rows that have no data, add a metric on the one-side model. See [Including one-side values with absent many-side values](../aqlearn.md#including-one-side-values-with-absent-many-side-values).
+
 ### Examples
 
 ```aml

@@ -1193,6 +1193,19 @@ explore {
 }
 ```
 
+### Empty groups give null, not 0
+A metric over a group with no rows gives `null`, not `0`. This holds for `count`, `count_distinct`, `sum` and the other aggregations. It happens when `where()` or `explore.filters` removes every row of the group, or when the group comes from another model and has no matching rows.
+
+AQL differs from SQL here. The explore drops a row when every measure in it is `null`. Without this rule, every combination of dimension values would give a row, and a report could never return no rows.
+
+* A metric alone does not show its empty groups. Next to another measure that is not `null`, the measure shows as `null`.
+* `count_if(cond)` gives `0` when the group has rows but none match `cond`. `count(x) | where(cond)` gives `null` there.
+
+=>
+* `cancelled_orders | coalesce(0)` to show `0` instead of `null`
+* `count_if(cond)` instead of `count(x) | where(cond)` to get `0` for groups that have rows
+* a metric on the one-side model to keep rows with no data (see above)
+
 ### Using select()
 * `select()` returns a Table that may contain multiple columns and multiple values. To return a single scalar value, you need to re-aggregate the Table.
 * Chaining `select()` is **NOT** like chaining SQL CTEs. It only adds more columns on the same level.
