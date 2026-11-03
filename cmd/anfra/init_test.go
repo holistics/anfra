@@ -18,17 +18,20 @@ var initFiles = []string{
 
 func TestInitSetsUpARepo(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "shop")
-	var out bytes.Buffer
-	if err := initRepo(dir, &out); err != nil {
+	res, err := initRepo(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range initFiles {
+	for i, f := range initFiles {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("%s: %v", f, err)
 		}
-		if !strings.Contains(out.String(), "created "+f) {
-			t.Errorf("not reported as created: %s\n%s", f, out.String())
+		if i >= len(res.Files) || res.Files[i] != (initFile{Path: f, Changed: true}) {
+			t.Errorf("not reported as created: %s\n%+v", f, res.Files)
 		}
+	}
+	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 8 files." || len(res.Hints) != 1 {
+		t.Errorf("result: %+v", res)
 	}
 
 	// The template is a data source anfra reads, so a repo works once it is filled in.
@@ -60,7 +63,7 @@ func TestInitRefusesASymlinkedGitignore(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, ".gitignore")); err != nil {
 		t.Fatal(err)
 	}
-	err := initRepo(dir, &bytes.Buffer{})
+	_, err := initRepo(dir)
 	if err == nil || !strings.Contains(err.Error(), ".gitignore") {
 		t.Fatalf("err = %v, want one about .gitignore", err)
 	}
@@ -82,15 +85,15 @@ func TestInitKeepsWhatIsThere(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var out bytes.Buffer
-	if err := initRepo(dir, &out); err != nil {
+	res, err := initRepo(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, ".anfra/data_sources.yml")); string(got) != mine {
 		t.Errorf("data_sources.yml was changed: %q", got)
 	}
-	if !strings.Contains(out.String(), "kept    .anfra/data_sources.yml") {
-		t.Errorf("not reported as kept:\n%s", out.String())
+	if res.Files[0] != (initFile{Path: ".anfra/data_sources.yml", Changed: false}) {
+		t.Errorf("not reported as kept: %+v", res.Files[0])
 	}
 	// Another tool's lines stay, and anfra's is added after them, on a line of its own.
 	ignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
@@ -99,12 +102,17 @@ func TestInitKeepsWhatIsThere(t *testing.T) {
 	}
 
 	// Again: nothing left to create, and .gitignore gets no second line.
-	out.Reset()
-	if err := initRepo(dir, &out); err != nil {
+	res, err = initRepo(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out.String(), "created") {
-		t.Errorf("a second run created something:\n%s", out.String())
+	for _, f := range res.Files {
+		if f.Changed {
+			t.Errorf("a second run changed %s", f.Path)
+		}
+	}
+	if !strings.HasSuffix(res.Message, "init changed nothing.") {
+		t.Errorf("message: %q", res.Message)
 	}
 	if again, _ := os.ReadFile(filepath.Join(dir, ".gitignore")); !bytes.Equal(again, ignore) {
 		t.Errorf(".gitignore changed on a second run: %q", again)

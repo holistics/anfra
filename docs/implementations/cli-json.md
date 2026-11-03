@@ -11,9 +11,9 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | Errors and warnings on stderr | Done, deprecation notes included |
 | No questions, no notices | Done |
 | Every command's output kind, and the test holding every command to one | Done |
-| CLI-only commands' structured results | `openapi`, `update` and `agent setup`, with `message` and `hints`; `auth` with `--yaml` or `--json`, without `message` and `hints` yet; `init` and `publish` not started |
+| CLI-only commands' structured results | `openapi`, `update`, `agent setup` and `init`, with `message` and `hints`; `auth` with `--yaml` or `--json`, without `message` and `hints` yet; `publish` not started |
 | `--yaml`, and a CLI-only command's default, the pretty format | Done: `--yaml`, the defaults, the annotations, the help |
-| The prettifier's first views, `update` and `agent setup`, then `init` | `update` and `agent setup` built (`internal/pretty`), to review; `init` next |
+| The prettifier's first views: `update`, `agent setup` and `init` | Built (`internal/pretty`) |
 | CLI-only commands' errors classified | Not started |
 | `--schema` | Not started |
 
@@ -59,7 +59,7 @@ Each CLI-only command's result has a shape the command defines (a Go type in `cm
 | `publish` | The org (`url`, `name`), the revision published, whether anything changed, what it replaced, and the data sources it created. Diagnostics from validation go in the error's details. |
 | `update` | `anfra version`'s answer after the update, the version it replaced, and the changelog's link. Servers still running another version stay warnings, and the skills needing attention becomes one. |
 | `agent setup` | `agent setup --check`'s report after setup, and what setup did per agent: `installed`, `failed`, `cli_missing` or `instructions_only`, with a message. |
-| `init` | The files and folders it created. |
+| `init` | Its folder, and each file with whether init changed it (created it, or added to it). A failure partway carries the result as far as it got. |
 | `auth status`, `login`, `logout` | Their results as today with `--json`, now also with `--yaml`. Without either, their hand-written output, as today. |
 
 `publish`, `agent setup` and `init` print progress and notes for a person today (`internal/cliui`), some on stdout. With `--yaml` or `--json`, stdout holds the result alone; progress goes to stderr, on a terminal only, and advice into `hints`.
