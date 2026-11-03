@@ -140,8 +140,12 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 		if presentationOf(c) == presentDownload {
 			d.output, _ = runCmd.Flags().GetString("output")
 			d.link, _ = runCmd.Flags().GetBool("link")
-			if output.json && !d.link {
-				return jsonRefused("without --link it writes the file; --link writes the export's link as a document")
+			if structuredAsked() && !d.link {
+				flag := "--json"
+				if output.yaml {
+					flag = "--yaml"
+				}
+				return formatRefused(flag, "without --link it writes the file; --link writes the export's link as a document")
 			}
 		}
 		values, err := flagValues(runCmd.Flags(), args, flagArg)

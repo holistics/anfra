@@ -98,6 +98,8 @@ func newPublishCmd() *cobra.Command {
 // next one. Ctrl-C, which cancels ctx, ends a question unanswered (a Prompt's
 // with its default, the safe answer): the read itself cannot be interrupted, so
 // it runs apart from the question.
+// A command that asks through them is marked interactable (markInteractable),
+// for its --help.
 func stdinQuestions(ctx context.Context, in io.Reader, out io.Writer) (publish.Prompt, publish.Input) {
 	var lines chan string
 	// line asks, and reads the answer; ok is false with nobody to answer, and

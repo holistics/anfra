@@ -140,57 +140,76 @@ Agents read each other's folders, so a skill can load twice. For example, Codex 
 - **A duplicate costs little:** about 500 tokens of names and descriptions per session.
 - **The real risk is drift:** two copies, updated by different mechanisms, at different versions. [`anfra agent setup --check`](#the-check-report) lists each copy it can see and marks any that has fallen behind.
 
-### The report and exit code
+### The result and exit code
 
-Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then prints the [check report](#the-check-report) of the state it leaves: the same sections, so there's one format to read. After it come setup's own notes, each only when it applies:
+Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then answers with what it did and the [check report](#the-check-report) of the state it leaves ([new state as output](commands-and-api.md#new-state-as-output)), as YAML, or JSON with `--json`:
 
+```yaml
+setup:
+    agents:
+        - agent: claude-code
+          outcome: installed
+          message: Restart Claude Code, or run /reload-plugins, to load it.
+        - agent: codex
+          outcome: failed
+          message: '`codex plugin add anfra@anfra-skills`: exit status 1'
+    agents_md:
+        wrote_block: true
+        wrote_import: false
+skills: …          # then the check report, as setup leaves things
 ```
-Restart Claude Code, or run /reload-plugins, to load it.
-Codex: failed: `codex plugin add anfra@anfra-skills`: exit status 1
-To update the skills in a folder, see https://github.com/holistics/anfra-skills#updating-and-removing.
-```
 
-- **The restart note,** for each agent it installed into.
-- **A failed step,** or an agent whose CLI isn't on the `PATH`.
-- **The pointer for copies,** when a copy is behind: setup updates plugins, not copies.
+- **Each agent's outcome:** `installed`, `failed` (a step failed), `cli_missing` (its CLI isn't on the `PATH`, so nothing was tried) or `instructions_only` (anfra doesn't install for it), with a message saying what to do next.
+- **`agents_md`:** what setup wrote of the block and the `CLAUDE.md` import; null outside an anfra repo.
 
-The `AGENTS.md` section says when setup just wrote the block: `the anfra block is up-to-date (setup just wrote it)`.
+It fails when any install failed, or when an agent named with `--agent` ends up not installed. An agent that was only detected and got pointed at the repo doesn't fail the run. Otherwise anyone with a second agent's folder would see setup fail on every run. A failed setup writes no result: its error, `command_failed`, carries the result as far as it got in its `details`.
 
-It exits non-zero when any install failed, or when an agent named with `--agent` ends up not installed. An agent that was only detected and got pointed at the repo doesn't fail the run. Otherwise anyone with a second agent's folder would see setup fail on every run.
+On a terminal, stderr also says what setup is doing ("Installing anfra for Claude Code...") and what a person would do next: update copies that are behind (setup updates plugins, not copies), clean up deprecated ones, or run `anfra init` outside a repo.
 
 ### The check report
 
-`anfra agent setup --check` changes nothing. It has three sections, and in an anfra repo (step 5) a fourth, for the `AGENTS.md` block:
+`anfra agent setup --check` changes nothing. It answers with four parts:
 
+```yaml
+skills:
+    latest: 0.4.5                        # null until the background check has run
+    checked_at: 2026-11-03T08:12:00Z
+agents:
+    - id: claude-code
+      name: Claude Code
+      plugins:
+        - scope: user
+          version: 0.4.4
+          status: behind
+      copies: [~/.claude/skills]
+    - id: opencode
+      name: OpenCode
+      plugins: []
+      copies: []
+      install: https://github.com/holistics/anfra-skills#opencode
+copies:
+    - dir: ~/.agents/skills
+      status: mixed
+      versions:
+        - version: 0.4.4
+          skills: [anfra-aql, anfra-write-aql]
+        - version: 0.4.5
+          skills: [anfra-amql, …]
+      deprecated_names: false
+    - dir: ~/.claude/skills
+      status: deprecated
+      versions: []
+      deprecated_names: true
+agents_md:                               # null outside an anfra repo
+    block: up-to-date
+    claude_md_imports: true              # null when the repo has no CLAUDE.md
 ```
-$ anfra agent setup --check
-Latest anfra skills: 0.4.5, from GitHub (checked today)
 
-Agents found:
-  Claude Code     plugin, skills  plugin 0.4.4; ~/.claude/skills
-  Cursor          skills          ~/.agents/skills, ~/.cursor/skills, ~/.claude/skills
-  GitHub Copilot  skills          ~/.agents/skills, ~/.copilot/skills
-  OpenCode        none            see https://github.com/holistics/anfra-skills#opencode
-
-Skills found:
-  Claude Code plugin  behind  0.4.4
-  ~/.agents/skills    mixed   anfra-aql, anfra-write-aql at 0.4.4; 6 skills at 0.4.5
-  ~/.cursor/skills    latest  0.4.5
-  ~/.copilot/skills   behind  0.4.4
-  .claude/skills      behind  no version
-
-Deprecated skills, from before 0.15.0:
-  ~/.claude/skills
-  ~/.cursor/skills
-Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
-
-Run `anfra agent setup` to install or update them.
-```
-
-- **The heading** says where the latest version comes from and when it was checked: "checked today", a date, or "not known yet".
-- **Agents** says where each agent's skills come from: `plugin`, `skills` (copies in the folders it reads), both, or `none`, with where to install from. It shows duplicates, such as a plugin and a copy in one agent. Which folders each agent reads is data in the agent list, from the agents' docs.
-- **Skills** lists each plugin and each copy, by where it is, as `latest`, `behind` or `mixed`, with its version, or which skills are at which version, oldest first. A copy is a folder's `anfra-*` skills, each read for its own stamp, so a partial install is found too. A skill with no stamp is `behind`, with `no version`. Against an unknown latest, the status is `unknown`.
-- **Deprecated skills** are copies of the names from before the `anfra-` prefix (`aml`, `aql`, …), found by their old `setup-repo` skill when its text names anfra. An agent loads them next to the new names. The section appears only when there are some, with the README's cleanup steps once.
+- **`skills`** is the latest skills version, from the background check, and when it was checked.
+- **`agents`** says where each agent's skills come from: its plugins, through its CLI, and the copies in the folders it reads; or, with neither, where to install from. It shows duplicates, such as a plugin and a copy in one agent. Which folders each agent reads is data in the agent list, from the agents' docs.
+- **`copies`** lists each folder of copies, as `latest`, `behind`, `mixed` or `deprecated`, with which skills are at which version, oldest first. A copy is a folder's `anfra-*` skills, each read for its own stamp, so a partial install is found too. A skill with no stamp has a null version, and makes its copy `behind`. Against an unknown latest, the status is `unknown`.
+- **Deprecated skills** are copies of the names from before the `anfra-` prefix (`aml`, `aql`, …), found by their old `setup-repo` skill when its text names anfra: `deprecated_names: true`. An agent loads them next to the new names. A folder with only those is `deprecated`: updating doesn't replace them, removing them does.
+- **`agents_md`** is the repo's anfra block: `missing`, `outdated`, `up-to-date`, or `unreadable` with a message, and whether `CLAUDE.md` imports `AGENTS.md`.
 - **The list of copies** doesn't decide whether the skills in use fit, since it can't tell which copy is in use. That's [the check](#the-check)'s job.
 - **What it reads:**
   - the skills folders the known agents read, at home and in the repo, and each `anfra-*` skill's stamp line;
@@ -480,7 +499,7 @@ The plugins' installed versions aren't here: listing them takes the agents' CLIs
 - **The agent list:** for each agent, its id, how it's detected (a CLI on the `PATH`, or a home folder, including one an environment variable names), its route, the skills folders it reads at home and in a repo, and its README anchor. Claude Code and Codex keep today's steps, and Claude Code's add `plugin update`, so running setup again upgrades.
 - **Per user only:** no `--scope`. The `skills install` alias keeps a hidden `--scope` only to refuse `project`, naming `anfra agent setup`.
 - **Selection:** `--agent`, else the detected agents. No prompt.
-- **The report and exit code,** as [described above](#the-report-and-exit-code).
+- **The result and exit code,** as [described above](#the-result-and-exit-code).
 - **`--check`,** reporting without changing anything, as [The check report](#the-check-report) describes: the plugins through the agents' CLIs, the copies in the folders the agents read, by their `anfra-*` skills' stamps, and the deprecated copies of the old names.
 - **Only the agent CLIs it installs through run:** the system's commands are built by literal name (`claude`, `codex`), whatever reaches them.
 - **`anfra skills install`** becomes an alias, printing "This command is deprecated. Use `anfra agent setup` instead."
@@ -501,7 +520,7 @@ This comes after steps 3 and 4, since the block names `version --skills` and `ag
 
 ### 6. anfra: what needs attention, and where it shows
 
-- **Setup's report** reuses the check report, then its own notes, as [described above](#the-report-and-exit-code).
+- **Setup's result** is what it did, then the check report, as [described above](#the-result-and-exit-code).
 - **The attention line** (`agents.Attention`), as [described above](#the-attention-line), at the end of `anfra update` and its `--check`, and as the notice after a command, at most once a day (`agents.Notice`).
 - **The plugins recorded** (`agents.RecordPlugins`, `~/.anfra/agents-check.json`), by the background check and by setup, for the line to read without starting the agents' CLIs.
 - **The background check twice a day:** its cache lasts 12 hours.

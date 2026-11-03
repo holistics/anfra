@@ -22,7 +22,7 @@ Commands live in packages under `internal/command/` (one per group), and are reg
 
 | Surface | Built by | What it is |
 |---|---|---|
-| CLI | `cmd/anfra/commands.go` | `anfra <group> <name>`: flags from the args (an object arg as JSON, or its fields as flags by their path, `--format-options.header`), output as YAML, or JSON with `--json` ([CLI output](#cli-output)). When the repo has a running `anfra serve`, the CLI sends the call there instead of starting its own sidecars, unless the command is CLI-local ([cli-vs-warm-server.md](cli-vs-warm-server.md)). |
+| CLI | `cmd/anfra/commands.go` | `anfra <group> <name>`: flags from the args (an object arg as JSON, or its fields as flags by their path, `--format-options.header`), output as YAML, JSON or pretty ([CLI output](#cli-output)). When the repo has a running `anfra serve`, the CLI sends the call there instead of starting its own sidecars, unless the command is CLI-local ([cli-vs-warm-server.md](cli-vs-warm-server.md)). |
 | HTTP | `shared/apikit` `HTTP` | `POST /api/core.<name>`, a JSON body in, the answer or an error envelope out. |
 | MCP | `shared/apikit` `MCP` | One tool per op, named like it, at `/mcp`. |
 | In-process | `engine.Dispatch` | For a platform embedding anfra ([engine.md](engine.md)). |
@@ -32,22 +32,30 @@ Discovery serves the same contract the operations do, filtered to what the calle
 
 ### CLI output
 
-Every command writes structured output, YAML documents by default and JSON with `--json`. (In docs, say *structured output* for what a command writes, as against prose; say *document* only beside YAML or JSON, where the format is the point.) Either way:
+Every command writes structured output, except the few that write an artifact (below). (In docs, say *structured output* for what a command writes, as against prose; say *document* only beside YAML or JSON, where the format is the point.) Structured output comes in three formats:
 
-- **stdout holds the result alone,** one document. A core command's is its op's answer, as HTTP returns it.
-- **A CLI-only command's result is structured too.** It has no op, so the command defines the result's shape itself (a Go type in `cmd/anfra`) and documents it in its `--help`. It is in no published schema and CI checks no change to it, but scripts rely on it, so it changes as a CLI-only command's flags do: with a deprecation period ([deprecation before removal](#deprecation-before-removal)).
-- **stderr holds the rest, structured:** each warning, then at most one error, last ([errors.md](errors.md#from-error-to-caller)), each a document with one top-level key saying what it is: `warning` or `error`.
+- **YAML** (`--yaml`): a core command's default. Read by a person or an agent, and by YAML tools.
+- **JSON** (`--json`): for tools and languages that read only JSON.
+- **Pretty**: the pretty format, laid out for a person, with tables and sections ([cli-pretty.md](cli-pretty.md)). A CLI-only command's default, as people run them more than programs do; no flag asks for it yet. Not for a program: it can truncate, and its layout may change.
+
+`--yaml` or `--json` works on every command, so an agent or a script passes one and never depends on a command's default. Whatever the format:
+
+- **stdout holds the result alone.** A core command's is its op's answer, as HTTP returns it.
+- **A CLI-only command's result is structured too.** It has no op, so the command defines the result's shape itself (a Go type in `cmd/anfra`), which `--schema` shows ([cli-json.md, step 4](../implementations/cli-json.md#4---schema)). It is in no published schema and CI checks no change to it, but scripts rely on it, so it changes as a CLI-only command's flags do: with a deprecation period ([deprecation before removal](#deprecation-before-removal)).
+- **A CLI-only command's result has `message` and `hints`.** `message`, its first field, says in a sentence where things stand, so a person or an agent grasps the outcome before the details: "Updated anfra 0.16.0 → 0.17.0." It's best built from the result's own fields, so it agrees with them. `hints`, its last, is what to act on next, one a line, absent when nothing is, as `anfra version`'s are: "Put your database in .anfra/data_sources.yml, …". Advice goes in `hints`, never in prose on stderr, which an agent doesn't see off a terminal.
+- **stderr holds the rest, as documents:** each warning, then at most one error, last ([errors.md](errors.md#from-error-to-caller)), each with one top-level key saying what it is: `warning` or `error`. They're YAML documents whatever stdout's format, pretty included, and JSONL with `--json`, so a program reads stderr the same way whichever command ran. Progress for a person ("Downloading…") is the one exception: on a terminal only.
 - **The exit code** is non-zero for a failure and for an invalid verdict, whatever the format.
 - **Questions, and notices for a person,** come only on a terminal, and not with `--non-interactive`: a command that would ask refuses instead, as it does without a terminal. `--no-interactive` is accepted as the same flag. Whether a run asks is the run's, not the command's: a command that asks on a terminal still writes structured output, and the format has no say in it (`--json` on a terminal still asks).
 
-| | YAML (default) | JSON (`--json`) |
-|---|---|---|
-| For | A person or an agent reading it, and YAML tools (`yq`) | Tools and languages that read only JSON (`jq`) |
-| stdout | The result as a YAML document | The result as one JSON document |
-| stderr | Multiple YAML documents, each after `---` | JSONL: one JSON document a line |
-| `openapi` | The OpenAPI document as YAML | The OpenAPI document as JSON |
+| | YAML (`--yaml`) | JSON (`--json`) | Pretty |
+|---|---|---|---|
+| Default for | core commands | none | CLI-only commands |
+| For | a person or an agent reading it, and YAML tools (`yq`) | tools and languages that read only JSON (`jq`) | a person |
+| stdout | the result as a YAML document | the result as one JSON document | the result laid out for reading: `message`, sections, tables, `hints` |
+| stderr | multiple YAML documents, each after `---` | JSONL: one JSON document a line | as YAML |
+| `openapi` | the OpenAPI document as YAML | the OpenAPI document as JSON | as YAML |
 
-**Artifacts are the exception.** A few commands write something other than a result to stdout, and refuse `--json` for good: `serve`, which runs until stopped and writes a log; `completion`, a shell script; `help`, its text; and `query export` without `--link`, the file. Every other command writes structured output, and a test holds every command to that (`cmd/anfra`): a new command either has a structured result or is marked an artifact.
+**Artifacts are the exception.** A few commands write something other than a result to stdout, and refuse `--yaml` and `--json` for good: `serve`, which runs until stopped and writes a log; `completion`, a shell script; `help`, its text; and `query export` without `--link`, the file. Every other command writes structured output, and a test holds every command to that (`cmd/anfra`): a new command either has a structured result or is marked an artifact.
 
 ## The contract: `api/openapi.yaml`
 
@@ -78,6 +86,21 @@ A command that changes something offers ways to ask about it without changing it
 - **`<action> --check` is the action's preflight.** It does everything the action would up to its first change, then reports what the action would do: "what would happen if I ran this?" It exits non-zero when the action would fail. `anfra update --check`, `anfra agent setup --check`.
 
 anfra has no `--dry-run`. Other tools use the name for both an offline look and an online preflight, so it says nothing about how far a command goes.
+
+### New state as output
+
+*A pattern we follow where it fits, not a rule yet.*
+
+A command that changes something can answer with the state it leaves, in the shape of the command that reads that state, plus what it changed. The caller learns where things stand now, which is what it acts on next, in fields it already knows from the read.
+
+Precedents:
+
+- **HTTP:** a `PUT` or `PATCH` that answers with the resource as it now is.
+- **`kubectl apply -o yaml`:** the object as the cluster now holds it.
+- **`anfra update`** (planned, [cli-json.md](../implementations/cli-json.md)): `anfra version`'s answer as it is after the update, plus `previous`, the version it replaced. `update --check` is the same answer without acting.
+- **`anfra agent setup`** (planned, same doc): `agent setup --check`'s report as it is after setup, plus what setup did for each agent.
+
+A command with no read of its state answers with what it changed alone: `anfra init`, the files it created.
 
 ### Public and internal ops
 

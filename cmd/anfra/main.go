@@ -91,9 +91,12 @@ func newRootCmd() *cobra.Command {
 		Use:   "anfra",
 		Short: "Anfra — local-first agentic analytics framework",
 		Long: "Anfra — local-first agentic analytics framework\n\n" +
-			"Every command writes its answer to stdout as a YAML document, or as JSON with --json.\n" +
-			"Warnings and errors go to stderr as multiple YAML documents, or JSONL documents with\n" +
-			"--json, and the exit code is non-zero on failure. --non-interactive asks no questions.",
+			"Every command writes its answer to stdout as a YAML document, except CLI-only commands\n" +
+			"like agent setup, auth, init and publish, which write it in the pretty format by default\n" +
+			"(the lists below tell core and CLI-only commands apart); --yaml or --json writes it as\n" +
+			"YAML or JSON from any command. Warnings and errors go to stderr as multiple YAML\n" +
+			"documents, or JSONL documents with --json, and the exit code is non-zero on failure.\n" +
+			"--non-interactive asks no questions.",
 		// Setting Version makes cobra add `--version` (and `-v`, since it's free) to
 		// the root. Mirrors the `version` command, which the server also serves.
 		Version: meta.Version,
@@ -105,14 +108,16 @@ func newRootCmd() *cobra.Command {
 	markArtifactOutput(serve, "a log, until it is stopped")
 	markArtifactOutput(updateCheck, "nothing: it checks in the background") // internal
 	update, agent, skills, initCmd, publish := newUpdateCmd(), newAgentCmd(), newSkillsCmd(), newInitCmd(), newPublishCmd()
-	for _, c := range []*cobra.Command{update, agent, skills, initCmd, publish} {
+	for _, c := range []*cobra.Command{initCmd, publish} {
 		markNoStructuredOutputYet(c) // docs/implementations/cli-json.md, step 2
 	}
+	markInteractable(publish)
 	root.AddCommand(serve, newOpenAPICmd())
 	root.AddCommand(update, updateCheck)
 	root.AddCommand(agent, skills, initCmd)
 	root.AddCommand(publish, newAuthCmd())
-	root.AddCommand(appCommands()...) // ping, query, … generated from the registry
-	addOutputFlags(root)
+	core := appCommands() // ping, query, … generated from the registry
+	root.AddCommand(core...)
+	addOutputFlags(root, core)
 	return root
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -65,8 +66,9 @@ const (
 func TestSetupInstallsIntoEachAgentFound(t *testing.T) {
 	env := newFakeEnv(t, "claude", "codex")
 	env.lists["claude"] = claudeList
-	var out bytes.Buffer
-	if err := Setup(context.Background(), env.Env, Options{Out: &out}); err != nil {
+	var progress bytes.Buffer
+	res, err := Setup(context.Background(), env.Env, Options{Progress: &progress})
+	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -81,33 +83,54 @@ func TestSetupInstallsIntoEachAgentFound(t *testing.T) {
 	if !slices.Equal(env.ran, want) {
 		t.Errorf("ran:\n%s\nwant:\n%s", strings.Join(env.ran, "\n"), strings.Join(want, "\n"))
 	}
-	for _, want := range []string{"Claude Code  plugin  plugin 0.4.5", "\nRestart Claude Code, or run /reload-plugins, to load it.\n"} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("the report lacks %q:\n%s", want, out.String())
-		}
+	if got := res.Setup.Agents; len(got) != 2 ||
+		got[0] != (AgentSetup{"claude-code", OutcomeInstalled, "Restart Claude Code, or run /reload-plugins, to load it."}) ||
+		got[1].Agent != "codex" || got[1].Outcome != OutcomeInstalled {
+		t.Errorf("setup: %+v", got)
 	}
+	if got := res.Agents[0].Plugins; !slices.Equal(got, []PluginState{{Scope: "user", Version: "0.4.5", Status: "unknown"}}) {
+		t.Errorf("Claude Code's plugins after setup: %+v", got)
+	}
+	if res.Setup.AgentsMD != nil || res.AgentsMD != nil {
+		t.Errorf("outside a repo, agents_md: %+v, %+v", res.Setup.AgentsMD, res.AgentsMD)
+	}
+	if !strings.Contains(progress.String(), "Installing anfra for Claude Code...") {
+		t.Errorf("progress:\n%s", progress.String())
+	}
+}
+
+// incomplete is the result a failed setup returns with ErrIncomplete.
+func incomplete(t *testing.T, res SetupResult, err error) SetupResult {
+	t.Helper()
+	if !errors.Is(err, ErrIncomplete) {
+		t.Fatalf("want ErrIncomplete, got %v", err)
+	}
+	return res
 }
 
 // An agent anfra doesn't install into is pointed at its README section, and
 // never reported as installed. Found, not named, it doesn't fail the run.
 func TestSetupPointsOtherAgentsAtTheReadme(t *testing.T) {
 	env := newFakeEnv(t, "opencode")
-	var out bytes.Buffer
-	if err := Setup(context.Background(), env.Env, Options{Out: &out}); err != nil {
+	res, err := Setup(context.Background(), env.Env, Options{})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if len(env.ran) > 0 {
 		t.Errorf("ran %v", env.ran)
 	}
-	report := out.String()
-	want := "OpenCode  none  see https://github.com/holistics/anfra-skills#opencode"
-	if !strings.Contains(report, want) {
-		t.Errorf("report:\n%s\nwant a line:\n%s", report, want)
+	readme := "https://github.com/holistics/anfra-skills#opencode"
+	if s := res.Setup.Agents[0]; s.Outcome != OutcomeInstructionsOnly || !strings.Contains(s.Message, readme) {
+		t.Errorf("setup: %+v", s)
+	}
+	if a := res.Agents[0]; a.ID != "opencode" || a.Install != readme {
+		t.Errorf("agent: %+v", a)
 	}
 
 	// Named, it fails the run: the agent asked for has no plugin.
-	if err := Setup(context.Background(), env.Env, Options{Agents: []string{"opencode"}, Out: &bytes.Buffer{}}); err == nil {
-		t.Error("a named agent left without the plugin: got no error")
+	res, err = Setup(context.Background(), env.Env, Options{Agents: []string{"opencode"}})
+	if s := incomplete(t, res, err).Setup.Agents[0]; s.Outcome != OutcomeInstructionsOnly {
+		t.Errorf("named: %+v", s)
 	}
 }
 
@@ -115,16 +138,16 @@ func TestSetupPointsOtherAgentsAtTheReadme(t *testing.T) {
 // which exists, rather than at a section that doesn't.
 func TestSetupPointsAnUnknownAgentAtOtherAgents(t *testing.T) {
 	env := newFakeEnv(t)
-	var out bytes.Buffer
-	_ = Setup(context.Background(), env.Env, Options{Agents: []string{"roo"}, Out: &out})
-	if !strings.Contains(out.String(), "anfra-skills#other-agents") {
-		t.Errorf("report:\n%s", out.String())
+	res, err := Setup(context.Background(), env.Env, Options{Agents: []string{"roo"}})
+	res = incomplete(t, res, err)
+	if !strings.Contains(res.Setup.Agents[0].Message, "anfra-skills#other-agents") || !strings.HasSuffix(res.Agents[0].Install, "#other-agents") {
+		t.Errorf("result: %+v", res)
 	}
 }
 
 func TestSetupWithNoAgentFound(t *testing.T) {
 	env := newFakeEnv(t)
-	err := Setup(context.Background(), env.Env, Options{Out: &bytes.Buffer{}})
+	_, err := Setup(context.Background(), env.Env, Options{})
 	if err == nil || !strings.Contains(err.Error(), "claude-code") || !strings.Contains(err.Error(), "#other-agents") {
 		t.Errorf("got %v, want an error listing the ids and the README", err)
 	}
@@ -138,15 +161,16 @@ func TestSetupWithoutTheAgentsCLI(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(env.Home, ".claude"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	var out bytes.Buffer
-	if err := Setup(context.Background(), env.Env, Options{Out: &out}); err != nil {
+	res, err := Setup(context.Background(), env.Env, Options{})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Claude Code: not installed, as its CLI `claude` is not on your PATH.") {
-		t.Errorf("report:\n%s", out.String())
+	if s := res.Setup.Agents[0]; s.Outcome != OutcomeCLIMissing || !strings.Contains(s.Message, "`claude` is not on your PATH") {
+		t.Errorf("setup: %+v", s)
 	}
-	if err := Setup(context.Background(), env.Env, Options{Agents: []string{"claude-code"}, Out: &out}); err == nil {
-		t.Error("a named agent whose CLI is missing: got no error")
+	res, err = Setup(context.Background(), env.Env, Options{Agents: []string{"claude-code"}})
+	if s := incomplete(t, res, err).Setup.Agents[0]; s.Outcome != OutcomeCLIMissing {
+		t.Errorf("named: %+v", s)
 	}
 }
 
@@ -175,52 +199,53 @@ func TestDetectedByAnEnvironmentVariable(t *testing.T) {
 func TestSetupReportsAFailedStep(t *testing.T) {
 	env := newFakeEnv(t, "claude", "codex")
 	env.fail = "claude plugin install"
-	var out bytes.Buffer
-	if err := Setup(context.Background(), env.Env, Options{Out: &out}); err == nil {
-		t.Error("a failed step: got no error")
+	res, err := Setup(context.Background(), env.Env, Options{})
+	res = incomplete(t, res, err)
+	if s := res.Setup.Agents[0]; s.Outcome != OutcomeFailed || !strings.Contains(s.Message, "`claude plugin install anfra@anfra-skills --scope user`") {
+		t.Errorf("setup: %+v", s)
 	}
-	if !strings.Contains(out.String(), "Claude Code: failed: `claude plugin install anfra@anfra-skills --scope user`") {
-		t.Errorf("report:\n%s", out.String())
+	if s := res.Setup.Agents[1]; s.Outcome != OutcomeInstalled {
+		t.Errorf("Codex: %+v", s)
 	}
 	if !slices.Contains(env.ran, "codex plugin add anfra@anfra-skills") {
 		t.Errorf("Codex wasn't set up after Claude Code failed: %v", env.ran)
 	}
 }
 
-// Check reports where each agent's skills come from, each plugin and copy
-// against the cached latest, and the deprecated copies, and changes nothing.
+// Check reports where each agent's skills come from, each copy against the
+// cached latest, the deprecated ones included, and changes nothing.
 func TestCheckReports(t *testing.T) {
 	env := newFakeEnv(t, "claude", "opencode", "codex")
 	cacheSkills(t, "0.4.6")
 	env.lists["claude"] = claudeList
 	writeSkill(t, filepath.Join(env.Home, ".agents/skills"), "anfra-aql", stamped("0.4.6"))
 	writeSkill(t, filepath.Join(env.Home, ".claude/skills"), "setup-repo", "Run `anfra version`.\n")
-	var out bytes.Buffer
-	if err := Check(context.Background(), env.Env, Options{NotRepo: true, Out: &out}); err != nil {
+	var progress bytes.Buffer
+	r, err := Check(context.Background(), env.Env, Options{Progress: &progress})
+	if err != nil {
 		t.Fatal(err)
 	}
-	want := `Latest anfra skills: 0.4.6, from GitHub (checked today)
-
-Agents found:
-  Claude Code  plugin, skills  plugin 0.4.5; ~/.claude/skills
-  Codex        skills          ~/.agents/skills
-  OpenCode     skills          ~/.agents/skills, ~/.claude/skills
-
-Skills found:
-  Claude Code plugin  behind  0.4.5
-  ~/.agents/skills    latest  0.4.6
-
-Deprecated skills, from before 0.15.0:
-  ~/.claude/skills
-Clean them up as https://github.com/holistics/anfra-skills#updating-and-removing says.
-
-AGENTS.md:
-  skipped: this folder isn't an anfra repo (no .anfra/). Run ` + "`anfra init`" + ` here to set it up, with the anfra block.
-
-Run ` + "`anfra agent setup`" + ` to install or update them.
-`
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
+	if r.Skills.Latest == nil || *r.Skills.Latest != "0.4.6" || r.Skills.CheckedAt == nil {
+		t.Errorf("skills: %+v", r.Skills)
+	}
+	r.Skills = LatestSkills{}
+	latest := "0.4.6"
+	want := Report{
+		Agents: []AgentState{
+			{ID: "claude-code", Name: "Claude Code", Plugins: []PluginState{{"user", "0.4.5", "behind"}}, Copies: []string{"~/.claude/skills"}},
+			{ID: "codex", Name: "Codex", Plugins: []PluginState{}, Copies: []string{"~/.agents/skills"}},
+			{ID: "opencode", Name: "OpenCode", Plugins: []PluginState{}, Copies: []string{"~/.agents/skills", "~/.claude/skills"}},
+		},
+		Copies: []CopyState{
+			{Dir: "~/.claude/skills", Status: "deprecated", Versions: []SkillsVersion{}, DeprecatedNames: true},
+			{Dir: "~/.agents/skills", Status: "latest", Versions: []SkillsVersion{{Version: &latest, Skills: []string{"anfra-aql"}}}},
+		},
+	}
+	if !reflect.DeepEqual(r, want) {
+		t.Errorf("got:\n%+v\nwant:\n%+v", r, want)
+	}
+	if !strings.Contains(progress.String(), "~/.claude/skills has deprecated anfra skills") {
+		t.Errorf("progress:\n%s", progress.String())
 	}
 	if len(env.ran) > 0 {
 		t.Errorf("ran %v", env.ran)
@@ -292,31 +317,29 @@ func TestSystemRunsOnlyTheAgentCLIs(t *testing.T) {
 func TestSetupWritesTheAgentsBlock(t *testing.T) {
 	env := newFakeEnv(t, "opencode")
 	repoDir := t.TempDir()
-	var out bytes.Buffer
-	if err := Setup(context.Background(), env.Env, Options{RepoDir: repoDir, Out: &out}); err != nil {
+	res, err := Setup(context.Background(), env.Env, Options{RepoDir: repoDir})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "AGENTS.md:\n  the anfra block is up-to-date (setup just wrote it)\n") {
-		t.Errorf("report:\n%s", out.String())
+	if *res.Setup.AgentsMD != (AgentsMDSetup{WroteBlock: true}) || *res.AgentsMD != (AgentsMDState{Block: BlockUpToDate}) {
+		t.Errorf("agents_md: %+v, %+v", res.Setup.AgentsMD, res.AgentsMD)
 	}
-	out.Reset()
-	if err := Setup(context.Background(), env.Env, Options{RepoDir: repoDir, Out: &out}); err != nil {
+	res, err = Setup(context.Background(), env.Env, Options{RepoDir: repoDir})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "AGENTS.md:\n  the anfra block is up-to-date\n") {
-		t.Errorf("report:\n%s", out.String())
+	if *res.Setup.AgentsMD != (AgentsMDSetup{}) || res.AgentsMD.Block != BlockUpToDate {
+		t.Errorf("again, agents_md: %+v, %+v", res.Setup.AgentsMD, res.AgentsMD)
 	}
 
 	linked := t.TempDir()
 	if err := os.Symlink(filepath.Join(t.TempDir(), "x.md"), filepath.Join(linked, "AGENTS.md")); err != nil {
 		t.Fatal(err)
 	}
-	out.Reset()
-	if err := Setup(context.Background(), env.Env, Options{RepoDir: linked, Out: &out}); err == nil {
-		t.Error("a symlinked AGENTS.md: got no error")
-	}
-	if !strings.Contains(out.String(), "AGENTS.md: failed: AGENTS.md is not a regular file") {
-		t.Errorf("report:\n%s", out.String())
+	res, err = Setup(context.Background(), env.Env, Options{RepoDir: linked})
+	res = incomplete(t, res, err)
+	if !strings.Contains(res.Setup.AgentsMD.Message, "AGENTS.md is not a regular file") || res.AgentsMD.Block != BlockUnreadable {
+		t.Errorf("a symlinked AGENTS.md: %+v, %+v", res.Setup.AgentsMD, res.AgentsMD)
 	}
 }
 
@@ -327,26 +350,26 @@ func TestCheckReportsTheAgentsBlock(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repoDir, "CLAUDE.md"), []byte("# Notes\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var out bytes.Buffer
-	if err := Check(context.Background(), env.Env, Options{RepoDir: repoDir, Out: &out}); err != nil {
+	r, err := Check(context.Background(), env.Env, Options{RepoDir: repoDir})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "\nAGENTS.md:\n  the anfra block is missing\n  CLAUDE.md doesn't import it (@AGENTS.md)\n") {
-		t.Errorf("report:\n%s", out.String())
+	if md := r.AgentsMD; md.Block != BlockMissing || md.ClaudeMDImports == nil || *md.ClaudeMDImports {
+		t.Errorf("agents_md: %+v", md)
 	}
 	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); err == nil {
 		t.Error("check wrote AGENTS.md")
 	}
 }
 
-// With nothing installed, the report says how to install them.
+// With nothing installed, the report says where to install them from.
 func TestCheckWithNoSkills(t *testing.T) {
 	env := newFakeEnv(t, "opencode")
-	var out bytes.Buffer
-	if err := Check(context.Background(), env.Env, Options{Out: &out}); err != nil {
+	r, err := Check(context.Background(), env.Env, Options{})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Skills found:\n  none. Run `anfra agent setup` to install them in your agents.\n") {
-		t.Errorf("report:\n%s", out.String())
+	if len(r.Copies) != 0 || r.Agents[0].Install != "https://github.com/holistics/anfra-skills#opencode" {
+		t.Errorf("report: %+v", r)
 	}
 }

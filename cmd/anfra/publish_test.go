@@ -586,8 +586,10 @@ func TestAuthStatusRepoBoundariesAndJSON(t *testing.T) {
 		t.Fatalf("crossed home boundary: %v %v", url, err)
 	}
 	seedLoginInventory(t)
+	t.Cleanup(resetOutput)
+	output.json = true
 	var empty bytes.Buffer
-	if err := printAuthStatus(context.Background(), root, &empty, true, false); err != nil || empty.String() != "{\"orgs\":[],\"repo_org_url\":null,\"remote_checked\":false}" {
+	if err := printAuthStatus(context.Background(), root, &empty, true, false); err != nil || empty.String() != "{\"orgs\":[],\"repo_org_url\":null,\"remote_checked\":false}\n" {
 		t.Fatalf("%s %v", &empty, err)
 	}
 }

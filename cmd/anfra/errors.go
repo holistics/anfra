@@ -17,6 +17,24 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
+// cliNS is the namespace of the CLI's own codes: its CLI-only commands'
+// failures, which no op has, so they're in no host's catalog
+// (docs/implementations/cli-json.md, step 3).
+var cliNS = apperr.DefineNamespace("anfra_cli")
+
+// commandFailed: a CLI-only command didn't do its job, for a reason the user
+// can fix, in a way no program branches on yet, as query_failed is for a query.
+// Its details, when it has any, are the command's to say, such as its result
+// as far as it got. A failure a program comes to act on gets a code of its own.
+var commandFailed = apperr.DefinePublicCodeWith[any](cliNS, "command_failed", apperr.User,
+	"The command failed.")
+
+// commandFailedWith is a CLI-only command's failure, msg saying what failed,
+// with details.
+func commandFailedWith(msg string, details any) error {
+	return apperr.NewWith(commandFailed, msg, details)
+}
+
 // remoteError is a running server's error: resp, decoded for its code and
 // scope, and raw, the error object as the body carried it, which printError
 // shows in its order.
@@ -155,8 +173,10 @@ func writeDoc(w io.Writer, key string, v any) {
 
 // blockStyle drops the JSON's style from n and beneath, its quotes and braces,
 // so the document reads as YAML written by hand. A string is styled as yaml.v3
-// styles a Go string: quoted where a reader would take it for something else,
-// "yes" for a YAML 1.1 reader's true included.
+// styles a Go string: quoted where a reader would take it for something else.
+// A number kept as a string, such as a query row's integer past 2^53, stays a
+// string, so a reader doesn't parse it as a number and round it; "yes" stays a
+// string for a YAML 1.1 reader, which would take it for true.
 func blockStyle(n *yaml.Node) {
 	n.Style = 0
 	if n.Kind == yaml.ScalarNode && n.Tag == "!!str" {

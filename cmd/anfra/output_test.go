@@ -8,13 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // resetOutput clears what a run's --json and --non-interactive set, which
 // outlives the run: a test that runs a command with them cleans up after it.
-func resetOutput() { output.json, output.nonInteractive = false, false }
+func resetOutput() { output.yaml, output.json, output.nonInteractive = false, false, false }
 
 // With --json, an answer is its op's JSON as it is, one document a line.
 func TestJSONAnswer(t *testing.T) {
@@ -171,17 +172,18 @@ func TestJSONAsked(t *testing.T) {
 	}
 }
 
-// An answer's YAML is its JSON's shape: the op's field order, and its numbers
-// as written.
+// An answer's YAML is its JSON's shape: the op's field order, its numbers as
+// written, and its strings strings, a number's digits kept as one quoted.
 func TestAnswerYAMLKeepsTheShape(t *testing.T) {
 	var out bytes.Buffer
-	body := []byte(`{"server": {"state": "running", "port": 9007199254740993}, "repo": {"id": "r1", "ratio": 1.50, "tags": ["b", "a"], "on": "yes", "empty": {}}}`)
+	body := []byte(`{"server": {"state": "running", "port": 9007199254740993, "row_id": "9007199254740993"}, "repo": {"id": "r1", "ratio": 1.50, "tags": ["b", "a"], "on": "yes", "empty": {}}}`)
 	if err := renderTo(body, "application/json", &out); err != nil {
 		t.Fatal(err)
 	}
 	want := "server:\n" +
 		"    state: running\n" +
 		"    port: 9007199254740993\n" +
+		"    row_id: \"9007199254740993\"\n" +
 		"repo:\n" +
 		"    id: r1\n" +
 		"    ratio: 1.50\n" +
@@ -212,5 +214,37 @@ func TestJSONRemoteErrorKeepsTheShape(t *testing.T) {
 		`"request_id":"req_1","help":"Run ` + "`anfra query --help`" + ` for usage."}}` + "\n"
 	if out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// A CLI-only command's result, asked for, is written as an answer is: YAML in its fields'
+// order, or one JSON document; a field it leaves out is absent from both.
+func TestWriteStructured(t *testing.T) {
+	t.Cleanup(resetOutput)
+	res := updateResult{Version: "0.15.0", Update: command.UpdateInfo{Latest: "0.16.0", Available: true},
+		Changelog: "https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md"}
+	var out bytes.Buffer
+	if err := writeStructured(&out, res); err != nil {
+		t.Fatal(err)
+	}
+	want := "version: 0.15.0\n" +
+		"update:\n" +
+		"    latest: 0.16.0\n" +
+		"    available: true\n" +
+		"changelog: https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md\n"
+	if out.String() != want {
+		t.Errorf("YAML:\n%s\nwant\n%s", out.String(), want)
+	}
+
+	output.json = true
+	out.Reset()
+	res.Version, res.Previous, res.Update.Available = "0.16.0", "0.15.0", false
+	if err := writeStructured(&out, res); err != nil {
+		t.Fatal(err)
+	}
+	want = `{"version":"0.16.0","update":{"latest":"0.16.0","available":false},"previous":"0.15.0",` +
+		`"changelog":"https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md"}` + "\n"
+	if out.String() != want {
+		t.Errorf("JSON:\n%s\nwant\n%s", out.String(), want)
 	}
 }
