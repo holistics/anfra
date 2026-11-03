@@ -1,13 +1,23 @@
 # PR CI: conventional-commit lint, golangci-lint, build/vet/test, the core API's
 # contract, and the SDK and frontend (web). Mirrors canal's
 # continuous_integration.yml + test.yml, flattened (anfra is a single Go module). `ci_passed` is the one required status check (via alls-green).
+#
+# It also runs in the merge queue (merge_group), on the queue's commit: the PR
+# rebased onto main and any PRs ahead of it. The repo merges by rebase, so the
+# queue replays the PR's commits unchanged; the jobs that judge only the PR's own
+# commits and diff (commitlint, dependency-review) ran on the PR and are skipped
+# there.
 name: Continuous Integration
 
 on:
   pull_request: {}
+  merge_group: {}
 
 concurrency:
-  group: continuous_integration-${{ github.head_ref }}
+  # One group per PR (refs/pull/<n>/merge): a push cancels the PR's older run.
+  # A merge group's ref (gh-readonly-queue/main/pr-<n>-<sha>) is its own, so
+  # queued runs never cancel each other.
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -15,6 +25,9 @@ permissions:
 
 jobs:
   commitlint:
+    # PR only: the queue rebases the PR's commits unchanged, so they were linted
+    # on the PR.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,7 +91,8 @@ jobs:
         run: scripts/openapi.sh diff
       - name: no undeclared breaking change
         env:
-          BASE: origin/${{ github.base_ref }}
+          # The branch the change lands on: a PR's base, or the merge group's base commit.
+          BASE: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.base_ref) }}
         run: |
           if ! git cat-file -e "$BASE:api/openapi.yaml" 2>/dev/null; then
             echo "the base branch has no api/openapi.yaml yet: nothing to compare"; exit 0
@@ -129,6 +143,9 @@ jobs:
   # license check can exempt dev tooling under tools/ by manifest path (the action
   # can only exempt a package everywhere) without also swallowing vulnerabilities.
   dependency-review:
+    # PR only: it judges the PR's own dependency changes, already reviewed on the
+    # PR, and comments on the PR, which a merge group has none of.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -199,3 +216,5 @@ jobs:
       - uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
+          # Skipped in the merge queue: they judged the PR already.
+          allowed-skips: ${{ github.event_name == 'merge_group' && 'commitlint, dependency-review' || '' }}
