@@ -28,9 +28,10 @@ func newUpdateCmd() *cobra.Command {
 		Use:   "update",
 		Short: "Update anfra to the latest release (use --check to only report)",
 		Long: "Update anfra to the latest release, replacing this binary. --check only reports.\n\n" +
-			"Its result is `anfra version`'s answer as it stands after the update, checked now rather than\n" +
-			"from the background check: version, and update's latest and available. previous is the version\n" +
-			"it replaced, when it installed one, and changelog links to what the latest release brings.",
+			"Its result opens with message, the outcome. Then `anfra version`'s answer as it stands after\n" +
+			"the update, checked now rather than from the background check: version, and update's latest\n" +
+			"and available. previous is the version it replaced, when it installed one; changelog links\n" +
+			"to what the latest release brings; hints, last, are what to do next.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := runUpdate(cmd.Context(), checkOnly, cmd.ErrOrStderr())
@@ -51,6 +52,8 @@ func newUpdateCmd() *cobra.Command {
 // updateResult is update's result: version's answer as the update leaves it,
 // and what it replaced (docs/designs/commands-and-api.md#new-state-as-output).
 type updateResult struct {
+	// Message is the outcome, in a sentence.
+	Message string             `json:"message"`
 	Version string             `json:"version"`
 	Update  command.UpdateInfo `json:"update"`
 	// Previous is the version the update replaced; absent when it installed
@@ -59,6 +62,8 @@ type updateResult struct {
 	// Changelog is the changelog as of the latest release: what it brings,
 	// and every release before it.
 	Changelog string `json:"changelog"`
+	// Hints are what to do next; absent when nothing is.
+	Hints []string `json:"hints,omitempty"`
 }
 
 // runUpdate checks for the latest release and, unless checkOnly, installs it.
@@ -86,10 +91,16 @@ func runUpdate(ctx context.Context, checkOnly bool, errOut io.Writer) (updateRes
 		Changelog: update.ChangelogURL(rel.Version),
 	}
 	terminal := stderrIsInteractive()
-	if !rel.IsNewer() || checkOnly {
-		if rel.IsNewer() && terminal {
+	if !rel.IsNewer() {
+		res.Message = fmt.Sprintf("anfra %s is up to date.", meta.Version)
+		return res, nil
+	}
+	if checkOnly {
+		if terminal {
 			showReleaseNotes(ctx, errOut, meta.Version, rel.Version)
 		}
+		res.Message = fmt.Sprintf("anfra %s is available (you have %s).", rel.Version, meta.Version)
+		res.Hints = []string{"Run `anfra update` to install it."}
 		return res, nil
 	}
 
@@ -102,9 +113,6 @@ func runUpdate(ctx context.Context, checkOnly bool, errOut io.Writer) (updateRes
 		return updateResult{}, err
 	}
 	if terminal {
-		s := cliui.NewTerminalStyles(errOut)
-		fmt.Fprintf(errOut, "%s Updated anfra %s → %s\n", s.Success.Render("✓"),
-			s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
 		showReleaseNotes(ctx, errOut, meta.Version, rel.Version)
 	}
 	// A running server keeps the binary it started with: last, so the notes
@@ -115,6 +123,7 @@ func runUpdate(ctx context.Context, checkOnly bool, errOut io.Writer) (updateRes
 				"`anfra serve` %s is still running for %s. Restart it to run %s.", srv.Version, srv.RepoDir, rel.Version))
 		}
 	}
+	res.Message = fmt.Sprintf("Updated anfra %s → %s.", meta.Version, rel.Version)
 	res.Version, res.Previous = rel.Version, meta.Version
 	res.Update.Available = false
 	return res, nil

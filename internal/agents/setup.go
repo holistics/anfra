@@ -32,35 +32,49 @@ type Report struct {
 	Agents []AgentState `json:"agents"`
 	Copies []CopyState  `json:"copies"`
 	// AgentsMD is the repo's anfra block; null outside an anfra repo.
-	AgentsMD *AgentsMDState `json:"agents_md"`
+	AgentsMD *AgentsMDState `json:"agents_md" pretty:"AGENTS.md"`
 }
 
 // LatestSkills is the latest anfra skills version, from the background check,
 // as `anfra version` names it; null until the check has run.
 type LatestSkills struct {
 	Latest    *string    `json:"latest"`
-	CheckedAt *time.Time `json:"checked_at"`
+	CheckedAt *time.Time `json:"checked_at" pretty:",moment"`
 }
 
 // AgentState is where an agent's skills come from: the plugin, through its
 // CLI, or copies in the folders it reads.
 type AgentState struct {
-	ID      string        `json:"id"`
-	Name    string        `json:"name"`
+	// ID is what --agent takes; not in the pretty format, where Name says
+	// the same to a person, and --help lists the ids.
+	ID   string `json:"id" pretty:"-"`
+	Name string `json:"name"`
+	// Status is installed, when it has a plugin or copies, or not-installed.
+	Status  AgentStatus   `json:"status" pretty:",tone=installed:good not-installed:warn"`
 	Plugins []PluginState `json:"plugins"`
 	// Copies are the folders it reads that hold anfra skills, as Copies shows
 	// them.
 	Copies []string `json:"copies"`
-	// Install is where to install the skills from, when it has none.
-	Install string `json:"install,omitempty"`
+	// InstallFrom is where to install the skills from: its README section;
+	// absent when they're installed. Not in the pretty format, where a hint
+	// says it, so the agents' table fits a terminal.
+	InstallFrom string `json:"install_from,omitempty" pretty:"-"`
 }
+
+// AgentStatus is whether an agent has the anfra skills.
+type AgentStatus string
+
+const (
+	AgentInstalled    AgentStatus = "installed"
+	AgentNotInstalled AgentStatus = "not-installed"
+)
 
 // PluginState is an installed plugin against the latest skills.
 type PluginState struct {
 	Scope   string `json:"scope"`
 	Version string `json:"version"`
 	// Status is latest, behind, or unknown against an unknown latest.
-	Status string `json:"status"`
+	Status string `json:"status" pretty:",tone=latest:good behind:warn unknown:warn"`
 }
 
 // CopyState is a folder of copies of the skills against the latest.
@@ -69,7 +83,7 @@ type CopyState struct {
 	// Status is latest, behind, mixed when its skills' versions differ, or
 	// unknown against an unknown latest; deprecated when it has only skills of
 	// the old names, which updating doesn't replace: they are removed.
-	Status   string          `json:"status"`
+	Status   string          `json:"status" pretty:",tone=latest:good behind:warn mixed:warn unknown:warn deprecated:bad"`
 	Versions []SkillsVersion `json:"versions"`
 	// DeprecatedNames: it has skills of the names from before renamedIn, which
 	// an agent loads next to the new ones until they are removed.
@@ -86,37 +100,66 @@ type SkillsVersion struct {
 // AgentsMDState is the repo's anfra block in AGENTS.md.
 type AgentsMDState struct {
 	// Block is missing, outdated, up-to-date, or unreadable (Message says why).
-	Block BlockState `json:"block"`
-	// ClaudeMDImports is whether the repo's CLAUDE.md imports AGENTS.md; null
-	// when it has none.
-	ClaudeMDImports *bool  `json:"claude_md_imports"`
-	Message         string `json:"message,omitempty"`
+	Block BlockState `json:"block" pretty:",tone=up-to-date:good missing:warn outdated:warn unreadable:bad"`
+	// ClaudeMD is whether AGENTS.md is imported in the repo's CLAUDE.md:
+	// imported, not-imported (Claude Code misses the anfra block), or absent
+	// when the repo has no CLAUDE.md, and Claude Code reads AGENTS.md on its
+	// own.
+	ClaudeMD ClaudeMDState `json:"claude_md" pretty:"CLAUDE.md,tone=imported:good not-imported:warn"`
+	Message  string        `json:"message,omitempty"`
 }
+
+// ClaudeMDState is a repo's CLAUDE.md, against the import of AGENTS.md
+// Claude Code needs to read it.
+type ClaudeMDState string
+
+const (
+	ClaudeMDImported    ClaudeMDState = "imported"
+	ClaudeMDNotImported ClaudeMDState = "not-imported"
+	ClaudeMDAbsent      ClaudeMDState = "absent"
+)
 
 // BlockUnreadable: AGENTS.md or CLAUDE.md can't be read as a file of the repo.
 const BlockUnreadable BlockState = "unreadable"
 
+// CheckResult is `agent setup --check`'s result: the Report, between its
+// message, the outcome, and its hints, what to do next
+// (docs/designs/commands-and-api.md#cli-output).
+type CheckResult struct {
+	Message string `json:"message"`
+	Report  `json:",inline"`
+	// Hints are what to do next; absent when nothing is.
+	Hints []string `json:"hints,omitempty"`
+}
+
 // SetupResult is setup's result: what it did, then the Report as it leaves
-// things (docs/designs/commands-and-api.md#new-state-as-output).
+// things (docs/designs/commands-and-api.md#new-state-as-output), between its
+// message and its hints.
 type SetupResult struct {
-	Setup  SetupActions `json:"setup"`
-	Report `json:",inline"`
+	Message string       `json:"message"`
+	Setup   SetupActions `json:"setup"`
+	Report  `json:",inline"`
+	// Hints are what to do next; absent when nothing is.
+	Hints []string `json:"hints,omitempty"`
 }
 
 // SetupActions are what setup did.
 type SetupActions struct {
 	Agents []AgentSetup `json:"agents"`
 	// AgentsMD is what setup wrote in the repo; null outside an anfra repo.
-	AgentsMD *AgentsMDSetup `json:"agents_md"`
+	AgentsMD *AgentsMDSetup `json:"agents_md" pretty:"AGENTS.md"`
 }
 
 // AgentSetup is what setup did for one agent.
 type AgentSetup struct {
-	Agent   string  `json:"agent"`
-	Outcome Outcome `json:"outcome"`
+	// Agent is its id, what --agent takes; not in the pretty format, as the
+	// report's agents.
+	Agent   string  `json:"agent" pretty:"-"`
+	Name    string  `json:"name"`
+	Outcome Outcome `json:"outcome" pretty:",tone=installed:good failed:bad cli_missing:warn instructions_only:warn"`
 	// Message is what to do next: restart the agent, install its CLI, or
 	// follow the README.
-	Message string `json:"message"`
+	Message string `json:"message" pretty:",truncate"`
 }
 
 // Outcome is what setup did for an agent.
@@ -171,6 +214,7 @@ func Setup(ctx context.Context, env Env, o Options) (SetupResult, error) {
 	RecordPlugins(ctx, env)
 
 	res.Report = report(ctx, env, o, agents)
+	res.Message, res.Hints = setupMessage(res.Setup), reportHints(res.Report, false)
 	if failed {
 		return res, ErrIncomplete
 	}
@@ -179,7 +223,7 @@ func Setup(ctx context.Context, env Env, o Options) (SetupResult, error) {
 
 // install runs an agent's install steps, and says what came of it.
 func install(ctx context.Context, env Env, a Agent, progress io.Writer) AgentSetup {
-	s := AgentSetup{Agent: a.ID}
+	s := AgentSetup{Agent: a.ID, Name: a.Name}
 	switch {
 	case !a.Installs():
 		s.Outcome, s.Message = OutcomeInstructionsOnly, "anfra doesn't install the skills for "+a.Name+": install them as "+a.README()+" says."
@@ -283,16 +327,13 @@ const renamedIn = "0.15.0"
 
 // Check reports the state of the agents' skills, as setup would find them,
 // and changes nothing.
-func Check(ctx context.Context, env Env, o Options) (Report, error) {
+func Check(ctx context.Context, env Env, o Options) (CheckResult, error) {
 	agents, _, err := selectAgents(env, o)
 	if err != nil {
-		return Report{}, err
+		return CheckResult{}, err
 	}
 	r := report(ctx, env, o, agents)
-	if o.Progress != nil {
-		fmt.Fprintln(o.Progress, "Run `anfra agent setup` to install or update them.")
-	}
-	return r, nil
+	return CheckResult{Message: checkMessage(r), Report: r, Hints: reportHints(r, true)}, nil
 }
 
 // report is the state of agents' skills, against the latest skills version
@@ -302,9 +343,6 @@ func Check(ctx context.Context, env Env, o Options) (Report, error) {
 //   - each copy found, the deprecated ones included, as an agent loads them
 //     next to the new ones;
 //   - in an anfra repo, its AGENTS.md block.
-//
-// It tells progress what a person would do next: update copies, which setup
-// doesn't, clean up deprecated ones, set up a repo.
 func report(ctx context.Context, env Env, o Options, agents []Agent) Report {
 	latest, checkedAt, known := update.CachedSkills()
 	r := Report{Agents: []AgentState{}, Copies: []CopyState{}}
@@ -322,13 +360,13 @@ func report(ctx context.Context, env Env, o Options, agents []Agent) Report {
 		for _, c := range a.readsCopies(env, o.RepoDir, copies) {
 			s.Copies = append(s.Copies, c.Dir)
 		}
+		s.Status = AgentInstalled
 		if len(s.Plugins) == 0 && len(s.Copies) == 0 {
-			s.Install = a.README()
+			s.Status, s.InstallFrom = AgentNotInstalled, a.README()
 		}
 		r.Agents = append(r.Agents, s)
 	}
 
-	var behind, deprecated []string
 	for _, c := range copies {
 		cs := CopyState{Dir: c.Dir, Versions: skillsVersions(c.Versions), DeprecatedNames: c.OldNames}
 		if len(c.Versions) > 0 {
@@ -336,32 +374,158 @@ func report(ctx context.Context, env Env, o Options, agents []Agent) Report {
 		} else {
 			cs.Status = "deprecated"
 		}
-		if cs.Status == "behind" || cs.Status == "mixed" {
-			behind = append(behind, c.Dir)
-		}
-		if c.OldNames {
-			deprecated = append(deprecated, c.Dir)
-		}
 		r.Copies = append(r.Copies, cs)
 	}
 
 	if o.RepoDir != "" {
 		r.AgentsMD = agentsMDState(o.RepoDir)
 	}
+	return r
+}
 
-	if p := o.Progress; p != nil {
-		if len(behind) > 0 {
-			fmt.Fprintf(p, "To update the skills in %s, see %s#updating-and-removing.\n", strings.Join(behind, ", "), readmeURL)
+// checkMessage is what r comes to, in a sentence: what needs attention, or
+// that nothing does.
+func checkMessage(r Report) string {
+	var issues []string
+	for _, a := range r.Agents {
+		if a.Status == AgentNotInstalled {
+			issues = append(issues, a.Name+" has no anfra skills")
 		}
-		if len(deprecated) > 0 {
-			fmt.Fprintf(p, "%s has deprecated anfra skills, from before %s: clean them up as %s#updating-and-removing says.\n",
-				strings.Join(deprecated, ", "), renamedIn, readmeURL)
-		}
-		if o.RepoDir == "" {
-			fmt.Fprintln(p, "AGENTS.md: skipped, as this folder isn't an anfra repo (no .anfra/). Run `anfra init` here to set it up, with the anfra block.")
+		for _, p := range a.Plugins {
+			if p.Status == "behind" {
+				issues = append(issues, fmt.Sprintf("%s's plugin is behind %s", a.Name, *r.Skills.Latest))
+			}
 		}
 	}
-	return r
+	for _, c := range r.Copies {
+		switch c.Status {
+		case "behind":
+			issues = append(issues, c.Dir+" is behind")
+		case "mixed":
+			issues = append(issues, c.Dir+" has skills at different versions")
+		}
+		if c.DeprecatedNames {
+			issues = append(issues, c.Dir+" has deprecated skills")
+		}
+	}
+	if md := r.AgentsMD; md != nil {
+		switch {
+		case md.Block == BlockMissing:
+			issues = append(issues, "this repo's AGENTS.md has no anfra block")
+		case md.Block == BlockOutdated:
+			issues = append(issues, "this repo's AGENTS.md block is out of date")
+		case md.Block == BlockUnreadable:
+			issues = append(issues, "this repo's AGENTS.md can't be read")
+		case md.ClaudeMD == ClaudeMDNotImported:
+			issues = append(issues, "this repo's CLAUDE.md doesn't import AGENTS.md")
+		}
+	}
+	if len(issues) == 0 {
+		if r.Skills.Latest == nil {
+			return "The anfra skills are set up in every agent. Their latest version isn't known yet."
+		}
+		return "The anfra skills are up to date in every agent."
+	}
+	return sentence(issues)
+}
+
+// setupMessage is what setup did, a sentence a kind of outcome, each agent by
+// its name.
+func setupMessage(s SetupActions) string {
+	byOutcome := map[Outcome][]string{}
+	for _, a := range s.Agents {
+		byOutcome[a.Outcome] = append(byOutcome[a.Outcome], a.Name)
+	}
+	var parts []string
+	if ids := byOutcome[OutcomeInstalled]; len(ids) > 0 {
+		parts = append(parts, "Installed the anfra skills for "+joinAnd(ids)+".")
+	}
+	if ids := byOutcome[OutcomeFailed]; len(ids) > 0 {
+		parts = append(parts, "Couldn't install them for "+joinAnd(ids)+".")
+	}
+	if ids := byOutcome[OutcomeCLIMissing]; len(ids) > 0 {
+		parts = append(parts, "Didn't try "+joinAnd(ids)+", whose CLI isn't on your PATH.")
+	}
+	if ids := byOutcome[OutcomeInstructionsOnly]; len(ids) > 0 {
+		verb := " needs"
+		if len(ids) > 1 {
+			verb = " need"
+		}
+		parts = append(parts, joinAnd(ids)+verb+" them installed by hand.")
+	}
+	if md := s.AgentsMD; md != nil {
+		switch {
+		case md.Message != "":
+			parts = append(parts, "Couldn't write the anfra block in AGENTS.md.")
+		case md.WroteBlock:
+			parts = append(parts, "Wrote the anfra block in AGENTS.md.")
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// reportHints are what to do next about r: run setup (for a check), update
+// or remove the copies setup doesn't touch, set up a repo.
+func reportHints(r Report, check bool) []string {
+	var hints, behind, deprecated, byHand []string
+	setupWould := false
+	for _, a := range r.Agents {
+		if a.Status == AgentNotInstalled {
+			if slices.ContainsFunc(Known, func(k Agent) bool { return k.ID == a.ID && k.Installs() }) {
+				setupWould = true
+			} else {
+				byHand = append(byHand, fmt.Sprintf("Install the anfra skills for %s as %s says.", a.Name, a.InstallFrom))
+			}
+		}
+		for _, p := range a.Plugins {
+			setupWould = setupWould || p.Status == "behind"
+		}
+	}
+	if md := r.AgentsMD; md != nil {
+		setupWould = setupWould || md.Block == BlockMissing || md.Block == BlockOutdated || md.ClaudeMD == ClaudeMDNotImported
+	}
+	for _, c := range r.Copies {
+		if c.Status == "behind" || c.Status == "mixed" {
+			behind = append(behind, c.Dir)
+		}
+		if c.DeprecatedNames {
+			deprecated = append(deprecated, c.Dir)
+		}
+	}
+	if check && setupWould {
+		hints = append(hints, "Run `anfra agent setup` to install or update them.")
+	}
+	hints = append(hints, byHand...)
+	if len(behind) > 0 {
+		hints = append(hints, fmt.Sprintf("To update the skills in %s, see %s#updating-and-removing.", joinAnd(behind), readmeURL))
+	}
+	if len(deprecated) > 0 {
+		hints = append(hints, fmt.Sprintf("Remove the deprecated anfra skills in %s, from before %s, as %s#updating-and-removing says.",
+			joinAnd(deprecated), renamedIn, readmeURL))
+	}
+	if r.AgentsMD == nil {
+		skipped := "skipped"
+		if check {
+			skipped = "not checked"
+		}
+		hints = append(hints, "This folder isn't an anfra repo, so AGENTS.md was "+skipped+": run `anfra init` here to set it up.")
+	}
+	return hints
+}
+
+// sentence is issues as one sentence: capitalized, joined with commas and a
+// final "and", and a full stop.
+func sentence(issues []string) string {
+	s := joinAnd(issues)
+	return strings.ToUpper(s[:1]) + s[1:] + "."
+}
+
+// joinAnd joins items as prose: "a", "a and b", "a, b and c".
+func joinAnd(items []string) string {
+	if len(items) <= 1 {
+		return strings.Join(items, "")
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
 // skillsVersions is a copy's skills by version, oldest first, those with no
@@ -396,12 +560,14 @@ func skillsVersions(versions map[string][]string) []SkillsVersion {
 func agentsMDState(repoDir string) *AgentsMDState {
 	b, err := CheckBlock(repoDir)
 	if err != nil {
-		return &AgentsMDState{Block: BlockUnreadable, Message: err.Error()}
+		return &AgentsMDState{Block: BlockUnreadable, ClaudeMD: ClaudeMDAbsent, Message: err.Error()}
 	}
-	s := &AgentsMDState{Block: b.State}
-	if b.HasClaudeMD {
-		imports := !b.NoImport
-		s.ClaudeMDImports = &imports
+	s := &AgentsMDState{Block: b.State, ClaudeMD: ClaudeMDAbsent}
+	switch {
+	case b.NoImport:
+		s.ClaudeMD = ClaudeMDNotImported
+	case b.HasClaudeMD:
+		s.ClaudeMD = ClaudeMDImported
 	}
 	return s
 }

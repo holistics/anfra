@@ -21,6 +21,7 @@ result (Go value, or an op's JSON) ──> view model ──> renderer ──> t
                                         tables, blocks)
 ```
 
+- **`internal/pretty`** builds both, behind `pretty.Render`; `cmd/anfra` decides when a result is drawn with it (`writeResult`, by the command's default format).
 - **The view model** is where the judgement lives: what a section is, what becomes a table. The [conventions](#conventions) build it from the result's shape, adjusted by [hints](#hints), or a command's [own view](#a-commands-own-view) builds it.
 - **A renderer** draws a view model. The terminal one aligns and styles. A Markdown one (headings, pipe tables, fenced blocks) could follow from the same model, for pasting into an issue or for agents, if it proves better than YAML for them; it isn't planned.
 
@@ -37,7 +38,7 @@ A result is a **detail** view, as `kubectl describe` is: one document, in sectio
 4. **Lists of scalars.** One per line, aligned in the value column. In a table cell, a CSV row (rule 10).
 5. **Lists of lists** (rows): aligned columns, never joined.
 6. **Nothing hidden.** No counts in place of items: a count can't be drilled into (there's no command for one item), so it's a dead end. A view may choose a count deliberately (`files: 42`) where the items don't matter.
-7. **Empty** is `<none>`. A hint can say what empty means instead (`already installed`).
+7. **Empty** is `<none>`, always. What an empty value means is the result's to say, in a field of its own, not the view's: `agent setup`'s agents have a `status`, `installed` or `not-installed`, beside `install_from`, absent when installed, rather than an empty `install` that pretty would have to explain.
 8. **Booleans** are `true` and `false`, as in the YAML.
 9. **Multi-line text** is an indented block under its key, never squashed. In a table cell: its first line, then `…`.
 10. **A list in a cell is a CSV row.** Every list joined into a table cell is written as one CSV record (RFC 4180, Go's `encoding/csv`), with no rule of ours: `,` between items, as `kubectl` joins (`80/TCP,443/TCP`), and an item quoted only when CSV needs it, a quote inside doubled: `Laptop,"Smith, John","a ""quoted"" word"`. A line break never reaches a cell (rule 9). A one-item object flattened into a cell is the same, with a space as the separator: `user 0.4.4 "behind by 2"`.
@@ -46,13 +47,12 @@ A result is a **detail** view, as `kubectl describe` is: one document, in sectio
 
 ### Hints
 
-A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it never adds a field or free text beyond its labels, so the pretty output shows what the JSON does:
+A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it never adds a field or text beyond its labels, so every word the pretty output shows is a label or a value the YAML has:
 
 | Hint | Does |
 |---|---|
 | `pretty:"-"` | hides the field |
 | `pretty:"AGENTS.md"` | its label, or its heading |
-| `pretty:",empty=already installed"` | what an empty value says; for a field whose doc comment states what empty means |
 | `pretty:",block"` | multi-line text as a block, even when it has one line |
 | `pretty:",moment"` | a time shown relative |
 | `pretty:",truncate"` | a column that may be cut to fit the terminal |
@@ -74,7 +74,7 @@ Color helps a person find their way around the output, and see what needs attent
 | The `message` line | bold (`Heading`) |
 | Section labels (`Agents:`) and table headers | bold (`Heading`) |
 | Key labels (`Latest:`) | faint (`Muted`) |
-| `<none>`, and an empty value's text (`already installed`) | faint (`Muted`) |
+| `<none>` | faint (`Muted`) |
 | `` `code` `` in a message, a hint or a value | `Code`, without the backquotes |
 | A URL | `Link` |
 | A value with a tone | `good` green (`Success`), `warn` yellow (`Warning`), `bad` red (`Error`) |
@@ -92,11 +92,11 @@ Skills:                                                                         
   Checked At:  today
 
 Agents:                                                                             bold
-  ID            NAME          PLUGINS             COPIES             INSTALL        headers bold
-  claude-code   Claude Code   user 0.4.4 behind   ~/.claude/skills   already installed
-                                         └ yellow                    └ faint
-  opencode      OpenCode      <none>              <none>             https://github.com/holistics/anfra-skills#opencode
-                              └ faint             └ faint            └ Link
+  NAME          STATUS          PLUGINS             COPIES                       headers bold
+  Claude Code   installed       user 0.4.4 behind   ~/.claude/skills
+                └ green                    └ yellow
+  OpenCode      not-installed   <none>              <none>
+                └ yellow        └ faint             └ faint
 
 Hints:                                                                              bold
   Run `anfra agent setup` to update the Claude Code plugin.
@@ -123,10 +123,10 @@ Skills:
   Checked At:  today
 
 Agents:
-  ID            NAME          PLUGINS             COPIES             INSTALL
-  claude-code   Claude Code   user 0.4.4 behind   ~/.claude/skills   already installed
-  cursor        Cursor        <none>              ~/.agents/skills   already installed
-  opencode      OpenCode      <none>              <none>             https://github.com/holistics/anfra-skills#opencode
+  NAME          STATUS          PLUGINS             COPIES
+  Claude Code   installed       user 0.4.4 behind   ~/.claude/skills
+  Cursor        installed       <none>              ~/.agents/skills
+  OpenCode      not-installed   <none>              <none>
 
 Copies:
   ~/.agents/skills:
@@ -143,8 +143,8 @@ Copies:
     Deprecated Names:  true
 
 AGENTS.md:
-  Block:              up-to-date
-  CLAUDE.md Imports:  true
+  Block:      up-to-date
+  CLAUDE.md:  imported
 
 Hints:
   Run `anfra agent setup` to update the Claude Code plugin.
@@ -154,7 +154,7 @@ Hints:
 
 - `agents` is a table: each agent has at most one plugin, flattened (`user 0.4.4 behind`), and its copies are scalars. With two plugins, an agent's row would hold a list of objects, and `agents` would become blocks.
 - `copies` is blocks: `versions` is a list of objects, shown in full inside each block.
-- Hints: `Install` (`empty=already installed`), `AgentsMD` (`AGENTS.md`), `ClaudeMDImports` (`CLAUDE.md Imports`), `CheckedAt` (`moment`).
+- Hints: `AgentsMD` (`AGENTS.md`), `ClaudeMD` (`CLAUDE.md`), `CheckedAt` (`moment`), and the tones of `status`, `block` and `claude_md`. `id` and `install_from` are hidden (`pretty:"-"`): the name says the same to a person, `--help` lists the ids, and a hint gives the link, so the table fits a terminal.
 
 ### `anfra agent setup`
 
@@ -165,10 +165,10 @@ Installed the anfra skills for Claude Code. Codex failed, and OpenCode needs the
 
 Setup:
   Agents:
-    AGENT         OUTCOME             MESSAGE
-    claude-code   installed           Restart Claude Code, or run /reload-plugins, to load it.
-    codex         failed              `codex plugin add anfra@anfra-skills`: exit status 1
-    opencode      instructions_only   anfra doesn't install the skills for OpenCode: install them as https://github.com/holistics/anfra-skills#opencode says.
+    NAME          OUTCOME             MESSAGE
+    Claude Code   installed           Restart Claude Code, or run /reload-plugins, to load it.
+    Codex         failed              `codex plugin add anfra@anfra-skills`: exit status 1
+    OpenCode      instructions_only   anfra doesn't install the skills for OpenCode: install them as https://github.com/holistics/anfra-skills#opencode says.
   AGENTS.md:
     Wrote Block:   true
     Wrote Import:  false
