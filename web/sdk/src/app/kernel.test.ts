@@ -3,7 +3,7 @@ import { testFrame } from './testFrame';
 import type { FrameKernel } from './kernel';
 import { textTypes } from './testSupport';
 
-describe('kernel.request', () => {
+describe('kernel.queryRequest', () => {
   it('is what the query runs with now: its AQL, what reaches it, and the timezone, with no page', async () => {
     let kernel!: FrameKernel;
     const f = testFrame({
@@ -26,7 +26,7 @@ describe('kernel.request', () => {
     // Not applied yet: the request is what the rows on screen were run with.
     region.setCondition({ operator: 'is', values: ['EMEA'] });
 
-    expect(kernel.request(query)).toEqual({
+    expect(kernel.queryRequest(query)).toEqual({
       dataset: 'sales',
       aql,
       input: {
@@ -44,6 +44,6 @@ describe('kernel.request', () => {
     const f = testFrame({ setups: [['notes', (k) => { kernel = k; }]] });
     const other = testFrame().anfra.createApp().createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
     f.anfra.createApp();
-    expect(() => kernel.request(other)).toThrow(/belongs to no app/);
+    expect(() => kernel.queryRequest(other)).toThrow(/belongs to no app/);
   });
 });

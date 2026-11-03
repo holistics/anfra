@@ -31,7 +31,7 @@ export default function setup (kernel: FrameKernel): void {
 
   async function open (target: RowsTarget, app: App, query: Query, candidate: Candidate): Promise<void> {
     const columns = query.result?.columns ?? [];
-    const planned = plan(target, candidate, kernel.request(query), columns, query.dataset.descriptor);
+    const planned = plan(target, candidate, kernel.queryRequest(query), columns, query.dataset.descriptor);
     const body = await kernel.body<Body>();
     const canExport = kernel.sdk.plugins.has('export');
     const filename = `${defaultExportFilename(query, app.title)} - underlying data`;
