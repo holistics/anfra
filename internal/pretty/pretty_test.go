@@ -2,6 +2,7 @@ package pretty
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,6 +96,44 @@ func TestRelativeTime(t *testing.T) {
 	} {
 		if got := relativeTime(now.Add(-d), now); got != want {
 			t.Errorf("%v ago: %q, want %q", d, got, want)
+		}
+	}
+}
+
+// A list of paths with the tree hint is drawn as tree draws it: folders first,
+// each sorted, a folder of one entry on its parent's line; in ASCII without
+// UTF-8.
+func TestTree(t *testing.T) {
+	paths := []string{"models/orders.aml", "apps/sales/index.html", "apps/sales/chart.js", "datasets/ecommerce.aml", "models/customers.aml", "README.aml"}
+	draw := func(utf8 bool) string {
+		var b strings.Builder
+		for _, l := range treeLines(paths, utf8) {
+			b.WriteString(l.plain() + "\n")
+		}
+		return b.String()
+	}
+	want := `├── apps/sales/
+│   ├── chart.js
+│   └── index.html
+├── datasets/ecommerce.aml
+├── models/
+│   ├── customers.aml
+│   └── orders.aml
+└── README.aml
+`
+	if got := draw(true); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	ascii := "|-- apps/sales/\n|   |-- chart.js\n|   `-- index.html\n"
+	if got := draw(false); !strings.HasPrefix(got, ascii) {
+		t.Errorf("ASCII:\n%s", got)
+	}
+}
+
+func TestTitleCase(t *testing.T) {
+	for name, want := range map[string]string{"checked_at": "Checked At", "url": "URL", "org_id": "Org ID", "deprecated_names": "Deprecated Names"} {
+		if got := titleCase(name); got != want {
+			t.Errorf("titleCase(%q) = %q, want %q", name, got, want)
 		}
 	}
 }

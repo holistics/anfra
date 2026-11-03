@@ -32,8 +32,8 @@ The view model takes JSON, not only Go values: a core command's answer reaches t
 A result is a **detail** view, as `kubectl describe` is: one document, in sections. A table is for a list of like items, not for the document itself.
 
 0. **`message` and `hints`.** A CLI-only command's result opens with `message` and closes with `hints` ([CLI output](commands-and-api.md#cli-output)). The pretty view shows `message` as its first line, unlabelled, and `hints` as its last section, one a line, after a blank line: the outcome first, what to do next last.
-1. **Key/value lines.** `Label:  value`. The label is the JSON name in Title Case (`checked_at` → `Checked At`), unless a hint says otherwise. Values align within a block.
-2. **Nesting.** A nested object is a `Label:` heading, its contents indented by 2. Top-level sections are separated by a blank line.
+1. **Key/value lines.** `Label:  value`. The label is the JSON name in Title Case (`checked_at` → `Checked At`, acronyms in capitals: `URL`, `ID`), unless a hint says otherwise. Values align within a run of consecutive key/value lines at one level, as gofmt aligns a struct literal's fields: a nested section ends the run, and lines at different levels never align.
+2. **Nesting.** A nested object is a `Label:` heading, its contents indented by 2. At the top, a blank line sets apart what has rows (a table, a list of blocks, a text block or a tree) and the message and hints; a section of key/values stays with its neighbours.
 3. **Lists of objects.** A table when every column holds a scalar (or a one-item list or object, flattened) and the table fits the terminal: UPPERCASE headers, columns 3 spaces apart. Otherwise, one block per item, separated by blank lines, its first scalar as its heading, its nested parts shown in full.
 4. **Lists of scalars.** One per line, aligned in the value column. In a table cell, a CSV row (rule 10).
 5. **Lists of lists** (rows): aligned columns, never joined.
@@ -56,7 +56,7 @@ A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it neve
 | `pretty:",block"` | multi-line text as a block, even when it has one line |
 | `pretty:",moment"` | a time shown relative |
 | `pretty:",truncate"` | a column that may be cut to fit the terminal |
-| `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Not built yet: with `publish --list` |
+| `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Built for a list of paths (`publish --list`); `tree=path` not yet |
 | `pretty:",tone=latest:good behind:warn failed:bad"` | the [tone](#color) of some of a field's values |
 
 ### Trees

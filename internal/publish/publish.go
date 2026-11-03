@@ -44,13 +44,19 @@ type Options struct {
 
 // Env is what a publish needs from the command around it.
 type Env struct {
-	Out, ErrOut io.Writer
-	Ask         Prompt
-	// Validate validates the repo here, before anything is sent: showing what
-	// fails on its writer, and an error refusing the publish. Always, and again on
-	// the server, whose verdict on exactly the published files is the one that
+	// ErrOut is where progress and questions go, for a person at a terminal.
+	ErrOut io.Writer
+	// Warn says a problem that doesn't stop the publish, by its code; nil says
+	// nothing.
+	Warn func(code, message string)
+	// OrgName is an org's name, as its login knows it; nil, or "": unknown.
+	OrgName func(cloudapi.Org) string
+	Ask     Prompt
+	// Validate validates the repo here, before anything is sent: an error
+	// refusing the publish, carrying what fails. Always, and again on the
+	// server, whose verdict on exactly the published files is the one that
 	// publishes (PUBLISH.md §Decisions).
-	Validate func(context.Context, io.Writer) error
+	Validate func(context.Context) error
 	// Credential checks the selected login before destination configuration is
 	// saved, returning an authorizer that resolves credentials for every request.
 	Credential func(context.Context, cloudapi.Org) (func(*http.Request) error, error)
@@ -71,56 +77,74 @@ type Env struct {
 }
 
 // Run publishes the repo at dir: PUBLISH.md's flow, from file selection to the
-// server's answer. Progress goes to env.ErrOut; the outcome to env.Out.
-func Run(ctx context.Context, dir string, o Options, env Env) error {
-	ask := env.Ask
-	p, result := cliui.NewPrinter(env.ErrOut), cliui.NewPrinter(env.Out)
+// server's answer. With o.List it lists instead, offline: a ListResult; else a
+// Result. Progress and questions go to env.ErrOut; warnings to env.Warn.
+func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
+	t := &told{warn: env.Warn}
 	org, configured, err := readOrg(dir)
 	if o.SetOrg != "" {
 		org, err = cloudapi.ParseOrg(o.SetOrg)
 		configured = true
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	files, leftOut, err := selectFiles(dir)
+	files, err := selectFiles(dir)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	selected := fmt.Sprintf("%d files of the repo", len(files))
-	noteLeftOut := func() {
-		if leftOut > 0 {
-			p.Note("%d other files in this folder are not part of the repo: a publish carries .aml files and Data Apps under %s/.", leftOut, repoformat.AppsDir)
-		}
-	}
+	tg := target{files: files, org: org, configured: configured}
 	if o.List {
-		for _, f := range files {
-			fmt.Fprintln(env.Out, f)
-		}
-		if configured {
-			p.Step("Would publish %s to %s.", selected, org)
-		} else {
-			p.Step("Would publish %s (no org configured).", selected)
-		}
-		noteLeftOut()
-		return nil
+		return list(tg), nil
 	}
+	return publish(ctx, dir, o, env, t, tg)
+}
+
+// target is what a publish sends, and where: its org, configured, or to
+// choose.
+type target struct {
+	files      []string
+	org        cloudapi.Org
+	configured bool
+}
+
+// list is what a publish would send, and where.
+func list(tg target) ListResult {
+	files, org, configured := tg.files, tg.org, tg.configured
+	res := ListResult{Files: files}
+	if !configured {
+		res.Message = fmt.Sprintf("Would publish %d files. No org is configured.", len(files))
+		res.Hints = []string{"Set the org with `anfra publish --set-org https://<server>/o/<org>`, or run `anfra publish` on a terminal to choose one."}
+		return res
+	}
+	res.Org = &OrgRef{URL: org.String()}
+	res.Message = fmt.Sprintf("Would publish %d files to %s.", len(files), org)
+	return res
+}
+
+// publish publishes tg's files to its org, configured or chosen here.
+func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg target) (Result, error) {
+	files, org, configured := tg.files, tg.org, tg.configured
+	ask := env.Ask
+	p := cliui.NewPrinter(env.ErrOut)
+	selected := fmt.Sprintf("%d files of the repo", len(files))
 	if len(files) == 0 {
-		return errors.New("there are no files to publish")
+		return Result{}, errors.New("there are no files to publish")
 	}
+	var err error
 	if !configured {
 		if env.SelectOrg == nil {
-			return errors.New("this repo has no org to publish to: set org.url or pass --set-org https://<server>/o/<org>; destination selection requires an interactive terminal")
+			return Result{}, errors.New("this repo has no org to publish to: set org.url or pass --set-org https://<server>/o/<org>; destination selection requires an interactive terminal")
 		}
 		org, err = env.SelectOrg(ctx)
 		if err != nil {
-			return err
+			return Result{}, err
 		}
 		// Selection is supplied by the command; keep the same address validation
 		// as configured destinations before selecting credentials or writing config.
 		org, err = cloudapi.ParseOrg(org.String())
 		if err != nil {
-			return err
+			return Result{}, err
 		}
 	}
 	authorize, err := env.Credential(ctx, org)
@@ -128,57 +152,57 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	if err != nil && configured && env.RecoverOrg != nil {
 		recovered, recoverErr := env.RecoverOrg(ctx, org, err)
 		if recoverErr != nil {
-			return recoverErr
+			return Result{}, recoverErr
 		}
 		recovered, err = cloudapi.ParseOrg(recovered.String())
 		if err != nil {
-			return err
+			return Result{}, err
 		}
 		destinationChanged = recovered != org
 		org = recovered
 		authorize, err = env.Credential(ctx, org)
 	}
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	if !configured || o.SetOrg != "" || destinationChanged {
 		if err := setOrg(dir, org); err != nil {
-			return err
+			return Result{}, err
 		}
 		p.Success("This repo publishes to %s (%s).", org, repoconfig.Hint("org", "url"))
 	}
 	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: authorize, UserAgent: env.UserAgent})
 
 	p.Step("Validating…")
-	if err := env.Validate(ctx, env.ErrOut); err != nil {
-		return err
+	if err := env.Validate(ctx); err != nil {
+		return Result{}, err
 	}
-	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
-		return err
+	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, t: t, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
+		return Result{}, err
 	}
-	warnOfOriginsOrgLacks(ctx, client, p, dir)
+	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
 
 	oids := make(map[string]string, len(files)) // path → blob id
 	sizes := make(map[string]int, len(files))
 	for _, f := range files {
 		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(f)))
 		if err != nil {
-			return err
+			return Result{}, err
 		}
 		oids[f], sizes[f] = repoformat.BlobID(content), len(content)
 	}
 
 	status, err := client.Status(ctx)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	limits := status.Publish.Limits
 	if len(files) > limits.Files {
-		return fmt.Errorf("the repo has %d files to publish; %s takes at most %d", len(files), org, limits.Files)
+		return Result{}, fmt.Errorf("the repo has %d files to publish; %s takes at most %d", len(files), org, limits.Files)
 	}
 	for _, f := range files {
 		if sizes[f] > limits.MaxFileBytes() {
-			return fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], org, limits.MaxFileBytes())
+			return Result{}, fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], org, limits.MaxFileBytes())
 		}
 	}
 	// What was published since this folder last published is replaced, unseen:
@@ -187,19 +211,18 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	if status.PublishedBy != nil && state.last(org) != status.Revision {
 		// TODO(OAUTH.md): "you" for the signed-in user's own publishes, once the
 		// CLI knows who it is.
-		p.Gap()
-		p.Warn("This repo was last published by %s on %s: publishing replaces that version.",
+		t.Warn("last_published_elsewhere", "This repo was last published by %s on %s: publishing replaces that version.",
 			who(status.PublishedBy), status.PublishedAt.Local().Format(time.DateTime))
 		if !o.Yes {
 			yes, ok := Confirm(ask, "Confirm publishing a new version?")
 			if !ok {
-				return errors.New("not published: there is no one to confirm it here; pass --yes to publish")
+				return Result{}, errors.New("not published: there is no one to confirm it here; pass --yes to publish")
 			}
 			if err := ctx.Err(); err != nil {
-				return err
+				return Result{}, err
 			}
 			if !yes {
-				return errors.New("not published")
+				return Result{}, errors.New("not published")
 			}
 		}
 	}
@@ -210,12 +233,12 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 	}
 	missing, err := listMissing(ctx, client, slices.Sorted(maps.Keys(byOID)), limits.Files)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	p.Gap()
 	up := uploader{client: client, dir: dir, byOID: byOID, sizes: sizes, limits: limits, progress: p}
 	if err := up.upload(ctx, missing); err != nil {
-		return err
+		return Result{}, err
 	}
 
 	in := cloudapi.PublishIn{Message: cmp.Or(o.Message, gitMessage(ctx, dir))}
@@ -223,30 +246,34 @@ func Run(ctx context.Context, dir string, o Options, env Env) error {
 		in.Files = append(in.Files, cloudapi.File{Path: f, OID: oids[f]})
 	}
 	p.Step("Publishing %s to %s…", selected, org)
-	noteLeftOut()
 	res, err := client.Publish(ctx, in)
 	if again, ok := cloudapi.Missing(err); ok {
 		// Uploaded, then collected before this publish named it: once more.
 		if err := up.upload(ctx, again); err != nil {
-			return err
+			return Result{}, err
 		}
 		res, err = client.Publish(ctx, in)
 	}
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	state.record(org, res.Revision)
-	if !res.Changed {
-		p.Gap()
-		result.Success("Nothing changed: %s is already published.", res.Revision)
-		return nil
+
+	ref := OrgRef{URL: org.String()}
+	if env.OrgName != nil {
+		ref.Name = env.OrgName(org)
 	}
-	p.Gap()
-	result.Success("Published %s.", res.Revision)
-	if r := res.Replaced; r != nil {
-		result.Note("It replaced %s, published by %s on %s.", r.Revision, who(r.PublishedBy), r.PublishedAt.Local().Format(time.DateTime))
+	shown := cmp.Or(ref.Name, ref.URL)
+	out := Result{Org: ref, Revision: res.Revision, Changed: res.Changed, Replaced: res.Replaced, Files: len(files),
+		DataSourcesCreated: append([]string{}, t.created...)}
+	if res.Changed {
+		out.Message = fmt.Sprintf("Published %d files to %s, as revision %s.", len(files), shown, res.Revision)
+	} else {
+		out.Message = fmt.Sprintf("Nothing changed: %s is already published to %s.", res.Revision, shown)
 	}
-	return nil
+	t.Hint("Open it at %s.", org)
+	out.Hints = t.hints
+	return out, nil
 }
 
 // listMissing asks which of oids the org's repo lacks, in calls of at most

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"io"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/motherduck"
 	"github.com/holistics/anfra/internal/publish"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -38,13 +40,24 @@ func newPublishCmd() *cobra.Command {
 			"If the destination needs authentication, log in or choose another org here. Changing\n" +
 			"the destination requires confirmation before updating .anfra/config.yml.\n" +
 			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n" +
-			"--yes skips overwrite confirmation only. --list never authenticates or writes configuration.",
+			"--yes skips overwrite confirmation only. --list never authenticates or writes configuration.\n\n" +
+			"Its result opens with message, the outcome. With --list: org (null when none is configured) and\n" +
+			"files, each path. Without: org (url, and name when the login knows it), revision, changed (false\n" +
+			"when these files were what the org had), replaced (the revision it replaced, when there was one),\n" +
+			"files (how many), and data_sources_created. hints, last, are what to do next. A repo that fails\n" +
+			"validation fails with repo_invalid, whose details are validate's answer.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Flags().Changed("dry-run") {
 				printWarning(cmd.ErrOrStderr(), "deprecated", "--dry-run is deprecated: use --list.")
 			}
 			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
+			// Progress and questions are for a person at a terminal; warnings,
+			// documents, go to stderr whoever reads it.
+			progress := io.Discard
+			if terminal.interactive {
+				progress = cmd.ErrOrStderr()
+			}
 			ask := publish.Prompt(func(string, ...string) (int, bool) { return 0, false })
 			input := publish.Input(func(string) (string, bool) { return "", false })
 			var selectOrg func(context.Context) (cloudapi.Org, error)
@@ -59,12 +72,13 @@ func newPublishCmd() *cobra.Command {
 				selectOrg = terminal.selectPublishOrg
 				recoverOrg = terminal.recoverPublishOrg
 			}
-			err := publish.Run(cmd.Context(), ".", o, publish.Env{
-				Out:        cmd.OutOrStdout(),
-				ErrOut:     cmd.ErrOrStderr(),
+			res, err := publish.Run(cmd.Context(), ".", o, publish.Env{
+				ErrOut:     progress,
+				Warn:       func(code, message string) { printWarning(cmd.ErrOrStderr(), code, message) },
+				OrgName:    storedOrgName(cmd.Context()),
 				Ask:        ask,
 				Input:      input,
-				Validate:   validateHere,
+				Validate:   func(ctx context.Context) error { return validateHere(ctx, cmd.ErrOrStderr()) },
 				Credential: (cliauth.Manager{}).Authorize,
 				SelectOrg:  selectOrg,
 				RecoverOrg: recoverOrg,
@@ -74,9 +88,14 @@ func newPublishCmd() *cobra.Command {
 			if err != nil && cmd.Context().Err() != nil { // Ctrl-C, maybe at a question, which took its default
 				return errors.New("interrupted: not published")
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, res)
 		},
 	}
+	markPrettyOutput(cmd)
+	markInteractable(cmd)
 	f := cmd.Flags()
 	f.StringVarP(&o.Message, "message", "m", "", "what this publish is, for the org's history of the repo (default: in a git repo, HEAD's commit)")
 	f.StringVar(&o.SetOrg, "set-org", "", "set the org the repo publishes to, by its address, https://<server>/o/<org> (.anfra/config.yml org.url), and publish there")
@@ -170,8 +189,9 @@ func readLines(ctx context.Context, in io.Reader) chan string {
 }
 
 // validateHere runs validate on this repo before a publish, as `anfra validate`
-// does; files that fail are shown, and refuse the publish. What in its Data Apps
-// will not work in a host is shown too, and refuses nothing.
+// does: a repo that fails refuses the publish, as repo_invalid with validate's
+// answer. What in its Data Apps will not work in a host is a warning on
+// errOut, and refuses nothing.
 func validateHere(ctx context.Context, errOut io.Writer) error {
 	c, ok := app.Find("validate")
 	if !ok {
@@ -187,11 +207,27 @@ func validateHere(ctx context.Context, errOut io.Writer) error {
 		}
 		return err
 	}
-	_ = renderTo(body, "application/json", errOut)
-	return errors.New("the repo has errors: fix them and publish again")
+	return apperr.NewWith(repoInvalid, "The repo has errors: fix them and publish again.", jsontext.Value(body))
 }
 
-// appWarnings shows validate's Data App warnings, one line each.
+// storedOrgName is an org's name as its stored login has it; "" when there's
+// none, or the logins can't be read.
+func storedOrgName(ctx context.Context) func(cloudapi.Org) string {
+	return func(org cloudapi.Org) string {
+		logins, err := (cliauth.Manager{}).StoredLogins(ctx)
+		if err != nil {
+			return ""
+		}
+		for _, l := range logins {
+			if l.Org == org {
+				return cliui.SafeText(l.Name)
+			}
+		}
+		return ""
+	}
+}
+
+// appWarnings warns of validate's Data App warnings, each a document.
 func appWarnings(body []byte, errOut io.Writer) {
 	var res struct {
 		Reports []struct {
@@ -203,10 +239,9 @@ func appWarnings(body []byte, errOut io.Writer) {
 	if jsonkit.Unmarshal(body, &res) != nil {
 		return
 	}
-	p := cliui.NewPrinter(errOut)
 	for _, r := range res.Reports {
 		if r.Validator == "data_app" {
-			p.Warn("%s, %s", r.FilePath, r.Message)
+			printWarning(errOut, "data_app_not_portable", r.FilePath+": "+r.Message)
 		}
 	}
 }

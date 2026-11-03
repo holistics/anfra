@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -76,18 +76,13 @@ func TestSelectFiles(t *testing.T) {
 		"README.md":                       "readme",
 		"build/out.js":                    "b",
 	})
-	got, leftOut, err := selectFiles(dir)
+	got, err := selectFiles(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"apps/dash/data/rows.json", "apps/dash/index.html", "datasets/sales.aml", "models/orders.aml", "nested/deep/x.AML"}
 	if !slices.Equal(got, want) {
 		t.Errorf("files = %v\nwant    %v", got, want)
-	}
-	// Counted: README.md, build/out.js, .gitignore and .env at the root; pruned
-	// folders (.anfra, .git, .hidden, node_modules) are not walked.
-	if leftOut != 4 {
-		t.Errorf("left out %d, want 4", leftOut)
 	}
 }
 
@@ -124,7 +119,7 @@ func TestSelectFilesRefusesSymlinks(t *testing.T) {
 	if err := os.Symlink("/etc/passwd", filepath.Join(dir, "notes.txt")); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := selectFiles(dir)
+	_, err := selectFiles(dir)
 	if err == nil || !strings.Contains(err.Error(), "models/link.aml (a symlink)") || strings.Contains(err.Error(), "notes.txt") {
 		t.Errorf("err = %v, want the repo's symlink refused by name, and only it", err)
 	}
@@ -290,8 +285,10 @@ func newServer(t *testing.T) (*server, string) {
 func testEnv(ask Prompt) (Env, *bytes.Buffer, *bytes.Buffer) {
 	var out, errOut bytes.Buffer
 	return Env{
-		Out: &out, ErrOut: &errOut, Ask: ask,
-		Validate: func(context.Context, io.Writer) error { return nil },
+		ErrOut: &errOut, Ask: ask,
+		// A warning beside the progress, as the command's stderr has them.
+		Warn:     func(code, message string) { fmt.Fprintf(&errOut, "%s: %s\n", code, message) },
+		Validate: func(context.Context) error { return nil },
 		Credential: func(context.Context, cloudapi.Org) (func(*http.Request) error, error) {
 			return func(r *http.Request) error { r.Header.Set("Authorization", "Bearer dev-token"); return nil }, nil
 		},
@@ -305,10 +302,10 @@ func TestPublishValidatesFirst(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "Model {"})
 	env, _, _ := testEnv(never(t))
-	env.Validate = func(context.Context, io.Writer) error {
+	env.Validate = func(context.Context) error {
 		return errors.New("the repo has errors: fix them and publish again")
 	}
-	if err := Run(context.Background(), dir, Options{SetOrg: url}, env); err == nil || !strings.Contains(err.Error(), "has errors") {
+	if _, err := Run(context.Background(), dir, Options{SetOrg: url}, env); err == nil || !strings.Contains(err.Error(), "has errors") {
 		t.Errorf("err = %v, want the validation's refusal", err)
 	}
 	if s.uploads != 0 || s.deployed != nil {
@@ -316,11 +313,30 @@ func TestPublishValidatesFirst(t *testing.T) {
 	}
 }
 
+// run publishes, and answers the result's message, and what it said: its
+// progress and warnings, then its hints.
 func run(t *testing.T, dir string, o Options, ask Prompt) (string, string, error) {
 	t.Helper()
-	env, out, errOut := testEnv(ask)
-	err := Run(context.Background(), dir, o, env)
-	return out.String(), errOut.String(), err
+	env, _, errOut := testEnv(ask)
+	res, err := Run(context.Background(), dir, o, env)
+	message, said := saidBy(res, errOut)
+	return message, said, err
+}
+
+// saidBy is a result's message, and what the run said: errOut, then the result's
+// hints, a line each.
+func saidBy(res any, errOut *bytes.Buffer) (message, said string) {
+	var hints []string
+	switch r := res.(type) {
+	case Result:
+		message, hints = r.Message, r.Hints
+	case ListResult:
+		message, hints = r.Message, r.Hints
+	}
+	for _, h := range hints {
+		fmt.Fprintf(errOut, "hint: %s\n", h)
+	}
+	return message, errOut.String()
 }
 
 func never(t *testing.T) Prompt {
@@ -367,7 +383,7 @@ func TestPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Published repo@") || s.bearer != "Bearer dev-token" {
+	if !strings.Contains(out, "as revision repo@") || s.bearer != "Bearer dev-token" {
 		t.Errorf("out = %q, bearer %q", out, s.bearer)
 	}
 	paths := func() (ps []string) {
@@ -491,7 +507,7 @@ func TestPublishSaysWhatIsMissing(t *testing.T) {
 	env.Credential = func(context.Context, cloudapi.Org) (func(*http.Request) error, error) {
 		return nil, errors.New("not signed in")
 	}
-	if err := Run(context.Background(), dir, Options{SetOrg: url}, env); err == nil || err.Error() != "not signed in" {
+	if _, err := Run(context.Background(), dir, Options{SetOrg: url}, env); err == nil || err.Error() != "not signed in" {
 		t.Errorf("no credential: %v", err)
 	}
 }
@@ -567,7 +583,7 @@ func TestFirstPublishDestinationOrdering(t *testing.T) {
 				}
 				return func(r *http.Request) error { r.Header.Set("Authorization", "Bearer selected"); return nil }, nil
 			}
-			env.Validate = func(context.Context, io.Writer) error {
+			env.Validate = func(context.Context) error {
 				got, ok, err := readOrg(dir)
 				if err != nil || !ok || got != org {
 					t.Fatal("validation began before destination was saved")
@@ -577,7 +593,7 @@ func TestFirstPublishDestinationOrdering(t *testing.T) {
 				}
 				return nil
 			}
-			err = Run(context.Background(), dir, Options{List: scenario == "list"}, env)
+			_, err = Run(context.Background(), dir, Options{List: scenario == "list"}, env)
 			success := scenario == "success" || scenario == "list"
 			if (err == nil) != success {
 				t.Fatalf("result: %v", err)
@@ -618,7 +634,7 @@ func TestConfiguredPublishNeverSubstitutesStoredOrg(t *testing.T) {
 		}
 		return nil, errors.New("use anfra auth login " + address)
 	}
-	if err := Run(context.Background(), dir, Options{Yes: true}, env); err == nil {
+	if _, err := Run(context.Background(), dir, Options{Yes: true}, env); err == nil {
 		t.Fatal("missing credentials accepted")
 	}
 	org, _, err := readOrg(dir)
@@ -666,14 +682,14 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 				}
 				return selected, nil
 			}
-			env.Validate = func(context.Context, io.Writer) error {
+			env.Validate = func(context.Context) error {
 				org, _, err := readOrg(dir)
 				if err != nil || org != selected {
 					t.Fatal("validation began before selected destination was saved")
 				}
 				return validated
 			}
-			err := Run(context.Background(), dir, Options{Yes: true, List: scenario == "list"}, env)
+			_, err := Run(context.Background(), dir, Options{Yes: true, List: scenario == "list"}, env)
 			switch scenario {
 			case "list":
 				if err != nil || recovered || loaded != 0 {

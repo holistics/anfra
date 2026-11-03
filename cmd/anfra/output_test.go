@@ -70,17 +70,16 @@ func TestJSONWarningAndError(t *testing.T) {
 	}
 }
 
-// Every runnable command has an output kind: structured output, an artifact, or
-// no structured output until step 2 of docs/implementations/cli-json.md. A new command
-// can't print prose unnoticed.
+// Every runnable command has an output kind: structured output, or an
+// artifact. A new command can't print prose unnoticed.
 func TestEveryCommandHasAnOutputKind(t *testing.T) {
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		if c.Runnable() {
 			switch c.Annotations[outputKind] {
-			case outputStructured, outputArtifact, noStructuredOutputYet:
+			case outputStructured, outputArtifact:
 			default:
-				t.Errorf("%s has no output kind: markStructuredOutput, markArtifactOutput or markNoStructuredOutputYet", c.CommandPath())
+				t.Errorf("%s has no output kind: markStructuredOutput, markPrettyOutput or markArtifactOutput", c.CommandPath())
 			}
 		}
 		for _, sub := range c.Commands() {
@@ -90,9 +89,8 @@ func TestEveryCommandHasAnOutputKind(t *testing.T) {
 	walk(newRootCmd())
 }
 
-// --json and --yaml are refused before the command runs where it writes no
-// structured output: for good by an artifact, saying what it writes instead,
-// and for now by a command without its structured result yet. An export takes
+// --json and --yaml are refused before the command runs by an artifact, which
+// writes no structured output, saying what it writes instead. An export takes
 // them only with --link. The two together are refused anywhere.
 func TestJSONRefused(t *testing.T) {
 	t.Cleanup(resetOutput)
@@ -100,7 +98,7 @@ func TestJSONRefused(t *testing.T) {
 	for args, want := range map[string]string{
 		"serve --json":           "anfra serve writes a log, until it is stopped, not structured output",
 		"completion bash --json": "anfra completion bash writes a shell script, not structured output",
-		"publish --yaml":         "anfra publish doesn't write structured output yet; run it without --yaml",
+		"serve --yaml":           "anfra serve writes a log, until it is stopped, not structured output",
 		"query export --json":    "without --link it writes the file",
 		"status --yaml --json":   "pass --yaml or --json, not both",
 	} {
