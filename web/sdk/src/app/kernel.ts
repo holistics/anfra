@@ -41,9 +41,10 @@ export interface FrameKernel {
   /** The page's structure as it is now. */
   structure: () => BuiltStructure;
   /**
-   * What a query runs with now, from what it last ran with: its dataset, its AQL, what reaches it
+   * What a query runs with now, from its applied state: its dataset, its AQL, what reaches it
    * (mapped controls, the selection, the reader's sort, date drills) and the timezone, as its own
-   * run and export are built. For a plugin that runs a variant of the query: it changes what it
+   * run and export are built. While a rerun is in flight, that is the rerun's request, not the one
+   * behind the result on screen. For a plugin that runs a variant of the query: it changes what it
    * needs and sends it as `core.submitQuery`, through the pipeline like any query.
    */
   request: (query: Query) => QueryRequest;
