@@ -150,6 +150,7 @@ What the kernel gives a setup:
 | `provide(api)` | Adds `Anfra.<plugin>`. Once. |
 | `provideOnQuery(factory)`, `provideOnControl(factory)` | Adds `query.<plugin>` / `control.<plugin>` to every one, made the first time it is read. |
 | `call(name, request?, signal?)` | Makes a call by its full name (`notes.list`, `core.submitQuery`): any call the frame may make. |
+| `request(query)` | What a query runs with now: its dataset, AQL, input (mapped controls, the selection, the reader's sort, date drills) and timezone, as its own run is built. Change what you need and send it as `core.submitQuery` to run a variant of the query through the pipeline. |
 | `emit(name, payload?)` | Sends the host one of this plugin's events, by its short name. |
 | `handle(name, handler)` | Answers a call the host makes into the frame (`mounted.call('notes.focus')`). |
 | `on(name, listener)` | Listens to an event the host sends. |
@@ -183,6 +184,8 @@ kernel.menuItem({
   },
 });
 ```
+
+An item whose entries depend on the target gives `entries(target)` instead of `label` and `run`: each entry a `{ label, run }`, or a `{ label, disabled }` that shows why it can't run; none leaves the item out.
 
 `kernel.modal({ title, size, mount })` and `kernel.popover({ anchor, side, mount, dismiss, closeButton })` (`side` is where it opens, `right` unless given, another side when that one has no room; it closes on Escape and its close button, and on a click outside with `dismiss: 'outside'`) draw the frame around your content (`mount` gets its own shadow root, on the host's `--anfra-*` tokens) and close the other one open. `when` only decides what shows: the definition can call anything a frame half can, so anything that must hold is checked on the host, in the calls `run` makes.
 
