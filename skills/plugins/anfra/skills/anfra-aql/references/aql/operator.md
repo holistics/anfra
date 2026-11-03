@@ -1,6 +1,29 @@
 A key component of AQL's query syntax involves the utilization of operators to generate more precise metrics. 
 
-<!-- TODO: Add Arithmetic operators -->
+## Arithmetic Operator
+
+| Operator | Example | Description |
+| --- | --- | --- |
+| `+` | `orders.price + orders.tax` | Add |
+| `-` | `orders.price - orders.discount` | Subtract |
+| `*` | `order_items.quantity * products.price` | Multiply |
+| `/` | `orders.revenue / orders.quantity` | Divide. Use [`safe_divide`](/reference/aql/null-and-zero-functions#safe_divide) to get `null` when the divisor is `0`. |
+
+### Null operands
+`+` and `-` treat a `null` operand as `0`. The result is `null` only when every operand is `null`. `*` and `/` give `null` when any operand is `null`.
+
+| Expression | Result |
+| --- | --- |
+| `5 + null` | `5` |
+| `5 - null` | `5` |
+| `null - 5` | `-5` |
+| `null + null` | `null` |
+| `null - null` | `null` |
+| `5 * null` | `null` |
+| `5 / null` | `null` |
+| `null / 5` | `null` |
+
+For example, `total_orders - cancelled_orders` gives `total_orders` for a group with no cancelled orders. A row where both metrics are `null` stays `null`, so the explore still drops it.
 
 ## Pipe
 
