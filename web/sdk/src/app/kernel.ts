@@ -7,6 +7,7 @@ import {
   DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest, isDataAppError,
 } from '../common/errors';
 import type { Endpoint } from '../common/endpoint';
+import type { QueryRequest } from '../common/types';
 import type { App } from './app';
 import type { Control } from './controls';
 import type { Query } from './query';
@@ -39,6 +40,13 @@ export interface FrameKernel {
   readonly overlay: Overlay;
   /** The page's structure as it is now. */
   structure: () => BuiltStructure;
+  /**
+   * What a query runs with now, from what it last ran with: its dataset, its AQL, what reaches it
+   * (mapped controls, the selection, the reader's sort, date drills) and the timezone, as its own
+   * run and export are built. For a plugin that runs a variant of the query: it changes what it
+   * needs and sends it as `core.submitQuery`, through the pipeline like any query.
+   */
+  request: (query: Query) => QueryRequest;
   /** Make a host half's call, by its full name (`core.submitQuery`). */
   call: <T = unknown>(name: string, request?: unknown, signal?: AbortSignal) => Promise<T>;
   /** Send the host one of this plugin's events, by its name under the plugin. */
@@ -112,6 +120,11 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
       return overlayFor(win.document);
     },
     structure: () => buildStructure(win.document, sdk.apps),
+    request (query) {
+      const app = sdk.apps.find((candidate) => candidate.queries[query?.name] === query);
+      if (!app) throw new ValidationError(`Query '${String(query?.name)}' belongs to no app.`, query?.name);
+      return app.requestFor(query);
+    },
     call: (name, request, signal) => endpoint.call(name, request ?? null, signal),
     emit: (name, payload) => endpoint.emit(`${plugin}.${name}`, payload ?? null),
     handle (name, handler) {

@@ -24,9 +24,10 @@ export interface NodeTarget {
 
 /**
  * Rows of a query's result: the query, by its app's index and name; the rows as the definition
- * passed them; the dimensions that took part; and the conditions they make, derived as a
- * cross-filter's are (an AQL `expression` when per-field conditions would admit more rows). With
- * the node the rows are drawn in, when the event was inside one.
+ * passed them; the dimensions that took part; the measure the point belongs to, when the
+ * definition said; and the conditions they make, derived as a cross-filter's are (an AQL
+ * `expression` when per-field conditions would admit more rows). With the node the rows are drawn
+ * in, when the event was inside one.
  */
 export interface RowsTarget {
   kind: 'rows';
@@ -34,6 +35,8 @@ export interface RowsTarget {
   query: string;
   rows: Row[];
   fields: string[];
+  /** The result column of the measure the point shows: a chart's series. */
+  measure?: string;
   conditions: SelectionCondition[];
   expression?: string;
   node?: NodeTarget;
@@ -72,6 +75,7 @@ export function checkTarget (value: unknown): MenuTarget | undefined {
   if (!Array.isArray(value.fields) || !value.fields.every((field) => typeof field === 'string')) return undefined;
   if (!Array.isArray(value.conditions) || !value.conditions.every(isObject)) return undefined;
   if (value.expression !== undefined && typeof value.expression !== 'string') return undefined;
+  if (value.measure !== undefined && typeof value.measure !== 'string') return undefined;
   const node = value.node === undefined ? undefined : checkNode(value.node);
   if (value.node !== undefined && !node) return undefined;
   return {
@@ -80,6 +84,7 @@ export function checkTarget (value: unknown): MenuTarget | undefined {
     query: value.query,
     rows: value.rows as Row[],
     fields: value.fields as string[],
+    ...(value.measure !== undefined ? { measure: value.measure } : {}),
     conditions: value.conditions as unknown as SelectionCondition[],
     ...(value.expression !== undefined ? { expression: value.expression } : {}),
     ...(node ? { node } : {}),

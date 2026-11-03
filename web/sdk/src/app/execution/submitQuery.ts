@@ -11,6 +11,7 @@ import type {
   Condition,
   DateGrain,
   ExportOptions,
+  QueryRequest,
   QueryResult,
   SelectionCondition,
 } from '../../common/types';
@@ -104,12 +105,12 @@ export interface SelectionInput {
  * controls, the selection, the reader's sort, the timezone). One builder, so a page of a query and
  * its export cannot drift apart.
  */
-function buildQuery (
+export function buildQuery (
   query: Query,
   mappings: Mapping[],
   selection: SelectionInput,
-  context: SubmitContext,
-): Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input' | 'timezone'> {
+  context: Pick<SubmitContext, 'timezone'>,
+): QueryRequest {
   const mappedFilters = mappings
     .map((mapping) => toFilter(mapping, mapping.from.appliedCondition))
     .filter((filter): filter is BackendFilter => filter !== undefined);

@@ -36,6 +36,10 @@ export interface DatasetDescriptor {
       type: string;
       is_custom_measure: boolean;
       defined_in_dataset?: boolean;
+      /** Hidden from readers' field lists by the AML (`hidden: true`); a query can still name it. */
+      is_hidden?: boolean;
+      /** A param: a value a query passes in, not a column of the model. */
+      is_param?: boolean;
     }[];
   }[];
   metrics: {
@@ -655,6 +659,13 @@ export interface BackendQueryRequest {
   /** Present on `refresh()`: skip any result cache. */
   bustCache?: boolean;
 }
+
+/**
+ * What a query runs with now, apart from its page: its dataset, its AQL, what reaches it (mapped
+ * controls, the selection, the reader's sort, date drills) and the timezone. A run and an export
+ * are both built on it.
+ */
+export type QueryRequest = Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input' | 'timezone'>;
 
 /** One page of a query's rows. `values` is positional: each row lines up with `columns`. */
 export interface BackendQueryResult {

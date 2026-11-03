@@ -35,5 +35,5 @@ export interface AppContext {
   /** Brings an entity's marked elements into view; false when none is on the page. */
   locate (kind: LocateKind, name: string): boolean;
   /** Opens the content menu on these rows of this query, for the event; whether one opens. */
-  menu (query: Query, event: Event, rows: readonly Row[], fields?: readonly string[]): boolean;
+  menu (query: Query, event: Event, rows: readonly Row[], fields?: readonly string[], measure?: string): boolean;
 }
