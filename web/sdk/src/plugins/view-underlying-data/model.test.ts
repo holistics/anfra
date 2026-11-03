@@ -177,6 +177,26 @@ describe('plan', () => {
     expect(aql.startsWith('dimension orders.kind = case(when: orders.amount > 100, then: "Big", else: "Small");\nexplore {')).toBe(true);
   });
 
+  it('sends a condition on a field the query declares itself as AQL, which compiles with its declarations', () => {
+    const kind: ColumnMeta = {
+      name: 'kind', fieldName: 'kind', modelId: 'orders', label: 'kind', adhoc: false, isMeasure: false, ...textTypes,
+    };
+    const point = target({
+      measure: 'revenue',
+      conditions: [
+        { field: 'orders.kind', operator: 'is', values: ['Big'] },
+        { field: 'users.region', operator: 'is', values: ['APAC'] },
+      ],
+    });
+    const [candidate] = candidates(point, [kind, region, revenue], dataset);
+    const { input } = plan(point, candidate, base, [kind, region, revenue], dataset).request;
+    expect(input.filters).toEqual([
+      { field: 'orders.status', operator: 'is', values: ['paid'] },
+      { field: 'users.region', operator: 'is', values: ['APAC'] },
+    ]);
+    expect(input.conditions).toEqual([{ expr: 'orders.amount > 0' }, { expr: 'orders.kind is "Big"' }]);
+  });
+
   it('says what an empty value and a date range are', () => {
     const point = target({
       measure: 'revenue',

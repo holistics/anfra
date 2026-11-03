@@ -8,8 +8,11 @@
  * metric or any other expression doesn't, and gets no entry.
  */
 import type {
-  BackendFilter, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
+  BackendCondition, BackendFilter, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
 } from '../../common/types';
+import {
+  dateRange as aqlDateRange, equals as aqlEquals, or as aqlOr, type AqlValue,
+} from '../../app/aql';
 import type { RowsTarget } from '../../common/menu';
 
 type Model = DatasetDescriptor['data_models'][number];
@@ -113,6 +116,31 @@ function chipOf (dataset: DatasetDescriptor, condition: SelectionCondition): Chi
   return { text: `${label} ${word} ${condition.values.map(String).join(', ')}` };
 }
 
+/** Whether the dataset defines this `model.field`: what a structured filter may name. */
+function isDatasetField (dataset: DatasetDescriptor, ref: string): boolean {
+  const dot = ref.lastIndexOf('.');
+  return dot > 0 && !!modelOf(dataset, ref.slice(0, dot))?.fields.some((field) => field.name === ref.slice(dot + 1));
+}
+
+/**
+ * A condition as AQL, for a field the query declares itself (`dimension orders.kind = ...;`): the
+ * API checks a structured filter's field against the dataset, while an AQL condition compiles with
+ * the query's declarations. Undefined when it has no AQL spelling here.
+ */
+function asExpression (condition: SelectionCondition, columns: readonly ColumnMeta[]): string | undefined {
+  const { field, operator, values } = condition;
+  const semanticType = columns.find((column) => column.modelId && `${column.modelId}.${column.fieldName}` === field)?.semantic_type;
+  try {
+    if (operator === 'is_null') return aqlEquals(field, null);
+    if (operator === 'is' && values.length) return aqlOr(values.map((value) => aqlEquals(field, value as AqlValue, semanticType)));
+    if (operator === 'matches' && values.length === 1 && typeof values[0] === 'string') {
+      const [start, end] = values[0].split(' until ');
+      if (start && end) return aqlDateRange(field, start, end);
+    }
+  } catch { /* a value AQL can't spell */ }
+  return undefined;
+}
+
 /** An identifier the explore can alias a column with, not already taken. */
 function freeAlias (wanted: string, taken: Set<string>): string {
   const base = /^[A-Za-z_][A-Za-z0-9_]*$/.test(wanted) ? wanted : 'value';
@@ -163,9 +191,13 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
     '}',
   ].join('\n');
 
-  const pointFilters: BackendFilter[] = target.conditions.map((condition) => ({
-    field: condition.field, operator: condition.operator, values: [...condition.values],
-  }));
+  const pointFilters: BackendFilter[] = [];
+  const pointConditions: BackendCondition[] = target.expression ? [{ expr: target.expression }] : [];
+  target.conditions.forEach((condition) => {
+    const expr = isDatasetField(dataset, condition.field) ? undefined : asExpression(condition, columns);
+    if (expr) pointConditions.push({ expr });
+    else pointFilters.push({ field: condition.field, operator: condition.operator, values: [...condition.values] });
+  });
   const chips: Chip[] = target.expression
     ? [{ text: 'Matches the selected point' }]
     : target.conditions.map((condition) => chipOf(dataset, condition));
@@ -183,7 +215,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
       aql,
       input: {
         filters: [...base.input.filters, ...pointFilters],
-        conditions: [...base.input.conditions, ...(target.expression ? [{ expr: target.expression }] : [])],
+        conditions: [...base.input.conditions, ...pointConditions],
         sorts: [],
         dateDrills: [],
       },
