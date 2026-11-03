@@ -108,6 +108,8 @@ export function view (root: ShadowRoot, deps: ViewDeps): () => void {
     downloadButton = el(doc, 'button', {
       type: 'button', class: 'a-button', 'data-variant': 'outline', 'data-size': 'sm', 'data-testid': 'vud-download',
     }, 'Download CSV');
+    // Shown once there are rows to download.
+    downloadButton.hidden = true;
     footer.append(downloadButton);
   }
   const problem = el(doc, 'span', { class: 'count problem', 'data-testid': 'vud-problem' });
@@ -147,15 +149,21 @@ export function view (root: ShadowRoot, deps: ViewDeps): () => void {
       shown += result.values?.length ?? 0;
       const hasMore = result.meta?.hasMore ?? (result.values?.length ?? 0) >= PAGE_SIZE;
       state.hidden = shown > 0;
+      state.classList.remove('error');
       state.textContent = 'No rows match this point.';
       count.textContent = countText(shown, hasMore);
+      more.textContent = 'Load more';
       more.hidden = !hasMore;
+      if (downloadButton) downloadButton.hidden = shown === 0;
     } catch (err) {
       if (isAbort(err) || controller.signal.aborted) return;
       if (page === 0) {
         state.hidden = false;
         state.classList.add('error');
         state.textContent = messageOf(err);
+        // The same button fetches the first page again.
+        more.textContent = 'Try again';
+        more.hidden = false;
       } else {
         problem.hidden = false;
         problem.textContent = messageOf(err);
