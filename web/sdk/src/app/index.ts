@@ -18,7 +18,7 @@ export { Mapping, CrossFilter, type Edge } from './mapping';
 export { bootstrap, type PluginSetup } from './bootstrap';
 export { type FrameKernel } from './kernel';
 export {
-  type FrameMenuItem, type ModalInput, type PopoverInput, type Opened,
+  type FrameMenuItem, type FrameMenuEntry, type ModalInput, type PopoverInput, type Opened,
 } from './menu';
 export { type PopoverSide } from './ui/body';
 export type {

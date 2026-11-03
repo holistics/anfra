@@ -26,6 +26,8 @@ export function toDescriptor (dataset: ShowDataset): DatasetDescriptor {
         type: field.type,
         is_custom_measure: field.role === 'measure',
         ...(field.definedInDataset ? { defined_in_dataset: true } : {}),
+        ...(field.hidden ? { is_hidden: true } : {}),
+        ...(field.role === 'param' ? { is_param: true } : {}),
       })),
     })),
     metrics: (dataset.metrics ?? []).map((metric) => ({

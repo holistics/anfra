@@ -10,7 +10,10 @@ import {
 import {
   assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
 } from './validation';
-import { buildExportRequest, runQuery, type SubmitContext } from './execution/submitQuery';
+import {
+  buildExportRequest, buildQuery, runQuery, type SubmitContext,
+} from './execution/submitQuery';
+import { withSuggestion } from './suggest';
 import { deriveSelection } from './selection';
 import { openRowsMenu } from './menu';
 import { applyExtensions, type EntityExtensions } from './extensions';
@@ -28,6 +31,7 @@ import type {
   ExportOptions,
   ExportResult,
   FilterAggregation,
+  QueryRequest,
   ConditionValue,
   FilterDeclaration,
   InspectedApp,
@@ -470,9 +474,25 @@ export class App extends Observable implements AppContext {
     return byField;
   }
 
-  menu (query: Query, event: Event, rows: readonly Row[], fields?: readonly string[]): boolean {
+  menu (query: Query, event: Event, rows: readonly Row[], fields?: readonly string[], measure?: string): boolean {
     if (this._queries.get(query.name) !== query) {
       throw new ValidationError(`Query '${query.name}' belongs to a different app.`, query.name);
+    }
+    if (measure !== undefined) {
+      const columns = query.result?.columns ?? [];
+      const column = columns.find((candidate) => candidate.name === measure);
+      if (!column?.isMeasure) {
+        throw new ValidationError(
+          column
+            ? `Query '${query.name}' can't open a menu on '${measure}' as its measure: it is a dimension.`
+            : withSuggestion(
+              `Query '${query.name}' has no measure '${measure}' in its last result.`,
+              measure,
+              columns.filter((candidate) => candidate.isMeasure).map((candidate) => candidate.name),
+            ),
+          query.name,
+        );
+      }
     }
     const derived = deriveSelection(query, rows, fields, this.drillTransformations(query));
     return openRowsMenu(event, {
@@ -481,9 +501,29 @@ export class App extends Observable implements AppContext {
       query: query.name,
       rows: [...rows],
       fields: derived?.fields ? [...derived.fields] : [],
+      ...(measure !== undefined ? { measure } : {}),
       conditions: derived?.conditions ? [...derived.conditions] : [],
       ...(derived?.expression ? { expression: derived.expression } : {}),
     });
+  }
+
+  /**
+   * @internal Backs the kernel's `request(query)`: what the query runs with now, from its applied
+   * state, as `fetchPage` and `exportQuery` build theirs.
+   */
+  requestFor (query: Query): QueryRequest {
+    if (this._queries.get(query.name) !== query) {
+      throw new ValidationError(`Query '${query.name}' belongs to a different app.`, query.name);
+    }
+    return buildQuery(
+      query,
+      this.mappingsTo(query.name),
+      {
+        conditions: this.selectionConditionsFor(query.name, 'applied'),
+        expression: this.selectionExpressionFor(query.name, 'applied'),
+      },
+      { timezone: this._timezone },
+    );
   }
 
   select (query: Query, rows: readonly Row[], fields?: readonly string[]): void {

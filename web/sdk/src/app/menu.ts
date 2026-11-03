@@ -11,11 +11,17 @@ import { layerRoot } from './layer';
 import { ATTR } from './structure';
 import type { PopoverSide, Rect, UiBody } from './ui/body';
 
-/** An entry a plugin's frame half adds to the menu, for one kind of target. */
-export interface FrameMenuItem {
-  /** Under the plugin's name once added (`underlying` is `explore.underlying`). */
-  id: string;
+/** One entry a frame item shows for a target: what it runs, or why it can't. */
+export interface FrameMenuEntry {
   label: string;
+  /** Why it can't run: shown, and the entry can't be picked. An entry with neither this nor `run` is left out. */
+  disabled?: string;
+  run?: () => unknown;
+}
+
+interface FrameMenuItemBase {
+  /** Under the plugin's name once added (`open` is `view-underlying-data.open`). */
+  id: string;
   target: MenuTargetKind;
   /**
    * Whether it applies to this target; it shows when this is left out. Presentation only: frame code
@@ -23,8 +29,17 @@ export interface FrameMenuItem {
    * the host, in the calls the item makes.
    */
   when?: (target: MenuTarget) => boolean;
-  run: (target: MenuTarget) => unknown;
 }
+
+/**
+ * An entry a plugin's frame half adds to the menu, for one kind of target: one `label` that runs
+ * `run`, or the `entries` it shows for each target, decided as the menu opens (one per measure of a
+ * point, say, or one that can't run and says why; none leaves the item out).
+ */
+export type FrameMenuItem = FrameMenuItemBase & (
+  | { label: string, run: (target: MenuTarget) => unknown, entries?: never }
+  | { entries: (target: MenuTarget) => readonly FrameMenuEntry[], label?: never, run?: never }
+);
 
 export interface ModalInput {
   title: string;
@@ -130,8 +145,22 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
       try { applies = item.when ? item.when(target) !== false : true; } catch { applies = false; }
       if (!applies) continue;
       const key = `frame:${item.full}:${target.kind}`;
-      entries.push({ id: key, label: item.label });
-      run.set(key, () => item.run(target));
+      if (!item.entries) {
+        entries.push({ id: key, label: item.label });
+        run.set(key, () => item.run(target));
+        continue;
+      }
+      let own: readonly FrameMenuEntry[] = [];
+      try { own = item.entries(target) ?? []; } catch { own = []; }
+      own.forEach((entry, index) => {
+        // An entry runs something or says why it can't; anything else is left out.
+        if (typeof entry?.label !== 'string') return;
+        const disabled = typeof entry.disabled === 'string' && entry.disabled ? entry.disabled : undefined;
+        if (!disabled && typeof entry.run !== 'function') return;
+        const entryKey = `${key}:${index}`;
+        entries.push({ id: entryKey, label: entry.label, ...(disabled ? { disabled } : {}) });
+        if (!disabled) run.set(entryKey, entry.run!);
+      });
     }
     return { entries, run };
   }

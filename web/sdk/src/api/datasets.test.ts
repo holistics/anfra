@@ -42,6 +42,24 @@ describe('toDescriptor', () => {
       metrics: [{ name: 'revenue', label: 'Revenue', type: 'number' }],
     });
   });
+
+  it('marks a hidden field and a param', () => {
+    const [model] = sales.models!;
+    const descriptor = toDescriptor({
+      ...sales,
+      models: [{
+        ...model,
+        fields: [
+          { fqn: 'shop.orders.secret', name: 'secret', role: 'dimension', type: 'text', hidden: true },
+          { fqn: 'shop.orders.cutoff', name: 'cutoff', role: 'param', type: 'date', hidden: false },
+        ],
+      }],
+    });
+    expect(descriptor.data_models[0].fields).toEqual([
+      { name: 'secret', type: 'text', is_custom_measure: false, is_hidden: true },
+      { name: 'cutoff', type: 'date', is_custom_measure: false, is_param: true },
+    ]);
+  });
 });
 
 describe('loadDatasets', () => {

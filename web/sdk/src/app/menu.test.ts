@@ -5,6 +5,7 @@ import { flush, testFrame } from './testFrame';
 import type { FrameKernel } from './kernel';
 import type { PluginSetup } from './bootstrap';
 import ui from './ui/body';
+import { numberTypes, textTypes } from './testSupport';
 
 // Each test's frame listens on the test's one window: take its listeners away after it, as a
 // frame's go with its document.
@@ -119,6 +120,66 @@ describe('the menu on a query\'s rows', () => {
     expect(run).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'rows', app: 0, query: 'revenue', rows: [{ region: 'APAC' }], node: expect.objectContaining({ kind: 'node' }),
     }));
+  });
+
+  it('passes the measure the point shows, and refuses one the result has no measure of', async () => {
+    const run = vi.fn();
+    const f = frame((kernel) => kernel.menuItem({ id: 'underlying', label: 'View underlying data', target: 'rows', run }), {
+      'core.submitQuery': () => ({
+        columns: [
+          { name: 'region', modelId: 'users', fieldName: 'region', label: 'Region', adhoc: false, isMeasure: false, ...textTypes },
+          { name: 'total', modelId: 'orders', fieldName: 'amount', label: 'total', adhoc: false, isMeasure: true, aggregation: 'sum', ...numberTypes },
+        ],
+        values: [['APAC', '10']],
+      }),
+    });
+    const app = f.anfra.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    await app.execute();
+    const open = (measure: string) => {
+      let opened: boolean | undefined;
+      document.getElementById('inside')!.addEventListener('contextmenu', (e) => { opened = query.menu(e, { region: 'APAC' }, { measure }); }, { once: true });
+      document.getElementById('inside')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      return opened;
+    };
+    expect(() => query.menu(new MouseEvent('contextmenu'), { region: 'APAC' }, { measure: 'region' })).toThrow(/it is a dimension/);
+    expect(() => query.menu(new MouseEvent('contextmenu'), { region: 'APAC' }, { measure: 'totl' })).toThrow(/no measure 'totl'.*Did you mean 'total'/);
+    expect(open('total')).toBe(true);
+    await settle();
+    entries()[0].click();
+    await settle();
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'rows', measure: 'total', fields: ['region'], conditions: [{ field: 'users.region', operator: 'is', values: ['APAC'] }],
+    }));
+  });
+
+  it('shows the entries an item gives for the target: several, one that says why it can\'t run, or none', async () => {
+    const picked = vi.fn();
+    let given: { label: string, disabled?: string, run?: () => unknown }[] = [];
+    const f = frame((kernel) => kernel.menuItem({ id: 'underlying', target: 'rows', entries: () => given }));
+    const query = f.anfra.createApp().createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    const open = () => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      document.getElementById('inside')!.addEventListener('contextmenu', (e) => { query.menu(e, []); }, { once: true });
+      document.getElementById('inside')!.dispatchEvent(event);
+      return event;
+    };
+
+    given = [
+      { label: 'Revenue', run: () => picked('revenue') },
+      { label: 'Orders', disabled: 'No data is available for this point' },
+      { label: 'Ignored' },
+    ];
+    expect(open().defaultPrevented).toBe(true);
+    await settle();
+    expect(entries().map((entry) => [entry.firstChild?.textContent, entry.getAttribute('aria-disabled')])).toEqual([['Revenue', null], ['Orders', 'true']]);
+    entries()[1].click();
+    entries()[0].click();
+    await settle();
+    expect(picked.mock.calls).toEqual([['revenue']]);
+
+    given = [];
+    expect(open().defaultPrevented).toBe(false);
   });
 
   it('opens nothing when no item is for rows', () => {
