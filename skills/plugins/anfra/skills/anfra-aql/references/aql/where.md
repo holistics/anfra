@@ -170,6 +170,23 @@ sum(balances.amount) | where(balances.date == max(balances.date))
 count(orders.id) | where(orders.amount > sum(orders.amount) / count(orders.id))
 ```
 
+## Groups with no matching rows
+
+When `where()` removes every row of a group, the metric gives `null` for that group, not `0`. If every measure in an explore row is `null`, the explore drops the row.
+
+```aml
+// null (or a dropped row) for a month with no cancelled orders
+count(orders.id) | where(orders.status == 'cancelled')
+
+// 0 for a month with orders but none cancelled
+count_if(orders.status == 'cancelled')
+
+// 0 for every month that has a row
+count(orders.id) | where(orders.status == 'cancelled') | coalesce(0)
+```
+
+See [Empty groups give null, not 0](../aqlearn.md#empty-groups-give-null-not-0).
+
 ## When not to use `where()`?
 
 Sometimes you want to filter an arbitrary expression that haven't been explicitly defined as a dimension yet. For example, you want to know which country has at least 100,000 users who have placed at least 1 order:
