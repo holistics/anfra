@@ -16,7 +16,6 @@ import (
 	"github.com/holistics/anfra/internal/cliauth"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
-	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 func newAuthCmd() *cobra.Command {
@@ -25,7 +24,7 @@ func newAuthCmd() *cobra.Command {
 	// format, the other whether to ask (newAuthTerminal).
 	terminalFor := func(cmd *cobra.Command) *authTerminal {
 		t := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
-		t.machine = output.json
+		t.machine = structuredAsked()
 		return t
 	}
 	auth.AddCommand(&cobra.Command{
@@ -48,8 +47,8 @@ func newAuthCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if output.json {
-				return jsonkit.MarshalWrite(cmd.OutOrStdout(), struct {
+			if structuredAsked() {
+				return writeStructured(cmd.OutOrStdout(), struct {
 					OrgURL                 string `json:"org_url"`
 					RepoDestinationChanged bool   `json:"repo_destination_changed"`
 				}{OrgURL: org.String()})
@@ -78,15 +77,15 @@ func newAuthCmd() *cobra.Command {
 				result, logoutErr = (cliauth.Manager{}).Logout(ctx, org)
 				return logoutErr
 			})
-			if output.json && (err == nil || result.LocalRemoved) {
-				if writeErr := jsonkit.MarshalWrite(cmd.OutOrStdout(), result); writeErr != nil {
+			if structuredAsked() && (err == nil || result.LocalRemoved) {
+				if writeErr := writeStructured(cmd.OutOrStdout(), result); writeErr != nil {
 					return writeErr
 				}
 			}
 			if err != nil {
 				return err
 			}
-			if !output.json {
+			if !structuredAsked() {
 				styles := cliui.TerminalStyles{}
 				if t.interactive {
 					styles = cliui.NewTerminalStyles(cmd.OutOrStdout())
@@ -104,11 +103,14 @@ func newAuthCmd() *cobra.Command {
 		Use: "status", Short: "Show authenticated organizations and this repo's publish destination",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return printAuthStatus(cmd.Context(), ".", cmd.OutOrStdout(), output.json, output.nonInteractive)
+			return printAuthStatus(cmd.Context(), ".", cmd.OutOrStdout(), structuredAsked(), output.nonInteractive)
 		},
 	})
 	for _, c := range auth.Commands() {
-		markStructuredOutput(c)
+		markPrettyOutput(c) // its own output for a person, until the prettifier covers it
+		if c.Name() == "login" || c.Name() == "logout" {
+			markInteractable(c) // which org, which login
+		}
 	}
 	return auth
 }
@@ -164,6 +166,9 @@ type authTerminal struct {
 	interactive, machine bool
 }
 
+// newAuthTerminal is a command's terminal, to ask on when the run is
+// interactive. A command that asks through it is marked interactable
+// (markInteractable), for its --help.
 func newAuthTerminal(in io.Reader, out io.Writer) *authTerminal {
 	return &authTerminal{in: in, out: out, interactive: !output.nonInteractive && cliui.CanInteract(in, out)}
 }

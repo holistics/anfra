@@ -20,30 +20,54 @@ import (
 
 // newUpdateCmd is the manual self-update command (like `gh`/`deno upgrade`):
 // check the latest GitHub release and, unless --check, replace this binary.
-// It ends by saying when the agents' skills need attention, which `anfra agent
-// setup` handles (docs/designs/agent-setup.md).
+// It warns when the agents' skills need attention, which `anfra agent setup`
+// handles (docs/designs/agent-setup.md).
 func newUpdateCmd() *cobra.Command {
 	var checkOnly bool
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update anfra to the latest release (use --check to only report)",
+		Long: "Update anfra to the latest release, replacing this binary. --check only reports.\n\n" +
+			"Its result is `anfra version`'s answer as it stands after the update, checked now rather than\n" +
+			"from the background check: version, and update's latest and available. previous is the version\n" +
+			"it replaced, when it installed one, and changelog links to what the latest release brings.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := runUpdate(cmd.Context(), checkOnly); err != nil {
+			res, err := runUpdate(cmd.Context(), checkOnly, cmd.ErrOrStderr())
+			if err != nil {
 				return err
 			}
 			if line := agents.Attention(agents.System(), repoDirIfAny()); line != "" {
-				fmt.Printf("\n%s\n", line)
+				printWarning(cmd.ErrOrStderr(), "skills_need_attention", line)
 			}
-			return nil
+			return writeResult(cmd, res)
 		},
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "only check for an update; do not install")
+	markPrettyOutput(cmd)
 	return cmd
 }
 
-func runUpdate(ctx context.Context, checkOnly bool) error {
+// updateResult is update's result: version's answer as the update leaves it,
+// and what it replaced (docs/designs/commands-and-api.md#new-state-as-output).
+type updateResult struct {
+	Version string             `json:"version"`
+	Update  command.UpdateInfo `json:"update"`
+	// Previous is the version the update replaced; absent when it installed
+	// none.
+	Previous string `json:"previous,omitempty"`
+	// Changelog is the changelog as of the latest release: what it brings,
+	// and every release before it.
+	Changelog string `json:"changelog"`
+}
+
+// runUpdate checks for the latest release and, unless checkOnly, installs it.
+// What it says for a person, its progress and the release notes, goes to
+// errOut on a terminal only; a running server left on another version is a
+// warning.
+func runUpdate(ctx context.Context, checkOnly bool, errOut io.Writer) (updateResult, error) {
 	if meta.FromSource() {
-		return fmt.Errorf("this anfra (%s) was built from source, which `anfra update` would replace with a release: "+
+		return updateResult{}, fmt.Errorf("this anfra (%s) was built from source, which `anfra update` would replace with a release: "+
 			"rebuild it to update it, or install a release with the installer", meta.Version)
 	}
 	// ctx is the signal-cancelable root from main, so Ctrl-C aborts the download
@@ -51,60 +75,65 @@ func runUpdate(ctx context.Context, checkOnly bool) error {
 	// update package (a quick lookup, then a large download).
 	rel, err := update.Latest(ctx)
 	if err != nil {
-		return err
+		return updateResult{}, err
 	}
 	// Record the check so the background notice stays quiet right after.
 	update.RecordCheck(rel)
 
-	if !rel.IsNewer() {
-		fmt.Printf("anfra is up to date (%s).\n", meta.Version)
-		return nil
+	res := updateResult{
+		Version:   meta.Version,
+		Update:    command.UpdateInfo{Latest: rel.Version, Available: rel.IsNewer()},
+		Changelog: update.ChangelogURL(rel.Version),
 	}
-	if checkOnly {
-		fmt.Printf("Update available: anfra %s (you have %s). Run `anfra update` to install.\n", rel.Version, meta.Version)
-		showReleaseNotes(ctx, meta.Version, rel.Version)
-		return nil
+	terminal := stderrIsInteractive()
+	if !rel.IsNewer() || checkOnly {
+		if rel.IsNewer() && terminal {
+			showReleaseNotes(ctx, errOut, meta.Version, rel.Version)
+		}
+		return res, nil
 	}
 
-	fmt.Printf("Downloading anfra %s...\n", rel.Version)
-	// Show a progress line only on an interactive terminal; stay silent when
-	// output is piped/captured (agent, CI).
 	var progress io.Writer
-	if stderrIsInteractive() {
-		progress = os.Stderr
+	if terminal {
+		progress = errOut
+		fmt.Fprintf(errOut, "Downloading anfra %s...\n", rel.Version)
 	}
 	if err := update.Apply(ctx, rel, progress); err != nil {
-		return err
+		return updateResult{}, err
 	}
-	s := cliui.NewTerminalStyles(os.Stdout)
-	fmt.Printf("%s Updated anfra %s → %s\n", s.Success.Render("✓"),
-		s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
-	showReleaseNotes(ctx, meta.Version, rel.Version)
+	if terminal {
+		s := cliui.NewTerminalStyles(errOut)
+		fmt.Fprintf(errOut, "%s Updated anfra %s → %s\n", s.Success.Render("✓"),
+			s.Muted.Render(meta.Version), s.Success.Inherit(s.Heading).Render(rel.Version))
+		showReleaseNotes(ctx, errOut, meta.Version, rel.Version)
+	}
 	// A running server keeps the binary it started with: last, so the notes
 	// don't bury it.
 	for _, srv := range runningServers(ctx) {
 		if srv.Version != rel.Version {
-			printWarning(os.Stderr, "server_version_mismatch", fmt.Sprintf(
+			printWarning(errOut, "server_version_mismatch", fmt.Sprintf(
 				"`anfra serve` %s is still running for %s. Restart it to run %s.", srv.Version, srv.RepoDir, rel.Version))
 		}
 	}
-	return nil
+	res.Version, res.Previous = rel.Version, meta.Version
+	res.Update.Available = false
+	return res, nil
 }
 
 // maxNotes caps how many releases' notes showReleaseNotes prints; the earlier
 // ones are a link away.
 const maxNotes = 3
 
-// showReleaseNotes prints what the releases after from, up to and including to,
-// changed, newest first. Best-effort: when the notes can't be fetched, it
-// points to them instead, and never fails the command.
-func showReleaseNotes(ctx context.Context, from, to string) {
+// showReleaseNotes prints to w what the releases after from, up to and
+// including to, changed, newest first. Best-effort: when the notes can't be
+// fetched, it points to them instead, and never fails the command.
+func showReleaseNotes(ctx context.Context, w io.Writer, from, to string) {
 	notes, err := update.ReleaseNotes(ctx, from, to)
 	if err != nil || len(notes) == 0 {
-		fmt.Printf("See what changed: %s\n", update.ReleasesURL)
+		fmt.Fprintf(w, "See what changed: %s\n", update.ReleasesURL)
 		return
 	}
-	update.RenderNotes(os.Stdout, notes, maxNotes, cliui.NewTerminalStyles(os.Stdout), cliui.Width(os.Stdout))
+	update.RenderNotes(w, notes, maxNotes, cliui.NewTerminalStyles(w), cliui.Width(w))
 }
 
 // newUpdateCheckCmd is a hidden command run detached in the background to

@@ -20,81 +20,190 @@ type Options struct {
 	// block, and whose copies of the skills the check looks for too; "" outside
 	// one.
 	RepoDir string
-	// NotRepo: setup runs in a folder that isn't an anfra repo, so it leaves its
-	// AGENTS.md alone, and the report says so.
-	NotRepo bool
-	Out     io.Writer
+	// Progress is where to say, for a person, what setup is doing and what to
+	// do next; nil says nothing. The result says what it did.
+	Progress io.Writer
 }
+
+// Report is the state of the agents' skills: what `agent setup --check`
+// answers, and setup with it, as setup leaves it.
+type Report struct {
+	Skills LatestSkills `json:"skills"`
+	Agents []AgentState `json:"agents"`
+	Copies []CopyState  `json:"copies"`
+	// AgentsMD is the repo's anfra block; null outside an anfra repo.
+	AgentsMD *AgentsMDState `json:"agents_md"`
+}
+
+// LatestSkills is the latest anfra skills version, from the background check,
+// as `anfra version` names it; null until the check has run.
+type LatestSkills struct {
+	Latest    *string    `json:"latest"`
+	CheckedAt *time.Time `json:"checked_at"`
+}
+
+// AgentState is where an agent's skills come from: the plugin, through its
+// CLI, or copies in the folders it reads.
+type AgentState struct {
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`
+	Plugins []PluginState `json:"plugins"`
+	// Copies are the folders it reads that hold anfra skills, as Copies shows
+	// them.
+	Copies []string `json:"copies"`
+	// Install is where to install the skills from, when it has none.
+	Install string `json:"install,omitempty"`
+}
+
+// PluginState is an installed plugin against the latest skills.
+type PluginState struct {
+	Scope   string `json:"scope"`
+	Version string `json:"version"`
+	// Status is latest, behind, or unknown against an unknown latest.
+	Status string `json:"status"`
+}
+
+// CopyState is a folder of copies of the skills against the latest.
+type CopyState struct {
+	Dir string `json:"dir"`
+	// Status is latest, behind, mixed when its skills' versions differ, or
+	// unknown against an unknown latest; deprecated when it has only skills of
+	// the old names, which updating doesn't replace: they are removed.
+	Status   string          `json:"status"`
+	Versions []SkillsVersion `json:"versions"`
+	// DeprecatedNames: it has skills of the names from before renamedIn, which
+	// an agent loads next to the new ones until they are removed.
+	DeprecatedNames bool `json:"deprecated_names"`
+}
+
+// SkillsVersion is the skills of a copy at one version, oldest first.
+type SkillsVersion struct {
+	// Version is null for skills with no version stamp.
+	Version *string  `json:"version"`
+	Skills  []string `json:"skills"`
+}
+
+// AgentsMDState is the repo's anfra block in AGENTS.md.
+type AgentsMDState struct {
+	// Block is missing, outdated, up-to-date, or unreadable (Message says why).
+	Block BlockState `json:"block"`
+	// ClaudeMDImports is whether the repo's CLAUDE.md imports AGENTS.md; null
+	// when it has none.
+	ClaudeMDImports *bool  `json:"claude_md_imports"`
+	Message         string `json:"message,omitempty"`
+}
+
+// BlockUnreadable: AGENTS.md or CLAUDE.md can't be read as a file of the repo.
+const BlockUnreadable BlockState = "unreadable"
+
+// SetupResult is setup's result: what it did, then the Report as it leaves
+// things (docs/designs/commands-and-api.md#new-state-as-output).
+type SetupResult struct {
+	Setup  SetupActions `json:"setup"`
+	Report `json:",inline"`
+}
+
+// SetupActions are what setup did.
+type SetupActions struct {
+	Agents []AgentSetup `json:"agents"`
+	// AgentsMD is what setup wrote in the repo; null outside an anfra repo.
+	AgentsMD *AgentsMDSetup `json:"agents_md"`
+}
+
+// AgentSetup is what setup did for one agent.
+type AgentSetup struct {
+	Agent   string  `json:"agent"`
+	Outcome Outcome `json:"outcome"`
+	// Message is what to do next: restart the agent, install its CLI, or
+	// follow the README.
+	Message string `json:"message"`
+}
+
+// Outcome is what setup did for an agent.
+type Outcome string
+
+const (
+	OutcomeInstalled        Outcome = "installed"         // installed or updated
+	OutcomeFailed           Outcome = "failed"            // an install step failed
+	OutcomeCLIMissing       Outcome = "cli_missing"       // not tried: its CLI isn't on the PATH
+	OutcomeInstructionsOnly Outcome = "instructions_only" // anfra doesn't install for it: the README says how
+)
+
+// AgentsMDSetup is what setup wrote of the anfra block.
+type AgentsMDSetup struct {
+	WroteBlock  bool `json:"wrote_block"`
+	WroteImport bool `json:"wrote_import"`
+	// Message is why it couldn't write them; absent when it could.
+	Message string `json:"message,omitempty"`
+}
+
+// ErrIncomplete is setup leaving an agent without the skills, or the anfra
+// block unwritten: Setup returns it with its result, as far as it got.
+var ErrIncomplete = errors.New("the anfra skills are not set up for every agent")
 
 // Setup installs the plugin into each agent anfra installs into, and writes
 // the AGENTS.md block in an anfra repo, then reports the state it leaves, as
-// Check does, and what to do next. It fails when an install step failed or an
-// agent named with --agent ends up without the plugin: an agent that was only
-// detected doesn't fail it, as anyone with a second agent's folder would see
-// setup fail on every run.
-func Setup(ctx context.Context, env Env, o Options) error {
+// Check does. It fails, with ErrIncomplete, when an install step failed or
+// an agent named with --agent ends up without the plugin: an agent that was
+// only detected doesn't fail it, as anyone with a second agent's folder would
+// see setup fail on every run.
+func Setup(ctx context.Context, env Env, o Options) (SetupResult, error) {
 	agents, named, err := selectAgents(env, o)
 	if err != nil {
-		return err
+		return SetupResult{}, err
 	}
-	var notes []string
+	res := SetupResult{Setup: SetupActions{Agents: []AgentSetup{}}}
 	failed := false
 	for _, a := range agents {
-		if !a.Installs() {
-			failed = failed || named
-			continue
-		}
-		ok, stepFailed, note := install(ctx, env, a, o)
-		notes = append(notes, note)
-		failed = failed || stepFailed || named && !ok
+		s := install(ctx, env, a, o.Progress)
+		res.Setup.Agents = append(res.Setup.Agents, s)
+		failed = failed || s.Outcome == OutcomeFailed || named && s.Outcome != OutcomeInstalled
 	}
-	blockNote := ""
 	if o.RepoDir != "" {
 		wroteBlock, wroteImport, err := WriteBlock(o.RepoDir)
-		switch {
-		case err != nil:
-			notes = append(notes, "AGENTS.md: failed: "+err.Error())
+		res.Setup.AgentsMD = &AgentsMDSetup{WroteBlock: wroteBlock, WroteImport: wroteImport}
+		if err != nil {
+			res.Setup.AgentsMD.Message = err.Error()
 			failed = true
-		case wroteBlock && wroteImport:
-			blockNote = " (setup just wrote it, and @AGENTS.md in CLAUDE.md)"
-		case wroteBlock:
-			blockNote = " (setup just wrote it)"
-		case wroteImport:
-			blockNote = " (setup just wrote @AGENTS.md in CLAUDE.md)"
 		}
 	}
 	// What setup installed, for the notice to know without asking the agents.
 	RecordPlugins(ctx, env)
 
-	fmt.Fprintln(o.Out)
-	if report(ctx, env, o, agents, blockNote) {
-		notes = append(notes, "To update the skills in a folder, see "+readmeURL+"#updating-and-removing.")
-	}
-	if len(notes) > 0 {
-		fmt.Fprintln(o.Out)
-		for _, n := range notes {
-			fmt.Fprintln(o.Out, n)
-		}
-	}
+	res.Report = report(ctx, env, o, agents)
 	if failed {
-		return errors.New("the anfra skills are not set up for every agent: see above")
+		return res, ErrIncomplete
 	}
-	return nil
+	return res, nil
 }
 
-// install runs an agent's install steps, and reports whether the plugin ends
-// up installed, whether a step failed, and what to tell the user.
-func install(ctx context.Context, env Env, a Agent, o Options) (ok, failed bool, note string) {
-	if _, err := env.LookPath(a.plugin.bin); err != nil {
-		return false, false, fmt.Sprintf("%s: not installed, as its CLI `%s` is not on your PATH. Install %s, then run this again.", a.Name, a.plugin.bin, a.Name)
+// install runs an agent's install steps, and says what came of it.
+func install(ctx context.Context, env Env, a Agent, progress io.Writer) AgentSetup {
+	s := AgentSetup{Agent: a.ID}
+	switch {
+	case !a.Installs():
+		s.Outcome, s.Message = OutcomeInstructionsOnly, "anfra doesn't install the skills for "+a.Name+": install them as "+a.README()+" says."
+		return s
+	case lookPathFails(env, a.plugin.bin):
+		s.Outcome, s.Message = OutcomeCLIMissing, fmt.Sprintf("Its CLI `%s` is not on your PATH. Install %s, then run this again.", a.plugin.bin, a.Name)
+		return s
 	}
-	fmt.Fprintf(o.Out, "Installing %s for %s...\n", Plugin, a.Name)
+	if progress != nil {
+		fmt.Fprintf(progress, "Installing %s for %s...\n", Plugin, a.Name)
+	}
 	for _, args := range a.plugin.install {
 		if err := env.Run(ctx, a.plugin.bin, args...); err != nil {
-			return false, true, fmt.Sprintf("%s: failed: `%s %s`: %v", a.Name, a.plugin.bin, strings.Join(args, " "), err)
+			s.Outcome, s.Message = OutcomeFailed, fmt.Sprintf("`%s %s`: %v", a.plugin.bin, strings.Join(args, " "), err)
+			return s
 		}
 	}
-	return true, false, a.plugin.note
+	s.Outcome, s.Message = OutcomeInstalled, a.plugin.note
+	return s
+}
+
+func lookPathFails(env Env, bin string) bool {
+	_, err := env.LookPath(bin)
+	return err != nil
 }
 
 // selectAgents are the agents setup acts on: those named, else those detected.
@@ -172,146 +281,127 @@ func status(versions map[string][]string, latest string, known bool) (string, st
 // skills of the names from before it are deprecated.
 const renamedIn = "0.15.0"
 
-// Check reports what setup would act on, without changing anything, as
-// report does.
-func Check(ctx context.Context, env Env, o Options) error {
+// Check reports the state of the agents' skills, as setup would find them,
+// and changes nothing.
+func Check(ctx context.Context, env Env, o Options) (Report, error) {
 	agents, _, err := selectAgents(env, o)
 	if err != nil {
-		return err
+		return Report{}, err
 	}
-	report(ctx, env, o, agents, "")
-	fmt.Fprintln(o.Out, "\nRun `anfra agent setup` to install or update them.")
-	return nil
+	r := report(ctx, env, o, agents)
+	if o.Progress != nil {
+		fmt.Fprintln(o.Progress, "Run `anfra agent setup` to install or update them.")
+	}
+	return r, nil
 }
 
-// report prints the state of the agents' skills:
-//   - Agents: where each agent's skills come from: the plugin, through its
-//     CLI, or copies in the folders it reads; or nowhere, with where to
-//     install them from.
-//   - Skills: each plugin and copy found, against the latest skills version
-//     from the background check.
-//   - Deprecated skills: copies of the names from before the prefix, to clean
-//     up, as an agent loads them next to the new ones.
-//   - AGENTS.md, in an anfra repo: its anfra block, with blockNote after its
-//     state.
+// report is the state of agents' skills, against the latest skills version
+// from the background check:
+//   - each agent, and where its skills come from: the plugin, through its CLI,
+//     or copies in the folders it reads; or where to install them from;
+//   - each copy found, the deprecated ones included, as an agent loads them
+//     next to the new ones;
+//   - in an anfra repo, its AGENTS.md block.
 //
-// It says whether a copy, rather than a plugin, is behind: setup doesn't
-// update those.
-func report(ctx context.Context, env Env, o Options, agents []Agent, blockNote string) (copiesBehind bool) {
+// It tells progress what a person would do next: update copies, which setup
+// doesn't, clean up deprecated ones, set up a repo.
+func report(ctx context.Context, env Env, o Options, agents []Agent) Report {
 	latest, checkedAt, known := update.CachedSkills()
-	switch {
-	case !known:
-		fmt.Fprintln(o.Out, "Latest anfra skills: not known yet. anfra checks GitHub in the background, twice a day.")
-	case sameDay(checkedAt, time.Now()):
-		fmt.Fprintf(o.Out, "Latest anfra skills: %s, from GitHub (checked today)\n", latest)
-	default:
-		fmt.Fprintf(o.Out, "Latest anfra skills: %s, from GitHub (checked %s)\n", latest, checkedAt.Format("2 Jan"))
+	r := Report{Agents: []AgentState{}, Copies: []CopyState{}}
+	if known {
+		r.Skills = LatestSkills{Latest: &latest, CheckedAt: &checkedAt}
 	}
 
 	copies := Copies(env, o.RepoDir)
-	type row struct{ where, status, details string }
-	var skills []row
-	var agentRows [][3]string
 	for _, a := range agents {
-		var how, details []string
-		plugins := a.InstalledPlugin(ctx, env)
-		if len(plugins) > 0 {
-			how = append(how, "plugin")
+		s := AgentState{ID: a.ID, Name: a.Name, Plugins: []PluginState{}, Copies: []string{}}
+		for _, p := range a.InstalledPlugin(ctx, env) {
+			st, _ := status(map[string][]string{p.Version: {Plugin}}, latest, known)
+			s.Plugins = append(s.Plugins, PluginState{Scope: p.Scope, Version: p.Version, Status: st})
 		}
-		for _, p := range plugins {
-			where := a.Name + " plugin"
-			if p.Scope != "user" {
-				where += " (" + p.Scope + " scope)"
-			}
-			st, d := status(map[string][]string{p.Version: {Plugin}}, latest, known)
-			skills = append(skills, row{where, st, d})
-			details = append(details, strings.TrimSpace("plugin "+p.Version))
-		}
-		var dirs []string
 		for _, c := range a.readsCopies(env, o.RepoDir, copies) {
-			dirs = append(dirs, c.Dir)
+			s.Copies = append(s.Copies, c.Dir)
 		}
-		if len(dirs) > 0 {
-			how = append(how, "skills")
-			details = append(details, strings.Join(dirs, ", "))
+		if len(s.Plugins) == 0 && len(s.Copies) == 0 {
+			s.Install = a.README()
 		}
-		if len(how) == 0 {
-			agentRows = append(agentRows, [3]string{a.Name, "none", "see " + a.README()})
-			continue
-		}
-		agentRows = append(agentRows, [3]string{a.Name, strings.Join(how, ", "), strings.Join(details, "; ")})
+		r.Agents = append(r.Agents, s)
 	}
 
-	fmt.Fprintln(o.Out, "\nAgents found:")
-	printRows(o.Out, agentRows)
-
-	var deprecated []string
+	var behind, deprecated []string
 	for _, c := range copies {
+		cs := CopyState{Dir: c.Dir, Versions: skillsVersions(c.Versions), DeprecatedNames: c.OldNames}
 		if len(c.Versions) > 0 {
-			st, d := status(c.Versions, latest, known)
-			skills = append(skills, row{c.Dir, st, d})
-			copiesBehind = copiesBehind || st == "behind" || st == "mixed"
+			cs.Status, _ = status(c.Versions, latest, known)
+		} else {
+			cs.Status = "deprecated"
+		}
+		if cs.Status == "behind" || cs.Status == "mixed" {
+			behind = append(behind, c.Dir)
 		}
 		if c.OldNames {
 			deprecated = append(deprecated, c.Dir)
 		}
-	}
-	fmt.Fprintln(o.Out, "\nSkills found:")
-	if len(skills) == 0 {
-		fmt.Fprintln(o.Out, "  none. Run `anfra agent setup` to install them in your agents.")
-	}
-	var skillRows [][3]string
-	for _, r := range skills {
-		skillRows = append(skillRows, [3]string{r.where, r.status, r.details})
-	}
-	printRows(o.Out, skillRows)
-
-	if len(deprecated) > 0 {
-		fmt.Fprintf(o.Out, "\nDeprecated skills, from before %s:\n", renamedIn)
-		for _, d := range deprecated {
-			fmt.Fprintf(o.Out, "  %s\n", d)
-		}
-		fmt.Fprintf(o.Out, "Clean them up as %s#updating-and-removing says.\n", readmeURL)
+		r.Copies = append(r.Copies, cs)
 	}
 
 	if o.RepoDir != "" {
-		b, err := CheckBlock(o.RepoDir)
-		fmt.Fprintln(o.Out, "\nAGENTS.md:")
+		r.AgentsMD = agentsMDState(o.RepoDir)
+	}
+
+	if p := o.Progress; p != nil {
+		if len(behind) > 0 {
+			fmt.Fprintf(p, "To update the skills in %s, see %s#updating-and-removing.\n", strings.Join(behind, ", "), readmeURL)
+		}
+		if len(deprecated) > 0 {
+			fmt.Fprintf(p, "%s has deprecated anfra skills, from before %s: clean them up as %s#updating-and-removing says.\n",
+				strings.Join(deprecated, ", "), renamedIn, readmeURL)
+		}
+		if o.RepoDir == "" {
+			fmt.Fprintln(p, "AGENTS.md: skipped, as this folder isn't an anfra repo (no .anfra/). Run `anfra init` here to set it up, with the anfra block.")
+		}
+	}
+	return r
+}
+
+// skillsVersions is a copy's skills by version, oldest first, those with no
+// stamp first of all, each version's skills sorted.
+func skillsVersions(versions map[string][]string) []SkillsVersion {
+	vs := make([]string, 0, len(versions))
+	for v := range versions {
+		vs = append(vs, v)
+	}
+	slices.SortFunc(vs, func(a, b string) int {
 		switch {
-		case err != nil:
-			fmt.Fprintf(o.Out, "  can't read it: %v\n", err)
-		case b.State == BlockMissing:
-			fmt.Fprintln(o.Out, "  the anfra block is missing")
-		case b.State == BlockOutdated:
-			fmt.Fprintln(o.Out, "  the anfra block is out of date")
-		default:
-			fmt.Fprintln(o.Out, "  the anfra block is up-to-date"+blockNote)
+		case a == b:
+			return 0
+		case a == "" || Newer(b, a):
+			return -1
 		}
-		if b.NoImport {
-			fmt.Fprintln(o.Out, "  CLAUDE.md doesn't import it (@AGENTS.md)")
+		return 1
+	})
+	out := make([]SkillsVersion, 0, len(vs))
+	for _, v := range vs {
+		sv := SkillsVersion{Skills: slices.Sorted(slices.Values(versions[v]))}
+		if v != "" {
+			sv.Version = &v
 		}
+		out = append(out, sv)
 	}
-
-	if o.NotRepo {
-		fmt.Fprintln(o.Out, "\nAGENTS.md:")
-		fmt.Fprintln(o.Out, "  skipped: this folder isn't an anfra repo (no .anfra/). Run `anfra init` here to set it up, with the anfra block.")
-	}
-	return copiesBehind
+	return out
 }
 
-// printRows prints rows of three columns, aligned.
-func printRows(w io.Writer, rows [][3]string) {
-	var w0, w1 int
-	for _, r := range rows {
-		w0, w1 = max(w0, len(r[0])), max(w1, len(r[1]))
+// agentsMDState is the anfra block in repoDir's AGENTS.md, and the import in
+// its CLAUDE.md.
+func agentsMDState(repoDir string) *AgentsMDState {
+	b, err := CheckBlock(repoDir)
+	if err != nil {
+		return &AgentsMDState{Block: BlockUnreadable, Message: err.Error()}
 	}
-	for _, r := range rows {
-		fmt.Fprintf(w, "  %-*s  %-*s  %s\n", w0, r[0], w1, r[1], r[2])
+	s := &AgentsMDState{Block: b.State}
+	if b.HasClaudeMD {
+		imports := !b.NoImport
+		s.ClaudeMDImports = &imports
 	}
-}
-
-func sameDay(a, b time.Time) bool {
-	ay, am, ad := a.Local().Date()
-	by, bm, bd := b.Local().Date()
-	return ay == by && am == bm && ad == bd
+	return s
 }

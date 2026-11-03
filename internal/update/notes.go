@@ -18,6 +18,12 @@ import (
 // ReleasesURL is the page listing every release and its notes.
 const ReleasesURL = "https://github.com/" + repoSlug + "/releases"
 
+// ChangelogURL is where CHANGELOG.md is as of version's release: its notes, and
+// every release's before it.
+func ChangelogURL(version string) string {
+	return fmt.Sprintf("%s/%s/blob/v%s/CHANGELOG.md", webBase, repoSlug, url.PathEscape(tagVersion(version)))
+}
+
 // Notes is what one release changed, from its notes on GitHub.
 type Notes struct {
 	Version string

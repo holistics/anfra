@@ -12,7 +12,6 @@ import (
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
-	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // statusRepoOrg reads the nearest config without crossing a Git, home or filesystem boundary.
@@ -93,7 +92,7 @@ func printAuthStatus(ctx context.Context, dir string, out io.Writer, machine, no
 		result.Orgs = append(result.Orgs, authStatusOrg{Name: cliui.SafeText(login.Name), URL: login.Org.String(), RepoActive: active, LocalState: login.LocalState})
 	}
 	if machine {
-		return jsonkit.MarshalWrite(out, result)
+		return writeStructured(out, result)
 	}
 	styles := cliui.TerminalStyles{}
 	if !noInteractive {

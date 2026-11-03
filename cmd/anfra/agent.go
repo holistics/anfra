@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -61,24 +62,40 @@ func newAgentSetupCmd(use, deprecated string) *cobra.Command {
 			"For Claude Code and Codex, anfra installs it through their CLIs. Any other agent is pointed at the skills " +
 			"repo's install steps for it. Without --agent, setup acts on every agent it finds on this machine. " +
 			"Running it again updates what it installed. It installs per user, for every project.\n\n" +
-			"--check changes nothing: it reports each agent, and the copies of the skills anfra can find.",
+			"--check changes nothing: it reports each agent, and the copies of the skills anfra can find.\n\n" +
+			"Its result is that report: skills, the latest skills version; agents, each with its plugins and\n" +
+			"the copies it reads; copies, each folder of copies with its skills' versions; and agents_md, the\n" +
+			"repo's anfra block, null outside an anfra repo. Without --check, setup's result starts with setup:\n" +
+			"for each agent, its outcome (installed, failed, cli_missing or instructions_only) and a message,\n" +
+			"and what it wrote of the anfra block; then the report, as setup leaves things. When setup leaves\n" +
+			"an agent without the skills, it fails with command_failed, whose details are that result.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if deprecated != "" {
 				printWarning(cmd.ErrOrStderr(), "deprecated", deprecated)
 			}
-			o := agents.Options{Agents: ids, Out: cmd.OutOrStdout()}
-			if dir, ok := anfraRepoDir(); ok {
-				o.RepoDir = dir
-			} else {
-				o.NotRepo = true
+			o := agents.Options{Agents: ids, RepoDir: repoDirIfAny()}
+			if stderrIsInteractive() {
+				o.Progress = cmd.ErrOrStderr()
 			}
 			if check {
-				return agents.Check(cmd.Context(), agents.System(), o)
+				r, err := agents.Check(cmd.Context(), agents.System(), o)
+				if err != nil {
+					return err
+				}
+				return writeResult(cmd, r)
 			}
-			return agents.Setup(cmd.Context(), agents.System(), o)
+			res, err := agents.Setup(cmd.Context(), agents.System(), o)
+			if errors.Is(err, agents.ErrIncomplete) {
+				return commandFailedWith("The anfra skills are not set up for every agent.", res)
+			}
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, res)
 		},
 	}
+	markPrettyOutput(cmd)
 	cmd.Flags().StringSliceVar(&ids, "agent", nil, "the agents to set up, by id (one or more of: "+strings.Join(agents.IDs(), ", ")+"); default: those found on this machine")
 	cmd.Flags().BoolVar(&check, "check", false, "report what is set up, and change nothing")
 	return cmd
