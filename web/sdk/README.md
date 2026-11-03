@@ -113,7 +113,7 @@ inspects, and never thrown over: a wrong name or a block inside a block is repor
 import { coreApiBackend, coreClient, loadDatasets } from '@holistics/anfra-sdk/api';
 import { createHost } from '@holistics/anfra-sdk/host';
 import {
-  corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin,
+  corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin, viewUnderlyingDataPlugin,
 } from '@holistics/anfra-sdk/plugins';
 
 const client = coreClient('/api');                       // the core API, on whichever server serves it
@@ -127,6 +127,7 @@ const host = createHost({                                // one per page
     lineagePlugin(backend),                              // Anfra.lineage(), and the panel's Lineage tab
     renderPlugin(),                                      // Anfra.render(): the host saves PNGs and PDFs the frame makes
     inspectPlugin(),                                     // what an inspect panel needs
+    viewUnderlyingDataPlugin(),                          // "View underlying data" on a chart point's menu
   ],
   allowOrigins: ['https://cdn.acme.com'],                // optional: more origins apps may load from
 });
