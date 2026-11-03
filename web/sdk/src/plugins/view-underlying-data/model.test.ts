@@ -3,8 +3,9 @@ import type { RowsTarget } from '../../common/menu';
 import type { ColumnMeta, DatasetDescriptor, QueryRequest } from '../../common/types';
 import { numberTypes, textTypes } from '../../app/testSupport';
 import {
-  aggregateFunction, candidates, NO_DATA, plan, preambleOf, visibleDimensions,
+  aggregateFunction, candidates, NO_DATA, plan, visibleDimensions,
 } from './model';
+import { preambleOf } from './aqlText';
 
 const dataset: DatasetDescriptor = {
   id: 'shop',
@@ -199,6 +200,32 @@ describe('plan', () => {
       { field: 'users.region', operator: 'is', values: ['APAC'] },
     ]);
     expect(input.conditions).toEqual([{ expr: 'orders.amount > 0' }, { expr: 'orders.kind is "Big"' }]);
+  });
+
+  it('keeps the query\'s own filters, and leaves out and warns of one that names a column by its alias', () => {
+    const filtered = {
+      ...base,
+      aql: `explore {
+        dimensions { region: users.region }
+        measures { revenue: sum(orders.amount) }
+        filters {
+          orders.status == 'paid', // only paid
+          region != 'EMEA',
+        }
+      }`,
+    };
+    const [candidate] = candidates(target({ measure: 'revenue' }), [region, revenue], dataset);
+    const planned = plan(target({ measure: 'revenue' }), candidate, filtered, [region, revenue], dataset);
+    expect(planned.request.aql.endsWith([
+      '  measures {',
+      '    revenue: sum(orders.amount)',
+      '  }',
+      '  filters {',
+      "    orders.status == 'paid'",
+      '  }',
+      '}',
+    ].join('\n'))).toBe(true);
+    expect(planned.chips).toEqual([{ text: 'Region is APAC' }, { text: "Not filtered by region != 'EMEA'", warning: true }]);
   });
 
   it('sorts by every dimension, dates first and newest first, so pages don\'t repeat rows', () => {

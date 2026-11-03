@@ -14,6 +14,7 @@ import {
   dateRange as aqlDateRange, equals as aqlEquals, or as aqlOr, type AqlValue,
 } from '../../app/aql';
 import type { RowsTarget } from '../../common/menu';
+import { bareNames, exploreFilters, preambleOf } from './aqlText';
 
 type Model = DatasetDescriptor['data_models'][number];
 type Field = Model['fields'][number];
@@ -104,11 +105,15 @@ const OPERATOR_WORDS: Record<string, string> = {
   is: 'is', is_not: 'is not', matches: 'in', contains: 'contains', greater_than: '>', less_than: '<', between: 'between',
 };
 
+/** The dataset's field a `model.field` reference names, if it has one. */
+function fieldOf (dataset: DatasetDescriptor, ref: string): Field | undefined {
+  const dot = ref.lastIndexOf('.');
+  return dot > 0 ? modelOf(dataset, ref.slice(0, dot))?.fields.find((field) => field.name === ref.slice(dot + 1)) : undefined;
+}
+
 /** A field reference's label, from the dataset; its own name when the dataset has none. */
 function labelOf (dataset: DatasetDescriptor, ref: string): string {
-  const dot = ref.lastIndexOf('.');
-  const field = dot > 0 ? modelOf(dataset, ref.slice(0, dot))?.fields.find((candidate) => candidate.name === ref.slice(dot + 1)) : undefined;
-  return field?.label || (dot > 0 ? ref.slice(dot + 1) : ref);
+  return fieldOf(dataset, ref)?.label || ref.slice(ref.lastIndexOf('.') + 1);
 }
 
 function chipOf (dataset: DatasetDescriptor, condition: SelectionCondition): Chip {
@@ -116,12 +121,6 @@ function chipOf (dataset: DatasetDescriptor, condition: SelectionCondition): Chi
   if (condition.operator === 'is_null') return { text: `${label} is empty` };
   const word = OPERATOR_WORDS[condition.operator] ?? condition.operator.replace(/_/g, ' ');
   return { text: `${label} ${word} ${condition.values.map(String).join(', ')}` };
-}
-
-/** Whether the dataset defines this `model.field`: what a structured filter may name. */
-function isDatasetField (dataset: DatasetDescriptor, ref: string): boolean {
-  const dot = ref.lastIndexOf('.');
-  return dot > 0 && !!modelOf(dataset, ref.slice(0, dot))?.fields.some((field) => field.name === ref.slice(dot + 1));
 }
 
 /**
@@ -153,20 +152,13 @@ function freeAlias (wanted: string, taken: Set<string>): string {
 }
 
 /**
- * What the query declares before its `explore` (a query-local `dimension orders.kind = ...;`): kept,
- * since the point's conditions may name what it declares.
- */
-export function preambleOf (aql: string): string {
-  const at = aql.search(/(^|[\s;}])explore\s*\{/);
-  return at > 0 ? aql.slice(0, at + 1).trim() : '';
-}
-
-/**
  * The modal for one measure of a point: the measure, then the base model's visible dimensions,
  * grouped by them, where the point's conditions and the query's own inputs hold.
  *
- * Built on the query's request as it runs now: its declarations, its controls' filters, its
- * selection, its timezone.
+ * Built on the query's request as it runs now: its declarations, its own `filters { }`, its
+ * controls' filters, its selection, its timezone. A condition of its `filters` that names one of the
+ * query's columns by its alias can't be kept, since the explore has its own: it is left out, and
+ * said so.
  * Its sorts and date drills are dropped: a sort names one of the query's own columns, which the
  * explore may not have, and a drill would truncate the model's dates, while the point's condition
  * already spans the bucket the reader clicked. The rows are sorted by every dimension instead, so
@@ -189,6 +181,12 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   // showed: every dimension, which the rows are grouped by. Dates go first, newest first.
   sorts.sort((a, b) => Number(b.direction === 'desc') - Number(a.direction === 'desc'));
   const preamble = preambleOf(base.aql);
+  const aliases = new Set(columns.map((column) => column.name));
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  exploreFilters(base.aql).forEach((condition) => {
+    ([...bareNames(condition)].some((name) => aliases.has(name)) ? dropped : kept).push(condition);
+  });
   const aql = [
     ...(preamble ? [preamble] : []),
     'explore {',
@@ -196,13 +194,14 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
     '  measures {',
     `    ${measureAlias}: ${candidate.expression}`,
     '  }',
+    ...(kept.length ? ['  filters {', kept.map((condition) => `    ${condition}`).join(',\n'), '  }'] : []),
     '}',
   ].join('\n');
 
   const pointFilters: BackendFilter[] = [];
   const pointConditions: BackendCondition[] = target.expression ? [{ expr: target.expression }] : [];
   target.conditions.forEach((condition) => {
-    const expr = isDatasetField(dataset, condition.field) ? undefined : asExpression(condition, columns);
+    const expr = fieldOf(dataset, condition.field) ? undefined : asExpression(condition, columns);
     if (expr) pointConditions.push({ expr });
     else pointFilters.push({ field: condition.field, operator: condition.operator, values: [...condition.values] });
   });
@@ -213,6 +212,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   columns.filter((column) => !column.isMeasure && column.adhoc).forEach((column) => {
     chips.push({ text: `Not filtered by ${column.label || column.name}`, warning: true });
   });
+  dropped.forEach((condition) => chips.push({ text: `Not filtered by ${condition}`, warning: true }));
 
   return {
     title: `View underlying data: ${candidate.column.label || candidate.column.name}`,
