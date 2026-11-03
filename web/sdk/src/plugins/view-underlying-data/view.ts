@@ -76,7 +76,7 @@ export function view (root: ShadowRoot, deps: ViewDeps): () => void {
   const rowsBox = el(doc, 'div', { class: 'rows' });
   const table = el(doc, 'table');
   const head = el(doc, 'tr');
-  plan.columns.forEach((column) => head.append(el(doc, 'th', { scope: 'col', ...(column.isMeasure ? { class: 'number' } : {}) }, column.label)));
+  plan.columns.forEach((column) => head.append(el(doc, 'th', { scope: 'col', ...(column.numeric ? { class: 'number' } : {}) }, column.label)));
   const thead = el(doc, 'thead');
   thead.append(head);
   const tbody = el(doc, 'tbody');
@@ -129,7 +129,7 @@ export function view (root: ShadowRoot, deps: ViewDeps): () => void {
           const at = index.get(column.name);
           const value = at === undefined ? null : values[at];
           const text = display(value, metas.get(column.name), format);
-          const classes = [column.isMeasure ? 'number' : '', text === '' ? 'empty' : ''].filter(Boolean).join(' ');
+          const classes = [column.numeric ? 'number' : '', text === '' ? 'empty' : ''].filter(Boolean).join(' ');
           tr.append(el(doc, 'td', classes ? { class: classes } : {}, text));
         });
         tbody.append(tr);
