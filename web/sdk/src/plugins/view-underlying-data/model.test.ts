@@ -139,7 +139,11 @@ describe('plan', () => {
             { field: 'users.region', operator: 'is', values: ['APAC'] },
           ],
           conditions: [{ expr: 'orders.amount > 0' }],
-          sorts: [],
+          sorts: [
+            { field: 'id', direction: 'asc' },
+            { field: 'status', direction: 'asc' },
+            { field: 'amount', direction: 'asc' },
+          ],
           dateDrills: [],
         },
         timezone: 'Asia/Singapore',
@@ -195,6 +199,23 @@ describe('plan', () => {
       { field: 'users.region', operator: 'is', values: ['APAC'] },
     ]);
     expect(input.conditions).toEqual([{ expr: 'orders.amount > 0' }, { expr: 'orders.kind is "Big"' }]);
+  });
+
+  it('sorts by every dimension, dates first and newest first, so pages don\'t repeat rows', () => {
+    const dated: DatasetDescriptor = {
+      ...dataset,
+      data_models: [{
+        ...dataset.data_models[0],
+        fields: [...dataset.data_models[0].fields, { name: 'created_at', label: 'Created At', type: 'datetime', is_custom_measure: false }],
+      }, dataset.data_models[1]],
+    };
+    const [candidate] = candidates(target({ measure: 'revenue' }), [region, revenue], dated);
+    expect(plan(target({ measure: 'revenue' }), candidate, base, [region, revenue], dated).request.input.sorts).toEqual([
+      { field: 'created_at', direction: 'desc' },
+      { field: 'id', direction: 'asc' },
+      { field: 'status', direction: 'asc' },
+      { field: 'amount', direction: 'asc' },
+    ]);
   });
 
   it('says what an empty value and a date range are', () => {

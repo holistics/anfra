@@ -8,7 +8,7 @@
  * metric or any other expression doesn't, and gets no entry.
  */
 import type {
-  BackendCondition, BackendFilter, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
+  BackendCondition, BackendFilter, BackendSort, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
 } from '../../common/types';
 import {
   dateRange as aqlDateRange, equals as aqlEquals, or as aqlOr, type AqlValue,
@@ -17,6 +17,8 @@ import type { RowsTarget } from '../../common/menu';
 
 type Model = DatasetDescriptor['data_models'][number];
 type Field = Model['fields'][number];
+
+const DATE_TYPES = new Set(['date', 'datetime', 'timestamp']);
 
 /** How many rows a page of the table holds. */
 export const PAGE_SIZE = 100;
@@ -167,7 +169,8 @@ export function preambleOf (aql: string): string {
  * selection, its timezone.
  * Its sorts and date drills are dropped: a sort names one of the query's own columns, which the
  * explore may not have, and a drill would truncate the model's dates, while the point's condition
- * already spans the bucket the reader clicked.
+ * already spans the bucket the reader clicked. The rows are sorted by every dimension instead, so
+ * each page follows the last.
  */
 export function plan (target: RowsTarget, candidate: Candidate, base: QueryRequest, columns: readonly ColumnMeta[], dataset: DatasetDescriptor): Plan {
   const dimensions = visibleDimensions(candidate.model);
@@ -175,11 +178,16 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   const planned: PlannedColumn[] = [];
   const measureAlias = freeAlias(candidate.column.name, taken);
   planned.push({ name: measureAlias, label: candidate.column.label || candidate.column.name, isMeasure: true });
+  const sorts: BackendSort[] = [];
   const dimensionLines = dimensions.map((field) => {
     const alias = freeAlias(field.name, taken);
     planned.push({ name: alias, label: field.label || field.name, isMeasure: false });
+    sorts.push({ field: alias, direction: DATE_TYPES.has(field.type) ? 'desc' : 'asc' });
     return `    ${alias}: ${candidate.model.name}.${field.name}`;
   });
+  // Pages are LIMIT and OFFSET, so the order must be total, or a page may repeat rows another
+  // showed: every dimension, which the rows are grouped by. Dates go first, newest first.
+  sorts.sort((a, b) => Number(b.direction === 'desc') - Number(a.direction === 'desc'));
   const preamble = preambleOf(base.aql);
   const aql = [
     ...(preamble ? [preamble] : []),
@@ -216,7 +224,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
       input: {
         filters: [...base.input.filters, ...pointFilters],
         conditions: [...base.input.conditions, ...pointConditions],
-        sorts: [],
+        sorts,
         dateDrills: [],
       },
       ...(base.timezone ? { timezone: base.timezone } : {}),
