@@ -90,18 +90,19 @@ func TestEveryCommandHasAnOutputKind(t *testing.T) {
 	walk(newRootCmd())
 }
 
-// --json is refused before the command runs where it writes no structured
-// output: for good by an artifact, saying what it writes instead, and for now
-// by a command without its structured result yet. An export takes it only with
-// --link.
+// --json and --yaml are refused before the command runs where it writes no
+// structured output: for good by an artifact, saying what it writes instead,
+// and for now by a command without its structured result yet. An export takes
+// them only with --link. The two together are refused anywhere.
 func TestJSONRefused(t *testing.T) {
 	t.Cleanup(resetOutput)
 	t.Chdir(t.TempDir())
 	for args, want := range map[string]string{
 		"serve --json":           "anfra serve writes a log, until it is stopped, not structured output",
 		"completion bash --json": "anfra completion bash writes a shell script, not structured output",
-		"init --json":            "anfra init doesn't write structured output yet; run it without --json",
+		"publish --yaml":         "anfra publish doesn't write structured output yet; run it without --yaml",
 		"query export --json":    "without --link it writes the file",
+		"status --yaml --json":   "pass --yaml or --json, not both",
 	} {
 		cmd := newRootCmd()
 		cmd.SetArgs(strings.Fields(args))
@@ -113,7 +114,7 @@ func TestJSONRefused(t *testing.T) {
 		}
 	}
 	if entries, _ := os.ReadDir("."); len(entries) != 0 {
-		t.Errorf("init ran: %v", entries)
+		t.Errorf("a refused command ran: %v", entries)
 	}
 }
 

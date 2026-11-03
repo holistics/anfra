@@ -56,7 +56,30 @@ A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it neve
 | `pretty:",block"` | multi-line text as a block, even when it has one line |
 | `pretty:",moment"` | a time shown relative |
 | `pretty:",truncate"` | a column that may be cut to fit the terminal |
+| `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Not built yet: with `publish --list` |
 | `pretty:",tone=latest:good behind:warn failed:bad"` | the [tone](#color) of some of a field's values |
+
+### Trees
+
+A list of paths, such as `publish --list`'s hundreds of files, repeats its folders on every line when flat. With the `tree` hint it's drawn as `tree` draws one:
+
+```
+Files:
+  PATH                             CHANGED
+  ├── .anfra/
+  │   ├── data_sources.yml         true
+  │   ├── data_sources.yml.example true
+  │   └── context_sources.yml      true
+  ├── models/.gitkeep              false
+  ├── .gitignore                   true
+  └── AGENTS.md                    true
+```
+
+- **Lines, not indentation alone**, as `tree`, `npm ls` and `cargo tree` draw them: `│` ties a folder's entries together across distance, `└──` ends it. Sections and blocks elsewhere nest by 2 spaces: they aren't trees.
+- **Folders first, then files**, each sorted. A folder with one entry stays on its parent's line (`models/.gitkeep`), as GitHub shows it.
+- **The other columns align**: a line's prefix is part of its first column's width.
+- **ASCII without a UTF-8 terminal** (`LANG`, `LC_ALL`): `|--`, `` `-- `` and `|`, as `tree --charset=ascii`. The lines are faint.
+- A path can't be copied whole from a tree; `--yaml` keeps every path whole.
 
 ## Color
 
@@ -182,7 +205,7 @@ On a terminal narrower than the `agents` table, `message` is the truncatable col
 ### `anfra init`
 
 ```
-Set up an anfra repo in /home/me/sales, creating 7 files and keeping 1 that was already there.
+Set up an anfra repo in sales: changed 7 files, kept 1 already there.
 
 Dir:  /home/me/sales
 

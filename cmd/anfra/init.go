@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -58,7 +57,7 @@ var initLayout = []string{"models", "datasets", "apps"}
 // newInitCmd sets up an anfra repo. It is a CLI command only, never an op: it
 // writes files on this machine, which a server must not do for its callers.
 func newInitCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "init [dir]",
 		Short: "Set up an anfra repo: its data source config, and folders for models, datasets and Data Apps",
 		Long: "Set up an anfra repo in dir (the current directory by default, created if missing):\n\n" +
@@ -69,16 +68,42 @@ func newInitCmd() *cobra.Command {
 			"  .gitignore                       + .anfra/data_sources.yml\n" +
 			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
 			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
-			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.",
+			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n\n" +
+			"Its result opens with message, the outcome; then dir, the repo's folder, and files, each with\n" +
+			"whether init changed it (created it, or added to it); and hints, last, what to do next.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			return initRepo(dir, cmd.OutOrStdout())
+			res, err := initRepo(dir)
+			if err != nil {
+				return commandFailedWith(err.Error(), res)
+			}
+			return writeResult(cmd, res)
 		},
 	}
+	markPrettyOutput(cmd)
+	return cmd
+}
+
+// initResult is init's result: the repo it set up, and each of its files.
+type initResult struct {
+	// Message is the outcome, in a sentence.
+	Message string `json:"message"`
+	// Dir is the repo's folder, absolute.
+	Dir   string     `json:"dir"`
+	Files []initFile `json:"files"`
+	// Hints are what to do next; absent when nothing is.
+	Hints []string `json:"hints,omitempty"`
+}
+
+// initFile is a file of the repo, by its path in it, and whether init changed
+// it: created it, or added its line or block.
+type initFile struct {
+	Path    string `json:"path"`
+	Changed bool   `json:"changed"`
 }
 
 // initStep makes one file of a repo, at path relative to it, unless it is
@@ -88,16 +113,22 @@ type initStep struct {
 	do   func(path string) (created bool, err error)
 }
 
-// initRepo creates what is missing of an anfra repo in dir, and reports each
-// item as created or kept.
-func initRepo(dir string, out io.Writer) error {
+// initRepo creates what is missing of an anfra repo in dir, and says what it
+// did to each file; on a failure, as far as it got.
+func initRepo(dir string) (initResult, error) {
+	res := initResult{Files: []initFile{}}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return res, err
+	}
+	res.Dir = abs
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create %s: %w", dir, err)
+		return res, fmt.Errorf("create %s: %w", dir, err)
 	}
 	r := repo.Resolve(dir)
 	config, err := filepath.Rel(dir, r.ConfigDir)
 	if err != nil {
-		return err
+		return res, err
 	}
 	sources := filepath.ToSlash(filepath.Join(config, datasource.FileName))
 
@@ -116,19 +147,32 @@ func initRepo(dir string, out io.Writer) error {
 		return wroteBlock || wroteImport, err
 	}})
 
+	changed := 0
 	for _, s := range steps {
 		created, err := s.do(filepath.Join(dir, s.path))
 		if err != nil {
-			return fmt.Errorf("init %s: %w", s.path, err)
+			return res, fmt.Errorf("init %s: %w", s.path, err)
 		}
-		status := "kept   "
+		res.Files = append(res.Files, initFile{Path: s.path, Changed: created})
 		if created {
-			status = "created"
+			changed++
 		}
-		fmt.Fprintf(out, "  %s %s\n", status, s.path)
 	}
-	fmt.Fprintf(out, "\nNext: put your database in %s, write models and datasets, then run anfra validate.\n", sources)
-	return nil
+	// The folder as the user named it: dir says where it is.
+	where := "this folder"
+	if filepath.Clean(dir) != "." {
+		where = dir
+	}
+	switch kept := len(res.Files) - changed; {
+	case changed == 0:
+		res.Message = fmt.Sprintf("%s is an anfra repo already: init changed nothing.", strings.ToUpper(where[:1])+where[1:])
+	case kept == 0:
+		res.Message = fmt.Sprintf("Set up an anfra repo in %s, with %d files.", where, changed)
+	default:
+		res.Message = fmt.Sprintf("Set up an anfra repo in %s: changed %d files, kept %d already there.", where, changed, kept)
+	}
+	res.Hints = []string{fmt.Sprintf("Put your database in %s, write models and datasets, then run `anfra validate`.", sources)}
+	return res, nil
 }
 
 // writeNew writes content to a file that does not exist yet, creating its
