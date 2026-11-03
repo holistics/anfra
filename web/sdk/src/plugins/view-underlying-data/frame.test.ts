@@ -31,13 +31,13 @@ const aql = 'explore { dimensions { region: users.region } measures { total: sum
 /** The rows behind the point, one page of `size` of them. */
 function page (size: number, hasMore: boolean): BackendQueryResult {
   const columns: ColumnMeta[] = [
-    { ...total },
     { name: 'id', modelId: 'orders', fieldName: 'id', label: 'Id', adhoc: false, isMeasure: false, ...numberTypes },
+    { name: 'amount', modelId: 'orders', fieldName: 'amount', label: 'Amount', adhoc: false, isMeasure: false, ...numberTypes },
     { name: 'status', modelId: 'orders', fieldName: 'status', label: 'Status', adhoc: false, isMeasure: false, ...textTypes },
   ];
   return {
     columns,
-    values: Array.from({ length: size }, (_, i) => [String(1000 + i), String(i + 1), i === 0 ? null : 'paid']),
+    values: Array.from({ length: size }, (_, i) => [String(i + 1), String(1000 + i), i === 0 ? null : 'paid']),
     meta: { hasMore },
   };
 }
@@ -127,13 +127,13 @@ describe('the modal', () => {
     entries()[0].click();
     await settle();
 
-    expect(uiRoot()!.querySelector('[role="dialog"] h2')!.textContent).toBe(`View underlying data: total · ${(1500).toLocaleString()}`);
+    expect(uiRoot()!.querySelector('[role="dialog"] h2')!.textContent).toBe(`View underlying data: ${(1500).toLocaleString()} total`);
     const root = content()!;
     expect(root.querySelector('[data-testid="vud-conditions"]')!.textContent).toBe('Region is APAC');
-    expect([...root.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['total', 'Id', 'Amount', 'Status', 'Created At']);
+    expect([...root.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Id', 'Amount', 'Status', 'Created At']);
     expect(underlying[0]).toEqual({
       dataset: 'sales',
-      aql: expect.stringContaining('total: sum(orders.amount)'),
+      aql: expect.stringContaining('amount: orders.amount'),
       input: {
         filters: [{ field: 'users.region', operator: 'is', values: ['APAC'] }], conditions: [], sorts: expect.arrayContaining([{ field: 'created_at', direction: 'desc' }]), dateDrills: [],
       },
@@ -143,8 +143,8 @@ describe('the modal', () => {
     });
     const rows = () => [...root.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((td) => td.textContent));
     expect(rows()).toEqual([
-      [(1000).toLocaleString(), '1', '', '', ''],
-      [(1001).toLocaleString(), '2', '', 'paid', ''],
+      ['1', (1000).toLocaleString(), '', ''],
+      ['2', (1001).toLocaleString(), 'paid', ''],
     ]);
     expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('Showing the first 2 rows');
 
@@ -167,10 +167,10 @@ describe('the modal', () => {
     await settle();
     const first = content()!.querySelector('tbody tr')!;
     const cells = [...first.querySelectorAll('td')];
-    expect(cells[0].textContent).toBe((1000).toLocaleString());
-    expect(cells[0].classList.contains('number')).toBe(true);
-    // The result has no `amount` or `created_at`, so those are empty; `status` is null in the first row.
-    expect(cells.slice(1).map((cell) => cell.classList.contains('empty'))).toEqual([false, true, true, true]);
+    expect(cells[1].textContent).toBe((1000).toLocaleString());
+    expect(cells.map((cell) => cell.classList.contains('number'))).toEqual([true, true, false, false]);
+    // `status` is null in the first row, and the result has no `created_at`: both empty.
+    expect(cells.map((cell) => cell.classList.contains('empty'))).toEqual([false, false, true, true]);
   });
 
   it('downloads every row as a CSV through export.query', async () => {
@@ -184,7 +184,7 @@ describe('the modal', () => {
     await settle();
     expect(exports).toEqual([expect.objectContaining({
       dataset: 'sales',
-      aql: expect.stringContaining('total: sum(orders.amount)'),
+      aql: expect.stringContaining('amount: orders.amount'),
       format: 'csv',
       formatOptions: { bom: true },
       filename: 'Sales - revenue - underlying data',

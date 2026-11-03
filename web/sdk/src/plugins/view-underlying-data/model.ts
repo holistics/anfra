@@ -39,7 +39,8 @@ export interface PlannedColumn {
   /** Its key in each row. */
   name: string;
   label: string;
-  isMeasure: boolean;
+  /** Its values are numbers: aligned right. */
+  numeric: boolean;
 }
 
 /** A condition the point puts on the rows, as the reader reads it; `warning` for one it couldn't. */
@@ -154,11 +155,15 @@ function asExpression (condition: SelectionCondition, columns: readonly ColumnMe
   return undefined;
 }
 
-/** ` · 1,234`: the point's value of the measure, when the point is one row; several have none to show. */
-function valueText (target: RowsTarget, column: ColumnMeta): string {
-  if (target.rows.length !== 1) return '';
+/**
+ * What the modal is of: the point's value and its measure (`1,234 players`), or the measure alone
+ * when the point has several rows, and so no one value.
+ */
+function subjectOf (target: RowsTarget, column: ColumnMeta): string {
+  const label = column.label || column.name;
+  if (target.rows.length !== 1) return label;
   const text = display(target.rows[0][column.name], column, new Intl.NumberFormat(undefined, { maximumFractionDigits: 20 }));
-  return text ? ` · ${text}` : '';
+  return text ? `${text} ${label}` : label;
 }
 
 /** An identifier the explore can alias a column with, not already taken. */
@@ -171,8 +176,10 @@ function freeAlias (wanted: string, taken: Set<string>): string {
 }
 
 /**
- * The modal for one measure of a point: the measure, then the base model's visible dimensions,
- * grouped by them, where the point's conditions and the query's own inputs hold.
+ * The modal for one measure of a point: the base model's visible dimensions, grouped by them, where
+ * the point's conditions and the query's own inputs hold. The measure isn't a column: a row is
+ * usually one record (a visible dimension is unique), where a count is 1 and a sum repeats a field;
+ * the point's value goes in the title instead. A model with no visible dimension shows the measure.
  *
  * Built on the query's request as it runs now: its declarations, its own `filters { }`, its
  * controls' filters, its selection, its timezone. A condition of its `filters` that names one of the
@@ -187,18 +194,22 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   const dimensions = visibleDimensions(candidate.model);
   const taken = new Set<string>();
   const planned: PlannedColumn[] = [];
-  const measureAlias = freeAlias(candidate.column.name, taken);
-  planned.push({ name: measureAlias, label: candidate.column.label || candidate.column.name, isMeasure: true });
   const sorts: BackendSort[] = [];
   const dimensionLines = dimensions.map((field) => {
     const alias = freeAlias(field.name, taken);
-    planned.push({ name: alias, label: field.label || field.name, isMeasure: false });
+    planned.push({ name: alias, label: field.label || field.name, numeric: field.type === 'number' });
     sorts.push({ field: alias, direction: DATE_TYPES.has(field.type) ? 'desc' : 'asc' });
     return `    ${alias}: ${candidate.model.name}.${field.name}`;
   });
   // Pages are LIMIT and OFFSET, so the order must be total, or a page may repeat rows another
   // showed: every dimension, which the rows are grouped by. Dates go first, newest first.
   sorts.sort((a, b) => Number(b.direction === 'desc') - Number(a.direction === 'desc'));
+  const measureLines: string[] = [];
+  if (!dimensionLines.length) {
+    const alias = freeAlias(candidate.column.name, taken);
+    planned.push({ name: alias, label: candidate.column.label || candidate.column.name, numeric: true });
+    measureLines.push(`    ${alias}: ${candidate.expression}`);
+  }
   const preamble = preambleOf(base.aql);
   const aliases = new Set(columns.map((column) => column.name));
   const kept: string[] = [];
@@ -210,9 +221,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
     ...(preamble ? [preamble] : []),
     'explore {',
     ...(dimensionLines.length ? ['  dimensions {', dimensionLines.join(',\n'), '  }'] : []),
-    '  measures {',
-    `    ${measureAlias}: ${candidate.expression}`,
-    '  }',
+    ...(measureLines.length ? ['  measures {', ...measureLines, '  }'] : []),
     ...(kept.length ? ['  filters {', kept.map((condition) => `    ${condition}`).join(',\n'), '  }'] : []),
     '}',
   ].join('\n');
@@ -236,7 +245,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   dropped.forEach((condition) => chips.push({ text: `Not filtered by ${condition}`, warning: true }));
 
   return {
-    title: `View underlying data: ${candidate.column.label || candidate.column.name}${valueText(target, candidate.column)}`,
+    title: `View underlying data: ${subjectOf(target, candidate.column)}`,
     chips,
     columns: planned,
     request: {

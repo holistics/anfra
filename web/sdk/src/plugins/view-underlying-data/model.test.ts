@@ -107,18 +107,17 @@ describe('plan', () => {
     timezone: 'Asia/Singapore',
   };
 
-  it('is the measure and the base model\'s visible dimensions, where the point and the query\'s inputs hold', () => {
+  it('is the base model\'s visible dimensions, where the point and the query\'s inputs hold, its value in the title', () => {
     const [candidate] = candidates(target({ measure: 'revenue' }), [region, revenue], dataset);
     const planned = plan(target({ measure: 'revenue' }), candidate, base, [region, revenue], dataset);
     expect(visibleDimensions(candidate.model).map((field) => field.name)).toEqual(['id', 'status', 'amount']);
     expect(planned).toEqual({
-      title: `View underlying data: revenue · ${(10).toLocaleString()}`,
+      title: `View underlying data: ${(10).toLocaleString()} revenue`,
       chips: [{ text: 'Region is APAC' }],
       columns: [
-        { name: 'revenue', label: 'revenue', isMeasure: true },
-        { name: 'id', label: 'Id', isMeasure: false },
-        { name: 'status', label: 'Status', isMeasure: false },
-        { name: 'amount', label: 'Amount', isMeasure: false },
+        { name: 'id', label: 'Id', numeric: true },
+        { name: 'status', label: 'Status', numeric: false },
+        { name: 'amount', label: 'Amount', numeric: true },
       ],
       request: {
         dataset: 'shop',
@@ -128,9 +127,6 @@ describe('plan', () => {
           '    id: orders.id,',
           '    status: orders.status,',
           '    amount: orders.amount',
-          '  }',
-          '  measures {',
-          '    revenue: sum(orders.amount)',
           '  }',
           '}',
         ].join('\n'),
@@ -157,15 +153,25 @@ describe('plan', () => {
     const [candidate] = candidates(point, [region, revenue], dataset);
     expect(plan(point, candidate, base, [region, revenue], dataset).title).toBe('View underlying data: revenue');
     const one = target({ measure: 'revenue', rows: [{ region: 'APAC', revenue: '1234.5' }] });
-    expect(plan(one, candidate, base, [region, revenue], dataset).title).toBe(`View underlying data: revenue · ${(1234.5).toLocaleString(undefined, { maximumFractionDigits: 20 })}`);
+    expect(plan(one, candidate, base, [region, revenue], dataset).title).toBe(`View underlying data: ${(1234.5).toLocaleString(undefined, { maximumFractionDigits: 20 })} revenue`);
   });
 
-  it('keeps the measure\'s alias apart from a dimension of the same name', () => {
-    const amount = { ...revenue, name: 'amount' };
-    const [candidate] = candidates(target({ measure: 'amount', rows: [{ amount: '1' }] }), [amount], dataset);
-    const planned = plan(target({ measure: 'amount' }), candidate, base, [amount], dataset);
-    expect(planned.columns.map((column) => column.name)).toEqual(['amount', 'id', 'status', 'amount_2']);
-    expect(planned.request.aql).toContain('amount_2: orders.amount');
+  it('shows the measure for a model with no visible dimension, as it has nothing else to show', () => {
+    const bare: DatasetDescriptor = {
+      ...dataset,
+      data_models: [{
+        id: 'events', name: 'events', fields: [
+          { name: 'id', type: 'number', is_custom_measure: false, is_hidden: true },
+          { name: 'n', label: 'Events', type: 'number', is_custom_measure: true },
+        ],
+      }],
+    };
+    const n: ColumnMeta = { ...orders, name: 'n', modelId: 'events', fieldName: 'n', label: 'Events' };
+    const point = target({ measure: 'n', rows: [{ n: '3' }] });
+    const [candidate] = candidates(point, [n], bare);
+    const planned = plan(point, candidate, base, [n], bare);
+    expect(planned.columns).toEqual([{ name: 'n', label: 'Events', numeric: true }]);
+    expect(planned.request.aql).toBe(['explore {', '  measures {', '    n: events.n', '  }', '}'].join('\n'));
   });
 
   it('carries a point\'s expression as a condition, and warns of a dimension it can\'t filter by', () => {
@@ -225,8 +231,7 @@ describe('plan', () => {
     const [candidate] = candidates(target({ measure: 'revenue' }), [region, revenue], dataset);
     const planned = plan(target({ measure: 'revenue' }), candidate, filtered, [region, revenue], dataset);
     expect(planned.request.aql.endsWith([
-      '  measures {',
-      '    revenue: sum(orders.amount)',
+      '    amount: orders.amount',
       '  }',
       '  filters {',
       "    orders.status == 'paid'",

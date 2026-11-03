@@ -30,7 +30,7 @@ describe('view', () => {
     const plan: Plan = {
       title: 't',
       chips: [],
-      columns: [{ name: 'n', label: 'N', isMeasure: true }],
+      columns: [{ name: 'n', label: 'N', numeric: true }],
       request: { dataset: 'd', aql: 'explore {}', input: { filters: [], conditions: [], sorts: [], dateDrills: [] } },
     };
     const pages: number[] = [];
