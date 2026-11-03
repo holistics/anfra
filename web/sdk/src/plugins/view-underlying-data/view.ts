@@ -5,7 +5,7 @@
  */
 import { COMPONENT_STYLES } from '../inspect/components';
 import type { BackendQueryResult, ColumnMeta } from '../../common/types';
-import { PAGE_SIZE, type Plan } from './model';
+import { display, PAGE_SIZE, type Plan } from './model';
 
 export interface ViewDeps {
   plan: Plan;
@@ -45,18 +45,6 @@ function el<K extends keyof HTMLElementTagNameMap> (doc: Document, tag: K, attrs
 
 const messageOf = (err: unknown) => (err instanceof Error && err.message) || 'Something went wrong.';
 const isAbort = (err: unknown) => (err as { name?: string } | null)?.name === 'AbortError';
-
-/** A value as the reader reads it: a number in their locale, anything else as the result has it. */
-export function display (value: unknown, column: ColumnMeta | undefined, format: Intl.NumberFormat): string {
-  if (value === null || value === undefined) return '';
-  if (column?.semantic_type === 'number' && (typeof value === 'string' || typeof value === 'number')) {
-    // A number arrives as a string with every digit; formatting the string keeps them.
-    if (typeof value === 'string' && !/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(value)) return value;
-    return format.format(value as number);
-  }
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
 
 /** How many rows the table holds: all there are, or the ones loaded so far. */
 export function countText (shown: number, hasMore: boolean): string {

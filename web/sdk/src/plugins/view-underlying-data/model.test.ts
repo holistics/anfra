@@ -112,7 +112,7 @@ describe('plan', () => {
     const planned = plan(target({ measure: 'revenue' }), candidate, base, [region, revenue], dataset);
     expect(visibleDimensions(candidate.model).map((field) => field.name)).toEqual(['id', 'status', 'amount']);
     expect(planned).toEqual({
-      title: 'View underlying data: revenue',
+      title: `View underlying data: revenue · ${(10).toLocaleString()}`,
       chips: [{ text: 'Region is APAC' }],
       columns: [
         { name: 'revenue', label: 'revenue', isMeasure: true },
@@ -150,6 +150,14 @@ describe('plan', () => {
         timezone: 'Asia/Singapore',
       },
     });
+  });
+
+  it('shows the point\'s value in the title only when the point is one row', () => {
+    const point = target({ measure: 'revenue', rows: [{ region: 'APAC', revenue: '1234.5' }, { region: 'EMEA', revenue: '10' }] });
+    const [candidate] = candidates(point, [region, revenue], dataset);
+    expect(plan(point, candidate, base, [region, revenue], dataset).title).toBe('View underlying data: revenue');
+    const one = target({ measure: 'revenue', rows: [{ region: 'APAC', revenue: '1234.5' }] });
+    expect(plan(one, candidate, base, [region, revenue], dataset).title).toBe(`View underlying data: revenue · ${(1234.5).toLocaleString(undefined, { maximumFractionDigits: 20 })}`);
   });
 
   it('keeps the measure\'s alias apart from a dimension of the same name', () => {

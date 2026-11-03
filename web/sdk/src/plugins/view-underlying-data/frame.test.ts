@@ -127,7 +127,7 @@ describe('the modal', () => {
     entries()[0].click();
     await settle();
 
-    expect(uiRoot()!.querySelector('[role="dialog"] h2')!.textContent).toBe('View underlying data: total');
+    expect(uiRoot()!.querySelector('[role="dialog"] h2')!.textContent).toBe(`View underlying data: total · ${(1500).toLocaleString()}`);
     const root = content()!;
     expect(root.querySelector('[data-testid="vud-conditions"]')!.textContent).toBe('Region is APAC');
     expect([...root.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['total', 'Id', 'Amount', 'Status', 'Created At']);

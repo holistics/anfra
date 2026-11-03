@@ -77,6 +77,18 @@ function measureExpression (column: ColumnMeta, model: Model): string | undefine
   return fn ? `${fn}(${ref})` : undefined;
 }
 
+/** A value as the reader reads it: a number in their locale, anything else as the result has it. */
+export function display (value: unknown, column: ColumnMeta | undefined, format: Intl.NumberFormat): string {
+  if (value === null || value === undefined) return '';
+  if (column?.semantic_type === 'number' && (typeof value === 'string' || typeof value === 'number')) {
+    // A number arrives as a string with every digit; formatting the string keeps them.
+    if (typeof value === 'string' && !/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(value)) return value;
+    return format.format(value as number);
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
 /** Whether every row of the point leaves this measure empty. */
 const isEmpty = (rows: readonly Row[], measure: string) => rows.every((row) => row[measure] === null || row[measure] === undefined);
 
@@ -140,6 +152,13 @@ function asExpression (condition: SelectionCondition, columns: readonly ColumnMe
     }
   } catch { /* a value AQL can't spell */ }
   return undefined;
+}
+
+/** ` · 1,234`: the point's value of the measure, when the point is one row; several have none to show. */
+function valueText (target: RowsTarget, column: ColumnMeta): string {
+  if (target.rows.length !== 1) return '';
+  const text = display(target.rows[0][column.name], column, new Intl.NumberFormat(undefined, { maximumFractionDigits: 20 }));
+  return text ? ` · ${text}` : '';
 }
 
 /** An identifier the explore can alias a column with, not already taken. */
@@ -217,7 +236,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   dropped.forEach((condition) => chips.push({ text: `Not filtered by ${condition}`, warning: true }));
 
   return {
-    title: `View underlying data: ${candidate.column.label || candidate.column.name}`,
+    title: `View underlying data: ${candidate.column.label || candidate.column.name}${valueText(target, candidate.column)}`,
     chips,
     columns: planned,
     request: {
