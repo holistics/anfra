@@ -317,13 +317,19 @@ a chart's points, report the right-click yourself with the rows under the pointe
 
 ```js
 chart.on('contextmenu', (p) => {
-  byRegion.menu(p.event.event, byRegion.result.rows[p.dataIndex]); // the DOM event, and the row
+  // The DOM event, the row, and the measure the point shows: each series' id is its measure's
+  // column name (`series: [{ id: 'revenue', ... }]`).
+  byRegion.menu(p.event.event, byRegion.result.rows[p.dataIndex], { measure: p.seriesId });
 });
 ```
 
-- `query.menu(event, rows, { fields })` returns whether a menu opened; when none would (nothing
-  is offered), it does nothing and the browser's own menu shows. Pass `result.rows` objects, as for
-  `select`; `fields` narrows the dimensions the same way.
+- `query.menu(event, rows, { fields, measure })` returns whether a menu opened; when none would
+  (nothing is offered), it does nothing and the browser's own menu shows. Pass `result.rows`
+  objects, as for `select`; `fields` narrows the dimensions the same way.
+- `measure` names the result column of the measure the point shows, for a chart with more than one
+  (a series per measure). Entries about one measure, such as "View underlying data", then show for
+  that one alone; without it they show once per measure. It throws when the last result has no
+  measure of that name.
 - Your own right-click handler wins: one that calls `event.preventDefault()` keeps the host's menu
   away. Shift+right-click always gives the browser's menu.
 - `data-anfra-menu="off"` on a block keeps the menu off it, for a block that uses right-click
