@@ -18,6 +18,12 @@ describe('provisionDocument', () => {
     expect(at('window.FRAME = 1;')).toBeLessThan(at('author()'));
   });
 
+  it('names the frame script, so devtools tell the SDK\'s code from the app\'s', () => {
+    const doc = provisionDocument('<head></head><script>author()</script>', options);
+    expect(doc).toMatch(/window\.FRAME = 1;[\s\S]*\n\/\/# sourceURL=anfra-sdk\.js<\/script>/);
+    expect(doc.indexOf('sourceURL')).toBeLessThan(doc.indexOf('author()'));
+  });
+
   it('goes after <head> without a charset, and first without a <head>', () => {
     expect(provisionDocument('<head lang="en"><script>a()</script></head>', options)).toMatch(/^<head lang="en"><meta [^>]*>\n<script type="application\/json"/);
     expect(provisionDocument('<header>h</header><script>a()</script>', options)).toMatch(/^<meta [^>]*>\n<script type="application\/json"/);
@@ -132,6 +138,6 @@ describe('provisionFrame', () => {
     const boom = where(html, 'boom()');
     const sdk = where(html, 'window.FRAME');
     const stack = `Error: x\n    at about:srcdoc:${boom.line}:${boom.column}\n    at Le.notify (about:srcdoc:${sdk.line}:9)\n    at https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js:1:2`;
-    expect(definitionStack(stack, lines)).toBe('Error: x\n    at definition:6:3\n    at Le.notify (anfra-sdk)\n    at https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js:1:2');
+    expect(definitionStack(stack, lines)).toBe('Error: x\n    at definition:6:3\n    at Le.notify (anfra-sdk.js)\n    at https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js:1:2');
   });
 });

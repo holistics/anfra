@@ -453,7 +453,7 @@ describe('runtime errors', () => {
     // 'hi' starts column 14 of its line in the document, and 20 of the definition's one line.
     const stack = `Error: x\n    at about:srcdoc:${line('hi</body>')}:14\n    at about:srcdoc:${line('window.FRAME')}:3`;
     fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'x', stack } });
-    expect(onError.mock.calls[0][0].stack).toBe('Error: x\n    at definition:1:20\n    at anfra-sdk');
+    expect(onError.mock.calls[0][0].stack).toBe('Error: x\n    at definition:1:20\n    at anfra-sdk.js');
   });
 
   it('drop what is not an error the frame may report, and cap what is', () => {

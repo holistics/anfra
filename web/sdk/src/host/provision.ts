@@ -53,6 +53,9 @@ export function composeFrameScript (frameScript: string, setups: readonly { name
   ].join('\n');
 }
 
+/** The name the frame script goes by in a browser's devtools and in its stacks. */
+export const FRAME_SCRIPT_URL = 'anfra-sdk.js';
+
 const charsetRe = /<meta[^>]*charset[^>]*>/i;
 const headRe = /<head(?:\s[^>]*)?>/i;
 // What may come before the policy without being parsed first: whitespace, comments and the
@@ -98,7 +101,9 @@ export function provisionFrame (definition: string, options: ProvisionOptions): 
   const policy = `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(options.contentPolicy)}">`;
   const injected = [
     `<script type="application/json" id="${PROVISION_ELEMENT_ID}">${scriptJSON(options.provision)}</script>`,
-    `<script>${scriptCode(composeFrameScript(options.frameScript, options.setups))}</script>`,
+    // Named, so a browser's devtools show the SDK's code as the SDK's, not the app's page (a console
+    // line the frame captures is otherwise said to come from it), and an author can ignore-list it.
+    `<script>${scriptCode(composeFrameScript(options.frameScript, options.setups))}\n//# sourceURL=${FRAME_SCRIPT_URL}</script>`,
   ].join('\n');
   const preamble = preambleRe.exec(definition)?.[0] ?? '';
   const rest = definition.slice(preamble.length);
@@ -140,11 +145,11 @@ export function definitionPosition (lines: DefinitionLines, line: number, column
 
 /**
  * A stack from the frame with its document's lines named in the definition: `definition:107:48`
- * for the definition's own, `anfra-sdk` for the SDK's, which the host put in the document.
+ * for the definition's own, `anfra-sdk.js` for the SDK's, which the host put in the document.
  */
 export function definitionStack (stack: string, lines: DefinitionLines): string {
   return stack.replace(/about:srcdoc:(\d+):(\d+)/g, (_, line: string, column: string) => {
     const at = definitionPosition(lines, Number(line), Number(column));
-    return at ? `definition:${at.line}:${at.column}` : 'anfra-sdk';
+    return at ? `definition:${at.line}:${at.column}` : FRAME_SCRIPT_URL;
   });
 }
