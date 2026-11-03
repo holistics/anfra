@@ -59,7 +59,8 @@ export interface HostOptions {
   /**
    * Every mounted Data App's runtime errors: a query that failed, the app's uncaught errors, a
    * listener's exception, and a call this host failed and hid from the frame. Each mount's also
-   * reach `mounted.on('anfra.error')`. `console.error` unless given.
+   * reach `mounted.on('anfra.error')`. `console.error` unless given; when given, the SDK writes
+   * nothing to the page's console, not even how many errors a mount sent over its budget.
    */
   onError?: (event: AppErrorEvent) => void;
   /**
@@ -199,6 +200,8 @@ export function createHost (options: HostOptions): Host {
   const plugins = [...options.plugins];
   const answers = install(plugins);
   const onError = options.onError ?? logError;
+  // A host that says where its errors go has said where the SDK's notes go: none on its page.
+  const quiet = options.onError !== undefined;
   const captureConsole = options.captureConsole ?? developmentBuild();
   const policy = contentPolicy(options.allowOrigins);
   const middleware = [
@@ -378,6 +381,7 @@ export function createHost (options: HostOptions): Host {
       };
       const mountInfo = { id: context.id, ...(mountOptions.title !== undefined ? { title: mountOptions.title } : {}) };
       const dropped = (what: string) => (count: number) => {
+        if (quiet) return;
         // eslint-disable-next-line no-console -- what is over the budget is said only here
         console.warn(`anfra: ${count} ${what} of a Data App (mount ${mountInfo.id}) over the ${EVENTS_PER_MINUTE} a minute a host takes were dropped.`);
       };
