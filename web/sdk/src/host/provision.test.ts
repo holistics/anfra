@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { PROVISION_ELEMENT_ID, type Provision } from '../common/bridge';
 import { salesDataset, testUser } from '../app/testSupport';
-import { provisionDocument } from './provision';
+import {
+  definitionPosition, definitionStack, provisionDocument, provisionFrame,
+} from './provision';
 
 const provision: Provision = { datasets: { sales: salesDataset }, user: testUser, plugins: [], hostOrigin: 'http://127.0.0.1:7878' };
 const options = { contentPolicy: "default-src 'none'", provision, frameScript: 'window.FRAME = 1;' };
@@ -96,5 +98,40 @@ describe('provisionDocument', () => {
     const doc = provisionDocument('<head></head>', options);
     const json = doc.slice(doc.indexOf('>', doc.indexOf(PROVISION_ELEMENT_ID)) + 1, doc.indexOf('</script>'));
     expect(JSON.parse(json)).toEqual(provision);
+  });
+});
+
+describe('provisionFrame', () => {
+  /** Where `text` is, as a stack names it: its 1-based line and column. */
+  const where = (doc: string, text: string) => {
+    const at = doc.indexOf(text);
+    const before = doc.slice(0, at);
+    return { line: before.split('\n').length, column: at - before.lastIndexOf('\n') };
+  };
+  const definitions = {
+    'a charset': '<!doctype html>\n<html>\n<head>\n  <meta charset="utf-8"> <script>m1()</script>\n  <title>T</title>\n</head>\n<body>\n<script>\n  m2();\n</script>\n</body>\n</html>',
+    '<head> only': '<!-- c -->\n<html lang="en"><head><script>m1()</script>\n<script>m2()</script></head></html>',
+    'no <head>': '<p>x</p>\n<script>m1()</script>\n\n<script>m2()</script>',
+    'a preamble with code after it': '<!doctype html><html><head><script>m1()</script><meta charset="utf-8">\n<script>m2()</script>',
+  };
+  for (const [name, definition] of Object.entries(definitions)) {
+    it(`names each line and column of the definition's, with ${name}`, () => {
+      const { html, lines } = provisionFrame(definition, options);
+      expect(html).toBe(provisionDocument(definition, options));
+      for (const marker of ['m1()', 'm2()']) {
+        const { line, column } = where(html, marker);
+        expect(definitionPosition(lines, line, column)).toEqual(where(definition, marker));
+      }
+      expect(definitionPosition(lines, where(html, 'window.FRAME').line, 1)).toBeUndefined();
+    });
+  }
+
+  it('rewrites a stack to the definition\'s lines, and the SDK\'s to its name', () => {
+    const definition = '<!doctype html>\n<head>\n<meta charset="utf-8">\n</head>\n<script>\n  boom();\n</script>';
+    const { html, lines } = provisionFrame(definition, options);
+    const boom = where(html, 'boom()');
+    const sdk = where(html, 'window.FRAME');
+    const stack = `Error: x\n    at about:srcdoc:${boom.line}:${boom.column}\n    at Le.notify (about:srcdoc:${sdk.line}:9)\n    at https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js:1:2`;
+    expect(definitionStack(stack, lines)).toBe('Error: x\n    at definition:6:3\n    at Le.notify (anfra-sdk)\n    at https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js:1:2');
   });
 });

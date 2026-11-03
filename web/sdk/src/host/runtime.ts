@@ -16,7 +16,7 @@ import type {
 import { checkPlugin } from './plugin';
 import { builtFrameScript, builtUiBody } from './frameScript';
 import { checkTarget, type MenuEntry, type MenuTarget } from '../common/menu';
-import { provisionDocument } from './provision';
+import { definitionStack, provisionFrame, type DefinitionLines } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel } from './panel';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
@@ -379,6 +379,8 @@ export function createHost (options: HostOptions): Host {
         onReady: (listener) => listen(readyListeners, listener),
         commandsChanged,
       };
+      // Set once the frame's document is made, before the frame can send anything.
+      let definitionLines: DefinitionLines = { runs: [] };
       const mountInfo = { id: context.id, ...(mountOptions.title !== undefined ? { title: mountOptions.title } : {}) };
       const dropped = (what: string) => (count: number) => {
         if (quiet) return;
@@ -416,6 +418,8 @@ export function createHost (options: HostOptions): Host {
           // The kernel's runtime errors and console lines: the frame's word, checked.
           if (name === 'anfra.error') {
             const event = checkErrorEvent(payload, mountInfo);
+            // The frame's stack names its document's lines: the author reads the definition's.
+            if (event?.stack) event.stack = definitionStack(event.stack, definitionLines);
             if (event) reportError(event);
             return;
           }
@@ -525,12 +529,14 @@ export function createHost (options: HostOptions): Host {
         hostOrigin: win.location.origin,
         captureConsole,
       };
-      frame.srcdoc = provisionDocument(mountOptions.definition, {
+      const provisioned = provisionFrame(mountOptions.definition, {
         contentPolicy: policy,
         provision,
         frameScript,
         setups: plugins.flatMap((plugin) => (plugin.frame ? [{ name: plugin.name, setup: plugin.frame.setup }] : [])),
       });
+      definitionLines = provisioned.lines;
+      frame.srcdoc = provisioned.html;
 
       /**
        * Run a command for this frame, unless its state says it can't run; one for content, with its

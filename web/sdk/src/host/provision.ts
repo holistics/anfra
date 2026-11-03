@@ -80,6 +80,21 @@ const preambleRe = new RegExp(`^${gap}(?:<!doctype[^>]*>${gap})?(?:<html${attrib
  * The definition itself never mentions the SDK.
  */
 export function provisionDocument (definition: string, options: ProvisionOptions): string {
+  return provisionFrame(definition, options).html;
+}
+
+/**
+ * Where the definition's text sits in its frame document, so a line the browser names there
+ * (`about:srcdoc:147:48` in a stack) can be named in the definition: each run of the definition's
+ * text, from the document's line `from` to `to`, starting at the definition's `line` and `column`
+ * (0-based, on that first line only; the document's runs all start a line).
+ */
+export interface DefinitionLines {
+  runs: readonly { from: number, to: number, line: number, column: number }[];
+}
+
+/** The frame document (`provisionDocument`), and where the definition's lines are in it. */
+export function provisionFrame (definition: string, options: ProvisionOptions): { html: string, lines: DefinitionLines } {
   const policy = `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(options.contentPolicy)}">`;
   const injected = [
     `<script type="application/json" id="${PROVISION_ELEMENT_ID}">${scriptJSON(options.provision)}</script>`,
@@ -87,12 +102,49 @@ export function provisionDocument (definition: string, options: ProvisionOptions
   ].join('\n');
   const preamble = preambleRe.exec(definition)?.[0] ?? '';
   const rest = definition.slice(preamble.length);
-  for (const re of [charsetRe, headRe]) {
-    const match = re.exec(rest);
-    if (match) {
-      const at = match.index + match[0].length;
-      return `${preamble}${policy}\n${rest.slice(0, at)}\n${injected}\n${rest.slice(at)}`;
-    }
+  // Each piece of the document, and for the definition's, where it starts in the definition.
+  const pieces: { text: string, from?: number }[] = [{ text: preamble, from: 0 }, { text: `${policy}\n` }];
+  const match = charsetRe.exec(rest) ?? headRe.exec(rest);
+  if (match) {
+    const at = match.index + match[0].length;
+    pieces.push({ text: rest.slice(0, at), from: preamble.length }, { text: `\n${injected}\n` }, { text: rest.slice(at), from: preamble.length + at });
+  } else {
+    pieces.push({ text: `${injected}\n` }, { text: rest, from: preamble.length });
   }
-  return `${preamble}${policy}\n${injected}\n${rest}`;
+  return { html: pieces.map((piece) => piece.text).join(''), lines: linesOf(definition, pieces) };
+}
+
+const newlines = (text: string) => text.split('\n').length - 1;
+
+function linesOf (definition: string, pieces: readonly { text: string, from?: number }[]): DefinitionLines {
+  const runs: DefinitionLines['runs'][number][] = [];
+  let line = 1;
+  for (const { text, from } of pieces) {
+    if (from !== undefined && text) {
+      const before = definition.slice(0, from);
+      runs.push({
+        from: line, to: line + newlines(text), line: newlines(before) + 1, column: from - (before.lastIndexOf('\n') + 1),
+      });
+    }
+    line += newlines(text);
+  }
+  return { runs };
+}
+
+/** The definition's line and column for the document's (1-based columns, as a stack has them), or undefined for the SDK's. */
+export function definitionPosition (lines: DefinitionLines, line: number, column: number): { line: number, column: number } | undefined {
+  const run = lines.runs.find((candidate) => candidate.from <= line && line <= candidate.to);
+  if (!run) return undefined;
+  return { line: run.line + line - run.from, column: line === run.from ? column + run.column : column };
+}
+
+/**
+ * A stack from the frame with its document's lines named in the definition: `definition:107:48`
+ * for the definition's own, `anfra-sdk` for the SDK's, which the host put in the document.
+ */
+export function definitionStack (stack: string, lines: DefinitionLines): string {
+  return stack.replace(/about:srcdoc:(\d+):(\d+)/g, (_, line: string, column: string) => {
+    const at = definitionPosition(lines, Number(line), Number(column));
+    return at ? `definition:${at.line}:${at.column}` : 'anfra-sdk';
+  });
 }
