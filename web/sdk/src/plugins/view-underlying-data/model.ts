@@ -208,8 +208,10 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   const chips: Chip[] = target.expression
     ? [{ text: 'Matches the selected point' }]
     : target.conditions.map((condition) => chipOf(dataset, condition));
-  // A query-local dimension can't become a condition: the rows span all its values.
-  columns.filter((column) => !column.isMeasure && column.adhoc).forEach((column) => {
+  // A dimension the point has no condition on (query-local, or left out by `fields`): the rows span
+  // all its values.
+  const conditioned = new Set(target.fields);
+  columns.filter((column) => !column.isMeasure && !conditioned.has(column.name)).forEach((column) => {
     chips.push({ text: `Not filtered by ${column.label || column.name}`, warning: true });
   });
   dropped.forEach((condition) => chips.push({ text: `Not filtered by ${condition}`, warning: true }));

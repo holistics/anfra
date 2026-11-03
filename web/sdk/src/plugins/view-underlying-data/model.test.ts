@@ -228,6 +228,17 @@ describe('plan', () => {
     expect(planned.chips).toEqual([{ text: 'Region is APAC' }, { text: "Not filtered by region != 'EMEA'", warning: true }]);
   });
 
+  it('warns of each dimension the point has no condition on, whether query-local or left out by fields', () => {
+    const category: ColumnMeta = {
+      name: 'category', fieldName: 'status', modelId: 'orders', label: 'Category', adhoc: false, isMeasure: false, ...textTypes,
+    };
+    const [candidate] = candidates(target({ measure: 'revenue' }), [region, category, revenue], dataset);
+    expect(plan(target({ measure: 'revenue' }), candidate, base, [region, category, revenue], dataset).chips).toEqual([
+      { text: 'Region is APAC' },
+      { text: 'Not filtered by Category', warning: true },
+    ]);
+  });
+
   it('sorts by every dimension, dates first and newest first, so pages don\'t repeat rows', () => {
     const dated: DatasetDescriptor = {
       ...dataset,
