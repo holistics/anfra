@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/cliui"
+	"github.com/holistics/anfra/internal/pretty"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -240,12 +241,12 @@ func helpSection(heading string, rows [][2]string) string {
 }
 
 // writeResult writes a CLI-only command's result, v, to cmd's stdout: for a
-// person when that's the command's default (renderPretty), else as an op's
+// person when that's the command's default (pretty.Render), else as an op's
 // answer is written, YAML in its fields' order or one JSON document.
 func writeResult(cmd *cobra.Command, v any) error {
 	out := cmd.OutOrStdout()
 	if cmd.Annotations[defaultFormat] == formatPretty && !structuredAsked() {
-		return renderPretty(out, v, cliui.Width(out))
+		return pretty.Render(out, v, cliui.Width(out))
 	}
 	return writeStructured(out, v)
 }

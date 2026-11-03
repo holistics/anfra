@@ -11,9 +11,9 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | Errors and warnings on stderr | Done, deprecation notes included |
 | No questions, no notices | Done |
 | Every command's output kind, and the test holding every command to one | Done |
-| CLI-only commands' structured results | `openapi`, `update` and `agent setup`, without `message` and `hints` yet; `auth` with `--json` only; the rest not started |
-| `--yaml`, and a CLI-only command's default, the pretty format | `--yaml`, the defaults, the annotations and the help done; `update` and `agent setup` write YAML until the prettifier exists |
-| The prettifier's first views, `update` and `agent setup`, then `init` | Not started |
+| CLI-only commands' structured results | `openapi`, `update` and `agent setup`, with `message` and `hints`; `auth` with `--yaml` or `--json`, without `message` and `hints` yet; `init` and `publish` not started |
+| `--yaml`, and a CLI-only command's default, the pretty format | Done: `--yaml`, the defaults, the annotations, the help |
+| The prettifier's first views, `update` and `agent setup`, then `init` | `update` and `agent setup` built (`internal/pretty`), to review; `init` next |
 | CLI-only commands' errors classified | Not started |
 | `--schema` | Not started |
 

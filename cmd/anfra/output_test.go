@@ -221,13 +221,14 @@ func TestJSONRemoteErrorKeepsTheShape(t *testing.T) {
 // order, or one JSON document; a field it leaves out is absent from both.
 func TestWriteStructured(t *testing.T) {
 	t.Cleanup(resetOutput)
-	res := updateResult{Version: "0.15.0", Update: command.UpdateInfo{Latest: "0.16.0", Available: true},
+	res := updateResult{Message: "anfra 0.16.0 is available (you have 0.15.0).", Version: "0.15.0", Update: command.UpdateInfo{Latest: "0.16.0", Available: true},
 		Changelog: "https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md"}
 	var out bytes.Buffer
 	if err := writeStructured(&out, res); err != nil {
 		t.Fatal(err)
 	}
-	want := "version: 0.15.0\n" +
+	want := "message: anfra 0.16.0 is available (you have 0.15.0).\n" +
+		"version: 0.15.0\n" +
 		"update:\n" +
 		"    latest: 0.16.0\n" +
 		"    available: true\n" +
@@ -238,12 +239,13 @@ func TestWriteStructured(t *testing.T) {
 
 	output.json = true
 	out.Reset()
-	res.Version, res.Previous, res.Update.Available = "0.16.0", "0.15.0", false
+	res.Message, res.Version, res.Previous, res.Update.Available = "Updated anfra 0.15.0 → 0.16.0.", "0.16.0", "0.15.0", false
+	res.Hints = []string{"Restart it."}
 	if err := writeStructured(&out, res); err != nil {
 		t.Fatal(err)
 	}
-	want = `{"version":"0.16.0","update":{"latest":"0.16.0","available":false},"previous":"0.15.0",` +
-		`"changelog":"https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md"}` + "\n"
+	want = `{"message":"Updated anfra 0.15.0 → 0.16.0.","version":"0.16.0","update":{"latest":"0.16.0","available":false},"previous":"0.15.0",` +
+		`"changelog":"https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md","hints":["Restart it."]}` + "\n"
 	if out.String() != want {
 		t.Errorf("JSON:\n%s\nwant\n%s", out.String(), want)
 	}

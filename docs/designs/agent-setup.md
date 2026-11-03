@@ -142,41 +142,49 @@ Agents read each other's folders, so a skill can load twice. For example, Codex 
 
 ### The result and exit code
 
-Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then answers with what it did and the [check report](#the-check-report) of the state it leaves ([new state as output](commands-and-api.md#new-state-as-output)), as YAML, or JSON with `--json`:
+Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then answers with what it did and the [check report](#the-check-report) of the state it leaves ([new state as output](commands-and-api.md#new-state-as-output)): in [the pretty format](cli-pretty.md#anfra-agent-setup) by default, as YAML with `--yaml` or JSON with `--json`:
 
 ```yaml
+message: Installed the anfra skills for Claude Code. Couldn't install them for Codex.
 setup:
     agents:
         - agent: claude-code
+          name: Claude Code
           outcome: installed
           message: Restart Claude Code, or run /reload-plugins, to load it.
         - agent: codex
+          name: Codex
           outcome: failed
           message: '`codex plugin add anfra@anfra-skills`: exit status 1'
     agents_md:
         wrote_block: true
         wrote_import: false
 skills: …          # then the check report, as setup leaves things
+hints: …           # what to do next, as the check's
 ```
+
+- **`message`:** what setup did, a sentence a kind of outcome, built from the outcomes.
 
 - **Each agent's outcome:** `installed`, `failed` (a step failed), `cli_missing` (its CLI isn't on the `PATH`, so nothing was tried) or `instructions_only` (anfra doesn't install for it), with a message saying what to do next.
 - **`agents_md`:** what setup wrote of the block and the `CLAUDE.md` import; null outside an anfra repo.
 
 It fails when any install failed, or when an agent named with `--agent` ends up not installed. An agent that was only detected and got pointed at the repo doesn't fail the run. Otherwise anyone with a second agent's folder would see setup fail on every run. A failed setup writes no result: its error, `command_failed`, carries the result as far as it got in its `details`.
 
-On a terminal, stderr also says what setup is doing ("Installing anfra for Claude Code...") and what a person would do next: update copies that are behind (setup updates plugins, not copies), clean up deprecated ones, or run `anfra init` outside a repo.
+On a terminal, stderr also says what setup is doing ("Installing anfra for Claude Code..."). What to do next is in `hints`, for a person and an agent alike: update copies that are behind (setup updates plugins, not copies), clean up deprecated ones, install by hand for an agent anfra doesn't install for, or run `anfra init` outside a repo.
 
 ### The check report
 
-`anfra agent setup --check` changes nothing. It answers with four parts:
+`anfra agent setup --check` changes nothing. It answers with four parts, between its `message`, what needs attention or that nothing does, and its `hints`, what to do next (`anfra agent setup`, when it would install or update something):
 
 ```yaml
+message: Claude Code's plugin is behind 0.4.5 and ~/.claude/skills has deprecated skills.
 skills:
     latest: 0.4.5                        # null until the background check has run
     checked_at: 2026-11-03T08:12:00Z
 agents:
     - id: claude-code
       name: Claude Code
+      status: installed
       plugins:
         - scope: user
           version: 0.4.4
@@ -184,9 +192,10 @@ agents:
       copies: [~/.claude/skills]
     - id: opencode
       name: OpenCode
+      status: not-installed
       plugins: []
       copies: []
-      install: https://github.com/holistics/anfra-skills#opencode
+      install_from: https://github.com/holistics/anfra-skills#opencode
 copies:
     - dir: ~/.agents/skills
       status: mixed
@@ -202,14 +211,17 @@ copies:
       deprecated_names: true
 agents_md:                               # null outside an anfra repo
     block: up-to-date
-    claude_md_imports: true              # null when the repo has no CLAUDE.md
+    claude_md: imported                  # not-imported, or absent when the repo has no CLAUDE.md
+hints:
+    - Run `anfra agent setup` to install or update them.
+    - Remove the deprecated anfra skills in ~/.claude/skills, from before 0.15.0, as https://github.com/holistics/anfra-skills#updating-and-removing says.
 ```
 
 - **`skills`** is the latest skills version, from the background check, and when it was checked.
-- **`agents`** says where each agent's skills come from: its plugins, through its CLI, and the copies in the folders it reads; or, with neither, where to install from. It shows duplicates, such as a plugin and a copy in one agent. Which folders each agent reads is data in the agent list, from the agents' docs.
+- **`agents`** says whether each agent has the skills (`status`: `installed` or `not-installed`) and where they come from: its plugins, through its CLI, and the copies in the folders it reads; or, with neither, where to install from (`install_from`). It shows duplicates, such as a plugin and a copy in one agent. Which folders each agent reads is data in the agent list, from the agents' docs.
 - **`copies`** lists each folder of copies, as `latest`, `behind`, `mixed` or `deprecated`, with which skills are at which version, oldest first. A copy is a folder's `anfra-*` skills, each read for its own stamp, so a partial install is found too. A skill with no stamp has a null version, and makes its copy `behind`. Against an unknown latest, the status is `unknown`.
 - **Deprecated skills** are copies of the names from before the `anfra-` prefix (`aml`, `aql`, …), found by their old `setup-repo` skill when its text names anfra: `deprecated_names: true`. An agent loads them next to the new names. A folder with only those is `deprecated`: updating doesn't replace them, removing them does.
-- **`agents_md`** is the repo's anfra block: `missing`, `outdated`, `up-to-date`, or `unreadable` with a message, and whether `CLAUDE.md` imports `AGENTS.md`.
+- **`agents_md`** is the repo's anfra block: `missing`, `outdated`, `up-to-date`, or `unreadable` with a message; and `claude_md`, whether `AGENTS.md` is imported in the repo's `CLAUDE.md`: `imported`, `not-imported`, or `absent` without a `CLAUDE.md`, as Claude Code then reads `AGENTS.md` on its own.
 - **The list of copies** doesn't decide whether the skills in use fit, since it can't tell which copy is in use. That's [the check](#the-check)'s job.
 - **What it reads:**
   - the skills folders the known agents read, at home and in the repo, and each `anfra-*` skill's stamp line;
