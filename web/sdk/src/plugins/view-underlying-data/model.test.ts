@@ -3,7 +3,7 @@ import type { RowsTarget } from '../../common/menu';
 import type { ColumnMeta, DatasetDescriptor, QueryRequest } from '../../common/types';
 import { numberTypes, textTypes } from '../../app/testSupport';
 import {
-  aggregateFunction, candidates, NO_DATA, plan, visibleDimensions,
+  aggregateFunction, candidates, NO_DATA, plan, preambleOf, visibleDimensions,
 } from './model';
 
 const dataset: DatasetDescriptor = {
@@ -164,6 +164,17 @@ describe('plan', () => {
     const planned = plan(point, candidate, base, [region, bucket, revenue], dataset);
     expect(planned.chips).toEqual([{ text: 'Matches the selected point' }, { text: 'Not filtered by bucket', warning: true }]);
     expect(planned.request.input.conditions).toEqual([{ expr: 'orders.amount > 0' }, { expr: '(users.region == "APAC")' }]);
+  });
+
+  it('keeps what the query declares before its explore, which the point\'s conditions may name', () => {
+    expect(preambleOf('explore { measures { n: count(orders.id) } }')).toBe('');
+    const declared = {
+      ...base,
+      aql: 'dimension orders.kind = case(when: orders.amount > 100, then: "Big", else: "Small");\nexplore { dimensions { kind: orders.kind } measures { revenue: sum(orders.amount) } }',
+    };
+    const [candidate] = candidates(target({ measure: 'revenue' }), [region, revenue], dataset);
+    const { aql } = plan(target({ measure: 'revenue' }), candidate, declared, [region, revenue], dataset).request;
+    expect(aql.startsWith('dimension orders.kind = case(when: orders.amount > 100, then: "Big", else: "Small");\nexplore {')).toBe(true);
   });
 
   it('says what an empty value and a date range are', () => {

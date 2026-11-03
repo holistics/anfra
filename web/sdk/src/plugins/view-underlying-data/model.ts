@@ -123,10 +123,20 @@ function freeAlias (wanted: string, taken: Set<string>): string {
 }
 
 /**
+ * What the query declares before its `explore` (a query-local `dimension orders.kind = ...;`): kept,
+ * since the point's conditions may name what it declares.
+ */
+export function preambleOf (aql: string): string {
+  const at = aql.search(/(^|[\s;}])explore\s*\{/);
+  return at > 0 ? aql.slice(0, at + 1).trim() : '';
+}
+
+/**
  * The modal for one measure of a point: the measure, then the base model's visible dimensions,
  * grouped by them, where the point's conditions and the query's own inputs hold.
  *
- * Built on the query's request as it runs now: its controls' filters, its selection, its timezone.
+ * Built on the query's request as it runs now: its declarations, its controls' filters, its
+ * selection, its timezone.
  * Its sorts and date drills are dropped: a sort names one of the query's own columns, which the
  * explore may not have, and a drill would truncate the model's dates, while the point's condition
  * already spans the bucket the reader clicked.
@@ -142,7 +152,9 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
     planned.push({ name: alias, label: field.label || field.name, isMeasure: false });
     return `    ${alias}: ${candidate.model.name}.${field.name}`;
   });
+  const preamble = preambleOf(base.aql);
   const aql = [
+    ...(preamble ? [preamble] : []),
     'explore {',
     ...(dimensionLines.length ? ['  dimensions {', dimensionLines.join(',\n'), '  }'] : []),
     '  measures {',
