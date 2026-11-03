@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -14,12 +15,13 @@ import (
 )
 
 // Report is what the appserve page posts to /appserve/log: one runtime error, or one console line,
-// of the Data App at Path, as the SDK's host reported it (anfra.error, anfra.console). It reaches
-// anfra.log, so an agent reads a Data App's failures without a browser.
+// of the Data App at Path, as the SDK's host reported it (anfra.error, anfra.console), or that the
+// page mounted it. It reaches anfra.log, so an agent reads a Data App's failures without a browser,
+// and tells the ones from before an edit from the ones after it.
 type Report struct {
 	// Path is the Data App's, under apps/.
 	Path string `json:"path"`
-	// Type is "error" or "console".
+	// Type is "error", "console" or "mounted" (no event: the page loaded the file as it is now).
 	Type  string      `json:"type"`
 	Event ReportEvent `json:"event"`
 }
@@ -182,8 +184,8 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 		httpkit.WriteError(w, r, apperr.Encapsulate(err, apperr.InvalidRequest, "Not a Data App's report."))
 		return
 	}
-	if rep.Path == "" || len(rep.Path) > 512 || (rep.Type != "error" && rep.Type != "console") {
-		httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, "A report names its Data App's path, and is an error or a console line."))
+	if rep.Path == "" || len(rep.Path) > 512 || (rep.Type != "error" && rep.Type != "console" && rep.Type != "mounted") {
+		httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, "A report names its Data App's path, and is an error, a console line or a mount."))
 		return
 	}
 	logger := s.opts.AppLogger
@@ -192,6 +194,11 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.reports.allow(rep.Path) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rep.Type == "mounted" {
+		s.logMounted(r.Context(), logger, rep.Path)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -221,4 +228,20 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 	add("at", e.At, shortLimit)
 	logger.LogAttrs(r.Context(), level, msg, attrs...)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// logMounted says the page loaded the Data App at path, with the file's modification time, read
+// here rather than taken from the page: the lines after it are the file as it was then. A path
+// that names no Data App's file is not logged.
+func (s *Server) logMounted(ctx context.Context, logger *slog.Logger, path string) {
+	file := appFile(s.opts.RepoDir, path)
+	if file == "" {
+		return
+	}
+	info, err := os.Stat(file) //nolint:gosec // G703: appFile confines it to apps/
+	if err != nil {
+		return
+	}
+	logger.LogAttrs(ctx, slog.LevelInfo, "app.mounted", slog.String("app", path),
+		slog.String("modified", info.ModTime().UTC().Format(time.RFC3339Nano)))
 }

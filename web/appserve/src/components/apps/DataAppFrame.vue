@@ -69,8 +69,10 @@ onMounted(async () => {
     });
     mounted.frame.dataset.testid = 'data-app-frame';
     mounted.frame.addEventListener('load', () => emit('load'));
-    // Into anfra.log, with this Data App's path: where an agent reads what went wrong.
+    // Into anfra.log, with this Data App's path: where an agent reads what went wrong, after the
+    // line that says which load of the file it was.
     const { path } = props;
+    report(path, 'mounted');
     mounted.on('anfra.error', (event) => report(path, 'error', event));
     mounted.on('anfra.console', (event) => report(path, 'console', event));
     emit('mounted', runtime, mounted);

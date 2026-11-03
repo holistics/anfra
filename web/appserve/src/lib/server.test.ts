@@ -107,6 +107,8 @@ describe('report', () => {
     expect(posted).toHaveBeenCalledWith('/appserve/log', expect.objectContaining({
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'sales.html', type: 'error', event }),
     }));
+    server.report('sales.html', 'mounted');
+    expect(posted).toHaveBeenLastCalledWith('/appserve/log', expect.objectContaining({ body: JSON.stringify({ path: 'sales.html', type: 'mounted' }) }));
     posted.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     expect(() => server.report('sales.html', 'console', { level: 'warn', message: 'x', at: '', mount: 1 })).not.toThrow();
     vi.unstubAllGlobals();

@@ -51,18 +51,20 @@ export async function definition (path: string): Promise<string> {
 
 /**
  * Write a Data App's runtime error or console line to the repo's anfra.log, as "service":"app", so
- * an agent reads it without a browser. Fire and forget: a report that can't be sent is still in
- * this page's console and the panel.
+ * an agent reads it without a browser; or that this page mounted it, so the lines after it are of
+ * the file as it is now. Fire and forget: a report that can't be sent is still in this page's
+ * console and the panel.
  */
 export function report (path: string, type: 'error', event: AppErrorEvent): void;
 export function report (path: string, type: 'console', event: AppConsoleEvent): void;
-export function report (path: string, type: 'error' | 'console', event: AppErrorEvent | AppConsoleEvent): void {
+export function report (path: string, type: 'mounted'): void;
+export function report (path: string, type: 'error' | 'console' | 'mounted', event?: AppErrorEvent | AppConsoleEvent): void {
   fetch('/appserve/log', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     // Not keepalive: the page stays, and a browser caps keepalive bodies in flight at 64KB, so a
     // burst of failures would lose the reports over it.
-    body: JSON.stringify({ path, type, event }),
+    body: JSON.stringify(event ? { path, type, event } : { path, type }),
   }).catch(() => { /* the server is gone: nothing to tell */ });
 }
 
