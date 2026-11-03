@@ -22,7 +22,6 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v3"
 )
 
 // appCommands builds the cobra tree from the registry: one command per
@@ -59,6 +58,7 @@ func appCommands() []*cobra.Command {
 func buildCobraCommand(c command.Command) *cobra.Command {
 	name := c.Name()[strings.LastIndex(c.Name(), ".")+1:]
 	cmd := &cobra.Command{Use: name, Short: c.Short(), Long: c.Long(), Args: cobra.NoArgs}
+	markStructuredOutput(cmd) // its op's answer
 	// Show flags in declaration order (else pflag sorts them alphabetically).
 	cmd.Flags().SortFlags = false
 
@@ -140,6 +140,9 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 		if presentationOf(c) == presentDownload {
 			d.output, _ = runCmd.Flags().GetString("output")
 			d.link, _ = runCmd.Flags().GetBool("link")
+			if output.json && !d.link {
+				return jsonRefused("without --link it writes the file; --link writes the export's link as a document")
+			}
 		}
 		values, err := flagValues(runCmd.Flags(), args, flagArg)
 		if err != nil {
@@ -496,9 +499,10 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 			defer resp.Body.Close()
 			// anfra serve's error, shown as any of its errors is (an expired link,
 			// say); a server of another kind's status.
-			var env apperr.Envelope
-			if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err == nil && jsonkit.Unmarshal(body, &env) == nil && env.Error.Code != "" {
-				return nil, &remoteError{resp: env.Error}
+			if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err == nil {
+				if re, ok := remoteErrorFrom(body); ok {
+					return nil, re
+				}
 			}
 			return nil, fmt.Errorf("download the export: %s", resp.Status)
 		}
@@ -567,13 +571,17 @@ func renderTo(body []byte, contentType string, out io.Writer) error {
 		_, err := out.Write(body)
 		return err
 	}
-	var v any
-	if err := jsonkit.Unmarshal(body, &v); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+	if output.json {
+		v := jsontext.Value(slices.Clone(body))
+		if err := v.Compact(); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+		_, err := out.Write(append(v, '\n'))
+		return err
 	}
-	b, err := yaml.Marshal(v)
+	b, err := jsonToYAML(body)
 	if err != nil {
-		return fmt.Errorf("marshal result: %w", err)
+		return fmt.Errorf("decode response: %w", err)
 	}
 	_, err = out.Write(b)
 	return err

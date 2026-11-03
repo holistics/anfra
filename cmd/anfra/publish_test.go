@@ -66,7 +66,7 @@ func TestPublishNonInteractiveAndList(t *testing.T) {
 		if !strings.Contains(out.String(), "orders.aml") {
 			t.Fatalf("%s: %s", flag, out.String())
 		}
-		if deprecated := strings.Contains(out.String(), "--dry-run has been deprecated, use --list"); deprecated != (flag == "--dry-run") {
+		if deprecated := strings.Contains(out.String(), "code: deprecated"); deprecated != (flag == "--dry-run") {
 			t.Fatalf("%s: deprecation note %v: %s", flag, deprecated, out.String())
 		}
 		if _, err := os.Stat(repoconfig.Path(".")); !os.IsNotExist(err) {
@@ -119,6 +119,7 @@ func TestAuthCommandsLeaveRepoConfigAlone(t *testing.T) {
 }
 
 func TestAuthStatusExplainsDamagedCredentials(t *testing.T) {
+	t.Cleanup(resetOutput) // the run's --json and --non-interactive
 	t.Chdir(t.TempDir())
 	home := t.TempDir()
 	t.Setenv("ANFRA_HOME", home)
@@ -346,6 +347,7 @@ func TestFirstPublishWithoutLoginsShowsAuthenticationImmediately(t *testing.T) {
 }
 
 func TestBareAuthNeverSelectsWithoutTerminal(t *testing.T) {
+	t.Cleanup(resetOutput) // the run's --json and --non-interactive
 	t.Chdir(t.TempDir())
 	for _, addresses := range [][]string{nil, {"https://bi.example.com/o/one"}, {"https://bi.example.com/o/one", "https://other.example.com/o/two"}} {
 		t.Run(strings.Join(addresses, "+"), func(t *testing.T) {
@@ -371,6 +373,7 @@ func TestBareAuthNeverSelectsWithoutTerminal(t *testing.T) {
 }
 
 func TestAuthLoginBrowserFallback(t *testing.T) {
+	t.Cleanup(resetOutput) // the run's --json and --non-interactive
 	t.Chdir(t.TempDir())
 	t.Setenv("PATH", t.TempDir()) // No browser launcher is installed.
 	var origin string
@@ -493,6 +496,7 @@ func TestAuthStatusIsLocalInventoryWithoutTokens(t *testing.T) {
 }
 
 func TestAuthStatusRepoBoundariesAndJSON(t *testing.T) {
+	t.Cleanup(resetOutput) // the run's --json and --non-interactive
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 	seedLoginInventory(t, "https://bi.example.com/o/one", "https://other.example.com/o/two")

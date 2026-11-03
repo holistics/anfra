@@ -42,6 +42,7 @@ Plans for work being built: the steps, their order, and where each stands.
 
 | Doc | Covers |
 |---|---|
+| [`--json` on every CLI command](implementations/cli-json.md) | Every command's answer, warnings and error as JSON instead of YAML: the shared rendering first, then the CLI-only commands one at a time. |
 | [revamp query result data types](implementations/revamp-query-result-data-types.md) | Encoded values (every number a string) and each column's semantic, Arrow and database types, across canal-query, amql, the core and the SDK. |
 
 ## Todos

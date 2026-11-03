@@ -20,19 +20,17 @@ import (
 )
 
 func newAuthCmd() *cobra.Command {
-	var machine, noInteractive bool
 	auth := &cobra.Command{Use: "auth", Short: "Manage organization authentication"}
-	auth.PersistentFlags().BoolVar(&machine, "json", false, "print results as JSON without prompts")
-	auth.PersistentFlags().BoolVar(&noInteractive, "no-interactive", false, "disable prompts and animations")
+	// --json and --non-interactive are the root's: the one sets the answer's
+	// format, the other whether to ask (newAuthTerminal).
 	terminalFor := func(cmd *cobra.Command) *authTerminal {
 		t := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
-		t.interactive = t.interactive && !machine && !noInteractive
-		t.machine = machine
+		t.machine = output.json
 		return t
 	}
 	auth.AddCommand(&cobra.Command{
 		Use: "login [<org URL>]", Short: "Authenticate with an organization",
-		Long: "Authenticate through your browser. Choose an organization or enter its URL.\n\nSupply an organization URL when using --json, --no-interactive, or a\nnon-interactive terminal. Browser approval is required.",
+		Long: "Authenticate through your browser. Choose an organization or enter its URL.\n\nSupply an organization URL when using --non-interactive or without a\nterminal. Browser approval is required.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t := terminalFor(cmd)
@@ -50,7 +48,7 @@ func newAuthCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if machine {
+			if output.json {
 				return jsonkit.MarshalWrite(cmd.OutOrStdout(), struct {
 					OrgURL                 string `json:"org_url"`
 					RepoDestinationChanged bool   `json:"repo_destination_changed"`
@@ -80,7 +78,7 @@ func newAuthCmd() *cobra.Command {
 				result, logoutErr = (cliauth.Manager{}).Logout(ctx, org)
 				return logoutErr
 			})
-			if machine && (err == nil || result.LocalRemoved) {
+			if output.json && (err == nil || result.LocalRemoved) {
 				if writeErr := jsonkit.MarshalWrite(cmd.OutOrStdout(), result); writeErr != nil {
 					return writeErr
 				}
@@ -88,7 +86,7 @@ func newAuthCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !machine {
+			if !output.json {
 				styles := cliui.TerminalStyles{}
 				if t.interactive {
 					styles = cliui.NewTerminalStyles(cmd.OutOrStdout())
@@ -106,9 +104,12 @@ func newAuthCmd() *cobra.Command {
 		Use: "status", Short: "Show authenticated organizations and this repo's publish destination",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return printAuthStatus(cmd.Context(), ".", cmd.OutOrStdout(), machine, noInteractive)
+			return printAuthStatus(cmd.Context(), ".", cmd.OutOrStdout(), output.json, output.nonInteractive)
 		},
 	})
+	for _, c := range auth.Commands() {
+		markStructuredOutput(c)
+	}
 	return auth
 }
 
@@ -164,7 +165,7 @@ type authTerminal struct {
 }
 
 func newAuthTerminal(in io.Reader, out io.Writer) *authTerminal {
-	return &authTerminal{in: in, out: out, interactive: cliui.CanInteract(in, out)}
+	return &authTerminal{in: in, out: out, interactive: !output.nonInteractive && cliui.CanInteract(in, out)}
 }
 
 func loginChoices(orgs []cliauth.StoredLogin) []cliui.OrgChoice {

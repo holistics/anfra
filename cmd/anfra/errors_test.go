@@ -33,6 +33,7 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 				"              code: required\n" +
 				"              message: name the data source to run the SQL query against\n" +
 				"              arg: --data-source\n" +
+				"    request_id: \"\"\n" +
 				"    help: Run `anfra query --help` for usage.\n"},
 		{"several, a schema's", apperr.NewWith(apperr.InvalidRequest, "", apperr.Violate(
 			apperr.Violation{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
@@ -52,9 +53,10 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 				"              code: required\n" +
 				"              message: Required.\n" +
 				"              arg: query\n" +
+				"    request_id: \"\"\n" +
 				"    help: Run `anfra query --help` for usage.\n"},
-		{"a remote server's", &remoteError{resp: apperr.Response{Code: "validation_failed", Scope: apperr.User, Status: 422, Message: "x", RequestID: "req_1",
-			Details: map[string]any{"violations": []any{map[string]any{"field": "dataset", "code": "invalid", "message": "x"}}}}},
+		{"a remote server's, in its order", remote(t, `{"error": {"code": "validation_failed", "scope": "user", "status": 422, "message": "x",
+			"details": {"violations": [{"field": "dataset", "code": "invalid", "message": "x"}]}, "request_id": "req_1"}}`),
 			"---\nerror:\n" +
 				"    code: validation_failed\n" +
 				"    scope: user\n" +
@@ -62,8 +64,8 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 				"    message: x\n" +
 				"    details:\n" +
 				"        violations:\n" +
-				"            - code: invalid\n" +
-				"              field: dataset\n" +
+				"            - field: dataset\n" +
+				"              code: invalid\n" +
 				"              message: x\n" +
 				"              arg: --dataset\n" +
 				"    request_id: req_1\n" +
@@ -82,9 +84,19 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 	var out bytes.Buffer
 	printError(&out, &commandError{path: "anfra query", args: args, err: &remoteError{resp: apperr.Response{
 		Code: "query_invalid", Scope: apperr.User, Message: "The query is not valid.", Details: map[string]any{"diagnostics": []any{}}}}}, "")
-	if want := "---\nerror:\n    code: query_invalid\n    scope: user\n    message: The query is not valid.\n    details:\n        diagnostics: []\n"; out.String() != want {
+	if want := "---\nerror:\n    code: query_invalid\n    scope: user\n    message: The query is not valid.\n    details:\n        diagnostics: []\n    request_id: \"\"\n"; out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
+}
+
+// remote is the error a server's error answer, body, carries.
+func remote(t *testing.T, body string) *remoteError {
+	t.Helper()
+	re, ok := remoteErrorFrom([]byte(body))
+	if !ok {
+		t.Fatalf("not an error answer: %s", body)
+	}
+	return re
 }
 
 // stderr is a stream of YAML documents: warnings, then the error, which a

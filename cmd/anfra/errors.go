@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"io"
@@ -16,8 +17,26 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-// remoteError is a running server's error, as its body carried it.
-type remoteError struct{ resp apperr.Response }
+// remoteError is a running server's error: resp, decoded for its code and
+// scope, and raw, the error object as the body carried it, which printError
+// shows in its order.
+type remoteError struct {
+	resp apperr.Response
+	raw  jsontext.Value
+}
+
+// remoteErrorFrom is the error a server's error answer carries; false when body
+// is not one.
+func remoteErrorFrom(body []byte) (*remoteError, bool) {
+	var env apperr.Envelope
+	var raw struct {
+		Error jsontext.Value `json:"error"`
+	}
+	if jsonkit.Unmarshal(body, &env) != nil || env.Error.Code == "" || jsonkit.Unmarshal(body, &raw) != nil {
+		return nil, false
+	}
+	return &remoteError{resp: env.Error, raw: raw.Error}, true
+}
 
 func (e *remoteError) Error() string { return e.resp.Code + ": " + e.resp.Message }
 
@@ -33,8 +52,9 @@ func (e *commandError) Error() string { return e.err.Error() }
 func (e *commandError) Unwrap() error { return e.err }
 
 // printError shows a failed command as its error's envelope, the one HTTP and
-// MCP answer, as a YAML document: stderr is a stream of them (printWarning's,
-// then this one), so a program reads it with a YAML library. Two fields are the
+// MCP answer, as a YAML document, or a JSON line with --json: stderr is a stream
+// of them (printWarning's, then this one), so a program reads it with a YAML or
+// JSONL reader. Two fields are the
 // CLI's own, for whoever fixes the call: each violation's arg, the flag or
 // positional the user typed, and help, the command's --help. A shown cause is
 // in message, as it is over HTTP (see main for when causes are shown).
@@ -44,12 +64,16 @@ func printError(w io.Writer, err error, hint string) {
 		err = ce.err
 	}
 	var resp apperr.Response
+	var body []byte
 	if re, ok := errors.AsType[*remoteError](err); ok {
-		resp = re.resp
+		resp, body = re.resp, re.raw
 	} else {
 		resp = apperr.From(err).Response("")
 	}
-	body, jerr := jsonkit.Marshal(resp)
+	var jerr error
+	if body == nil {
+		body, jerr = jsonkit.Marshal(resp)
+	}
 	var doc yaml.Node
 	if jerr == nil {
 		jerr = yaml.Unmarshal(body, &doc) // JSON is YAML: the wire's field order is kept
@@ -60,9 +84,6 @@ func printError(w io.Writer, err error, hint string) {
 	}
 	e := doc.Content[0]
 	blockStyle(e)
-	if v := mapValue(e, "request_id"); v != nil && v.Value == "" {
-		deleteKey(e, "request_id") // a command run here has none
-	}
 	// help is what helps whoever fixes the call, one piece of advice a line: the
 	// command's usage, when a violation names an arg, and hint.
 	var help []string
@@ -109,13 +130,18 @@ func printWarning(w io.Writer, code, message string) {
 	writeDoc(w, "warning", e)
 }
 
-// writeDoc writes {key: v} as one document of a YAML stream.
+// writeDoc writes {key: v} as one document of a YAML stream, or with --json as
+// one line of a JSONL stream.
 func writeDoc(w io.Writer, key string, v any) {
 	root := &yaml.Node{Kind: yaml.MappingNode}
 	value := &yaml.Node{}
 	if n, ok := v.(*yaml.Node); ok {
 		value = n
 	} else if err := value.Encode(v); err != nil {
+		return
+	}
+	if output.json {
+		writeJSONDoc(w, key, value)
 		return
 	}
 	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, value)
@@ -128,10 +154,17 @@ func writeDoc(w io.Writer, key string, v any) {
 }
 
 // blockStyle drops the JSON's style from n and beneath, its quotes and braces,
-// so the document reads as an answer's YAML does. A string that needs quotes
-// still gets them.
+// so the document reads as YAML written by hand. A string is styled as yaml.v3
+// styles a Go string: quoted where a reader would take it for something else,
+// "yes" for a YAML 1.1 reader's true included.
 func blockStyle(n *yaml.Node) {
 	n.Style = 0
+	if n.Kind == yaml.ScalarNode && n.Tag == "!!str" {
+		var s yaml.Node
+		if s.Encode(n.Value) == nil {
+			n.Style = s.Style
+		}
+	}
 	for _, c := range n.Content {
 		blockStyle(c)
 	}
@@ -180,15 +213,6 @@ func setKey(m *yaml.Node, key, value string) {
 	v := &yaml.Node{}
 	v.SetString(value)
 	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, v)
-}
-
-func deleteKey(m *yaml.Node, key string) {
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			m.Content = append(m.Content[:i], m.Content[i+2:]...)
-			return
-		}
-	}
 }
 
 // argName is how the user passes the arg a violation is on: its flag, or the

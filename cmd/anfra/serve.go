@@ -30,7 +30,6 @@ import (
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
-	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/holistics/anfra/shared/routine"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -475,23 +474,33 @@ func stopWhenIdle(g *routine.Group, next http.Handler, idle time.Duration, stop 
 // registry with no repo or sidecars: for a client generated without a running
 // server, and the committed api/openapi.yaml (scripts/openapi.sh).
 func newOpenAPICmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "openapi",
 		Short: "Print the core API's OpenAPI document (the contract `anfra serve` serves)",
-		Long: "Print the core API's OpenAPI document, in YAML: the contract `anfra serve` serves at\n" +
+		Long: "Print the core API's OpenAPI document, in YAML or with --json in JSON: the contract `anfra serve` serves at\n" +
 			"/api/openapi.json, here without a repo or a running server — to generate a client, or to\n" +
 			"give an agent the API.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			none := func(*http.Request) command.CommandContext { return command.CommandContext{} }
-			spec, err := coreAPI(none).Spec(app.NewRuntime(), app.NewRegistry())
+			api := coreAPI(none)
+			build := api.Spec
+			if output.json {
+				build = api.SpecJSON
+			}
+			spec, err := build(app.NewRuntime(), app.NewRegistry())
 			if err != nil {
 				return err
+			}
+			if output.json {
+				spec = append(spec, '\n')
 			}
 			_, err = cmd.OutOrStdout().Write(spec)
 			return err
 		},
 	}
+	markStructuredOutput(cmd)
+	return cmd
 }
 
 // --- the client: a CLI call routed to the repo's running server ---
@@ -520,9 +529,8 @@ func callServe(ctx context.Context, url, name string, input []byte) ([]byte, err
 		return nil, fmt.Errorf("read anfra serve's answer: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		var env apperr.Envelope
-		if jsonkit.Unmarshal(body, &env) == nil && env.Error.Code != "" {
-			return nil, &remoteError{resp: env.Error}
+		if re, ok := remoteErrorFrom(body); ok {
+			return nil, re
 		}
 		return nil, fmt.Errorf("anfra serve answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}

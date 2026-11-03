@@ -41,6 +41,9 @@ func newPublishCmd() *cobra.Command {
 			"--yes skips overwrite confirmation only. --list never authenticates or writes configuration.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if cmd.Flags().Changed("dry-run") {
+				printWarning(cmd.ErrOrStderr(), "deprecated", "--dry-run is deprecated: use --list.")
+			}
 			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
 			ask := publish.Prompt(func(string, ...string) (int, bool) { return 0, false })
 			input := publish.Input(func(string) (string, bool) { return "", false })
@@ -80,8 +83,10 @@ func newPublishCmd() *cobra.Command {
 	f.BoolVar(&o.List, "list", false, "list the files that would be published, and where to, and stop: offline")
 	// --dry-run was --list's name; a dry run elsewhere goes as far as the server
 	// (docs/designs/commands-and-api.md#deprecation-before-removal).
+	// It warns as a document, not as pflag's deprecation note: stderr is a stream
+	// of them.
 	f.BoolVar(&o.List, "dry-run", false, "list the files that would be published, and stop")
-	_ = f.MarkDeprecated("dry-run", "use --list")
+	_ = f.MarkHidden("dry-run")
 	f.BoolVar(&o.CreateDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server. DuckDB ones, files on this machine, are never sent")
 	f.BoolVarP(&o.Yes, "yes", "y", false, "publish without asking, though the repo was last published elsewhere (needed without a terminal)")
 	return cmd
