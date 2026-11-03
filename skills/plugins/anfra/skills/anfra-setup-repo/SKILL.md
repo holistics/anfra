@@ -27,11 +27,17 @@ Ask before installing. Reuse a working CLI rather than upgrading it unless the u
 
 ## 2. Create the repo's files
 
-From the repo's folder (an existing Git repo is fine):
+Before running `anfra init`, ask the user whether to add the e-commerce sample: 6 models, a
+dataset, a small DuckDB file and a Data App, so they can try anfra without a warehouse of their own.
+Ask first, because init writes `.anfra/data_sources.yml` and never changes it afterwards. Then run
+init once, from the repo's folder (an existing Git repo is fine):
 
 ```sh
-anfra init            # or: anfra init <dir>
+anfra init --with-sample   # the user wants the sample; or: anfra init <dir> --with-sample
+anfra init --yes           # they don't; or: anfra init <dir> --yes
 ```
+
+With the sample, the repo already queries its DuckDB file: skip step 3 and run `anfra validate`.
 
 It creates what is missing and never changes an existing file, so it is safe to run again:
 
