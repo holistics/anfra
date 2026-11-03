@@ -103,6 +103,12 @@ func (h HTTP[Call]) Spec(rt *Runtime, reg OpSet[Call]) ([]byte, error) {
 	return api.OpenAPI().YAML()
 }
 
+// SpecJSON is Spec in JSON, as the server publishes it at openapi.json.
+func (h HTTP[Call]) SpecJSON(rt *Runtime, reg OpSet[Call]) ([]byte, error) {
+	api, _ := h.api(rt, reg)
+	return api.OpenAPI().MarshalJSON()
+}
+
 func (h HTTP[Call]) api(rt *Runtime, reg OpSet[Call]) (huma.API, *http.ServeMux) {
 	mux := http.NewServeMux()
 	cfg := huma.DefaultConfig(h.Title, h.Version)

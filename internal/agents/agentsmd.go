@@ -23,6 +23,11 @@ This is an anfra repo.
 
 - Use the anfra skills for work in this repo. They know anfra's languages and commands, so you'll work more
   accurately and efficiently with them than from memory.
+- Check a command's flags with ` + "`anfra <command> --help`" + ` rather than guessing; ` + "`anfra --help`" + ` lists the
+  commands.
+- anfra commands write their answer to stdout as a YAML document, or JSON with ` + "`--json`" + `. Warnings and errors
+  go to stderr as multiple YAML documents, or JSONL documents with ` + "`--json`" + `, each with a ` + "`code`" + ` to act on, and a
+  failed command exits non-zero. Pass ` + "`--non-interactive`" + ` so a command never waits on a question.
 - Docs: anfra at https://anfra.ai/docs, AML and AQL at https://amql.org/docs.
 
 Keeping the skills working:

@@ -220,8 +220,12 @@ func maybeNotifyUpdate(invoked string) {
 	}
 }
 
-// stderrIsInteractive reports whether stderr is a terminal (not a pipe/file).
+// stderrIsInteractive reports whether stderr is a terminal (not a pipe/file),
+// and the run may treat it as one: not with --non-interactive.
 func stderrIsInteractive() bool {
+	if output.nonInteractive {
+		return false
+	}
 	fi, err := os.Stderr.Stat()
 	if err != nil {
 		return false

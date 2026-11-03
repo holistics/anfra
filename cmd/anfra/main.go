@@ -27,6 +27,7 @@ func main() {
 	// anfra's switches are 1 or 0. Refuse any other value before anything reads
 	// one, so a typo stops the command instead of silently meaning the opposite.
 	if err := envflag.Validate(); err != nil {
+		output.json = jsonAsked(os.Args[1:])
 		printError(os.Stderr, settingRefused(err), "") // the user's setting, said as it is: not anfra's failure
 		os.Exit(1)
 	}
@@ -68,6 +69,7 @@ func main() {
 	if errors.As(err, &ec) {
 		os.Exit(ec.code) // result already rendered; exit quietly
 	}
+	output.json = output.json || jsonAsked(os.Args[1:]) // flags that failed to parse set nothing
 	printError(os.Stderr, err, failureHint(err))
 	os.Exit(1)
 }
@@ -87,7 +89,11 @@ func settingRefused(err error) error {
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "anfra",
-		Short: "Anfra — local-first agentic analytics infrastructure",
+		Short: "Anfra — local-first agentic analytics framework",
+		Long: "Anfra — local-first agentic analytics framework\n\n" +
+			"Every command writes its answer to stdout as a YAML document, or as JSON with --json.\n" +
+			"Warnings and errors go to stderr as multiple YAML documents, or JSONL documents with\n" +
+			"--json, and the exit code is non-zero on failure. --non-interactive asks no questions.",
 		// Setting Version makes cobra add `--version` (and `-v`, since it's free) to
 		// the root. Mirrors the `version` command, which the server also serves.
 		Version: meta.Version,
@@ -95,10 +101,18 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newServeCmd(), newOpenAPICmd())
-	root.AddCommand(newUpdateCmd(), newUpdateCheckCmd())
-	root.AddCommand(newAgentCmd(), newSkillsCmd(), newInitCmd())
-	root.AddCommand(newPublishCmd(), newAuthCmd())
+	serve, updateCheck := newServeCmd(), newUpdateCheckCmd()
+	markArtifactOutput(serve, "a log, until it is stopped")
+	markArtifactOutput(updateCheck, "nothing: it checks in the background") // internal
+	update, agent, skills, initCmd, publish := newUpdateCmd(), newAgentCmd(), newSkillsCmd(), newInitCmd(), newPublishCmd()
+	for _, c := range []*cobra.Command{update, agent, skills, initCmd, publish} {
+		markNoStructuredOutputYet(c) // docs/implementations/cli-json.md, step 2
+	}
+	root.AddCommand(serve, newOpenAPICmd())
+	root.AddCommand(update, updateCheck)
+	root.AddCommand(agent, skills, initCmd)
+	root.AddCommand(publish, newAuthCmd())
 	root.AddCommand(appCommands()...) // ping, query, … generated from the registry
+	addOutputFlags(root)
 	return root
 }

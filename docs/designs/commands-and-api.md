@@ -22,13 +22,32 @@ Commands live in packages under `internal/command/` (one per group), and are reg
 
 | Surface | Built by | What it is |
 |---|---|---|
-| CLI | `cmd/anfra/commands.go` | `anfra <group> <name>`: flags from the args (an object arg as JSON, or its fields as flags by their path, `--format-options.header`), output as YAML. When the repo has a running `anfra serve`, the CLI sends the call there instead of starting its own sidecars, unless the command is CLI-local ([cli-vs-warm-server.md](cli-vs-warm-server.md)). |
+| CLI | `cmd/anfra/commands.go` | `anfra <group> <name>`: flags from the args (an object arg as JSON, or its fields as flags by their path, `--format-options.header`), output as YAML, or JSON with `--json` ([CLI output](#cli-output)). When the repo has a running `anfra serve`, the CLI sends the call there instead of starting its own sidecars, unless the command is CLI-local ([cli-vs-warm-server.md](cli-vs-warm-server.md)). |
 | HTTP | `shared/apikit` `HTTP` | `POST /api/core.<name>`, a JSON body in, the answer or an error envelope out. |
 | MCP | `shared/apikit` `MCP` | One tool per op, named like it, at `/mcp`. |
 | In-process | `engine.Dispatch` | For a platform embedding anfra ([engine.md](engine.md)). |
 | Discovery | `shared/apikit` `Discovery` | `GET /api/ops`, `/api/ops?group=…`, `/api/ops/<name>`; and over MCP, the `list_operations` and `describe_operation` tools. |
 
 Discovery serves the same contract the operations do, filtered to what the caller may call. An agent can find out what anfra can do, and how to call it, without leaving the API. Each operation's usage names its args, which of them are required, their allowed values, and the codes it can fail with.
+
+### CLI output
+
+Every command writes structured output, YAML documents by default and JSON with `--json`. (In docs, say *structured output* for what a command writes, as against prose; say *document* only beside YAML or JSON, where the format is the point.) Either way:
+
+- **stdout holds the result alone,** one document. A core command's is its op's answer, as HTTP returns it.
+- **A CLI-only command's result is structured too.** It has no op, so the command defines the result's shape itself (a Go type in `cmd/anfra`) and documents it in its `--help`. It is in no published schema and CI checks no change to it, but scripts rely on it, so it changes as a CLI-only command's flags do: with a deprecation period ([deprecation before removal](#deprecation-before-removal)).
+- **stderr holds the rest, structured:** each warning, then at most one error, last ([errors.md](errors.md#from-error-to-caller)), each a document with one top-level key saying what it is: `warning` or `error`.
+- **The exit code** is non-zero for a failure and for an invalid verdict, whatever the format.
+- **Questions, and notices for a person,** come only on a terminal, and not with `--non-interactive`: a command that would ask refuses instead, as it does without a terminal. `--no-interactive` is accepted as the same flag. Whether a run asks is the run's, not the command's: a command that asks on a terminal still writes structured output, and the format has no say in it (`--json` on a terminal still asks).
+
+| | YAML (default) | JSON (`--json`) |
+|---|---|---|
+| For | A person or an agent reading it, and YAML tools (`yq`) | Tools and languages that read only JSON (`jq`) |
+| stdout | The result as a YAML document | The result as one JSON document |
+| stderr | Multiple YAML documents, each after `---` | JSONL: one JSON document a line |
+| `openapi` | The OpenAPI document as YAML | The OpenAPI document as JSON |
+
+**Artifacts are the exception.** A few commands write something other than a result to stdout, and refuse `--json` for good: `serve`, which runs until stopped and writes a log; `completion`, a shell script; `help`, its text; and `query export` without `--link`, the file. Every other command writes structured output, and a test holds every command to that (`cmd/anfra`): a new command either has a structured result or is marked an artifact.
 
 ## The contract: `api/openapi.yaml`
 

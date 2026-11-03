@@ -51,8 +51,9 @@ revocation fails. In that case, revoke it on the server's `/account/connected-ap
 
 ## Scripted use
 
-All auth commands accept `--json` for one secret-free result on stdout without prompts or
-animation, and `--no-interactive` to disable prompts/animation with plain output. Explicit
+All auth commands accept `--json` for one secret-free result on stdout, and
+`--non-interactive` (or `--no-interactive`) to disable prompts and animation. A script passes both:
+`--json` alone still asks on a terminal. Explicit
 login still needs browser approval in either mode. JSON login reports `org_url` and
 `repo_destination_changed: false`. Status reports `orgs` (`name`, `url`, `repo_active`,
 `local_state` of `stored` or `sign_in_again`), nullable `repo_org_url`, and

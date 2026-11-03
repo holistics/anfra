@@ -65,7 +65,7 @@ func newAgentSetupCmd(use, deprecated string) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if deprecated != "" {
-				fmt.Fprintln(cmd.ErrOrStderr(), deprecated)
+				printWarning(cmd.ErrOrStderr(), "deprecated", deprecated)
 			}
 			o := agents.Options{Agents: ids, Out: cmd.OutOrStdout()}
 			if dir, ok := anfraRepoDir(); ok {
