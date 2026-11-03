@@ -241,6 +241,10 @@ and `"msg":"app.error"` (with the error's `kind`, `code`, `message`, `stack`) or
 grep '"service":"app"' <repo.logs> | grep '"app":"sales/overview.html"' | tail -20
 ```
 
+Each load of the app starts with an `"msg":"app.mounted"` line, with the file's `modified` time:
+after an edit, read only the lines after the last one, or you are reading the old file's errors.
+A stack names the file's own lines as `definition:<line>:<column>`, and the SDK's as `anfra-sdk`.
+
 The same errors are in the panel's Overview, under Problems. Read errors against
 [references/api.md](references/api.md#errors), by `code`: a `declaration_invalid` error
 (`ValidationError`) names a declaring line; `invalid_request` names a call made wrong (an
