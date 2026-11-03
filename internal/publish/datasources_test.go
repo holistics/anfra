@@ -63,36 +63,11 @@ func TestPublishOffersMissingDataSources(t *testing.T) {
 	if s.settings["warehouse"]["require_ssl"] != true || s.settings["dev"] != nil {
 		t.Errorf("created with settings %v, want warehouse's alone", s.settings)
 	}
-	if strings.Contains(errOut, "settings are not sent") {
-		t.Errorf("settings said unsent to a server that takes them: %q", errOut)
-	}
 	if _, ok := s.created["events"]; ok || s.sources["events"] != "snowflake" || !strings.Contains(errOut, "events is bigquery here and snowflake on the org") {
 		t.Errorf("events: created %v, now %s; said %q", s.created["events"], s.sources["events"], errOut)
 	}
 	if !strings.Contains(errOut, "Queries on the models using dev fail until the org has them") || len(s.deployed) != 1 {
 		t.Errorf("said %q; deployed %v", errOut, s.deployed)
-	}
-}
-
-// A server from before data sources had settings gets one without them, saying
-// so: the data source is still created.
-func TestPublishToAServerWithoutSettings(t *testing.T) {
-	s, url := newServer(t)
-	s.sources["events"] = "snowflake"
-	s.noSettings = true
-	dir := t.TempDir()
-	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": localSources})
-
-	ask := &script{t: t, answers: []string{"no", "yes"}} // dev: not now; warehouse: create
-	_, errOut, err := run(t, dir, Options{SetOrg: url}, ask.ask)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := s.created["warehouse"]; !ok || s.settings["warehouse"] != nil {
-		t.Errorf("warehouse: created %v, settings %v; want created without them", s.created["warehouse"], s.settings["warehouse"])
-	}
-	if strings.Count(errOut, "The settings of data source warehouse (postgresql) are not sent") != 1 {
-		t.Errorf("the unsent settings are not said once: %q", errOut)
 	}
 }
 

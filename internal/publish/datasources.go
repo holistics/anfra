@@ -175,15 +175,9 @@ var sameSQL = map[[2]string]bool{{"duckdb", "motherduck"}: true}
 
 // createDataSource checks the server can reach d, then creates it, or, when it
 // cannot, asks whether to create it anyway; created is false for one skipped. An
-// error is the server's (forbidden, for one who may not add data sources). A
-// server too old to take data sources' settings gets d without them, saying so.
+// error is the server's (forbidden, for one who may not add data sources).
 func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.DataSource, p *cliui.Printer, t *told, ask Prompt) (created bool, err error) {
 	check, err := c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection, Settings: d.Settings})
-	if len(d.Settings) > 0 && cloudapi.Unknown(err, "settings") {
-		t.Warn("data_source_settings_not_sent", "The settings of data source %s (%s) are not sent: the org's server takes none, so it runs with the defaults.", d.Name, d.DBType)
-		d.Settings = nil
-		check, err = c.TestDataSource(ctx, cloudapi.TestDataSourceIn{Name: d.Name, Type: d.DBType, Connection: d.Connection})
-	}
 	if err != nil {
 		return false, err
 	}
