@@ -486,8 +486,25 @@ describe('runtime errors', () => {
     expect(heard).toHaveBeenCalledTimes(120);
     mounted!.unmount();
     mounted = undefined;
+    // The host said where its errors go: nothing of the SDK's on its page's console.
+    expect(warned).not.toHaveBeenCalled();
+    warned.mockRestore();
+  });
+
+  it('say how many were over the budget on the console, unless the host says where errors go', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mount([corePlugin(backend())], [], { captureConsole: true });
+    for (let i = 0; i < 130; i += 1) {
+      fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'flood' } });
+      fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'warn', message: 'flood' } });
+    }
+    expect(logged).toHaveBeenCalledTimes(120);
+    mounted!.unmount();
+    mounted = undefined;
     expect(warned).toHaveBeenCalledWith(expect.stringMatching(/^anfra: 10 runtime errors of a Data App/));
     expect(warned).toHaveBeenCalledWith(expect.stringMatching(/^anfra: 10 console lines of a Data App/));
+    logged.mockRestore();
     warned.mockRestore();
   });
 
