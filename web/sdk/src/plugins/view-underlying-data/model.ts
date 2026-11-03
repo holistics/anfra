@@ -1,0 +1,181 @@
+/**
+ * What "View underlying data" shows for a point: the measure it is about, the model that measure
+ * aggregates (its base model), and the query that lists that model's rows behind the point. Pure:
+ * the frame half decides with it as the menu opens, and the body draws what it plans.
+ *
+ * A point's measure resolves when its result column names a model: a model's measure
+ * (`orders.total_revenue`), or an aggregate of one model field (`sum(orders.amount)`). A dataset
+ * metric or any other expression doesn't, and gets no entry.
+ */
+import type {
+  BackendFilter, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
+} from '../../common/types';
+import type { RowsTarget } from '../../common/menu';
+
+type Model = DatasetDescriptor['data_models'][number];
+type Field = Model['fields'][number];
+
+/** How many rows a page of the table holds. */
+export const PAGE_SIZE = 100;
+
+/** A measure of the point, with the model it aggregates. */
+export interface Candidate {
+  column: ColumnMeta;
+  model: Model;
+  /** The measure as AQL: the model's measure, or the aggregate rebuilt from the column. */
+  expression: string;
+  /** Why it can't be shown for this point, if it can't. */
+  disabled?: string;
+}
+
+/** What one of the modal's columns is. */
+export interface PlannedColumn {
+  /** Its key in each row. */
+  name: string;
+  label: string;
+  isMeasure: boolean;
+}
+
+/** A condition the point puts on the rows, as the reader reads it; `warning` for one it couldn't. */
+export interface Chip {
+  text: string;
+  warning?: boolean;
+}
+
+/** Everything the modal needs: what it says, and the request its pages are made from. */
+export interface Plan {
+  title: string;
+  chips: Chip[];
+  columns: PlannedColumn[];
+  /** The rows behind the point, with no page: each page adds one, the download none. */
+  request: QueryRequest;
+}
+
+export const NO_DATA = 'No data is available for this point';
+
+/** `count distinct` → `count_distinct`: an aggregation's name as an AQL function, the reverse of anfra-node's naming. */
+export function aggregateFunction (aggregation: string): string | undefined {
+  const name = aggregation.trim().toLowerCase().replace(/\s+/g, '_');
+  return /^[a-z][a-z0-9_]*$/.test(name) && name !== 'custom' ? name : undefined;
+}
+
+const modelOf = (dataset: DatasetDescriptor, name: string) => dataset.data_models.find((model) => model.name === name);
+
+/** The measure as AQL, when its column names a model: the model's own measure, or the aggregate of one of its fields. */
+function measureExpression (column: ColumnMeta, model: Model): string | undefined {
+  const field = model.fields.find((candidate) => candidate.name === column.fieldName);
+  if (!field || field.is_param) return undefined;
+  const ref = `${model.name}.${field.name}`;
+  if (field.is_custom_measure) return ref;
+  const fn = column.aggregation ? aggregateFunction(column.aggregation) : undefined;
+  return fn ? `${fn}(${ref})` : undefined;
+}
+
+/** Whether every row of the point leaves this measure empty. */
+const isEmpty = (rows: readonly Row[], measure: string) => rows.every((row) => row[measure] === null || row[measure] === undefined);
+
+/**
+ * The measures a point offers: the one the definition named, or else each the query has. Only
+ * those whose column resolves to a model; empty when none does, and so no entry shows.
+ */
+export function candidates (target: RowsTarget, columns: readonly ColumnMeta[], dataset: DatasetDescriptor): Candidate[] {
+  const measures = columns.filter((column) => column.isMeasure && (target.measure === undefined || column.name === target.measure));
+  return measures.flatMap((column) => {
+    const model = column.modelId ? modelOf(dataset, column.modelId) : undefined;
+    const expression = model && measureExpression(column, model);
+    if (!model || !expression) return [];
+    return [{
+      column, model, expression, ...(isEmpty(target.rows, column.name) ? { disabled: NO_DATA } : {}),
+    }];
+  });
+}
+
+/** The base model's fields a reader sees: its dimensions, not hidden, in the model's order. */
+export function visibleDimensions (model: Model): Field[] {
+  return model.fields.filter((field) => !field.is_custom_measure && !field.is_hidden && !field.is_param);
+}
+
+const OPERATOR_WORDS: Record<string, string> = {
+  is: 'is', is_not: 'is not', matches: 'in', contains: 'contains', greater_than: '>', less_than: '<', between: 'between',
+};
+
+/** A field reference's label, from the dataset; its own name when the dataset has none. */
+function labelOf (dataset: DatasetDescriptor, ref: string): string {
+  const dot = ref.lastIndexOf('.');
+  const field = dot > 0 ? modelOf(dataset, ref.slice(0, dot))?.fields.find((candidate) => candidate.name === ref.slice(dot + 1)) : undefined;
+  return field?.label || (dot > 0 ? ref.slice(dot + 1) : ref);
+}
+
+function chipOf (dataset: DatasetDescriptor, condition: SelectionCondition): Chip {
+  const label = labelOf(dataset, condition.field);
+  if (condition.operator === 'is_null') return { text: `${label} is empty` };
+  const word = OPERATOR_WORDS[condition.operator] ?? condition.operator.replace(/_/g, ' ');
+  return { text: `${label} ${word} ${condition.values.map(String).join(', ')}` };
+}
+
+/** An identifier the explore can alias a column with, not already taken. */
+function freeAlias (wanted: string, taken: Set<string>): string {
+  const base = /^[A-Za-z_][A-Za-z0-9_]*$/.test(wanted) ? wanted : 'value';
+  let alias = base;
+  for (let n = 2; taken.has(alias); n += 1) alias = `${base}_${n}`;
+  taken.add(alias);
+  return alias;
+}
+
+/**
+ * The modal for one measure of a point: the measure, then the base model's visible dimensions,
+ * grouped by them, where the point's conditions and the query's own inputs hold.
+ *
+ * Built on the query's request as it runs now: its controls' filters, its selection, its timezone.
+ * Its sorts and date drills are dropped: a sort names one of the query's own columns, which the
+ * explore may not have, and a drill would truncate the model's dates, while the point's condition
+ * already spans the bucket the reader clicked.
+ */
+export function plan (target: RowsTarget, candidate: Candidate, base: QueryRequest, columns: readonly ColumnMeta[], dataset: DatasetDescriptor): Plan {
+  const dimensions = visibleDimensions(candidate.model);
+  const taken = new Set<string>();
+  const planned: PlannedColumn[] = [];
+  const measureAlias = freeAlias(candidate.column.name, taken);
+  planned.push({ name: measureAlias, label: candidate.column.label || candidate.column.name, isMeasure: true });
+  const dimensionLines = dimensions.map((field) => {
+    const alias = freeAlias(field.name, taken);
+    planned.push({ name: alias, label: field.label || field.name, isMeasure: false });
+    return `    ${alias}: ${candidate.model.name}.${field.name}`;
+  });
+  const aql = [
+    'explore {',
+    ...(dimensionLines.length ? ['  dimensions {', dimensionLines.join(',\n'), '  }'] : []),
+    '  measures {',
+    `    ${measureAlias}: ${candidate.expression}`,
+    '  }',
+    '}',
+  ].join('\n');
+
+  const pointFilters: BackendFilter[] = target.conditions.map((condition) => ({
+    field: condition.field, operator: condition.operator, values: [...condition.values],
+  }));
+  const chips: Chip[] = target.expression
+    ? [{ text: 'Matches the selected point' }]
+    : target.conditions.map((condition) => chipOf(dataset, condition));
+  // A query-local dimension can't become a condition: the rows span all its values.
+  columns.filter((column) => !column.isMeasure && column.adhoc).forEach((column) => {
+    chips.push({ text: `Not filtered by ${column.label || column.name}`, warning: true });
+  });
+
+  return {
+    title: `View underlying data: ${candidate.column.label || candidate.column.name}`,
+    chips,
+    columns: planned,
+    request: {
+      dataset: base.dataset,
+      aql,
+      input: {
+        filters: [...base.input.filters, ...pointFilters],
+        conditions: [...base.input.conditions, ...(target.expression ? [{ expr: target.expression }] : [])],
+        sorts: [],
+        dateDrills: [],
+      },
+      ...(base.timezone ? { timezone: base.timezone } : {}),
+    },
+  };
+}

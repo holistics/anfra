@@ -20,6 +20,8 @@ async function buildScript (entry: string, globalName: string) {
     keepNames: true,
     write: false,
     metafile: true,
+    // A body may carry anfra-design's class layer, as a plugin tab does.
+    plugins: [raw],
   });
   return {
     contents: `export default ${JSON.stringify(result.outputFiles[0].text)};`,

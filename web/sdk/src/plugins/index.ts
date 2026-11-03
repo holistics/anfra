@@ -7,3 +7,4 @@ export { exportPlugin } from './export';
 export { lineagePlugin } from './lineage';
 export { renderPlugin, pictureFilename, type RenderPluginOptions } from './render';
 export { inspectPlugin } from './inspect';
+export { viewUnderlyingDataPlugin } from './view-underlying-data';
