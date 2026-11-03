@@ -135,7 +135,7 @@ describe('the modal', () => {
       dataset: 'sales',
       aql: expect.stringContaining('total: sum(orders.amount)'),
       input: {
-        filters: [{ field: 'users.region', operator: 'is', values: ['APAC'] }], conditions: [], sorts: [], dateDrills: [],
+        filters: [{ field: 'users.region', operator: 'is', values: ['APAC'] }], conditions: [], sorts: expect.arrayContaining([{ field: 'created_at', direction: 'desc' }]), dateDrills: [],
       },
       timezone: 'Asia/Singapore',
       page: 1,
