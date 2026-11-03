@@ -74,7 +74,6 @@ What a program should know becomes a warning document, with a code; what exists 
 | `data_source_type_differs` | "Data source X is postgresql here and bigquery on the org…" |
 | `data_sources_missing` | "Queries on the models using X fail until the org has them." |
 | `data_source_local_file` | "Data source X (duckdb) uses a local file that the org's server can't read…" |
-| `data_source_settings_not_sent` | "The settings of data source X are not sent…" |
 | `origin_not_allowed` | "The org does not allow X, which this repo's Data Apps may load from…" |
 | `origins_not_checked` | "Not checking the org's allowed origins: …" |
 | `last_published_elsewhere` | "This repo was last published by X on Y: publishing replaces that version." |
