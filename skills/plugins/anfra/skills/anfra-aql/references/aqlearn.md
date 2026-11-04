@@ -93,7 +93,7 @@ Explore-level filtering uses two blocks (same syntax, both AND-combined, both ap
 * `explore.filters {}` — conditions on **dimensions** (like SQL `WHERE`). E.g. `orders.status == 'delivered'`.
 * `explore.having {}` — conditions on **metrics / measures / aggregations** (like SQL `HAVING`). E.g. `order_count > 10`.
 
-Put each condition in the block matching its left operand — dimension conditions in `filters`, metric conditions in `having`.
+Put each condition in the block matching its left operand — dimension conditions in `filters`, metric conditions in `having`. See "Aliases in explore filters and having" for which names each block takes.
 
 Filter expressions use AQL Operators:
 ```aql
@@ -1008,8 +1008,14 @@ NOTE: The source model should be on the "many" side of the relationship.
 ### MUST use aliases in explore sorts
 We can **ONLY** use dimension and measure **aliases** inside `explore.sorts`.
 
-### Must NOT use aliases in explore filters
-We **CANNOT** use dimension and measure **aliases** inside `explore.filters`.
+### Aliases in explore filters and having
+* Metrics: put a metric condition in `explore.having`, by its **metric name**, **NEVER** by its alias in `explore.measures`. The metric doesn't need to be in `explore.measures`.
+  * DO: `measures { country_rank: country_rank_by_order_count }` + `having { country_rank_by_order_count < 11 }`
+  * DON'T: `measures { country_rank: country_rank_by_order_count }` + `having { country_rank < 11 }` — a measure alias in `having` is not supported right now.
+  * NOTE: a metric condition also works in `explore.filters`, by its measure **alias** instead of its metric name (e.g. `filters { country_rank < 11 }`). It gives the same result as `having`, but the metric must be in `explore.measures`.
+* Dimensions: in `explore.filters`, the left operand decides when the filter is applied:
+  * Model dimension (e.g. `orders.status == 'delivered'`): applied **before** aggregation, to the rows the measures aggregate.
+  * Dimension alias (e.g. `status == 'delivered'`): applied **after** aggregation, to the explore result rows.
 
 ### previous() must have order
 `order:` argument is **mandatory** in `previous()`.
@@ -1088,7 +1094,7 @@ metric total_area =
 ```
 
 
-`explore.filters` filters on **dimensions** (acts like `where()`); `explore.having` filters on **metrics/measures/aggregations** (acts like `filter()`). Both apply to **all** explore measures — prefer them over local `where()`/`filter()` for explore-wide filtering.
+`explore.filters` filters on **dimensions**: a model dimension acts like `where()`, filtering the rows **before** aggregation; a dimension alias filters the result **after** aggregation. `explore.having` filters on **metrics/measures/aggregations** (acts like `filter()`). See "Aliases in explore filters and having". Both apply to **all** explore measures — prefer them over local `where()`/`filter()` for explore-wide filtering.
 
 
 ### Avoid <= and >=
