@@ -18,7 +18,14 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
+
+	"github.com/holistics/anfra/shared/logkit"
 )
+
+// eventDevFrontend is a dev frontend URL that cannot be used.
+var eventDevFrontend = logkit.DefineEvent("appserve.dev_frontend",
+	"The dev frontend URL was ignored, and the built pages are served instead.",
+	"error")
 
 // Options configure a Server.
 type Options struct {
@@ -59,7 +66,7 @@ func newServer(opts Options, built fs.FS) *Server {
 		if u, err := url.Parse(opts.DevFrontendURL); err == nil && u.Scheme != "" && u.Host != "" {
 			s.dev = u
 		} else if opts.Logger != nil {
-			opts.Logger.Warn("Ignoring the dev frontend URL", "event", "appserve.dev_frontend", "error", "not an absolute URL: "+opts.DevFrontendURL)
+			opts.Logger.Warn("Ignoring the dev frontend URL", logkit.EventKey, eventDevFrontend, "error", "not an absolute URL: "+opts.DevFrontendURL)
 		}
 	}
 	if built != nil {

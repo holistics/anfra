@@ -34,10 +34,17 @@ func setup(t *testing.T) bool {
 	return installed
 }
 
-func TestOffWithoutAnEndpoint(t *testing.T) {
+// Without an endpoint, spans still get ids, for the log, and pass them on, but
+// are not sampled, so nothing is exported, and anfra-node is not told to export.
+func TestIdsWithoutAnEndpoint(t *testing.T) {
 	clearEnv(t)
-	if setup(t) {
-		t.Fatal("a tracer provider was installed with no endpoint set")
+	if !setup(t) {
+		t.Fatal("no tracer provider was installed with no endpoint set")
+	}
+	_, span := otel.Tracer("test").Start(context.Background(), "op")
+	defer span.End()
+	if sc := span.SpanContext(); !sc.IsValid() || sc.IsSampled() {
+		t.Errorf("span context = %+v, want valid ids, not sampled", sc)
 	}
 	if os.Getenv("H_OTEL_ENABLED") != "" {
 		t.Fatal("anfra-node was told to export with no endpoint set")

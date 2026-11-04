@@ -11,7 +11,14 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/holistics/anfra/shared/logkit"
 )
+
+// eventWatchFailed is a failure to watch the repo's Data Apps for changes.
+var eventWatchFailed = logkit.DefineEvent("appserve.watch",
+	"Watching the repo's Data Apps for changes failed, so a change may not reload their pages.",
+	"error")
 
 // listening counts an event stream in, starting the watcher for the first one. The repo is
 // watched only while at least one stream is open (a Data App open in a browser): the last one to
@@ -28,7 +35,7 @@ func (s *Server) listening() {
 	if err := s.watch(ctx); err != nil {
 		stop()
 		if s.opts.Logger != nil {
-			s.opts.Logger.Warn("Watching Data Apps failed", "event", "appserve.watch", "error", err.Error())
+			s.opts.Logger.Warn("Watching Data Apps failed", logkit.EventKey, eventWatchFailed, "error", err.Error())
 		}
 		return
 	}
@@ -101,7 +108,7 @@ func (s *Server) watch(ctx context.Context) error {
 					return
 				}
 				if s.opts.Logger != nil {
-					s.opts.Logger.Warn("Watching Data Apps failed", "event", "appserve.watch", "error", err.Error())
+					s.opts.Logger.Warn("Watching Data Apps failed", logkit.EventKey, eventWatchFailed, "error", err.Error())
 				}
 			}
 		}

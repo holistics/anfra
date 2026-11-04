@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -8,6 +9,17 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/holistics/anfra/shared/logkit"
+)
+
+// A sidecar's log events, as the host sees it (docs/designs/logs.md).
+var (
+	eventSpawned = logkit.DefineEvent("sidecar.spawned", "A sidecar process was started.", "name", "child_pid")
+	eventClosing = logkit.DefineEvent("sidecar.closing", "A sidecar process is being stopped.", "name", "child_pid")
+	// EventReady is a sidecar answering, started here (socket) or already
+	// running at a URL (owned false).
+	EventReady = logkit.DefineEvent("sidecar.ready", "A sidecar is ready for calls.", "name", "url", "socket", "owned")
 )
 
 // Process is the shared lifecycle of any spawned sidecar: orphan-prevention
@@ -42,7 +54,11 @@ type ProcSpec struct {
 
 // StartProcess spawns the sidecar spec describes. It does not wait for it to
 // be ready: that is the sidecar's protocol, its own package's to check.
-func StartProcess(spec ProcSpec) (*Process, error) {
+//
+// ctx carries the trace its log record joins, as slog.Handler.Handle's does: it
+// is not for cancellation, and does not bound the sidecar's life, which lasts
+// until Close (exec.Command, not exec.CommandContext).
+func StartProcess(ctx context.Context, spec ProcSpec) (*Process, error) {
 	// No sink supplied → discard. Callers (the sidecar supervisors / host) wire the
 	// real destinations; the supervisor takes no opinion on where output goes.
 	stdout := spec.Stdout
@@ -82,7 +98,7 @@ func StartProcess(spec ProcSpec) (*Process, error) {
 		}
 		return nil, fmt.Errorf("start %s: %w", spec.Name, err)
 	}
-	logger.Info("Sidecar started", "event", "sidecar.spawned", "name", spec.Name, "child_pid", cmd.Process.Pid)
+	logger.InfoContext(ctx, "Sidecar started", logkit.EventKey, eventSpawned, "name", spec.Name, "child_pid", cmd.Process.Pid)
 	return &Process{name: spec.Name, cmd: cmd, stdin: stdin, logger: logger}, nil
 }
 
@@ -92,11 +108,14 @@ func (p *Process) Logger() *slog.Logger { return p.logger }
 
 // Close stops the sidecar: SIGTERM, then SIGKILL to its process group if it has
 // not exited within 3s.
-func (p *Process) Close() {
+//
+// ctx carries the trace its log record joins, as slog.Handler.Handle's does: it
+// is not for cancellation, so a sidecar closed after Ctrl-C still gets its 3s.
+func (p *Process) Close(ctx context.Context) {
 	if p.cmd == nil || p.cmd.Process == nil {
 		return
 	}
-	p.logger.Info("Closing sidecar", "event", "sidecar.closing", "name", p.name, "child_pid", p.cmd.Process.Pid)
+	p.logger.InfoContext(ctx, "Closing sidecar", logkit.EventKey, eventClosing, "name", p.name, "child_pid", p.cmd.Process.Pid)
 	_ = p.cmd.Process.Signal(syscall.SIGTERM)
 
 	done := make(chan struct{})

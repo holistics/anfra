@@ -21,7 +21,7 @@ var tracer = otel.Tracer("github.com/holistics/anfra/cmd/anfra")
 // is down must not hold up a command that is done.
 const flushTimeout = 2 * time.Second
 
-// startTelemetry installs tracing, if the environment asks for it, and returns
+// startTelemetry installs tracing, exported if the environment asks for it, and returns
 // the function that flushes it. Telemetry never stops a command: a setup that
 // fails is reported and the command runs untraced.
 func startTelemetry(ctx context.Context) (flush func()) {
@@ -38,7 +38,8 @@ func startTelemetry(ctx context.Context) (flush func()) {
 }
 
 // traceSidecar traces each call to a sidecar, and carries the trace into it.
-// Without telemetry the spans are no-ops and nothing is propagated.
+// Its span is sampled only when telemetry exports, but its ids always go along,
+// so the sidecar's log records join this one's.
 func traceSidecar(sidecar string, rt http.RoundTripper) http.RoundTripper {
 	return otelhttp.NewTransport(rt, otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
 		return sidecar + " " + r.Method + " " + r.URL.Path

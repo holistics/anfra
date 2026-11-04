@@ -15,7 +15,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/holistics/anfra/shared/requestid"
+
+	"github.com/holistics/anfra/shared/logkit"
 )
+
+// eventRequest is the one record of each request answered
+// (docs/designs/logs.md).
+var eventRequest = logkit.DefineEvent("http.request",
+	"A request was answered: its outcome, and its error's code and scope if it failed, at the scope's level.",
+	"request_id", "method", "path", "status", "duration", "op", "canceled", "code", "scope", "internal_code", "error")
 
 // assignRequestID mints the request's id, returns it in the Request-Id header —
 // so a failure without a body still carries it — and puts it in the context for
@@ -149,7 +157,7 @@ func logRequests(next http.Handler, logger *slog.Logger) http.Handler {
 		next.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), entryKey{}, e)))
 
 		attrs := []slog.Attr{
-			slog.String("event", "http.request"),
+			slog.Any(logkit.EventKey, eventRequest),
 			slog.String("request_id", requestid.From(r.Context())),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),

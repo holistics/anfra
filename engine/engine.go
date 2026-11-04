@@ -381,14 +381,15 @@ func Connect(ctx context.Context, nodeURL, canalQueryURL string, opts ...Connect
 	}
 	canal := canalquery.New(cfg)
 	if err := canal.Start(ctx); err != nil {
-		node.Close()
+		node.Close(ctx)
 		return Clients{}, nil, fmt.Errorf("engine.Connect: canal-query at %s: %w", canalQueryURL, err)
 	}
 
 	clients := Clients{Node: node.Client(), CanalQuery: canal.Client()}
 	return clients, closerFunc(func() error {
-		canal.Close()
-		node.Close()
+		// External sidecars: closing stops no process, and logs nothing.
+		canal.Close(context.WithoutCancel(ctx))
+		node.Close(context.WithoutCancel(ctx))
 		return nil
 	}), nil
 }

@@ -54,13 +54,37 @@ Alert rules and dashboards depend on events and their attributes, so anfra keeps
   anfra-node defines its own the same way, with `defineEvent`.
 - **Every event is listed** in `api/log-events.json`: anfra's, generated from every package it links, and anfra-node's, from the version anfra pins. `make check` fails on a stale list (`scripts/log-events.sh diff`), so a change to an event is a change to the list, in the pull request that makes it, or that bumps anfra-node, where a reviewer sees it.
 - **The release notes say what changed.** `pnpm bump` compares the list at the last release with the list now and writes a "Log events" section: the events and attributes removed, and those new. A rename is a removal and an addition; the pull request says why. `pnpm bump` refuses a patch version with anything removed.
-- **A platform embedding the engine** logs `shared/`'s events (`http.request`, `routine.*`) under the same names, with its own beside them.
+- **A platform embedding the engine** logs `shared/`'s events (`http.request`, `routine.*`) under the same names, with its own beside them. `shared/logkit` is public API for that.
+- **A log event is not a product-analytics event.** It is a named log record, what OpenTelemetry calls an event (a log record's `EventName`), for operators. Tracking what users do, for product analytics, is another contract: other readers, user identity and consent, other guarantees. It gets its own events and its own list, never `logkit`'s, so neither can break the other. Where one place in the code is both, it writes both, each defined on its own side.
 
 ## Writing a log line
 
 - **Name the event for what happened,** not for the code that logs it: `routine.cut_short`, not `routine.log_cut_short`. The area is the part of the service it belongs to, as a reader would look for it: `serve`, `sidecar`, `routine`, `http`, `rpc`.
 - **Prefer adding to changing.** A new attribute is free; renaming one breaks whatever reads it.
+- **Log with a context wherever one is at hand** (`InfoContext(ctx, …)` and the like): it is what gives a record its trace. Which context, and whether to pass one down to get it, is [which trace a record joins](#which-trace-a-record-joins).
 - **What is checked:** in anfra, sloglint (`.golangci.yml`) refuses a message that is not constant or not capitalized, and a key that is not snake_case; in anfra-node, a test refuses an event defined twice or misnamed; the list refuses to go stale. Nothing checks that a record has an `event`, or that it logs the attributes its event lists: a reviewer does.
+
+### Which trace a record joins
+
+A record carries `trace_id` only if it is logged with a context that holds a span. Most records are logged where that context is already at hand. The question comes up when it is not: a function that logs takes no context today (a `Close()`), or the code that logs is a resource that outlives the request that created it.
+
+**Ask: does the trace wait on the work the record tells of?** If the work is done for one request, and that request takes longer when the work does, the record belongs in its trace: it explains where the request's time went. If the work serves many requests, or none, it belongs to no request's trace, and a record that claimed one would mislead.
+
+The same code can answer both ways, depending on who runs it. A sidecar started by a CLI command lives and dies inside that command: the command waits on its start, and on its stop, which can take 3s when it won't exit. Its records belong in the command's trace. The same sidecar started by `anfra serve` serves every request: its start and stop are the server's, and belong to none.
+
+**Then pick how the context reaches the record.** Go programs do one of three things:
+
+1. **Log without a context.** Right for a long-lived resource's own lifecycle, opened once and serving many: a connection pool, a server, `anfra serve`'s sidecars. It is what most libraries' `Close()` does. Wrong when the work is for one request: the request's trace then hides a cost it pays.
+2. **Log at the caller,** which has the context, around a call that takes none: `logger.InfoContext(ctx, …); x.Close()`. Right when only one caller cares, and the record is about the caller's decision. Wrong when the event is the callee's own: each caller then repeats it, and a new caller forgets it.
+3. **Pass the context down,** so the function logs with it. Right when the event is the function's own and its work is done for its caller. This is the usual answer once the first question says the trace waits on the work.
+
+**A context passed down for its trace is not for cancellation,** unless the function says otherwise. A parameter `ctx` reads as "cancel this to stop waiting", as in `http.Server.Shutdown(ctx)`, so a function that takes one only to log with says so in its doc comment, as `slog.Handler.Handle` does ("must not be used for cancellation"). Whether the function should also honour cancellation is a separate decision about its behaviour, made on its own merits, not as a side effect of logging: `sidecar.Process.Close(ctx)` does not, so a sidecar closed after Ctrl-C still gets its 3s to exit.
+
+**What the caller passes:**
+
+- Its own context, when it has one for the work.
+- `context.WithoutCancel(ctx)`, when the only context it has is canceled or may be, and the callee might be changed to honour cancellation later: the trace stays, the cancellation goes.
+- Never a context kept in a struct to log with later: Go's rule for contexts, and the trace it holds may have ended. A resource that logs at its close takes the context at its close.
 
 ## Logs and the CLI
 
