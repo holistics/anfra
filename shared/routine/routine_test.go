@@ -117,7 +117,7 @@ func TestEveryCarriesOnAfterAnError(t *testing.T) {
 	})
 	g.Start(context.Background())
 	waitFor(t, again, "a second run")
-	if !strings.Contains(l.String(), "routine.failed") || !strings.Contains(l.String(), "boom") {
+	if !strings.Contains(l.String(), "event=routine.failed") || !strings.Contains(l.String(), "boom") {
 		t.Errorf("the failure was not logged:\n%s", l)
 	}
 }
@@ -172,7 +172,7 @@ func TestStopCancelsARunAtItsDeadline(t *testing.T) {
 	if err := stopWithin(t, g, 20*time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Stop = %v, want the deadline's error", err)
 	}
-	if !strings.Contains(l.String(), "routine.cut_short") {
+	if !strings.Contains(l.String(), "event=routine.cut_short") {
 		t.Errorf("the cut-short run was not logged:\n%s", l)
 	}
 }
@@ -293,7 +293,7 @@ func TestStopCancelsAWorkerAtItsDeadline(t *testing.T) {
 	if err := stopWithin(t, g, 20*time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Stop = %v, want the deadline's error", err)
 	}
-	if !strings.Contains(l.String(), "routine.cut_short") {
+	if !strings.Contains(l.String(), "event=routine.cut_short") {
 		t.Errorf("the cut-short worker was not logged:\n%s", l)
 	}
 }

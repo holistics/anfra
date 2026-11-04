@@ -76,7 +76,7 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 	defer lg.Close()
 	// The exporter's failures (a collector down) go to the log, not the terminal.
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		lg.Logger.Warn("telemetry", "error", err)
+		lg.Logger.Warn("Telemetry failed", "event", "telemetry.failed", "error", err)
 	}))
 
 	return fn(ctx, hostContext{

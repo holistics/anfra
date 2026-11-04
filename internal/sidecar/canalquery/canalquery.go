@@ -44,7 +44,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 			return fmt.Errorf("canal-query at %s not ready: %w", c.cfg.CanalQueryURL, err)
 		}
 		c.cfg.Wrap(Name, c.client.http)
-		c.cfg.Log().Info("sidecar.ready", "name", Name, "url", c.cfg.CanalQueryURL, "owned", false)
+		c.cfg.Log().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "url", c.cfg.CanalQueryURL, "owned", false)
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 		return err
 	}
 	c.cfg.Wrap(Name, c.client.http)
-	c.proc.Logger().Info("sidecar.ready", "name", Name, "socket", c.socketPath)
+	c.proc.Logger().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "socket", c.socketPath)
 	return nil
 }
 

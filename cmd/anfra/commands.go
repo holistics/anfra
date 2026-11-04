@@ -402,6 +402,7 @@ func logFailure(ctx context.Context, logger *slog.Logger, name string, err error
 		level = slog.LevelError
 	}
 	attrs := []slog.Attr{
+		slog.String("event", "command.failed"),
 		slog.String("command", name),
 		slog.String("code", pub.String()),
 		slog.String("scope", string(pub.Scope())),
@@ -410,7 +411,7 @@ func logFailure(ctx context.Context, logger *slog.Logger, name string, err error
 		attrs = append(attrs, slog.String("internal_code", e.Code.Qualified()))
 	}
 	attrs = append(attrs, slog.String("error", err.Error()))
-	logger.LogAttrs(ctx, level, "command.failed", attrs...)
+	logger.LogAttrs(ctx, level, "Command failed", attrs...)
 }
 
 // delivery is how the CLI delivers an export: its file to stdout, or to output,

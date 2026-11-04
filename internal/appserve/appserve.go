@@ -59,7 +59,7 @@ func newServer(opts Options, built fs.FS) *Server {
 		if u, err := url.Parse(opts.DevFrontendURL); err == nil && u.Scheme != "" && u.Host != "" {
 			s.dev = u
 		} else if opts.Logger != nil {
-			opts.Logger.Warn("appserve.dev_frontend", "error", "not an absolute URL: "+opts.DevFrontendURL)
+			opts.Logger.Warn("Ignoring the dev frontend URL", "event", "appserve.dev_frontend", "error", "not an absolute URL: "+opts.DevFrontendURL)
 		}
 	}
 	if built != nil {
