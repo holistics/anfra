@@ -4,12 +4,12 @@ package cliauth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -40,11 +40,11 @@ func credentialKey(org cloudapi.Org) string { return org.String() }
 func withCredentialLock(ctx context.Context, use func(*credentialInventory, string) error) error {
 	dir := home.Dir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("cannot create authentication directory %q; check directory permissions and available disk space", dir)
+		return clierr.Precondition("cannot create authentication directory %q; check directory permissions and available disk space", dir)
 	}
 	lock, err := os.OpenFile(filepath.Join(dir, "credentials.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return fmt.Errorf("cannot open the authentication lock in %q; check directory and credentials.lock permissions", dir)
+		return clierr.Precondition("cannot open the authentication lock in %q; check directory and credentials.lock permissions", dir)
 	}
 	defer lock.Close()
 	if err := acquireCredentialLock(ctx, lock); err != nil {
@@ -58,14 +58,14 @@ func withCredentialLock(ctx context.Context, use func(*credentialInventory, stri
 		defer f.Close()
 		info, statErr := f.Stat()
 		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-			return fmt.Errorf("cannot use authentication file %q; it must be a regular file readable and writable only by its owner (mode 0600)", path)
+			return clierr.Precondition("cannot use authentication file %q; it must be a regular file readable and writable only by its owner (mode 0600)", path)
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(f, 4<<20+1))
 		if readErr != nil || len(raw) > 4<<20 || jsonkit.Unmarshal(raw, &inventory) != nil || inventory.Version != 1 || inventory.Entries == nil {
-			return fmt.Errorf("cannot read valid authentication data from %q; restore a valid backup, or move the file aside and run anfra auth login for each organization; moving it does not revoke server access", path)
+			return clierr.Precondition("cannot read valid authentication data from %q; restore a valid backup, or move the file aside and run anfra auth login for each organization; moving it does not revoke server access", path)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("cannot read authentication file %q; check file and directory permissions", path)
+		return clierr.Precondition("cannot read authentication file %q; check file and directory permissions", path)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -80,7 +80,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".credentials-*")
 	if err != nil {
-		return fmt.Errorf("cannot create a temporary authentication file in %q; check directory permissions and available disk space", filepath.Dir(path))
+		return clierr.Precondition("cannot create a temporary authentication file in %q; check directory permissions and available disk space", filepath.Dir(path))
 	}
 	temp := f.Name()
 	defer os.Remove(temp)
@@ -102,7 +102,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 		err = syncCredentialDirectory(path)
 	}
 	if err != nil {
-		return fmt.Errorf("could not safely save authentication to %q; check directory permissions and available disk space, then run anfra auth login again", path)
+		return clierr.Precondition("could not safely save authentication to %q; check directory permissions and available disk space, then run anfra auth login again", path)
 	}
 	return nil
 }

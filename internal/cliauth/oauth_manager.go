@@ -9,7 +9,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // Manager uses the machine's home directory; its zero value is ready for use.
@@ -38,7 +40,7 @@ func canonicalCredentialOrg(org cloudapi.Org) (cloudapi.Org, error) {
 var ErrAuthenticationRequired = errors.New("authentication required")
 
 func loginRequired(org cloudapi.Org) error {
-	return fmt.Errorf("%w; run anfra auth login %s", ErrAuthenticationRequired, org.String())
+	return apperr.Encapsulate(ErrAuthenticationRequired, clierr.Unauthenticated, fmt.Sprintf("Not signed in to %s: run anfra auth login %s.", org, org))
 }
 
 // StoredLogins is local inventory only, not proof of a usable remote grant.

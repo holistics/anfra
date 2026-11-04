@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -150,22 +150,22 @@ func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, e
 	}
 	resp, err := c.opts.HTTP.Do(req)
 	if err != nil {
-		return out, fmt.Errorf("reach %s: %w", c.org, err)
+		return out, clierr.Unreachablef(clierr.Org, err, "reach %s: %v", c.org, err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {
-		return out, fmt.Errorf("read %s's answer to %s: %w", c.org, op, err)
+		return out, clierr.Unreachablef(clierr.Org, err, "read %s's answer to %s: %v", c.org, op, err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		var env apperr.Envelope
 		if jsonkit.Unmarshal(raw, &env) != nil || env.Error.Code == "" {
-			return out, fmt.Errorf("%s answered %s with %s, not an anfra error: is it an anfra server?", c.org, op, resp.Status)
+			return out, clierr.Unreachablef(clierr.Org, nil, "%s answered %s with %s, not an anfra error: is it an anfra server?", c.org, op, resp.Status)
 		}
 		return out, &Error{Status: resp.StatusCode, Response: env.Error}
 	}
 	if err := jsonkit.Unmarshal(raw, &out); err != nil {
-		return out, fmt.Errorf("decode %s's answer to %s: %w", c.org, op, err)
+		return out, clierr.Unreachablef(clierr.Org, err, "decode %s's answer to %s: %v", c.org, op, err)
 	}
 	return out, nil
 }

@@ -13,7 +13,11 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/appstep"
+	"github.com/holistics/anfra/shared/apptracing"
 )
 
 type oauthCallbackResult struct {
@@ -30,12 +34,18 @@ const (
 	LoginSaving     LoginStage = "Saving authentication"
 )
 
+// signInStep is signing in to an org's server: public, so a failure in it says
+// which server it was, in its context, its message the failure's own.
+var signInStep = appstep.Define(clierr.NS, "sign_in", appstep.Public("sign in to {origin}"))
+
 // Login performs browser loopback login, saving the authoritative returned org,
 // which may differ from hint. openBrowser must honor its context and never log the URL.
-func (m Manager) Login(ctx context.Context, origin, hint string, openBrowser func(context.Context, string) error) (cloudapi.Org, error) {
+func (m Manager) Login(ctx context.Context, origin, hint string, openBrowser func(context.Context, string) error) (_ cloudapi.Org, err error) {
+	ctx, span := apptracing.Start(ctx, signInStep, "origin", origin)
+	defer span.End(&err)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	origin, err := cloudapi.ParseOrigin(origin)
+	origin, err = cloudapi.ParseOrigin(origin)
 	if err != nil {
 		return cloudapi.Org{}, errors.New("cliauth: invalid server origin")
 	}
@@ -53,11 +63,11 @@ func (m Manager) Login(ctx context.Context, origin, hint string, openBrowser fun
 	}
 	metadata, err := discoverOAuthServer(ctx, origin)
 	if err != nil {
-		return cloudapi.Org{}, fmt.Errorf("could not start authentication with %s: %w", origin, err)
+		return cloudapi.Org{}, err
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return cloudapi.Org{}, errors.New("could not listen on 127.0.0.1 for browser approval; allow anfra to open a local port and try again")
+		return cloudapi.Org{}, clierr.Precondition("Couldn't listen on 127.0.0.1 for browser approval: allow anfra to open a local port, and try again.")
 	}
 	defer listener.Close()
 	redirect := "http://" + listener.Addr().String() + "/oauth/callback"
@@ -103,17 +113,17 @@ waitCallback:
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return cloudapi.Org{}, errors.New("authentication timed out; run anfra auth login to try again")
+				return cloudapi.Org{}, clierr.Precondition("Authentication timed out: run anfra auth login to try again.")
 			}
 			return cloudapi.Org{}, ctx.Err()
 		case <-serveErrors:
-			return cloudapi.Org{}, errors.New("the local listener stopped before browser approval arrived; run anfra auth login again")
+			return cloudapi.Org{}, clierr.Precondition("The local listener stopped before browser approval arrived: run anfra auth login again.")
 		case err := <-launchErrors:
 			if err != nil {
 				if ctx.Err() != nil {
 					return cloudapi.Org{}, ctx.Err()
 				}
-				return cloudapi.Org{}, errors.New("could not open your browser; check your default browser and try again")
+				return cloudapi.Org{}, clierr.Precondition("Couldn't open your browser: check your default browser, and try again.")
 			}
 			launchErrors = nil
 		case callback = <-result:
@@ -121,12 +131,12 @@ waitCallback:
 		}
 	}
 	if callback.denied {
-		return cloudapi.Org{}, errors.New("the browser returned an authentication error or denied access; run anfra auth login again and complete approval in the browser")
+		return cloudapi.Org{}, apperr.New(clierr.Interrupted, "The browser returned an authentication error, or access was denied: run anfra auth login again, and complete approval in the browser.")
 	}
 	started := time.Now()
 	response, err := exchangeOAuthCode(ctx, &config, callback.code, verifier, origin+"/api")
 	if err != nil && !safeOpaqueToken(response.RefreshToken) && !safeOpaqueToken(response.AccessToken) {
-		return cloudapi.Org{}, fmt.Errorf("could not complete authentication with %s: %w", origin, err)
+		return cloudapi.Org{}, err
 	}
 	var entry storedCredential
 	failure := "the authentication server returned an invalid authentication grant; contact your server administrator if this happens again"
@@ -164,9 +174,9 @@ waitCallback:
 			revocationToken = response.AccessToken
 		}
 		if !safeOpaqueToken(revocationToken) || revokeOAuthCredential(cleanupCtx, metadata.RevocationEndpoint, revocationToken) != nil {
-			return cloudapi.Org{}, fmt.Errorf("%s; server access may still be active; remove it at %s/account/connected-apps before trying again", failure, origin)
+			return cloudapi.Org{}, clierr.Precondition("%s; server access may still be active: remove it at %s/account/connected-apps before trying again.", failure, origin)
 		}
-		return cloudapi.Org{}, fmt.Errorf("%s; server access was revoked; run anfra auth login again after resolving the problem", failure)
+		return cloudapi.Org{}, clierr.Precondition("%s; server access was revoked: run anfra auth login again after resolving the problem.", failure)
 	}
 	return entry.Org, nil
 }

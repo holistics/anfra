@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/holistics/anfra/internal/cliauth"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
@@ -36,14 +37,14 @@ func statusRepoOrg(dir string) (*string, error) {
 		if err == nil {
 			config, err := repoconfig.Read(dir)
 			if err != nil {
-				return nil, fmt.Errorf("cannot read valid repo configuration from %q; check file permissions and YAML syntax", repoconfig.Path(dir))
+				return nil, clierr.Precondition("Can't read a valid repo configuration from %q: check its permissions and YAML syntax.", repoconfig.Path(dir))
 			}
 			if config.Org.URL == "" {
 				return nil, nil
 			}
 			org, err := cloudapi.ParseOrg(config.Org.URL)
 			if err != nil {
-				return nil, fmt.Errorf("invalid org.url in %q; use an organization URL such as https://<server>/o/<org>", repoconfig.Path(dir))
+				return nil, clierr.Precondition("org.url in %q isn't an organization URL such as https://<server>/o/<org>.", repoconfig.Path(dir))
 			}
 			canonical := org.String()
 			return &canonical, nil

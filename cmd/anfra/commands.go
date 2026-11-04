@@ -14,7 +14,9 @@ import (
 	"strings"
 
 	"github.com/holistics/anfra/internal/app"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -197,7 +199,7 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 		if t == command.ArgObjectArray {
 			var objs []map[string]any
 			if jsonkit.Unmarshal(raw, &objs) != nil || objs == nil || slices.ContainsFunc(objs, func(o map[string]any) bool { return o == nil }) {
-				err = fmt.Errorf("--%s takes a JSON array of objects, such as '[{\"name\": \"a\"}]'", f.Name)
+				err = refused("--"+f.Name, "invalid", fmt.Sprintf("--%s takes a JSON array of objects, such as '[{\"name\": \"a\"}]'.", f.Name))
 				return
 			}
 			values[key] = raw
@@ -209,7 +211,7 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 		}
 		var obj map[string]any
 		if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
-			err = fmt.Errorf("--%s takes a JSON object, such as '{\"filters\": []}'", f.Name)
+			err = refused("--"+f.Name, "invalid", fmt.Sprintf("--%s takes a JSON object, such as '{\"filters\": []}'.", f.Name))
 			return
 		}
 		values[key] = raw
@@ -223,7 +225,7 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 			continue
 		}
 		if _, set := values[a.Name]; set {
-			return nil, fmt.Errorf("--%s takes a JSON object or its --%s.<field> flags, not both", a.Flag(), a.Flag())
+			return nil, refused("--"+a.Flag(), "invalid", fmt.Sprintf("--%s takes a JSON object or its --%s.<field> flags, not both.", a.Flag(), a.Flag()))
 		}
 		values[a.Name] = obj
 	}
@@ -477,7 +479,7 @@ func copyTo(output string, src io.Reader) error {
 	if _, err := io.Copy(dst, src); err != nil {
 		_ = dst.Close()
 		_ = os.Remove(output)
-		return fmt.Errorf("download the export: %w", err)
+		return clierr.Unreachablef(clierr.AnfraServe, err, "download the export: %v", err)
 	}
 	return dst.Close()
 }
@@ -497,7 +499,7 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("download the export: %w", err)
+			return nil, clierr.Unreachablef(clierr.AnfraServe, err, "download the export: %v", err)
 		}
 		if resp.StatusCode != http.StatusOK {
 			defer resp.Body.Close()
@@ -508,7 +510,7 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 					return nil, re
 				}
 			}
-			return nil, fmt.Errorf("download the export: %s", resp.Status)
+			return nil, clierr.Unreachablef(clierr.AnfraServe, nil, "download the export: the server answered %s", resp.Status)
 		}
 		return resp.Body, nil
 	}
@@ -551,7 +553,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 		node := anfranode.New(h.cfg)
 		if err := node.Start(ctx); err != nil {
 			closeAll()
-			return command.Clients{}, nil, fmt.Errorf("start anfra-node sidecar: %w", err)
+			return command.Clients{}, nil, apperr.Encapsulate(err, errcode.SidecarUnavailable, "start anfra-node sidecar: "+err.Error())
 		}
 		closers = append(closers, node.Close)
 		clients.Node = node.Client()
@@ -560,7 +562,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 		canal := canalquery.New(h.cfg)
 		if err := canal.Start(ctx); err != nil {
 			closeAll()
-			return command.Clients{}, nil, fmt.Errorf("start canal-query sidecar: %w", err)
+			return command.Clients{}, nil, apperr.Encapsulate(err, errcode.SidecarUnavailable, "start canal-query sidecar: "+err.Error())
 		}
 		closers = append(closers, canal.Close)
 		clients.CanalQuery = canal.Client()

@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
 )
 
@@ -26,7 +26,7 @@ func refreshRecoveryRequired(path string, org cloudapi.Org) bool {
 func markRefreshRecovery(path string, org cloudapi.Org) error {
 	marker, err := os.OpenFile(refreshRecoveryPath(path, org), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
-		return fmt.Errorf("cannot save authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
+		return clierr.Precondition("cannot save authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
 	}
 	err = marker.Sync()
 	closeErr := marker.Close()
@@ -37,7 +37,7 @@ func markRefreshRecovery(path string, org cloudapi.Org) error {
 		err = syncCredentialDirectory(path)
 	}
 	if err != nil {
-		return fmt.Errorf("cannot save authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
+		return clierr.Precondition("cannot save authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
 	}
 	return nil
 }
@@ -53,7 +53,7 @@ func clearRefreshRecovery(path string, org cloudapi.Org) error {
 	if err != nil {
 		// A failed removal sync must not make an uncertain save look usable locally.
 		_ = markRefreshRecovery(path, org)
-		return fmt.Errorf("cannot finish saving authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
+		return clierr.Precondition("cannot finish saving authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
 	}
 	return nil
 }

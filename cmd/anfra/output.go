@@ -4,6 +4,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -146,6 +147,9 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	root.SetHelpCommandGroupID(cliGroup)
 	root.SetCompletionCommandGroupID(cliGroup)
 	describeOutput(root)
+	// cobra's own refusals, of a flag or of the args, are the caller's mistakes.
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return flagRefused(err) })
+	refuseArgsAsRequests(root)
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		flag := "--json"
@@ -219,6 +223,48 @@ func helpSection(heading string, rows [][2]string) string {
 		}
 	}
 	return b.String()
+}
+
+// flagRefused is pflag's refusal of a flag as invalid_request, a violation on
+// the flag as typed: unknown, missing its value, or given one it can't parse.
+func flagRefused(err error) error {
+	msg := err.Error()
+	field, code := "flags", "invalid"
+	for _, p := range []struct {
+		re   *regexp.Regexp
+		code string
+	}{
+		{regexp.MustCompile(`^unknown (?:shorthand )?flag: (?:'.' in )?(-\S+)`), "unknown"},
+		{regexp.MustCompile(`^flag needs an argument: (?:'.' in )?(-\S+)`), "required"},
+		{regexp.MustCompile(`^invalid argument ".*" for "(?:-., )?(--?[^"]+)" flag`), "invalid"},
+		{regexp.MustCompile(`^bad flag syntax: (\S+)`), "invalid"},
+	} {
+		if m := p.re.FindStringSubmatch(msg); m != nil {
+			field, code = m[1], p.code
+			break
+		}
+	}
+	return apperr.NewWith(apperr.InvalidRequest, msg, apperr.Violate(apperr.Violation{Field: field, Code: code, Message: msg}))
+}
+
+// refuseArgsAsRequests makes cmd's and its commands' refusals of their args,
+// cobra's, invalid_request: too many, too few, an arg it doesn't take.
+func refuseArgsAsRequests(cmd *cobra.Command) {
+	for _, c := range cmd.Commands() {
+		refuseArgsAsRequests(c)
+	}
+	if cmd.Args == nil {
+		return
+	}
+	validate := cmd.Args
+	cmd.Args = func(c *cobra.Command, args []string) error {
+		err := validate(c, args)
+		if err == nil || apperr.From(err).Code != apperr.InternalServerError.Code() {
+			return err
+		}
+		return apperr.NewWith(apperr.InvalidRequest, err.Error(),
+			apperr.Violate(apperr.Violation{Field: "args", Code: "invalid", Message: err.Error()}))
+	}
 }
 
 // writeResult writes a CLI-only command's result, v, to cmd's stdout: for a

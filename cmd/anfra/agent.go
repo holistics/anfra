@@ -39,7 +39,7 @@ func newSkillsCmd() *cobra.Command {
 	run := install.RunE
 	install.RunE = func(cmd *cobra.Command, args []string) error {
 		if scope != "user" {
-			return fmt.Errorf("--scope %s is no longer supported: use `anfra agent setup`, which installs per user", scope)
+			return refused("--scope", "invalid", fmt.Sprintf("--scope %s is no longer supported: use `anfra agent setup`, which installs per user.", scope))
 		}
 		return run(cmd, args)
 	}

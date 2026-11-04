@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/holistics/anfra/shared/jsonkit"
 	"net/http"
@@ -160,7 +161,7 @@ func TestBrowserLoginCancellation(t *testing.T) {
 		cancel()
 		return nil
 	})
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
 	logins, err := (Manager{}).StoredLogins(context.Background())

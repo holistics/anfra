@@ -3,6 +3,7 @@ package cliauth
 import (
 	"context"
 	"errors"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 	"net/http"
 	"net/http/httptest"
@@ -189,5 +190,23 @@ func TestCodeExchangeFailureDoesNotRetryOrExposeSecrets(t *testing.T) {
 				t.Fatalf("code exchange made %d attempts", attempts.Load())
 			}
 		})
+	}
+}
+
+// A failure in signing in keeps its own code and message, and says which
+// server it was in its context: the public step, not words added to the
+// message.
+func TestLoginFailureSaysTheServerInItsContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	_, err := (Manager{}).Login(context.Background(), server.URL, "", func(context.Context, string) error { return nil })
+	r := apperr.From(err).Response("")
+	if r.Code != "unavailable" || strings.Contains(r.Message, server.URL) {
+		t.Errorf("code %s, message %q: want unavailable, the failure's own message", r.Code, r.Message)
+	}
+	if len(r.Context) != 1 || r.Context[0].Step != "anfra_cli.sign_in" || r.Context[0].Text != "sign in to '"+server.URL+"'" {
+		t.Errorf("context %+v, want the sign-in step", r.Context)
 	}
 }

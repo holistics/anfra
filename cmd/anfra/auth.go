@@ -14,8 +14,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/holistics/anfra/internal/cliauth"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // authLoginResult is auth login's result: the org signed in to.
@@ -148,7 +150,7 @@ func configuredCloudOrigin() (string, error) {
 	}
 	origin, err := cloudapi.ParseOrigin(raw)
 	if err != nil {
-		return "", fmt.Errorf("ANFRA_CLOUD_URL: %w", err)
+		return "", refused("ANFRA_CLOUD_URL", "invalid", "ANFRA_CLOUD_URL: "+err.Error())
 	}
 	return origin, nil
 }
@@ -157,12 +159,15 @@ func loginServer(address string) (origin, hint string, err error) {
 	if address == "" {
 		origin, err = configuredCloudOrigin()
 		if err == nil && origin == "" {
-			err = errors.New("provide an organization URL: anfra auth login https://<server>/o/<org>")
+			err = refused("org URL", "required", "Provide an organization URL: anfra auth login https://<server>/o/<org>.")
 		}
 		return origin, "", err
 	}
 	org, err := cloudapi.ParseOrg(address)
-	return org.Origin, org.Slug, err
+	if err != nil {
+		return "", "", refused("org URL", "invalid", err.Error())
+	}
+	return org.Origin, org.Slug, nil
 }
 
 // openAuthBrowser passes the authorization URL directly to the platform launcher,
@@ -203,7 +208,7 @@ func loginChoices(orgs []cliauth.StoredLogin) []cliui.OrgChoice {
 
 func (t *authTerminal) loginAddress(ctx context.Context, title string) (string, error) {
 	if !t.interactive {
-		return "", errors.New("provide an organization URL: anfra auth login https://<server>/o/<org>")
+		return "", refused("org URL", "required", "Provide an organization URL: anfra auth login https://<server>/o/<org>.")
 	}
 	origin, err := configuredCloudOrigin()
 	if err != nil {
@@ -259,10 +264,10 @@ func (t *authTerminal) loginOrg(ctx context.Context, address string) (cloudapi.O
 		return loginErr
 	})
 	if errors.Is(err, context.Canceled) {
-		return org, errors.New("authentication canceled")
+		return org, apperr.New(clierr.Interrupted, "Authentication canceled.")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return org, errors.New("authentication timed out; run anfra auth login again and complete approval in the browser")
+		return org, clierr.Precondition("Authentication timed out: run anfra auth login again, and complete approval in the browser.")
 	}
 	return org, err
 }
@@ -277,17 +282,21 @@ func (t *authTerminal) pickStored(ctx context.Context, orgs []cliauth.StoredLogi
 
 func logoutOrg(ctx context.Context, args []string, terminal *authTerminal) (cloudapi.Org, error) {
 	if len(args) != 0 {
-		return cloudapi.ParseOrg(args[0])
+		org, err := cloudapi.ParseOrg(args[0])
+		if err != nil {
+			return cloudapi.Org{}, refused("org URL", "invalid", err.Error())
+		}
+		return org, nil
 	}
 	if !terminal.interactive {
-		return cloudapi.Org{}, errors.New("provide an organization URL: anfra auth logout https://<server>/o/<org>")
+		return cloudapi.Org{}, refused("org URL", "required", "Provide an organization URL: anfra auth logout https://<server>/o/<org>.")
 	}
 	orgs, err := (cliauth.Manager{}).StoredLogins(ctx)
 	if err != nil {
 		return cloudapi.Org{}, err
 	}
 	if len(orgs) == 0 {
-		return cloudapi.Org{}, errors.New("no saved authentication to sign out of")
+		return cloudapi.Org{}, apperr.New(apperr.NotFound, "No saved login to sign out of.")
 	}
 	return terminal.pickStored(ctx, orgs)
 }
