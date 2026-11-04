@@ -18,6 +18,27 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 )
 
+// authLoginResult is auth login's result: the org signed in to.
+type authLoginResult struct {
+	// Message is the outcome, in a sentence.
+	Message string `json:"message"`
+	OrgURL  string `json:"org_url"`
+}
+
+// authLogoutResult is auth logout's result: the org signed out of, here and
+// on its server.
+type authLogoutResult struct {
+	// Message is the outcome, in a sentence.
+	Message string `json:"message"`
+	OrgURL  string `json:"org_url"`
+	// LocalRemoved: no login for the org is saved here anymore.
+	LocalRemoved bool `json:"local_removed"`
+	// RemoteRevocationConfirmed: the org's server revoked the login.
+	RemoteRevocationConfirmed bool `json:"remote_revocation_confirmed"`
+	// Hints are what to do next; absent when nothing is.
+	Hints []string `json:"hints,omitempty"`
+}
+
 func newAuthCmd() *cobra.Command {
 	auth := &cobra.Command{Use: "auth", Short: "Manage organization authentication"}
 	// --json and --non-interactive are the root's: the one sets the answer's
@@ -29,7 +50,8 @@ func newAuthCmd() *cobra.Command {
 	}
 	auth.AddCommand(&cobra.Command{
 		Use: "login [<org URL>]", Short: "Authenticate with an organization",
-		Long: "Authenticate through your browser. Choose an organization or enter its URL.\n\nSupply an organization URL when using --non-interactive or without a\nterminal. Browser approval is required.",
+		Long: "Authenticate through your browser. Choose an organization or enter its URL.\n\nSupply an organization URL when using --non-interactive or without a\nterminal. Browser approval is required. It saves the org's login on this\nmachine, and never changes the repo's publish destination.\n\n" +
+			"Its result is message, the outcome, and org_url, the org signed in to.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t := terminalFor(cmd)
@@ -47,23 +69,15 @@ func newAuthCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if structuredAsked() {
-				return writeStructured(cmd.OutOrStdout(), struct {
-					OrgURL                 string `json:"org_url"`
-					RepoDestinationChanged bool   `json:"repo_destination_changed"`
-				}{OrgURL: org.String()})
-			}
-			styles := cliui.TerminalStyles{}
-			if t.interactive {
-				styles = cliui.NewTerminalStyles(cmd.OutOrStdout())
-			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s.\n", styles.Success.Render("Authenticated with"), org)
-			return err
+			return writeResult(cmd, authLoginResult{Message: fmt.Sprintf("Signed in to %s.", org), OrgURL: org.String()})
 		},
 	})
 	auth.AddCommand(&cobra.Command{
 		Use: "logout [<org URL>]", Short: "Sign out of an organization",
-		Long: "Choose a saved organization to sign out of, or supply its URL.\n\nThis manages authentication on this machine and ignores the repo's linked\norganization. An organization URL is required without an interactive terminal.",
+		Long: "Choose a saved organization to sign out of, or supply its URL.\n\nThis manages authentication on this machine and ignores the repo's linked\norganization. An organization URL is required without an interactive terminal.\n\n" +
+			"Its result is message, the outcome; org_url; local_removed, whether the login saved here is\n" +
+			"gone; and remote_revocation_confirmed, whether the server revoked it. When the server couldn't,\n" +
+			"it fails with command_failed, whose details are that result.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t := terminalFor(cmd)
@@ -77,37 +91,43 @@ func newAuthCmd() *cobra.Command {
 				result, logoutErr = (cliauth.Manager{}).Logout(ctx, org)
 				return logoutErr
 			})
-			if structuredAsked() && (err == nil || result.LocalRemoved) {
-				if writeErr := writeStructured(cmd.OutOrStdout(), result); writeErr != nil {
-					return writeErr
-				}
-			}
-			if err != nil {
+			res := authLogoutResult{OrgURL: org.String(), LocalRemoved: result.LocalRemoved, RemoteRevocationConfirmed: result.RemoteRevocationConfirmed}
+			switch {
+			case err != nil && result.LocalRemoved:
+				// Gone from here, maybe not from the server: a credential left live.
+				res.Message = fmt.Sprintf("Signed out of %s on this machine, but couldn't revoke the login on the server.", org)
+				res.Hints = []string{fmt.Sprintf("Revoke it at %s/account/connected-apps.", org.Origin)}
+				return commandFailedWith(res.Message, res)
+			case err != nil:
 				return err
+			case result.RemoteRevocationConfirmed:
+				res.Message = fmt.Sprintf("Signed out of %s.", org)
+			default:
+				res.Message = fmt.Sprintf("No saved login for %s: nothing to sign out of.", org)
 			}
-			if !structuredAsked() {
-				styles := cliui.TerminalStyles{}
-				if t.interactive {
-					styles = cliui.NewTerminalStyles(cmd.OutOrStdout())
-				}
-				if result.RemoteRevocationConfirmed {
-					_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s.\n", styles.Success.Render("Signed out of"), org)
-				} else {
-					_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s.\n", styles.Warning.Render("No saved authentication for"), org)
-				}
-			}
-			return err
+			return writeResult(cmd, res)
 		},
 	})
 	auth.AddCommand(&cobra.Command{
-		Use: "status", Short: "Show authenticated organizations and this repo's publish destination",
+		Use: "status", Short: "Show the organizations signed in to on this machine",
+		Long: "Show the organizations signed in to on this machine, and whether the current repo's is one\n" +
+			"of them. It reads what's saved here and asks no server: a login revoked on its server still\n" +
+			"shows as valid.\n\n" +
+			"Its result opens with message, the outcome. orgs lists each org with a saved login, and the\n" +
+			"current repo's without one: its name and url, saved_login (valid, invalid when it can't be\n" +
+			"used, or missing), and current_repo, whether the current repo publishes to it. hints, last,\n" +
+			"are what to do next.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return printAuthStatus(cmd.Context(), ".", cmd.OutOrStdout(), structuredAsked(), output.nonInteractive)
+			res, err := authStatus(cmd.Context(), ".")
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, res)
 		},
 	})
 	for _, c := range auth.Commands() {
-		markPrettyOutput(c) // its own output for a person, until the prettifier covers it
+		markPrettyOutput(c)
 		if c.Name() == "login" || c.Name() == "logout" {
 			markInteractable(c) // which org, which login
 		}

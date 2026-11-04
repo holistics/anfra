@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -465,7 +466,7 @@ func TestAuthLoginBrowserFallback(t *testing.T) {
 			if callbackErr := <-observed; callbackErr != nil {
 				t.Fatal(callbackErr)
 			}
-			if out.String() != "Authenticated with "+origin+"/o/selected.\n" || strings.Contains(diagnostics.String(), "fallback-access-token") || strings.Contains(diagnostics.String(), "fallback-refresh-token") || strings.Contains(diagnostics.String(), "manual-callback-code") {
+			if out.String() != "Signed in to "+origin+"/o/selected.\n\nOrg URL:  "+origin+"/o/selected\n" || strings.Contains(diagnostics.String(), "fallback-access-token") || strings.Contains(diagnostics.String(), "fallback-refresh-token") || strings.Contains(diagnostics.String(), "manual-callback-code") {
 				t.Fatalf("incorrect login output: stdout=%q stderr=%q", out.String(), diagnostics.String())
 			}
 		})
@@ -484,11 +485,18 @@ func TestAuthStatusIsLocalInventoryWithoutTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.HasPrefix(text, "Authenticated organizations\n\n") || strings.Contains(text, "Access has not been checked") || !strings.Contains(text, "/o/one") || !strings.Contains(text, "/o/two") || strings.Contains(text, "must-not-print") || strings.Contains(text, "\x1b") {
+	if !strings.HasPrefix(text, "Not signed in to any org.\n\n") || strings.Contains(text, "must-not-print") || strings.Contains(text, "\x1b") {
 		t.Fatal(text)
 	}
-	if !strings.Contains(text, "  1. one\n     https://bi.example.com/o/one\n     Authenticate again: anfra auth login https://bi.example.com/o/one\n\n  2. two\n     https://other.example.com/o/two\n") {
-		t.Fatalf("authenticated organizations are not numbered in order: %s", text)
+	for _, want := range []string{
+		"  NAME   URL                               SAVED LOGIN   CURRENT REPO\n",
+		"  one    https://bi.example.com/o/one      invalid       false\n",
+		"  two    https://other.example.com/o/two   invalid       false\n",
+		"Hints:\n  Run `anfra auth login https://bi.example.com/o/one` to sign in to one again: its saved login can't be used.\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("lacks %q:\n%s", want, text)
+		}
 	}
 	if _, err := os.Stat(repoconfig.Path(".")); !os.IsNotExist(err) {
 		t.Fatal("status created repo config")
@@ -526,33 +534,28 @@ func TestAuthStatusRepoBoundariesAndJSON(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatal(err)
 		}
-		var result struct {
-			Orgs          []authStatusOrg `json:"orgs"`
-			RepoOrgURL    *string         `json:"repo_org_url"`
-			RemoteChecked bool            `json:"remote_checked"`
-		}
+		var result authStatusResult
 		if err := jsonkit.Unmarshal(out.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		if len(result.Orgs) != 2 || result.RepoOrgURL == nil || *result.RepoOrgURL != "https://bi.example.com/o/one" || !result.Orgs[0].RepoActive || result.Orgs[1].RepoActive || result.RemoteChecked || stderr.Len() != 0 || strings.Contains(out.String(), "must-not-print") || strings.Contains(out.String(), "\x1b") {
+		if len(result.Orgs) != 2 || result.Orgs[0] != (authStatusOrg{Name: "one", URL: "https://bi.example.com/o/one", SavedLogin: "invalid", CurrentRepo: true}) ||
+			result.Orgs[1].CurrentRepo || stderr.Len() != 0 || strings.Contains(out.String(), "must-not-print") || strings.Contains(out.String(), "\x1b") {
 			t.Fatalf("unsafe or incorrect result: %s stderr=%s", &out, &stderr)
 		}
-		var plain bytes.Buffer
-		if err := printAuthStatus(context.Background(), dir, &plain, false, true); err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(plain.String(), "* 1. one  (current org of this repo)\n     https://bi.example.com/o/one\n     Authenticate again: anfra auth login https://bi.example.com/o/one\n\n  2. two\n     https://other.example.com/o/two\n") || strings.Contains(plain.String(), "\x1b") || strings.Contains(plain.String(), "anfra publish") || strings.Contains(plain.String(), "Set by") {
-			t.Fatalf("repo publishing organization is not clearly identified: %s", &plain)
+		if result.Message != "Not signed in to any org, the current repo's (https://bi.example.com/o/one) included." {
+			t.Fatalf("message: %q", result.Message)
 		}
 	}
+	// The current repo's org without a login is listed, as missing.
 	writeConfig(repo, "org:\n  url: https://bi.example.com/o/missing\n")
-	var plain bytes.Buffer
-	if err := printAuthStatus(context.Background(), nested, &plain, false, false); err != nil || !strings.Contains(plain.String(), "This repo is configured to publish to https://bi.example.com/o/missing  Not authenticated\nRun anfra auth login https://bi.example.com/o/missing to authenticate\n") || strings.Contains(plain.String(), "(current org of this repo)") {
-		t.Fatalf("%s %v", &plain, err)
+	res, err := authStatus(context.Background(), nested)
+	if err != nil || len(res.Orgs) != 3 || res.Orgs[2] != (authStatusOrg{URL: "https://bi.example.com/o/missing", SavedLogin: "missing", CurrentRepo: true}) ||
+		!slices.Contains(res.Hints, "Run `anfra auth login https://bi.example.com/o/missing` to sign in to the current repo's org.") {
+		t.Fatalf("%+v %v", res, err)
 	}
 	for _, raw := range []string{"org: [", "org:\n  url: https://user:secret@bi.example.com/o/one\n"} {
 		writeConfig(repo, raw)
-		if err := printAuthStatus(context.Background(), nested, &bytes.Buffer{}, true, false); err == nil || strings.Contains(err.Error(), "secret") {
+		if _, err := authStatus(context.Background(), nested); err == nil || strings.Contains(err.Error(), "secret") {
 			t.Fatalf("config error: %v", err)
 		}
 	}
@@ -586,11 +589,9 @@ func TestAuthStatusRepoBoundariesAndJSON(t *testing.T) {
 		t.Fatalf("crossed home boundary: %v %v", url, err)
 	}
 	seedLoginInventory(t)
-	t.Cleanup(resetOutput)
-	output.json = true
-	var empty bytes.Buffer
-	if err := printAuthStatus(context.Background(), root, &empty, true, false); err != nil || empty.String() != "{\"orgs\":[],\"repo_org_url\":null,\"remote_checked\":false}\n" {
-		t.Fatalf("%s %v", &empty, err)
+	if res, err := authStatus(context.Background(), root); err != nil || len(res.Orgs) != 0 || res.Message != "Not signed in to any org." ||
+		!slices.Equal(res.Hints, []string{"Run `anfra auth login` to sign in."}) {
+		t.Fatalf("%+v %v", res, err)
 	}
 }
 

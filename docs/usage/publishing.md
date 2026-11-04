@@ -40,26 +40,29 @@ or HTTP on literal `127.0.0.1` or `[::1]` for local testing; see
 Credentials are in `<ANFRA_HOME>/credentials.json`, defaulting to
 `~/.anfra/credentials.json`, with mode `0600`. Keep this file private and out of git.
 Multiple server/org logins coexist. Status lists cached names and canonical URLs without
-network access or tokens. It marks the repo's publish destination, not a global active org.
+network access or tokens, so a login revoked on its server still shows as valid. It marks
+the current repo's org (its publish destination), not a global active org, and lists that
+org even when no login for it is saved.
 From nested directories it reads the nearest `.anfra/config.yml`, stopping at the nearest
 Git root (including worktrees), home directory or filesystem root. A nearer config without
-`org.url` stops lookup; malformed config is an error. Missing credentials say `Not signed in`.
-Locally expired grants and uncertain refresh state say `Sign in again`; access expiry alone
-does not. Cached names can be stale. Logout uses its address, else repo `org.url`, else an
+`org.url` stops lookup; malformed config is an error. A login is `valid`, `invalid`
+(locally expired grants, an uncertain refresh, a damaged entry; access expiry alone isn't),
+or `missing`, for the current repo's org with none saved. Cached names can be stale. Logout uses its address, else repo `org.url`, else an
 interactive picker. It removes only the selected local login, even when remote
 revocation fails. In that case, revoke it on the server's `/account/connected-apps` page.
 
 ## Scripted use
 
-All auth commands accept `--json` for one secret-free result on stdout, and
+All auth commands accept `--yaml` or `--json` for one secret-free result on stdout, and
 `--non-interactive` (or `--no-interactive`) to disable prompts and animation. A script passes both:
 `--json` alone still asks on a terminal. Explicit
-login still needs browser approval in either mode. JSON login reports `org_url` and
-`repo_destination_changed: false`. Status reports `orgs` (`name`, `url`, `repo_active`,
-`local_state` of `stored` or `sign_in_again`), nullable `repo_org_url`, and
-`remote_checked: false`. Logout distinguishes `local_removed` from
-`remote_revocation_confirmed`; failed revocation is nonzero even after local removal.
-Progress goes to stderr; final results go to stdout. `NO_COLOR` disables colors, not
+login still needs browser approval in either mode. Each result opens with `message`, the
+outcome, and status's and logout's end with `hints`, what to do next. Login reports `org_url`;
+it never changes the repo's destination. Status reports `orgs`, each with `name` (absent
+without a saved login), `url`, `saved_login` (`valid`, `invalid` or `missing`) and
+`current_repo`. Logout reports `org_url`, `local_removed` and `remote_revocation_confirmed`;
+a failed revocation after local removal fails with `command_failed`, whose details are that
+result. Progress goes to stderr; final results go to stdout. `NO_COLOR` disables colors, not
 keyboard navigation. Auth remains machine-local, outside the HTTP/MCP command registry.
 
 ## Publish a repo

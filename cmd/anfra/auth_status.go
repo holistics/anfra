@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -64,67 +63,88 @@ func statusRepoOrg(dir string) (*string, error) {
 	}
 }
 
-type authStatusOrg struct {
-	Name       string `json:"name"`
-	URL        string `json:"url"`
-	RepoActive bool   `json:"repo_active"`
-	LocalState string `json:"local_state"`
+// authStatusResult is auth status's result: the logins saved on this machine,
+// read offline (docs/usage/publishing.md).
+type authStatusResult struct {
+	// Message is the outcome, in a sentence.
+	Message string          `json:"message"`
+	Orgs    []authStatusOrg `json:"orgs"`
+	// Hints are what to do next; absent when nothing is.
+	Hints []string `json:"hints,omitempty"`
 }
 
-func printAuthStatus(ctx context.Context, dir string, out io.Writer, machine, noInteractive bool) error {
+// authStatusOrg is an org with a saved login, or the current repo's without
+// one.
+type authStatusOrg struct {
+	// Name is the org's, as its login saved it; absent without a login.
+	Name string `json:"name,omitempty"`
+	URL  string `json:"url"`
+	// SavedLogin is valid, invalid (expired, an interrupted refresh, a
+	// damaged entry: it can't be used), or missing: none is saved.
+	SavedLogin string `json:"saved_login" pretty:",tone=valid:good invalid:warn missing:warn"`
+	// CurrentRepo: the current repo publishes to this org.
+	CurrentRepo bool `json:"current_repo"`
+}
+
+// authStatus is the logins saved on this machine, and whether the repo at dir
+// publishes to one of them. It asks no server.
+func authStatus(ctx context.Context, dir string) (authStatusResult, error) {
 	repoURL, err := statusRepoOrg(dir)
 	if err != nil {
-		return err
+		return authStatusResult{}, err
 	}
 	logins, err := (cliauth.Manager{}).StoredLogins(ctx)
 	if err != nil {
-		return err
+		return authStatusResult{}, err
 	}
-	result := struct {
-		Orgs          []authStatusOrg `json:"orgs"`
-		RepoOrgURL    *string         `json:"repo_org_url"`
-		RemoteChecked bool            `json:"remote_checked"`
-	}{Orgs: make([]authStatusOrg, 0, len(logins)), RepoOrgURL: repoURL}
-	found := false
+	res := authStatusResult{Orgs: make([]authStatusOrg, 0, len(logins)+1)}
+	var repoOrg *authStatusOrg
+	valid := 0
 	for _, login := range logins {
-		active := repoURL != nil && *repoURL == login.Org.String()
-		found = found || active
-		result.Orgs = append(result.Orgs, authStatusOrg{Name: cliui.SafeText(login.Name), URL: login.Org.String(), RepoActive: active, LocalState: login.LocalState})
-	}
-	if machine {
-		return writeStructured(out, result)
-	}
-	styles := cliui.TerminalStyles{}
-	if !noInteractive {
-		styles = cliui.NewTerminalStyles(out)
-	}
-	fmt.Fprintln(out, styles.Heading.Render("Authenticated organizations"))
-	fmt.Fprintln(out)
-	if len(result.Orgs) == 0 {
-		if repoURL != nil {
-			_, err = fmt.Fprintln(out, "No authenticated organizations.")
+		o := authStatusOrg{Name: cliui.SafeText(login.Name), URL: login.Org.String(), SavedLogin: "valid"}
+		if login.LocalState == "sign_in_again" {
+			o.SavedLogin = "invalid"
+			res.Hints = append(res.Hints, fmt.Sprintf("Run `anfra auth login %s` to sign in to %s again: its saved login can't be used.", o.URL, o.Name))
 		} else {
-			_, err = fmt.Fprintf(out, "No authenticated organizations. Run %s to authenticate.\n", styles.Code.Render("anfra auth login"))
+			valid++
+		}
+		o.CurrentRepo = repoURL != nil && *repoURL == o.URL
+		res.Orgs = append(res.Orgs, o)
+		if o.CurrentRepo {
+			repoOrg = &res.Orgs[len(res.Orgs)-1]
 		}
 	}
-	numberWidth := len(fmt.Sprint(len(result.Orgs)))
-	indent := fmt.Sprintf("%*s", numberWidth+4, "")
-	for i, org := range result.Orgs {
-		if i > 0 {
-			fmt.Fprintln(out)
-		}
-		line := fmt.Sprintf("  %*d. %s", numberWidth, i+1, styles.Heading.Render(org.Name))
-		if org.RepoActive {
-			line = styles.Selection.Render(fmt.Sprintf("* %*d. %s  (current org of this repo)", numberWidth, i+1, org.Name))
-		}
-		fmt.Fprintln(out, line)
-		fmt.Fprintln(out, indent+styles.Muted.Render(org.URL))
-		if org.LocalState == "sign_in_again" {
-			fmt.Fprintf(out, "%s%s %s %s\n", indent, styles.Warning.Render("Authenticate again:"), styles.Code.Render("anfra auth login"), styles.Link.Render(org.URL))
-		}
+	if repoURL != nil && repoOrg == nil {
+		res.Orgs = append(res.Orgs, authStatusOrg{URL: *repoURL, SavedLogin: "missing", CurrentRepo: true})
+		repoOrg = &res.Orgs[len(res.Orgs)-1]
 	}
-	if repoURL != nil && !found {
-		_, err = fmt.Fprintf(out, "\nThis repo is configured to publish to %s  %s\nRun %s to authenticate\n", styles.Link.Render(*repoURL), styles.Warning.Render("Not authenticated"), styles.Code.Render(fmt.Sprintf("anfra auth login %s", *repoURL)))
+	if repoOrg != nil && repoOrg.SavedLogin == "missing" {
+		res.Hints = append(res.Hints, fmt.Sprintf("Run `anfra auth login %s` to sign in to the current repo's org.", repoOrg.URL))
 	}
-	return err
+
+	signedIn := "Not signed in to any org"
+	if valid > 0 {
+		signedIn = fmt.Sprintf("Signed in to %d %s", valid, plural(valid, "org", "orgs"))
+	}
+	switch {
+	case repoOrg == nil:
+		res.Message = signedIn + "."
+	case repoOrg.SavedLogin == "valid":
+		res.Message = fmt.Sprintf("%s, including the current repo's, %s.", signedIn, repoOrg.Name)
+	case valid == 0:
+		res.Message = fmt.Sprintf("%s, the current repo's (%s) included.", signedIn, repoOrg.URL)
+	default:
+		res.Message = fmt.Sprintf("%s, but not the current repo's, %s.", signedIn, repoOrg.URL)
+	}
+	if len(logins) == 0 && repoOrg == nil {
+		res.Hints = append(res.Hints, "Run `anfra auth login` to sign in.")
+	}
+	return res, nil
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
