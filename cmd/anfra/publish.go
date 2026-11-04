@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/muesli/cancelreader"
 	"github.com/spf13/cobra"
 
 	"github.com/holistics/anfra/internal/app"
@@ -194,12 +195,22 @@ func stdinQuestions(ctx context.Context, in io.Reader, out io.Writer) (publish.P
 	return prompt, input
 }
 
-// readLines reads in's lines as they come, until its end or ctx's.
+// readLines reads in's lines as they come, until its end or ctx's. ctx's end
+// cancels a read waiting on a terminal, so no read outlives the command: in a
+// console, the next entry is read from the same terminal
+// (docs/implementations/console.md).
 func readLines(ctx context.Context, in io.Reader) chan string {
 	lines := make(chan string)
 	go func() {
 		defer close(lines)
-		r := bufio.NewReader(in)
+		cr, err := cancelreader.NewReader(in)
+		if err != nil {
+			return
+		}
+		defer cr.Close()
+		stop := context.AfterFunc(ctx, func() { cr.Cancel() })
+		defer stop()
+		r := bufio.NewReader(cr)
 		for {
 			line, err := r.ReadString('\n')
 			if line != "" || err == nil {

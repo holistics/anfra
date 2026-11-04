@@ -818,3 +818,33 @@ func TestStdinPromptAnswersAndStopsOnCancel(t *testing.T) {
 		t.Errorf("after Ctrl-C: %d, asked %q", choice, out.String())
 	}
 }
+
+// A question's read of stdin ends with the question: the next line goes to
+// whoever reads next, a console's prompt, not to a read left waiting.
+func TestReadLinesEndWithTheirContext(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	lines := readLines(ctx, r)
+	cancel()
+	select {
+	case _, open := <-lines:
+		if open {
+			t.Fatal("a line read with nothing written")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the read outlived its context")
+	}
+	if _, err := w.WriteString("next\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.SetReadDeadline(time.Now().Add(5 * time.Second))
+	got, err := bufio.NewReader(r).ReadString('\n')
+	if got != "next\n" {
+		t.Fatalf("the next reader got %q, %v", got, err)
+	}
+}
