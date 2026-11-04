@@ -1,12 +1,12 @@
 package publish
 
 import (
-	"fmt"
 	"io/fs"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/shared/repoformat"
 )
 
@@ -47,7 +47,7 @@ func selectFiles(dir string) (files []string, err error) {
 		return nil, err
 	}
 	if len(refused) > 0 {
-		return nil, fmt.Errorf("a publish carries regular files only; replace these with the files themselves: %s", strings.Join(refused, ", "))
+		return nil, clierr.Precondition("A publish carries regular files only: replace these with the files themselves: %s.", strings.Join(refused, ", "))
 	}
 	slices.Sort(files)
 	return files, nil

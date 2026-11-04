@@ -7,9 +7,12 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/envflag"
+	"github.com/holistics/anfra/internal/errcode"
 
 	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/meta"
@@ -70,8 +73,27 @@ func main() {
 		os.Exit(ec.code) // result already rendered; exit quietly
 	}
 	output.json = output.json || jsonAsked(os.Args[1:]) // flags that failed to parse set nothing
+	err = runError(ctx, err)
 	printError(os.Stderr, err, failureHint(err))
+	if apperr.From(err).Code == clierr.Interrupted.Code() {
+		os.Exit(130) // as a shell exits on an interrupt
+	}
 	os.Exit(1)
+}
+
+// runError is a failed run's err as the CLI tells it: a run the user
+// interrupted (Ctrl-C) as interrupted, whatever failed as it stopped; an
+// unknown command, cobra's, as unknown_command.
+func runError(ctx context.Context, err error) error {
+	switch code := apperr.From(err).Code; {
+	case code == clierr.Interrupted.Code():
+		return err
+	case ctx.Err() != nil:
+		return apperr.Encapsulate(err, clierr.Interrupted, "Interrupted.")
+	case code == apperr.InternalServerError.Code() && strings.HasPrefix(err.Error(), "unknown command "):
+		return apperr.Encapsulate(err, errcode.UnknownCommand, strings.TrimSpace(err.Error()))
+	}
+	return err
 }
 
 // settingRefused is an invalid switch as a violation of the variable that holds

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/update"
 )
 
@@ -269,8 +270,8 @@ func selectAgents(env Env, o Options) (agents []Agent, named bool, err error) {
 		}
 	}
 	if len(agents) == 0 {
-		return nil, false, fmt.Errorf("found no coding agent on this machine. Name yours with --agent, one of: %s.\n"+
-			"For any other agent, see %s", strings.Join(IDs(), ", "), ReadmeFor(""))
+		return nil, false, clierr.Precondition("Found no coding agent on this machine. Name yours with --agent, one of: %s.\n"+
+			"For any other agent, see %s.", strings.Join(IDs(), ", "), ReadmeFor(""))
 	}
 	return agents, false, nil
 }

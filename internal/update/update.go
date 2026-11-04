@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/shared/jsonkit"
 
@@ -81,7 +83,7 @@ func assetName() (string, error) {
 	case "darwin/arm64":
 		return "anfra-darwin-arm64", nil
 	default:
-		return "", fmt.Errorf("no anfra release build for %s/%s", runtime.GOOS, runtime.GOARCH)
+		return "", clierr.Precondition("There's no anfra release build for %s/%s.", runtime.GOOS, runtime.GOARCH)
 	}
 }
 
@@ -113,24 +115,24 @@ func Latest(ctx context.Context) (*Release, error) {
 	page := fmt.Sprintf("%s/%s/releases/latest", webBase, repoSlug)
 	resp, err := noRedirect(ctx, http.MethodGet, page)
 	if err != nil {
-		return nil, fmt.Errorf("check for a newer anfra: %w", err)
+		return nil, clierr.Unreachablef(clierr.GitHub, err, "check for a newer anfra: %v", err)
 	}
 	resp.Body.Close()
 	_, tag, ok := strings.Cut(resp.Header.Get("Location"), "/releases/tag/")
 	if resp.StatusCode < 300 || resp.StatusCode >= 400 || !ok || tag == "" || strings.Contains(tag, "/") {
-		return nil, fmt.Errorf("check for a newer anfra: %s answered %s, without pointing at a release", page, resp.Status)
+		return nil, clierr.Unreachablef(clierr.GitHub, nil, "check for a newer anfra: %s answered %s, without pointing at a release", page, resp.Status)
 	}
 	if tag, err = url.PathUnescape(tag); err != nil {
-		return nil, fmt.Errorf("check for a newer anfra: %s pointed at a release tag that isn't one: %w", page, err)
+		return nil, clierr.Unreachablef(clierr.GitHub, err, "check for a newer anfra: %s pointed at a release tag that isn't one: %v", page, err)
 	}
 	asset := fmt.Sprintf("%s/%s/releases/download/%s/%s", webBase, repoSlug, url.PathEscape(tag), want)
 	head, err := noRedirect(ctx, http.MethodHead, asset)
 	if err != nil {
-		return nil, fmt.Errorf("check for a newer anfra: %w", err)
+		return nil, clierr.Unreachablef(clierr.GitHub, err, "check for a newer anfra: %v", err)
 	}
 	head.Body.Close()
 	if head.StatusCode >= 400 {
-		return nil, fmt.Errorf("anfra %s has no build for this platform (%s) yet: its release may still be uploading, so try again in a few minutes", tagVersion(tag), want)
+		return nil, clierr.Unreachablef(clierr.GitHub, nil, "anfra %s has no build for this platform (%s) yet: its release may still be uploading, so try again in a few minutes", tagVersion(tag), want)
 	}
 	return &Release{Tag: tag, Version: tagVersion(tag), AssetURL: asset}, nil
 }
@@ -158,11 +160,11 @@ func LatestSkills(ctx context.Context) (string, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s", rawBase, skillsRepo, skillsRef, skillsManifest)
 	resp, err := get(ctx, url, lookupTimeout)
 	if err != nil {
-		return "", fmt.Errorf("check the latest anfra skills: %w", err)
+		return "", clierr.Unreachablef(clierr.GitHub, err, "check the latest anfra skills: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("check the latest anfra skills: GitHub returned %s", resp.Status)
+		return "", clierr.Unreachablef(clierr.GitHub, nil, "check the latest anfra skills: GitHub returned %s", resp.Status)
 	}
 	var m struct {
 		Version string `json:"version"`
@@ -206,11 +208,11 @@ func canonicalVersion(v string) string {
 func Apply(ctx context.Context, r *Release, progress io.Writer) error {
 	resp, err := get(ctx, r.AssetURL, downloadTimeout)
 	if err != nil {
-		return fmt.Errorf("download %s: %w", r.Tag, err)
+		return clierr.Unreachablef(clierr.GitHub, err, "download %s: %v", r.Tag, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s: GitHub returned %s", r.Tag, resp.Status)
+		return clierr.Unreachablef(clierr.GitHub, nil, "download %s: GitHub returned %s", r.Tag, resp.Status)
 	}
 	// Progress tracks the compressed bytes actually transferred; gzip.Reader then
 	// decompresses to the real binary for the self-replace (embed stays uncompressed).
@@ -226,6 +228,9 @@ func Apply(ctx context.Context, r *Release, progress io.Writer) error {
 	if err := selfupdate.Apply(gz, selfupdate.Options{}); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return fmt.Errorf("update failed and rollback also failed: %v (rollback: %v)", err, rerr)
+		}
+		if errors.Is(err, fs.ErrPermission) {
+			return clierr.Precondition("Can't replace this anfra: %v. Update it as the user that installed it.", err)
 		}
 		return fmt.Errorf("apply update: %w", err)
 	}

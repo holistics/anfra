@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/holistics/anfra/internal/agents"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
 )
@@ -123,7 +124,7 @@ func initRepo(dir string) (initResult, error) {
 	}
 	res.Dir = abs
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return res, fmt.Errorf("create %s: %w", dir, err)
+		return res, clierr.Precondition("Can't create %s: %v.", dir, err)
 	}
 	r := repo.Resolve(dir)
 	config, err := filepath.Rel(dir, r.ConfigDir)
@@ -151,7 +152,7 @@ func initRepo(dir string) (initResult, error) {
 	for _, s := range steps {
 		created, err := s.do(filepath.Join(dir, s.path))
 		if err != nil {
-			return res, fmt.Errorf("init %s: %w", s.path, err)
+			return res, clierr.Precondition("Can't set up %s: %v.", s.path, err)
 		}
 		res.Files = append(res.Files, initFile{Path: s.path, Changed: created})
 		if created {

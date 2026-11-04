@@ -1,8 +1,7 @@
 package publish
 
 import (
-	"fmt"
-
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
 )
@@ -15,7 +14,7 @@ func readOrg(dir string) (org cloudapi.Org, ok bool, err error) {
 		return org, false, err
 	}
 	if org, err = cloudapi.ParseOrg(c.Org.URL); err != nil {
-		return org, false, fmt.Errorf("%s: org.url: %w", repoconfig.Path(dir), err)
+		return org, false, clierr.Precondition("%s: org.url: %v.", repoconfig.Path(dir), err)
 	}
 	return org, true, nil
 }

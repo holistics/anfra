@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -60,18 +61,18 @@ func (a API) CreateReadToken(ctx context.Context, session, username, name, descr
 		TokenType string `json:"token_type"`
 	}
 	if err := a.do(ctx, http.MethodPost, "/v1/users/"+url.PathEscape(username)+"/tokens", session, body, &out); err != nil {
-		return Token{}, fmt.Errorf("create a MotherDuck token: %w", err)
+		return Token{}, clierr.Unreachablef(clierr.MotherDuck, err, "create a MotherDuck token: %v", err)
 	}
 	if out.ID == "" || out.Token == "" {
-		return Token{}, errors.New("create a MotherDuck token: the answer has no token")
+		return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "create a MotherDuck token: the answer has no token")
 	}
 	if out.TokenType != "read_scaling" {
 		// Not what was asked: one that may write is not given to an org.
 		t := Token{ID: out.ID}
 		if err := a.RevokeToken(ctx, session, username, t.ID); err != nil {
-			return Token{}, fmt.Errorf("MotherDuck made a %q token, not a read-only one, and revoking it failed (%v): revoke it in MotherDuck's settings", out.TokenType, err)
+			return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "MotherDuck made a %q token, not a read-only one, and revoking it failed (%v): revoke it in MotherDuck's settings", out.TokenType, err)
 		}
-		return Token{}, fmt.Errorf("MotherDuck made a %q token, not a read-only one; it is revoked", out.TokenType)
+		return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "MotherDuck made a %q token, not a read-only one; it is revoked", out.TokenType)
 	}
 	return Token{ID: out.ID, Name: name, Secret: out.Token}, nil
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/cliauth"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/meta"
@@ -45,7 +46,7 @@ func newPublishCmd() *cobra.Command {
 			"files, each path. Without: org (url, and name when the login knows it), revision, changed (false\n" +
 			"when these files were what the org had), replaced (the revision it replaced, when there was one),\n" +
 			"files (how many), and data_sources_created. hints, last, are what to do next. A repo that fails\n" +
-			"validation fails with repo_invalid, whose details are validate's answer.",
+			"validation fails with repo_invalid, whose details are validate's answer, as validation.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Flags().Changed("dry-run") {
@@ -86,7 +87,7 @@ func newPublishCmd() *cobra.Command {
 				MotherDuck: md,
 			})
 			if err != nil && cmd.Context().Err() != nil { // Ctrl-C, maybe at a question, which took its default
-				return errors.New("interrupted: not published")
+				return apperr.New(clierr.Interrupted, "Interrupted: not published.")
 			}
 			if err != nil {
 				return err
@@ -207,7 +208,7 @@ func validateHere(ctx context.Context, errOut io.Writer) error {
 		}
 		return err
 	}
-	return apperr.NewWith(repoInvalid, "The repo has errors: fix them and publish again.", jsontext.Value(body))
+	return apperr.NewWith(clierr.RepoInvalid, "The repo has errors: fix them and publish again.", clierr.RepoProblems{Validation: jsontext.Value(body)})
 }
 
 // storedOrgName is an org's name as its stored login has it; "" when there's

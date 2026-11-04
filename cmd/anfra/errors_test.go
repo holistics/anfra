@@ -2,11 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json/jsontext"
+	"errors"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/clierr"
+	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -146,5 +151,73 @@ func TestPrintErrorWithAHint(t *testing.T) {
 	}
 	if want := "Run `anfra query --help` for usage.\nRun `anfra agent setup`."; doc.Error.Help != want {
 		t.Errorf("help = %q, want %q\n%s", doc.Error.Help, want, out.String())
+	}
+}
+
+// repo_invalid is anfra-cloud's code, with its details: validate's answer as
+// validation, so a repo refused here and one refused by the org's server read
+// the same.
+func TestRepoInvalidAsTheCloudHasIt(t *testing.T) {
+	var out bytes.Buffer
+	printError(&out, apperr.NewWith(clierr.RepoInvalid, "The repo has errors: fix them and publish again.",
+		clierr.RepoProblems{Validation: jsontext.Value(`{"valid":false,"diagnostics":[],"reports":[]}`)}), "")
+	want := "---\nerror:\n" +
+		"    code: repo_invalid\n" +
+		"    scope: user\n" +
+		"    message: 'The repo has errors: fix them and publish again.'\n" +
+		"    details:\n" +
+		"        validation:\n" +
+		"            valid: false\n" +
+		"            diagnostics: []\n" +
+		"            reports: []\n" +
+		"    request_id: \"\"\n"
+	if out.String() != want {
+		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// cobra's refusals are the caller's mistakes: a flag as invalid_request on the
+// flag, an unknown command as unknown_command, the args as invalid_request.
+func TestCobraRefusalsAreCoded(t *testing.T) {
+	t.Cleanup(resetOutput)
+	for args, want := range map[string]struct{ code, field string }{
+		"version --nope":        {"invalid_request", "--nope"},
+		"query --page-size x q": {"invalid_request", "--page-size"},
+		"nope":                  {"unknown_command", ""},
+		"openapi extra":         {"invalid_request", "args"},
+	} {
+		cmd := newRootCmd()
+		cmd.SetArgs(strings.Fields(args))
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		err := runError(context.Background(), cmd.Execute())
+		got := apperr.From(err).Response("")
+		if got.Code != want.code {
+			t.Errorf("%s: %s, want %s (%v)", args, got.Code, want.code, err)
+			continue
+		}
+		if want.field != "" {
+			if v, ok := got.Details.(apperr.Violations); !ok || len(v.Violations) != 1 || v.Violations[0].Field != want.field {
+				t.Errorf("%s: details %+v, want a violation on %s", args, got.Details, want.field)
+			}
+		}
+	}
+}
+
+// A run the user interrupted is interrupted, whatever failed as it stopped.
+func TestInterruptedRun(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := apperr.From(runError(ctx, errors.New("read: connection reset"))).Code; got != clierr.Interrupted.Code() {
+		t.Errorf("code %v, want interrupted", got)
+	}
+}
+
+// The org's server's errors are shown as it answered them.
+func TestCloudErrorsPassThrough(t *testing.T) {
+	var out bytes.Buffer
+	printError(&out, &cloudapi.Error{Status: 403, Response: apperr.Response{Code: "forbidden", Scope: apperr.User, Message: "Only an admin can do that."}}, "")
+	if !strings.HasPrefix(out.String(), "---\nerror:\n    code: forbidden\n    scope: user\n    message: Only an admin can do that.\n") {
+		t.Errorf("got\n%s", out.String())
 	}
 }

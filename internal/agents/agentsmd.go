@@ -3,11 +3,12 @@ package agents
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/holistics/anfra/internal/clierr"
 )
 
 // The anfra block of a repo's AGENTS.md, between its markers. anfra replaces
@@ -134,7 +135,7 @@ func readRegular(path string) ([]byte, error) {
 		return nil, err
 	}
 	if !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file (a symlink?): anfra writes only the repo's own files", filepath.Base(path))
+		return nil, clierr.Precondition("%s is not a regular file (a symlink?): anfra writes only the repo's own files.", filepath.Base(path))
 	}
 	return os.ReadFile(path) //nolint:gosec // G304: a file of the repo being set up
 }

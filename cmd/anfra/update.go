@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/envflag"
 
 	"github.com/holistics/anfra/internal/agents"
@@ -72,8 +73,8 @@ type updateResult struct {
 // warning.
 func runUpdate(ctx context.Context, checkOnly bool, errOut io.Writer) (updateResult, error) {
 	if meta.FromSource() {
-		return updateResult{}, fmt.Errorf("this anfra (%s) was built from source, which `anfra update` would replace with a release: "+
-			"rebuild it to update it, or install a release with the installer", meta.Version)
+		return updateResult{}, clierr.Precondition("This anfra (%s) was built from source, which `anfra update` would replace with a release: "+
+			"rebuild it to update it, or install a release with the installer.", meta.Version)
 	}
 	// ctx is the signal-cancelable root from main, so Ctrl-C aborts the download
 	// (its request is context-aware). Per-request timeouts are bounded inside the

@@ -19,6 +19,7 @@ import (
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/appserve"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/exports"
@@ -92,7 +93,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 	opts.siteURL = site
 	return withRepo(ctx, true, func(ctx context.Context, h hostContext) error {
 		if f, ok := findServer(ctx, h.repo); ok {
-			return fmt.Errorf("anfra serve is already running for this repo, at %s", f.URL)
+			return clierr.Precondition("anfra serve is already running for this repo, at %s.", f.URL)
 		}
 		ln, err := listen(h.repo, opts.addr)
 		if err != nil {
@@ -258,7 +259,7 @@ func siteURL() (string, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("ANFRA_SITE_URL %q is not a URL such as https://anfra.example.com", raw)
+		return "", refused("ANFRA_SITE_URL", "invalid", fmt.Sprintf("ANFRA_SITE_URL %q is not a URL such as https://anfra.example.com.", raw))
 	}
 	return strings.TrimSuffix(u.String(), "/"), nil
 }
@@ -280,13 +281,13 @@ func listen(r repo.Local, addr string) (net.Listener, error) {
 		return ln, nil
 	}
 	if !errors.Is(err, syscall.EADDRINUSE) {
-		return nil, fmt.Errorf("listen on %s: %w", addr, err)
+		return nil, clierr.Precondition("Can't listen on %s: %v.", addr, err)
 	}
 	if explicit {
 		if holder := holderOf(r, addr); holder != "" {
-			return nil, fmt.Errorf("%s is taken by anfra serve for %s; pick another with --addr", addr, holder)
+			return nil, clierr.Precondition("%s is taken by anfra serve for %s: pick another with --addr.", addr, holder)
 		}
-		return nil, fmt.Errorf("%s is taken; pick another with --addr", addr)
+		return nil, clierr.Precondition("%s is taken: pick another with --addr.", addr)
 	}
 	return net.Listen("tcp", "127.0.0.1:0")
 }
@@ -521,18 +522,18 @@ func callServe(ctx context.Context, url, name string, input []byte) ([]byte, err
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := serveClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("call anfra serve at %s: %w", url, err)
+		return nil, clierr.Unreachablef(clierr.AnfraServe, err, "call anfra serve at %s: %v", url, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read anfra serve's answer: %w", err)
+		return nil, clierr.Unreachablef(clierr.AnfraServe, err, "read anfra serve's answer: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		if re, ok := remoteErrorFrom(body); ok {
 			return nil, re
 		}
-		return nil, fmt.Errorf("anfra serve answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, clierr.Unreachablef(clierr.AnfraServe, nil, "anfra serve answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return body, nil
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"golang.org/x/mod/semver"
 )
@@ -54,11 +55,11 @@ const maxChangelog = 4 << 20
 func ReleaseNotes(ctx context.Context, from, to string) ([]Notes, error) {
 	resp, err := get(ctx, fmt.Sprintf("%s/%s/v%s/CHANGELOG.md", rawBase, repoSlug, url.PathEscape(tagVersion(to))), lookupTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("fetch the changelog: %w", err)
+		return nil, clierr.Unreachablef(clierr.GitHub, err, "fetch the changelog: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch the changelog: GitHub returned %s", resp.Status)
+		return nil, clierr.Unreachablef(clierr.GitHub, nil, "fetch the changelog: GitHub returned %s", resp.Status)
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxChangelog))
 	if err != nil {

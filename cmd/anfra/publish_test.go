@@ -190,7 +190,7 @@ func TestLogoutUsesGlobalAuthenticationOnly(t *testing.T) {
 				want      string
 				wantError string
 			}{
-				{name: "none", wantError: "no saved authentication to sign out of"},
+				{name: "none", wantError: "No saved login to sign out of"},
 				{name: "one still asks", addresses: []string{"https://bi.example.com/o/repo"}, keys: "\x03", wantError: context.Canceled.Error()},
 				{name: "choose another", addresses: []string{"https://bi.example.com/o/repo", "https://bi.example.com/o/other"}, keys: "\r", want: "https://bi.example.com/o/other"},
 			} {
@@ -273,7 +273,7 @@ func TestLoginServerRuntimeCloudURL(t *testing.T) {
 	for _, tc := range []struct {
 		name, value, want, wantError string
 	}{
-		{name: "missing", wantError: "provide an organization URL"},
+		{name: "missing", wantError: "Provide an organization URL"},
 		{name: "canonical", value: "HTTPS://Cloud.Example.COM:443/", want: "https://cloud.example.com"},
 		{name: "local", value: "http://127.0.0.1:5173", want: "http://127.0.0.1:5173"},
 		{name: "invalid", value: "https://example.com/path", wantError: "ANFRA_CLOUD_URL"},
@@ -455,7 +455,7 @@ func TestAuthLoginBrowserFallback(t *testing.T) {
 			cmd.SetErr(io.MultiWriter(&diagnostics, writer))
 			err := cmd.ExecuteContext(ctx)
 			if mode == "json" {
-				if err == nil || !strings.Contains(err.Error(), "could not open your browser") || out.Len() != 0 || diagnostics.Len() != 0 {
+				if err == nil || !strings.Contains(err.Error(), "Couldn't open your browser") || out.Len() != 0 || diagnostics.Len() != 0 {
 					t.Fatalf("JSON launcher failure: err=%v stdout=%q stderr=%q", err, out.String(), diagnostics.String())
 				}
 				return

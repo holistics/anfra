@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/holistics/anfra/internal/clierr"
 )
 
 // startPprof serves Go's profiling endpoints (/debug/pprof/) for anfra itself
@@ -26,7 +27,7 @@ func startPprof(logger *slog.Logger) (stop func(), err error) {
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("ANFRA_PPROF_ADDR: listen on %s: %w", addr, err)
+		return nil, clierr.Precondition("ANFRA_PPROF_ADDR: can't listen on %s: %v.", addr, err)
 	}
 	if host, _, _ := net.SplitHostPort(ln.Addr().String()); !isLoopback(host) {
 		logger.Warn("pprof.exposed", "addr", ln.Addr().String(),

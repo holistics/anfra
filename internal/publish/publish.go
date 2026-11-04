@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -19,9 +18,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/repoformat"
 )
 
@@ -129,12 +130,12 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	p := cliui.NewPrinter(env.ErrOut)
 	selected := fmt.Sprintf("%d files of the repo", len(files))
 	if len(files) == 0 {
-		return Result{}, errors.New("there are no files to publish")
+		return Result{}, clierr.Precondition("There are no files to publish: a publish carries .aml files and Data Apps under %s/.", repoformat.AppsDir)
 	}
 	var err error
 	if !configured {
 		if env.SelectOrg == nil {
-			return Result{}, errors.New("this repo has no org to publish to: set org.url or pass --set-org https://<server>/o/<org>; destination selection requires an interactive terminal")
+			return Result{}, apperr.New(clierr.OrgNotSet, "This repo has no org to publish to: set org.url, or pass --set-org https://<server>/o/<org>. Choosing one takes an interactive terminal.")
 		}
 		org, err = env.SelectOrg(ctx)
 		if err != nil {
@@ -198,11 +199,11 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	}
 	limits := status.Publish.Limits
 	if len(files) > limits.Files {
-		return Result{}, fmt.Errorf("the repo has %d files to publish; %s takes at most %d", len(files), org, limits.Files)
+		return Result{}, clierr.Precondition("The repo has %d files to publish; %s takes at most %d.", len(files), org, limits.Files)
 	}
 	for _, f := range files {
 		if sizes[f] > limits.MaxFileBytes() {
-			return Result{}, fmt.Errorf("%s is %d bytes; %s takes files of at most %d", f, sizes[f], org, limits.MaxFileBytes())
+			return Result{}, clierr.Precondition("%s is %d bytes; %s takes files of at most %d.", f, sizes[f], org, limits.MaxFileBytes())
 		}
 	}
 	// What was published since this folder last published is replaced, unseen:
@@ -216,13 +217,13 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		if !o.Yes {
 			yes, ok := Confirm(ask, "Confirm publishing a new version?")
 			if !ok {
-				return Result{}, errors.New("not published: there is no one to confirm it here; pass --yes to publish")
+				return Result{}, apperr.New(clierr.ConfirmationRequired, "Not published: publishing replaces the org's version, and there's no one here to confirm it. Pass --yes to publish.")
 			}
 			if err := ctx.Err(); err != nil {
 				return Result{}, err
 			}
 			if !yes {
-				return Result{}, errors.New("not published")
+				return Result{}, apperr.New(clierr.Interrupted, "Not published.")
 			}
 		}
 	}
@@ -336,7 +337,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 			return err
 		}
 		if repoformat.BlobID(content) != oid {
-			return fmt.Errorf("%s changed while publishing: publish again", path)
+			return clierr.Precondition("%s changed while publishing: publish again.", path)
 		}
 		if len(batch) == limits.UploadBlobs || size+len(content) > limits.UploadBytes {
 			if err := flush(); err != nil {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
@@ -196,7 +197,7 @@ func (m *mdCopy) offer(ctx context.Context, f duckdbFile, rest int) (created []s
 // errSwitchAccount ends the publish for the person to switch the MotherDuck
 // account the CLI is signed in to, which anfra leaves to them: signing the CLI
 // out signs them out wherever they use it.
-var errSwitchAccount = errors.New("not published: to upload to another MotherDuck account, run motherduck logout, then motherduck login, then publish again")
+var errSwitchAccount = clierr.Precondition("Not published: to upload to another MotherDuck account, run motherduck logout, then motherduck login, then publish again.")
 
 // askUpload asks whether to upload f, naming the account it goes to when one is
 // known, with the choice then to quit to switch it, and, with rest files still
@@ -437,7 +438,7 @@ func (m *mdCopy) freeName(base string) (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("the names %s to %s_99 are all taken", base, base)
+	return "", clierr.Precondition("The MotherDuck database names %s to %s_99 are all taken.", base, base)
 }
 
 // orgToken settles the org's token, a read-only one, once per publish: never

@@ -14,7 +14,7 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | CLI-only commands' structured results | Done: `openapi`, `update`, `agent setup`, `init`, `publish` and `auth`, with `message` and `hints` |
 | `--yaml`, and a CLI-only command's default, the pretty format | Done: `--yaml`, the defaults, the annotations, the help |
 | The prettifier's first views: `update`, `agent setup` and `init` | Built (`internal/pretty`) |
-| CLI-only commands' errors classified | Not started |
+| CLI-only commands' errors classified | Done (`internal/clierr`) |
 | `--schema` | Not started |
 | `--jq` | Not started |
 
@@ -57,7 +57,7 @@ Each CLI-only command's result has a shape the command defines (a Go type in `cm
 | `update --check` | `anfra version`'s answer, checked now, and the changelog's link ([new state as output](../designs/commands-and-api.md#new-state-as-output)). |
 | `agent setup --check` | Each agent, and the copies of the skills found, with their versions. |
 | `publish --list` | The org (`url`; null when none is configured) and the files, a tree in the pretty format. The note on the folder's other files goes. |
-| `publish` | The org (`url`, `name`, from the login), the revision published, whether anything changed, what it replaced, how many files, and the data sources it created. A repo that fails validation fails with `repo_invalid`, validate's answer its details. |
+| `publish` | The org (`url`, `name`, from the login), the revision published, whether anything changed, what it replaced, how many files, and the data sources it created. A repo that fails validation fails with `repo_invalid`, anfra-cloud's code for the same, with its details: `{validation: <validate's answer>}`. |
 | `update` | `anfra version`'s answer after the update, the version it replaced, and the changelog's link. Servers still running another version stay warnings, and the skills needing attention becomes one. |
 | `agent setup` | `agent setup --check`'s report after setup, and what setup did per agent: `installed`, `failed`, `cli_missing` or `instructions_only`, with a message. |
 | `init` | Its folder, and each file with whether init changed it (created it, or added to it). A failure partway carries the result as far as it got. |
@@ -87,15 +87,39 @@ Advice that was prose (`p.Note`: ask an admin, pass `--create-data-sources`, loa
 
 ## 3. CLI-only commands' errors classified
 
-A CLI-only command's failure is mostly a plain error (`fmt.Errorf`, `errors.New`), in `cmd/anfra` and in what it calls (`internal/update`, `internal/agents`, `internal/publish`), and so is cobra's own, an unknown flag or a wrong number of args. `apperr.From` reads an error with no code as ours: `internal_server_error`, scope `server`. A program reads "anfra is broken" where the user can fix it: `update` from a build from source, a destination with no credentials, a flag mistyped.
+A CLI-only command's failure was mostly a plain error (`fmt.Errorf`, `errors.New`), in `cmd/anfra` and in what it calls, and so was cobra's own. `apperr.From` reads an error with no code as ours: `internal_server_error`, scope `server`, telling a program "anfra is broken" where the user can fix it. And a coded error wrapped in a plain one (`fmt.Errorf("…: %w")`) reads the same, its code lost. So a path that may carry a code returns it as it is, and adds context, where it matters, with a public step ([errors.md](../designs/errors.md#steps-context-written-once)), never by rewording the message: a failed sign-in carries `anfra_cli.sign_in`, "sign in to {origin}", in its `context`.
 
-Each becomes a coded error, as a core command's is ([errors.md](../designs/errors.md)):
+The CLI's codes are in `internal/clierr`, in their own namespace, `anfra_cli`, out of the engine's catalog (`engine.ErrorCodes`), which hosts translate. Every failure is in one of three buckets.
 
-- **The caller's input**, cobra's included: `invalid_request` or `validation_failed`, with a violation naming the arg, so the CLI's `arg` and `help` apply.
-- **A state the user can change**, such as a build from source, or no login for the destination: a code of anfra's own, scope `user`, saying what to do.
-- **The outside world**, such as GitHub or the org's server unreachable: a code saying which, so a program can retry, not `internal_server_error`.
+**Kept `internal_server_error`: our own failures.** Encoding or decoding our own data; `crypto/rand`; `cliauth`'s broken invariants; "anfra runs no program"; the org's server hashing uploads differently; an update whose rollback failed too; setting up logging or the working directory.
 
-The CLI's codes are in their own namespace, `anfra_cli` (`cmd/anfra/errors.go`), out of the engine's catalog (`engine.ErrorCodes`), which hosts translate. A failure no program branches on yet is the generic `command_failed`, scope `user` (as `query_failed` is for a query), with the command's details, as `agent setup`'s is with its result as far as it got; one a program comes to act on gets a code of its own. What's left with no code is anfra's own failure, as for a core command. New codes are public: they're part of the contract, and `feat!:` when an existing failure's code changes.
+**Existing codes:**
+
+| Failure | Code | From |
+|---|---|---|
+| cobra: an unknown flag, a flag missing its value or with one it can't parse; the wrong args | `invalid_request`, a violation on the flag (or `args`) | apperr |
+| cobra: an unknown command | `unknown_command` | the engine |
+| a JSON flag that isn't one; no org URL without a terminal; an invalid org address; `--scope project`; an invalid `ANFRA_CLOUD_URL` or `ANFRA_SITE_URL` | `validation_failed`, a violation on the arg, flag or variable | apperr |
+| no saved login to sign out of | `not_found` | apperr |
+| a sidecar that won't start | `sidecar_unavailable` | the engine |
+| a command failing partway, its result in details | `command_failed` | `anfra_cli` |
+| the org's server's own errors (`cloudapi.Error`) | its code, passed through as its envelope, as `anfra serve`'s | anfra-cloud |
+
+**New codes**, each where a program does something of its own, or mirroring anfra-cloud's, so a client reads one code whichever side found the failure:
+
+| Code | Scope | Failures | What a program does |
+|---|---|---|---|
+| `unauthenticated` | user | no usable login saved for the org; anfra-cloud's code, for the same as its server finds it | asks the user to sign in (`anfra auth login`), which takes a browser; in CI, fails saying the job needs a login |
+| `org_not_set` | user | the repo has no org to publish to, and no terminal to choose one | passes `--set-org` if it knows the org, else asks the user which |
+| `confirmation_required` | user | publishing would replace the org's version, with no one to confirm | asks the user, and passes `--yes` only on a yes: never on its own |
+| `interrupted` | user | Ctrl-C, whatever failed as it stopped; a no to the question; access denied in the browser. The CLI exits 130, as a shell does | neither retries nor reports a failure: the user stopped it. Not anfra-cloud's `cancelled`, an operation someone else stopped |
+| `precondition_failed` | user | built from source (`update`); no coding agent; no files to publish, too many or too large; a symlink anfra won't write through or publish; `serve` already running, or the address taken; can't listen for the browser, or open it; a sign-in timed out; an unreadable config or `org.url`; the credentials file's permissions or state; MotherDuck's names taken, or another account signed in; a file changed while publishing; no permission to replace the binary | shows the message: the user changes something |
+| `unavailable` | server | GitHub (the release check, the download, the changelog, the skills' manifest); the org's server unreachable, or not answering as anfra; its authentication server; MotherDuck's CLI or API; the warm `anfra serve` not answering. anfra-cloud's code, details `{service, retry_after_seconds}` | retries later; `service` (`github`, `motherduck`, `org`, `auth`, `anfra_serve`) says what was down, anfra's or a third party's |
+| `repo_invalid` | user | the repo fails validation before a publish; anfra-cloud's code, with its details, `{validation: <validate's answer>}` | shows the diagnostics: the user fixes the files |
+
+`internal_server_error` stays the one catch-all, for CLI-only commands too: one code for "anfra failed" whichever surface, as HTTP's 500 and gRPC's `INTERNAL` are.
+
+Tests: cobra's refusals coded; an interrupted run; the org's server's errors passed through; `repo_invalid`'s details as anfra-cloud's; a failed sign-in's step in its context.
 
 ## 4. `--schema`
 

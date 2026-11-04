@@ -12,35 +12,24 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/agents"
+	"github.com/holistics/anfra/internal/clierr"
+	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-// cliNS is the namespace of the CLI's own codes: its CLI-only commands'
-// failures, which no op has, so they're in no host's catalog
-// (docs/implementations/cli-json.md, step 3).
-var cliNS = apperr.DefineNamespace("anfra_cli")
-
-// commandFailed: a CLI-only command didn't do its job, for a reason the user
-// can fix, in a way no program branches on yet, as query_failed is for a query.
-// Its details, when it has any, are the command's to say, such as its result
-// as far as it got. A failure a program comes to act on gets a code of its own.
-var commandFailed = apperr.DefinePublicCodeWith[any](cliNS, "command_failed", apperr.User,
-	"The command failed.")
-
-// commandFailedWith is a CLI-only command's failure, msg saying what failed,
-// with details.
-func commandFailedWith(msg string, details any) error {
-	return apperr.NewWith(commandFailed, msg, details)
+// refused is a validation_failed with one violation: field, an arg, flag or
+// variable as the user gives it, refused for code, as msg says.
+func refused(field, code, msg string) error {
+	return apperr.NewWith(apperr.ValidationFailed, msg, apperr.Violate(apperr.Violation{Field: field, Code: code, Message: msg}))
 }
 
-// repoInvalid: the repo fails validation. Its details are validate's answer,
-// the diagnostics to fix. Any command refused for an invalid repo fails with
-// it; were an op to, it would move to the engine's namespace with its name and
-// details, so a client sees no change.
-var repoInvalid = apperr.DefinePublicCodeWith[jsontext.Value](cliNS, "repo_invalid", apperr.User,
-	"The repo has errors.")
+// commandFailedWith is a CLI-only command's failure, msg saying what failed,
+// with details (clierr.CommandFailed).
+func commandFailedWith(msg string, details any) error {
+	return apperr.NewWith(clierr.CommandFailed, msg, details)
+}
 
 // remoteError is a running server's error: resp, decoded for its code and
 // scope, and raw, the error object as the body carried it, which printError
@@ -92,6 +81,8 @@ func printError(w io.Writer, err error, hint string) {
 	var body []byte
 	if re, ok := errors.AsType[*remoteError](err); ok {
 		resp, body = re.resp, re.raw
+	} else if ce, ok := errors.AsType[*cloudapi.Error](err); ok && !coded(err) {
+		resp = ce.Response // the org's server's, as it answered
 	} else {
 		resp = apperr.From(err).Response("")
 	}
@@ -138,11 +129,20 @@ func failureHint(err error) string {
 	scope := apperr.From(err).Code.Scope()
 	if re, ok := errors.AsType[*remoteError](err); ok {
 		scope = re.resp.Scope
+	} else if ce, ok := errors.AsType[*cloudapi.Error](err); ok && !coded(err) {
+		scope = ce.Response.Scope
 	}
 	if scope != apperr.User && scope != apperr.Client {
 		return ""
 	}
 	return agents.Failed(agents.System(), repoDirIfAny(), time.Now())
+}
+
+// coded reports whether err carries a code of its own, at its top: a code
+// that wraps, say, the org's server's answer is what it says.
+func coded(err error) bool {
+	_, ok := err.(*apperr.Error)
+	return ok
 }
 
 // printWarning shows a problem that did not stop the command, such as an

@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -101,7 +102,7 @@ func (c CLI) Status(ctx context.Context) (Status, error) {
 	}
 	var s Status
 	if err := jsonkit.Unmarshal(bytes.TrimSpace(out), &s); err != nil {
-		return Status{}, fmt.Errorf("read the MotherDuck CLI's status: %w", err)
+		return Status{}, clierr.Unreachablef(clierr.MotherDuck, err, "read the MotherDuck CLI's status: %v", err)
 	}
 	return s, nil
 }
@@ -127,7 +128,7 @@ func (c CLI) Session(ctx context.Context) (token string, databases []string, err
 		if jsonkit.Unmarshal(bytes.TrimSpace(out), &failed) == nil && failed.Message != "" && !strings.Contains(failed.Message, "motherduck_token") {
 			return "", nil, &failed
 		}
-		return "", nil, errors.New("the MotherDuck CLI did not give its token")
+		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI did not give its token")
 	}
 	// The pragma prints a line of shell, then an empty JSON array; the
 	// SELECT, one JSON row.
@@ -141,13 +142,13 @@ func (c CLI) Session(ctx context.Context) (token string, databases []string, err
 		}
 	}
 	if token == "" {
-		return "", nil, errors.New("the MotherDuck CLI did not give its token")
+		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI did not give its token")
 	}
 	var rows []struct {
 		Names []string `json:"names"`
 	}
 	if err := jsonkit.Unmarshal([]byte(last), &rows); err != nil || len(rows) != 1 {
-		return "", nil, errors.New("the MotherDuck CLI did not list the account's databases")
+		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI did not list the account's databases")
 	}
 	return token, rows[0].Names, nil
 }
@@ -163,11 +164,11 @@ func (c CLI) DatabaseExists(ctx context.Context, name string) (bool, error) {
 		return false, err
 	}
 	if len(rows) != 1 {
-		return false, errors.New("the MotherDuck CLI answered no count of databases")
+		return false, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI answered no count of databases")
 	}
 	n, err := strconv.Atoi(fmt.Sprint(rows[0]["n"]))
 	if err != nil {
-		return false, fmt.Errorf("the MotherDuck CLI answered a count of databases that is not one: %v", rows[0]["n"])
+		return false, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI answered a count of databases that is not one: %v", rows[0]["n"])
 	}
 	return n > 0, nil
 }
@@ -252,7 +253,7 @@ func (c CLI) query(ctx context.Context, sql string) ([]map[string]any, error) {
 		}
 		rows = nil
 		if err := jsonkit.Unmarshal([]byte(line), &rows); err != nil {
-			return nil, fmt.Errorf("read the MotherDuck CLI's answer: %w", err)
+			return nil, clierr.Unreachablef(clierr.MotherDuck, err, "read the MotherDuck CLI's answer: %v", err)
 		}
 	}
 	return rows, nil
@@ -296,9 +297,9 @@ func (c CLI) exec(ctx context.Context, args ...string) ([]byte, error) {
 		// The CLI says a failed query on stdout, as JSON, and anything else on
 		// stderr.
 		if msg := strings.TrimSpace(stderr.String()); msg != "" && stdout.Len() == 0 {
-			return stdout.Bytes(), fmt.Errorf("motherduck %s: %s", args[0], msg)
+			return stdout.Bytes(), clierr.Unreachablef(clierr.MotherDuck, nil, "motherduck %s: %s", args[0], msg)
 		}
-		return stdout.Bytes(), fmt.Errorf("motherduck %s: %w", args[0], err)
+		return stdout.Bytes(), clierr.Unreachablef(clierr.MotherDuck, err, "motherduck %s: %v", args[0], err)
 	}
 	return stdout.Bytes(), nil
 }
