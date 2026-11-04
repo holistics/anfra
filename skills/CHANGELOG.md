@@ -1,3 +1,20 @@
+## [0.17.0](https://github.com/holistics/anfra/compare/v0.16.0...v0.17.0) (2026-11-04)
+
+### Features
+
+* **skills:** minor updates ([2b096ca](https://github.com/holistics/anfra/commit/2b096cab76c952b8a778ffbae9c3d88d17ac0173))
+* **skills:** name a relationship in with_relationships ([64c884f](https://github.com/holistics/anfra/commit/64c884f570dda064ff927b4270a7378795683505))
+* **skills:** name the point's measure in query.menu ([4100913](https://github.com/holistics/anfra/commit/41009133a928917fd129f19c7c52e8eee2058e16))
+* **skills:** read a filter's value, guard late libraries, find server errors ([0cc1220](https://github.com/holistics/anfra/commit/0cc1220fb1b95b6462a51ec99f3f434c0627bc18))
+* **skills:** say what requestId and a throwing subscribe() listener do ([03af9b2](https://github.com/holistics/anfra/commit/03af9b2322d5dc2480b4dfa9e32988408554c3c0))
+* **skills:** teach a Data App's errors by code and scope ([92a98b9](https://github.com/holistics/anfra/commit/92a98b99268d8d31f54d486e3b71a56fdb9f5f9c))
+
+### Bug Fixes
+
+* **skills:** clarify wording in the feedback corrections ([9caa1c8](https://github.com/holistics/anfra/commit/9caa1c87c3d0cb64555e4f6d19efc737a09ff58e))
+* **skills:** find anfra serve's log with anfra status ([6f5b4ca](https://github.com/holistics/anfra/commit/6f5b4caa548c8ba622853bcd398d69a139cdfb02))
+* **skills:** fix knowledge and examples for filters on aliases ([c34cfcf](https://github.com/holistics/anfra/commit/c34cfcfa4edb19344328ad00576b3529bb074783))
+* **skills:** say an inactive relationship is off, not optional ([ef4e55f](https://github.com/holistics/anfra/commit/ef4e55f5edb0e2c0848382d887eef50de8b847dd))
 ## [0.15.0](https://github.com/holistics/anfra/compare/v0.14.2...v0.15.0) (2026-10-30)
 
 ### ⚠ BREAKING CHANGES
