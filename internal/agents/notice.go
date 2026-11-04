@@ -169,15 +169,18 @@ func attention(env Env, repoDir string) (latest string, behind, others []string)
 
 // Badge is Attention as a console's badge (docs/designs/console.md): a mark
 // and a few words, the command to run being setup's. ↑ and the latest skills
-// when a plugin or a copy is behind; ! when something else needs attention,
-// or the agents have no skills; "" when nothing does.
+// when a plugin or a copy is behind; ! and how many issues when something
+// else needs attention; ! when the agents have no skills; "" when nothing
+// needs attention.
 func Badge(env Env, repoDir string) (mark, label string) {
 	latest, behind, others := attention(env, repoDir)
 	switch {
 	case len(behind) > 0:
 		return "↑", "anfra skills " + latest
-	case len(others) > 0:
-		return "!", "anfra skills"
+	case len(others) == 1:
+		return "!", "1 skills issue"
+	case len(others) > 1:
+		return "!", fmt.Sprintf("%d skills issues", len(others))
 	case noSkills(env, repoDir):
 		return "!", "no anfra skills"
 	}

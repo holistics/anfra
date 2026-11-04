@@ -32,7 +32,7 @@ func TestDispatchErrorsAreClassified(t *testing.T) {
 			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"})},
 		{"an unsupported input", ungoverned,
 			engine.Request{Command: "query", Args: map[string]any{"query": "x", "data_source": "w"}},
-			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "unsupported", Message: "an AQL query runs against a dataset"})},
+			apperr.ValidationFailed, apperr.Violate(apperr.Violation{Field: "data_source", Code: "unsupported", Message: "an AQL query runs against a dataset, not a data source"})},
 		{"SQL for a governed caller", engine.Invocation{DataPerms: engine.Governed(nil)},
 			engine.Request{Command: "query", Args: map[string]any{"query": "select 1", "lang": "sql", "data_source": "w"}},
 			engine.DataPermsUnenforceable, apperr.Violations{}},

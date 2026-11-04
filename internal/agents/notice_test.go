@@ -67,7 +67,7 @@ func TestBadge(t *testing.T) {
 		{"a copy behind", "↑", "anfra skills 0.5.0", func(t *testing.T, env *fakeEnv) {
 			writeSkill(t, filepath.Join(env.Home, ".agents/skills"), "anfra-aql", stamped("0.4.5"))
 		}},
-		{"deprecated skills", "!", "anfra skills", func(t *testing.T, env *fakeEnv) {
+		{"deprecated skills", "!", "1 skills issue", func(t *testing.T, env *fakeEnv) {
 			writeSkill(t, filepath.Join(env.Home, ".cursor/skills"), "setup-repo", "Run `anfra version`.\n")
 		}},
 	} {

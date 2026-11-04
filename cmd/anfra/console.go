@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/clierr"
@@ -20,70 +21,175 @@ import (
 	"github.com/holistics/anfra/internal/update"
 )
 
-// consoleHelp is \?'s answer: the console's own commands, then anfra's, as
-// anfra --help groups them, one line each, the names in violet, typed as
-// they are (docs/designs/console.md#lines). Left out: the console itself,
-// refused in one; help, which this replaces; completion, a shell's.
-func consoleHelp(styles cliui.TerminalStyles) string {
+// consoleHelp is \?'s answer: where the session is, in full, as the line
+// under the prompt may cut it short, and any notice in full; then anfra's
+// own help for where it is, anfra --help in command mode, the mode's
+// command's --help in a text mode; then what the console adds.
+func consoleHelp(s *consoleSession, dir string) string {
+	st := s.styles
+	key := st.Accent.Render
 	var b strings.Builder
-	section := func(title string, rows [][2]string) {
-		width := 0
-		for _, r := range rows {
-			width = max(width, len(r[0]))
-		}
-		b.WriteString(title + "\n")
-		for _, r := range rows {
-			b.WriteString("  " + styles.Accent.Render(r[0]) + strings.Repeat(" ", width-len(r[0])+3) + r[1] + "\n")
-		}
+	label := func(l string) string { return st.Muted.Render(l) }
+	mode := "commands"
+	if s.mode != nil {
+		mode = s.modePath + " " + s.textName()
 	}
-	section("The console's commands:", [][2]string{
-		{`\?`, "list these"},
-		{`\q, exit, quit`, "leave (or Ctrl-D)"},
-	})
+	flags := s.styledFlags()
+	if flags == "" {
+		flags = label("none")
+	}
+	b.WriteString(label("Repo:  ") + homeRelative(dir) + "\n")
+	modeStyle := st.Accent
+	if st.Muted.Render("x") != "x" { // bold as the prompt is, with styles only
+		modeStyle = modeStyle.Bold(true)
+	}
+	b.WriteString(label("Mode:  ") + modeStyle.Render(mode) + "\n")
+	b.WriteString(label("Flags: ") + flags + label(" (view all with ") + st.Code.Render(`\--`) + label(")") + "\n")
+	var notices []string
+	if w := consoleWarning(s); w != "" {
+		notices = append(notices, w)
+	}
+	for _, n := range consoleNotices() {
+		notices = append(notices, codeSpans(n, st))
+	}
+	if len(notices) > 0 {
+		b.WriteString(label("Notices:") + "\n  " + strings.Join(notices, "\n  ") + "\n")
+	}
+	b.WriteString("\nUsage:\n")
+	pair := func(k1, v1, k2, v2 string) string {
+		return "  " + key(k1) + strings.Repeat(" ", max(14-len(k1), 1)) + v1 + strings.Repeat(" ", max(24-len(v1), 2)) + key(k2) + "  " + v2 + "\n"
+	}
 	root := newRootCmd()
-	for _, g := range root.Groups() {
-		var rows [][2]string
-		for _, c := range root.Commands() {
-			if c.GroupID != g.ID || c.Hidden || !c.IsAvailableCommand() || c.Name() == "console" || c.Name() == "help" || c.Name() == "completion" {
-				continue
+	if c := s.modeCommand(); c != nil {
+		b.WriteString("  " + s.howToType() + " Alt+Enter runs it as it is.\n")
+		b.WriteString(pair(`\<command>`, "runs a command", `\c`, "goes back to commands"))
+		b.WriteString(pair(`\--<flag>`, "sets a flag", `\q`, "leaves"))
+		local := pflag.NewFlagSet("", pflag.ContinueOnError)
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if f.Name != "help" && !f.Hidden {
+				local.AddFlag(f)
 			}
-			rows = append(rows, [2]string{c.Name(), c.Short})
-		}
-		if len(rows) > 0 {
-			b.WriteString("\n")
-			section(g.Title, rows)
+		})
+		b.WriteString("\n" + s.modePath + " flags:\n" + local.FlagUsages())
+	} else {
+		b.WriteString("  " + key("c <command>") + "   types its text directly: " + strings.Join(modeCommands(root), ", ") + "\n")
+		b.WriteString(pair(`\--<flag>`, "sets a flag", `\q`, "leaves"))
+		for _, g := range root.Groups() {
+			var rows [][2]string
+			width := 0
+			for _, c := range root.Commands() {
+				if c.GroupID == g.ID && c.IsAvailableCommand() && c.Name() != "console" && c.Name() != "help" && c.Name() != "completion" {
+					rows = append(rows, [2]string{c.Name(), c.Short})
+					width = max(width, len(c.Name()))
+				}
+			}
+			b.WriteString("\n" + g.Title + "\n")
+			for _, r := range rows {
+				b.WriteString("  " + key(r[0]) + strings.Repeat(" ", width-len(r[0])+3) + r[1] + "\n")
+			}
 		}
 	}
-	b.WriteString("\n" + styles.Muted.Render("<command> --help says more about one."))
+	global := pflag.NewFlagSet("", pflag.ContinueOnError)
+	root.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if !f.Hidden && !notSessionFlags[f.Name] {
+			global.AddFlag(f)
+		}
+	})
+	b.WriteString("\nGlobal flags:\n" + strings.TrimRight(global.FlagUsages(), "\n"))
 	return b.String()
 }
 
-// consoleAct is what an entry asks of the console.
-type consoleAct int
+// consoleWarning is what the next entry would fail for, as its command's own
+// check finds it (flagProblem), in yellow, where the eye lands, the left of
+// the line under the frame: a flag missing, and how to set it; a flag that
+// can't be used, or is invalid, in the check's words, and how to unset it.
+// "" when none.
+func consoleWarning(s *consoleSession) string {
+	long, short, code, msg := s.flagProblem()
+	switch {
+	case long == "":
+		return ""
+	case code == "required":
+		return s.styles.Warning.Render("! "+long+" is missing. Set it using") + " " + s.styles.Code.Render(`\`+short+" <value>")
+	}
+	// The check's message says what's wrong, standing alone, as every
+	// surface shows it: first letter up, and the fix after it.
+	msg = strings.TrimSuffix(msg, ".")
+	if msg != "" {
+		msg = strings.ToUpper(msg[:1]) + msg[1:]
+	}
+	return s.styles.Warning.Render("! "+msg+". Unset it using") + " " + s.styles.Code.Render(`\`+long+"=")
+}
 
-const (
-	actRun   consoleAct = iota // run an anfra command
-	actLeave                   // end the session
-	actHelp                    // list the commands
-	actSay                     // say why it can't run
-)
+// textName is what the mode's text is: "AQL", "SQL", or "text".
+func (s *consoleSession) textName() string {
+	switch s.lang {
+	case "aql", "sql":
+		return strings.ToUpper(s.lang)
+	}
+	return "text"
+}
+
+// consoleNotices are the notices the badge stands for, in full, as the CLI
+// says them after a command elsewhere, a command as typed in the console:
+// `update`, not `anfra update`.
+func consoleNotices() []string {
+	if updateNotifyDisabled() {
+		return nil
+	}
+	var notices []string
+	if n := update.CachedNotice(); n != "" {
+		notices = append(notices, n)
+	}
+	if n := agents.Attention(agents.System(), repoDirIfAny()); n != "" {
+		notices = append(notices, n)
+	}
+	for i, n := range notices {
+		notices[i] = strings.ReplaceAll(n, "`anfra ", "`")
+	}
+	return notices
+}
+
+// codeSpans is text with its `code` as code spans, without the backquotes,
+// with styles; as written, without.
+func codeSpans(text string, st cliui.TerminalStyles) string {
+	parts := strings.Split(text, "`")
+	if st.Code.Render("x") == "x" || len(parts)%2 == 0 {
+		return text
+	}
+	for i := 1; i < len(parts); i += 2 {
+		parts[i] = st.Code.Render(parts[i])
+	}
+	return strings.Join(parts, "")
+}
 
 func newConsoleCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "console",
+		Use:     "console [command [flags]]",
 		Aliases: []string{"c"},
 		Short:   "Start a session at this terminal, running anfra's commands for a person",
-		Long: "Start a session at this terminal, as psql or rails console does: each line runs a command,\n" +
+		Long: "Start a session at this terminal, as psql or rails console does. Each line runs a command,\n" +
 			"typed as after anfra (validate, query -d sales \"…\"), until \\q, exit or Ctrl-D.\n" +
-			"Ctrl-C clears the line being typed, or cancels the command running. It needs a terminal.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+			"Ctrl-C clears the line being typed, or cancels the command running. It needs a terminal.\n\n" +
+			"With a command, its text is typed directly. anfra console query takes AQL, each query ending\n" +
+			"with ;;, and \\<command> runs a command. In the console, console <command> switches to one,\n" +
+			"and console alone goes back to commands. \\--<flag> <value> sets a flag for every command.",
+		Args: cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if output.nonInteractive || !cliui.CanInteract(os.Stdin, os.Stdout) {
-				return clierr.Precondition("anfra console needs a terminal: run it at one, or run each command as anfra <command>.")
+				return clierr.Precondition("anfra console needs a terminal. Run it at one, or run each command as anfra <command>.")
 			}
-			return runConsole(cmd.Context(), os.Stdin, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			var s consoleSession
+			if len(args) > 0 {
+				if msg := s.switchMode(args); s.mode == nil {
+					return clierr.Precondition("%s", msg)
+				}
+			}
+			return runConsole(cmd.Context(), os.Stdin, cmd.OutOrStdout(), cmd.ErrOrStderr(), &s)
 		},
 	}
+	// A mode's flags are the mode's: anfra console query --lang sql.
+	cmd.Flags().SetInterspersed(false)
 	markArtifactOutput(cmd, "a session, until you leave")
 	return cmd
 }
@@ -93,26 +199,32 @@ func newConsoleCmd() *cobra.Command {
 // Ctrl-C cancels the command running, not the session, which only SIGTERM
 // ends: so the session's context is ctx's values, not its end, which main's
 // interrupt brings.
-func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error {
+func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *consoleSession) error {
 	session, stop := signal.NotifyContext(context.WithoutCancel(ctx), syscall.SIGTERM)
 	defer stop()
 	styles := cliui.NewTerminalStyles(out)
+	s.styles = styles
 	dir, _ := os.Getwd()
 	if os.Getenv(consoleRestarted) != "" { // the session goes on, on the new anfra
 		_ = os.Unsetenv(consoleRestarted)
 		fmt.Fprintln(out, styles.Muted.Render("Restarted on anfra "+meta.Version+"."))
 	} else {
 		fmt.Fprintf(out, "anfra console %s in %s\n", meta.Version, homeRelative(dir))
-		fmt.Fprintln(out, styles.Muted.Render(`Type a command as after anfra: validate, query -d sales "orders | count()".`))
-		fmt.Fprintln(out, styles.Muted.Render(`\? lists the console's commands, \q or exit leaves.`))
+		if s.mode != nil {
+			fmt.Fprintln(out, styles.Muted.Render(s.modeHint()))
+		} else {
+			fmt.Fprintln(out, styles.Muted.Render(`Type a command as after anfra; c query to type AQL. \? helps, \q leaves.`))
+		}
 	}
 	fmt.Fprintln(out)
 
 	exe := runningAnfra()
 	history := openConsoleHistory()
-	opts := cliui.EntryOptions{Prompt: filepath.Base(dir) + "> ", Leave: `\q, exit or Ctrl-D to leave`, History: history.load()}
+	opts := cliui.EntryOptions{Leave: `\q, exit or Ctrl-D to leave`, History: history.load(), Ends: s.ends}
 	for {
-		opts.Status = consoleBadge(styles) //nolint:contextcheck // reads local state, runs nothing
+		opts.Prompt, opts.Context = s.prompt(), s.styledContext(filepath.Base(dir), false) //nolint:contextcheck // names the flags, runs nothing
+		opts.Status = consoleBadge(s)                                                      //nolint:contextcheck // reads local state, runs nothing
+		opts.Warning = consoleWarning(s)                                                   //nolint:contextcheck // reads the commands, runs none
 		entry, err := cliui.ReadEntry(session, in, out, opts)
 		if errors.Is(err, io.EOF) {
 			return nil
@@ -130,18 +242,21 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 				history.add(entry)
 			}
 		}
-		args, act, msg := consoleArgs(entry)
-		if act != actLeave { // Up then Enter shouldn't leave by surprise
+		args, act, msg := s.dispatch(entry) //nolint:contextcheck // reads the commands, runs none
+		if act != actLeave {                // Up then Enter shouldn't leave by surprise
 			remember(entry)
 		}
 		switch act {
 		case actLeave:
 			return nil
 		case actHelp:
-			fmt.Fprintln(out, consoleHelp(styles)) //nolint:contextcheck // names the commands, runs none
+			fmt.Fprintln(out, consoleHelp(s, dir)) //nolint:contextcheck // names the commands, runs none
 		case actSay:
-			fmt.Fprintln(out, msg)
+			if msg != "" {
+				fmt.Fprintln(out, msg)
+			}
 		default:
+			args = s.withFlags(args) //nolint:contextcheck // reads the commands, runs none
 			cmdCtx, stopCmd := signal.NotifyContext(session, os.Interrupt)
 			code := run(cmdCtx, args, out, errOut, runOptions{inConsole: true})
 			stopCmd()
@@ -149,8 +264,8 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 				fmt.Fprintln(out)
 				return restartConsole(exe.path)
 			}
-			if code != 0 && !isCommand(args[0]) { //nolint:contextcheck // names the commands, runs none
-				fmt.Fprintln(out, styles.Muted.Render(`Not an anfra command. To run AQL: query -d <dataset> "…" (typing it directly comes later).`))
+			if code != 0 && s.mode == nil && !isCommand(args[0]) { //nolint:contextcheck // names the commands, runs none
+				fmt.Fprintln(out, styles.Muted.Render(`Not an anfra command. To type AQL, enter console query.`))
 			}
 		}
 		fmt.Fprintln(out)
@@ -163,15 +278,17 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 // consoleBadge is the notice under the console's prompt, one at a time, as
 // short as a badge, the command dealing with it a code span
 // (docs/designs/console.md#the-rest): a newer anfra first, then what of the
-// agents' skills needs attention. Both from local state, as the CLI's notices
+// agents' skills needs attention. What the next entry would fail for is a
+// warning, apart (consoleWarning). Both from local state, as the CLI's notices
 // after a command are, so it's checked again after each; "" when nothing
 // needs attention, or with ANFRA_NO_UPDATE_NOTIFIER.
-func consoleBadge(styles cliui.TerminalStyles) string {
-	if updateNotifyDisabled() {
-		return ""
-	}
+func consoleBadge(s *consoleSession) string {
+	styles := s.styles
 	badge := func(mark, label, cmd string) string {
 		return styles.Muted.Render(mark+" "+label+" · Run") + " " + styles.Code.Render(cmd)
+	}
+	if updateNotifyDisabled() {
+		return ""
 	}
 	if r := update.Cached(); r != nil && r.IsNewer() {
 		return badge("↑", "anfra "+r.Version, "update")
@@ -213,28 +330,6 @@ func (f anfraFile) replaced() bool {
 	}
 	now, err := os.Stat(f.path)
 	return err == nil && !os.SameFile(f.info, now)
-}
-
-// consoleArgs is what an entry asks: an anfra command's args, to leave, the
-// commands listed (\?), or a message saying why it can't run. In command
-// mode, the console's only one yet, a line is a command; a \ before it, as
-// a text mode will need, is taken too (docs/designs/console.md#lines).
-func consoleArgs(entry string) (args []string, act consoleAct, msg string) {
-	rest := strings.TrimPrefix(entry, `\`)
-	switch strings.TrimSpace(rest) {
-	case "q", "exit", "quit":
-		return nil, actLeave, ""
-	case "?", "":
-		return nil, actHelp, ""
-	}
-	args, err := splitArgs(rest)
-	if err != nil {
-		return nil, actSay, err.Error()
-	}
-	if args[0] == "console" || args[0] == "c" {
-		return nil, actSay, `You're in the console already: \? lists its commands.`
-	}
-	return args, actRun, ""
 }
 
 // isCommand reports whether name is one of anfra's commands, or an alias of

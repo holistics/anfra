@@ -57,12 +57,14 @@ func (in QueryRunInput) check() error {
 		return err
 	}
 	if in.Lang == "sql" {
+		// Each said by what it is, not its field's name, which each surface
+		// writes its own way (page_size, --page-size).
 		for _, a := range []struct {
-			name string
-			set  bool
-		}{{"input", !in.Input.IsZero()}, {"page", in.Page != 0}, {"page_size", in.PageSize != 0}, {"timezone", in.Timezone != ""}} {
+			name, what string
+			set        bool
+		}{{"input", "Query Input", !in.Input.IsZero()}, {"page", "page", in.Page != 0}, {"page_size", "page size", in.PageSize != 0}, {"timezone", "time zone", in.Timezone != ""}} {
 			if a.set {
-				return command.InvalidArg(a.name, "unsupported", a.name+" applies to an AQL query only: a SQL query runs as it is written")
+				return command.InvalidArg(a.name, "unsupported", a.what+" is only applicable to AQL queries")
 			}
 		}
 		return nil
@@ -111,7 +113,7 @@ func (in QueryInput) target() error {
 	}
 	switch {
 	case in.DataSource != "":
-		return command.InvalidArg("data_source", "unsupported", "an AQL query runs against a dataset")
+		return command.InvalidArg("data_source", "unsupported", "an AQL query runs against a dataset, not a data source")
 	case strings.TrimSpace(in.Dataset) == "":
 		return command.InvalidArg("dataset", "required", "name the dataset to run the AQL query against")
 	}

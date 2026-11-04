@@ -99,6 +99,11 @@ type Command interface {
 	// Valid is an answer's verdict: an Out from an in-process call, or its JSON
 	// from a server. A command that judges nothing answers true.
 	Valid(out any) (bool, error)
+	// Check is what the command would refuse input with before running, as
+	// the op's JSON, without running it: decoded, its defaults applied,
+	// Normalize, Check; nil when it would run. Not its schema's checks. For a
+	// caller asking ahead, as a console warning of a flag missing.
+	Check(input []byte) error
 	// Register serves the command as its op in reg.
 	Register(reg *apikit.Registry[CommandContext, CommandContext])
 }
@@ -174,6 +179,15 @@ func (c *command[In, Out]) prepare(in In) (In, error) {
 		}
 	}
 	return in, nil
+}
+
+func (c *command[In, Out]) Check(input []byte) error {
+	var in In
+	if err := jsonkit.Unmarshal(input, &in); err != nil {
+		return err
+	}
+	_, err := c.prepare(in)
+	return err
 }
 
 func (c *command[In, Out]) Valid(out any) (bool, error) {

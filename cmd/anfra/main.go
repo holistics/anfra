@@ -131,6 +131,7 @@ func settingRefused(err error) error {
 
 func newRootCmd() *cobra.Command {
 	resultTypes = map[*cobra.Command]reflect.Type{} // this tree's, not the trees' before it
+	inputChecks = map[*cobra.Command]func([]string) error{}
 	root := &cobra.Command{
 		Use:   "anfra",
 		Short: "Anfra — local-first agentic analytics framework",

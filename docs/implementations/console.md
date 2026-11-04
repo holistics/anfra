@@ -11,7 +11,7 @@ Implements [anfra console](../designs/console.md): a session at a terminal, anfr
 | 2. The skeleton | Done (`cmd/anfra/console.go`, `cliui.ReadEntry`) |
 | 3. Output for a person | Done: YAML and JSON colored (`internal/pretty/color.go`) |
 | 3b. Notices in the status area | Done: a badge, one at a time (`consoleBadge`), and a restart after `update` |
-| 4. Modes and AQL | |
+| 4. Modes and AQL | Done (`cmd/anfra/console_session.go`) |
 | 5. A warm server | |
 | 6. History kept between sessions | Done, ahead of 3b, whose restart reloads it (`cmd/anfra/console_history.go`) |
 
@@ -88,12 +88,16 @@ Tests: the badge's kinds (`TestBadge`); the status shown while typing, not left 
 
 ## 4. Modes and AQL
 
-- **Modes**: `console <command> [flags]` (`\console …` in a text mode) and `anfra console <command> [flags]`; `console` alone back to command mode; in a text mode, a command needs a `\`. The commands a mode can be, from their positional args (`argsOn`, `cmd/anfra/schema.go`). The hint for AQL typed in command mode becomes "enter console query", and the banner, `\?` and `anfra console --help` say how to enter a text mode (`console query`) and leave it (`console`).
-- **How an entry ends** (`internal/console/ends.go`): `;;` for AQL, `;` for SQL, Enter otherwise; Alt+Enter and Ctrl+Enter; a `;;` in an open string ignored.
-- **`\use <dataset>`**, checked against the repo's datasets, and the dataset in the prompt.
-- Multi-line entries, with a continuation prompt.
+The session's state is a `consoleSession` (`cmd/anfra/console_session.go`): its mode and its flags.
 
-Tests: entries ending or not (a declaration's `;`, `;;` in a string, `;;` after a `//` comment); a scripted session switching modes.
+- **Modes** (`switchMode`): `console <command> [flags]`, `c …`, `\c …` in a text mode, and `anfra console <command> [flags]` (the console's flags not interspersed, so a mode's are the mode's); `console` alone back to command mode. A mode is a core command with a positional argument (`modeArg`, from its op's args): `query` and its subcommands, `search`, `show`, `validate`; anything else is refused, naming those (`modeCommands`). Text is passed after `--`: whole for a string argument, as words for a list (`textArgs`).
+- **How an entry ends** (`ends`, `terminated`): the mode's `--lang` in effect (its own flags, the session's, the command's default; `refreshLang`) decides: `;;` for AQL, `;` for SQL, removed before sending; Enter otherwise; a `\` line and an empty entry always. A terminator in a string or a comment (`//` in AQL, `--` in SQL) doesn't end it. The reader asks `EntryOptions.Ends` on Enter, and starts a line when it says no; Alt+Enter and Ctrl+Enter end the entry regardless. Lines after the first are prompted `...`.
+- **The session's flags** (`setFlags`, `withFlags`, `flagCatalog`): `\-d sales`, `\--timezone UTC --json`, an empty value unsetting one, `\--` listing them; added before a command runs to every command that takes them, unless given. Replaces the plan's `\use <dataset>`: one mechanism for every flag, the console knowing none's meaning. In a text mode a flag must be its command's, short names its command's; in command mode any command's, an ambiguous short name refused. The dataset isn't checked when set: a wrong one fails the next query, with its own error. An error whose violations name a flag says, in the console, how to set it for the session (`usageHelp`, `cmd/anfra/errors.go`; `TestConsoleErrorHelp`). A flag the mode was entered with changes the mode instead (`withoutFlag`), and shows with the session's in the line under the frame and in `\--` ("Set by the mode").
+- **A flag problem warned of before an entry fails** (`flagProblem`, the first of the badges): `command.Command` has `Check(input)`, what the command would refuse input with before running (decoded, defaults, `Normalize`, `Check`), without running; the CLI keeps, for each core command, a check of the input its parsed flags make (`inputChecks`, reset with each tree, as `resultTypes`). The console runs it for the mode, its flags and the session's, with any text: `! -d needed · Run \-d <value>` for a flag required, the check's message for another problem. The rule is the command's (`query`'s `target()`): an AQL query needs a dataset, a SQL one a data source and no dataset. Tested by `TestConsoleMissingFlag`.
+- **The prompt and the line under it**: the prompt is the mode (`query>`, `>`); the folder and the session's flags, as typed, go on the left of the line under the frame, the badge on its right, the left cut short first (`EntryOptions.Context`, `entryReader.bottom`).
+- **`\?`** (`consoleHelp`): where the session is and its flags, any notice (`consoleNotices`), in full; anfra's own help for the mode (`run` with `--help`, into a buffer); then the console's lines. The intros, one line each, point to it.
+
+Tests: dispatch in both modes, modes refused, text after `--` (`TestConsoleDispatch`); entries ending or not, a declaration's `;`, `;;` in a string, after a `//` comment, SQL's `;` and `--` (`TestConsoleEnds`); flags set, applied, overridden by an entry, kept from an artifact, refused, unset, `--lang` from the session, checked against a mode (`TestConsoleFlags`); `\?` in both modes (`TestConsoleHelp`); the bottom line's fitting (`TestReadEntryBottomLine`). By hand, through a pseudo-terminal: `\-d sales`, `c query`, a two-line AQL entry run by `;;` reaching `query` after `--`, `\c search`, `\--`, `\c`.
 
 ## 5. A warm server
 

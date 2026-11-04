@@ -16,10 +16,27 @@ import (
 
 // EntryOptions are what ReadEntry shows and remembers.
 type EntryOptions struct {
-	Prompt  string   // before the entry: "sales> "
+	Prompt  string   // before the entry: "query> "
 	History []string // earlier entries, oldest first, for Up and Down
-	Leave   string   // the hint shown under the prompt after Ctrl-C on an empty entry
-	Status  string   // a line under the prompt while typing, styled: a notice's badge; "" for none
+	Leave   string   // the hint shown under the prompt after Ctrl-C on an empty entry, in Status's place
+	// Warning, Context and Status share the line under the prompt while
+	// typing: Warning first, styled, what the next entry would fail for, where
+	// the eye lands; then Context, styled, where the session is;
+	// Status on the right, styled, a notice's badge. Too narrow, Context is cut
+	// short with … first, then Status, then Warning. "" for none.
+	Warning string
+	Context string
+	Status  string
+	// Ends reports whether the text typed is a whole entry, for Enter to end
+	// it rather than start a line (AQL's ;;); nil, Enter always ends it.
+	// Alt+Enter and Ctrl+Enter end it whatever it holds.
+	Ends func(text string) bool
+}
+
+// more is the prompt of an entry's lines after its first: "... ", under the
+// end of its prompt.
+func more(prompt string) string {
+	return strings.Repeat(" ", max(ansi.StringWidth(prompt)-4, 0)) + "... "
 }
 
 // ReadEntry reads one entry of a console at a terminal, as a shell reads a
@@ -32,7 +49,12 @@ func ReadEntry(ctx context.Context, in io.Reader, out io.Writer, opts EntryOptio
 	styles := NewTerminalStyles(out)
 	styles.Accent = styles.Accent.Bold(true) // the prompt: where each entry starts, found scrolling back
 	ta := textarea.New()
-	ta.Prompt = opts.Prompt
+	ta.SetPromptFunc(ansi.StringWidth(opts.Prompt), func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
+			return opts.Prompt
+		}
+		return more(opts.Prompt)
+	})
 	ta.ShowLineNumbers = false
 	ta.DynamicHeight = true
 	ta.MinHeight = 1
@@ -42,8 +64,8 @@ func ReadEntry(ctx context.Context, in io.Reader, out io.Writer, opts EntryOptio
 	taStyles := textarea.DefaultDarkStyles()
 	taStyles.Focused, taStyles.Blurred = plain, plain
 	ta.SetStyles(taStyles)
-	// One entry, one line, in this console: Enter ends it.
-	ta.KeyMap.InsertNewline = key.NewBinding(key.WithDisabled())
+	// Enter starts a line only where opts.Ends says the entry goes on.
+	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("enter"))
 
 	m := &entryReader{input: ta, opts: opts, styles: styles, browsing: len(opts.History)}
 	programOpts, finishOutput := terminalOptions(in, out)
@@ -124,7 +146,12 @@ func (m *entryReader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		m.leaving = false
 		switch msg.String() {
-		case "enter", "alt+enter", "ctrl+enter":
+		case "enter":
+			if m.opts.Ends == nil || m.opts.Ends(m.input.Value()) {
+				m.done = true
+				return m, tea.Quit
+			}
+		case "alt+enter", "ctrl+enter":
 			m.done = true
 			return m, tea.Quit
 		case "ctrl+c":
@@ -177,7 +204,7 @@ func (m *entryReader) View() tea.View {
 		lines := strings.Split(m.input.Value(), "\n")
 		band, ok := entryBand(m.styles)
 		for i, l := range lines {
-			prompt := ""
+			prompt := more(m.opts.Prompt)
 			if i == 0 {
 				prompt = m.opts.Prompt
 			}
@@ -191,16 +218,60 @@ func (m *entryReader) View() tea.View {
 		return tea.NewView(strings.Join(lines, "\n") + "\n")
 	}
 	// While typing: the entry framed by a rule above and below, as Claude
-	// Code frames its input, then one status line, there even when blank, so
-	// a badge coming or going shifts nothing. The leave hint takes the status
-	// line until the next key.
-	rule := m.styles.Muted.Render(strings.Repeat("─", max(m.width, 20)))
+	// Code frames its input, then one line, there even when blank, so a badge
+	// coming or going shifts nothing. The leave hint takes the badge's place
+	// until the next key.
+	width := m.width
+	if width <= 0 {
+		width = 80 // until the terminal says, as the text area assumes
+	}
+	rule := m.styles.Muted.Render(strings.Repeat("─", width))
 	status := m.opts.Status
 	if m.leaving && m.opts.Leave != "" {
 		status = m.styles.Muted.Render(m.opts.Leave)
 	}
-	if status == "" {
-		status = "\u00a0" // a blank line, kept: Bubble Tea drops a last line of spaces
+	return tea.NewView(rule + "\n" + m.input.View() + "\n" + rule + "\n" + m.bottom(width, status))
+}
+
+// bottom is the line under the frame: the warning and the context on the
+// left, status on the right, two spaces apart; to fit width, the context is
+// cut short first, then status, then the warning.
+func (m *entryReader) bottom(width int, status string) string {
+	const gap = 2
+	warning := ansi.Truncate(m.opts.Warning, width, "…")
+	if warning != "" && status != "" {
+		if room := width - ansi.StringWidth(warning) - gap; room > 1 {
+			status = ansi.Truncate(status, room, "…")
+		} else {
+			status = ""
+		}
+	} else {
+		status = ansi.Truncate(status, width, "…")
 	}
-	return tea.NewView(rule + "\n" + m.input.View() + "\n" + rule + "\n" + status)
+	room := width - ansi.StringWidth(warning) - ansi.StringWidth(status)
+	if warning != "" {
+		room -= gap
+	}
+	if status != "" {
+		room -= gap
+	}
+	left := warning
+	if m.opts.Context != "" && room > 1 {
+		if warning != "" {
+			left += strings.Repeat(" ", gap)
+		}
+		left += ansi.Truncate(m.opts.Context, room, m.styles.Muted.Render("…"))
+	}
+	line := left
+	if status != "" {
+		spaces := width - ansi.StringWidth(left) - ansi.StringWidth(status)
+		if left != "" {
+			spaces = max(spaces, 1)
+		}
+		line += strings.Repeat(" ", max(spaces, 0)) + status
+	}
+	if strings.TrimSpace(ansi.Strip(line)) == "" {
+		return "\u00a0" // a blank line, kept: Bubble Tea drops a last line of spaces
+	}
+	return line
 }

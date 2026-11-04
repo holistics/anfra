@@ -31,3 +31,9 @@ Held off: `--colors` with `--yaml` or `--json` at a shell, one command's answer 
 In `anfra console`, `\?` lists the commands in color, by [cli-pretty.md's rules](../designs/cli-pretty.md#color) (names violet, a command being what a person types), while `help` and `<command> --help` stay plain: they're cobra's templates. Coloring them as `\?` is, section titles (`Usage:`, `Flags:`) plain, command and flag names violet, `` `code` `` as a code span, needs template functions (`cobra.AddTemplateFunc`) and the root's usage and help templates written out.
 
 In the console only, as YAML and JSON: an agent running anfra in a terminal of its own reads `--help` too. Where to start: `output.color`, which a console's run sets (`cmd/anfra/output.go`), decides it, as it does for YAML.
+
+## Descriptions written for a person, and for an agent
+
+A command's long description (`Long`, and an op's `Doc`) is written for an agent as much as a person: `query`'s opens with three paragraphs on pages, `has_more`, exporting and NDJSON streaming, which an agent reading `--help` needs and a person at `anfra console`'s `\?` skims past. So `\?` shows a command's one-line `Short` and its flags, not its `Long` ([console.md](../designs/console.md#lines)).
+
+To decide: whether one description can serve both, rewritten (the outcome first, the details after, as cli-pretty.md's message-then-hints), or a command needs one for each, a person's beside the agent's (a `Person` field on `command.Def`, say). Start by rewriting `query`'s and seeing whether both readers are served.
