@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
@@ -27,6 +28,9 @@ type EntryOptions struct {
 	Warning string
 	Context string
 	Status  string
+	// Refresh, when set, gives Context again a few times a second while
+	// typing: for what changes under it, a server starting.
+	Refresh func() string
 	// Ends reports whether the text typed is a whole entry, for Enter to end
 	// it rather than start a line (AQL's ;;); nil, Enter always ends it.
 	// Alt+Enter and Ctrl+Enter end it whatever it holds.
@@ -121,19 +125,36 @@ func entryBand(styles TerminalStyles) (band lipgloss.Style, ok bool) {
 	return lipgloss.NewStyle().Background(lipgloss.Color("#f2f0eb")), true
 }
 
+// refreshMsg is the time to ask EntryOptions.Refresh again.
+type refreshMsg struct{}
+
+func refreshSoon() tea.Cmd {
+	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return refreshMsg{} })
+}
+
 func (m *entryReader) Init() tea.Cmd {
+	focus := m.input.Focus()
+	if m.opts.Refresh != nil {
+		focus = tea.Batch(focus, refreshSoon())
+	}
 	terminalBackground.Lock()
 	ask := !terminalBackground.asked && m.styles.Muted.Render("x") != "x"
 	terminalBackground.asked = terminalBackground.asked || ask
 	terminalBackground.Unlock()
 	if ask {
-		return tea.Batch(m.input.Focus(), tea.RequestBackgroundColor)
+		return tea.Batch(focus, tea.RequestBackgroundColor)
 	}
-	return m.input.Focus()
+	return focus
 }
 
 func (m *entryReader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case refreshMsg:
+		if m.done || m.eof {
+			return m, nil
+		}
+		m.opts.Context = m.opts.Refresh()
+		return m, refreshSoon()
 	case tea.BackgroundColorMsg:
 		dark := msg.IsDark()
 		terminalBackground.Lock()

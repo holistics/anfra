@@ -12,7 +12,7 @@ Implements [anfra console](../designs/console.md): a session at a terminal, anfr
 | 3. Output for a person | Done: YAML and JSON colored (`internal/pretty/color.go`) |
 | 3b. Notices in the status area | Done: a badge, one at a time (`consoleBadge`), and a restart after `update` |
 | 4. Modes and AQL | Done (`cmd/anfra/console_session.go`) |
-| 5. A warm server | |
+| 5. A warm server | Done (`cmd/anfra/console_server.go`) |
 | 6. History kept between sessions | Done, ahead of 3b, whose restart reloads it (`cmd/anfra/console_history.go`) |
 
 ## Order
@@ -101,7 +101,14 @@ Tests: dispatch in both modes, modes refused, text after `--` (`TestConsoleDispa
 
 ## 5. A warm server
 
-Without a server running, each core command starts its own sidecars (`invoke`, `cmd/anfra/commands.go`). At its start, the console uses the repo's server (`findServer`), or starts `anfra serve --idle-timeout 10m` detached (`detach_unix.go`), so it stops by itself after the session. `invoke` already prefers a running server, so the commands need no change. The banner says which.
+`consoleServer` (`cmd/anfra/console_server.go`):
+
+- **Found or started.** `findServer` finds the repo's running server, used and left alone. Otherwise `ensure` starts `anfra serve --idle-timeout 10m`, detached, in the repo's folder, and watches for it to answer (`findServer`, every 200ms, up to 30s). Outside an anfra repo, none.
+- **When.** On entering a mode whose command runs on the query engine (`runsOnEngine`: a core command the CLI forwards, not `cliLocal`), in the background; or before such a command (`ready`), which waits for a server starting with `cliui.RunActivity`'s spinner, and starts one stopped while idle. A command's own forwarding then finds it (`invoke`); a server not up in time leaves the command to run on its own.
+- **Stopped** with SIGTERM when the session ends (deferred), and before the restart after `update`, if the console started it. The 10-minute idle timeout is for a console that dies without stopping it: a running server holds DuckDB files locked.
+- **Shown** live in the line under the frame (`EntryOptions.Refresh`, asked every 300ms while typing): `server`, orange while starting, green once warm; and in `\?`'s `Server:` line (`describe`).
+
+Tests: which commands start one (`TestRunsOnEngine`). By hand, through a pseudo-terminal, in a scratch repo with the pinned sidecars (`.sidecars/`): none before `c query`, warm within a second after, `\validate` answered on it, stopped by `\q` (its runtime file removed, its process and sidecars gone a few seconds later); a server already running used, `Server: warm, at …, already running`, and left running.
 
 ## 6. History kept between sessions
 
