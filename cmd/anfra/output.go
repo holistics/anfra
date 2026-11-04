@@ -22,36 +22,47 @@ import (
 // output is how this run writes its output, and whether it may ask: the
 // root's --yaml, --json and --non-interactive
 // (docs/designs/commands-and-api.md#cli-output). The format flags and
-// --non-interactive are independent: --json sets the format only. color is
-// run's option, not a flag: a console's run, for a person, colors YAML and
-// JSON at a terminal (docs/designs/console.md).
+// --non-interactive are independent: --json sets the format only. inConsole
+// is run's option, not a flag: a console's run is a person's, so it colors
+// YAML and JSON at a terminal, and indents JSON (docs/designs/console.md).
 var output struct {
 	yaml           bool
 	json           bool
 	schema         bool
 	jq             string
 	nonInteractive bool
-	color          bool
+	inConsole      bool
 }
 
 // docTones are the tones of an error's and a warning's document: its code.
 var docTones = pretty.Tones{"error.code": "bad", "warning.code": "warn"}
 
-// paintYAML is b, YAML, colored for out when the run colors and out is a
-// terminal (pretty.ColorYAML); else b.
+// paintYAML is b, YAML, colored for out when the run is a console's and out is
+// a terminal (pretty.ColorYAML); else b.
 func paintYAML(out io.Writer, b []byte, tones pretty.Tones) []byte {
-	if !output.color {
+	if !output.inConsole {
 		return b
 	}
 	return pretty.ColorYAML(b, cliui.NewTerminalStyles(out), tones)
 }
 
-// paintJSON is paintYAML for JSON lines.
+// paintJSON is b, JSON lines, for a console's run: each document indented by
+// 2, as gh and jq show JSON to a person, then colored at a terminal; else b,
+// a line a document, for a program.
 func paintJSON(out io.Writer, b []byte, tones pretty.Tones) []byte {
-	if !output.color {
+	if !output.inConsole {
 		return b
 	}
-	return pretty.ColorJSON(b, cliui.NewTerminalStyles(out), tones)
+	var indented bytes.Buffer
+	for line := range bytes.Lines(b) {
+		v := jsontext.Value(bytes.TrimSuffix(line, []byte("\n")))
+		if err := v.Indent(jsontext.WithIndent("  ")); err != nil {
+			return b
+		}
+		indented.Write(v)
+		indented.WriteByte('\n')
+	}
+	return pretty.ColorJSON(indented.Bytes(), cliui.NewTerminalStyles(out), tones)
 }
 
 // structuredAsked reports whether the run asked for structured output, YAML or
@@ -355,7 +366,23 @@ func jsonToYAML(b []byte) ([]byte, error) {
 		return nil, errors.New("no JSON document")
 	}
 	blockStyle(&n)
-	return yaml.Marshal(&n)
+	return marshalYAML(&n)
+}
+
+// marshalYAML is v as the CLI writes YAML: indented by 2, as most YAML is
+// (yaml.v3's own is 4), so a deep answer, a query's columns say, costs its
+// reader, often an agent, fewer characters.
+func marshalYAML(v any) ([]byte, error) {
+	var b bytes.Buffer
+	enc := yaml.NewEncoder(&b)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 // writeJSONDoc writes {key: n} as one line of a JSONL stream, keeping n's order:

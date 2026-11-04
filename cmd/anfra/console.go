@@ -127,7 +127,7 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 			fmt.Fprintln(out, msg)
 		default:
 			cmdCtx, stopCmd := signal.NotifyContext(session, os.Interrupt)
-			code := run(cmdCtx, args, out, errOut, runOptions{color: true})
+			code := run(cmdCtx, args, out, errOut, runOptions{inConsole: true})
 			stopCmd()
 			if code != 0 && !isCommand(args[0]) { //nolint:contextcheck // names the commands, runs none
 				fmt.Fprintln(out, styles.Muted.Render(`Not an anfra command. To run AQL: query -d <dataset> "…" (typing it directly comes later).`))

@@ -18,14 +18,13 @@ To do, with database context sources:
 - `QueryClient` dials a `unix:<path>` base URL itself, through an undici `Agent({ connect: { socketPath } })` as `fetch`'s `dispatcher`, and keeps plain `fetch` for HTTP. undici is not a dependency yet. The browser build (`apps/lineage-demo`) does not import `query-client`, so it can live there.
 - Test it against a canal-query on a socket, and through `anfra ingest` with a `postgres` context source.
 
-## Color flags: `console --no-colors`, and `--colors` with `--yaml`
+## `anfra console --no-colors`
 
-The console colors YAML and JSON at a terminal, and nothing else does ([console.md](../designs/console.md), [cli-pretty.md](../designs/cli-pretty.md#color)). Two flags would let a person choose otherwise, run by run, without a setting an agent started from the same shell inherits:
+The console colors YAML and JSON at a terminal ([console.md](../designs/console.md), [cli-pretty.md](../designs/cli-pretty.md#color)). `--no-colors` would start a session without color, for a person who finds it noisy, or a terminal that shows it badly, without a setting an agent started from the same shell inherits. `NO_COLOR` does it today, for every command.
 
-- **`anfra console --no-colors`**: a session without color, for a person who finds it noisy, or a terminal that shows it badly. `NO_COLOR` does it today, for every command.
-- **`--colors`, with `--yaml` or `--json`**, at a shell: one command's answer colored, as the console would, for a person reading it at a terminal. Still only at a terminal, so a pipe stays plain.
+Where to start: `runOptions.inConsole` (`cmd/anfra/main.go`) colors and indents a console's output; `--no-colors` keeps the indentation and drops the color, so the option splits in two.
 
-Where to start: `runOptions.color` (`cmd/anfra/main.go`) is what the console sets; `--colors` would set it for one run, and `--no-colors` would keep the console from setting it. Decide first how they relate to `NO_COLOR` (which wins) and whether `--colors` colors the pretty format's defaults too, or only YAML and JSON.
+Held off: `--colors` with `--yaml` or `--json` at a shell, one command's answer colored as the console would. Color stays the console's: a run outside one is read by a program or an agent as often as by a person.
 
 ## Color `help` and `--help` in the console
 

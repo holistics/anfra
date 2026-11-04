@@ -58,10 +58,11 @@ func main() {
 	os.Exit(code)
 }
 
-// runOptions are how a run differs from `anfra <args>` at a shell: color,
-// YAML and JSON colored at a terminal, for a console's person.
+// runOptions are how a run differs from `anfra <args>` at a shell: inConsole,
+// a console's run, a person's, its YAML and JSON colored at a terminal and its
+// JSON indented.
 type runOptions struct {
-	color bool
+	inConsole bool
 }
 
 // run runs the command args name on a command tree of its own, as `anfra
@@ -70,7 +71,7 @@ type runOptions struct {
 // console.md): each tree starts from the flags' defaults.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runOptions) int {
 	root := newRootCmd() //nolint:contextcheck // builds commands; each runs on ctx, through ExecuteContextC
-	output.color = opts.color
+	output.inConsole = opts.inConsole
 	root.SetArgs(args)
 	root.SetOut(stdout)
 	root.SetErr(stderr)

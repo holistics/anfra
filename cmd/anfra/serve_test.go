@@ -182,7 +182,7 @@ func TestWarnIfOtherVersion(t *testing.T) {
 	} {
 		out.Reset()
 		warnIfOtherVersion(&out, runtimeFile{Version: "0.13.3"}, forwarded)
-		if got := out.String(); !strings.HasPrefix(got, "---\nwarning:\n    code: server_version_mismatch\n") ||
+		if got := out.String(); !strings.HasPrefix(got, "---\nwarning:\n  code: server_version_mismatch\n") ||
 			!strings.Contains(got, want) {
 			t.Errorf("forwarded=%v: warning =\n%s", forwarded, got)
 		}

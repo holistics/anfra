@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json/jsontext"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -50,14 +52,46 @@ func TestRunExitCodes(t *testing.T) {
 }
 
 // A console's run colors only at a terminal: into anything else, its output is
-// a shell's, byte for byte.
+// a shell's, but for JSON's indentation, a line a document still a document.
 func TestColorOnlyAtATerminal(t *testing.T) {
+	t.Cleanup(func() { output.inConsole = false }) // run leaves it as its last run had it
 	for _, args := range [][]string{{"version"}, {"version", "--json"}, {"nope"}, {"nope", "--json"}} {
-		var plainOut, plainErr, colorOut, colorErr bytes.Buffer
+		var plainOut, plainErr, consoleOut, consoleErr bytes.Buffer
 		run(t.Context(), args, &plainOut, &plainErr, runOptions{})
-		run(t.Context(), args, &colorOut, &colorErr, runOptions{color: true})
-		if colorOut.String() != plainOut.String() || colorErr.String() != plainErr.String() {
-			t.Errorf("%q colored off a terminal:\n%q\n%q", args, colorOut.String()+colorErr.String(), plainOut.String()+plainErr.String())
+		run(t.Context(), args, &consoleOut, &consoleErr, runOptions{inConsole: true})
+		got, want := consoleOut.String()+consoleErr.String(), plainOut.String()+plainErr.String()
+		if slices.Contains(args, "--json") {
+			got, want = compactJSONLines(t, got), compactJSONLines(t, want)
+		}
+		if got != want {
+			t.Errorf("%q colored off a terminal:\n%q\n%q", args, got, want)
 		}
 	}
+}
+
+// A console's JSON is indented: each document over lines, by 2.
+func TestConsoleJSONIndented(t *testing.T) {
+	t.Cleanup(func() { output.inConsole = false }) // run leaves it as its last run had it
+	var out, errOut bytes.Buffer
+	run(t.Context(), []string{"version", "--json"}, &out, &errOut, runOptions{inConsole: true})
+	if !strings.HasPrefix(out.String(), "{\n  \"version\": ") {
+		t.Fatalf("not indented: %q", &out)
+	}
+}
+
+// compactJSONLines is s's JSON documents, one a line, compact.
+func compactJSONLines(t *testing.T, s string) string {
+	t.Helper()
+	dec := jsontext.NewDecoder(strings.NewReader(s))
+	var b strings.Builder
+	for {
+		v, err := dec.ReadValue()
+		if err != nil {
+			break
+		}
+		_ = v.Compact()
+		b.Write(v)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
