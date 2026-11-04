@@ -8,6 +8,7 @@ Implements [anfra console](../designs/console.md): a session at a terminal, AQL 
 |---|---|
 | 1. One process, many runs | Done (`run`, `cmd/anfra/main.go`) |
 | A spike: stdin and the terminal across entries | Done on Linux; macOS and Windows to try |
+| 2. The skeleton | Done (`cmd/anfra/console.go`, `cliui.ReadEntry`) |
 
 ## Order
 
@@ -50,13 +51,14 @@ Not covered, for real terminals: macOS (Terminal.app, iTerm2: Option as Alt), re
 
 ## 2. The skeleton
 
-- **`anfra console`** (`cmd/anfra/console.go`): a CLI-only command, an artifact, refusing without a terminal.
-- **The line reader** (`internal/console/reader.go`): one inline Bubble Tea program an entry, ending with it, as `cliui`'s pickers do, so the command then runs with the terminal to itself and its own questions don't fight the prompt. On `bubbles/textarea`. History in memory, Up and Down.
-- **Splitting** (`internal/console/split.go`): a `\` line into args, shell quoting.
-- **Dispatch**: a `\` line runs through `run` on a new tree; the console's own commands (`\q`, `\exit`, `\?`) first. Without modes yet, any other entry is refused, saying to start it with `\`.
-- **Ctrl-C**: each command runs on a context of its own, canceled by an interrupt; the session's isn't.
+- **`anfra console`** (`cmd/anfra/console.go`): a CLI-only command, an artifact ("a session, until you leave"), refusing without a terminal or with `--non-interactive` as `precondition_failed`. The banner names the version and the folder; the prompt, the folder's name.
+- **The entry reader** (`cliui.ReadEntry`, `internal/cliui/entry.go`): one inline Bubble Tea program an entry, on `bubbles/textarea`, growing with the entry, ending with it, as `cliui`'s pickers do, so the command then runs with the terminal to itself. Up and Down step through the session's entries, the one being typed kept; Ctrl-C clears the entry, or on an empty one shows "\q or Ctrl-D to leave" under the prompt; Ctrl-D on an empty entry leaves. One line an entry, for now: Enter ends it.
+- **Splitting** (`splitArgs`): a `\` line into args as a POSIX shell splits words, quotes and backslashes, expanding nothing. A quote left open is said, and nothing runs.
+- **Dispatch** (`consoleArgs`): `\q`, `\exit`, `\?` (and a bare `\`) are the console's; `\console` is refused, being in one; any other `\` line runs through `run` on a new tree, its output and errors as the CLI writes them. A line without `\` is refused, saying to start it with one.
+- **Ctrl-C**: each command runs on a context of its own, canceled by an interrupt. The session's context keeps the root's values but not its end, which main's interrupt brings: only SIGTERM ends a session.
+- **No read of stdin outlives its command.** `publish`'s questions (`readLines`, `cmd/anfra/publish.go`) read through `muesli/cancelreader`, canceled with the question's context: after Ctrl-C at a question, the session reads the next entry, which the read left waiting used to take.
 
-Tests: the reader, driven with key sequences, as the pickers' tests are; splitting; a scripted session: `\version`, `\nope`, `\q`.
+Tests: the reader, driven with key sequences (`internal/cliui/entry_test.go`); splitting and dispatch, and the refusal without a terminal (`cmd/anfra/console_test.go`); a canceled read leaving the next line to the next reader (`TestReadLinesEndWithTheirContext`). A session driven through a pseudo-terminal, by hand: the banner, `\version`, `\nope`, a plain line, `\?`, a quote left open, Ctrl-C, history, `\console`, `\q`.
 
 ## 3. Output for a person
 
