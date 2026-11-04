@@ -20,14 +20,14 @@ func TestMain(m *testing.M) {
 // --jq leaves the next one writing YAML, unfiltered, as a console needs.
 func TestRunsInOneProcessStartClean(t *testing.T) {
 	var first, second, stderr bytes.Buffer
-	if code := run(t.Context(), []string{"version", "--json", "--jq", ".version"}, &first, &stderr); code != 0 {
+	if code := run(t.Context(), []string{"version", "--json", "--jq", ".version"}, &first, &stderr, runOptions{}); code != 0 {
 		t.Fatalf("first run: exit %d: %s", code, &stderr)
 	}
 	if got := strings.TrimSpace(first.String()); strings.ContainsAny(got, "{:\n") {
 		t.Fatalf("first run not filtered to the version: %q", got)
 	}
 	types := len(resultTypes)
-	if code := run(t.Context(), []string{"version"}, &second, &stderr); code != 0 {
+	if code := run(t.Context(), []string{"version"}, &second, &stderr, runOptions{}); code != 0 {
 		t.Fatalf("second run: exit %d: %s", code, &stderr)
 	}
 	if !strings.HasPrefix(second.String(), "version: ") {
@@ -41,10 +41,23 @@ func TestRunsInOneProcessStartClean(t *testing.T) {
 // run is the exit code main exits with: 1 for a failure, its error on stderr.
 func TestRunExitCodes(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := run(t.Context(), []string{"nope"}, &stdout, &stderr); code != 1 {
+	if code := run(t.Context(), []string{"nope"}, &stdout, &stderr, runOptions{}); code != 1 {
 		t.Fatalf("unknown command: exit %d", code)
 	}
 	if !strings.Contains(stderr.String(), "unknown_command") {
 		t.Fatalf("unknown command's error: %q", &stderr)
+	}
+}
+
+// A console's run colors only at a terminal: into anything else, its output is
+// a shell's, byte for byte.
+func TestColorOnlyAtATerminal(t *testing.T) {
+	for _, args := range [][]string{{"version"}, {"version", "--json"}, {"nope"}, {"nope", "--json"}} {
+		var plainOut, plainErr, colorOut, colorErr bytes.Buffer
+		run(t.Context(), args, &plainOut, &plainErr, runOptions{})
+		run(t.Context(), args, &colorOut, &colorErr, runOptions{color: true})
+		if colorOut.String() != plainOut.String() || colorErr.String() != plainErr.String() {
+			t.Errorf("%q colored off a terminal:\n%q\n%q", args, colorOut.String()+colorErr.String(), plainOut.String()+plainErr.String())
+		}
 	}
 }

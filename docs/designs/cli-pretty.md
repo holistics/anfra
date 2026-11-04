@@ -96,18 +96,20 @@ Files:
 Color helps a person find their way around the output, and see what needs attention. It never carries meaning alone.
 
 1. **Color only reinforces.** Every meaning is in the text: `behind` says it's behind, yellow or not. The output reads the same without color: piped, with `NO_COLOR`, or for a person who can't tell red from green.
-2. **The styles anfra already has.** `cliui.TerminalStyles` (`Heading`, `Muted`, `Success`, `Warning`, `Error`, `Code`, `Link`), in the 16 ANSI colors of the user's own palette, so it suits light and dark terminals. No new palette, no backgrounds.
+2. **The styles anfra already has.** `cliui.TerminalStyles` (`Heading`, `Muted`, `Accent`, `Selection`, `Success`, `Warning`, `Error`, `Code`, `Link`, `Key`), in the 16 ANSI colors of the user's own palette, so it suits light and dark terminals, but for one: anfra's violet, the design package's accent ([DESIGN.md](../../web/design/DESIGN.md), `#8a51d4`), mid-light for light and dark backgrounds alike, converted to what the terminal shows (the nearest of 256 colors; magenta, of 16). No backgrounds, but a code span's: it sets its text's color too, so it doesn't depend on the terminal's.
 3. **Off where `cliui` turns it off:** not a terminal, `NO_COLOR`, `CI`, `TERM=dumb`.
-4. **Weight for structure, hue for meaning.** Bold and faint lay out the document; green, yellow and red are only for tones, so a color always means something.
+4. **Weight for structure, hue for meaning.** Bold and faint lay out the document, in three steps: **bold** for the message alone, the one line saying what happened; plain for headings and values; faint for labels, headers and punctuation. Bold everywhere would mark nothing. Each hue means one thing: **violet** what a person can act on (a prompt, a selection, a link, a command to run), as the design package's one accent marks the primary action, links and selection; **bright blue** a key, in YAML and JSON; **green, yellow and red** tones.
 
 | What | Style |
 |---|---|
 | The `message` line | bold (`Heading`) |
-| Section labels (`Agents:`) and table headers | bold (`Heading`) |
+| Section labels standing apart (`Agents:`, `Hints:`, a blank line before and after), and a block's heading in a list | plain |
+| Section labels among their siblings (`Versions:`, inside a block) | faint (`Muted`), as the siblings' labels |
+| Table headers | faint (`Muted`): uppercase marks a header already |
 | Key labels (`Latest:`) | faint (`Muted`) |
 | `<none>` | faint (`Muted`) |
-| `` `code` `` in a message, a hint or a value | `Code`, without the backquotes |
-| A URL | `Link` |
+| `` `code` `` in a message, a hint or a value, a command to run | `Code`, a code span without the backquotes: the design package's dark violet text (`violet-350`, `#d4c0fc`) on its violet wash (`violet-a26` over its dark panel `ink-925`, `#332349`), a space of padding each side, as Sentry's CLI shows code: a dim tint, the text standing out. Both colors set, so it reads on dark and light terminals alike (8.6:1). Of 16 colors, bold magenta, without a fill |
+| A URL | `Link`, violet, underlined |
 | A value with a tone | `good` green (`Success`), `warn` yellow (`Warning`), `bad` red (`Error`) |
 | Everything else: values, numbers, paths | plain |
 
@@ -118,21 +120,25 @@ What `agent setup check` would look like, styles noted on the right:
 ```
 Claude Code's plugin is behind 0.4.5, and ~/.claude/skills has deprecated skills.   bold
 
-Skills:                                                                             bold
+Skills:                                                                             plain
   Latest:      0.4.5                                                                labels faint
   Checked At:  today
 
-Agents:                                                                             bold
-  NAME          STATUS          PLUGINS             COPIES                       headers bold
+Agents:                                                                             plain
+  NAME          STATUS          PLUGINS             COPIES                       headers faint
   Claude Code   installed       user 0.4.4 behind   ~/.claude/skills
                 └ green                    └ yellow
   OpenCode      not-installed   <none>              <none>
                 └ yellow        └ faint             └ faint
 
-Hints:                                                                              bold
+Hints:                                                                              plain
   Run `anfra agent setup` to update the Claude Code plugin.
-      └ Code
+      └ Code: a violet code span
 ```
+
+**Siblings look alike.** Labels at one level share a style, whatever their values: a section among key/value lines is faint as they are, the indentation showing what it holds. Only a section standing apart, as a heading does, is plain, a step above them.
+
+**YAML and JSON, in a console**, follow the same rules ([console.md](console.md)): every key bright blue (`Key`), siblings alike, the indentation showing what opens a map or a list; `null` and punctuation faint; a URL as a link; an error's `code` red and a warning's yellow, the tones every error and warning has; any other value plain. Keys are blue where pretty labels are faint: pretty aligns its values in a column, so its labels can recede, while YAML's keys, unaligned, are what a reader finds their way by. Blue is a key's alone, as jq colors keys, bright as it reads on dark backgrounds and light, and without bold: the hue sets keys apart, and bold is for what a reader looks for first (a console's prompt, a result's message), not a long result's every line; values get no hue of their type (jq's strings green), since green is a tone's. Outside a console, YAML and JSON stay plain, since an agent reads them.
 
 The tone inside a flattened cell (`behind`, in `user 0.4.4 behind`) is the field's own: flattening keeps each value's style.
 

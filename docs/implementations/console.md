@@ -1,6 +1,6 @@
 # Implementation: `anfra console`
 
-Implements [anfra console](../designs/console.md): a session at a terminal, AQL typed directly, anfra's commands behind a `\`, the output coloured for the person at the keyboard.
+Implements [anfra console](../designs/console.md): a session at a terminal, anfra's commands typed without the `anfra`, AQL typed directly in a query mode, the output coloured for the person at the keyboard.
 
 ## Where it stands
 
@@ -9,6 +9,8 @@ Implements [anfra console](../designs/console.md): a session at a terminal, AQL 
 | 1. One process, many runs | Done (`run`, `cmd/anfra/main.go`) |
 | A spike: stdin and the terminal across entries | Done on Linux; macOS and Windows to try |
 | 2. The skeleton | Done (`cmd/anfra/console.go`, `cliui.ReadEntry`) |
+| 3. Output for a person | Done: YAML and JSON colored (`internal/pretty/color.go`) |
+| 3b. Notices in the status area | Next |
 
 ## Order
 
@@ -51,10 +53,10 @@ Not covered, for real terminals: macOS (Terminal.app, iTerm2: Option as Alt), re
 
 ## 2. The skeleton
 
-- **`anfra console`** (`cmd/anfra/console.go`): a CLI-only command, an artifact ("a session, until you leave"), refusing without a terminal or with `--non-interactive` as `precondition_failed`. The banner names the version and the folder; the prompt, the folder's name.
+- **`anfra console`**, or `anfra c` (`cmd/anfra/console.go`): a CLI-only command, an artifact ("a session, until you leave"), refusing without a terminal or with `--non-interactive` as `precondition_failed`. The banner names the version and the folder; the prompt, the folder's name.
 - **The entry reader** (`cliui.ReadEntry`, `internal/cliui/entry.go`): one inline Bubble Tea program an entry, on `bubbles/textarea`, growing with the entry, ending with it, as `cliui`'s pickers do, so the command then runs with the terminal to itself. Up and Down step through the session's entries, the one being typed kept; Ctrl-C clears the entry, or on an empty one shows "\q or Ctrl-D to leave" under the prompt; Ctrl-D on an empty entry leaves. One line an entry, for now: Enter ends it.
 - **Splitting** (`splitArgs`): a `\` line into args as a POSIX shell splits words, quotes and backslashes, expanding nothing. A quote left open is said, and nothing runs.
-- **Dispatch** (`consoleArgs`): `\q`, `\exit`, `\?` (and a bare `\`) are the console's; `\console` is refused, being in one; any other `\` line runs through `run` on a new tree, its output and errors as the CLI writes them. A line without `\` is refused, saying to start it with one.
+- **Dispatch** (`consoleArgs`): command mode, the only one before step 4. `\q`, `exit`, `quit`, `\?` (and a bare `\`) are the console's; `console` is refused, being in one, until step 4 makes `console <command>` the switch; any other line runs through `run` on a new tree, a `\` before it taken too, its output and errors as the CLI writes them. A line that isn't a command fails as at a shell, and the console says how to run AQL (`isCommand`).
 - **Ctrl-C**: each command runs on a context of its own, canceled by an interrupt. The session's context keeps the root's values but not its end, which main's interrupt brings: only SIGTERM ends a session.
 - **No read of stdin outlives its command.** `publish`'s questions (`readLines`, `cmd/anfra/publish.go`) read through `muesli/cancelreader`, canceled with the question's context: after Ctrl-C at a question, the session reads the next entry, which the read left waiting used to take.
 
@@ -62,16 +64,18 @@ Tests: the reader, driven with key sequences (`internal/cliui/entry_test.go`); s
 
 ## 3. Output for a person
 
-- **`run`'s `forPerson` option**, set by the console: colour on wherever the stream is a terminal, unless `NO_COLOR`, and the pretty format for every command whose view is reviewed. Which those are is a mark on the command, beside `anfra.default-format`: today the CLI-only commands, each core command joining when its view clears [the bar](../designs/cli-pretty.md#where-it-stands). Any other writes YAML.
-- **Coloured JSON** from its tokens (`jsontext`): keys, strings, numbers, booleans and null, punctuation, in the `cliui` styles.
-- **Coloured YAML**: yaml.v3 writes it as it does now, and goccy/go-yaml's lexer colours that text, as yq does. A YAML printer of our own would have to match yaml.v3's quoting exactly.
-- `--jq`'s plain lines stay plain.
+- **`run`'s options** (`runOptions`, `cmd/anfra/main.go`): `color`, set by the console only, and set by `run` on every run, as the flags are reset. A shell's run leaves it off.
+- **YAML and JSON colored** (`pretty.ColorYAML`, `pretty.ColorJSON`, `internal/pretty/color.go`) by the pretty format's rules ([cli-pretty.md](../designs/cli-pretty.md#color)): every key bright blue; `null` and punctuation faint; a URL as a link; an error's `code` red and a warning's yellow (`docTones`); any other value plain. yaml.v3 writes the YAML as it did, and goccy/go-yaml's lexer (already in the module graph, through huma) colors that text. The JSON, compact lines the CLI wrote, is scanned as it is.
+- **Where**: a core command's answer (`renderTo`), `--jq`'s YAML and JSON (`renderJQ`; its plain lines stay plain), and errors and warnings (`writeDoc`, `writeJSONDoc`). Only at a terminal (`cliui.NewTerminalStyles`: not with `NO_COLOR`, `CI` or `TERM=dumb`).
+- **The text is never changed.** Each colorer checks its output, its escape codes removed, against its input, and gives the input back uncolored when they differ: the lexer drops the text's final line break, which is put back.
+- The pretty format was colored already, wherever it's written to a terminal. Its section labels now follow "siblings look alike": bold only where the section stands apart, faint among key/value lines (`TestSectionLabels`).
+- **Not yet: the pretty format for a core command in the console.** The mark saying a command's view is reviewed comes with the first core command's view: today none has one.
 
-Tests: for every format, the coloured output with its escape codes removed is byte for byte the plain output.
+Tests: for YAML and JSON, colored output with its escape codes removed is the input, and without styles nothing changes (`internal/pretty/color_test.go`); each rule's style; a colored run into anything but a terminal writes what a shell's run writes, errors included (`TestColorOnlyAtATerminal`). A session driven through a pseudo-terminal, by hand: `\version`, `\nope`, `--json`, `--jq` giving a scalar and a map.
 
 ## 4. Modes and AQL
 
-- **Modes**: `\console <command> [flags]` and `anfra console <command> [flags]`; the commands a mode can be, from their positional args (`argsOn`, `cmd/anfra/schema.go`).
+- **Modes**: `console <command> [flags]` (`\console …` in a text mode) and `anfra console <command> [flags]`; `console` alone back to command mode; in a text mode, a command needs a `\`. The commands a mode can be, from their positional args (`argsOn`, `cmd/anfra/schema.go`). The hint for AQL typed in command mode becomes "enter console query", and the banner, `\?` and `anfra console --help` say how to enter a text mode (`console query`) and leave it (`console`).
 - **How an entry ends** (`internal/console/ends.go`): `;;` for AQL, `;` for SQL, Enter otherwise; Alt+Enter and Ctrl+Enter; a `;;` in an open string ignored.
 - **`\use <dataset>`**, checked against the repo's datasets, and the dataset in the prompt.
 - Multi-line entries, with a continuation prompt.

@@ -27,6 +27,7 @@ type EntryOptions struct {
 // terminal to itself. Callers pass stdout as out.
 func ReadEntry(ctx context.Context, in io.Reader, out io.Writer, opts EntryOptions) (string, error) {
 	styles := NewTerminalStyles(out)
+	styles.Accent = styles.Accent.Bold(true) // the prompt: where each entry starts, found scrolling back
 	ta := textarea.New()
 	ta.Prompt = opts.Prompt
 	ta.ShowLineNumbers = false

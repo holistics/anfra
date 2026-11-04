@@ -104,7 +104,7 @@ func (p *Printer) Question(question string, choices ...string) {
 		listed = listed || ChoiceName(c) != c
 	}
 	def := p.Styles.Muted.Render("(default: " + ChoiceName(choices[len(choices)-1]) + ")")
-	mark := p.Styles.Code.Render("?") + " "
+	mark := p.Styles.Accent.Render("?") + " "
 	if !listed {
 		p.ask(mark, p.Styles.Heading.Render(question)+" "+strings.Join(labels, " / ")+" "+def)
 		return
@@ -146,7 +146,7 @@ func (p *Printer) ask(mark, text string) {
 // it for the answer.
 func (p *Printer) Input(question string) {
 	p.Open()
-	fmt.Fprint(p.w, p.Styles.Code.Render("?")+" "+p.Styles.Heading.Render(question)+" ")
+	fmt.Fprint(p.w, p.Styles.Accent.Render("?")+" "+p.Styles.Heading.Render(question)+" ")
 	p.wrote = true
 }
 

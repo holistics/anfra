@@ -174,8 +174,7 @@ func writeDoc(w io.Writer, key string, v any) {
 	if err != nil {
 		return
 	}
-	_, _ = io.WriteString(w, "---\n")
-	_, _ = w.Write(b)
+	_, _ = w.Write(paintYAML(w, append([]byte("---\n"), b...), docTones))
 }
 
 // blockStyle drops the JSON's style from n and beneath, its quotes and braces,
