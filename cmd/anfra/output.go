@@ -26,12 +26,13 @@ var output struct {
 	yaml           bool
 	json           bool
 	schema         bool
+	jq             string
 	nonInteractive bool
 }
 
 // structuredAsked reports whether the run asked for structured output, YAML or
 // JSON, rather than a command's default.
-func structuredAsked() bool { return output.yaml || output.json }
+func structuredAsked() bool { return output.yaml || output.json || output.jq != "" }
 
 // A command's annotations about its output. Every runnable command has an
 // output kind (TestEveryCommandHasAnOutputKind).
@@ -119,6 +120,7 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	pf := root.PersistentFlags()
 	pf.BoolVar(&output.yaml, "yaml", false, "write the answer as YAML, whatever the command's default")
 	pf.BoolVar(&output.json, "json", false, "write the answer, warnings and errors as JSON")
+	pf.StringVar(&output.jq, "jq", "", "filter the answer with a jq expression, writing what it gives as YAML, or JSON with --json")
 	pf.BoolVar(&output.schema, "schema", false, "write the command's input and output, as JSON Schema, instead of running it: each input field is a flag, --<field>, unless its x-cli says it's positional")
 	pf.BoolVar(&output.nonInteractive, "non-interactive", false, "ask no questions and print no notices: refuse what would need an answer")
 	root.SetGlobalNormalizationFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
@@ -164,6 +166,8 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 		switch {
 		case output.yaml && output.json:
 			return formatRefused("--json", "pass --yaml or --json, not both")
+		case output.jq != "":
+			flag = "--jq"
 		case output.yaml:
 			flag = "--yaml"
 		case !output.json:
@@ -171,6 +175,9 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 		}
 		if cmd.Annotations[outputKind] == outputArtifact {
 			return formatRefused(flag, cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", not structured output")
+		}
+		if output.jq != "" {
+			return compileJQ(output.jq)
 		}
 		return nil
 	}
