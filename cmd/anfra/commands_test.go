@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -246,7 +247,7 @@ func TestDownload(t *testing.T) {
 		srv.URL + "/exports/x":                           "b\n2\n",
 	} {
 		out := filepath.Join(dir, "out.csv")
-		if err := download(context.Background(), link, out); err != nil {
+		if err := download(context.Background(), link, out, io.Discard); err != nil {
 			t.Fatalf("%s: %v", link, err)
 		}
 		if b, _ := os.ReadFile(out); string(b) != want {
@@ -259,7 +260,7 @@ func TestDownload(t *testing.T) {
 
 	gone := filepath.Join(dir, "gone.csv")
 	var remote *remoteError
-	if err := download(context.Background(), srv.URL+"/exports/gone", gone); !errors.As(err, &remote) || remote.resp.Code != "not_found" {
+	if err := download(context.Background(), srv.URL+"/exports/gone", gone, io.Discard); !errors.As(err, &remote) || remote.resp.Code != "not_found" {
 		t.Errorf("an expired link: %v, want the server's not_found", err)
 	}
 	if _, err := os.Stat(gone); !os.IsNotExist(err) {

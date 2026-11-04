@@ -142,7 +142,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 	}
 
 	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
-		var d delivery
+		d := delivery{stdout: runCmd.OutOrStdout()}
 		if presentationOf(c) == presentDownload {
 			d.output, _ = runCmd.Flags().GetString("output")
 			d.link, _ = runCmd.Flags().GetBool("link")
@@ -416,9 +416,10 @@ func logFailure(ctx context.Context, logger *slog.Logger, name string, err error
 	logger.LogAttrs(ctx, level, "Command failed", attrs...)
 }
 
-// delivery is how the CLI delivers an export: its file to stdout, or to output,
-// or its link alone.
+// delivery is how the CLI delivers an answer: to stdout, an export as its
+// file, to stdout or to output, or as its link alone.
 type delivery struct {
+	stdout io.Writer
 	output string
 	link   bool
 }
@@ -444,26 +445,26 @@ func presentationOf(c command.Command) presentation {
 // or its link shown when asked for (--link), and any other answer shown.
 func deliver(ctx context.Context, c command.Command, body []byte, d delivery) error {
 	if presentationOf(c) != presentDownload || d.link {
-		return present(c, body)
+		return presentTo(c, body, d.stdout)
 	}
 	var link command.ExportLink
 	if err := jsonkit.Unmarshal(body, &link); err != nil {
 		return fmt.Errorf("decode the export's link: %w", err)
 	}
-	return download(ctx, link.URL, d.output)
+	return download(ctx, link.URL, d.output, d.stdout)
 }
 
 // download copies the file at link (file:// from the CLI's own exports,
-// http(s):// from a server's) to output, or to stdout. A partly written output
+// http(s):// from a server's) to output, or without one to stdout. A partly written output
 // is removed; the CLI's own file, once written out, is too: it was made for
 // this.
-func download(ctx context.Context, link, output string) error {
+func download(ctx context.Context, link, output string, stdout io.Writer) error {
 	src, err := openLink(ctx, link)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
-	if err := copyTo(output, src); err != nil {
+	if err := copyTo(output, src, stdout); err != nil {
 		return err
 	}
 	if f, ok := src.(*os.File); ok {
@@ -472,9 +473,9 @@ func download(ctx context.Context, link, output string) error {
 	return nil
 }
 
-func copyTo(output string, src io.Reader) error {
+func copyTo(output string, src io.Reader, stdout io.Writer) error {
 	if output == "" {
-		_, err := io.Copy(os.Stdout, src)
+		_, err := io.Copy(stdout, src)
 		return err
 	}
 	dst, err := os.Create(output)
@@ -522,12 +523,8 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("the export's link %q is not one the CLI can download", link)
 }
 
-// present shows an answer as YAML, and turns an invalid verdict into a silent
-// exit code 1: the answer says why.
-func present(c command.Command, body []byte) error {
-	return presentTo(c, body, os.Stdout)
-}
-
+// presentTo shows an answer as YAML on out, and turns an invalid verdict into a
+// silent exit code 1: the answer says why.
 func presentTo(c command.Command, body []byte, out io.Writer) error {
 	if err := renderTo(body, "application/json", out); err != nil {
 		return err

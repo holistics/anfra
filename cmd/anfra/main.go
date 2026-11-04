@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
+	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,7 +23,7 @@ import (
 )
 
 // exitCodeError makes a command exit with a specific code without printing an
-// error message — the output was already rendered (see present()).
+// error message — the output was already rendered (see presentTo()).
 type exitCodeError struct{ code int }
 
 func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
@@ -47,14 +49,27 @@ func main() {
 	// Ctrl-C (SIGINT/SIGTERM) cancels in-flight work — an update download, a
 	// query, or the serve loop.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	// Traces, when an OTEL_* endpoint asks for them; flushed before any exit below.
 	flush := startTelemetry(ctx)
+	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	flush()
+	stop()
+	os.Exit(code)
+}
 
+// run runs the command args name on a command tree of its own, as `anfra
+// <args>` does, and is its exit code: writing its answer to stdout, its error
+// to stderr. A process can run many, one after another (docs/implementations/
+// console.md): each tree starts from the flags' defaults.
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	root := newRootCmd() //nolint:contextcheck // builds commands; each runs on ctx, through ExecuteContextC
+	root.SetArgs(args)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
 	// ExecuteContextC sets that root context and returns the command that actually
 	// ran, so we get the real subcommand name (handles flags/args/aliases).
-	executed, err := newRootCmd().ExecuteContextC(ctx)
+	executed, err := root.ExecuteContextC(ctx)
 	// After the command runs, surface a cached "update available" notice (and, if
 	// opted in, kick a background update). Best-effort; never affects exit status.
 	// Not after a failure: the error, or the invalid answer, is what to read, and
@@ -63,22 +78,20 @@ func main() {
 		maybeNotifyUpdate(executed.Name())
 		agents.Succeeded() // ends a streak of failures (agents.Failed)
 	}
-
-	flush()
 	if err == nil {
-		return
+		return 0
 	}
 	var ec *exitCodeError
 	if errors.As(err, &ec) {
-		os.Exit(ec.code) // result already rendered; exit quietly
+		return ec.code // result already rendered; exit quietly
 	}
-	output.json = output.json || jsonAsked(os.Args[1:]) // flags that failed to parse set nothing
+	output.json = output.json || jsonAsked(args) // flags that failed to parse set nothing
 	err = runError(ctx, err)
-	printError(os.Stderr, err, failureHint(err))
+	printError(stderr, err, failureHint(err))
 	if apperr.From(err).Code == clierr.Interrupted.Code() {
-		os.Exit(130) // as a shell exits on an interrupt
+		return 130 // as a shell exits on an interrupt
 	}
-	os.Exit(1)
+	return 1
 }
 
 // runError is a failed run's err as the CLI tells it: a run the user
@@ -109,6 +122,7 @@ func settingRefused(err error) error {
 }
 
 func newRootCmd() *cobra.Command {
+	resultTypes = map[*cobra.Command]reflect.Type{} // this tree's, not the trees' before it
 	root := &cobra.Command{
 		Use:   "anfra",
 		Short: "Anfra — local-first agentic analytics framework",
