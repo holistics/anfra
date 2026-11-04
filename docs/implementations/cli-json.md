@@ -16,7 +16,7 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | The prettifier's first views: `update`, `agent setup` and `init` | Built (`internal/pretty`) |
 | CLI-only commands' errors classified | Done (`internal/clierr`) |
 | `--schema` | Done (`cmd/anfra/schema.go`) |
-| `--jq` | Not started |
+| `--jq` | Done (`cmd/anfra/jq.go`) |
 
 ## Order
 
@@ -132,13 +132,15 @@ Tests: cobra's refusals coded; an interrupted run; the org's server's errors pas
 - **An artifact refuses it**, as it refuses `--json`.
 - **Two fixes to apikit's inlining**, which discovery shares: a struct field's description, beside its `$ref`, was dropped; and a type that refers to itself (lineage's `DiagramSection`) failed, so `/api/ops/lineage` did. It is now kept once, in `$defs`.
 
-The summary and doc stay out: `--help` is the first look, `--schema` the contract, and repeating them would cost every reader. The hint for reading the output alone, without descriptions (`--jq '.output | del(.. | .description?)'`), comes with `--jq`.
+The summary and doc stay out: `--help` is the first look, `--schema` the contract, and repeating them would cost every reader. The hint for reading the output alone, without descriptions, came with `--jq`, in the AGENTS.md block.
 
 ## 5. `--jq`
 
-`anfra <command> --jq <expr>` filters a structured result before it's written, with jq (gojq, built in: no `jq` to install), as `gh --jq` does. The filter is applied to the result's data, which is the same in YAML and JSON, and what it answers is written in the chosen format: YAML by default, JSON with `--json`, and a scalar as a plain line, as `jq -r`. With it, a command writes no pretty format, as with `--yaml`; an artifact refuses it, as it refuses `--json`.
+`anfra <command> --jq <expr>` filters a structured answer before it's written, with jq built in (gojq v0.12.19, as `gh --jq` embeds it: no `jq` to install). Done:
 
-- **jq, not yq.** jq is the language most people and agents know, and gojq a solid Go library. mikefarah's yq, the common one, speaks a dialect of jq that looks alike and behaves differently, so it isn't offered beside it; `--yaml` piped into yq still works.
-- **A filter, not field selection.** `gh --json fields` selects what `gh` asks its API for. An op here computes its whole answer, so selecting fields would only cut it afterwards, which the filter does too, and more. An op whose answer is costly can take its own argument for less (a `fields` on `query`, say), later and per op.
-- **It cuts what an agent reads**, which matters most for large answers: query rows, search results.
-
+- **Applied in `renderTo`**, so to every structured answer: core commands', CLI-only commands' (it skips the pretty format, as `--yaml` does), and `--schema`'s.
+- **Written in the chosen format:** each result a JSON line with `--json`; when every result is a scalar, a plain line each, a string unquoted, as `jq -r`, for a shell (`for url in $(anfra auth status --jq '.orgs[].url')`); else YAML, each result a document of its own when there are several. A filtered object's keys come out sorted: gojq's objects are maps.
+- **Numbers as written:** the answer is decoded with each integer an `int`, or a `*big.Int` past its range, so a filter keeps every digit.
+- **Refused early:** an expression that doesn't parse is an invalid `--jq` before the command runs, a filter that fails on the answer one after; an artifact refuses it, as it refuses `--json`.
+- **jq, not yq.** jq is the language most people and agents know. mikefarah's yq, the common one, speaks a dialect that looks alike and behaves differently, so it isn't offered beside it; `--yaml` piped into yq still works.
+- **A filter, not field selection.** `gh --json fields` selects what `gh` asks its API for. An op here computes its whole answer, so selecting fields would only cut it afterwards, which the filter does, and more. An op whose answer is costly can take its own argument for less (a `fields` on `query`, say), later and per op.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json/jsontext"
 	"fmt"
@@ -576,6 +577,14 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 func renderTo(body []byte, contentType string, out io.Writer) error {
 	if !isJSONContentType(contentType) {
 		_, err := out.Write(body)
+		return err
+	}
+	if jqCode != nil {
+		var filtered bytes.Buffer
+		if err := renderJQ(body, &filtered); err != nil {
+			return err
+		}
+		_, err := out.Write(filtered.Bytes())
 		return err
 	}
 	if output.json {

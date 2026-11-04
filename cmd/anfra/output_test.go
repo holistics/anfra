@@ -16,7 +16,10 @@ import (
 
 // resetOutput clears what a run's --json and --non-interactive set, which
 // outlives the run: a test that runs a command with them cleans up after it.
-func resetOutput() { output.yaml, output.json, output.nonInteractive = false, false, false }
+func resetOutput() {
+	output.yaml, output.json, output.schema, output.jq, output.nonInteractive = false, false, false, "", false
+	jqCode = nil
+}
 
 // With --json, an answer is its op's JSON as it is, one document a line.
 func TestJSONAnswer(t *testing.T) {
@@ -339,5 +342,61 @@ func TestUnderscoreFlags(t *testing.T) {
 	}
 	if v, _ := q.Flags().GetString("data-source"); v != "warehouse" {
 		t.Errorf("--data_source set data-source to %q", v)
+	}
+}
+
+// --jq filters an answer before it's written: scalars as plain lines, as jq -r
+// writes them; objects as YAML documents; with --json, a JSON line each. A big
+// integer keeps every digit.
+func TestJQ(t *testing.T) {
+	t.Cleanup(resetOutput)
+	body := []byte(`{"orgs": [{"url": "https://a.example/o/x", "n": 9007199254740993}, {"url": "https://b.example/o/y", "n": 1}]}`)
+	for _, tc := range []struct {
+		expr string
+		json bool
+		want string
+	}{
+		{".orgs[].url", false, "https://a.example/o/x\nhttps://b.example/o/y\n"},
+		{".orgs[0].n", false, "9007199254740993\n"},
+		{".orgs[] | {url}", false, "---\nurl: https://a.example/o/x\n---\nurl: https://b.example/o/y\n"},
+		{".orgs[].url", true, "\"https://a.example/o/x\"\n\"https://b.example/o/y\"\n"},
+		{".orgs | length", true, "2\n"},
+	} {
+		resetOutput()
+		output.json = tc.json
+		if err := compileJQ(tc.expr); err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := renderTo(body, "application/json", &out); err != nil {
+			t.Fatalf("%s: %v", tc.expr, err)
+		}
+		if out.String() != tc.want {
+			t.Errorf("%s (json %v):\n%s\nwant\n%s", tc.expr, tc.json, out.String(), tc.want)
+		}
+	}
+
+	// A filter that fails on the answer is an invalid --jq.
+	resetOutput()
+	_ = compileJQ(".orgs[0].url[]")
+	if err := renderTo(body, "application/json", &bytes.Buffer{}); apperr.From(err).Code != apperr.ValidationFailed.Code() {
+		t.Errorf("failing filter: %v", err)
+	}
+}
+
+// An expression that doesn't parse is refused before the command runs.
+func TestJQRefusedBeforeRunning(t *testing.T) {
+	t.Cleanup(resetOutput)
+	t.Chdir(t.TempDir())
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"init", "--jq", ".["})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if apperr.From(err).Code != apperr.ValidationFailed.Code() || !strings.Contains(err.Error(), "--jq") {
+		t.Errorf("err = %v", err)
+	}
+	if entries, _ := os.ReadDir("."); len(entries) != 0 {
+		t.Errorf("init ran: %v", entries)
 	}
 }
