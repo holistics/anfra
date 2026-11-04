@@ -602,7 +602,7 @@ func (r prettyRenderer) doc(d prettyDoc) string {
 		if len(d.body) > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(r.styles.Heading.Render("Hints:") + "\n")
+		b.WriteString("Hints:\n") // a section standing apart, as its siblings
 		for _, h := range d.hints {
 			b.WriteString("  " + r.inline(h) + "\n")
 		}
@@ -615,15 +615,26 @@ func (r prettyRenderer) doc(d prettyDoc) string {
 // lines, as gofmt aligns a struct literal's fields: a nested section ends the
 // run. At the top, a blank line sets apart what has rows (a table, a list of
 // blocks, a text block); a section of key/values stays with its neighbours.
+// A section's label is plain where the section stands apart, a blank line (or
+// the document's edge) before and after it, as a heading; elsewhere faint, as
+// its siblings' labels are, the indentation showing what it holds. Bold is the
+// message's alone.
 func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, indent int, top bool) {
 	labelWidths := runLabelWidths(entries)
 	pad := strings.Repeat(" ", indent)
+	apart := func(i int) bool { // a blank line, or the edge, between entries i-1 and i
+		return i == 0 || i == len(entries) || hasRows(entries[i].value.kind) || hasRows(entries[i-1].value.kind)
+	}
 	for i, e := range entries {
-		if top && i > 0 && (hasRows(e.value.kind) || hasRows(entries[i-1].value.kind)) {
+		if top && i > 0 && apart(i) {
 			b.WriteString("\n")
 		}
 		labelWidth := labelWidths[i]
 		label := e.label + ":"
+		heading := r.styles.Muted.Render(label)
+		if top && apart(i) && apart(i+1) {
+			heading = label
+		}
 		switch e.value.kind {
 		case prettyText:
 			b.WriteString(pad + r.styles.Muted.Render(label) + spaces(labelWidth-ansi.StringWidth(label)+2) + r.cell(e.value.cell) + "\n")
@@ -636,15 +647,15 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 				b.WriteString(pad + head + r.cell(l) + "\n")
 			}
 		case prettyBlock:
-			b.WriteString(pad + r.styles.Heading.Render(label) + "\n")
+			b.WriteString(pad + heading + "\n")
 			for _, l := range e.value.lines {
 				b.WriteString(pad + "  " + r.cell(l) + "\n")
 			}
 		case prettySection:
-			b.WriteString(pad + r.styles.Heading.Render(label) + "\n")
+			b.WriteString(pad + heading + "\n")
 			r.entries(b, e.value.entries, indent+2, false)
 		case prettyList:
-			b.WriteString(pad + r.styles.Heading.Render(label) + "\n")
+			b.WriteString(pad + heading + "\n")
 			if t := e.value.table; t != nil && r.fits(t, indent+2) {
 				r.table(b, t, indent+2)
 				break
@@ -653,11 +664,11 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 				if j > 0 {
 					b.WriteString("\n")
 				}
-				b.WriteString(pad + "  " + r.styles.Heading.Render(r.inline(it.heading)+":") + "\n")
+				b.WriteString(pad + "  " + r.inline(it.heading) + ":" + "\n")
 				r.entries(b, it.entries, indent+4, false)
 			}
 		case prettyRows:
-			b.WriteString(pad + r.styles.Heading.Render(label) + "\n")
+			b.WriteString(pad + heading + "\n")
 			r.table(b, &prettyTable{rows: e.value.rows, truncate: -1}, indent+2)
 		}
 	}
@@ -754,7 +765,7 @@ func (r prettyRenderer) table(b *strings.Builder, t *prettyTable, indent int) {
 		cells := make([]string, len(t.header))
 		ws := make([]int, len(t.header))
 		for i, h := range t.header {
-			cells[i], ws[i] = r.styles.Heading.Render(h), ansi.StringWidth(h)
+			cells[i], ws[i] = r.styles.Muted.Render(h), ansi.StringWidth(h)
 		}
 		line(cells, ws)
 	}

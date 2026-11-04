@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json/jsontext"
+	"io"
 	"math/big"
 	"strconv"
 	"strings"
@@ -57,22 +58,25 @@ func filterJQ(body []byte) ([][]byte, error) {
 	return out, nil
 }
 
-// renderJQ writes body through --jq to w: each result as a JSON line with
+// renderJQ writes body through --jq to out: each result as a JSON line with
 // --json; else, when every result is a scalar, each as a plain line, a string
 // unquoted, as jq -r writes them, for a shell to read; else as YAML, each a
 // document of its own when there are several. gojq's objects are maps, so a
-// filtered object's keys come out sorted.
-func renderJQ(body []byte, w *bytes.Buffer) error {
+// filtered object's keys come out sorted. Nothing is written when a result
+// can't be.
+func renderJQ(body []byte, out io.Writer) error {
 	results, err := filterJQ(body)
 	if err != nil {
 		return err
 	}
+	var w bytes.Buffer
 	if output.json {
 		for _, r := range results {
 			w.Write(r)
 			w.WriteByte('\n')
 		}
-		return nil
+		_, err := out.Write(paintJSON(out, w.Bytes(), nil))
+		return err
 	}
 	if allScalars(results) {
 		for _, r := range results {
@@ -82,7 +86,8 @@ func renderJQ(body []byte, w *bytes.Buffer) error {
 			w.Write(r)
 			w.WriteByte('\n')
 		}
-		return nil
+		_, err := out.Write(w.Bytes())
+		return err
 	}
 	for _, r := range results {
 		y, err := jsonToYAML(r)
@@ -94,7 +99,8 @@ func renderJQ(body []byte, w *bytes.Buffer) error {
 		}
 		w.Write(y)
 	}
-	return nil
+	_, err = out.Write(paintYAML(out, w.Bytes(), nil))
+	return err
 }
 
 // allScalars reports whether every JSON document of results is a scalar: a

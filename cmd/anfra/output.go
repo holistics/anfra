@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json/jsontext"
 	"errors"
 	"io"
@@ -21,13 +22,36 @@ import (
 // output is how this run writes its output, and whether it may ask: the
 // root's --yaml, --json and --non-interactive
 // (docs/designs/commands-and-api.md#cli-output). The format flags and
-// --non-interactive are independent: --json sets the format only.
+// --non-interactive are independent: --json sets the format only. color is
+// run's option, not a flag: a console's run, for a person, colors YAML and
+// JSON at a terminal (docs/designs/console.md).
 var output struct {
 	yaml           bool
 	json           bool
 	schema         bool
 	jq             string
 	nonInteractive bool
+	color          bool
+}
+
+// docTones are the tones of an error's and a warning's document: its code.
+var docTones = pretty.Tones{"error.code": "bad", "warning.code": "warn"}
+
+// paintYAML is b, YAML, colored for out when the run colors and out is a
+// terminal (pretty.ColorYAML); else b.
+func paintYAML(out io.Writer, b []byte, tones pretty.Tones) []byte {
+	if !output.color {
+		return b
+	}
+	return pretty.ColorYAML(b, cliui.NewTerminalStyles(out), tones)
+}
+
+// paintJSON is paintYAML for JSON lines.
+func paintJSON(out io.Writer, b []byte, tones pretty.Tones) []byte {
+	if !output.color {
+		return b
+	}
+	return pretty.ColorJSON(b, cliui.NewTerminalStyles(out), tones)
 }
 
 // structuredAsked reports whether the run asked for structured output, YAML or
@@ -337,11 +361,13 @@ func jsonToYAML(b []byte) ([]byte, error) {
 // writeJSONDoc writes {key: n} as one line of a JSONL stream, keeping n's order:
 // n is an error or a warning, which the CLI edits as a node.
 func writeJSONDoc(w io.Writer, key string, n *yaml.Node) {
-	enc := jsontext.NewEncoder(w)
+	var b bytes.Buffer
+	enc := jsontext.NewEncoder(&b)
 	_ = enc.WriteToken(jsontext.BeginObject)
 	_ = enc.WriteToken(jsontext.String(key))
 	_ = encodeNode(enc, n)
 	_ = enc.WriteToken(jsontext.EndObject)
+	_, _ = w.Write(paintJSON(w, b.Bytes(), docTones))
 }
 
 // encodeNode writes n, a YAML node read from JSON or made by setKey, as JSON.

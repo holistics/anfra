@@ -52,18 +52,25 @@ func main() {
 
 	// Traces, when an OTEL_* endpoint asks for them; flushed before any exit below.
 	flush := startTelemetry(ctx)
-	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr, runOptions{})
 	flush()
 	stop()
 	os.Exit(code)
+}
+
+// runOptions are how a run differs from `anfra <args>` at a shell: color,
+// YAML and JSON colored at a terminal, for a console's person.
+type runOptions struct {
+	color bool
 }
 
 // run runs the command args name on a command tree of its own, as `anfra
 // <args>` does, and is its exit code: writing its answer to stdout, its error
 // to stderr. A process can run many, one after another (docs/implementations/
 // console.md): each tree starts from the flags' defaults.
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runOptions) int {
 	root := newRootCmd() //nolint:contextcheck // builds commands; each runs on ctx, through ExecuteContextC
+	output.color = opts.color
 	root.SetArgs(args)
 	root.SetOut(stdout)
 	root.SetErr(stderr)

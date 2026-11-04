@@ -2,7 +2,7 @@
 
 *Being designed. Not built yet: the steps are in [implementations/console.md](../implementations/console.md).*
 
-A session at a terminal, as psql, `rails console` and duckdb's shell are: AQL typed directly, anfra's commands behind a `\`, the output for the person at the keyboard.
+A session at a terminal, as psql, `rails console` and duckdb's shell are: anfra's commands typed without the `anfra`, AQL typed directly in a query mode, the output for the person at the keyboard.
 
 ## Why
 
@@ -20,7 +20,22 @@ The session also holds what a one-shot command can't: the dataset queries run ag
 
 ```
 $ anfra console
-anfra console: AQL ends with ;; and runs. \? lists the console's commands, \q leaves.
+anfra console 0.17.0 in ~/work/acme
+Type a command as after anfra: validate, query -d sales "orders | count()".
+\? lists the console's commands, \q or exit leaves.
+
+acme> validate
+valid: true
+…
+
+acme> publish check
+Would publish to Acme (https://cloud.example.com/o/acme).
+
+Files:
+  ├── datasets/
+  …
+
+acme> console query
 acme query> \use sales
 acme/sales query> orders
               ... | group(orders.status)
@@ -35,16 +50,11 @@ result:
   - [pending, "87"]
 has_more: false
 
-acme/sales query> \publish check
-Would publish to Acme (https://cloud.example.com/o/acme).
-Files
-├── datasets/
-…
-
 acme/sales query> \console search
 acme/sales search> revenue by region
 …
-acme/sales search> \q
+acme/sales search> \console
+acme> exit
 ```
 
 (Drafts: the prompt, the banner, and the answers' shapes, cut short with `…`.)
@@ -53,9 +63,12 @@ acme/sales search> \q
 
 ## Lines
 
-- **A line starting with `\` runs an anfra command,** without the `anfra`: `\validate`, `\query compile -d sales "…"`, `\publish check`. Split into args as a shell would, quotes and escapes included. It runs on Enter, as psql's backslash commands do.
-- **Any other entry goes to the mode's command.** The mode is the command that receives plain text: `query` by default. `\console <command> [flags]` switches it: `\console search`, `\console query --lang sql`. `anfra console search` starts in it. A command can be a mode when it takes its main input positionally, which `--schema` marks with `x-cli: [positional]`: today `query`, `search`, `show` and `validate`. A string argument gets the entry whole; a list, its words.
-- **The console's own commands**: `\use <dataset>` sets the dataset any `query` in the session runs against, unless it says `-d`; `\console <command> [flags]` switches the mode; `\q` and `\exit` leave, as Ctrl-D on an empty entry does; `\?` lists these, and points to `\help` for anfra's.
+The console is in **command mode** until a **text mode** is entered, and the prompt says which: `acme>`, or `acme/sales query>`.
+
+- **In command mode, a line is a command, typed as after `anfra`: `validate`, `query compile -d sales "…"`, `publish check`. Split into args as a shell would, quotes and escapes included, and run on Enter. A `\` before it, typed from a text mode's habit, is taken too. A line that isn't a command (AQL, say) fails as at a shell, `unknown_command`, and the console says how to type AQL.
+- **In a text mode, a line goes to the mode's command,** and a command needs a `\`: `\validate`. The mode is the command that receives plain text: `console query` enters `query`'s, `console query --lang sql` SQL's, `console search` `search`'s; `anfra console query` starts in it. `console` alone, `\console` in a text mode, goes back to command mode. So `console <command>` means one thing wherever it's typed, and so does its short name: `c query`, `\c search`, `\c` back. psql's `\c` connects to another database, the nearest thing to `\use`: `\c sales`, sales not being a command, says to `\use sales`. A command can be a mode when it takes its main input positionally, which `--schema` marks with `x-cli: [positional]`: today `query`, `search`, `show` and `validate`. A string argument gets the entry whole; a list, its words.
+- **`\` means "a command, not text"**, needed only where text is what a line is by default.
+- **The console's own commands**, in every mode: `\use <dataset>` sets the dataset any `query` in the session runs against, unless it says `-d`; `\q`, `exit` and `quit` leave, as Ctrl-D on an empty entry does; `\?` lists these, then anfra's commands as `anfra --help` groups them, one line each, the names in violet (`help` and `--help` stay cobra's, plain, for now).
 
 ## How an entry ends
 
@@ -72,14 +85,14 @@ The mode decides.
 - **Colour** wherever the stream is a terminal; `NO_COLOR` still turns it off. The colours follow [cli-pretty.md](cli-pretty.md#color), so YAML, JSON and the pretty format read as one family. `--jq`'s plain lines stay plain, as `jq -r`'s are.
 - **Questions** are asked, as a command run at a terminal asks them.
 - **Ctrl-C** clears the entry being typed, or cancels the command running. The session stays.
-- **The prompt** shows the repo, the dataset when one is set, and the mode.
+- **The prompt** shows the repo, the dataset when one is set, and the mode, in bold violet: where each entry starts, found scrolling back.
 - **Notices** (anfra or the skills behind, a server started) go in a status area under the prompt, as Claude Code's, rather than after each command's output: shown while they hold, not repeated after every command, and never mixed into an answer.
 - **A warm server**: the console uses the repo's running server, or starts one that stops by itself once the session has been gone a while. The banner says which.
 - **Without a terminal**, `anfra console` refuses, as does `--yaml` or `--json` on it: it's an artifact, writing "a session, until you leave".
 
 ## The name
 
-`console`, as `rails console`, `fly console` and Symfony's. It can be confused with a web console: AWS's, Google Cloud's, and anfra Cloud reserves `console` as a path (`internal/bi/tenancy/tenancy.go` in anfra-cloud). Accepted: the command's help says what it is, and anfra Cloud's page would be the web console, this the terminal's. The others considered:
+`console`, as `rails console`, `fly console` and Symfony's, with `c` as its short name: `anfra c`, as `rails c`. It can be confused with a web console: AWS's, Google Cloud's, and anfra Cloud reserves `console` as a path (`internal/bi/tenancy/tenancy.go` in anfra-cloud). Accepted: the command's help says what it is, and anfra Cloud's page would be the web console, this the terminal's. The others considered:
 
 | Name | Against |
 |---|---|

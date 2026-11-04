@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json/jsontext"
 	"fmt"
@@ -580,26 +579,21 @@ func renderTo(body []byte, contentType string, out io.Writer) error {
 		return err
 	}
 	if jqCode != nil {
-		var filtered bytes.Buffer
-		if err := renderJQ(body, &filtered); err != nil {
-			return err
-		}
-		_, err := out.Write(filtered.Bytes())
-		return err
+		return renderJQ(body, out)
 	}
 	if output.json {
 		v := jsontext.Value(slices.Clone(body))
 		if err := v.Compact(); err != nil {
 			return fmt.Errorf("decode response: %w", err)
 		}
-		_, err := out.Write(append(v, '\n'))
+		_, err := out.Write(paintJSON(out, append(v, '\n'), nil))
 		return err
 	}
 	b, err := jsonToYAML(body)
 	if err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
-	_, err = out.Write(b)
+	_, err = out.Write(paintYAML(out, b, nil))
 	return err
 }
 

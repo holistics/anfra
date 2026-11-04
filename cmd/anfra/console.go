@@ -18,18 +18,61 @@ import (
 	"github.com/holistics/anfra/internal/meta"
 )
 
-// The console's own commands (docs/designs/console.md#lines).
-const consoleHelp = `The console's commands:
-  \?          list these
-  \q, \exit   leave (or Ctrl-D)
-Any other \ runs an anfra command: \help lists them, \<command> --help says more.`
+// consoleHelp is \?'s answer: the console's own commands, then anfra's, as
+// anfra --help groups them, one line each, the names in violet, typed as
+// they are (docs/designs/console.md#lines). Left out: the console itself,
+// refused in one; help, which this replaces; completion, a shell's.
+func consoleHelp(styles cliui.TerminalStyles) string {
+	var b strings.Builder
+	section := func(title string, rows [][2]string) {
+		width := 0
+		for _, r := range rows {
+			width = max(width, len(r[0]))
+		}
+		b.WriteString(title + "\n")
+		for _, r := range rows {
+			b.WriteString("  " + styles.Accent.Render(r[0]) + strings.Repeat(" ", width-len(r[0])+3) + r[1] + "\n")
+		}
+	}
+	section("The console's commands:", [][2]string{
+		{`\?`, "list these"},
+		{`\q, exit, quit`, "leave (or Ctrl-D)"},
+	})
+	root := newRootCmd()
+	for _, g := range root.Groups() {
+		var rows [][2]string
+		for _, c := range root.Commands() {
+			if c.GroupID != g.ID || c.Hidden || !c.IsAvailableCommand() || c.Name() == "console" || c.Name() == "help" || c.Name() == "completion" {
+				continue
+			}
+			rows = append(rows, [2]string{c.Name(), c.Short})
+		}
+		if len(rows) > 0 {
+			b.WriteString("\n")
+			section(g.Title, rows)
+		}
+	}
+	b.WriteString("\n" + styles.Muted.Render("<command> --help says more about one."))
+	return b.String()
+}
+
+// consoleAct is what an entry asks of the console.
+type consoleAct int
+
+const (
+	actRun   consoleAct = iota // run an anfra command
+	actLeave                   // end the session
+	actHelp                    // list the commands
+	actSay                     // say why it can't run
+)
 
 func newConsoleCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "console",
-		Short: "Start a session at this terminal, running anfra's commands for a person",
-		Long: "Start a session at this terminal, as psql or rails console does: each line starting with \\\n" +
-			"runs an anfra command, without the anfra (\\validate, \\query -d sales \"…\"), until \\q or Ctrl-D.\n" +
+		Use:     "console",
+		Aliases: []string{"c"},
+		Short:   "Start a session at this terminal, running anfra's commands for a person",
+		Long: "Start a session at this terminal, as psql or rails console does: each line runs a command,\n" +
+			"typed as after anfra (validate, query -d sales \"…\"), until \\q, exit or Ctrl-D.\n" +
 			"Ctrl-C clears the line being typed, or cancels the command running. It needs a terminal.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -54,11 +97,11 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 	styles := cliui.NewTerminalStyles(out)
 	dir, _ := os.Getwd()
 	fmt.Fprintf(out, "anfra console %s in %s\n", meta.Version, homeRelative(dir))
-	fmt.Fprintln(out, styles.Muted.Render(`Start a command with \, as in \validate or \query -d sales "orders | count()".`))
-	fmt.Fprintln(out, styles.Muted.Render(`\? lists the console's commands, \q leaves.`))
+	fmt.Fprintln(out, styles.Muted.Render(`Type a command as after anfra: validate, query -d sales "orders | count()".`))
+	fmt.Fprintln(out, styles.Muted.Render(`\? lists the console's commands, \q or exit leaves.`))
 	fmt.Fprintln(out)
 
-	opts := cliui.EntryOptions{Prompt: filepath.Base(dir) + "> ", Leave: `\q or Ctrl-D to leave`}
+	opts := cliui.EntryOptions{Prompt: filepath.Base(dir) + "> ", Leave: `\q, exit or Ctrl-D to leave`}
 	for {
 		entry, err := cliui.ReadEntry(session, in, out, opts)
 		if errors.Is(err, io.EOF) {
@@ -74,16 +117,21 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 		if n := len(opts.History); n == 0 || opts.History[n-1] != entry {
 			opts.History = append(opts.History, entry)
 		}
-		args, leave, msg := consoleArgs(entry)
-		switch {
-		case leave:
+		args, act, msg := consoleArgs(entry)
+		switch act {
+		case actLeave:
 			return nil
-		case msg != "":
+		case actHelp:
+			fmt.Fprintln(out, consoleHelp(styles)) //nolint:contextcheck // names the commands, runs none
+		case actSay:
 			fmt.Fprintln(out, msg)
 		default:
 			cmdCtx, stopCmd := signal.NotifyContext(session, os.Interrupt)
-			run(cmdCtx, args, out, errOut)
+			code := run(cmdCtx, args, out, errOut, runOptions{color: true})
 			stopCmd()
+			if code != 0 && !isCommand(args[0]) { //nolint:contextcheck // names the commands, runs none
+				fmt.Fprintln(out, styles.Muted.Render(`Not an anfra command. To run AQL: query -d <dataset> "…" (typing it directly comes later).`))
+			}
 		}
 		fmt.Fprintln(out)
 		if session.Err() != nil {
@@ -92,27 +140,37 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 	}
 }
 
-// consoleArgs is what an entry asks: an anfra command's args, to leave, or a
-// message instead, the console's own (\?) or why it can't run.
-func consoleArgs(entry string) (args []string, leave bool, msg string) {
-	rest, isCommand := strings.CutPrefix(entry, `\`)
-	if !isCommand {
-		return nil, false, `Start a command with \, as in \validate: typing AQL directly isn't supported yet.`
-	}
+// consoleArgs is what an entry asks: an anfra command's args, to leave, the
+// commands listed (\?), or a message saying why it can't run. In command
+// mode, the console's only one yet, a line is a command; a \ before it, as
+// a text mode will need, is taken too (docs/designs/console.md#lines).
+func consoleArgs(entry string) (args []string, act consoleAct, msg string) {
+	rest := strings.TrimPrefix(entry, `\`)
 	switch strings.TrimSpace(rest) {
-	case "q", "exit":
-		return nil, true, ""
+	case "q", "exit", "quit":
+		return nil, actLeave, ""
 	case "?", "":
-		return nil, false, consoleHelp
+		return nil, actHelp, ""
 	}
 	args, err := splitArgs(rest)
 	if err != nil {
-		return nil, false, err.Error()
+		return nil, actSay, err.Error()
 	}
-	if args[0] == "console" {
-		return nil, false, `You're in the console already: \? lists its commands.`
+	if args[0] == "console" || args[0] == "c" {
+		return nil, actSay, `You're in the console already: \? lists its commands.`
 	}
-	return args, false, ""
+	return args, actRun, ""
+}
+
+// isCommand reports whether name is one of anfra's commands, or an alias of
+// one: a line starting otherwise, AQL say, is said how to type it.
+func isCommand(name string) bool {
+	for _, c := range newRootCmd().Commands() {
+		if c.Name() == name || c.HasAlias(name) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitArgs splits s into args as a POSIX shell does, without expanding
