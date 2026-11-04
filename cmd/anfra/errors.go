@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,7 +105,7 @@ func printError(w io.Writer, err error, hint string) {
 	// command's usage, when a violation names an arg, and hint.
 	var help []string
 	if ce != nil && nameArgs(mapValue(e, "details"), ce.args) {
-		help = append(help, fmt.Sprintf("Run `%s --help` for usage.", ce.path))
+		help = append(help, usageHelp(ce.path, mapValue(e, "details")))
 	}
 	if hint != "" {
 		help = append(help, hint)
@@ -214,6 +215,33 @@ func nameArgs(details *yaml.Node, args []command.Arg) bool {
 		setKey(v, "arg", argName(args, field.Value))
 	}
 	return true
+}
+
+// usageHelp is the help for a call whose violations nameArgs named: its
+// command's usage, as a shell runs it. In a console, as typed there, without
+// the anfra, and first how to set each flag a violation names for every
+// command (docs/designs/console.md#lines): a flag missing is most often one
+// the session would rather hold.
+func usageHelp(path string, details *yaml.Node) string {
+	if !output.inConsole {
+		return fmt.Sprintf("Run `%s --help` for usage.", path)
+	}
+	var sets []string
+	if vs := mapValue(details, "violations"); vs != nil {
+		for _, v := range vs.Content {
+			if arg := mapValue(v, "arg"); arg != nil && strings.HasPrefix(arg.Value, "--") && !slices.Contains(sets, arg.Value) {
+				sets = append(sets, arg.Value)
+			}
+		}
+	}
+	usage := fmt.Sprintf("Run `%s --help` for usage.", strings.TrimPrefix(path, "anfra "))
+	if len(sets) == 0 {
+		return usage
+	}
+	for i, f := range sets {
+		sets[i] = "`\\" + f + " <value>`"
+	}
+	return fmt.Sprintf("%s sets it for every command here. %s", strings.Join(sets, " or "), usage)
 }
 
 // mapValue is the value of key in mapping m, or nil.

@@ -90,3 +90,29 @@ func TestReadEntryFrameKeepsItsHeight(t *testing.T) {
 		t.Fatalf("heights: quiet %d, with a badge %d, with the hint %d", quiet, withBadge, withHint)
 	}
 }
+
+// The line under the frame holds the context on the left and the status on
+// the right; too narrow, the context is cut short first.
+func TestReadEntryBottomLine(t *testing.T) {
+	m := &entryReader{input: textarea.New(), opts: EntryOptions{Context: "acme · -d sales --json"}} // unstyled, without a terminal
+	if got := m.bottom(40, "↑ anfra 0.17.0"); got != "acme · -d sales --json    ↑ anfra 0.17.0" {
+		t.Errorf("wide: %q", got)
+	}
+	if got := m.bottom(28, "↑ anfra 0.17.0"); got != "acme · -d s…  ↑ anfra 0.17.0" {
+		t.Errorf("narrow: %q", got)
+	}
+	if got := m.bottom(10, "↑ anfra 0.17.0"); got != "↑ anfra 0…" {
+		t.Errorf("narrower than the status: %q", got)
+	}
+	// A warning comes first, the context after it, cut short before the status.
+	m.opts.Warning = "! --dataset is missing"
+	if got := m.bottom(62, "↑ anfra 0.17.0"); got != "! --dataset is missing  acme · -d sales --json  ↑ anfra 0.17.0" {
+		t.Errorf("with a warning: %q", got)
+	}
+	if got := m.bottom(45, "↑ anfra 0.17.0"); got != "! --dataset is missing  acme…  ↑ anfra 0.17.0" {
+		t.Errorf("with a warning, narrow: %q", got)
+	}
+	if got := m.bottom(30, "↑ anfra 0.17.0"); got != "! --dataset is missing  ↑ anf…" {
+		t.Errorf("with a warning, narrower: %q", got)
+	}
+}

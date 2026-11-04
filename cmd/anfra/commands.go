@@ -140,6 +140,27 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 		cmd.Flags().Bool("link", false, "print the export's link instead of downloading its file")
 	}
 
+	// The command's input as its flags make it, with text for its positional,
+	// checked as the command would before running: for a console asking ahead.
+	inputChecks[cmd] = func(text []string) error {
+		values, err := flagValues(cmd.Flags(), args, flagArg)
+		if err != nil {
+			return err
+		}
+		if positional != nil && len(text) > 0 {
+			if positional.Type == command.ArgStringArray {
+				values[positional.Name] = text
+			} else {
+				values[positional.Name] = text[0]
+			}
+		}
+		input, err := jsonkit.Marshal(values)
+		if err != nil {
+			return err
+		}
+		return c.Check(input)
+	}
+
 	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
 		d := delivery{stdout: runCmd.OutOrStdout()}
 		if presentationOf(c) == presentDownload {
@@ -336,6 +357,12 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 	}
 	return deliver(ctx, c, body, d)
 }
+
+// inputChecks are each core command's check of the input its parsed flags
+// make, with text for its positional, without running it (command.Check):
+// for a console, to warn of a flag missing before an entry fails for it.
+// Keyed by command, they're a tree's, as resultTypes are.
+var inputChecks = map[*cobra.Command]func(text []string) error{}
 
 // cliLocal are the core commands the CLI runs itself while the repo's server
 // runs: their answer is about the anfra running them, so forwarded they would

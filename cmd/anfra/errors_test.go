@@ -221,3 +221,25 @@ func TestCloudErrorsPassThrough(t *testing.T) {
 		t.Errorf("got\n%s", out.String())
 	}
 }
+
+// In a console, an error naming a flag says how to set it for the session,
+// and the usage as typed there, without the anfra.
+func TestConsoleErrorHelp(t *testing.T) {
+	t.Cleanup(func() { output.inConsole = false })
+	err := apperr.NewWith(apperr.ValidationFailed, "x", apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "x"}))
+	args := []command.Arg{{Name: "data_source", Type: command.ArgString}}
+	for _, tc := range []struct {
+		inConsole bool
+		want      string
+	}{
+		{false, "help: Run `anfra query --help` for usage."},
+		{true, "help: '`\\--data-source <value>` sets it for every command here. Run `query --help` for usage.'"},
+	} {
+		output.inConsole = tc.inConsole
+		var out bytes.Buffer
+		printError(&out, &commandError{path: "anfra query", args: args, err: err}, "")
+		if !strings.Contains(out.String(), tc.want) {
+			t.Errorf("inConsole=%v:\n%s\nwant %s", tc.inConsole, &out, tc.want)
+		}
+	}
+}
