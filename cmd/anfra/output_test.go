@@ -400,3 +400,46 @@ func TestJQRefusedBeforeRunning(t *testing.T) {
 		t.Errorf("init ran: %v", entries)
 	}
 }
+
+// --pretty is for a command with a pretty view, alone: refused elsewhere and
+// beside another format, before the command runs.
+func TestPrettyRefused(t *testing.T) {
+	for args, want := range map[string]string{
+		"validate --pretty":        "validate has no pretty view yet",
+		"query x --pretty --json":  "pass one format",
+		"query x --pretty --jq .a": "pass one format",
+		"serve --pretty":           "writes a log",
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := run(t.Context(), strings.Fields(args), &stdout, &stderr, runOptions{}); code == 0 || !strings.Contains(stderr.String(), want) {
+			t.Errorf("%s: exit %d: %s", args, code, &stderr)
+		}
+	}
+}
+
+// query's answer, pretty: its rows as a grid labelled by its columns, from its
+// JSON, as a server would send it; YAML in a console when asked for it.
+func TestQueryPretty(t *testing.T) {
+	saved := output
+	t.Cleanup(func() { output = saved })
+	output = saved
+	output.json, output.jq = false, "" // whatever an earlier test left
+	q := registered(t, "query")
+	body := []byte(`{"sql":"select","columns":[{"name":"s","fieldName":"s","label":"Status","adhoc":false,"isMeasure":false}],` +
+		`"result":{"fields":["s"],"records":[["delivered"]]},"has_more":false,"timings":{"steps":[],"end_ms":3}}`)
+	for _, tc := range []struct {
+		pretty, inConsole, yaml bool
+		want                    string
+	}{
+		{pretty: true, want: "Status"},
+		{inConsole: true, want: "Status"},
+		{inConsole: true, yaml: true, want: "sql: select"},
+		{want: "sql: select"},
+	} {
+		output.pretty, output.inConsole, output.yaml = tc.pretty, tc.inConsole, tc.yaml
+		var out bytes.Buffer
+		if err := presentTo(q, body, &out); err != nil || !strings.Contains(out.String(), tc.want) {
+			t.Errorf("pretty=%v inConsole=%v yaml=%v: %v\n%s", tc.pretty, tc.inConsole, tc.yaml, err, &out)
+		}
+	}
+}

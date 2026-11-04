@@ -8,15 +8,15 @@ How the CLI shows a command's structured output to a person at a terminal: laid 
 
 - **Formats.** A command's output is an artifact (a log, a script) or structured. Structured output comes as YAML, JSON, or pretty.
 - **Defaults.** A core command writes YAML. A CLI-only command writes the pretty format by default, through the prettifier, since people run them more than programs do: `update`, `agent setup`, `init`, `publish` and `auth`. `--yaml` or `--json` on any command gives structured output.
-- **`--pretty`** comes once the prettifier shows every command well, `query` included. Then we decide whether pretty becomes the default on an interactive terminal for every command, with YAML for everything else.
-- **In [`anfra console`](console.md)**, output is for a person, so a command whose view is reviewed writes the pretty format by default, a core command included; any other writes YAML, coloured. A core command's view reaches people there first.
+- **`--pretty`** asks for the pretty format, from a command with a pretty view: every CLI-only command, and of the core commands, those whose view is reviewed (`prettyViews`, `cmd/anfra/output.go`): `query` so far. Any other refuses it, as it does beside `--yaml`, `--json` or `--jq`. A core command's default stays YAML, outside a console. Whether pretty becomes the default on an interactive terminal for every command waits for the prettifier to show every one well.
+- **In [`anfra console`](console.md)**, output is for a person, so a command with a pretty view writes it by default, `query` included; any other writes YAML, coloured. `--yaml` or `--json`, an entry's or the session's, still wins.
 
 The bar for a pretty view: **it beats the YAML for a person, or it doesn't ship.** A generic renderer can do worse than YAML (a query's rows buried under its columns' metadata), so a view is reviewed, from real output, before a command uses it.
 
 The aim is very pretty output, reached **incrementally, and by rules**:
 
 - **One command at a time.** A command gets its view when one is reviewed and clears the bar; until then it writes YAML, which is never wrong. No date by which every command must be pretty.
-- **Rules before views.** The [conventions](#conventions) first, a [hint](#hints) where they fall short, a command's [own view](#a-commands-own-view) only where both do. A convention improved improves every command it covers; an own view is code to keep in step with its result.
+- **Rules before views.** The [conventions](#conventions) first, a [hint](#hints) where they fall short, a [named view](#named-views) of a type of value only where both do. A convention improved improves every command it covers; a view is code to keep in step with its type.
 - **No formatting outside the prettifier.** No console-only view, no hand-written output beside a result: one place to change, and a command reads the same wherever it's pretty.
 - **No surprises where they buy nothing.** Labels from the JSON names, values as the YAML has them (`true`, not `yes`), nothing hidden: a person moving between the pretty format and `--yaml` recognizes the same result. A view departs from the result only where reading gains from it (a relative time, a tree of paths), and says so in a hint.
 
@@ -30,10 +30,10 @@ result (Go value, or an op's JSON) ──> view model ──> renderer ──> t
 ```
 
 - **`internal/pretty`** builds both, behind `pretty.Render`; `cmd/anfra` decides when a result is drawn with it (`writeResult`, by the command's default format).
-- **The view model** is where the judgement lives: what a section is, what becomes a table. The [conventions](#conventions) build it from the result's shape, adjusted by [hints](#hints), or a command's [own view](#a-commands-own-view) builds it.
+- **The view model** is where the judgement lives: what a section is, what becomes a table. The [conventions](#conventions) build it from the result's shape, adjusted by [hints](#hints), and a [named view](#named-views) where a hint names one.
 - **A renderer** draws a view model. The terminal one aligns and styles. A Markdown one (headings, pipe tables, fenced blocks) could follow from the same model, for pasting into an issue or for agents, if it proves better than YAML for them; it isn't planned.
 
-The view model takes JSON, not only Go values: a core command's answer reaches the CLI as JSON, often forwarded from the warm server. A hint then travels in the result's JSON Schema (`x-pretty`), generated from the Go type's `pretty` tag.
+A core command's answer reaches the CLI as JSON, often forwarded from the warm server: the CLI decodes it into the command's Go type again (`presentTo`, `cmd/anfra/commands.go`), so its `pretty` tags apply, whoever answered.
 
 ## Conventions
 
@@ -42,9 +42,11 @@ A result is a **detail** view, as `kubectl describe` is: one document, in sectio
 0. **`message` and `hints`.** A CLI-only command's result opens with `message` and closes with `hints` ([CLI output](commands-and-api.md#cli-output)). The pretty view shows `message` as its first line, unlabelled, and `hints` as its last section, one a line, after a blank line: the outcome first, what to do next last.
 1. **Key/value lines.** `Label:  value`. The label is the JSON name in Title Case (`checked_at` → `Checked At`, acronyms in capitals: `URL`, `ID`), unless a hint says otherwise. Values align within a run of consecutive key/value lines at one level, as gofmt aligns a struct literal's fields: a nested section ends the run, and lines at different levels never align.
 2. **Nesting.** A nested object is a `Label:` heading, its contents indented by 2. At the top, a blank line sets apart what has rows (a table, a list of blocks, a text block or a tree) and the message and hints; a section of key/values stays with its neighbours.
-3. **Lists of objects.** A table when every column holds a scalar (or a one-item list or object, flattened) and the table fits the terminal: UPPERCASE headers, columns 3 spaces apart. Otherwise, one block per item, separated by blank lines, its first scalar as its heading, its nested parts shown in full.
+3. **Lists of objects** (a listing: agents, orgs, a few named fields each). A table when every column holds a scalar (or a one-item list or object, flattened) and the table fits the terminal: UPPERCASE headers, columns 3 spaces apart, no borders, as kubectl and gh draw them. Otherwise, one block per item, separated by blank lines, its first scalar as its heading, its nested parts shown in full.
 4. **Lists of scalars.** One per line, aligned in the value column. In a table cell, a CSV row (rule 10).
-5. **Lists of lists** (rows): aligned columns, never joined.
+5. **Lists of lists** (rows: data, as a query answers). A bordered grid, as psql and duckdb draw one: a value may hold spaces or be empty, and only a border says where a cell ends. Its header is its values' labels when a hint gives them (`labels=`), faint; none otherwise. Wider than the terminal, one block per row, a label and a value a line (`-[ ROW 1 ]-`), as psql's expanded mode; never cut cells. In ASCII without a UTF-8 terminal, as trees are. Which is a grid and which a table is the data's shape, never where it's shown.
+5b. **Numbers are right-aligned**, in a grid or a table: a column whose every value, `<none>` aside, is a number.
+5c. **Raw JSON** (a `jsontext.Value`, a query's row) is laid out as the value it holds.
 6. **Nothing hidden.** No counts in place of items: a count can't be drilled into (there's no command for one item), so it's a dead end. A view may choose a count deliberately (`files: 42`) where the items don't matter.
 7. **Empty** is `<none>`, always. What an empty value means is the result's to say, in a field of its own, not the view's: `agent setup`'s agents have a `status`, `installed` or `not-installed`, beside `install_from`, absent when installed, rather than an empty `install` that pretty would have to explain.
 8. **Booleans** are `true` and `false`, as in the YAML.
@@ -55,7 +57,7 @@ A result is a **detail** view, as `kubectl describe` is: one document, in sectio
 
 ### Hints
 
-A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it never adds a field or text beyond its labels, so every word the pretty output shows is a label or a value the YAML has:
+A field's `pretty` tag adjusts the layout; it never adds a field or text beyond its labels, so every word the pretty output shows is a label or a value the YAML has:
 
 | Hint | Does |
 |---|---|
@@ -66,6 +68,9 @@ A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it neve
 | `pretty:",truncate"` | a column that may be cut to fit the terminal |
 | `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Built for a list of paths (`publish check`); `tree=path` not yet |
 | `pretty:",tone=latest:good behind:warn failed:bad"` | the [tone](#color) of some of a field's values |
+| `pretty:",labels=columns.label"` | rows' values' labels, from a path from the result's top, through objects and lists: a grid's header, a block's labels |
+| `pretty:",inline"` | an object's shown fields are its parent's, under no heading of their own, as encoding/json inlines an embedded one |
+| `pretty:",view=timings"` | a [named view](#named-views) of the value, for one no convention shows well |
 
 ### Trees
 
@@ -98,15 +103,14 @@ Color helps a person find their way around the output, and see what needs attent
 1. **Color only reinforces.** Every meaning is in the text: `behind` says it's behind, yellow or not. The output reads the same without color: piped, with `NO_COLOR`, or for a person who can't tell red from green.
 2. **The styles anfra already has.** `cliui.TerminalStyles` (`Heading`, `Muted`, `Accent`, `Selection`, `Success`, `Warning`, `Error`, `Code`, `Link`, `Key`), in the 16 ANSI colors of the user's own palette, so it suits light and dark terminals, but for one: anfra's violet, the design package's accent ([DESIGN.md](../../web/design/DESIGN.md), `#8a51d4`), mid-light for light and dark backgrounds alike, converted to what the terminal shows (the nearest of 256 colors; magenta, of 16). No backgrounds, but a code span's: it sets its text's color too, so it doesn't depend on the terminal's.
 3. **Off where `cliui` turns it off:** not a terminal, `NO_COLOR`, `CI`, `TERM=dumb`.
-4. **Weight for structure, hue for meaning.** Bold and faint lay out the document, in three steps: **bold** for the message alone, the one line saying what happened; plain for headings and values; faint for labels, headers and punctuation. Bold everywhere would mark nothing. Each hue means one thing: **violet** what a person can act on (a prompt, a selection, a link, a command to run), as the design package's one accent marks the primary action, links and selection; **bright blue** a key, in YAML and JSON; **green, yellow and red** tones.
+4. **Weight for structure, hue for meaning.** Bold and faint lay out the document, in two steps: **bold** for the message alone, the one line saying what happened; faint for what's beside the point (punctuation, `<none>`, a table's header, the steps of timings). Bold everywhere would mark nothing. Each hue means one thing: **violet** what a person can act on (a prompt, a selection, a link, a command to run), as the design package's one accent marks the primary action, links and selection; **bright blue** a key, in every format: a pretty view's labels as YAML's and JSON's keys; **green, yellow and red** tones.
 
 | What | Style |
 |---|---|
 | The `message` line | bold (`Heading`) |
-| Section labels standing apart (`Agents:`, `Hints:`, a blank line before and after), and a block's heading in a list | plain |
-| Section labels among their siblings (`Versions:`, inside a block) | faint (`Muted`), as the siblings' labels |
-| Table headers | faint (`Muted`): uppercase marks a header already |
-| Key labels (`Latest:`) | faint (`Muted`) |
+| Every label, a value's (`Latest:`) or a section's (`Agents:`, `Hints:`) | bright blue (`Key`), as YAML's keys |
+| A block's heading in a list (`~/.agents/skills:`), a value used as a heading | plain |
+| A table's header (`NAME  STATUS`) and a grid's (a query's columns' labels) | faint (`Muted`): a header names columns, it isn't a value, and uppercase or a border marks it already |
 | `<none>` | faint (`Muted`) |
 | `` `code` `` in a message, a hint or a value, a command to run | `Code`, a code span without the backquotes: the design package's dark violet text (`violet-350`, `#d4c0fc`) on its violet wash (`violet-a26` over its dark panel `ink-925`, `#332349`), a space of padding each side, as Sentry's CLI shows code: a dim tint, the text standing out. Both colors set, so it reads on dark and light terminals alike (8.6:1). Of 16 colors, bold magenta, without a fill |
 | A URL | `Link`, violet, underlined |
@@ -120,33 +124,35 @@ What `agent setup check` would look like, styles noted on the right:
 ```
 Claude Code's plugin is behind 0.4.5, and ~/.claude/skills has deprecated skills.   bold
 
-Skills:                                                                             plain
-  Latest:      0.4.5                                                                labels faint
+Skills:                                                                             blue
+  Latest:      0.4.5                                                                labels blue
   Checked At:  today
 
-Agents:                                                                             plain
+Agents:                                                                             blue
   NAME          STATUS          PLUGINS             COPIES                       headers faint
   Claude Code   installed       user 0.4.4 behind   ~/.claude/skills
                 └ green                    └ yellow
   OpenCode      not-installed   <none>              <none>
                 └ yellow        └ faint             └ faint
 
-Hints:                                                                              plain
+Hints:                                                                              blue
   Run `anfra agent setup` to update the Claude Code plugin.
       └ Code: a violet code span
 ```
 
-**Siblings look alike.** Labels at one level share a style, whatever their values: a section among key/value lines is faint as they are, the indentation showing what it holds. Only a section standing apart, as a heading does, is plain, a step above them.
+**Siblings look alike.** Every label is a key, blue, a section's as a value's: the indentation and the blank lines show what a section holds, not a style of its own. A key in a pretty view is the key the YAML shows: someone moving between the formats finds the same names, in the same hue.
 
-**YAML and JSON, in a console**, follow the same rules ([console.md](console.md)): every key bright blue (`Key`), siblings alike, the indentation showing what opens a map or a list; `null` and punctuation faint; a URL as a link; an error's `code` red and a warning's yellow, the tones every error and warning has; any other value plain. Keys are blue where pretty labels are faint: pretty aligns its values in a column, so its labels can recede, while YAML's keys, unaligned, are what a reader finds their way by. Blue is a key's alone, as jq colors keys, bright as it reads on dark backgrounds and light, and without bold: the hue sets keys apart, and bold is for what a reader looks for first (a console's prompt, a result's message), not a long result's every line; values get no hue of their type (jq's strings green), since green is a tone's. Outside a console, YAML and JSON stay plain, since an agent reads them.
+**YAML and JSON, in a console**, follow the same rules ([console.md](console.md)): every key bright blue (`Key`), as a pretty view's labels are, siblings alike, the indentation showing what opens a map or a list; `null` and punctuation faint; a URL as a link; an error's `code` red and a warning's yellow, the tones every error and warning has; any other value plain. Blue is a key's alone, as jq colors keys, bright as it reads on dark backgrounds and light, and without bold: the hue sets keys apart, and bold is for what a reader looks for first (a console's prompt, a result's message), not a long result's every line; values get no hue of their type (jq's strings green), since green is a tone's. Outside a console, YAML and JSON stay plain, since an agent reads them.
 
 The tone inside a flattened cell (`behind`, in `user 0.4.4 behind`) is the field's own: flattening keeps each value's style.
 
-## A command's own view
+## Named views
 
-Where conventions and hints can't make a result read well, the command writes its view model itself. `query` is the case: a person wants the rows, labelled by each column's `label`, numbers right-aligned by `semantic_type`, and a line saying how many rows, whether there are more, and how long it took. Its columns' metadata, the AQL, the SQL and the timing steps stay in `--yaml`.
+Where conventions and hints can't show a value well, a named view does: `views` (`internal/pretty/views.go`), each of a type of value rather than of a command, so every result holding one shows it alike, and a hint names it (`pretty:",view=timings"`). The last resort: it's code to keep in step with its type.
 
-An own view can drift from its result, as hand-written output does. Its test lists the result's fields the view leaves out on purpose, so a field added to the result fails the test until someone decides whether the view shows it.
+- **`timings`**, a run's (`command.Timings`). They record when each step *started*; how long each took is what a person reads, which no convention can compute. So: each step's duration, until the next at its level or above starts, or the run ends; a child step (`<parent>.<child>`) nested under its parent; a step run again shown again; the steps faint, the detail; then the total, plain, what's read first.
+
+`query` needed none of its own: its rows are a grid by the conventions, labelled by a hint, and its timings are the named view.
 
 ## Examples
 
@@ -268,18 +274,31 @@ Columns:
 
   The whole message is in `--yaml`; a view that needs it whole makes its list blocks instead.
 
-### `anfra query` (its own view)
+### `anfra query`
+
+`query --pretty`, and `query` in a console: the SQL, the AQL and what each column is are hidden (`pretty:"-"`), left to `--yaml`; the rows, inlined from `result` (`inline`), under `Result:`, the YAML's own key, labelled by each column's `label` (`labels=columns.label`); then `has_more`; then the timings by their view.
 
 ```
-NAME       ID
-Laptop      1
-Mouse       2
-Keyboard    3
+Result:
+  ┌───────────┬────────┬──────────┐
+  │ status    │ orders │ city     │
+  ├───────────┼────────┼──────────┤
+  │ delivered │   1204 │ New York │
+  │ pending   │     87 │ <none>   │
+  │ refunded  │      3 │ Hà Nội   │
+  └───────────┴────────┴──────────┘
 
-3 rows, more on the next page (--page 2) · 64 ms
+Has More:  false
+
+Timings:
+  connecting_to_dw        60 ms
+    open_connection       60 ms
+  executing_query          3 ms
+  fetching_query_result    5 ms
+  total                   68 ms
 ```
 
-A result wider than the terminal is one block per row (`-[ RECORD 1 ]-`), as psql's expanded mode, rather than truncated cells.
+Values are as the answer has them: no thousands separators, no rounding. `Has More: false` shows on every result; a hint showing a field only when true would hide it, should it prove noise.
 
 ## Other formats considered
 

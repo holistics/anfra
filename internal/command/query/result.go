@@ -11,18 +11,22 @@ import (
 // QueryResult is the `query` result answered whole: the SQL that ran, the AQL it
 // was compiled from, what each column is, and one page of rows — page_size's,
 // or the first MaxPageSize without one.
+//
+// Its pretty view (docs/designs/cli-pretty.md) is its rows, labelled by each
+// column's label, then has_more and how long each step took; the SQL, the AQL
+// and what each column is are for --yaml.
 type QueryResult struct {
-	SQL     string    `json:"sql"`
-	AQL     string    `json:"aql,omitempty" doc:"the AQL that ran: the query with its Query Input applied; absent for a SQL query"`
-	Columns []Column  `json:"columns" doc:"one per field of result, in order"`
-	Result  QueryRows `json:"result"`
+	SQL     string    `json:"sql" pretty:"-"`
+	AQL     string    `json:"aql,omitempty" pretty:"-" doc:"the AQL that ran: the query with its Query Input applied; absent for a SQL query"`
+	Columns []Column  `json:"columns" pretty:"-" doc:"one per field of result, in order"`
+	Result  QueryRows `json:"result" pretty:",inline"`
 	HasMore bool      `json:"has_more" doc:"there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"`
-	Timings Timings   `json:"timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
+	Timings Timings   `json:"timings" pretty:",view=timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
 }
 
 type QueryRows struct {
-	Fields  []string         `json:"fields"`
-	Records []canalquery.Row `json:"records" doc:"one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as \"NaN\", \"Infinity\" and \"-Infinity\", and so at any depth of a list, map or struct; null as null"`
+	Fields  []string         `json:"fields" pretty:"-"`
+	Records []canalquery.Row `json:"records" pretty:"Result,labels=columns.label" doc:"one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as \"NaN\", \"Infinity\" and \"-Infinity\", and so at any depth of a list, map or struct; null as null"`
 }
 
 // CompiledQuery is the `query compile` result: the SQL the query compiles to.
