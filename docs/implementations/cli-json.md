@@ -11,16 +11,17 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | Errors and warnings on stderr | Done, deprecation notes included |
 | No questions, no notices | Done |
 | Every command's output kind, and the test holding every command to one | Done |
-| CLI-only commands' structured results | `openapi`, `update`, `agent setup`, `init` and `publish`, with `message` and `hints`; `auth` with `--yaml` or `--json`, without `message` and `hints` yet |
+| CLI-only commands' structured results | Done: `openapi`, `update`, `agent setup`, `init`, `publish` and `auth`, with `message` and `hints` |
 | `--yaml`, and a CLI-only command's default, the pretty format | Done: `--yaml`, the defaults, the annotations, the help |
 | The prettifier's first views: `update`, `agent setup` and `init` | Built (`internal/pretty`) |
 | CLI-only commands' errors classified | Not started |
 | `--schema` | Not started |
+| `--jq` | Not started |
 
 ## Order
 
 ```
-1 the flags, core commands, stderr ──> 2 artifacts marked, CLI-only commands structured, --yaml ──> 3 CLI-only errors classified ──> 4 --schema
+1 the flags, core commands, stderr ──> 2 artifacts marked, CLI-only commands structured, --yaml ──> 3 CLI-only errors classified ──> 4 --schema ──> 5 --jq
 ```
 
 Step 1 is one change in the shared rendering code, and leaves every CLI-only command refusing `--json` except `auth` and `openapi`. Step 2 turns the rule around, so every command writes structured output unless it is marked an artifact, and gives the remaining CLI-only commands their structured results, all at once: the test that holds every command to the rule passes only then.
@@ -45,7 +46,7 @@ Tests: for a core command, `--json`'s stdout parses as JSON and equals the op's 
 
 - **`--yaml`** joins `--json` on the root command: YAML, from any command. Both refused by an artifact.
 - **The annotations** (`cmd/anfra/output.go`): `anfra.output`, the kind (structured, artifact, or no structured output yet); `anfra.artifact-desc`, what an artifact writes instead; `anfra.default-format`, `yaml` or `pretty`; `anfra.interactable`, a command that may ask when the run is interactive. They decide the refusals, the default format (`writeResult`) and each command's help line.
-- **A CLI-only command's default** is the pretty format: through the prettifier for `update` and `agent setup`, then `init`, its first views ([cli-pretty.md](../designs/cli-pretty.md)), reviewed from real output before they ship; for `publish` and `auth`, their hand-written output, until the prettifier covers them. Either way stdout holds no advice that the result lacks.
+- **A CLI-only command's default** is the pretty format, through the prettifier ([cli-pretty.md](../designs/cli-pretty.md)), each view reviewed from real output: `update`, `agent setup`, `init`, `publish` and `auth`. Done. stdout holds no advice that the result lacks.
 - **`--help` says it.** The root's: every command writes YAML, except CLI-only commands like `agent setup`, `auth`, `init` and `publish`, which write the pretty format by default; `anfra --help` lists the two apart, as "Core commands" and "CLI-only commands" (cobra's command groups). Each command's `--help` ends with its output: its default format, and whether it asks on a terminal. All generated from the commands' annotations, so they can't drift.
 - **`message` and `hints`** open and close every CLI-only command's result ([CLI output](../designs/commands-and-api.md#cli-output)). Advice that's prose on stderr today ("Next: put your database in …", "To update the skills in …") moves into `hints`.
 
@@ -60,7 +61,7 @@ Each CLI-only command's result has a shape the command defines (a Go type in `cm
 | `update` | `anfra version`'s answer after the update, the version it replaced, and the changelog's link. Servers still running another version stay warnings, and the skills needing attention becomes one. |
 | `agent setup` | `agent setup --check`'s report after setup, and what setup did per agent: `installed`, `failed`, `cli_missing` or `instructions_only`, with a message. |
 | `init` | Its folder, and each file with whether init changed it (created it, or added to it). A failure partway carries the result as far as it got. |
-| `auth status`, `login`, `logout` | Their results as today with `--json`, now also with `--yaml`. Without either, their hand-written output, as today. |
+| `auth status`, `login`, `logout` | `status`: each org with a saved login, and the current repo's without one: `name`, `url`, `saved_login` (`valid`, `invalid`, `missing`), `current_repo`. `login`: `org_url`. `logout`: `org_url`, `local_removed`, `remote_revocation_confirmed`; a failed revocation after local removal is `command_failed`, the result its details. `remote_checked`, `repo_org_url`, `repo_destination_changed` and `repo_active` go: their guarantees are in `--help` and the usage doc. |
 
 `publish`, `agent setup` and `init` print progress and notes for a person today (`internal/cliui`), some on stdout. With `--yaml` or `--json`, stdout holds the result alone; progress goes to stderr, on a terminal only, and advice into `hints`.
 
@@ -99,3 +100,12 @@ The CLI's codes are in their own namespace, `anfra_cli` (`cmd/anfra/errors.go`),
 ## 4. `--schema`
 
 `anfra <command> --schema` writes the JSON Schema of the command's result instead of running it: in YAML, or with `--json` in JSON, as any output. One schema describes both, since a result has the same shape in either. A core command's comes from its op, as in `api/openapi.yaml`; a CLI-only command's is generated from its Go result type by huma, as the ops' are. `--help` then says, in a line, that the command writes its result as YAML or JSON and that `--schema` shows its shape, rather than listing its fields.
+
+## 5. `--jq`
+
+`anfra <command> --jq <expr>` filters a structured result before it's written, with jq (gojq, built in: no `jq` to install), as `gh --jq` does. The filter is applied to the result's data, which is the same in YAML and JSON, and what it answers is written in the chosen format: YAML by default, JSON with `--json`, and a scalar as a plain line, as `jq -r`. With it, a command writes no pretty format, as with `--yaml`; an artifact refuses it, as it refuses `--json`.
+
+- **jq, not yq.** jq is the language most people and agents know, and gojq a solid Go library. mikefarah's yq, the common one, speaks a dialect of jq that looks alike and behaves differently, so it isn't offered beside it; `--yaml` piped into yq still works.
+- **A filter, not field selection.** `gh --json fields` selects what `gh` asks its API for. An op here computes its whole answer, so selecting fields would only cut it afterwards, which the filter does too, and more. An op whose answer is costly can take its own argument for less (a `fields` on `query`, say), later and per op.
+- **It cuts what an agent reads**, which matters most for large answers: query rows, search results.
+

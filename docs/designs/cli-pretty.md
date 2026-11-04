@@ -7,7 +7,7 @@ How the CLI shows a command's structured output to a person at a terminal: laid 
 ## Where it stands
 
 - **Formats.** A command's output is an artifact (a log, a script) or structured. Structured output comes as YAML, JSON, or pretty.
-- **Defaults.** A core command writes YAML. A CLI-only command writes the pretty format by default, since people run them more than programs do: `update` and `agent setup` through the prettifier, then `init`; `publish` and `auth` through their own hand-written output, the pretty format done by hand until the prettifier covers them. `--yaml` or `--json` on any command gives structured output.
+- **Defaults.** A core command writes YAML. A CLI-only command writes the pretty format by default, through the prettifier, since people run them more than programs do: `update`, `agent setup`, `init`, `publish` and `auth`. `--yaml` or `--json` on any command gives structured output.
 - **`--pretty`** comes once the prettifier shows every command well, `query` included. Then we decide whether pretty becomes the default on an interactive terminal for every command, with YAML for everything else.
 
 The bar for a pretty view: **it beats the YAML for a person, or it doesn't ship.** A generic renderer can do worse than YAML (a query's rows buried under its columns' metadata), so a view is reviewed, from real output, before a command uses it.
