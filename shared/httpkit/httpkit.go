@@ -48,10 +48,11 @@ func Wrap(h http.Handler, cfg Config) http.Handler {
 	})
 }
 
-// Serve runs srv until ctx ends, then drains it, giving in-flight requests ten
-// seconds. A listener that fails — the port taken, say — ends it too, with that
-// error.
-func Serve(ctx context.Context, srv *http.Server) error {
+// Serve runs srv until ctx ends, then drains it, giving in-flight requests up
+// to drain. A listener that fails — the port taken, say — ends it too, with that
+// error. drain is the caller's, with no default: the orchestrator's grace period
+// is set from it, so it must be stated where that is.
+func Serve(ctx context.Context, srv *http.Server, drain time.Duration) error {
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -61,7 +62,7 @@ func Serve(ctx context.Context, srv *http.Server) error {
 	})
 	g.Go(func() error {
 		<-gctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drain)
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	})
