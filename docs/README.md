@@ -28,6 +28,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |
 | [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
+| [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
 
 ## Research
@@ -45,6 +46,7 @@ Plans for work being built: the steps, their order, and where each stands.
 | Doc | Covers |
 |---|---|
 | [`--json` on every CLI command](implementations/cli-json.md) | Every command's answer, warnings and error as JSON instead of YAML: the shared rendering first, then the CLI-only commands one at a time. |
+| [`anfra console`](implementations/console.md) | The console's steps: one process running many commands, the skeleton, output for a person, modes and AQL, a warm server. |
 | [revamp query result data types](implementations/revamp-query-result-data-types.md) | Encoded values (every number a string) and each column's semantic, Arrow and database types, across canal-query, amql, the core and the SDK. |
 
 ## Todos
