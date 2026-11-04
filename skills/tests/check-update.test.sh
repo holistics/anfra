@@ -47,7 +47,7 @@ run() { # the session's cwd, then any env assignments
     | env PATH="$tmp/bin:/usr/bin:/bin" "$@" sh "$hook"
 }
 
-newer=$'update:\n    available: true\n    latest: 0.5.0\nversion: 0.4.2\n'
+newer=$'version: 0.4.2\nupdate:\n    latest: 0.5.0\n    available: true\n'
 
 fake "$newer"
 out=$(run "$tmp/repo")
@@ -55,7 +55,7 @@ check "a newer release is announced" 'anfra 0.5.0 is available (installed: 0.4.2
 check "as SessionStart context" '"hookEventName":"SessionStart","additionalContext":"' "$out"
 check "valid JSON" '' "$(printf '%s' "$out" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>&1)"
 
-fake $'update:\n    available: false\n    latest: 0.4.2\nversion: 0.4.2\n'
+fake $'version: 0.4.2\nupdate:\n    latest: 0.4.2\n    available: false\n'
 check "current: silent" '' "$(run "$tmp/repo")"
 
 fake $'version: 0.4.1\n'
@@ -78,7 +78,7 @@ check "anfra not installed: silent" '' "$(run "$tmp/repo")"
 node "$skills/scripts/build.mjs" --version 0.15.0 --source test --out "$tmp/facade" >/dev/null
 hook="$tmp/facade/plugins/anfra/hooks/check-update.sh"
 
-behind=$'hints:\n    - \'anfra skills 0.15.0 are behind the latest, 0.16.0: run `anfra agent setup --agent <your id>`.\'\nskills:\n    latest: 0.16.0\n    version: 0.15.0\nversion: 0.15.0\n'
+behind=$'version: 0.15.0\nskills:\n    version: 0.15.0\n    latest: 0.16.0\nhints:\n    - \'anfra skills 0.15.0 are behind the latest, 0.16.0: run `anfra agent setup --agent <your id>`.\'\n'
 fake "$newer" 0 "$behind"
 out=$(run "$tmp/repo")
 check "the plugin's stamp is passed" "version --skills 0.15.0" "$(cat "$tmp/args")"
@@ -87,16 +87,16 @@ check "and what to do with it" "Don't run these commands unless the user asks" "
 check "valid JSON" '' "$(printf '%s' "$out" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>&1)"
 check "in Claude Code, the hint names it" '--agent claude-code' "$(run "$tmp/repo" CLAUDE_PLUGIN_ROOT=/x)"
 
-both=$'hints:\n    - \'anfra 0.16.0 is out: ask the user to run `anfra update`.\'\n    - \'anfra skills 0.15.0 are behind the latest, 0.16.0: run `anfra agent setup --agent <your id>`.\'\nskills:\n    latest: 0.16.0\n    version: 0.15.0\nupdate:\n    available: true\n    latest: 0.16.0\nversion: 0.15.0\n'
+both=$'version: 0.15.0\nupdate:\n    latest: 0.16.0\n    available: true\nskills:\n    version: 0.15.0\n    latest: 0.16.0\nhints:\n    - \'anfra 0.16.0 is out: ask the user to run `anfra update`.\'\n    - \'anfra skills 0.15.0 are behind the latest, 0.16.0: run `anfra agent setup --agent <your id>`.\'\n'
 fake "$newer" 0 "$both"
 out=$(run "$tmp/repo")
 check "both behind: anfra's hint" 'anfra 0.16.0 is out: ask the user to run `anfra update`.' "$out"
 check "both behind: the skills' hint" 'anfra skills 0.15.0 are behind' "$out"
 
-fake "$newer" 0 $'skills:\n    latest: 0.15.0\n    version: 0.15.0\nversion: 0.15.0\n'
+fake "$newer" 0 $'version: 0.15.0\nskills:\n    version: 0.15.0\n    latest: 0.15.0\n'
 check "nothing to act on: silent" '' "$(run "$tmp/repo")"
 
-fake "$newer" 0 $'hints:\n    - it\'\'s quoted\nversion: 0.15.0\n'
+fake "$newer" 0 $'version: 0.15.0\nhints:\n    - it\'\'s quoted\n'
 check "a plain hint is passed as it is" "anfra says: it''s quoted" "$(run "$tmp/repo")"
 
 fake "$newer"

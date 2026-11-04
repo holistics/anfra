@@ -33,7 +33,8 @@ From the repo's folder (an existing Git repo is fine):
 anfra init            # or: anfra init <dir>
 ```
 
-It creates what is missing and never changes an existing file, so it is safe to run again:
+It creates what is missing and never changes an existing file beyond adding to it, so it is safe
+to run again:
 
 | Path | What it is |
 |---|---|
@@ -42,6 +43,7 @@ It creates what is missing and never changes an existing file, so it is safe to 
 | `.anfra/context_sources.yml` | What `anfra ingest` reads for `anfra search`: the repo's own AML. |
 | `models/`, `datasets/`, `apps/` | AML models, AML datasets, Data Apps. |
 | `.gitignore` | Gains `.anfra/data_sources.yml`. |
+| `AGENTS.md` | Gains the anfra block, telling coding agents to use the anfra skills (and `@AGENTS.md` in an existing `CLAUDE.md`). |
 
 ## 3. Connect the data source
 
