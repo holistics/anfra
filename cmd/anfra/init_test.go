@@ -111,7 +111,7 @@ func TestInitKeepsWhatIsThere(t *testing.T) {
 			t.Errorf("a second run changed %s", f.Path)
 		}
 	}
-	if !strings.HasSuffix(res.Message, "init changed nothing.") {
+	if !strings.HasPrefix(res.Message, "Nothing changed: ") {
 		t.Errorf("message: %q", res.Message)
 	}
 	if again, _ := os.ReadFile(filepath.Join(dir, ".gitignore")); !bytes.Equal(again, ignore) {

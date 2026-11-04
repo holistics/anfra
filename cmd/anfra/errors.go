@@ -42,14 +42,14 @@ type remoteError struct {
 // remoteErrorFrom is the error a server's error answer carries; false when body
 // is not one.
 func remoteErrorFrom(body []byte) (*remoteError, bool) {
-	var env apperr.Envelope
-	var raw struct {
+	var env struct {
 		Error jsontext.Value `json:"error"`
 	}
-	if jsonkit.Unmarshal(body, &env) != nil || env.Error.Code == "" || jsonkit.Unmarshal(body, &raw) != nil {
+	var resp apperr.Response
+	if jsonkit.Unmarshal(body, &env) != nil || len(env.Error) == 0 || jsonkit.Unmarshal(env.Error, &resp) != nil || resp.Code == "" {
 		return nil, false
 	}
-	return &remoteError{resp: env.Error, raw: raw.Error}, true
+	return &remoteError{resp: resp, raw: env.Error}, true
 }
 
 func (e *remoteError) Error() string { return e.resp.Code + ": " + e.resp.Message }

@@ -164,7 +164,7 @@ func initRepo(dir string) (initResult, error) {
 	}
 	switch kept := len(res.Files) - changed; {
 	case changed == 0:
-		res.Message = fmt.Sprintf("%s is an anfra repo already: init changed nothing.", strings.ToUpper(where[:1])+where[1:])
+		res.Message = fmt.Sprintf("Nothing changed: %s is an anfra repo already.", where)
 	case kept == 0:
 		res.Message = fmt.Sprintf("Set up an anfra repo in %s, with %d files.", where, changed)
 	default:
