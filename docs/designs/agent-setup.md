@@ -20,9 +20,9 @@ The design in short:
 |---|---|
 | Where do I stand? Offline and cheap, for agents and hooks, once per session | `anfra version --skills <version>` |
 | Update anfra itself | `anfra update` |
-| Is a newer anfra out? Asked fresh | `anfra update --check` |
+| Is a newer anfra out? Asked fresh | `anfra update check` |
 | Install, update or repair the skills for my agents | `anfra agent setup` |
-| What state is each agent in, and the `AGENTS.md` block? | `anfra agent setup --check` |
+| What state is each agent in, and the `AGENTS.md` block? | `anfra agent setup check` |
 
 `anfra skills install` is kept as an alias of `anfra agent setup` for now, with a deprecation note.
 
@@ -127,8 +127,8 @@ Every skill's name starts with `anfra-` (`anfra-aql`, `anfra-write-aql`, …), f
 - **Shared folders hold skills by name.** `npx skills` installs into folders several agents read, such as `~/.agents/skills`, one folder per skill name. Other vendors use our old names too: Holistics' `holistics-development` plugin has `aql`, `write-aql`, `run-aql`, `validate-aql` and `lookup-values`. Two skills of one name overwrite each other there, silently, whichever was installed last. Inside a plugin, names don't clash, but most agents get the skills alone ([Each agent's route](#each-agents-route)).
 - **It's what other vendors do.** Supabase (`supabase-*`), Vercel (`vercel-*`), Expo (`expo-*`) and Stripe (`stripe-*`) name their skills after themselves ([Vendor CLIs that install skills](../research/skills-install.md#vendor-clis-that-install-skills)).
 - **The source is renamed, not the installed copy.** The spec requires a skill's folder to match its `name`, and the skills refer to one another about 45 times. Renaming at install time would mean rewriting their text on every machine.
-- **The prefix marks our skills.** `--check` takes a folder's `anfra-*` skills as a copy, and reads each one's stamp ([The check report](#the-check-report)). Before it, anfra could only guess a folder was ours from one skill name that no other vendor used.
-- **Copies of the old names stay behind.** A plugin update replaces its skills, but a copy installed with `npx skills` before the rename keeps its old folders, which an agent loads next to the new ones. `--check` lists them under "Deprecated skills", and the skills repo's README gives the command that removes them.
+- **The prefix marks our skills.** `agent setup check` takes a folder's `anfra-*` skills as a copy, and reads each one's stamp ([The check report](#the-check-report)). Before it, anfra could only guess a folder was ours from one skill name that no other vendor used.
+- **Copies of the old names stay behind.** A plugin update replaces its skills, but a copy installed with `npx skills` before the rename keeps its old folders, which an agent loads next to the new ones. `agent setup check` lists them under "Deprecated skills", and the skills repo's README gives the command that removes them.
 - **The cost:** in Claude Code, a plugin's skills are shown as `<plugin>:<skill>`, so `anfra:aql` becomes `anfra:anfra-aql`. Stripe's plugin shows the same.
 - **The `aql-writer` agent keeps its name.** Agents come only through plugins, which namespace them, so it never shares a folder with another vendor's.
 
@@ -138,7 +138,7 @@ Agents read each other's folders, so a skill can load twice. For example, Codex 
 
 - **No reliable rule exists.** No agent offers a usable way to turn off one copy, and copies installed by other routes are outside our control anyway.
 - **A duplicate costs little:** about 500 tokens of names and descriptions per session.
-- **The real risk is drift:** two copies, updated by different mechanisms, at different versions. [`anfra agent setup --check`](#the-check-report) lists each copy it can see and marks any that has fallen behind.
+- **The real risk is drift:** two copies, updated by different mechanisms, at different versions. [`anfra agent setup check`](#the-check-report) lists each copy it can see and marks any that has fallen behind.
 
 ### The result and exit code
 
@@ -174,7 +174,7 @@ On a terminal, stderr also says what setup is doing ("Installing anfra for Claud
 
 ### The check report
 
-`anfra agent setup --check` changes nothing. It answers with four parts, between its `message`, what needs attention or that nothing does, and its `hints`, what to do next (`anfra agent setup`, when it would install or update something):
+`anfra agent setup check` changes nothing. It answers with four parts, between its `message`, what needs attention or that nothing does, and its `hints`, what to do next (`anfra agent setup`, when it would install or update something):
 
 ```yaml
 message: Claude Code's plugin is behind 0.4.5 and ~/.claude/skills has deprecated skills.
@@ -362,10 +362,10 @@ update:
 skills:
   latest: 0.16.0
 hints:
-  - To see which copies of the anfra skills are installed, and their versions, run `anfra agent setup --check`.
+  - To see which copies of the anfra skills are installed, and their versions, run `anfra agent setup check`.
 ```
 
-anfra doesn't guess that these skills are behind: a missing stamp can have other causes, such as a copy someone edited, or an agent that didn't find the line. `anfra agent setup --check` shows the facts: a copy it finds with no stamp is listed as older than the stamp, so behind.
+anfra doesn't guess that these skills are behind: a missing stamp can have other causes, such as a copy someone edited, or an agent that didn't find the line. `anfra agent setup check` shows the facts: a copy it finds with no stamp is listed as older than the stamp, so behind.
 
 `unknown` is a value rather than a bare `--skills`: a flag with an optional value would read `--skills 0.16.0` as `--skills` followed by a stray argument, and an op's input can't tell an empty value from a missing one.
 
@@ -389,7 +389,7 @@ Optional, and only if phase 1 turns out not to be enough. Phase 1 can't tell a m
 
 `anfra agent setup` is the one place that acts on the skills, and reports them. Everything else only points at it.
 
-- **`anfra update`** updates only the binary: it never runs an agent's CLI. Running `anfra agent setup` again updates the plugins. `anfra update`, and its `--check`, end with [the attention line](#the-attention-line) when something needs it.
+- **`anfra update`** updates only the binary: it never runs an agent's CLI. Running `anfra agent setup` again updates the plugins. `anfra update`, and `anfra update check`, end with [the attention line](#the-attention-line) when something needs it.
 - **The background check** is the existing `__update-check`, now twice a day (its cache lasts 12 hours, for anfra's release and the skills' alike):
   - it fetches the latest skills version: the `version` in the skills repo's plugin manifest on `main`;
   - it records the installed plugins and their versions, through `claude plugin list --json` and `codex plugin list --marketplace anfra-skills --json`, in `~/.anfra/agents-check.json`. Setup records them too, after it acts, so the notice is current after it.
@@ -414,7 +414,7 @@ The last says nothing is installed: only when a coding agent is detected on the 
 
 - **What it reads:** the plugins as the background check or setup last recorded them; the copies, in the folders the agents read; and the `AGENTS.md` block of the repo it runs in. No network and no agent CLI, so it's cheap enough after any command.
 - **Where it shows:**
-  - at the end of `anfra update` and `anfra update --check`;
+  - at the end of `anfra update` and `anfra update check`;
   - as the notice after a command at a terminal, at most once a day, not after `anfra agent setup` itself. It respects `ANFRA_NO_UPDATE_NOTIFIER`. Agents get no notice: the session hook and the `AGENTS.md` block are theirs.
 - **Its limits:** the plugins' versions are up to 12 hours old, so an update made in the agent's own CLI shows only after the next check. Outside an anfra repo it can't see any repo's block.
 
@@ -512,7 +512,7 @@ The plugins' installed versions aren't here: listing them takes the agents' CLIs
 - **Per user only:** no `--scope`. The `skills install` alias keeps a hidden `--scope` only to refuse `project`, naming `anfra agent setup`.
 - **Selection:** `--agent`, else the detected agents. No prompt.
 - **The result and exit code,** as [described above](#the-result-and-exit-code).
-- **`--check`,** reporting without changing anything, as [The check report](#the-check-report) describes: the plugins through the agents' CLIs, the copies in the folders the agents read, by their `anfra-*` skills' stamps, and the deprecated copies of the old names.
+- **`agent setup check`,** reporting without changing anything, as [The check report](#the-check-report) describes: the plugins through the agents' CLIs, the copies in the folders the agents read, by their `anfra-*` skills' stamps, and the deprecated copies of the old names.
 - **Only the agent CLIs it installs through run:** the system's commands are built by literal name (`claude`, `codex`), whatever reaches them.
 - **`anfra skills install`** becomes an alias, printing "This command is deprecated. Use `anfra agent setup` instead."
 - **The docs that named the old command:** anfra's `README.md` quickstart and `install.sh`'s next steps say `anfra agent setup`. Their prompts name the skills by their new names (`anfra-build-data-app`, `anfra-setup-repo`), which ship with the first release from anfra (step 7).
@@ -525,7 +525,7 @@ In `internal/agents` (`agentsmd.go`), used by setup and `anfra init` alike:
 
 - **Writing the block:** add it to `AGENTS.md`, creating the file, or replace the marked block that's there; add `@AGENTS.md` to an existing `CLAUDE.md`, and create none. A symlink is refused, as it would write outside the repo.
 - **Setup** writes it in an anfra repo, with one line after the agents: `wrote the anfra block`, `…, and @AGENTS.md in CLAUDE.md`, `the anfra block is up-to-date`, or `failed: …`, which fails the run.
-- **`--check`** adds an `AGENTS.md:` section: the block is `up-to-date`, `out of date` (other than what this anfra writes) or `missing`, and `CLAUDE.md doesn't import it (@AGENTS.md)` when that's so.
+- **`agent setup check`** adds an `AGENTS.md:` section: the block is `up-to-date`, `out of date` (other than what this anfra writes) or `missing`, and `CLAUDE.md doesn't import it (@AGENTS.md)` when that's so.
 - **`anfra init`** lists `AGENTS.md`, as `created` when it wrote the block or the import, else `kept`.
 
 This comes after steps 3 and 4, since the block names `version --skills` and `agent setup`.
@@ -533,7 +533,7 @@ This comes after steps 3 and 4, since the block names `version --skills` and `ag
 ### 6. anfra: what needs attention, and where it shows
 
 - **Setup's result** is what it did, then the check report, as [described above](#the-result-and-exit-code).
-- **The attention line** (`agents.Attention`), as [described above](#the-attention-line), at the end of `anfra update` and its `--check`, and as the notice after a command, at most once a day (`agents.Notice`).
+- **The attention line** (`agents.Attention`), as [described above](#the-attention-line), at the end of `anfra update` and `anfra update check`, and as the notice after a command, at most once a day (`agents.Notice`).
 - **The plugins recorded** (`agents.RecordPlugins`, `~/.anfra/agents-check.json`), by the background check and by setup, for the line to read without starting the agents' CLIs.
 - **The background check twice a day:** its cache lasts 12 hours.
 - **`anfra update` doesn't update plugins:** setup is the one place that acts on the skills.
@@ -585,10 +585,10 @@ The rule is in [commands and API](commands-and-api.md#deprecation-before-removal
 - **More plugins,** in the [order described above](#more-plugins-in-order). Each lands in the README first, then in setup's agent list.
 - **Phase 2's compatibility map,** if phase 1 isn't enough.
 - **Claude Code's auto-update,** once an [open question](#open-questions) is settled.
-- **Missing and extra skills in a copy.** `--check` reports only the `anfra-*` skills a folder has. A partial install (`npx skills add … -s anfra-write-aql`), a skill a newer release added, or one it removed goes unnoticed. The fix:
+- **Missing and extra skills in a copy.** `agent setup check` reports only the `anfra-*` skills a folder has. A partial install (`npx skills add … -s anfra-write-aql`), a skill a newer release added, or one it removed goes unnoticed. The fix:
   - the skills repo's build writes the release's list of skills next to its manifest, such as `plugins/anfra/skills.json` (`{"version": …, "skills": […]}`), checked against the folders;
   - the background check fetches that file in place of `plugin.json`, still one request, and caches the list with the version;
-  - `--check` compares each copy with it: a copy at the latest version that lacks skills is `partial`, and a copy that's behind says what it's missing; a skill no longer in the release is listed as extra. A plugin can't be partial, since its agent installs it whole.
+  - `agent setup check` compares each copy with it: a copy at the latest version that lacks skills is `partial`, and a copy that's behind says what it's missing; a skill no longer in the release is listed as extra. A plugin can't be partial, since its agent installs it whole.
 
 ## Not doing
 
@@ -596,7 +596,7 @@ The rule is in [commands and API](commands-and-api.md#deprecation-before-removal
 - **Writing hooks or subagents into agents' own config.** They come only through plugins. Agents without a plugin get skills only, so they don't get the AML validation hook. `write-aql` already falls back to a generic subagent when `aql-writer` is missing.
 - **Removing duplicates.** See [Duplicates are accepted](#duplicates-are-accepted).
 - **An uninstall command.** Each route removes its own copies.
-- **A separate `anfra agent status`.** `anfra version --skills` answers agents and hooks, and `anfra agent setup --check` answers people.
+- **A separate `anfra agent status`.** `anfra version --skills` answers agents and hooks, and `anfra agent setup check` answers people.
 - **Listing in Anthropic's official marketplace** (`claude-plugins-official`). It doesn't keep up with its plugins' latest versions.
 
 ## Open questions

@@ -60,6 +60,7 @@ func appCommands() []*cobra.Command {
 func buildCobraCommand(c command.Command) *cobra.Command {
 	name := c.Name()[strings.LastIndex(c.Name(), ".")+1:]
 	cmd := &cobra.Command{Use: name, Short: c.Short(), Long: c.Long(), Args: cobra.NoArgs}
+	annotate(cmd, opAnnotation, c.Name())
 	markStructuredOutput(cmd) // its op's answer
 	// Show flags in declaration order (else pflag sorts them alphabetically).
 	cmd.Flags().SortFlags = false

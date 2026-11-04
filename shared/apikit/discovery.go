@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/shared/apperr"
@@ -214,8 +215,9 @@ func (d Discovery[Call]) visible(ctx context.Context, reg OpSet[Call], r Call, i
 
 // Inline is s as a self-contained JSON Schema: every reference into Schemas
 // replaced by what it names. For a document that must stand alone — an MCP
-// tool's input, an op's usage. A schema that refers to itself cannot be
-// inlined, and is an error.
+// tool's input, an op's usage. A schema that refers to itself, which can't be
+// inlined, is the one kept as a reference: once, in the document's $defs,
+// referred to as #/$defs/<name>, as JSON Schema 2020-12 bundles one.
 func (rt *Runtime) Inline(s *huma.Schema) (map[string]any, error) {
 	raw, err := jsonkit.Marshal(s)
 	if err != nil {
@@ -225,40 +227,91 @@ func (rt *Runtime) Inline(s *huma.Schema) (map[string]any, error) {
 	if err := jsonkit.Unmarshal(raw, &root); err != nil {
 		return nil, err
 	}
-	out, err := rt.inline(root, map[string]bool{})
+	defs := map[string]any{} // a recursive schema, by name: nil until inlined
+	out, err := rt.inline(root, map[string]bool{}, defs)
 	if err != nil {
 		return nil, err
 	}
+	for {
+		var name string
+		for n, d := range defs {
+			if d == nil {
+				name = n
+				break
+			}
+		}
+		if name == "" {
+			break
+		}
+		ref := "#/components/schemas/" + name
+		target, err := rt.resolve(ref)
+		if err != nil {
+			return nil, err
+		}
+		inlined, err := rt.inline(target, map[string]bool{ref: true}, defs)
+		if err != nil {
+			return nil, err
+		}
+		defs[name] = inlined
+	}
 	m, _ := out.(map[string]any)
+	if len(defs) > 0 && m != nil {
+		m["$defs"] = defs
+	}
 	return m, nil
 }
 
-func (rt *Runtime) inline(v any, seen map[string]bool) (any, error) {
+// resolve is the schema ref names in Schemas, as decoded JSON.
+func (rt *Runtime) resolve(ref string) (any, error) {
+	target := rt.Schemas.SchemaFromRef(ref)
+	if target == nil {
+		return nil, fmt.Errorf("schema %s is not in the registry", ref)
+	}
+	raw, err := jsonkit.Marshal(target)
+	if err != nil {
+		return nil, err
+	}
+	var resolved any
+	return resolved, jsonkit.Unmarshal(raw, &resolved)
+}
+
+func (rt *Runtime) inline(v any, seen map[string]bool, defs map[string]any) (any, error) {
 	switch x := v.(type) {
 	case map[string]any:
 		if ref, ok := x["$ref"].(string); ok {
 			if seen[ref] {
-				return nil, fmt.Errorf("schema %s refers to itself, and cannot be inlined", ref)
+				// Recursive: a reference into $defs, inlined there once.
+				name := ref[strings.LastIndex(ref, "/")+1:]
+				if _, ok := defs[name]; !ok {
+					defs[name] = nil
+				}
+				out := make(map[string]any, len(x))
+				for k, e := range x {
+					out[k] = e
+				}
+				out["$ref"] = "#/$defs/" + name
+				return out, nil
 			}
-			target := rt.Schemas.SchemaFromRef(ref)
-			if target == nil {
-				return nil, fmt.Errorf("schema %s is not in the registry", ref)
-			}
-			raw, err := jsonkit.Marshal(target)
+			resolved, err := rt.resolve(ref)
 			if err != nil {
 				return nil, err
 			}
-			var resolved any
-			if err := jsonkit.Unmarshal(raw, &resolved); err != nil {
-				return nil, err
+			// What sits beside the $ref is the field's own, its description
+			// above all: it is kept, over the referred schema's.
+			if m, ok := resolved.(map[string]any); ok {
+				for k, e := range x {
+					if k != "$ref" {
+						m[k] = e
+					}
+				}
 			}
 			seen[ref] = true
 			defer delete(seen, ref)
-			return rt.inline(resolved, seen)
+			return rt.inline(resolved, seen, defs)
 		}
 		out := make(map[string]any, len(x))
 		for k, e := range x {
-			ie, err := rt.inline(e, seen)
+			ie, err := rt.inline(e, seen, defs)
 			if err != nil {
 				return nil, err
 			}
@@ -268,7 +321,7 @@ func (rt *Runtime) inline(v any, seen map[string]bool) (any, error) {
 	case []any:
 		out := make([]any, len(x))
 		for i, e := range x {
-			ie, err := rt.inline(e, seen)
+			ie, err := rt.inline(e, seen, defs)
 			if err != nil {
 				return nil, err
 			}

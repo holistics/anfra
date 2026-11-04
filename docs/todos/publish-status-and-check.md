@@ -1,16 +1,15 @@
-# `publish status` and `publish --check`
+# `publish status`, and the rest of `publish check`
 
 *Not built. Noted 2026-11-02.*
 
-Two ways to ask about publishing without publishing, and the convention that tells them apart. `publish --dry-run`, the offline listing, is already `publish --list`.
+Two ways to ask about publishing without publishing, and the convention that tells them apart. `publish check` exists, doing the offline part of the preflight so far: the files, and where they'd go. It was `publish --list`, and before it `--dry-run`.
 
-## The convention: `status` and `--check`
+## The convention: `status` and `check`
 
 - **`status` is the state of a thing.** Read-only, cheap, safe to run any time: "what is the situation?" `anfra status` (the repo and its server), `anfra auth status` (logins).
-- **`<action> --check` is the action's preflight.** Everything the action would do up to its first change, then what it would do: "what would happen if I ran this?" It exits non-zero when the action would fail. `anfra update --check`, `anfra agent setup --check`.
-- **A listing is neither.** It names what an action would take, offline: `anfra publish --list`.
+- **`<action> check` is the action's preflight.** Everything the action would do up to its first change, then what it would do: "what would happen if I ran this?" It exits non-zero when the action would fail. `anfra update check`, `anfra agent setup check`, `anfra publish check`. A part of the preflight (the files alone, offline) is the check's for now, not a command of its own, until use asks for one.
 
-Other tools draw the same lines: `cargo package --list` and `cargo publish --dry-run`, `terraform validate` and `terraform plan`, Ansible's `--syntax-check` and `--check`, kubectl's `--dry-run=client` and `--dry-run=server`. Where a tool says "dry run", it mostly means the online level; anfra says `--check`, and so has no `--dry-run`.
+Other tools draw the same lines: `cargo package --list` and `cargo publish --dry-run`, `terraform validate` and `terraform plan`, Ansible's `--syntax-check` and `--check`, kubectl's `--dry-run=client` and `--dry-run=server`. Where a tool says "dry run", it mostly means the online level; anfra says `check`, and so has no `--dry-run`.
 
 The first two are written down in [commands-and-api.md](../designs/commands-and-api.md#asking-without-acting).
 
@@ -35,12 +34,12 @@ published:
 
 Until then, the CLI can record the tree id it published beside the revision it already records (`internal/publish/state.go`): `current` is known when the published revision is this folder's last, and `unknown` when someone else published since.
 
-## `anfra publish --check`
+## The rest of `anfra publish check`
 
-The preflight: every step of `publish.Run` up to the upload, each step's answer, and whether a publish would succeed.
+The whole preflight: every step of `publish.Run` up to the upload, each step's answer, and whether a publish would succeed. Today `publish check` does the first two steps, offline.
 
 ```
-$ anfra publish --check
+$ anfra publish check
 ! Not published: 3 files differ from acme@8f3a…, published by alex@example.com on 2026-11-01 14:02.
 ✓ 42 files of the repo
 ✓ Publishes to https://cloud.example.com/o/acme (signed in)

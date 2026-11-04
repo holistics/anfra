@@ -15,7 +15,7 @@ Implements [CLI output](../designs/commands-and-api.md#cli-output): every comman
 | `--yaml`, and a CLI-only command's default, the pretty format | Done: `--yaml`, the defaults, the annotations, the help |
 | The prettifier's first views: `update`, `agent setup` and `init` | Built (`internal/pretty`) |
 | CLI-only commands' errors classified | Done (`internal/clierr`) |
-| `--schema` | Not started |
+| `--schema` | Done (`cmd/anfra/schema.go`) |
 | `--jq` | Not started |
 
 ## Order
@@ -54,12 +54,12 @@ Each CLI-only command's result has a shape the command defines (a Go type in `cm
 
 | Command | Its result |
 |---|---|
-| `update --check` | `anfra version`'s answer, checked now, and the changelog's link ([new state as output](../designs/commands-and-api.md#new-state-as-output)). |
-| `agent setup --check` | Each agent, and the copies of the skills found, with their versions. |
-| `publish --list` | The org (`url`; null when none is configured) and the files, a tree in the pretty format. The note on the folder's other files goes. |
+| `update check` | `anfra version`'s answer, checked now, and the changelog's link. It was `update --check`, which warns now ([new state as output](../designs/commands-and-api.md#new-state-as-output)). |
+| `agent setup check` | Each agent, and the copies of the skills found, with their versions. It was `agent setup --check`, which warns now. |
+| `publish check` | The org (`url`; null when none is configured) and the files, a tree in the pretty format. It was `publish --list`, and before it `--dry-run`, which warn now. The note on the folder's other files goes. |
 | `publish` | The org (`url`, `name`, from the login), the revision published, whether anything changed, what it replaced, how many files, and the data sources it created. A repo that fails validation fails with `repo_invalid`, anfra-cloud's code for the same, with its details: `{validation: <validate's answer>}`. |
 | `update` | `anfra version`'s answer after the update, the version it replaced, and the changelog's link. Servers still running another version stay warnings, and the skills needing attention becomes one. |
-| `agent setup` | `agent setup --check`'s report after setup, and what setup did per agent: `installed`, `failed`, `cli_missing` or `instructions_only`, with a message. |
+| `agent setup` | `agent setup check`'s report after setup, and what setup did per agent: `installed`, `failed`, `cli_missing` or `instructions_only`, with a message. |
 | `init` | Its folder, and each file with whether init changed it (created it, or added to it). A failure partway carries the result as far as it got. |
 | `auth status`, `login`, `logout` | `status`: each org with a saved login, and the current repo's without one: `name`, `url`, `saved_login` (`valid`, `invalid`, `missing`), `current_repo`. `login`: `org_url`. `logout`: `org_url`, `local_removed`, `remote_revocation_confirmed`; a failed revocation after local removal is `command_failed`, the result its details. `remote_checked`, `repo_org_url`, `repo_destination_changed` and `repo_active` go: their guarantees are in `--help` and the usage doc. |
 
@@ -123,7 +123,16 @@ Tests: cobra's refusals coded; an interrupted run; the org's server's errors pas
 
 ## 4. `--schema`
 
-`anfra <command> --schema` writes the JSON Schema of the command's result instead of running it: in YAML, or with `--json` in JSON, as any output. One schema describes both, since a result has the same shape in either. A core command's comes from its op, as in `api/openapi.yaml`; a CLI-only command's is generated from its Go result type by huma, as the ops' are. `--help` then says, in a line, that the command writes its result as YAML or JSON and that `--schema` shows its shape, rather than listing its fields.
+`anfra <command> --schema` writes the command's input and output instead of running it ([CLI output](../designs/commands-and-api.md#cli-output)): `command`, `input`, `output`, in YAML or with `--json` in JSON. Done:
+
+- **A core command's** come from its op, as discovery's usage does (`rt.Inline`). **A CLI-only command's** input from its flags and positionals, its output from its result type, recorded with `resultIs`; a test holds every structured command to having one.
+- **Each input field is a flag, `--<field>`,** in kebab or snake case: pflag takes a flag by its field's name too (`--data_source`). Only a field that isn't one says so, `x-cli: [positional]` or `[positional, stdin]`, as the op's `cli` tag. No short forms: `--help` has them, and an agent is better off with the long one.
+- **In order:** a schema's keywords (`type`, `description`, `x-cli`, `required`, `properties`, …) and its properties in the result's own field order, as the result is written.
+- **Descriptions** from `doc` tags, now on the CLI-only result types too, one clause each; the "Its result opens with…" paragraphs in `--help` went, for a sentence on the result's meaning.
+- **An artifact refuses it**, as it refuses `--json`.
+- **Two fixes to apikit's inlining**, which discovery shares: a struct field's description, beside its `$ref`, was dropped; and a type that refers to itself (lineage's `DiagramSection`) failed, so `/api/ops/lineage` did. It is now kept once, in `$defs`.
+
+The summary and doc stay out: `--help` is the first look, `--schema` the contract, and repeating them would cost every reader. The hint for reading the output alone, without descriptions (`--jq '.output | del(.. | .description?)'`), comes with `--jq`.
 
 ## 5. `--jq`
 

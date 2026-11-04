@@ -56,12 +56,12 @@ A field's `pretty` tag (and its schema's `x-pretty`) adjusts the layout; it neve
 | `pretty:",block"` | multi-line text as a block, even when it has one line |
 | `pretty:",moment"` | a time shown relative |
 | `pretty:",truncate"` | a column that may be cut to fit the terminal |
-| `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Built for a list of paths (`publish --list`); `tree=path` not yet |
+| `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Built for a list of paths (`publish check`); `tree=path` not yet |
 | `pretty:",tone=latest:good behind:warn failed:bad"` | the [tone](#color) of some of a field's values |
 
 ### Trees
 
-A list of paths, such as `publish --list`'s hundreds of files, repeats its folders on every line when flat. With the `tree` hint it's drawn as `tree` draws one:
+A list of paths, such as `publish check`'s hundreds of files, repeats its folders on every line when flat. With the `tree` hint it's drawn as `tree` draws one:
 
 ```
 Files:
@@ -105,7 +105,7 @@ Color helps a person find their way around the output, and see what needs attent
 
 **Tones come from hints.** The prettifier can't guess that `behind` is bad news and `latest` good, so a field says which of its values have a tone: `pretty:",tone=latest:good behind:warn mixed:warn deprecated:bad unknown:warn"` on a copy's `status`, `pretty:",tone=installed:good failed:bad cli_missing:warn"` on setup's `outcome`. A value without a tone, and a boolean, stays plain: `true` isn't good news in itself.
 
-What `agent setup --check` would look like, styles noted on the right:
+What `agent setup check` would look like, styles noted on the right:
 
 ```
 Claude Code's plugin is behind 0.4.5, and ~/.claude/skills has deprecated skills.   bold
@@ -136,7 +136,7 @@ An own view can drift from its result, as hand-written output does. Its test lis
 
 ## Examples
 
-### `anfra agent setup --check`
+### `anfra agent setup check`
 
 ```
 Claude Code's plugin is behind 0.4.5, ~/.agents/skills is mixed, and ~/.claude/skills has deprecated skills.

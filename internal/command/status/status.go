@@ -84,7 +84,7 @@ func compareSkills(inUse string, known *command.SkillsInfo, now time.Time, hints
 	}
 	switch {
 	case inUse == SkillsUnknown:
-		hints = append(hints, "To see which copies of the anfra skills are installed, and their versions, run `anfra agent setup --check`.")
+		hints = append(hints, "To see which copies of the anfra skills are installed, and their versions, run `anfra agent setup check`.")
 	case newer(inUse, s.Latest):
 		s.Latest = inUse
 	case inUse != s.Latest:

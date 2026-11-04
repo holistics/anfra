@@ -25,6 +25,7 @@ import (
 var output struct {
 	yaml           bool
 	json           bool
+	schema         bool
 	nonInteractive bool
 }
 
@@ -118,8 +119,11 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	pf := root.PersistentFlags()
 	pf.BoolVar(&output.yaml, "yaml", false, "write the answer as YAML, whatever the command's default")
 	pf.BoolVar(&output.json, "json", false, "write the answer, warnings and errors as JSON")
+	pf.BoolVar(&output.schema, "schema", false, "write the command's input and output, as JSON Schema, instead of running it: each input field is a flag, --<field>, unless its x-cli says it's positional")
 	pf.BoolVar(&output.nonInteractive, "non-interactive", false, "ask no questions and print no notices: refuse what would need an answer")
 	root.SetGlobalNormalizationFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		// A flag by its field's name works too: --data_source, as --schema names it.
+		name = strings.ReplaceAll(name, "_", "-")
 		if name == "no-interactive" {
 			name = "non-interactive"
 		}
@@ -151,7 +155,11 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return flagRefused(err) })
 	refuseArgsAsRequests(root)
 
+	schemaInstead(root)
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if output.schema && cmd.Annotations[outputKind] == outputArtifact {
+			return formatRefused("--schema", cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", which has no schema")
+		}
 		flag := "--json"
 		switch {
 		case output.yaml && output.json:
@@ -188,7 +196,7 @@ func describeOutput(cmd *cobra.Command) {
 		} else {
 			rows = [][2]string{{"default", "a YAML document"}}
 		}
-		rows = append(rows, [2]string{"--json", "a JSON document"})
+		rows = append(rows, [2]string{"--json", "a JSON document"}, [2]string{"--schema", "its input and output, as JSON Schema"})
 	}
 	sections := helpSection("Output:", rows)
 	if cmd.Annotations[interactable] != "" {

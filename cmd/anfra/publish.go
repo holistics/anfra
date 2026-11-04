@@ -34,23 +34,22 @@ func newPublishCmd() *cobra.Command {
 			"Which files: the repo's own, its .aml files and its Data Apps (everything under apps/), wherever they\n" +
 			"are in the folder, except under a dot-folder or node_modules. Nothing else is published: not .anfra/\n" +
 			"(data_sources.yml holds credentials), nor a .env, notes or build output beside the repo. .gitignore does\n" +
-			"not apply: it says what belongs in git, not what is published. --list lists the files and stops.\n\n" +
+			"not apply: it says what belongs in git, not what is published. `anfra publish check` lists them.\n\n" +
 			"Where to: the org's address on its server, https://<server>/o/<org>, kept in .anfra/config.yml\n" +
 			"(org.url) and committed, so everyone publishes to the same org. --set-org sets it, and publishes there.\n" +
 			"Without a destination, an interactive terminal offers stored logins or new authentication.\n" +
 			"If the destination needs authentication, log in or choose another org here. Changing\n" +
 			"the destination requires confirmation before updating .anfra/config.yml.\n" +
 			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n" +
-			"--yes skips overwrite confirmation only. --list never authenticates or writes configuration.\n\n" +
-			"Its result opens with message, the outcome. With --list: org (null when none is configured) and\n" +
-			"files, each path. Without: org (url, and name when the login knows it), revision, changed (false\n" +
-			"when these files were what the org had), replaced (the revision it replaced, when there was one),\n" +
-			"files (how many), and data_sources_created. hints, last, are what to do next. A repo that fails\n" +
-			"validation fails with repo_invalid, whose details are validate's answer, as validation.",
+			"--yes skips overwrite confirmation only.\n\n" +
+			"Its result is the revision published, and what came of it. A repo that fails validation fails\n" +
+			"with repo_invalid, whose details are validate's answer, as validation.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if cmd.Flags().Changed("dry-run") {
-				printWarning(cmd.ErrOrStderr(), "deprecated", "--dry-run is deprecated: use --list.")
+			for _, former := range []string{"list", "dry-run"} {
+				if cmd.Flags().Changed(former) {
+					printWarning(cmd.ErrOrStderr(), "deprecated", "--"+former+" is deprecated: use `anfra publish check`.")
+				}
 			}
 			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
 			// Progress and questions are for a person at a terminal; warnings,
@@ -96,19 +95,48 @@ func newPublishCmd() *cobra.Command {
 		},
 	}
 	markPrettyOutput(cmd)
+	resultIs[publish.Result](cmd)
 	markInteractable(cmd)
 	f := cmd.Flags()
 	f.StringVarP(&o.Message, "message", "m", "", "what this publish is, for the org's history of the repo (default: in a git repo, HEAD's commit)")
 	f.StringVar(&o.SetOrg, "set-org", "", "set the org the repo publishes to, by its address, https://<server>/o/<org> (.anfra/config.yml org.url), and publish there")
-	f.BoolVar(&o.List, "list", false, "list the files that would be published, and where to, and stop: offline")
-	// --dry-run was --list's name; a dry run elsewhere goes as far as the server
-	// (docs/designs/commands-and-api.md#deprecation-before-removal).
-	// It warns as a document, not as pflag's deprecation note: stderr is a stream
-	// of them.
-	f.BoolVar(&o.List, "dry-run", false, "list the files that would be published, and stop")
+	// --list and, before it, --dry-run were publish check's names: they still
+	// work, warning (docs/designs/commands-and-api.md#deprecation-before-removal),
+	// as a document, not as pflag's deprecation note: stderr is a stream of them.
+	f.BoolVar(&o.Check, "list", false, "former name of `anfra publish check`")
+	f.BoolVar(&o.Check, "dry-run", false, "former name of `anfra publish check`")
+	_ = f.MarkHidden("list")
 	_ = f.MarkHidden("dry-run")
 	f.BoolVar(&o.CreateDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server. DuckDB ones, files on this machine, are never sent")
 	f.BoolVarP(&o.Yes, "yes", "y", false, "publish without asking, though the repo was last published elsewhere (needed without a terminal)")
+	cmd.AddCommand(newPublishCheckCmd())
+	return cmd
+}
+
+// newPublishCheckCmd is publish's preflight
+// (docs/designs/commands-and-api.md#asking-without-acting): as far as a
+// publish goes before its first change. Today the part done here, offline:
+// the files, and where they'd go.
+func newPublishCheckCmd() *cobra.Command {
+	o := publish.Options{Check: true}
+	cmd := &cobra.Command{
+		Use:   "check",
+		Short: "Check what a publish would do, without publishing: the files it would send, and where to",
+		Long: "Check what `anfra publish` would do, without publishing: the files of this folder it would\n" +
+			"send, and the org they'd go to. Worked out here: it never authenticates, nor writes configuration.\n\n" +
+			"Its result is what a publish would send, and where.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, err := publish.Run(cmd.Context(), ".", o, publish.Env{})
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, res)
+		},
+	}
+	cmd.Flags().StringVar(&o.SetOrg, "set-org", "", "check against this org, by its address, https://<server>/o/<org>, rather than the configured one; nothing is written")
+	markPrettyOutput(cmd)
+	resultIs[publish.CheckResult](cmd)
 	return cmd
 }
 

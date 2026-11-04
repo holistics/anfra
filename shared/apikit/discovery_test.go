@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -212,5 +213,45 @@ func TestMCPDestructiveHint(t *testing.T) {
 				t.Errorf("an op that may destroy: destructiveHint %v, want true", d)
 			}
 		}
+	}
+}
+
+// A struct field's own description, beside its $ref, survives inlining: the
+// field says what it is, over what its type says.
+func TestInlineKeepsAFieldsDescription(t *testing.T) {
+	type inner struct {
+		N int `json:"n"`
+	}
+	type outer struct {
+		In inner `json:"in" doc:"what in is, here"`
+	}
+	rt := apikit.NewRuntime()
+	s, err := rt.Inline(rt.Schema(reflect.TypeFor[outer]()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, _ := s["properties"].(map[string]any)["in"].(map[string]any)
+	if in["description"] != "what in is, here" || in["type"] != "object" || in["$ref"] != nil {
+		t.Errorf("in = %v", in)
+	}
+}
+
+// A schema that refers to itself is inlined everywhere but where it recurs:
+// there, a reference into the document's $defs, which holds it once.
+func TestInlineARecursiveSchema(t *testing.T) {
+	type node struct {
+		Name     string `json:"name"`
+		Children []node `json:"children"`
+	}
+	rt := apikit.NewRuntime()
+	s, err := rt.Inline(rt.Schema(reflect.TypeFor[node]()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	children := s["properties"].(map[string]any)["children"].(map[string]any)
+	defs, _ := s["$defs"].(map[string]any)
+	def, _ := defs["Node"].(map[string]any)
+	if children["items"].(map[string]any)["$ref"] != "#/$defs/Node" || def["type"] != "object" {
+		t.Errorf("schema: %v", s)
 	}
 }

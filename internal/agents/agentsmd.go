@@ -24,8 +24,8 @@ This is an anfra repo.
 
 - Use the anfra skills for work in this repo. They know anfra's languages and commands, so you'll work more
   accurately and efficiently with them than from memory.
-- Check a command's flags with ` + "`anfra <command> --help`" + ` rather than guessing; ` + "`anfra --help`" + ` lists the
-  commands.
+- Check a command with ` + "`anfra <command> --help`" + ` rather than guessing; ` + "`anfra --help`" + ` lists the commands.
+  Before scripting a call or reading its result, ` + "`--schema`" + ` gives its exact input and output.
 - Pass ` + "`--yaml`" + ` (or ` + "`--json`" + `) and ` + "`--non-interactive`" + ` to every anfra command: it then writes its answer to stdout
   as a YAML document (JSON with ` + "`--json`" + `), and never waits on a question. Warnings and errors go to stderr as
   multiple YAML documents, or JSONL documents with ` + "`--json`" + `, each with a ` + "`code`" + ` to act on, and a failed command

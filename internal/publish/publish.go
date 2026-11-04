@@ -33,9 +33,11 @@ type Options struct {
 	Message string
 	// SetOrg is an org's address to record as the repo's, and publish to.
 	SetOrg string
-	// List lists the files and the destination, and stops: offline, without
-	// authentication or config writes.
-	List bool
+	// Check is publish check: the preflight, which goes as far as a publish
+	// would before its first change, then says what it would do. Today, the
+	// part done here, offline, without authentication or config writes: the
+	// files, and where they'd go.
+	Check bool
 	// Yes publishes without asking, though the repo was last published elsewhere.
 	Yes bool
 	// CreateDataSources adds the data sources the repo uses and the org lacks
@@ -78,7 +80,7 @@ type Env struct {
 }
 
 // Run publishes the repo at dir: PUBLISH.md's flow, from file selection to the
-// server's answer. With o.List it lists instead, offline: a ListResult; else a
+// server's answer. With o.Check it checks instead: a CheckResult; else a
 // Result. Progress and questions go to env.ErrOut; warnings to env.Warn.
 func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 	t := &told{warn: env.Warn}
@@ -95,8 +97,8 @@ func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 		return nil, err
 	}
 	tg := target{files: files, org: org, configured: configured}
-	if o.List {
-		return list(tg), nil
+	if o.Check {
+		return check(tg), nil
 	}
 	return publish(ctx, dir, o, env, t, tg)
 }
@@ -109,10 +111,10 @@ type target struct {
 	configured bool
 }
 
-// list is what a publish would send, and where.
-func list(tg target) ListResult {
+// check is what a publish would send, and where.
+func check(tg target) CheckResult {
 	files, org, configured := tg.files, tg.org, tg.configured
-	res := ListResult{Files: files}
+	res := CheckResult{Files: files}
 	if !configured {
 		res.Message = fmt.Sprintf("Would publish %d files. No org is configured.", len(files))
 		res.Hints = []string{"Set the org with `anfra publish --set-org https://<server>/o/<org>`, or run `anfra publish` on a terminal to choose one."}

@@ -310,7 +310,7 @@ func saidBy(res any, errOut *bytes.Buffer) (message, said string) {
 	switch r := res.(type) {
 	case Result:
 		message, hints = r.Message, r.Hints
-	case ListResult:
+	case CheckResult:
 		message, hints = r.Message, r.Hints
 	}
 	for _, h := range hints {
@@ -498,7 +498,7 @@ func TestSetOrg(t *testing.T) {
 	s, url := newServer(t)
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a"})
-	if _, _, err := run(t, dir, Options{SetOrg: url, List: true}, never(t)); err != nil {
+	if _, _, err := run(t, dir, Options{SetOrg: url, Check: true}, never(t)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(repoconfig.Path(dir)); err == nil {
@@ -573,7 +573,7 @@ func TestFirstPublishDestinationOrdering(t *testing.T) {
 				}
 				return nil
 			}
-			_, err = Run(context.Background(), dir, Options{List: scenario == "list"}, env)
+			_, err = Run(context.Background(), dir, Options{Check: scenario == "list"}, env)
 			success := scenario == "success" || scenario == "list"
 			if (err == nil) != success {
 				t.Fatalf("result: %v", err)
@@ -669,7 +669,7 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 				}
 				return validated
 			}
-			_, err := Run(context.Background(), dir, Options{Yes: true, List: scenario == "list"}, env)
+			_, err := Run(context.Background(), dir, Options{Yes: true, Check: scenario == "list"}, env)
 			switch scenario {
 			case "list":
 				if err != nil || recovered || loaded != 0 {
