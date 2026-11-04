@@ -118,6 +118,7 @@ const (
 // accepted for good and shown nowhere: the name some CLIs use.
 func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	pf := root.PersistentFlags()
+	jqCode = nil // a tree starts without --jq, as its flags start at their defaults
 	pf.BoolVar(&output.yaml, "yaml", false, "write the answer as YAML, whatever the command's default")
 	pf.BoolVar(&output.json, "json", false, "write the answer, warnings and errors as JSON")
 	pf.StringVar(&output.jq, "jq", "", "filter the answer with a jq expression, writing what it gives as YAML, or JSON with --json")
