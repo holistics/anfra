@@ -34,7 +34,7 @@ Discovery serves the same contract the operations do, filtered to what the calle
 
 Every command writes structured output, except the few that write an artifact (below). (In docs, say *structured output* for what a command writes, as against prose; say *document* only beside YAML or JSON, where the format is the point.) Structured output comes in three formats:
 
-- **YAML** (`--yaml`): a core command's default. Read by a person or an agent, and by YAML tools.
+- **YAML** (`--yaml`): a core command's default. Read by a person or an agent, and by YAML tools. Indented by 2, as most YAML is: a deep answer costs its reader fewer characters.
 - **JSON** (`--json`): for tools and languages that read only JSON.
 - **Pretty**: the pretty format, laid out for a person, with tables and sections ([cli-pretty.md](cli-pretty.md)). A CLI-only command's default, as people run them more than programs do; no flag asks for it yet. Not for a program: it can truncate, and its layout may change.
 
@@ -57,7 +57,7 @@ Every command writes structured output, except the few that write an artifact (b
 | Default for | core commands | none | CLI-only commands |
 | For | a person or an agent reading it, and YAML tools (`yq`) | tools and languages that read only JSON (`jq`) | a person |
 | stdout | the result as a YAML document | the result as one JSON document | the result laid out for reading: `message`, sections, tables, `hints` |
-| stderr | multiple YAML documents, each after `---` | JSONL: one JSON document a line | as YAML |
+| stderr | multiple YAML documents, each after `---` | JSONL: one JSON document a line (indented, in [`anfra console`](console.md)) | as YAML |
 | `openapi` | the OpenAPI document as YAML | the OpenAPI document as JSON | as YAML |
 
 **Artifacts are the exception.** A few commands write something other than a result to stdout, and refuse `--yaml` and `--json` for good: `serve`, which runs until stopped and writes a log; `completion`, a shell script; `help`, its text; and `query export` without `--link`, the file. Every other command writes structured output, and a test holds every command to that (`cmd/anfra`): a new command either has a structured result or is marked an artifact.

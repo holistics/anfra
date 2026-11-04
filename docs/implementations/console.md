@@ -11,11 +11,14 @@ Implements [anfra console](../designs/console.md): a session at a terminal, anfr
 | 2. The skeleton | Done (`cmd/anfra/console.go`, `cliui.ReadEntry`) |
 | 3. Output for a person | Done: YAML and JSON colored (`internal/pretty/color.go`) |
 | 3b. Notices in the status area | Next |
+| 4. Modes and AQL | |
+| 5. A warm server | |
+| 6. History kept between sessions | |
 
 ## Order
 
 ```
-1 one process, many runs ──> 2 the skeleton ──> 3 output for a person ──> 4 modes and AQL ──> 5 a warm server
+1 one process, many runs ──> 2 the skeleton ──> 3 output for a person ──> 4 modes and AQL ──> 5 a warm server ──> 6 history kept
 ```
 
 Each step ships on its own. Step 1 changes nothing visible, and is worth doing whether or not the console follows.
@@ -64,7 +67,7 @@ Tests: the reader, driven with key sequences (`internal/cliui/entry_test.go`); s
 
 ## 3. Output for a person
 
-- **`run`'s options** (`runOptions`, `cmd/anfra/main.go`): `color`, set by the console only, and set by `run` on every run, as the flags are reset. A shell's run leaves it off.
+- **`run`'s options** (`runOptions`, `cmd/anfra/main.go`): `inConsole`, set by the console only, and set by `run` on every run, as the flags are reset. A shell's run leaves it off. It colors YAML and JSON at a terminal, and indents JSON by 2 (`paintJSON`), answers, `--jq`'s results and errors alike.
 - **YAML and JSON colored** (`pretty.ColorYAML`, `pretty.ColorJSON`, `internal/pretty/color.go`) by the pretty format's rules ([cli-pretty.md](../designs/cli-pretty.md#color)): every key bright blue; `null` and punctuation faint; a URL as a link; an error's `code` red and a warning's yellow (`docTones`); any other value plain. yaml.v3 writes the YAML as it did, and goccy/go-yaml's lexer (already in the module graph, through huma) colors that text. The JSON, compact lines the CLI wrote, is scanned as it is.
 - **Where**: a core command's answer (`renderTo`), `--jq`'s YAML and JSON (`renderJQ`; its plain lines stay plain), and errors and warnings (`writeDoc`, `writeJSONDoc`). Only at a terminal (`cliui.NewTerminalStyles`: not with `NO_COLOR`, `CI` or `TERM=dumb`).
 - **The text is never changed.** Each colorer checks its output, its escape codes removed, against its input, and gives the input back uncolored when they differ: the lexer drops the text's final line break, which is put back.
@@ -85,6 +88,18 @@ Tests: entries ending or not (a declaration's `;`, `;;` in a string, `;;` after 
 ## 5. A warm server
 
 Without a server running, each core command starts its own sidecars (`invoke`, `cmd/anfra/commands.go`). At its start, the console uses the repo's server (`findServer`), or starts `anfra serve --idle-timeout 10m` detached (`detach_unix.go`), so it stops by itself after the session. `invoke` already prefers a running server, so the commands need no change. The banner says which.
+
+## 6. History kept between sessions
+
+Up and Down step through the session's entries only (`cliui.ReadEntry`'s `History`, kept in memory by `runConsole`). psql, irb and shells keep theirs in a file, so yesterday's query is an Up away.
+
+- **Where:** a file in anfra's home (`internal/home`), `~/.anfra/console_history`. An entry can be several lines (AQL), so not one a line: JSON lines, or psql's way, escaped newlines.
+- **How much:** the last 1,000 entries, as bash keeps 1,000 and psql 500; older ones dropped as new ones are written.
+- **Per repo or not:** one file for all, the simplest, or one per repo (`internal/repo`'s data dir), so a repo's queries stay with it. Per repo suits AQL, whose datasets are a repo's. To decide.
+- **What's kept out:** an entry starting with a space, as shells let a leading space keep a line out (`HISTCONTROL=ignorespace`), for one carrying a secret.
+- **Written** as each entry runs, not when the session ends, so a session killed keeps what it ran; two sessions at once both append.
+
+Tests: entries written and read back, multi-line ones whole; the limit; an entry starting with a space kept out; a second session's Up reaching the first's last entry.
 
 ## Open questions
 

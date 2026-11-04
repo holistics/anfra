@@ -170,7 +170,7 @@ func writeDoc(w io.Writer, key string, v any) {
 		return
 	}
 	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, value)
-	b, err := yaml.Marshal(root)
+	b, err := marshalYAML(root)
 	if err != nil {
 		return
 	}

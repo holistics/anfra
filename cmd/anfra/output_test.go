@@ -184,17 +184,17 @@ func TestAnswerYAMLKeepsTheShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "server:\n" +
-		"    state: running\n" +
-		"    port: 9007199254740993\n" +
-		"    row_id: \"9007199254740993\"\n" +
+		"  state: running\n" +
+		"  port: 9007199254740993\n" +
+		"  row_id: \"9007199254740993\"\n" +
 		"repo:\n" +
-		"    id: r1\n" +
-		"    ratio: 1.50\n" +
-		"    tags:\n" +
-		"        - b\n" +
-		"        - a\n" +
-		"    \"on\": \"yes\"\n" +
-		"    empty: {}\n"
+		"  id: r1\n" +
+		"  ratio: 1.50\n" +
+		"  tags:\n" +
+		"    - b\n" +
+		"    - a\n" +
+		"  \"on\": \"yes\"\n" +
+		"  empty: {}\n"
 	if out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
@@ -233,8 +233,8 @@ func TestWriteStructured(t *testing.T) {
 	want := "message: anfra 0.16.0 is available (you have 0.15.0).\n" +
 		"version: 0.15.0\n" +
 		"update:\n" +
-		"    latest: 0.16.0\n" +
-		"    available: true\n" +
+		"  latest: 0.16.0\n" +
+		"  available: true\n" +
 		"changelog: https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md\n"
 	if out.String() != want {
 		t.Errorf("YAML:\n%s\nwant\n%s", out.String(), want)

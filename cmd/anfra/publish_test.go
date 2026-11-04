@@ -775,7 +775,7 @@ func TestAppWarnings(t *testing.T) {
 		{"validator":"data_app","filePath":"apps/a.html","severity":"warning","message":"line 3: \"x.png\" is a file beside the app"},
 		{"validator":"unused_field","filePath":"models/m.aml","severity":"warning","message":"unused"}
 	]}`), &out)
-	want := "---\nwarning:\n    code: data_app_not_portable\n    message: 'apps/a.html: line 3: \"x.png\" is a file beside the app'\n"
+	want := "---\nwarning:\n  code: data_app_not_portable\n  message: 'apps/a.html: line 3: \"x.png\" is a file beside the app'\n"
 	if got := out.String(); got != want {
 		t.Errorf("appWarnings wrote %q, want %q", got, want)
 	}

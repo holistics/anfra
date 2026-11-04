@@ -59,7 +59,7 @@ acme> exit
 
 (Drafts: the prompt, the banner, and the answers' shapes, cut short with `…`.)
 
-**The output is the formats the CLI has, coloured.** A command whose pretty view is reviewed writes the pretty format, a core command included; any other writes YAML ([cli-pretty.md](cli-pretty.md#where-it-stands)). Today that is the CLI-only commands' views, so `query` above writes YAML. The console gets prettier as the prettifier does, one command at a time, by its rules: no view is made for the console alone. `--yaml` and `--json` work as they do outside, coloured.
+**The output is the formats the CLI has, coloured.** A command whose pretty view is reviewed writes the pretty format, a core command included; any other writes YAML ([cli-pretty.md](cli-pretty.md#where-it-stands)). Today that is the CLI-only commands' views, so `query` above writes YAML. The console gets prettier as the prettifier does, one command at a time, by its rules: no view is made for the console alone. `--yaml` and `--json` work as they do outside, coloured, and JSON, answers and errors alike, indented by 2, as gh and jq show JSON to a person: outside a console, a program reads it a line a document.
 
 ## Lines
 
@@ -85,6 +85,7 @@ The mode decides.
 - **Colour** wherever the stream is a terminal; `NO_COLOR` still turns it off. The colours follow [cli-pretty.md](cli-pretty.md#color), so YAML, JSON and the pretty format read as one family. `--jq`'s plain lines stay plain, as `jq -r`'s are.
 - **Questions** are asked, as a command run at a terminal asks them.
 - **Ctrl-C** clears the entry being typed, or cancels the command running. The session stays.
+- **History** is kept between sessions, in a file in anfra's home: Up reaches yesterday's entries, as in psql or a shell. An entry starting with a space is kept out, for one carrying a secret.
 - **The prompt** shows the repo, the dataset when one is set, and the mode, in bold violet: where each entry starts, found scrolling back.
 - **Notices** (anfra or the skills behind, a server started) go in a status area under the prompt, as Claude Code's, rather than after each command's output: shown while they hold, not repeated after every command, and never mixed into an answer.
 - **A warm server**: the console uses the repo's running server, or starts one that stops by itself once the session has been gone a while. The banner says which.
@@ -104,7 +105,6 @@ The mode decides.
 
 ## Later
 
-- History kept in a file, in anfra's state directory.
 - Completion: commands and flags, then datasets, then fields.
 - The last result: paging, drilling into a row, exporting it.
 

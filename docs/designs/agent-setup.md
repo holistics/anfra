@@ -147,18 +147,18 @@ Setup runs its installs, writes the `AGENTS.md` block in an anfra repo, then ans
 ```yaml
 message: Installed the anfra skills for Claude Code. Couldn't install them for Codex.
 setup:
-    agents:
-        - agent: claude-code
-          name: Claude Code
-          outcome: installed
-          message: Restart Claude Code, or run /reload-plugins, to load it.
-        - agent: codex
-          name: Codex
-          outcome: failed
-          message: '`codex plugin add anfra@anfra-skills`: exit status 1'
-    agents_md:
-        wrote_block: true
-        wrote_import: false
+  agents:
+    - agent: claude-code
+      name: Claude Code
+      outcome: installed
+      message: Restart Claude Code, or run /reload-plugins, to load it.
+    - agent: codex
+      name: Codex
+      outcome: failed
+      message: '`codex plugin add anfra@anfra-skills`: exit status 1'
+  agents_md:
+    wrote_block: true
+    wrote_import: false
 skills: …          # then the check report, as setup leaves things
 hints: …           # what to do next, as the check's
 ```
@@ -179,42 +179,42 @@ On a terminal, stderr also says what setup is doing ("Installing anfra for Claud
 ```yaml
 message: Claude Code's plugin is behind 0.4.5 and ~/.claude/skills has deprecated skills.
 skills:
-    latest: 0.4.5                        # null until the background check has run
-    checked_at: 2026-11-03T08:12:00Z
+  latest: 0.4.5                        # null until the background check has run
+  checked_at: 2026-11-03T08:12:00Z
 agents:
-    - id: claude-code
-      name: Claude Code
-      status: installed
-      plugins:
-        - scope: user
-          version: 0.4.4
-          status: behind
-      copies: [~/.claude/skills]
-    - id: opencode
-      name: OpenCode
-      status: not-installed
-      plugins: []
-      copies: []
-      install_from: https://github.com/holistics/anfra-skills#opencode
+  - id: claude-code
+    name: Claude Code
+    status: installed
+    plugins:
+      - scope: user
+        version: 0.4.4
+        status: behind
+    copies: [~/.claude/skills]
+  - id: opencode
+    name: OpenCode
+    status: not-installed
+    plugins: []
+    copies: []
+    install_from: https://github.com/holistics/anfra-skills#opencode
 copies:
-    - dir: ~/.agents/skills
-      status: mixed
-      versions:
-        - version: 0.4.4
-          skills: [anfra-aql, anfra-write-aql]
-        - version: 0.4.5
-          skills: [anfra-amql, …]
-      deprecated_names: false
-    - dir: ~/.claude/skills
-      status: deprecated
-      versions: []
-      deprecated_names: true
+  - dir: ~/.agents/skills
+    status: mixed
+    versions:
+      - version: 0.4.4
+        skills: [anfra-aql, anfra-write-aql]
+      - version: 0.4.5
+        skills: [anfra-amql, …]
+    deprecated_names: false
+  - dir: ~/.claude/skills
+    status: deprecated
+    versions: []
+    deprecated_names: true
 agents_md:                               # null outside an anfra repo
-    block: up-to-date
-    claude_md: imported                  # not-imported, or absent when the repo has no CLAUDE.md
+  block: up-to-date
+  claude_md: imported                  # not-imported, or absent when the repo has no CLAUDE.md
 hints:
-    - Run `anfra agent setup` to install or update them.
-    - Remove the deprecated anfra skills in ~/.claude/skills, from before 0.15.0, as https://github.com/holistics/anfra-skills#updating-and-removing says.
+  - Run `anfra agent setup` to install or update them.
+  - Remove the deprecated anfra skills in ~/.claude/skills, from before 0.15.0, as https://github.com/holistics/anfra-skills#updating-and-removing says.
 ```
 
 - **`skills`** is the latest skills version, from the background check, and when it was checked.
@@ -440,10 +440,10 @@ An agent with no anfra skills keeps failing at anfra's commands. After the third
 
 ```yaml
 error:
-    code: validation_failed
-    scope: user
-    message: …
-    help: The anfra skills aren't installed for your coding agents. They know anfra's commands and languages, so run `anfra agent setup`, then ask the user to restart you.
+  code: validation_failed
+  scope: user
+  message: …
+  help: The anfra skills aren't installed for your coding agents. They know anfra's commands and languages, so run `anfra agent setup`, then ask the user to restart you.
 ```
 
 - **Which failures count:** those the caller can fix, scoped `user` or `client`, such as invalid AQL or AML, an unknown command or flag, or a bad argument. A server or sidecar failure doesn't.

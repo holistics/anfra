@@ -29,52 +29,52 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 		{"one violation", apperr.NewWith(apperr.ValidationFailed, "name the data source to run the SQL query against",
 			apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "name the data source to run the SQL query against"})),
 			"---\nerror:\n" +
-				"    code: validation_failed\n" +
-				"    scope: user\n" +
-				"    message: name the data source to run the SQL query against\n" +
-				"    details:\n" +
-				"        violations:\n" +
-				"            - field: data_source\n" +
-				"              code: required\n" +
-				"              message: name the data source to run the SQL query against\n" +
-				"              arg: --data-source\n" +
-				"    request_id: \"\"\n" +
-				"    help: Run `anfra query --help` for usage.\n"},
+				"  code: validation_failed\n" +
+				"  scope: user\n" +
+				"  message: name the data source to run the SQL query against\n" +
+				"  details:\n" +
+				"    violations:\n" +
+				"      - field: data_source\n" +
+				"        code: required\n" +
+				"        message: name the data source to run the SQL query against\n" +
+				"        arg: --data-source\n" +
+				"  request_id: \"\"\n" +
+				"  help: Run `anfra query --help` for usage.\n"},
 		{"several, a schema's", apperr.NewWith(apperr.InvalidRequest, "", apperr.Violate(
 			apperr.Violation{Field: "lang", Code: "invalid", Message: `Must be one of: aql, sql; got "cobol".`},
 			apperr.Violation{Field: "query", Code: "required", Message: "Required."},
 		)),
 			"---\nerror:\n" +
-				"    code: invalid_request\n" +
-				"    scope: client\n" +
-				"    message: The request is not valid.\n" +
-				"    details:\n" +
-				"        violations:\n" +
-				"            - field: lang\n" +
-				"              code: invalid\n" +
-				"              message: 'Must be one of: aql, sql; got \"cobol\".'\n" +
-				"              arg: --lang\n" +
-				"            - field: query\n" +
-				"              code: required\n" +
-				"              message: Required.\n" +
-				"              arg: query\n" +
-				"    request_id: \"\"\n" +
-				"    help: Run `anfra query --help` for usage.\n"},
+				"  code: invalid_request\n" +
+				"  scope: client\n" +
+				"  message: The request is not valid.\n" +
+				"  details:\n" +
+				"    violations:\n" +
+				"      - field: lang\n" +
+				"        code: invalid\n" +
+				"        message: 'Must be one of: aql, sql; got \"cobol\".'\n" +
+				"        arg: --lang\n" +
+				"      - field: query\n" +
+				"        code: required\n" +
+				"        message: Required.\n" +
+				"        arg: query\n" +
+				"  request_id: \"\"\n" +
+				"  help: Run `anfra query --help` for usage.\n"},
 		{"a remote server's, in its order", remote(t, `{"error": {"code": "validation_failed", "scope": "user", "status": 422, "message": "x",
 			"details": {"violations": [{"field": "dataset", "code": "invalid", "message": "x"}]}, "request_id": "req_1"}}`),
 			"---\nerror:\n" +
-				"    code: validation_failed\n" +
-				"    scope: user\n" +
-				"    status: 422\n" +
-				"    message: x\n" +
-				"    details:\n" +
-				"        violations:\n" +
-				"            - field: dataset\n" +
-				"              code: invalid\n" +
-				"              message: x\n" +
-				"              arg: --dataset\n" +
-				"    request_id: req_1\n" +
-				"    help: Run `anfra query --help` for usage.\n"},
+				"  code: validation_failed\n" +
+				"  scope: user\n" +
+				"  status: 422\n" +
+				"  message: x\n" +
+				"  details:\n" +
+				"    violations:\n" +
+				"      - field: dataset\n" +
+				"        code: invalid\n" +
+				"        message: x\n" +
+				"        arg: --dataset\n" +
+				"  request_id: req_1\n" +
+				"  help: Run `anfra query --help` for usage.\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
@@ -89,7 +89,7 @@ func TestPrintErrorNamesTheArgs(t *testing.T) {
 	var out bytes.Buffer
 	printError(&out, &commandError{path: "anfra query", args: args, err: &remoteError{resp: apperr.Response{
 		Code: "query_invalid", Scope: apperr.User, Message: "The query is not valid.", Details: map[string]any{"diagnostics": []any{}}}}}, "")
-	if want := "---\nerror:\n    code: query_invalid\n    scope: user\n    message: The query is not valid.\n    details:\n        diagnostics: []\n    request_id: \"\"\n"; out.String() != want {
+	if want := "---\nerror:\n  code: query_invalid\n  scope: user\n  message: The query is not valid.\n  details:\n    diagnostics: []\n  request_id: \"\"\n"; out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
 }
@@ -132,7 +132,7 @@ func TestStderrIsAYAMLStream(t *testing.T) {
 func TestPrintErrorWithAHint(t *testing.T) {
 	var out bytes.Buffer
 	printError(&out, apperr.New(apperr.NotFound, "No such dataset."), "Run `anfra agent setup`.")
-	if want := "    help: Run `anfra agent setup`.\n"; !strings.HasSuffix(out.String(), want) {
+	if want := "  help: Run `anfra agent setup`.\n"; !strings.HasSuffix(out.String(), want) {
 		t.Errorf("alone:\n%s", out.String())
 	}
 
@@ -162,15 +162,15 @@ func TestRepoInvalidAsTheCloudHasIt(t *testing.T) {
 	printError(&out, apperr.NewWith(clierr.RepoInvalid, "The repo has errors: fix them and publish again.",
 		clierr.RepoProblems{Validation: jsontext.Value(`{"valid":false,"diagnostics":[],"reports":[]}`)}), "")
 	want := "---\nerror:\n" +
-		"    code: repo_invalid\n" +
-		"    scope: user\n" +
-		"    message: 'The repo has errors: fix them and publish again.'\n" +
-		"    details:\n" +
-		"        validation:\n" +
-		"            valid: false\n" +
-		"            diagnostics: []\n" +
-		"            reports: []\n" +
-		"    request_id: \"\"\n"
+		"  code: repo_invalid\n" +
+		"  scope: user\n" +
+		"  message: 'The repo has errors: fix them and publish again.'\n" +
+		"  details:\n" +
+		"    validation:\n" +
+		"      valid: false\n" +
+		"      diagnostics: []\n" +
+		"      reports: []\n" +
+		"  request_id: \"\"\n"
 	if out.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", out.String(), want)
 	}
@@ -217,7 +217,7 @@ func TestInterruptedRun(t *testing.T) {
 func TestCloudErrorsPassThrough(t *testing.T) {
 	var out bytes.Buffer
 	printError(&out, &cloudapi.Error{Status: 403, Response: apperr.Response{Code: "forbidden", Scope: apperr.User, Message: "Only an admin can do that."}}, "")
-	if !strings.HasPrefix(out.String(), "---\nerror:\n    code: forbidden\n    scope: user\n    message: Only an admin can do that.\n") {
+	if !strings.HasPrefix(out.String(), "---\nerror:\n  code: forbidden\n  scope: user\n  message: Only an admin can do that.\n") {
 		t.Errorf("got\n%s", out.String())
 	}
 }
