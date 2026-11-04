@@ -56,4 +56,37 @@ func TestReadEntrySaysHowToLeave(t *testing.T) {
 	if strings.Contains(m.View().Content, "to leave") {
 		t.Fatalf("after a key: %q", m.View().Content)
 	}
+
+}
+
+// A status, a notice's badge, shows under the prompt while typing, and isn't
+// left on screen with the entry.
+func TestReadEntryStatus(t *testing.T) {
+	m := &entryReader{input: textarea.New(), opts: EntryOptions{Prompt: "> ", Status: "↑ anfra 0.17.0 · Run update"}}
+	if !strings.Contains(m.View().Content, "↑ anfra 0.17.0") {
+		t.Fatalf("while typing: %q", m.View().Content)
+	}
+	m.done = true
+	if got := m.View().Content; strings.Contains(got, "anfra 0.17.0") || strings.Contains(got, "─") {
+		t.Fatalf("left on screen: %q", got)
+	}
+}
+
+// The frame keeps one height, a badge or the leave hint there or not: nothing
+// under the prompt shifts as they come and go.
+func TestReadEntryFrameKeepsItsHeight(t *testing.T) {
+	m := &entryReader{input: textarea.New(), opts: EntryOptions{Prompt: "> ", Leave: "leave"}}
+	height := func() int { return strings.Count(m.View().Content, "\n") }
+	quiet := height()
+	lines := strings.Split(m.View().Content, "\n")
+	if strings.TrimSpace(lines[len(lines)-1]) == "" && !strings.Contains(lines[len(lines)-1], "\u00a0") {
+		t.Fatalf("a blank status line of spaces, which Bubble Tea doesn't draw: %q", m.View().Content)
+	}
+	m.opts.Status = "↑ anfra 0.17.0 · Run update"
+	withBadge := height()
+	m.leaving = true
+	withHint := height()
+	if withBadge != quiet || withHint != quiet {
+		t.Fatalf("heights: quiet %d, with a badge %d, with the hint %d", quiet, withBadge, withHint)
+	}
 }

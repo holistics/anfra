@@ -56,6 +56,34 @@ func TestAttention(t *testing.T) {
 	}
 }
 
+// The badge is the same check, in a few words: ↑ and the latest skills when
+// something is behind, ! when something else needs attention.
+func TestBadge(t *testing.T) {
+	for _, tc := range []struct {
+		name, mark, label string
+		setup             func(*testing.T, *fakeEnv)
+	}{
+		{"nothing", "", "", nil},
+		{"a copy behind", "↑", "anfra skills 0.5.0", func(t *testing.T, env *fakeEnv) {
+			writeSkill(t, filepath.Join(env.Home, ".agents/skills"), "anfra-aql", stamped("0.4.5"))
+		}},
+		{"deprecated skills", "!", "anfra skills", func(t *testing.T, env *fakeEnv) {
+			writeSkill(t, filepath.Join(env.Home, ".cursor/skills"), "setup-repo", "Run `anfra version`.\n")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newFakeEnv(t)
+			cacheSkills(t, "0.5.0")
+			if tc.setup != nil {
+				tc.setup(t, env)
+			}
+			if mark, label := Badge(env.Env, ""); mark != tc.mark || label != tc.label {
+				t.Errorf("got %q %q, want %q %q", mark, label, tc.mark, tc.label)
+			}
+		})
+	}
+}
+
 // The notice is the same line, at most once a day.
 func TestNoticeOnceADay(t *testing.T) {
 	env := newFakeEnv(t)

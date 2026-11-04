@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -112,5 +113,33 @@ func TestConsoleHistory(t *testing.T) {
 	b, _ := os.ReadFile(first.path)
 	if lines := bytes.Count(b, []byte("\n")); lines != historyKept {
 		t.Fatalf("the file wasn't cut back: %d lines", lines)
+	}
+}
+
+// An update renames the running anfra aside, then puts a new one at its
+// path, as minio/selfupdate does: told apart, by the path the console started
+// from.
+func TestReplaced(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "anfra")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, _ := os.Stat(path)
+	f := anfraFile{path: path, info: info}
+	if f.replaced() {
+		t.Fatal("the same file told apart")
+	}
+	if err := os.Rename(path, filepath.Join(dir, ".anfra.old")); err != nil {
+		t.Fatal(err)
+	}
+	if f.replaced() {
+		t.Fatal("replaced, with nothing at the path yet")
+	}
+	if err := os.WriteFile(path, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !f.replaced() {
+		t.Fatal("a new file at the path not told apart")
 	}
 }

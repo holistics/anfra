@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // EntryOptions are what ReadEntry shows and remembers.
@@ -17,6 +19,7 @@ type EntryOptions struct {
 	Prompt  string   // before the entry: "sales> "
 	History []string // earlier entries, oldest first, for Up and Down
 	Leave   string   // the hint shown under the prompt after Ctrl-C on an empty entry
+	Status  string   // a line under the prompt while typing, styled: a notice's badge; "" for none
 }
 
 // ReadEntry reads one entry of a console at a terminal, as a shell reads a
@@ -65,16 +68,59 @@ type entryReader struct {
 	browsing int    // the history entry shown; len(History) for the one being typed
 	draft    string // the entry being typed, kept while browsing
 	leaving  bool   // Ctrl-C on an empty entry: show opts.Leave
+	width    int    // the terminal's, for the frame's rules
 	done     bool
 	eof      bool
 }
 
-func (m *entryReader) Init() tea.Cmd { return m.input.Focus() }
+// The terminal's background, asked once a process, by the first entry's
+// reader, for the band behind entries left on screen: unknown until the
+// terminal answers, and for good when it doesn't (some, and tmux, don't).
+var terminalBackground struct {
+	sync.Mutex
+	asked bool
+	dark  *bool
+}
+
+// entryBand is the background behind an entry left on screen, as Claude Code
+// shows a message sent: the design package's dark raised surface (ink-825) on
+// a dark terminal, its chrome (surface-chrome) on a light one. ok is false
+// when the terminal's background is unknown, or without styles: no band.
+func entryBand(styles TerminalStyles) (band lipgloss.Style, ok bool) {
+	terminalBackground.Lock()
+	dark := terminalBackground.dark
+	terminalBackground.Unlock()
+	if dark == nil || styles.Muted.Render("x") == "x" {
+		return band, false
+	}
+	if *dark {
+		return lipgloss.NewStyle().Background(lipgloss.Color("#26232c")), true
+	}
+	return lipgloss.NewStyle().Background(lipgloss.Color("#f2f0eb")), true
+}
+
+func (m *entryReader) Init() tea.Cmd {
+	terminalBackground.Lock()
+	ask := !terminalBackground.asked && m.styles.Muted.Render("x") != "x"
+	terminalBackground.asked = terminalBackground.asked || ask
+	terminalBackground.Unlock()
+	if ask {
+		return tea.Batch(m.input.Focus(), tea.RequestBackgroundColor)
+	}
+	return m.input.Focus()
+}
 
 func (m *entryReader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		dark := msg.IsDark()
+		terminalBackground.Lock()
+		terminalBackground.dark = &dark
+		terminalBackground.Unlock()
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.input.SetWidth(msg.Width)
+		m.width = msg.Width
 	case tea.KeyPressMsg:
 		m.leaving = false
 		switch msg.String() {
@@ -125,14 +171,36 @@ func (m *entryReader) step(by int) {
 
 func (m *entryReader) View() tea.View {
 	if m.done || m.eof {
-		// What stays on screen: the prompt and the entry, as typed.
+		// What stays on screen: the prompt and the entry, as typed, on a band
+		// the terminal's width where its background is known, so each entry is
+		// found scrolling back.
 		lines := strings.Split(m.input.Value(), "\n")
-		lines[0] = m.styles.Accent.Render(m.opts.Prompt) + lines[0]
+		band, ok := entryBand(m.styles)
+		for i, l := range lines {
+			prompt := ""
+			if i == 0 {
+				prompt = m.opts.Prompt
+			}
+			if !ok {
+				lines[i] = m.styles.Accent.Render(prompt) + l
+				continue
+			}
+			pad := strings.Repeat(" ", max(m.width-ansi.StringWidth(prompt+l), 0))
+			lines[i] = m.styles.Accent.Inherit(band).Render(prompt) + band.Render(l+pad)
+		}
 		return tea.NewView(strings.Join(lines, "\n") + "\n")
 	}
-	view := m.input.View()
+	// While typing: the entry framed by a rule above and below, as Claude
+	// Code frames its input, then one status line, there even when blank, so
+	// a badge coming or going shifts nothing. The leave hint takes the status
+	// line until the next key.
+	rule := m.styles.Muted.Render(strings.Repeat("─", max(m.width, 20)))
+	status := m.opts.Status
 	if m.leaving && m.opts.Leave != "" {
-		view += "\n" + m.styles.Muted.Render("  "+m.opts.Leave)
+		status = m.styles.Muted.Render(m.opts.Leave)
 	}
-	return tea.NewView(view)
+	if status == "" {
+		status = "\u00a0" // a blank line, kept: Bubble Tea drops a last line of spaces
+	}
+	return tea.NewView(rule + "\n" + m.input.View() + "\n" + rule + "\n" + status)
 }

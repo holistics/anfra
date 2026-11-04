@@ -87,7 +87,9 @@ The mode decides.
 - **Ctrl-C** clears the entry being typed, or cancels the command running. The session stays.
 - **History** is kept between sessions, in a file in anfra's home, one for every repo: Up reaches yesterday's entries, as in psql or a shell. `\q`, `exit` and `quit` are kept out, so Up then Enter never leaves by surprise. No entry holds a secret to keep out: no command takes one as an argument ([commands-and-api.md](commands-and-api.md#secrets-never-in-arguments)).
 - **The prompt** shows the repo, the dataset when one is set, and the mode, in bold violet: where each entry starts, found scrolling back.
-- **Notices** (anfra or the skills behind, a server started) go in a status area under the prompt, as Claude Code's, rather than after each command's output: shown while they hold, not repeated after every command, and never mixed into an answer.
+- **The prompt is framed** while typing, as Claude Code frames its input: a faint rule above and below, then one status line, there even when blank, so nothing shifts as a badge comes and goes. Enter leaves only the prompt and the entry, on a band the terminal's width, as Claude Code shows a message sent, so each entry is found scrolling back: the design package's dark raised surface (`ink-825`, `#26232c`) on a dark terminal, its chrome (`surface-chrome`, `#f2f0eb`) on a light one, the text the terminal's own. Which, the console asks the terminal once; one that doesn't answer gets no band.
+- **Notices** go in the status line, as Claude Code's, rather than after each command's output: one at a time, as a badge, `↑ anfra 0.17.0 · Run update`, shown while it holds, never mixed into an answer. The command it names says more.
+- **After `update`,** the console restarts itself on the new anfra: `Restarted on anfra 0.17.0.`
 - **A warm server**: the console uses the repo's running server, or starts one that stops by itself once the session has been gone a while. The banner says which.
 - **Without a terminal**, `anfra console` refuses, as does `--yaml` or `--json` on it: it's an artifact, writing "a session, until you leave".
 
