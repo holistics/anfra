@@ -5,6 +5,7 @@
 //	├── bin/anfra              the installer's binary (install.sh)
 //	├── sidecars/<name>-<hash> the embedded sidecars, unpacked to run (internal/sidecar)
 //	├── update-check.json      the last update check (internal/update)
+//	├── console_history        anfra console's entries, kept between sessions (cmd/anfra)
 //	└── repos/<repo id>/       each repo's state: logs, caches, the running server (internal/repo)
 //
 // It is ~/.anfra, or ANFRA_HOME. A repo's own config is not here: it is the

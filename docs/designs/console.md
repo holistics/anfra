@@ -85,7 +85,7 @@ The mode decides.
 - **Colour** wherever the stream is a terminal; `NO_COLOR` still turns it off. The colours follow [cli-pretty.md](cli-pretty.md#color), so YAML, JSON and the pretty format read as one family. `--jq`'s plain lines stay plain, as `jq -r`'s are.
 - **Questions** are asked, as a command run at a terminal asks them.
 - **Ctrl-C** clears the entry being typed, or cancels the command running. The session stays.
-- **History** is kept between sessions, in a file in anfra's home: Up reaches yesterday's entries, as in psql or a shell. An entry starting with a space is kept out, for one carrying a secret.
+- **History** is kept between sessions, in a file in anfra's home, one for every repo: Up reaches yesterday's entries, as in psql or a shell. `\q`, `exit` and `quit` are kept out, so Up then Enter never leaves by surprise. No entry holds a secret to keep out: no command takes one as an argument ([commands-and-api.md](commands-and-api.md#secrets-never-in-arguments)).
 - **The prompt** shows the repo, the dataset when one is set, and the mode, in bold violet: where each entry starts, found scrolling back.
 - **Notices** (anfra or the skills behind, a server started) go in a status area under the prompt, as Claude Code's, rather than after each command's output: shown while they hold, not repeated after every command, and never mixed into an answer.
 - **A warm server**: the console uses the repo's running server, or starts one that stops by itself once the session has been gone a while. The banner says which.

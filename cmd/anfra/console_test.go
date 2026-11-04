@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -79,5 +82,35 @@ func TestConsoleNeedsATerminal(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if code := run(t.Context(), []string{"console"}, &stdout, &stderr, runOptions{}); code != 1 || !strings.Contains(stderr.String(), "precondition_failed") {
 		t.Fatalf("console without a terminal: exit %d: %s", code, stderr.String())
+	}
+}
+
+// A console's history is kept between sessions: an entry of several lines
+// whole, the newest last, only so many, and private to its user.
+func TestConsoleHistory(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	first := openConsoleHistory()
+	if got := first.load(); len(got) != 0 {
+		t.Fatalf("a new history holds %q", got)
+	}
+	first.add("validate")
+	first.add("orders\n| count()")
+	if got := openConsoleHistory().load(); !slices.Equal(got, []string{"validate", "orders\n| count()"}) {
+		t.Fatalf("the next session's history = %q", got)
+	}
+	if info, err := os.Stat(first.path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("history file: %v, %v", info, err)
+	}
+
+	for i := range 2*historyKept + 1 {
+		first.add(fmt.Sprint(i))
+	}
+	got := openConsoleHistory().load()
+	if len(got) != historyKept || got[len(got)-1] != fmt.Sprint(2*historyKept) {
+		t.Fatalf("history kept %d entries, the last %q", len(got), got[len(got)-1])
+	}
+	b, _ := os.ReadFile(first.path)
+	if lines := bytes.Count(b, []byte("\n")); lines != historyKept {
+		t.Fatalf("the file wasn't cut back: %d lines", lines)
 	}
 }

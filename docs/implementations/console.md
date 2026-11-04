@@ -10,10 +10,10 @@ Implements [anfra console](../designs/console.md): a session at a terminal, anfr
 | A spike: stdin and the terminal across entries | Done on Linux; macOS and Windows to try |
 | 2. The skeleton | Done (`cmd/anfra/console.go`, `cliui.ReadEntry`) |
 | 3. Output for a person | Done: YAML and JSON colored (`internal/pretty/color.go`) |
-| 3b. Notices in the status area | Next |
+| 3b. Notices in the status area | Next: a short badge, one at a time, and a restart after `update` |
 | 4. Modes and AQL | |
 | 5. A warm server | |
-| 6. History kept between sessions | |
+| 6. History kept between sessions | Done, ahead of 3b, whose restart reloads it (`cmd/anfra/console_history.go`) |
 
 ## Order
 
@@ -91,16 +91,19 @@ Without a server running, each core command starts its own sidecars (`invoke`, `
 
 ## 6. History kept between sessions
 
-Up and Down step through the session's entries only (`cliui.ReadEntry`'s `History`, kept in memory by `runConsole`). psql, irb and shells keep theirs in a file, so yesterday's query is an Up away.
+Done ahead of 3b, so the console's restart after `update` loses nothing: the new process reads it back.
 
-- **Where:** a file in anfra's home (`internal/home`), `~/.anfra/console_history`. An entry can be several lines (AQL), so not one a line: JSON lines, or psql's way, escaped newlines.
-- **How much:** the last 1,000 entries, as bash keeps 1,000 and psql 500; older ones dropped as new ones are written.
-- **Per repo or not:** one file for all, the simplest, or one per repo (`internal/repo`'s data dir), so a repo's queries stay with it. Per repo suits AQL, whose datasets are a repo's. To decide.
-- **What's kept out:** an entry starting with a space, as shells let a leading space keep a line out (`HISTCONTROL=ignorespace`), for one carrying a secret.
-- **Written** as each entry runs, not when the session ends, so a session killed keeps what it ran; two sessions at once both append.
+- **Where:** `~/.anfra/console_history` (`home.Dir()`, so `ANFRA_HOME` moves it), one file for every repo, as psql's, irb's and a shell's. Per repo is an open question, below. Readable by its user only (0600): an entry may hold what's private.
+- **Format:** a JSON string a line (`consoleHistory`), so an entry of several lines, AQL, is one record; the newest last.
+- **How much:** the last 1,000 entries loaded, as bash keeps 1,000 and psql 500. Sessions only append, so a file grown past 2,000 lines is cut back to 1,000 when a session starts, through a file renamed over it.
+- **Kept out:** `\q`, `exit` and `quit`, so Up then Enter never leaves by surprise; an entry the same as the one before. No shell-style "a leading space keeps it out": no command takes a secret as an argument ([commands-and-api.md](../designs/commands-and-api.md#secrets-never-in-arguments)), so there's none to keep out, and a query's values are the user's own, in their own home.
+- **Written** as each entry runs, so a session killed keeps what it ran, and two sessions at once both keep theirs (appends, under the size of a write the system keeps whole).
 
-Tests: entries written and read back, multi-line ones whole; the limit; an entry starting with a space kept out; a second session's Up reaching the first's last entry.
+Tests: an entry of several lines read back whole, by the next session; the limit, and the file cut back; the file's mode (`TestConsoleHistory`). Two sessions driven through a pseudo-terminal, by hand: the second's Up runs the first's `version`; `quit` isn't kept.
 
 ## Open questions
+
+- **History per repo.** Once AQL is typed directly (step 4), most entries are one repo's queries, noise or worse in another's; psql users often keep one history a database (`\set HISTFILE ~/.psql_history- :DBNAME`). The likely shape: a repo's history in its state folder (`~/.anfra/repos/<id>/console_history`), the global one outside a repo (`openConsoleHistory` choosing by `repoDirIfAny`). Costs: commands not about a repo (`auth status`, `update`) don't follow from one to another; a repo moved or renamed starts afresh, its id being its path's (`repo.ID`), as its logs and caches do.
+  - **After `init`,** the folder a session started in becomes a repo. Chosen once at the start, the session would go on writing to the global history, and the next session there would open the repo's, empty. So the console would check after each command whether its folder is a repo (a stat of `.anfra/`, as `repoDirIfAny`), from then on writing to the repo's history, and copying the session's earlier entries into it once; Up and Down showing the whole session throughout. `init` of another folder changes nothing; a `cd`, if the console gets one, is the same check.
 
 - **Bubble Tea in a loop**: an inline program an entry, hundreds in a session. The pickers start one a command. To check on Windows, and for leaks.
