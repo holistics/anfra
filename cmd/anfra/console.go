@@ -13,9 +13,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/internal/update"
 )
 
 // consoleHelp is \?'s answer: the console's own commands, then anfra's, as
@@ -96,14 +98,21 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 	defer stop()
 	styles := cliui.NewTerminalStyles(out)
 	dir, _ := os.Getwd()
-	fmt.Fprintf(out, "anfra console %s in %s\n", meta.Version, homeRelative(dir))
-	fmt.Fprintln(out, styles.Muted.Render(`Type a command as after anfra: validate, query -d sales "orders | count()".`))
-	fmt.Fprintln(out, styles.Muted.Render(`\? lists the console's commands, \q or exit leaves.`))
+	if os.Getenv(consoleRestarted) != "" { // the session goes on, on the new anfra
+		_ = os.Unsetenv(consoleRestarted)
+		fmt.Fprintln(out, styles.Muted.Render("Restarted on anfra "+meta.Version+"."))
+	} else {
+		fmt.Fprintf(out, "anfra console %s in %s\n", meta.Version, homeRelative(dir))
+		fmt.Fprintln(out, styles.Muted.Render(`Type a command as after anfra: validate, query -d sales "orders | count()".`))
+		fmt.Fprintln(out, styles.Muted.Render(`\? lists the console's commands, \q or exit leaves.`))
+	}
 	fmt.Fprintln(out)
 
+	exe := runningAnfra()
 	history := openConsoleHistory()
 	opts := cliui.EntryOptions{Prompt: filepath.Base(dir) + "> ", Leave: `\q, exit or Ctrl-D to leave`, History: history.load()}
 	for {
+		opts.Status = consoleBadge(styles) //nolint:contextcheck // reads local state, runs nothing
 		entry, err := cliui.ReadEntry(session, in, out, opts)
 		if errors.Is(err, io.EOF) {
 			return nil
@@ -136,6 +145,10 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 			cmdCtx, stopCmd := signal.NotifyContext(session, os.Interrupt)
 			code := run(cmdCtx, args, out, errOut, runOptions{inConsole: true})
 			stopCmd()
+			if code == 0 && args[0] == "update" && exe.replaced() {
+				fmt.Fprintln(out)
+				return restartConsole(exe.path)
+			}
 			if code != 0 && !isCommand(args[0]) { //nolint:contextcheck // names the commands, runs none
 				fmt.Fprintln(out, styles.Muted.Render(`Not an anfra command. To run AQL: query -d <dataset> "…" (typing it directly comes later).`))
 			}
@@ -145,6 +158,61 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 			return nil
 		}
 	}
+}
+
+// consoleBadge is the notice under the console's prompt, one at a time, as
+// short as a badge, the command dealing with it a code span
+// (docs/designs/console.md#the-rest): a newer anfra first, then what of the
+// agents' skills needs attention. Both from local state, as the CLI's notices
+// after a command are, so it's checked again after each; "" when nothing
+// needs attention, or with ANFRA_NO_UPDATE_NOTIFIER.
+func consoleBadge(styles cliui.TerminalStyles) string {
+	if updateNotifyDisabled() {
+		return ""
+	}
+	badge := func(mark, label, cmd string) string {
+		return styles.Muted.Render(mark+" "+label+" · Run") + " " + styles.Code.Render(cmd)
+	}
+	if r := update.Cached(); r != nil && r.IsNewer() {
+		return badge("↑", "anfra "+r.Version, "update")
+	}
+	if mark, label := agents.Badge(agents.System(), repoDirIfAny()); mark != "" {
+		return badge(mark, label, "agent setup")
+	}
+	return ""
+}
+
+// consoleRestarted tells a console it was restarted on a new anfra, after
+// update replaced the one it ran on: it says so, rather than its banner.
+const consoleRestarted = "ANFRA_CONSOLE_RESTARTED"
+
+// anfraFile is the file the console's anfra was started from: its path, and
+// the file at it then.
+type anfraFile struct {
+	path string
+	info os.FileInfo // nil when unknown
+}
+
+// runningAnfra is the running anfra's file, taken when the console starts:
+// an update renames the running file aside before putting the new one at its
+// path (minio/selfupdate), and os.Executable follows the file, not the path.
+func runningAnfra() anfraFile {
+	path, err := os.Executable()
+	if err != nil {
+		return anfraFile{}
+	}
+	info, _ := os.Stat(path)
+	return anfraFile{path: path, info: info}
+}
+
+// replaced reports whether another file is at f's path now: an update put a
+// new anfra in its place.
+func (f anfraFile) replaced() bool {
+	if f.info == nil {
+		return false
+	}
+	now, err := os.Stat(f.path)
+	return err == nil && !os.SameFile(f.info, now)
 }
 
 // consoleArgs is what an entry asks: an anfra command's args, to leave, the

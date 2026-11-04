@@ -243,6 +243,14 @@ func maybeNotifyUpdate(invoked string) {
 	if updateNotifyDisabled() || noNotifyCommands[invoked] {
 		return
 	}
+	// A console shows its notices as a badge under its prompt
+	// (consoleBadge), not after each command's output: here, only the refresh.
+	if output.inConsole {
+		if update.Stale() && os.Getenv("CI") == "" {
+			spawnDetached("__update-check")
+		}
+		return
+	}
 	notice := update.CachedNotice()
 
 	// Opt-in auto-update is explicit, so it runs regardless of interactivity

@@ -10,7 +10,7 @@ Implements [anfra console](../designs/console.md): a session at a terminal, anfr
 | A spike: stdin and the terminal across entries | Done on Linux; macOS and Windows to try |
 | 2. The skeleton | Done (`cmd/anfra/console.go`, `cliui.ReadEntry`) |
 | 3. Output for a person | Done: YAML and JSON colored (`internal/pretty/color.go`) |
-| 3b. Notices in the status area | Next: a short badge, one at a time, and a restart after `update` |
+| 3b. Notices in the status area | Done: a badge, one at a time (`consoleBadge`), and a restart after `update` |
 | 4. Modes and AQL | |
 | 5. A warm server | |
 | 6. History kept between sessions | Done, ahead of 3b, whose restart reloads it (`cmd/anfra/console_history.go`) |
@@ -75,6 +75,16 @@ Tests: the reader, driven with key sequences (`internal/cliui/entry_test.go`); s
 - **Not yet: the pretty format for a core command in the console.** The mark saying a command's view is reviewed comes with the first core command's view: today none has one.
 
 Tests: for YAML and JSON, colored output with its escape codes removed is the input, and without styles nothing changes (`internal/pretty/color_test.go`); each rule's style; a colored run into anything but a terminal writes what a shell's run writes, errors included (`TestColorOnlyAtATerminal`). A session driven through a pseudo-terminal, by hand: `\version`, `\nope`, `--json`, `--jq` giving a scalar and a map.
+
+## 3b. Notices in the status area
+
+- **The prompt framed** (`entryReader.View`): a faint rule, the terminal's width, above and below the entry, then the status line, always there, blank when nothing's to say; the leave hint takes it until the next key. One height whatever it holds (`TestReadEntryFrameKeepsItsHeight`); a blank status line is a non-breaking space, since Bubble Tea doesn't draw a last line of spaces.
+- **A band behind an entry left on screen** (`entryBand`): the first reader of a process asks the terminal its background (`tea.RequestBackgroundColor`), once; a dark one gets `ink-825`, a light one `surface-chrome`, one that doesn't answer none. Checked through a pseudo-terminal playing a dark, a light and a silent terminal.
+- **A badge in the status line** (`consoleBadge`, `cmd/anfra/console.go`; `EntryOptions.Status`, `internal/cliui/entry.go`), while typing only: Enter takes it away with the rest of the entry, so it never sits in the scrollback or between a command's output. One at a time, as short as a badge, the command dealing with it a code span: `↑ anfra 0.17.0 · Run update` first, then what of the agents' skills needs attention (`agents.Badge`): `↑ anfra skills 0.16.0`, `! anfra skills`, `! no anfra skills`, each `· Run agent setup`. Details come from the commands it names, and `version`. Both from local state, as the CLI's notices after a command are, so it's checked again before each entry, and goes once dealt with. None with `ANFRA_NO_UPDATE_NOTIFIER`.
+- **No notices after a command, in a console** (`maybeNotifyUpdate`): the badge says it; the background refresh of the update check still runs.
+- **A restart after `update`.** The console notes the file it started from, its path and the file there (`runningAnfra`); when `update` succeeds and another file is at that path, it runs itself again from it (`restartConsole`, `syscall.Exec`), saying `Restarted on anfra 0.17.0.` rather than its banner (`ANFRA_CONSOLE_RESTARTED`). The path is noted at the start because `minio/selfupdate` renames the running file aside before putting the new one in place, and `os.Executable` follows the file. History is on disk (step 6), so nothing is lost. Unix only, as anfra's releases are.
+
+Tests: the badge's kinds (`TestBadge`); the status shown while typing, not left on screen (`TestReadEntryStatus`); a new file at the path told apart, after the running one is renamed aside (`TestReplaced`). By hand, through a pseudo-terminal: an anfra stamped 0.15.0 shows `↑ anfra 0.16.0 · Run update`, prints no notice after `version`; its `update` downloaded 0.16.0 and ran it in its place (which, having no console, said so); a restarted console greets with its one line.
 
 ## 4. Modes and AQL
 

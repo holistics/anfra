@@ -66,42 +66,7 @@ func RecordPlugins(ctx context.Context, env Env) {
 // and repoDir's AGENTS.md block ("" outside a repo). "" when nothing does. No
 // network and no agent CLI: it is cheap enough to run after a command.
 func Attention(env Env, repoDir string) string {
-	latest, _, known := update.CachedSkills()
-	var behind, others []string
-	if known {
-		plugins := readState().Plugins
-		for _, a := range Known {
-			for _, p := range plugins[a.ID] {
-				if Newer(latest, p.Version) {
-					behind = append(behind, "the "+a.Name+" plugin")
-					break
-				}
-			}
-		}
-	}
-	for _, c := range Copies(env, repoDir) {
-		if len(c.Versions) > 0 && known {
-			if st, _ := status(c.Versions, latest, known); st == "behind" || st == "mixed" {
-				behind = append(behind, c.Dir)
-			}
-		}
-		if c.OldNames {
-			others = append(others, c.Dir+" has deprecated anfra skills")
-		}
-	}
-	if repoDir != "" {
-		if b, err := CheckBlock(repoDir); err == nil {
-			switch {
-			case b.State == BlockMissing:
-				others = append(others, "this repo's AGENTS.md has no anfra block")
-			case b.State == BlockOutdated:
-				others = append(others, "this repo's AGENTS.md block is out of date")
-			case b.NoImport:
-				others = append(others, "this repo's CLAUDE.md doesn't import its AGENTS.md")
-			}
-		}
-	}
-
+	latest, behind, others := attention(env, repoDir)
 	var line string
 	more := len(others)
 	switch {
@@ -160,4 +125,61 @@ func Notice(env Env, repoDir string) string {
 		writeState(s)
 	}
 	return line
+}
+
+// attention is what Attention and Badge say: the latest skills, as last
+// checked; what's behind them; and what else needs attention.
+func attention(env Env, repoDir string) (latest string, behind, others []string) {
+	latest, _, known := update.CachedSkills()
+	if known {
+		plugins := readState().Plugins
+		for _, a := range Known {
+			for _, p := range plugins[a.ID] {
+				if Newer(latest, p.Version) {
+					behind = append(behind, "the "+a.Name+" plugin")
+					break
+				}
+			}
+		}
+	}
+	for _, c := range Copies(env, repoDir) {
+		if len(c.Versions) > 0 && known {
+			if st, _ := status(c.Versions, latest, known); st == "behind" || st == "mixed" {
+				behind = append(behind, c.Dir)
+			}
+		}
+		if c.OldNames {
+			others = append(others, c.Dir+" has deprecated anfra skills")
+		}
+	}
+	if repoDir != "" {
+		if b, err := CheckBlock(repoDir); err == nil {
+			switch {
+			case b.State == BlockMissing:
+				others = append(others, "this repo's AGENTS.md has no anfra block")
+			case b.State == BlockOutdated:
+				others = append(others, "this repo's AGENTS.md block is out of date")
+			case b.NoImport:
+				others = append(others, "this repo's CLAUDE.md doesn't import its AGENTS.md")
+			}
+		}
+	}
+	return latest, behind, others
+}
+
+// Badge is Attention as a console's badge (docs/designs/console.md): a mark
+// and a few words, the command to run being setup's. ↑ and the latest skills
+// when a plugin or a copy is behind; ! when something else needs attention,
+// or the agents have no skills; "" when nothing does.
+func Badge(env Env, repoDir string) (mark, label string) {
+	latest, behind, others := attention(env, repoDir)
+	switch {
+	case len(behind) > 0:
+		return "↑", "anfra skills " + latest
+	case len(others) > 0:
+		return "!", "anfra skills"
+	case noSkills(env, repoDir):
+		return "!", "no anfra skills"
+	}
+	return "", ""
 }
