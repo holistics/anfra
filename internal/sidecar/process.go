@@ -82,7 +82,7 @@ func StartProcess(spec ProcSpec) (*Process, error) {
 		}
 		return nil, fmt.Errorf("start %s: %w", spec.Name, err)
 	}
-	logger.Info("sidecar.spawned", "name", spec.Name, "childPid", cmd.Process.Pid)
+	logger.Info("Sidecar started", "event", "sidecar.spawned", "name", spec.Name, "child_pid", cmd.Process.Pid)
 	return &Process{name: spec.Name, cmd: cmd, stdin: stdin, logger: logger}, nil
 }
 
@@ -96,7 +96,7 @@ func (p *Process) Close() {
 	if p.cmd == nil || p.cmd.Process == nil {
 		return
 	}
-	p.logger.Info("sidecar.closing", "name", p.name, "childPid", p.cmd.Process.Pid)
+	p.logger.Info("Closing sidecar", "event", "sidecar.closing", "name", p.name, "child_pid", p.cmd.Process.Pid)
 	_ = p.cmd.Process.Signal(syscall.SIGTERM)
 
 	done := make(chan struct{})

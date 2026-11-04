@@ -13,10 +13,17 @@ linters:
     - misspell
     - reassign
     - revive
+    - sloglint
     - spancheck
     - unconvert
     - wastedassign
   settings:
+    sloglint:
+      # A record is a constant sentence plus attributes, its `event` among
+      # them (docs/designs/architecture.md#logs-and-telemetry).
+      static-msg: true
+      msg-style: capitalized
+      key-naming-case: snake
     depguard:
       rules:
         # Tenant and user identity is tracing baggage: it names who an

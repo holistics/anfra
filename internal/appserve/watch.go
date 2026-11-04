@@ -28,7 +28,7 @@ func (s *Server) listening() {
 	if err := s.watch(ctx); err != nil {
 		stop()
 		if s.opts.Logger != nil {
-			s.opts.Logger.Warn("appserve.watch", "error", err.Error())
+			s.opts.Logger.Warn("Watching Data Apps failed", "event", "appserve.watch", "error", err.Error())
 		}
 		return
 	}
@@ -101,7 +101,7 @@ func (s *Server) watch(ctx context.Context) error {
 					return
 				}
 				if s.opts.Logger != nil {
-					s.opts.Logger.Warn("appserve.watch", "error", err.Error())
+					s.opts.Logger.Warn("Watching Data Apps failed", "event", "appserve.watch", "error", err.Error())
 				}
 			}
 		}

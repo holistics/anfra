@@ -219,7 +219,7 @@ func checkUpdates(logger *slog.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if r, err := update.Check(ctx); err == nil && r.IsNewer() && r.Version != announced {
 			announced = r.Version
-			logger.Info("serve.update_available", "latest", r.Version, "current", meta.Version, "notice", update.Notice(r))
+			logger.Info("Update available", "event", "serve.update_available", "latest", r.Version, "current", meta.Version, "notice", update.Notice(r))
 		}
 		return nil
 	}

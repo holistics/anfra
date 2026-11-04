@@ -101,7 +101,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		}
 		defer ln.Close()
 		if host, _, _ := net.SplitHostPort(ln.Addr().String()); !isLoopback(host) {
-			h.cfg.Logger.Warn("serve.exposed", "addr", ln.Addr().String(),
+			h.cfg.Logger.Warn("Server is reachable beyond this machine", "event", "serve.exposed", "addr", ln.Addr().String(),
 				"hint", "anfra serve has no authentication: anyone who reaches this address can query your data sources")
 		}
 		stopPprof, err := startPprof(h.cfg.Logger)
@@ -147,7 +147,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 				DevFrontendURL: os.Getenv("ANFRA_APPSERVE_DEV_URL"),
 			})
 			if !apps.FrontendBuilt() {
-				h.cfg.Logger.Warn("serve.no_app_pages", "hint", "this anfra was built without its Data App pages; /apps/ says how to build them")
+				h.cfg.Logger.Warn("Built without Data App pages", "event", "serve.no_app_pages", "hint", "this anfra was built without its Data App pages; /apps/ says how to build them")
 			}
 		}
 		handler := serveHandler(serveConfig{
@@ -181,7 +181,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 			_ = srv.Shutdown(shutdownCtx)
 		}()
 
-		h.cfg.Logger.Info("serve.listening", "url", info.URL)
+		h.cfg.Logger.Info("Serving", "event", "serve.listening", "url", info.URL)
 		fmt.Printf("anfra serve listening on %s (Ctrl-C to stop)\n", info.URL)
 		if apps != nil {
 			fmt.Printf("  Data Apps  %s/apps/\n", info.URL)

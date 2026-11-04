@@ -149,6 +149,7 @@ func logRequests(next http.Handler, logger *slog.Logger) http.Handler {
 		next.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), entryKey{}, e)))
 
 		attrs := []slog.Attr{
+			slog.String("event", "http.request"),
 			slog.String("request_id", requestid.From(r.Context())),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
@@ -177,7 +178,7 @@ func logRequests(next http.Handler, logger *slog.Logger) http.Handler {
 				level = slog.LevelError
 			}
 		}
-		logger.LogAttrs(r.Context(), level, "request", attrs...)
+		logger.LogAttrs(r.Context(), level, "Request handled", attrs...)
 	})
 }
 

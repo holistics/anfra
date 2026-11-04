@@ -30,12 +30,12 @@ func startPprof(logger *slog.Logger) (stop func(), err error) {
 		return nil, clierr.Precondition("ANFRA_PPROF_ADDR: can't listen on %s: %v.", addr, err)
 	}
 	if host, _, _ := net.SplitHostPort(ln.Addr().String()); !isLoopback(host) {
-		logger.Warn("pprof.exposed", "addr", ln.Addr().String(),
+		logger.Warn("Profiler is reachable beyond this machine", "event", "pprof.exposed", "addr", ln.Addr().String(),
 			"hint", "pprof is not on a loopback address: anyone who reaches it can read anfra's memory")
 	}
 	srv := &http.Server{Handler: pprofHandler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
-	logger.Info("pprof.listening", "addr", ln.Addr().String())
+	logger.Info("Profiler listening", "event", "pprof.listening", "addr", ln.Addr().String())
 	return func() { _ = srv.Close() }, nil
 }
 

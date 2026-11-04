@@ -45,7 +45,7 @@ func (a *Sidecar) Start(ctx context.Context) error {
 			return fmt.Errorf("anfra-node at %s not ready: %w", a.cfg.NodeURL, err)
 		}
 		a.cfg.Wrap(Name, a.client.http)
-		a.cfg.Log().Info("sidecar.ready", "name", Name, "url", a.cfg.NodeURL, "owned", false)
+		a.cfg.Log().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "url", a.cfg.NodeURL, "owned", false)
 		return nil
 	}
 
@@ -89,7 +89,7 @@ func (a *Sidecar) Start(ctx context.Context) error {
 		return err
 	}
 	a.cfg.Wrap(Name, a.client.http)
-	a.proc.Logger().Info("sidecar.ready", "name", Name, "socket", a.socketPath)
+	a.proc.Logger().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "socket", a.socketPath)
 	return nil
 }
 

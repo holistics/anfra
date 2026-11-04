@@ -15,6 +15,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [commands and API](designs/commands-and-api.md) | One command definition, served as the CLI, the HTTP API and MCP; the OpenAPI contract. |
 | [CLI pretty output](designs/cli-pretty.md) | How a command's result is shown to a person at a terminal: the prettifier's conventions, hints and views, and the bar a view must clear. |
 | [errors](designs/errors.md) | The error framework: codes, scopes, violations, and how an error reaches each surface, a Data App included. |
+| [logs](designs/logs.md) | What a log record carries for people and for programs, and the events: a soft contract for alerts and dashboards. |
 | [JSON](designs/json.md) | How anfra reads and writes JSON: one package, `shared/jsonkit`, and the rule that every package uses it. |
 | [exports](designs/exports.md) | A query's whole result as a file, through one op that answers a link, on every door and server. |
 | [export stores](designs/export-store.md) | Where an export's file goes and how its link is served: anfra's own store, its cleanup, and how a platform's differs. |
