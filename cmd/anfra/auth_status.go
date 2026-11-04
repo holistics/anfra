@@ -67,24 +67,18 @@ func statusRepoOrg(dir string) (*string, error) {
 // authStatusResult is auth status's result: the logins saved on this machine,
 // read offline (docs/usage/publishing.md).
 type authStatusResult struct {
-	// Message is the outcome, in a sentence.
-	Message string          `json:"message"`
-	Orgs    []authStatusOrg `json:"orgs"`
-	// Hints are what to do next; absent when nothing is.
-	Hints []string `json:"hints,omitempty"`
+	Message string          `json:"message" doc:"the outcome, in a sentence"`
+	Orgs    []authStatusOrg `json:"orgs" doc:"each org with a saved login, and the current repo's without one"`
+	Hints   []string        `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
 }
 
 // authStatusOrg is an org with a saved login, or the current repo's without
 // one.
 type authStatusOrg struct {
-	// Name is the org's, as its login saved it; absent without a login.
-	Name string `json:"name,omitempty"`
-	URL  string `json:"url"`
-	// SavedLogin is valid, invalid (expired, an interrupted refresh, a
-	// damaged entry: it can't be used), or missing: none is saved.
-	SavedLogin string `json:"saved_login" pretty:",tone=valid:good invalid:warn missing:warn"`
-	// CurrentRepo: the current repo publishes to this org.
-	CurrentRepo bool `json:"current_repo"`
+	Name        string `json:"name,omitempty" doc:"the org's name, as its login saved it; absent without a login"`
+	URL         string `json:"url" doc:"the org's address"`
+	SavedLogin  string `json:"saved_login" doc:"valid; invalid when it can't be used (expired, an interrupted refresh, a damaged entry); or missing when none is saved" pretty:",tone=valid:good invalid:warn missing:warn"`
+	CurrentRepo bool   `json:"current_repo" doc:"whether the current repo publishes to this org"`
 }
 
 // authStatus is the logins saved on this machine, and whether the repo at dir

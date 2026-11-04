@@ -86,25 +86,23 @@ func newInitCmd() *cobra.Command {
 		},
 	}
 	markPrettyOutput(cmd)
+	resultIs[initResult](cmd)
 	return cmd
 }
 
 // initResult is init's result: the repo it set up, and each of its files.
 type initResult struct {
-	// Message is the outcome, in a sentence.
-	Message string `json:"message"`
-	// Dir is the repo's folder, absolute.
-	Dir   string     `json:"dir"`
-	Files []initFile `json:"files"`
-	// Hints are what to do next; absent when nothing is.
-	Hints []string `json:"hints,omitempty"`
+	Message string     `json:"message" doc:"the outcome, in a sentence"`
+	Dir     string     `json:"dir" doc:"the repo's folder, absolute"`
+	Files   []initFile `json:"files" doc:"the repo's files init sets up"`
+	Hints   []string   `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
 }
 
 // initFile is a file of the repo, by its path in it, and whether init changed
 // it: created it, or added its line or block.
 type initFile struct {
-	Path    string `json:"path"`
-	Changed bool   `json:"changed"`
+	Path    string `json:"path" doc:"the file's path in the repo"`
+	Changed bool   `json:"changed" doc:"whether init created it, or added to it"`
 }
 
 // initStep makes one file of a repo, at path relative to it, unless it is

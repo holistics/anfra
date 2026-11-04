@@ -94,8 +94,8 @@ func (l Limits) MaxFileBytes() int {
 // Person is who published a revision. Email is empty once the account is gone,
 // or has left the org.
 type Person struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID    string `json:"id" doc:"the person's id"`
+	Email string `json:"email" doc:"the person's email"`
 }
 
 // ListMissingBlobsIn is blob ids the client computed from its files.
@@ -139,9 +139,9 @@ type PublishOut struct {
 
 // Replaced is a published revision a publish replaced.
 type Replaced struct {
-	Revision    string    `json:"revision"`
-	PublishedBy *Person   `json:"published_by,omitempty"`
-	PublishedAt time.Time `json:"published_at" pretty:",moment"`
+	Revision    string    `json:"revision" doc:"the revision replaced"`
+	PublishedBy *Person   `json:"published_by,omitempty" doc:"who published it"`
+	PublishedAt time.Time `json:"published_at" doc:"when it was published" pretty:",moment"`
 }
 
 // DataSource is a data source as the server shows it: never its connection.

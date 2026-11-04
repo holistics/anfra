@@ -6,42 +6,33 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 )
 
-// ListResult is `publish --list`'s result: what would be published, and where
+// CheckResult is `publish check`'s result: what would be published, and where
 // (docs/designs/commands-and-api.md#cli-output).
-type ListResult struct {
-	// Message is the outcome, in a sentence.
-	Message string `json:"message"`
-	// Org is where it would be published; null when none is configured.
-	Org   *OrgRef  `json:"org"`
-	Files []string `json:"files" pretty:",tree"`
-	// Hints are what to do next; absent when nothing is.
-	Hints []string `json:"hints,omitempty"`
+type CheckResult struct {
+	Message string   `json:"message" doc:"the outcome, in a sentence"`
+	Org     *OrgRef  `json:"org" doc:"where it would be published; null when no org is configured"`
+	Files   []string `json:"files" doc:"the files it would send" pretty:",tree"`
+	Hints   []string `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
 }
 
 // Result is a publish's result: the revision it published, and what came of
 // it.
 type Result struct {
-	// Message is the outcome, in a sentence.
-	Message  string `json:"message"`
-	Org      OrgRef `json:"org"`
-	Revision string `json:"revision"`
-	// Changed is false when these files were what the org had published.
-	Changed bool `json:"changed"`
-	// Replaced is the revision it replaced; absent when none was published.
-	Replaced *cloudapi.Replaced `json:"replaced,omitempty"`
-	// Files is how many files it published: publish --list lists them.
-	Files int `json:"files"`
-	// DataSourcesCreated are the data sources it added to the org, by name.
-	DataSourcesCreated []string `json:"data_sources_created"`
-	// Hints are what to do next; absent when nothing is.
-	Hints []string `json:"hints,omitempty"`
+	Message            string             `json:"message" doc:"the outcome, in a sentence"`
+	Org                OrgRef             `json:"org" doc:"where it was published"`
+	Revision           string             `json:"revision" doc:"the revision published"`
+	Changed            bool               `json:"changed" doc:"false when these files were what the org had published"`
+	Replaced           *cloudapi.Replaced `json:"replaced,omitempty" doc:"the revision it replaced; absent when none was published"`
+	Files              int                `json:"files" doc:"how many files it published"`
+	DataSourcesCreated []string           `json:"data_sources_created" doc:"the data sources it added to the org"`
+	Hints              []string           `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
 }
 
 // OrgRef is an org a publish goes to: its address, and its name when the
 // login knows it.
 type OrgRef struct {
-	URL  string `json:"url"`
-	Name string `json:"name,omitempty"`
+	URL  string `json:"url" doc:"the org's address"`
+	Name string `json:"name,omitempty" doc:"the org's name, as its login knows it; absent when unknown"`
 }
 
 // told is what a publish says beside its result: its warnings, each with a

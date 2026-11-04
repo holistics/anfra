@@ -27,44 +27,59 @@ func newUpdateCmd() *cobra.Command {
 	var checkOnly bool
 	cmd := &cobra.Command{
 		Use:   "update",
-		Short: "Update anfra to the latest release (use --check to only report)",
-		Long: "Update anfra to the latest release, replacing this binary. --check only reports.\n\n" +
-			"Its result opens with message, the outcome. Then `anfra version`'s answer as it stands after\n" +
-			"the update, checked now rather than from the background check: version, and update's latest\n" +
-			"and available. previous is the version it replaced, when it installed one; changelog links\n" +
-			"to what the latest release brings; hints, last, are what to do next.",
+		Short: "Update anfra to the latest release",
+		Long: "Update anfra to the latest release, replacing this binary. `anfra update check` only checks.\n\n" +
+			"Its result is `anfra version`'s answer, checked after the update.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, err := runUpdate(cmd.Context(), checkOnly, cmd.ErrOrStderr())
-			if err != nil {
-				return err
+			if checkOnly {
+				printWarning(cmd.ErrOrStderr(), "deprecated", "--check is deprecated: use `anfra update check`.")
 			}
-			if line := agents.Attention(agents.System(), repoDirIfAny()); line != "" {
-				printWarning(cmd.ErrOrStderr(), "skills_need_attention", line)
-			}
-			return writeResult(cmd, res)
+			return updateRun(cmd, checkOnly)
 		},
 	}
-	cmd.Flags().BoolVar(&checkOnly, "check", false, "only check for an update; do not install")
+	// --check was update check's name: it still works, warning.
+	cmd.Flags().BoolVar(&checkOnly, "check", false, "former name of `anfra update check`")
+	_ = cmd.Flags().MarkHidden("check")
 	markPrettyOutput(cmd)
+	resultIs[updateResult](cmd)
+	check := &cobra.Command{
+		Use:   "check",
+		Short: "Check for a newer release, without installing it",
+		Long: "Check for a newer release, asking GitHub now rather than reading the background check, and\n" +
+			"install nothing.\n\n" +
+			"Its result is `anfra version`'s answer, checked now.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error { return updateRun(cmd, true) },
+	}
+	markPrettyOutput(check)
+	resultIs[updateResult](check)
+	cmd.AddCommand(check)
 	return cmd
+}
+
+// updateRun runs update, or update check, and writes its result; the skills
+// needing attention is a warning.
+func updateRun(cmd *cobra.Command, checkOnly bool) error {
+	res, err := runUpdate(cmd.Context(), checkOnly, cmd.ErrOrStderr())
+	if err != nil {
+		return err
+	}
+	if line := agents.Attention(agents.System(), repoDirIfAny()); line != "" {
+		printWarning(cmd.ErrOrStderr(), "skills_need_attention", line)
+	}
+	return writeResult(cmd, res)
 }
 
 // updateResult is update's result: version's answer as the update leaves it,
 // and what it replaced (docs/designs/commands-and-api.md#new-state-as-output).
 type updateResult struct {
-	// Message is the outcome, in a sentence.
-	Message string             `json:"message"`
-	Version string             `json:"version"`
-	Update  command.UpdateInfo `json:"update"`
-	// Previous is the version the update replaced; absent when it installed
-	// none.
-	Previous string `json:"previous,omitempty"`
-	// Changelog is the changelog as of the latest release: what it brings,
-	// and every release before it.
-	Changelog string `json:"changelog"`
-	// Hints are what to do next; absent when nothing is.
-	Hints []string `json:"hints,omitempty"`
+	Message   string             `json:"message" doc:"the outcome, in a sentence"`
+	Version   string             `json:"version" doc:"the anfra installed after the command"`
+	Update    command.UpdateInfo `json:"update" doc:"the latest release, checked now"`
+	Previous  string             `json:"previous,omitempty" doc:"the version the update replaced; absent when it installed none"`
+	Changelog string             `json:"changelog" doc:"the changelog as of the latest release: what it brings, and every release before it"`
+	Hints     []string           `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
 }
 
 // runUpdate checks for the latest release and, unless checkOnly, installs it.

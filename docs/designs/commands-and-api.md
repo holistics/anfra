@@ -40,8 +40,12 @@ Every command writes structured output, except the few that write an artifact (b
 
 `--yaml` or `--json` works on every command, so an agent or a script passes one and never depends on a command's default. Whatever the format:
 
+- **`--schema` describes a command instead of running it:** `command`, then its `input` and `output`, each a JSON Schema (2020-12), inlined as discovery inlines an op's usage (`/api/ops/<name>`, MCP's `describe_operation`), with a type that recurs kept once in `$defs`. A core command's come from its op; a CLI-only command's from its flags and its result type. Each input field is keyed by its name, snake_case, and is a flag, `--<field>`, in kebab or snake case (`--data-source`, `--data_source`; an object's field as its path, `--format-options.header`), unless its `x-cli` says otherwise, as the op's `cli` tag does: `positional`, and `stdin` when it's read from stdin unless given (`query`'s `query`). `--help` stays the first look, for a person or an agent; `--schema` is the contract when exactness matters, and costs more to read.
+- **A command's `--help` says what its result means,** in a sentence ("Its result is `anfra version`'s answer, checked after the update."), and its fields are `--schema`'s: their descriptions live once, on the result's type (`doc` tags), as an op's do.
+- **A field's description is one clause on what it means:** what the name and type don't say ("every number a string, with every digit"), not how it's made. Descriptions are a schema's largest part after its structure, read by every agent that asks; the reasoning behind a field belongs in a design doc.
+
 - **stdout holds the result alone.** A core command's is its op's answer, as HTTP returns it.
-- **A CLI-only command's result is structured too.** It has no op, so the command defines the result's shape itself (a Go type in `cmd/anfra`), which `--schema` shows ([cli-json.md, step 4](../implementations/cli-json.md#4---schema)). It is in no published schema and CI checks no change to it, but scripts rely on it, so it changes as a CLI-only command's flags do: with a deprecation period ([deprecation before removal](#deprecation-before-removal)).
+- **A CLI-only command's result is structured too.** It has no op, so the command defines the result's shape itself (a Go type in `cmd/anfra` or the package it calls), which `--schema` shows. It is in no published schema and CI checks no change to it, but scripts rely on it, so it changes as a CLI-only command's flags do: with a deprecation period ([deprecation before removal](#deprecation-before-removal)).
 - **A CLI-only command's result has `message` and `hints`.** `message`, its first field, says in a sentence where things stand, so a person or an agent grasps the outcome before the details: "Updated anfra 0.16.0 → 0.17.0." It's best built from the result's own fields, so it agrees with them. `hints`, its last, is what to act on next, one a line, absent when nothing is, as `anfra version`'s are: "Put your database in .anfra/data_sources.yml, …". Advice goes in `hints`, never in prose on stderr, which an agent doesn't see off a terminal.
 - **stderr holds the rest, as documents:** each warning, then at most one error, last ([errors.md](errors.md#from-error-to-caller)), each with one top-level key saying what it is: `warning` or `error`. They're YAML documents whatever stdout's format, pretty included, and JSONL with `--json`, so a program reads stderr the same way whichever command ran. Progress for a person ("Downloading…") is the one exception: on a terminal only.
 - **The exit code** is non-zero for a failure and for an invalid verdict, whatever the format.
@@ -83,9 +87,23 @@ A command or flag keeps working, with a deprecation warning, for at least one mi
 A command that changes something offers ways to ask about it without changing it. Each answers a different question, so it takes a different form:
 
 - **`status` describes the state of a thing.** Read-only, cheap, safe to run any time: "what is the situation?" It exits 0 whatever the state, unless judging the state is its job (`anfra status` exits non-zero when the server isn't healthy). `anfra status`, `anfra auth status`.
-- **`<action> --check` is the action's preflight.** It does everything the action would up to its first change, then reports what the action would do: "what would happen if I ran this?" It exits non-zero when the action would fail. `anfra update --check`, `anfra agent setup --check`.
+- **`<action> check` is the action's preflight.** It does everything the action would up to its first change, then reports what the action would do: "what would happen if I ran this?" It exits non-zero when the action would fail. `anfra update check`, `anfra agent setup check`, `anfra publish check`. A preflight that does only part of that so far, as `publish check`'s, offline, is still the action's check: the rest is added to it, rather than a command for each part, until real use asks for one (`publish check --offline`, say).
+
+A preflight is a subcommand, not a flag, by the rule below, and `anfra <action> --help` lists it. A check belongs to its action, not to the action's group: `agent setup check`, not `agent check`, so that a second action in the group (`agent remove`, say) gets its own check without either becoming ambiguous.
 
 anfra has no `--dry-run`. Other tools use the name for both an offline look and an online preflight, so it says nothing about how far a command goes.
+
+### One command, one result
+
+A command answers one shape of result, whatever its flags. A flag may narrow or tune what a command does (`--agent`, `--set-org`, `--page-size`), never change what its result is. A variant that answers something else is a command of its own, often a subcommand, as the preflights are (`publish check`, not `publish --list`).
+
+The reason is that a command is an API, and is held to what an API's operation is ([philosophy.md](philosophy.md#make-interfaces-work-for-agents-and-programs-not-only-people)). An op has one input and one output type, the same over HTTP, MCP and the CLI ([define once, serve everywhere](philosophy.md#define-once-serve-everywhere)); a CLI-only command keeps to the same, so a program or an agent reads every command the same way, and is never surprised by what comes back. In practice:
+
+- **`--schema` describes the command** with one schema, and a program or a typed client maps one command to one type: no branching on which flags were passed to know what it got.
+- **`--help` lists the variant** among the commands, where a flag would hide it among the options.
+- **The name says what it answers**, rather than leaving a reader to guess what a flag does to the output.
+
+Precedents: Terraform's `plan` and `apply`, Git's `status` and `commit`. The counter-pattern, a flag that swaps the output (`cargo package --list`, `npm pack --dry-run`), is common in single-purpose tools, but leaves the command with two results to document and type.
 
 ### New state as output
 
@@ -97,8 +115,8 @@ Precedents:
 
 - **HTTP:** a `PUT` or `PATCH` that answers with the resource as it now is.
 - **`kubectl apply -o yaml`:** the object as the cluster now holds it.
-- **`anfra update`** (planned, [cli-json.md](../implementations/cli-json.md)): `anfra version`'s answer as it is after the update, plus `previous`, the version it replaced. `update --check` is the same answer without acting.
-- **`anfra agent setup`** (planned, same doc): `agent setup --check`'s report as it is after setup, plus what setup did for each agent.
+- **`anfra update`** (planned, [cli-json.md](../implementations/cli-json.md)): `anfra version`'s answer as it is after the update, plus `previous`, the version it replaced. `update check` is the same answer without acting.
+- **`anfra agent setup`** (planned, same doc): `agent setup check`'s report as it is after setup, plus what setup did for each agent.
 
 A command with no read of its state answers with what it changed alone: `anfra init`, the files it created.
 

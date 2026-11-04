@@ -54,7 +54,7 @@ Work known or agreed, not built yet.
 |---|---|
 | [backlog](todos/backlog.md) | Work known to be needed, not yet scheduled: what, why, and where to start. |
 | [check before push](todos/check-pre-push.md) | Running `make check` from a pre-push hook, to catch what would fail CI. |
-| [publish status and check](todos/publish-status-and-check.md) | `anfra publish status` and `anfra publish --check`: asking about a publish without publishing. |
+| [publish status and check](todos/publish-status-and-check.md) | `anfra publish status`, and the rest of `anfra publish check`: asking about a publish without publishing. |
 
 ## Usage
 

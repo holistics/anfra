@@ -53,10 +53,12 @@ func TestPublishNonInteractiveAndList(t *testing.T) {
 			t.Fatalf("noninteractive prompt: %s", output.String())
 		}
 	}
-	// --dry-run is --list's former name: the same, and says so.
-	for _, flag := range []string{"--list", "--dry-run"} {
+	// publish check lists the files; --list and --dry-run, its former names, do
+	// the same, and say so.
+	for _, args := range [][]string{{"publish", "check"}, {"publish", "--list"}, {"publish", "--dry-run"}} {
+		flag := args[len(args)-1]
 		cmd := newRootCmd()
-		cmd.SetArgs([]string{"publish", flag})
+		cmd.SetArgs(args)
 		var out bytes.Buffer
 		cmd.SetIn(strings.NewReader(""))
 		cmd.SetOut(&out)
@@ -67,7 +69,7 @@ func TestPublishNonInteractiveAndList(t *testing.T) {
 		if !strings.Contains(out.String(), "orders.aml") {
 			t.Fatalf("%s: %s", flag, out.String())
 		}
-		if deprecated := strings.Contains(out.String(), "code: deprecated"); deprecated != (flag == "--dry-run") {
+		if deprecated := strings.Contains(out.String(), "code: deprecated"); deprecated != (flag != "check") {
 			t.Fatalf("%s: deprecation note %v: %s", flag, deprecated, out.String())
 		}
 		if _, err := os.Stat(repoconfig.Path(".")); !os.IsNotExist(err) {

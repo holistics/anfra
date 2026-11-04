@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -247,5 +248,96 @@ func TestWriteStructured(t *testing.T) {
 		`"changelog":"https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md","hints":["Restart it."]}` + "\n"
 	if out.String() != want {
 		t.Errorf("JSON:\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// An action's preflight is its check subcommand; the former --check still
+// works, warning.
+func TestPreflightsAreCheckCommands(t *testing.T) {
+	root := newRootCmd()
+	for _, path := range [][]string{{"publish", "check"}, {"update", "check"}, {"agent", "setup", "check"}} {
+		c, _, err := root.Find(path)
+		if err != nil || c.Name() != "check" || c.Annotations[outputKind] != outputStructured {
+			t.Errorf("%v: %v %v", path, c, err)
+		}
+	}
+	for _, path := range [][]string{{"update"}, {"agent", "setup"}} {
+		c, _, _ := root.Find(path)
+		if f := c.Flags().Lookup("check"); f == nil || !f.Hidden {
+			t.Errorf("%v: --check is gone, or shown", path)
+		}
+	}
+}
+
+// Every command that writes structured output has a schema: a core command's
+// from its op, a CLI-only command's from its result type (resultIs). openapi's
+// result is an OpenAPI document, described as one.
+func TestEveryStructuredCommandHasASchema(t *testing.T) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c.Runnable() && c.Annotations[outputKind] == outputStructured && c.Name() != "openapi" {
+			_, typed := resultTypes[c]
+			if _, err := schemaOf(c); err != nil || c.Annotations[opAnnotation] == "" && !typed {
+				t.Errorf("%s: no schema of its result (%v): give it resultIs", c.CommandPath(), err)
+			}
+		}
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+	walk(newRootCmd())
+}
+
+// --schema writes a command's input and output instead of running it, a field
+// that isn't a flag marked x-cli, as its cli tag; an artifact refuses it.
+func TestSchema(t *testing.T) {
+	t.Cleanup(resetOutput)
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"query", "--schema", "--json"})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Command string `json:"command"`
+		Input   struct {
+			Properties map[string]struct {
+				CLI []string `json:"x-cli"`
+			} `json:"properties"`
+		} `json:"input"`
+		Output struct {
+			Properties map[string]any `json:"properties"`
+		} `json:"output"`
+	}
+	if err := jsonkit.Unmarshal(out.Bytes(), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Command != "anfra query" || !slices.Equal(s.Input.Properties["query"].CLI, []string{"positional", "stdin"}) || s.Input.Properties["data_source"].CLI != nil || s.Output.Properties["columns"] == nil {
+		t.Errorf("schema: %s", out.String())
+	}
+	if !strings.HasPrefix(out.String(), `{"command":"anfra query","input":{"type":"object",`) {
+		t.Errorf("not in order: %.80s", out.String())
+	}
+
+	resetOutput()
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"serve", "--schema"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "has no schema") {
+		t.Errorf("serve --schema: %v", err)
+	}
+}
+
+// A flag by its field's name works too: --data_source as --data-source.
+func TestUnderscoreFlags(t *testing.T) {
+	cmd := newRootCmd()
+	q, _, _ := cmd.Find([]string{"query"})
+	if err := q.ParseFlags([]string{"--data_source", "warehouse"}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := q.Flags().GetString("data-source"); v != "warehouse" {
+		t.Errorf("--data_source set data-source to %q", v)
 	}
 }
