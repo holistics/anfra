@@ -14,7 +14,7 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"OTEL_SDK_DISABLED", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-		"H_OTEL_ENABLED", "H_OTEL_INTERNAL_EXPORTER_URL",
+		"H_OTEL_ENABLED", "H_OTEL_INTERNAL_EXPORTER_URL", "H_OTEL_TRACES_EXPORTER",
 	} {
 		t.Setenv(k, "")
 		_ = os.Unsetenv(k)
@@ -35,7 +35,8 @@ func setup(t *testing.T) bool {
 }
 
 // Without an endpoint, spans still get ids, for the log, and pass them on, but
-// are not sampled, so nothing is exported, and anfra-node is not told to export.
+// are not sampled, so nothing is exported; anfra-node traces for its ids too,
+// exporting nothing.
 func TestIdsWithoutAnEndpoint(t *testing.T) {
 	clearEnv(t)
 	if !setup(t) {
@@ -46,8 +47,12 @@ func TestIdsWithoutAnEndpoint(t *testing.T) {
 	if sc := span.SpanContext(); !sc.IsValid() || sc.IsSampled() {
 		t.Errorf("span context = %+v, want valid ids, not sampled", sc)
 	}
-	if os.Getenv("H_OTEL_ENABLED") != "" {
-		t.Fatal("anfra-node was told to export with no endpoint set")
+	if os.Getenv("H_OTEL_ENABLED") != "1" || os.Getenv("H_OTEL_TRACES_EXPORTER") != "none" {
+		t.Errorf("anfra-node: H_OTEL_ENABLED=%q H_OTEL_TRACES_EXPORTER=%q, want 1 and none",
+			os.Getenv("H_OTEL_ENABLED"), os.Getenv("H_OTEL_TRACES_EXPORTER"))
+	}
+	if os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL") != "" {
+		t.Error("anfra-node was given an exporter URL with no endpoint set")
 	}
 }
 
@@ -74,6 +79,9 @@ func TestExportsToTheEndpoint(t *testing.T) {
 			}
 			if got := os.Getenv("H_OTEL_ENABLED"); got != "1" {
 				t.Errorf("H_OTEL_ENABLED = %q, want 1", got)
+			}
+			if got := os.Getenv("H_OTEL_TRACES_EXPORTER"); got != "" {
+				t.Errorf("H_OTEL_TRACES_EXPORTER = %q, want it unset, to export", got)
 			}
 			if got := os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL"); got != c.node {
 				t.Errorf("H_OTEL_INTERNAL_EXPORTER_URL = %q, want %q", got, c.node)

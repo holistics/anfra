@@ -19,7 +19,7 @@ anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo i
 ```
 
 - **`msg`**: what happened, as a sentence for people. Constant, capitalized, no full stop: `Update available`, never one built from values. It can be reworded in any release, so nothing matches on it.
-- **`event`**: what happened, as a name for programs: `<area>.<what happened>` in snake_case (`serve.update_available`, `routine.failed`, `rpc.failed`). Alerts, dashboards, searches and tests match on it. Every record has one.
+- **`event`**: what happened, as a name for programs: `<area>.<what happened>` in snake_case (`serve.update_available`, `routine.failed`, `rpc.request`). Alerts, dashboards, searches and tests match on it. Every record has one.
 - **Attributes**: the facts that vary, with snake_case keys (`routine`, `status`, `duration`). An alert reads them with the event: `http.request` with a `status` of 500 or more.
 - **`level`**: `DEBUG`, `INFO`, `WARN` or `ERROR`, in every service. For a failure, its error's scope decides it (`user` info, `client` warn, `server` error; see [errors](errors.md)), so operators alert on what anfra must fix. Otherwise, warn for what the operator should act on, info for what changed, debug for detail.
 - **`trace_id`, `span_id`**: the trace and span the record was written in, as lowercase hex, OpenTelemetry's names for trace context in JSON logs. They join one request's records across services, and a tracing backend links each record to its span. A record written outside any request (a server starting) has none. Tracing is always on for its ids, exported or not: with no OTLP endpoint, spans are not sampled and nothing is exported, but each gets its ids and passes them on (`traceparent`).
@@ -29,11 +29,11 @@ anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo i
 
 Whether to log is decided with what the service itself knows, never with a guess about what another service will log. A service logs:
 
-- **Each request it answered, with how**: one record, with its outcome, its error's code if it failed, and its duration. anfra's `http.request` and `command.failed`, anfra-node's `rpc.*`.
+- **Each request it answered, with how**: one record, with its outcome, its error's code if it failed, and its duration. anfra's `http.request` and `command.failed`, anfra-node's `rpc.request`.
 - **What happened to the service itself**: starting, ready, shutting down, an update available.
 - **What it absorbed that no caller will see**: a retry, a fallback, an item skipped, a routine's failed run.
 
-It never leaves something out because another service may log it, and never logs on another's behalf. A failure that crosses services so has a record in each, each its own view: anfra-node's `rpc.failed`, and anfra's `http.request` with the error's code. `trace_id` joins them; nothing removes either.
+It never leaves something out because another service may log it, and never logs on another's behalf. A failure that crosses services so has a record in each, each its own view: anfra-node's `rpc.request`, and anfra's `http.request`, each with the error's code. `trace_id` joins them; nothing removes either.
 
 Within a service, a failure is logged once, in the request's record or where it is absorbed, not at each function it passes through: the steps it passed through are on the error itself ([steps](errors.md#steps-context-written-once)).
 
@@ -52,8 +52,7 @@ Alert rules and dashboards depend on events and their attributes, so anfra keeps
   ```
 
   anfra-node defines its own the same way, with `defineEvent`.
-- **Every event is listed** in `api/log-events.json`: anfra's, generated from every package it links, and anfra-node's, from the version anfra pins. `make check` fails on a stale list (`scripts/log-events.sh diff`), so a change to an event is a change to the list, in the pull request that makes it, or that bumps anfra-node, where a reviewer sees it.
-- **The release notes say what changed.** `pnpm bump` compares the list at the last release with the list now and writes a "Log events" section: the events and attributes removed, and those new. A rename is a removal and an addition; the pull request says why. `pnpm bump` refuses a patch version with anything removed.
+- **A rename or a removal is caught in review,** and the release notes mention it by hand, until the list of events does it ([not yet](#not-yet)).
 - **A platform embedding the engine** logs `shared/`'s events (`http.request`, `routine.*`) under the same names, with its own beside them. `shared/logkit` is public API for that.
 - **A log event is not a product-analytics event.** It is a named log record, what OpenTelemetry calls an event (a log record's `EventName`), for operators. Tracking what users do, for product analytics, is another contract: other readers, user identity and consent, other guarantees. It gets its own events and its own list, never `logkit`'s, so neither can break the other. Where one place in the code is both, it writes both, each defined on its own side.
 
@@ -62,7 +61,7 @@ Alert rules and dashboards depend on events and their attributes, so anfra keeps
 - **Name the event for what happened,** not for the code that logs it: `routine.cut_short`, not `routine.log_cut_short`. The area is the part of the service it belongs to, as a reader would look for it: `serve`, `sidecar`, `routine`, `http`, `rpc`.
 - **Prefer adding to changing.** A new attribute is free; renaming one breaks whatever reads it.
 - **Log with a context wherever one is at hand** (`InfoContext(ctx, …)` and the like): it is what gives a record its trace. Which context, and whether to pass one down to get it, is [which trace a record joins](#which-trace-a-record-joins).
-- **What is checked:** in anfra, sloglint (`.golangci.yml`) refuses a message that is not constant or not capitalized, and a key that is not snake_case; in anfra-node, a test refuses an event defined twice or misnamed; the list refuses to go stale. Nothing checks that a record has an `event`, or that it logs the attributes its event lists: a reviewer does.
+- **What is checked:** in anfra, sloglint (`.golangci.yml`) refuses a message that is not constant or not capitalized, and a key that is not snake_case; in both services, defining an event refuses one defined twice, misnamed or undocumented. Nothing checks that a record has an `event`, or that it logs the attributes its event lists: a reviewer does.
 
 ### Which trace a record joins
 
@@ -92,4 +91,5 @@ Logs are for operators and debugging, not for a program reading a command's stde
 
 ## Not yet
 
-- **canal-query** writes plain text lines (`starting Canal Query at 42183 (…)`), and its OpenTelemetry exporter's failures, to the same `anfra.log`: no JSON, no `service`, no `event`, no trace context. TODO: JSON records in the shape above, its events in the list.
+- **canal-query** writes plain text lines (`starting Canal Query at 42183 (…)`), and its OpenTelemetry exporter's failures, to the same `anfra.log`: no JSON, no `service`, no `event`, no trace context. TODO: JSON records in the shape above.
+- **A list of events, and release notes from it.** TODO: each service commits a list of its events, generated from its definitions (`logkit.Events()`, anfra-node's `listEvents()`) and checked by a test, so a change to an event shows in its pull request. `pnpm bump` compares the lists at the last release with the lists now, anfra-node's at the versions anfra pinned, writes a "Log events" section (what was removed, what is new), and refuses a patch version with anything removed. The lists are read from source, by version, rather than asked of a running binary: events are fixed at build time, and a release compares two versions.

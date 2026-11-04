@@ -62,23 +62,27 @@ func Setup(ctx context.Context, service, version string) (shutdown func(context.
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{}, propagation.Baggage{}))
-	if exporting {
-		exportFromNode(base, traces)
-	}
+	configureNode(exporting, base, traces)
 	return tp.Shutdown, nil
 }
 
-// exportFromNode points the anfra-node this process spawns, which inherits its
-// environment, at the same collector, unless it is configured already. Its
+// configureNode sets up tracing in the anfra-node this process spawns, which
+// inherits its environment, as here, unless it is configured already: always
+// on, for the ids its log records carry, and exporting to the same collector
+// when this process does, otherwise nothing (H_OTEL_TRACES_EXPORTER=none). Its
 // h-otel reads its own variables, and takes the base URL, adding /v1/traces.
-func exportFromNode(base, traces string) {
+func configureNode(exporting bool, base, traces string) {
 	if os.Getenv("H_OTEL_ENABLED") != "" {
+		return
+	}
+	_ = os.Setenv("H_OTEL_ENABLED", "1")
+	if !exporting {
+		_ = os.Setenv("H_OTEL_TRACES_EXPORTER", "none")
 		return
 	}
 	if base == "" {
 		base = strings.TrimSuffix(strings.TrimSuffix(traces, "/"), "/v1/traces")
 	}
-	_ = os.Setenv("H_OTEL_ENABLED", "1")
 	_ = os.Setenv("H_OTEL_INTERNAL_EXPORTER_URL", strings.TrimSuffix(base, "/"))
 }
 
