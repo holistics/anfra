@@ -343,12 +343,12 @@ func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) command.Clien
 	if err := node.Start(ctx); err != nil {
 		t.Fatalf("start anfra-node: %v", err)
 	}
-	t.Cleanup(node.Close)
+	t.Cleanup(func() { node.Close(context.WithoutCancel(ctx)) })
 	canal := canalquery.New(cfg)
 	if err := canal.Start(ctx); err != nil {
 		t.Fatalf("start canal-query: %v", err)
 	}
-	t.Cleanup(canal.Close)
+	t.Cleanup(func() { canal.Close(context.WithoutCancel(ctx)) })
 	return command.Clients{Node: node.Client(), CanalQuery: canal.Client()}
 }
 

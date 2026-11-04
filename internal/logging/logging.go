@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/holistics/anfra/internal/envflag"
+	"github.com/holistics/anfra/shared/logkit"
 )
 
 // Logging is the host's logging setup:
@@ -92,7 +93,7 @@ func Setup(logsDir, repo string, toStderr bool) (*Logging, error) {
 			return a
 		},
 	})
-	logger := slog.New(handler).With(
+	logger := slog.New(logkit.TraceHandler(handler)).With(
 		"service", "anfra-host",
 		"repo", repo,
 		"pid", os.Getpid(),

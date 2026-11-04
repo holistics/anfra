@@ -270,7 +270,7 @@ func TestExternalDoesNotSpawn(t *testing.T) {
 	if canal.Client() == nil {
 		t.Fatal("Client() is nil")
 	}
-	canal.Close()
+	canal.Close(context.Background())
 }
 
 // Progress reaches the handler before the header, read as canal-query wrote it;

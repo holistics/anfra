@@ -110,7 +110,7 @@ func TestExternalDoesNotSpawn(t *testing.T) {
 	if node.Client() == nil {
 		t.Fatal("Client() is nil")
 	}
-	node.Close() // must not panic with no process of its own
+	node.Close(context.Background()) // must not panic with no process of its own
 }
 
 func TestExternalUnreachable(t *testing.T) {

@@ -28,6 +28,24 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/holistics/anfra/shared/logkit"
+)
+
+// A routine's log events (docs/designs/logs.md). Every record names its group's
+// routine.
+var (
+	eventStart  = logkit.DefineEvent("routine.start", "A routine started.", "routine")
+	eventStop   = logkit.DefineEvent("routine.stop", "A routine returned.", "routine")
+	eventFailed = logkit.DefineEvent("routine.failed",
+		"A routine's run failed: it returned an error, or a task's panicked; a loop or worker is restarted.",
+		"routine", "outcome", "error")
+	eventPanic = logkit.DefineEvent("routine.panic",
+		"A routine panicked: recovered for a task, otherwise the process crashes after this record.",
+		"routine", "panic", "stack", "recovered")
+	eventCutShort = logkit.DefineEvent("routine.cut_short",
+		"A routine was still running at Stop's deadline, and its context was canceled.",
+		"routine")
 )
 
 type kind int
@@ -166,8 +184,8 @@ func (g *Group) spawn(ctx context.Context, r *routine) {
 	go func() {
 		defer g.wg.Done()
 		defer g.crashOnPanic(ctx, r.name)
-		g.logger.Debug("Routine started", "event", "routine.start", "routine", r.name)
-		defer g.logger.Debug("Routine stopped", "event", "routine.stop", "routine", r.name)
+		g.logger.Debug("Routine started", logkit.EventKey, eventStart, "routine", r.name)
+		defer g.logger.Debug("Routine stopped", logkit.EventKey, eventStop, "routine", r.name)
 		switch r.kind {
 		case kindEvery:
 			g.every(ctx, r)
@@ -289,7 +307,7 @@ func (g *Group) loop(ctx context.Context, r *routine) {
 		}
 		lasted := time.Since(start)
 		countRun(ctx, r.name, outcomeError)
-		g.logger.ErrorContext(ctx, "Routine failed", "event", "routine.failed", "routine", r.name, "outcome", outcomeError, "error", err.Error())
+		g.logger.ErrorContext(ctx, "Routine failed", logkit.EventKey, eventFailed, "routine", r.name, "outcome", outcomeError, "error", err.Error())
 		if lasted > r.opts.backoffMax {
 			b.Reset()
 		}
@@ -315,7 +333,7 @@ func (g *Group) run(ctx context.Context, name string, recoverPanic bool, fn func
 	outcome, err := g.call(ctx, name, recoverPanic, fn)
 	recordRun(ctx, name, outcome, time.Since(start))
 	if err != nil {
-		g.logger.ErrorContext(ctx, "Routine failed", "event", "routine.failed", "routine", name, "outcome", outcome, "error", err.Error())
+		g.logger.ErrorContext(ctx, "Routine failed", logkit.EventKey, eventFailed, "routine", name, "outcome", outcome, "error", err.Error())
 	}
 	g.logCutShort(ctx, name)
 }
@@ -324,7 +342,7 @@ func (g *Group) call(ctx context.Context, name string, recoverPanic bool, fn fun
 	if recoverPanic {
 		defer func() {
 			if p := recover(); p != nil {
-				g.logger.ErrorContext(ctx, "Routine panicked", "event", "routine.panic", "routine", name, "panic", fmt.Sprint(p), "stack", string(debug.Stack()), "recovered", true)
+				g.logger.ErrorContext(ctx, "Routine panicked", logkit.EventKey, eventPanic, "routine", name, "panic", fmt.Sprint(p), "stack", string(debug.Stack()), "recovered", true)
 				outcome, err = outcomePanic, fmt.Errorf("panic: %v", p)
 			}
 		}()
@@ -340,7 +358,7 @@ func (g *Group) call(ctx context.Context, name string, recoverPanic bool, fn fun
 // cancel after every routine has returned.
 func (g *Group) logCutShort(ctx context.Context, name string) {
 	if ctx.Err() != nil {
-		g.logger.ErrorContext(ctx, "Routine cut short", "event", "routine.cut_short", "routine", name)
+		g.logger.ErrorContext(ctx, "Routine cut short", logkit.EventKey, eventCutShort, "routine", name)
 	}
 }
 
@@ -353,7 +371,7 @@ var repanic = func(v any) { panic(v) }
 func (g *Group) crashOnPanic(ctx context.Context, name string) {
 	if p := recover(); p != nil {
 		countRun(ctx, name, outcomePanic)
-		g.logger.ErrorContext(ctx, "Routine panicked", "event", "routine.panic", "routine", name, "panic", fmt.Sprint(p), "stack", string(debug.Stack()))
+		g.logger.ErrorContext(ctx, "Routine panicked", logkit.EventKey, eventPanic, "routine", name, "panic", fmt.Sprint(p), "stack", string(debug.Stack()))
 		repanic(p)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/logkit"
 )
 
 // Name is the sidecar's name, in its logs, its errors and its binary's.
@@ -44,7 +45,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 			return fmt.Errorf("canal-query at %s not ready: %w", c.cfg.CanalQueryURL, err)
 		}
 		c.cfg.Wrap(Name, c.client.http)
-		c.cfg.Log().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "url", c.cfg.CanalQueryURL, "owned", false)
+		c.cfg.Log().InfoContext(ctx, "Sidecar ready", logkit.EventKey, sidecar.EventReady, "name", Name, "url", c.cfg.CanalQueryURL, "owned", false)
 		return nil
 	}
 
@@ -57,7 +58,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 		return err
 	}
 
-	proc, err := sidecar.StartProcess(sidecar.ProcSpec{
+	proc, err := sidecar.StartProcess(ctx, sidecar.ProcSpec{
 		Name: Name,
 		Path: binPath,
 		ExtraEnv: []string{
@@ -82,11 +83,11 @@ func (c *Sidecar) Start(ctx context.Context) error {
 	c.client = NewClientUnix(c.socketPath, c.cfg.EnablePooling)
 
 	if err := c.client.WaitReady(ctx); err != nil {
-		c.Close()
+		c.Close(ctx)
 		return err
 	}
 	c.cfg.Wrap(Name, c.client.http)
-	c.proc.Logger().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "socket", c.socketPath)
+	c.proc.Logger().InfoContext(ctx, "Sidecar ready", logkit.EventKey, sidecar.EventReady, "name", Name, "socket", c.socketPath)
 	return nil
 }
 
@@ -95,9 +96,12 @@ func (c *Sidecar) Client() *Client { return c.client }
 
 // Close stops canal-query and removes its socket, which one killed before it
 // could leaves. A no-op for an external one, which this process never owned.
-func (c *Sidecar) Close() {
+//
+// ctx carries the trace its log record joins; it is not for cancellation
+// (sidecar.Process.Close).
+func (c *Sidecar) Close(ctx context.Context) {
 	if c.proc != nil {
-		c.proc.Close()
+		c.proc.Close(ctx)
 	}
 	sidecar.RemoveSocket(c.socketPath)
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/update"
 	"github.com/spf13/cobra"
+
+	"github.com/holistics/anfra/shared/logkit"
 )
 
 // newUpdateCmd is the manual self-update command (like `gh`/`deno upgrade`):
@@ -219,7 +221,7 @@ func checkUpdates(logger *slog.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if r, err := update.Check(ctx); err == nil && r.IsNewer() && r.Version != announced {
 			announced = r.Version
-			logger.Info("Update available", "event", "serve.update_available", "latest", r.Version, "current", meta.Version, "notice", update.Notice(r))
+			logger.Info("Update available", logkit.EventKey, eventServeUpdateAvailable, "latest", r.Version, "current", meta.Version, "notice", update.Notice(r))
 		}
 		return nil
 	}

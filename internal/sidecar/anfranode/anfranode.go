@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/shared/logkit"
 )
 
 // Name is the sidecar's name, in its logs, its errors and its binary's.
@@ -45,7 +46,7 @@ func (a *Sidecar) Start(ctx context.Context) error {
 			return fmt.Errorf("anfra-node at %s not ready: %w", a.cfg.NodeURL, err)
 		}
 		a.cfg.Wrap(Name, a.client.http)
-		a.cfg.Log().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "url", a.cfg.NodeURL, "owned", false)
+		a.cfg.Log().InfoContext(ctx, "Sidecar ready", logkit.EventKey, sidecar.EventReady, "name", Name, "url", a.cfg.NodeURL, "owned", false)
 		return nil
 	}
 
@@ -63,7 +64,7 @@ func (a *Sidecar) Start(ctx context.Context) error {
 	if a.cfg.CompileCachePath != "" {
 		env = append(env, "ANFRA_COMPILE_CACHE_PATH="+a.cfg.CompileCachePath)
 	}
-	proc, err := sidecar.StartProcess(sidecar.ProcSpec{
+	proc, err := sidecar.StartProcess(ctx, sidecar.ProcSpec{
 		Name:     Name,
 		Path:     binPath,
 		Args:     []string{"--socket=" + a.socketPath},
@@ -85,11 +86,11 @@ func (a *Sidecar) Start(ctx context.Context) error {
 	a.client = NewClientUnix(a.socketPath)
 
 	if err := a.client.WaitReady(ctx); err != nil {
-		a.Close()
+		a.Close(ctx)
 		return err
 	}
 	a.cfg.Wrap(Name, a.client.http)
-	a.proc.Logger().Info("Sidecar ready", "event", "sidecar.ready", "name", Name, "socket", a.socketPath)
+	a.proc.Logger().InfoContext(ctx, "Sidecar ready", logkit.EventKey, sidecar.EventReady, "name", Name, "socket", a.socketPath)
 	return nil
 }
 
@@ -98,9 +99,12 @@ func (a *Sidecar) Client() *Client { return a.client }
 
 // Close stops the sidecar and removes its socket. A no-op for an external
 // sidecar, which this process never owned.
-func (a *Sidecar) Close() {
+//
+// ctx carries the trace its log record joins; it is not for cancellation
+// (sidecar.Process.Close).
+func (a *Sidecar) Close(ctx context.Context) {
 	if a.proc != nil {
-		a.proc.Close()
+		a.proc.Close(ctx)
 	}
 	sidecar.RemoveSocket(a.socketPath)
 }

@@ -25,6 +25,8 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/holistics/anfra/shared/logkit"
 )
 
 // appCommands builds the cobra tree from the registry: one command per
@@ -402,7 +404,7 @@ func logFailure(ctx context.Context, logger *slog.Logger, name string, err error
 		level = slog.LevelError
 	}
 	attrs := []slog.Attr{
-		slog.String("event", "command.failed"),
+		slog.Any(logkit.EventKey, eventCommandFailed),
 		slog.String("command", name),
 		slog.String("code", pub.String()),
 		slog.String("scope", string(pub.Scope())),
@@ -558,7 +560,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 			closeAll()
 			return command.Clients{}, nil, apperr.Encapsulate(err, errcode.SidecarUnavailable, "start anfra-node sidecar: "+err.Error())
 		}
-		closers = append(closers, node.Close)
+		closers = append(closers, func() { node.Close(ctx) })
 		clients.Node = node.Client()
 	}
 	if need.CanalQuery {
@@ -567,7 +569,7 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 			closeAll()
 			return command.Clients{}, nil, apperr.Encapsulate(err, errcode.SidecarUnavailable, "start canal-query sidecar: "+err.Error())
 		}
-		closers = append(closers, canal.Close)
+		closers = append(closers, func() { canal.Close(ctx) })
 		clients.CanalQuery = canal.Client()
 	}
 	return clients, closeAll, nil

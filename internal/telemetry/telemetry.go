@@ -2,12 +2,15 @@
 // the global tracer provider and W3C propagation, which the spans anfra already
 // makes (apptracing's per op, httpkit's per request) go to.
 //
-// Off unless an endpoint is set. Everything is configured by the standard OTEL_*
+// Always on, for the ids it gives each span: log records carry them, so one
+// request's records join across services (docs/designs/logs.md). Exported only
+// when an endpoint is set. Everything is configured by the standard OTEL_*
 // environment variables, which the SDK and its exporter read themselves:
 // OTEL_EXPORTER_OTLP_ENDPOINT (or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT) turns
 // export on, over OTLP/HTTP; OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
-// label it; and OTEL_SDK_DISABLED=true turns it off. Without an endpoint nothing
-// is installed and spans are the API's no-ops.
+// label it; and OTEL_SDK_DISABLED=true turns it all off, ids included. Without
+// an endpoint, a span is sampled only when its caller's is, and nothing is
+// exported: each still has its ids, and passes them on (traceparent).
 //
 // A copy of anfra-cloud's shared/telemetry, trimmed to traces and over HTTP, as
 // anfra-node exports: one collector endpoint serves both.
@@ -37,27 +40,31 @@ func Setup(ctx context.Context, service, version string) (shutdown func(context.
 	}
 	base := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	traces := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-	if base == "" && traces == "" {
-		return noop, nil
-	}
+	exporting := base != "" || traces != ""
 
-	res, err := newResource(ctx, service, version)
-	if err != nil {
-		return noop, err
+	opts := []sdktrace.TracerProviderOption{sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.NeverSample()))}
+	if exporting {
+		res, err := newResource(ctx, service, version)
+		if err != nil {
+			return noop, err
+		}
+		exp, err := otlptracehttp.New(ctx)
+		if err != nil {
+			return noop, err
+		}
+		opts = []sdktrace.TracerProviderOption{
+			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.AlwaysSample())),
+			sdktrace.WithResource(res),
+			sdktrace.WithBatcher(exp),
+		}
 	}
-	exp, err := otlptracehttp.New(ctx)
-	if err != nil {
-		return noop, err
-	}
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.AlwaysSample())),
-		sdktrace.WithResource(res),
-		sdktrace.WithBatcher(exp),
-	)
+	tp := sdktrace.NewTracerProvider(opts...)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{}, propagation.Baggage{}))
-	exportFromNode(base, traces)
+	if exporting {
+		exportFromNode(base, traces)
+	}
 	return tp.Shutdown, nil
 }
 
