@@ -35,7 +35,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code_any_changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # the base commit, for the diff
       - uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
@@ -59,8 +59,8 @@ jobs:
       contents: read
       pull-requests: read # wagoid lists the PR's commits via the API
     steps:
-      - uses: actions/checkout@v4
-      - uses: wagoid/commitlint-github-action@v6 # validates PR commits against commitlint.config.mjs
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1; validates PR commits against commitlint.config.mjs
 
   lint:
     needs: changes
@@ -70,8 +70,8 @@ jobs:
       contents: read
       checks: write # annotate the PR with lint findings
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           # The tool's build is cached with the module's.
@@ -82,7 +82,7 @@ jobs:
       # one pin, so CI and a local run cannot lint with different versions.
       - name: Build golangci-lint, as tools/go.mod pins it
         run: go build -modfile=tools/go.mod -o "$(go env GOPATH)/bin/golangci-lint" github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
           install-mode: none # the binary built above
           args: -v --timeout=10m
@@ -92,8 +92,8 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - name: the Go this builds with (go.mod's toolchain line)
@@ -113,10 +113,10 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # the base branch's spec, and the PR's commits
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - name: the contract is fresh
@@ -144,9 +144,9 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # the version is package.json's packageManager
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0; the version is package.json's packageManager
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -174,9 +174,9 @@ jobs:
   skills:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # the version is package.json's packageManager
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0; the version is package.json's packageManager
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -196,9 +196,9 @@ jobs:
       contents: read
       pull-requests: write # comment the license failures
     steps:
-      - uses: actions/checkout@v4 # the config file
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0; the config file
       - name: vulnerabilities
-        uses: actions/dependency-review-action@v5
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           config-file: ./.github/dependency-review-config.yml
           license-check: false
@@ -206,7 +206,7 @@ jobs:
         id: licenses
         if: ${{ !cancelled() }}
         continue-on-error: true # judged by the next step, minus tools/
-        uses: actions/dependency-review-action@v5
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           config-file: ./.github/dependency-review-config.yml
           vulnerability-check: false
@@ -269,7 +269,7 @@ jobs:
           # Skipped when only skills/ changed.
           if [ "$CODE" = false ]; then skips+=(lint test api web); fi
           echo "list=$(IFS=,; echo "${skips[*]}")" >> "$GITHUB_OUTPUT"
-      - uses: re-actors/alls-green@release/v1
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: ${{ steps.skips.outputs.list }}
