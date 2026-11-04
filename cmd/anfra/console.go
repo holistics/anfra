@@ -101,7 +101,8 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 	fmt.Fprintln(out, styles.Muted.Render(`\? lists the console's commands, \q or exit leaves.`))
 	fmt.Fprintln(out)
 
-	opts := cliui.EntryOptions{Prompt: filepath.Base(dir) + "> ", Leave: `\q, exit or Ctrl-D to leave`}
+	history := openConsoleHistory()
+	opts := cliui.EntryOptions{Prompt: filepath.Base(dir) + "> ", Leave: `\q, exit or Ctrl-D to leave`, History: history.load()}
 	for {
 		entry, err := cliui.ReadEntry(session, in, out, opts)
 		if errors.Is(err, io.EOF) {
@@ -114,10 +115,16 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer) error 
 		if entry == "" {
 			continue
 		}
-		if n := len(opts.History); n == 0 || opts.History[n-1] != entry {
-			opts.History = append(opts.History, entry)
+		remember := func(entry string) {
+			if n := len(opts.History); n == 0 || opts.History[n-1] != entry {
+				opts.History = append(opts.History, entry)
+				history.add(entry)
+			}
 		}
 		args, act, msg := consoleArgs(entry)
+		if act != actLeave { // Up then Enter shouldn't leave by surprise
+			remember(entry)
+		}
 		switch act {
 		case actLeave:
 			return nil

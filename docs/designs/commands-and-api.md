@@ -106,6 +106,14 @@ The reason is that a command is an API, and is held to what an API's operation i
 
 Precedents: Terraform's `plan` and `apply`, Git's `status` and `commit`. The counter-pattern, a flag that swaps the output (`cargo package --list`, `npm pack --dry-run`), is common in single-purpose tools, but leaves the command with two results to document and type.
 
+### Secrets never in arguments
+
+A command never takes a secret, a password, a token, a key, as a flag or a positional argument. One it needs comes on stdin (`--password-stdin`, as `docker login` takes it, or `gh auth login --with-token`), or from a file it reads (the repo's `.anfra/data_sources.yml`), or through a browser (`anfra auth login`'s OAuth).
+
+The reason is where arguments go: a shell's history, `anfra console`'s history ([console.md](console.md)), the process list any user on the machine can read (`ps`), CI logs, and an agent's transcript, which records every command it runs. stdin goes to the command alone.
+
+Today no command takes a secret at all. Over HTTP and MCP, an op's field is in the request's body, not a command line, so the rule is the CLI's: a field holding a secret is read from stdin only, never given as a flag. The `cli` tag has `stdin`, read from stdin unless given; the first such field adds a stdin-only form.
+
 ### New state as output
 
 *A pattern we follow where it fits, not a rule yet.*

@@ -95,6 +95,7 @@ A default must be safe for the person who never reads the docs.
 - `anfra serve` listens on loopback and has no authentication; it warns when told to listen elsewhere, and refuses requests a web page could forge ([security.md](security.md)).
 - A Data App definition, which any author or agent may write, runs in a sandboxed frame and reaches data only through the SDK's bridge, so a definition that forgets about security is still safe ([data-apps.md](data-apps.md)).
 - Credentials stay in the repo's git-ignored `.anfra/data_sources.yml` and are passed to the query engine only, never to anfra-node.
+- No command takes a secret as an argument, where shell histories, process lists and agents' transcripts would keep it: only on stdin ([commands-and-api.md](commands-and-api.md#secrets-never-in-arguments)).
 
 ### Interfaces, not implementations
 
