@@ -15,8 +15,10 @@ import (
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/clierr"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/pretty"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -64,6 +66,9 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: name, Short: c.Short(), Long: c.Long(), Args: cobra.NoArgs}
 	annotate(cmd, opAnnotation, c.Name())
 	markStructuredOutput(cmd) // its op's answer
+	if prettyViews[c.Name()] {
+		annotate(cmd, prettyView, "true")
+	}
 	// Show flags in declaration order (else pflag sorts them alphabetically).
 	cmd.Flags().SortFlags = false
 
@@ -552,7 +557,17 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 // presentTo shows an answer as YAML on out, and turns an invalid verdict into a
 // silent exit code 1: the answer says why.
 func presentTo(c command.Command, body []byte, out io.Writer) error {
-	if err := renderTo(body, "application/json", out); err != nil {
+	if wantsPretty(prettyViews[c.Name()]) {
+		// Its pretty view reads its type's hints: the answer, its JSON, as
+		// that type again, though a server answered it.
+		v := reflect.New(c.Output())
+		if err := jsonkit.Unmarshal(body, v.Interface()); err != nil {
+			return fmt.Errorf("decode %s's answer: %w", c.Name(), err)
+		}
+		if err := pretty.Render(out, v.Elem().Interface(), cliui.Width(out)); err != nil {
+			return err
+		}
+	} else if err := renderTo(body, "application/json", out); err != nil {
 		return err
 	}
 	valid, err := c.Valid(body)

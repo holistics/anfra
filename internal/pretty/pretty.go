@@ -12,12 +12,14 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/holistics/anfra/internal/cliui"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Render writes v, a command's result, in the pretty format, for a terminal
@@ -65,6 +67,7 @@ type prettyValue struct {
 	table   *prettyTable   // nil when the list can't be a table
 	items   []prettyItem   // the list as blocks
 	rows    [][]prettyCell // a list of lists
+	labels  []string       // the rows' values' labels, from a hint; none without one
 }
 
 // prettyItem is a list's object as a block: its first scalar as its heading.
@@ -117,13 +120,17 @@ type prettyField struct {
 	tree     bool
 	moment   bool
 	truncate bool
+	labels   string // rows: the path, from the result's top, of their values' labels (columns.label)
+	view     string // a named view of the value (views), rather than its shape's
 	tones    map[string]prettyStyle
 	value    reflect.Value
+	root     reflect.Value // the result, for a path from its top
 }
 
 // prettyFields are v's fields, embedded structs inlined as encoding/json
-// does, hidden ones left out.
-func prettyFields(v reflect.Value) []prettyField {
+// does, and those a hint inlines; hidden ones left out. root is the result
+// they're part of.
+func prettyFields(v, root reflect.Value) []prettyField {
 	var out []prettyField
 	t := v.Type()
 	for i := range t.NumField() {
@@ -137,15 +144,16 @@ func prettyFields(v reflect.Value) []prettyField {
 		}
 		if sf.Anonymous && name == "" && deref(sf.Type).Kind() == reflect.Struct {
 			if fv := indirect(v.Field(i)); fv.IsValid() {
-				out = append(out, prettyFields(fv)...)
+				out = append(out, prettyFields(fv, root)...)
 			}
 			continue
 		}
 		if name == "" {
 			name = sf.Name
 		}
-		f := prettyField{name: name, label: titleCase(name), value: v.Field(i),
+		f := prettyField{name: name, label: titleCase(name), value: v.Field(i), root: root,
 			omit: strings.Contains(jsonOpts, "omitempty") || strings.Contains(jsonOpts, "omitzero")}
+		inline := false
 		label, opts, _ := strings.Cut(sf.Tag.Get("pretty"), ",")
 		if label != "" {
 			f.label = label
@@ -161,6 +169,12 @@ func prettyFields(v reflect.Value) []prettyField {
 				f.moment = true
 			case "truncate":
 				f.truncate = true
+			case "labels":
+				f.labels = val
+			case "view":
+				f.view = val
+			case "inline":
+				inline = true
 			case "tone":
 				f.tones = map[string]prettyStyle{}
 				for pair := range strings.FieldsSeq(val) {
@@ -168,6 +182,13 @@ func prettyFields(v reflect.Value) []prettyField {
 					f.tones[value] = map[string]prettyStyle{"good": styleGood, "warn": styleWarn, "bad": styleBad}[tone]
 				}
 			}
+		}
+		// An inlined object's shown fields are its parent's, as encoding/json
+		// inlines an embedded one: the rows of a query's result, under no
+		// heading of their own.
+		if fv := indirect(f.value); inline && fv.IsValid() && fv.Kind() == reflect.Struct {
+			out = append(out, prettyFields(fv, root)...)
+			continue
 		}
 		out = append(out, f)
 	}
@@ -179,7 +200,7 @@ func prettyFields(v reflect.Value) []prettyField {
 func buildPrettyDoc(v reflect.Value) prettyDoc {
 	var doc prettyDoc
 	var body []prettyField
-	for _, f := range prettyFields(indirect(v)) {
+	for _, f := range prettyFields(indirect(v), indirect(v)) {
 		switch f.name {
 		case "message":
 			doc.message = f.value.String()
@@ -208,9 +229,15 @@ func prettyEntries(fields []prettyField) []prettyEntry {
 	return out
 }
 
-// prettyValueOf lays out a field's value by its shape: the conventions.
+// prettyValueOf lays out a field's value by its shape: the conventions; or
+// by the named view a hint gives it.
 func prettyValueOf(f prettyField) prettyValue {
-	v := indirect(f.value)
+	if view, ok := views[f.view]; ok {
+		if pv, ok := view(indirect(f.value)); ok {
+			return pv
+		}
+	}
+	v := decodedJSON(indirect(f.value))
 	if !v.IsValid() || isEmpty(v) {
 		return prettyValue{kind: prettyText, cell: noneCell}
 	}
@@ -221,9 +248,9 @@ func prettyValueOf(f prettyField) prettyValue {
 		}
 		return prettyValue{kind: prettyText, cell: scalarCell(f, v)}
 	case v.Kind() == reflect.Struct:
-		return prettyValue{kind: prettySection, entries: prettyEntries(prettyFields(v))}
+		return prettyValue{kind: prettySection, entries: prettyEntries(prettyFields(v, f.root))}
 	case v.Kind() == reflect.Slice || v.Kind() == reflect.Array:
-		elem := deref(v.Type().Elem())
+		elem := shapeOf(v)
 		switch {
 		case isScalar(elem) && f.tree:
 			var paths []string
@@ -238,30 +265,159 @@ func prettyValueOf(f prettyField) prettyValue {
 			}
 			return prettyValue{kind: prettyLines, lines: lines}
 		case elem.Kind() == reflect.Struct:
-			return prettyListOf(v)
+			return prettyListOf(v, f.root)
 		case elem.Kind() == reflect.Slice:
 			var rows [][]prettyCell
 			for i := range v.Len() {
 				var row []prettyCell
-				for j := range v.Index(i).Len() {
-					row = append(row, scalarCell(f, indirect(v.Index(i).Index(j))))
+				rv := indirect(v.Index(i))
+				for j := range rv.Len() {
+					c := indirect(rv.Index(j))
+					switch {
+					case !c.IsValid():
+						row = append(row, noneCell) // a null
+					case isScalar(c.Type()):
+						row = append(row, firstLine(scalarCell(f, c)))
+					default: // a list or a map in a cell: as its JSON
+						b, _ := jsonkit.Marshal(c.Interface())
+						row = append(row, prettyCell{{text: cliui.SafeText(string(b))}})
+					}
 				}
 				rows = append(rows, row)
 			}
-			return prettyValue{kind: prettyRows, rows: rows}
+			return prettyValue{kind: prettyRows, rows: rows, labels: pathStrings(f.root, f.labels)}
 		}
 	}
 	return prettyValue{kind: prettyText, cell: prettyCell{{text: fmt.Sprint(v.Interface())}}}
 }
 
+// decodedJSON is v, when it's raw JSON (a jsontext.Value, a canal-query row),
+// as the value it holds: laid out as that value would be. A list of raw JSON
+// values is a list of the values they hold.
+func decodedJSON(v reflect.Value) reflect.Value {
+	if !v.IsValid() {
+		return v
+	}
+	t := v.Type()
+	switch {
+	case isRawJSON(t):
+		var x any
+		if jsonkit.Unmarshal(v.Bytes(), &x) != nil {
+			return v
+		}
+		return reflect.ValueOf(&x).Elem()
+	case t.Kind() == reflect.Slice && isRawJSON(t.Elem()):
+		out := make([]any, v.Len())
+		for i := range v.Len() {
+			if d := indirect(decodedJSON(v.Index(i))); d.IsValid() {
+				out[i] = d.Interface()
+			}
+		}
+		return reflect.ValueOf(out)
+	}
+	return v
+}
+
+// isRawJSON reports whether t is raw JSON: bytes, which encoding/json would
+// otherwise write as base64, a result never holds.
+func isRawJSON(t reflect.Type) bool {
+	return t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8
+}
+
+// shapeOf is the type of list v's elements, or, for a list of anything (as
+// JSON decodes), the type its elements share: a list, when every one is.
+func shapeOf(v reflect.Value) reflect.Type {
+	elem := deref(v.Type().Elem())
+	if elem.Kind() != reflect.Interface || v.Len() == 0 {
+		return elem
+	}
+	var shared reflect.Type
+	for i := range v.Len() {
+		e := indirect(v.Index(i))
+		if !e.IsValid() {
+			continue
+		}
+		t := e.Type()
+		if t.Kind() == reflect.Slice {
+			t = reflect.TypeFor[[]any]()
+		}
+		if shared != nil && shared != t {
+			return elem
+		}
+		shared = t
+	}
+	if shared == nil {
+		return elem
+	}
+	return shared
+}
+
+// pathStrings is the strings at path in root, dot-separated JSON names
+// through objects and lists (columns.label: each column's label); none when
+// path is "" or leads nowhere.
+func pathStrings(root reflect.Value, path string) []string {
+	if path == "" {
+		return nil
+	}
+	vals := []reflect.Value{indirect(root)}
+	for name := range strings.SplitSeq(path, ".") {
+		var next []reflect.Value
+		for _, v := range vals {
+			if v.Kind() == reflect.Slice {
+				for i := range v.Len() {
+					next = append(next, indirect(fieldNamed(indirect(v.Index(i)), name)))
+				}
+			} else {
+				next = append(next, indirect(fieldNamed(v, name)))
+			}
+		}
+		vals = next
+	}
+	var out []string
+	for _, v := range vals {
+		switch {
+		case !v.IsValid():
+		case v.Kind() == reflect.Slice:
+			for i := range v.Len() {
+				out = append(out, fmt.Sprint(indirect(v.Index(i)).Interface()))
+			}
+		default:
+			out = append(out, fmt.Sprint(v.Interface()))
+		}
+	}
+	return out
+}
+
+// fieldNamed is struct v's field whose JSON name is name, embedded ones
+// searched too; invalid when there's none.
+func fieldNamed(v reflect.Value, name string) reflect.Value {
+	if !v.IsValid() || v.Kind() != reflect.Struct {
+		return reflect.Value{}
+	}
+	t := v.Type()
+	for i := range t.NumField() {
+		sf := t.Field(i)
+		n, _, _ := strings.Cut(sf.Tag.Get("json"), ",")
+		if n == name || n == "" && sf.Name == name {
+			return v.Field(i)
+		}
+		if sf.Anonymous && n == "" {
+			if fv := fieldNamed(indirect(v.Field(i)), name); fv.IsValid() {
+				return fv
+			}
+		}
+	}
+	return reflect.Value{}
+}
+
 // prettyListOf is a list of objects: always as blocks, and as a table too
 // when every column's value fits in a cell.
-func prettyListOf(v reflect.Value) prettyValue {
+func prettyListOf(v, root reflect.Value) prettyValue {
 	out := prettyValue{kind: prettyList}
 	tabular := true
 	table := &prettyTable{truncate: -1}
 	for i := range v.Len() {
-		fields := prettyFields(indirect(v.Index(i)))
+		fields := prettyFields(indirect(v.Index(i)), root)
 		var row []prettyCell
 		for col, f := range fields {
 			if i == 0 {
@@ -325,7 +481,7 @@ func cellOf(f prettyField) (prettyCell, bool) {
 // scalarsOf is object v's values as cells, if they're all scalars.
 func scalarsOf(v reflect.Value) []prettyCell {
 	var cells []prettyCell
-	for _, f := range prettyFields(v) {
+	for _, f := range prettyFields(v, reflect.Value{}) {
 		fv := indirect(f.value)
 		if fv.IsValid() && !isScalar(fv.Type()) {
 			return nil
@@ -602,7 +758,7 @@ func (r prettyRenderer) doc(d prettyDoc) string {
 		if len(d.body) > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString("Hints:\n") // a section standing apart, as its siblings
+		b.WriteString(r.styles.Key.Render("Hints:") + "\n") // a key, as its siblings
 		for _, h := range d.hints {
 			b.WriteString("  " + r.inline(h) + "\n")
 		}
@@ -615,10 +771,9 @@ func (r prettyRenderer) doc(d prettyDoc) string {
 // lines, as gofmt aligns a struct literal's fields: a nested section ends the
 // run. At the top, a blank line sets apart what has rows (a table, a list of
 // blocks, a text block); a section of key/values stays with its neighbours.
-// A section's label is plain where the section stands apart, a blank line (or
-// the document's edge) before and after it, as a heading; elsewhere faint, as
-// its siblings' labels are, the indentation showing what it holds. Bold is the
-// message's alone.
+// Every label is a key, bright blue as YAML's are, a section's as a value's:
+// siblings alike, the indentation and the blank lines showing what a section
+// holds. Bold is the message's alone.
 func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, indent int, top bool) {
 	labelWidths := runLabelWidths(entries)
 	pad := strings.Repeat(" ", indent)
@@ -631,16 +786,13 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 		}
 		labelWidth := labelWidths[i]
 		label := e.label + ":"
-		heading := r.styles.Muted.Render(label)
-		if top && apart(i) && apart(i+1) {
-			heading = label
-		}
+		heading := r.styles.Key.Render(label)
 		switch e.value.kind {
 		case prettyText:
-			b.WriteString(pad + r.styles.Muted.Render(label) + spaces(labelWidth-ansi.StringWidth(label)+2) + r.cell(e.value.cell) + "\n")
+			b.WriteString(pad + heading + spaces(labelWidth-ansi.StringWidth(label)+2) + r.cell(e.value.cell) + "\n")
 		case prettyLines:
 			for j, l := range e.value.lines {
-				head := r.styles.Muted.Render(label) + spaces(labelWidth-ansi.StringWidth(label)+2)
+				head := heading + spaces(labelWidth-ansi.StringWidth(label)+2)
 				if j > 0 {
 					head = spaces(labelWidth + 2)
 				}
@@ -669,7 +821,7 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 			}
 		case prettyRows:
 			b.WriteString(pad + heading + "\n")
-			r.table(b, &prettyTable{rows: e.value.rows, truncate: -1}, indent+2)
+			r.grid(b, e.value.rows, e.value.labels, indent+2)
 		}
 	}
 }
@@ -737,8 +889,10 @@ func columnWidths(t *prettyTable) []int {
 	return widths
 }
 
-// table draws t at indent: columns 3 spaces apart, its header in bold, its
-// truncatable column cut to the terminal's width.
+// table draws t at indent: columns 3 spaces apart, its header faint, a
+// column
+// of numbers right-aligned, its truncatable column cut to the terminal's
+// width. A listing's table: rows of data are a grid.
 func (r prettyRenderer) table(b *strings.Builder, t *prettyTable, indent int) {
 	widths := columnWidths(t)
 	if r.width > 0 && t.truncate >= 0 {
@@ -751,10 +905,14 @@ func (r prettyRenderer) table(b *strings.Builder, t *prettyTable, indent int) {
 		}
 	}
 	pad := strings.Repeat(" ", indent)
+	numeric := numericColumns(t.rows)
 	line := func(cells []string, plainWidths []int) {
 		var parts []string
 		for i, c := range cells {
-			if i < len(cells)-1 {
+			switch {
+			case numeric[i]:
+				c = spaces(widths[i]-plainWidths[i]) + c
+			case i < len(cells)-1:
 				c += spaces(widths[i] - plainWidths[i])
 			}
 			parts = append(parts, c)
@@ -765,7 +923,7 @@ func (r prettyRenderer) table(b *strings.Builder, t *prettyTable, indent int) {
 		cells := make([]string, len(t.header))
 		ws := make([]int, len(t.header))
 		for i, h := range t.header {
-			cells[i], ws[i] = r.styles.Muted.Render(h), ansi.StringWidth(h)
+			cells[i], ws[i] = r.styles.Muted.Render(h), ansi.StringWidth(h) // uppercase marks a header already
 		}
 		line(cells, ws)
 	}
@@ -779,6 +937,123 @@ func (r prettyRenderer) table(b *strings.Builder, t *prettyTable, indent int) {
 			cells[i], ws[i] = r.cell(c), c.width()
 		}
 		line(cells, ws)
+	}
+}
+
+// numericColumns reports, for each column of rows, whether every value in it
+// is a number, <none> aside: right-aligned, as numbers are read.
+func numericColumns(rows [][]prettyCell) []bool {
+	n := 0
+	for _, row := range rows {
+		n = max(n, len(row))
+	}
+	numeric := make([]bool, n)
+	for i := range numeric {
+		any := false
+		numeric[i] = true
+		for _, row := range rows {
+			if i >= len(row) || row[i].plain() == noneCell.plain() {
+				continue
+			}
+			if _, err := strconv.ParseFloat(row[i].plain(), 64); err != nil {
+				numeric[i] = false
+				break
+			}
+			any = true
+		}
+		numeric[i] = numeric[i] && any
+	}
+	return numeric
+}
+
+// grid draws rows, data, at indent: a bordered grid, as psql and duckdb draw
+// one, since a value may hold spaces or be empty, and only a border says where
+// a cell ends; its values' labels, when a hint gives them, as its header,
+// faint; numbers right-aligned. Wider than the terminal, it's one block per
+// row instead, a label and a value a line, as psql's expanded mode. Without a
+// UTF-8 terminal, in ASCII.
+func (r prettyRenderer) grid(b *strings.Builder, rows [][]prettyCell, labels []string, indent int) {
+	t := &prettyTable{header: labels, rows: rows, truncate: -1}
+	widths := columnWidths(t)
+	total := indent + 1
+	for _, w := range widths {
+		total += w + 3
+	}
+	pad := strings.Repeat(" ", indent)
+	if r.width > 0 && total > r.width {
+		r.rowBlocks(b, rows, labels, pad)
+		return
+	}
+	h, v, tl, tm, tr, ml, mm, mr, bl, bm, br := "─", "│", "┌", "┬", "┐", "├", "┼", "┤", "└", "┴", "┘"
+	if !utf8Terminal() {
+		h, v, tl, tm, tr, ml, mm, mr, bl, bm, br = "-", "|", "+", "+", "+", "+", "+", "+", "+", "+", "+"
+	}
+	border := func(left, mid, right string) {
+		var parts []string
+		for _, w := range widths {
+			parts = append(parts, strings.Repeat(h, w+2))
+		}
+		b.WriteString(pad + r.styles.Muted.Render(left+strings.Join(parts, mid)+right) + "\n")
+	}
+	numeric := numericColumns(rows)
+	line := func(cells []prettyCell, header bool) {
+		b.WriteString(pad + r.styles.Muted.Render(v))
+		for i, w := range widths {
+			c := prettyCell{}
+			if i < len(cells) {
+				c = cells[i]
+			}
+			text := r.cell(c)
+			if header { // faint, as a listing's header is: the columns' names, not a value
+				text = r.styles.Muted.Render(c.plain())
+			}
+			gap := spaces(w - c.width())
+			if numeric[i] && !header {
+				text = gap + text
+			} else {
+				text += gap
+			}
+			b.WriteString(" " + text + " " + r.styles.Muted.Render(v))
+		}
+		b.WriteString("\n")
+	}
+	border(tl, tm, tr)
+	if len(labels) > 0 {
+		head := make([]prettyCell, len(labels))
+		for i, l := range labels {
+			head[i] = prettyCell{{text: cliui.SafeText(l)}}
+		}
+		line(head, true)
+		border(ml, mm, mr)
+	}
+	for _, row := range rows {
+		line(row, false)
+	}
+	border(bl, bm, br)
+}
+
+// rowBlocks draws rows one block a row, as psql's expanded mode: a faint
+// "-[ ROW n ]-" line, then each value under its label, labels faint, numbered
+// when no hint gives them.
+func (r prettyRenderer) rowBlocks(b *strings.Builder, rows [][]prettyCell, labels []string, pad string) {
+	width := 0
+	label := func(i int) string {
+		if i < len(labels) {
+			return cliui.SafeText(labels[i])
+		}
+		return strconv.Itoa(i + 1)
+	}
+	for _, row := range rows {
+		for i := range row {
+			width = max(width, ansi.StringWidth(label(i)))
+		}
+	}
+	for n, row := range rows {
+		b.WriteString(pad + r.styles.Muted.Render(fmt.Sprintf("-[ ROW %d ]-", n+1)) + "\n")
+		for i, c := range row {
+			l := label(i)
+			b.WriteString(pad + r.styles.Muted.Render(l) + spaces(width-ansi.StringWidth(l)+3) + r.cell(c) + "\n")
+		}
 	}
 }
 

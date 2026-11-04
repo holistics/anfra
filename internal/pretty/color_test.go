@@ -120,8 +120,8 @@ func render(s lipgloss.Style, text string) string {
 	return before + text + after
 }
 
-// A section's label is plain where the section stands apart, as a heading, and
-// faint among its siblings, as theirs are; bold is the message's alone.
+// Every label is a key, blue as YAML's are, a value's and a section's alike;
+// a table's header faint; bold is the message's alone.
 func TestSectionLabels(t *testing.T) {
 	type versions struct {
 		Version string `json:"version"`
@@ -129,9 +129,6 @@ func TestSectionLabels(t *testing.T) {
 	type copyOf struct {
 		Status   string     `json:"status"`
 		Versions []versions `json:"versions"`
-		Update   struct {
-			Latest string `json:"latest"`
-		} `json:"update"`
 	}
 	type result struct {
 		Message string `json:"message"`
@@ -140,15 +137,19 @@ func TestSectionLabels(t *testing.T) {
 			Latest string `json:"latest"`
 		} `json:"update"`
 		Copies []copyOf `json:"copies"`
+		Hints  []string `json:"hints"`
 	}
-	v := result{Message: "Done.", Version: "0.17.0", Copies: []copyOf{{Status: "mixed", Versions: []versions{{"0.4.4"}}}}}
+	v := result{Message: "Done.", Version: "0.17.0", Copies: []copyOf{{Status: "mixed", Versions: []versions{{"0.4.4"}}}}, Hints: []string{"Run it."}}
 	r := prettyRenderer{styles: testStyles}
 	got := r.doc(buildPrettyDoc(reflect.ValueOf(v)))
 	for _, want := range []string{
 		render(testStyles.Heading, "Done."),
-		render(testStyles.Muted, "Version:"),
-		render(testStyles.Muted, "Update:"), // beside Version, no blank line between: a sibling
-		"\nCopies:\n",                       // its rows set it apart: a heading, plain
+		render(testStyles.Key, "Version:"),
+		render(testStyles.Key, "Update:"),
+		render(testStyles.Key, "Latest:"),
+		render(testStyles.Key, "Copies:"),
+		render(testStyles.Muted, "STATUS"), // a header faint, not a key's blue
+		render(testStyles.Key, "Hints:"),
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)

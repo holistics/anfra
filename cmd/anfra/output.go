@@ -26,6 +26,7 @@ import (
 // is run's option, not a flag: a console's run is a person's, so it colors
 // YAML and JSON at a terminal, and indents JSON (docs/designs/console.md).
 var output struct {
+	pretty         bool
 	yaml           bool
 	json           bool
 	schema         bool
@@ -87,14 +88,23 @@ const (
 	// otherwise. A command that adds a question marks itself: nothing finds
 	// them.
 	interactable = "anfra.interactable"
+	// prettyView marks a command whose result has a pretty view, reviewed
+	// (docs/designs/cli-pretty.md#where-it-stands): it takes --pretty, and a
+	// console shows it so by default. Every CLI-only command's; a core
+	// command's when it's in prettyViews.
+	prettyView = "anfra.pretty-view"
 )
+
+// prettyViews are the core commands whose results have a pretty view: one
+// at a time, each once its view clears the bar (docs/designs/cli-pretty.md).
+var prettyViews = map[string]bool{"query": true}
 
 // The default formats.
 const (
 	formatYAML = "yaml"
 	// formatPretty: the pretty format, laid out for a person
-	// (docs/designs/cli-pretty.md): by the prettifier, or by a command's own
-	// code until the prettifier covers it. It has no flag yet.
+	// (docs/designs/cli-pretty.md), by the prettifier; --pretty on a command
+	// with a pretty view.
 	formatPretty = "pretty"
 )
 
@@ -125,6 +135,14 @@ func markStructuredOutput(cmd *cobra.Command) {
 func markPrettyOutput(cmd *cobra.Command) {
 	annotate(cmd, outputKind, outputStructured)
 	annotate(cmd, defaultFormat, formatPretty)
+	annotate(cmd, prettyView, "true")
+}
+
+// wantsPretty reports whether a run of a command with a pretty view, or not
+// (hasView), writes it: asked with --pretty, or by default in a console,
+// unless the run asks for YAML or JSON.
+func wantsPretty(hasView bool) bool {
+	return hasView && (output.pretty || output.inConsole && !structuredAsked())
 }
 
 // markArtifactOutput marks cmd and the commands under it as writing writes,
@@ -154,6 +172,7 @@ const (
 func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	pf := root.PersistentFlags()
 	jqCode = nil // a tree starts without --jq, as its flags start at their defaults
+	pf.BoolVar(&output.pretty, "pretty", false, "write the answer in the pretty format, laid out for a person: a command with a pretty view")
 	pf.BoolVar(&output.yaml, "yaml", false, "write the answer as YAML, whatever the command's default")
 	pf.BoolVar(&output.json, "json", false, "write the answer, warnings and errors as JSON")
 	pf.StringVar(&output.jq, "jq", "", "filter the answer with a jq expression, writing what it gives as YAML, or JSON with --json")
@@ -198,6 +217,17 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 		if output.schema && cmd.Annotations[outputKind] == outputArtifact {
 			return formatRefused("--schema", cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", which has no schema")
 		}
+		if output.pretty {
+			switch {
+			case output.yaml || output.json || output.jq != "":
+				return formatRefused("--pretty", "pass one format: --pretty, --yaml or --json")
+			case cmd.Annotations[outputKind] == outputArtifact:
+				return formatRefused("--pretty", cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", not a result")
+			case cmd.Annotations[prettyView] == "":
+				return formatRefused("--pretty", cmd.CommandPath()+" has no pretty view yet")
+			}
+			return nil
+		}
 		flag := "--json"
 		switch {
 		case output.yaml && output.json:
@@ -234,9 +264,12 @@ func describeOutput(cmd *cobra.Command) {
 	case outputArtifact:
 		rows = [][2]string{{cmd.Annotations[artifactDesc], ""}}
 	default:
-		if cmd.Annotations[defaultFormat] == formatPretty {
+		switch {
+		case cmd.Annotations[defaultFormat] == formatPretty:
 			rows = [][2]string{{"default", "the pretty format"}, {"--yaml", "a YAML document"}}
-		} else {
+		case cmd.Annotations[prettyView] != "":
+			rows = [][2]string{{"default", "a YAML document"}, {"--pretty", "the pretty format, the console's default"}}
+		default:
 			rows = [][2]string{{"default", "a YAML document"}}
 		}
 		rows = append(rows, [2]string{"--json", "a JSON document"}, [2]string{"--schema", "its input and output, as JSON Schema"})
