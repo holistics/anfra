@@ -1,3 +1,101 @@
+## [0.17.0](https://github.com/holistics/anfra/compare/v0.16.0...v0.17.0) (2026-11-04)
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** QueryError, PermissionError and TransportError are
+gone. Branch on err.code and err.scope instead of err.name:
+PermissionError is code forbidden or unauthenticated, TransportError
+is scope server, QueryError is query_invalid or query_failed.
+ValidationError stays for declarations, with code
+declaration_invalid. A plugin refuses a malformed call with
+invalidRequest() rather than ValidationError.
+* **cli:** include repo info in anfra status
+
+### Features
+
+* add --schema flag and revamp check to subcommands ([afa0b65](https://github.com/holistics/anfra/commit/afa0b652be6669bd5655112ac02f081870ba2f96))
+* **appserve:** draw the sidebar and header as anfra Cloud does ([101dd83](https://github.com/holistics/anfra/commit/101dd83ba2b6da2558dee09bb1d3d8d1b3b35a0c))
+* **appserve:** install the view-underlying-data plugin ([42e2ed9](https://github.com/holistics/anfra/commit/42e2ed9a82f5d037208e5d6fd8b260b7bc30f841))
+* **appserve:** search apps and commands in a command dialog ([9594c18](https://github.com/holistics/anfra/commit/9594c18875f478f708d2fc2b0d43c16ea601d5a7))
+* **appserve:** set up tailwind and shadcn-vue ([45ecf15](https://github.com/holistics/anfra/commit/45ecf1560933f9a8c273d737afa3167baf01f1e7))
+* **appserve:** show the anfra logomark, as anfra Cloud does ([d90e593](https://github.com/holistics/anfra/commit/d90e5932a4646cea7befff305dabd8daf09e9629))
+* **cli:** built-in jq ([108dfb8](https://github.com/holistics/anfra/commit/108dfb8425c4d5d88db8e5f8dbc66ca739170d27))
+* **cli:** formalize CLI error codes ([a4dfe8f](https://github.com/holistics/anfra/commit/a4dfe8f87e9ed256e466087dc1a6f4fcb60b454b))
+* **cli:** include repo info in anfra status ([56b147d](https://github.com/holistics/anfra/commit/56b147deeb8cf8867d50990524fe0ee29baddf0e))
+* **cli:** pretty and structured output for anfra update ([bc84320](https://github.com/holistics/anfra/commit/bc84320a4225ed843e872526e825c6ad18393b22))
+* **cli:** publish --list to leave room for publish --check later on ([e7aa866](https://github.com/holistics/anfra/commit/e7aa86681b2ad6f48e2ca9859cbe576fa509e2af))
+* **cli:** structured output for agent setup ([69c480e](https://github.com/holistics/anfra/commit/69c480ef27ddba4bcc522e426eeaf86e367765af))
+* **cli:** structured output for auth ([8ffd3dc](https://github.com/holistics/anfra/commit/8ffd3dce94cd708eb0e2c49ce6453657630292ea))
+* **cli:** structured output for init ([87509d6](https://github.com/holistics/anfra/commit/87509d6ae6f0498cc240d16557212c3d92e1b5c3))
+* **cli:** structured output for publish ([98cc6d1](https://github.com/holistics/anfra/commit/98cc6d13de40ca18e53ae14619febec39b3ed9da))
+* **cli:** support json output format for commands ([9cc0695](https://github.com/holistics/anfra/commit/9cc06955fe9ac4dfeef11e64d6f29fd2120f874b))
+* **design:** add a small tab list, with a 2px track ([bd6dee4](https://github.com/holistics/anfra/commit/bd6dee4836d34d54f3127444a394e9ba4592d62b))
+* **design:** add the class layer and lucide icons for core ([61ed549](https://github.com/holistics/anfra/commit/61ed549d506fe6b93f5d1eebe380f23dec61780f))
+* **design:** add the kbd group, and the shortcut and casing rules ([ebfd813](https://github.com/holistics/anfra/commit/ebfd81304f4072599d3ad1e8a7aa1ed246e67708))
+* **design:** draw an app as Cloud does, and add the open folder ([5bb4774](https://github.com/holistics/anfra/commit/5bb4774bb51011aeeaf966cc19208c7cb3483cee))
+* **design:** edge inputs as buttons, and menus with a ring shadow ([6907169](https://github.com/holistics/anfra/commit/69071699ec5eb722afed932f2854fcce22b6079d))
+* **design:** give controls under 32px the md corner ([ecc8581](https://github.com/holistics/anfra/commit/ecc8581c19697a1413552e03509cc2f22c09e640))
+* more version mismatch warnings ([74d39a8](https://github.com/holistics/anfra/commit/74d39a87e936d03ec341aa8e5c795e4aa7118768))
+* revamp log msg to event for anfra-node ([e6b7212](https://github.com/holistics/anfra/commit/e6b721204138d28fe6f555135184c06e2d9bae09))
+* **sdk.common:** log an error the bridge hides where it was raised ([c5dad57](https://github.com/holistics/anfra/commit/c5dad578f8da89940103e1393a0981fc536235a1))
+* **sdk:** add the view-underlying-data plugin, a point's rows in a modal ([4e2a246](https://github.com/holistics/anfra/commit/4e2a2461c41216429af817af7fbdd3596d4c2483))
+* **sdk:** carry a failed request's id on the SDK's errors ([59f250c](https://github.com/holistics/anfra/commit/59f250c70cbda191f35a8c662ad1d1e3664e4892))
+* **sdk:** draw plugin tabs with anfra's class layer and lucide icons ([ac4129c](https://github.com/holistics/anfra/commit/ac4129c4d976d47bd0474f3b7b0ece3d1c12cede))
+* **sdk:** drop the measure column from underlying data, and title it by the point's value ([4843668](https://github.com/holistics/anfra/commit/48436685eb40ccd83e973a5b70bf31ffcfe0c699))
+* **sdk:** give a Data App's errors the API's shape ([3988fd6](https://github.com/holistics/anfra/commit/3988fd655ec834292b7d355d6cf75235c2cf80d1))
+* **sdk:** name a point's measure in query.menu, and give plugins a query's request ([a634edb](https://github.com/holistics/anfra/commit/a634edb9504f7d3e0aca3fe77e69bcb94b8acc83))
+* **sdk:** show the point's value in the underlying data's title ([b4ac707](https://github.com/holistics/anfra/commit/b4ac707211488da4f8360b3b17395a95cd68363b))
+* **shared:** make httpkit.Serve drain configurable ([7dd7206](https://github.com/holistics/anfra/commit/7dd7206f17108f29eff5821717d123e5dcaa4684))
+* **shared:** when otel exporter is disabled, still generate local traces ([53fa5aa](https://github.com/holistics/anfra/commit/53fa5aa6ed093f875ec7e910919dc6d4b2f441da))
+* **skills:** minor updates ([2b096ca](https://github.com/holistics/anfra/commit/2b096cab76c952b8a778ffbae9c3d88d17ac0173))
+* **skills:** name a relationship in with_relationships ([64c884f](https://github.com/holistics/anfra/commit/64c884f570dda064ff927b4270a7378795683505))
+* **skills:** name the point's measure in query.menu ([4100913](https://github.com/holistics/anfra/commit/41009133a928917fd129f19c7c52e8eee2058e16))
+* **skills:** read a filter's value, guard late libraries, find server errors ([0cc1220](https://github.com/holistics/anfra/commit/0cc1220fb1b95b6462a51ec99f3f434c0627bc18))
+* **skills:** say what requestId and a throwing subscribe() listener do ([03af9b2](https://github.com/holistics/anfra/commit/03af9b2322d5dc2480b4dfa9e32988408554c3c0))
+* **skills:** teach a Data App's errors by code and scope ([92a98b9](https://github.com/holistics/anfra/commit/92a98b99268d8d31f54d486e3b71a56fdb9f5f9c))
+* turn log `msg` into `event`, leaving `msg` for readable messages ([4585e02](https://github.com/holistics/anfra/commit/4585e02d81f846d9cd5f9c15e08e14dccdbc3776))
+
+### Bug Fixes
+
+* **appserve:** colour the logomark from a design token ([f1a0f94](https://github.com/holistics/anfra/commit/f1a0f94e743d754ff951d800ac62cd17d018fd0e))
+* **appserve:** let an open menu take escape, and leave the panel open ([a40e13d](https://github.com/holistics/anfra/commit/a40e13d672fba43ae150b7114fa4832d88db3882))
+* **design:** give a tab list in a well the pressed layer for its track ([53198c6](https://github.com/holistics/anfra/commit/53198c68b386c3ae527b18bf3f9047d5c56f5192))
+* **design:** give a wrapping field its input's read-only and disabled looks ([eb3376f](https://github.com/holistics/anfra/commit/eb3376f035e0f8a8458b6f27e955f21b92dd749f))
+* **design:** give dark mode its own fills, lighter than their ground ([a8d4341](https://github.com/holistics/anfra/commit/a8d43414f4a2a55e61b5bd4926bb6e206f8adf29))
+* **design:** keep a tab's corner concentric with its list's ([c56e68a](https://github.com/holistics/anfra/commit/c56e68a99b7e2306084561e3eb2e0ed5b6ce34e2))
+* **design:** make a badge holding one icon square ([2e5198a](https://github.com/holistics/anfra/commit/2e5198a346625d66645eb2590b3a8860278a1dc9))
+* **design:** make every nested corner concentric, and even the tab track ([3311bb2](https://github.com/holistics/anfra/commit/3311bb29e3dffb9ac17417312047e0586d926092))
+* **design:** pick Cloud's icons for pick, inspect and a table ([880e500](https://github.com/holistics/anfra/commit/880e500e83b0743db7baf57b7dbbca1655e48ac3))
+* **design:** size a button and a tab by their border box, and disable a tab by aria too ([c6cd07e](https://github.com/holistics/anfra/commit/c6cd07e1230db91807dc7cea736a9b19e0907a04))
+* **engine.query:** run queries in UTC or GMT ([88d29a1](https://github.com/holistics/anfra/commit/88d29a1d67bb820c977ed81fbd2c84d2fcf89655))
+* **sdk.api:** fail a stream line that is not an event as a transport error ([e2cc170](https://github.com/holistics/anfra/commit/e2cc1702ee3b46ebb6cffbfebc04052a3016c086))
+* **sdk.app:** keep a throwing subscribe() listener out of the queries ([846c382](https://github.com/holistics/anfra/commit/846c38284cbc820ffc4620b34ee9a9fe2ac5f27a))
+* **sdk.app:** log a query's error the app is not shown ([ed0d8af](https://github.com/holistics/anfra/commit/ed0d8af4ddde711e0d0d3ca75410d462e74397ac))
+* **sdk.common:** recognise the SDK's errors by one check, a subclass's and another copy's too ([161f0cc](https://github.com/holistics/anfra/commit/161f0ccec194ffb0e3a92cdadcfa2fc66826a0cf))
+* **sdk:** give the tabs' tooltip their colours ([3ce6be5](https://github.com/holistics/anfra/commit/3ce6be57e2cd6873065dcc5ba87d57aa22c46692))
+* **sdk:** hide load more once every row is in, and say so ([7b1d398](https://github.com/holistics/anfra/commit/7b1d3983475bee128dd4fa1016c216ab7115f433))
+* **sdk:** keep a host's failure to save a rendering as it is ([b1cb3bf](https://github.com/holistics/anfra/commit/b1cb3bfcb27c93c9c382e883eee6fe0f118d4928))
+* **sdk:** keep a query's own declarations in its underlying data ([c63d156](https://github.com/holistics/anfra/commit/c63d1563c965fe9ac929617b7792d8a8c73d9950))
+* **sdk:** keep a query's own filters in its underlying data ([0a75c3c](https://github.com/holistics/anfra/commit/0a75c3c1e84e98136f7076291373f0235ac30190))
+* **sdk:** name the kernel's request call queryRequest ([af92d88](https://github.com/holistics/anfra/commit/af92d884cebc5addc5b99462c485339e8fbeb51c))
+* **sdk:** offer to try again when underlying data fails to load ([ea3c57f](https://github.com/holistics/anfra/commit/ea3c57f16894d36ddbd8f59d15db4097d801d745))
+* **sdk:** send a point's condition on a query-declared field as AQL ([ba1a013](https://github.com/holistics/anfra/commit/ba1a0136b3a0eda402b1784a90f9c9738d14e894))
+* **sdk:** sort underlying rows by every dimension, so pages don't repeat ([8538dfa](https://github.com/holistics/anfra/commit/8538dfae283b61ed3bbab94f113b275e9f6714e2))
+* **sdk:** warn of every dimension a point has no condition on ([b844cad](https://github.com/holistics/anfra/commit/b844cadb891f85ab98c29c8d4d014b42eeb8b3d0))
+* **sdk:** wrap a long cross-link, and keep a section's count on one line ([34e7d23](https://github.com/holistics/anfra/commit/34e7d23a479ae92c447c02fdd9c177eec2bc73f8))
+* **skills:** clarify wording in the feedback corrections ([9caa1c8](https://github.com/holistics/anfra/commit/9caa1c87c3d0cb64555e4f6d19efc737a09ff58e))
+* **skills:** find anfra serve's log with anfra status ([6f5b4ca](https://github.com/holistics/anfra/commit/6f5b4caa548c8ba622853bcd398d69a139cdfb02))
+* **skills:** fix knowledge and examples for filters on aliases ([c34cfcf](https://github.com/holistics/anfra/commit/c34cfcfa4edb19344328ad00576b3529bb074783))
+* **skills:** say an inactive relationship is off, not optional ([ef4e55f](https://github.com/holistics/anfra/commit/ef4e55f5edb0e2c0848382d887eef50de8b847dd))
+
+### Build
+
+* **deps:** keep one lightningcss, the version vite already brings ([ea8a68e](https://github.com/holistics/anfra/commit/ea8a68e731cfbbf30fafc5e3c607a759040fbd25))
+
+### Security
+
+* bump fast-uri to 3.1.9, drop its stale override (W45) ([80c41f3](https://github.com/holistics/anfra/commit/80c41f3747326841a1a3b06a3bef949d0be36a49))
+* bump Go to 1.27.3 for the eMudhra CA compromise (DSO-1415) ([7538f45](https://github.com/holistics/anfra/commit/7538f4564b42ffaab10d050cbcf23a26d8db8fa6))
 ## [0.16.0](https://github.com/holistics/anfra/compare/v0.15.1...v0.16.0) (2026-10-30)
 
 ### Features
