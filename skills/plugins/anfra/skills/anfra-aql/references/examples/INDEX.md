@@ -10,14 +10,14 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 | --- | --- | --- | --- | --- | --- |
 | 1 | good | Per-city average user count of each country | nested_aggregation | nested_aggregation |  |
 | 2 | good | List 10 latest products | simple_listing | limit_sort |  |
-| 3 | good | Top 10 products by price | top_n, data_type_mismatch | fn:rank, fn:cast |  |
-| 4 | good | Top 10 countries by user count | top_n | fn:rank |  |
+| 3 | good | Top 10 products by price | top_n, data_type_mismatch | fn:rank, fn:cast, explore_having |  |
+| 4 | good | Top 10 countries by user count | top_n | fn:rank, explore_having |  |
 | 5 | good | Top 10 products with highest order count in last quarter, compare their order count in the same quarter of 3 previous years | top_n, period_compare | fn:relative_period, limit_sort |  |
 | 6 | good | Top 10 products (dense ranking) with highest order count in last quarter, compare their order count in the same quarter of 3 previous years | top_n, period_compare | fn:top, fn:relative_period, fn:where, filter_by_subset, subset_as_table_metric |  |
 | 7 | good | Top 10 products (dense ranking) with highest order count in last quarter, compare their order count in the same quarter of 3 previous years. Display product names and order counts | top_n, period_compare | fn:top, fn:relative_period, fn:where, filter_by_subset, subset_as_table_metric |  |
 | 8 | good | List 10 latest products with at least 20 orders | filter_on_aggregate | dimensionalize_metric, limit_sort, explore_filters |  |
 | 9 | good | Count of orders made on Thursdays (assuming week-start-day is Sunday) | date_part_filter | fn:date_part |  |
-| 10 | good | Order count percentage of each product over total order count. Keep those whose percentage > 1% | ratio_percentage, filter_on_aggregate | fn:keep_grains, explore_filters |  |
+| 10 | good | Order count percentage of each product over total order count. Keep those whose percentage > 1% | ratio_percentage, filter_on_aggregate | fn:keep_grains, explore_having |  |
 | 11 | good | Order count percentage of each product over total order count. Use exclude_grains | ratio_percentage | fn:exclude_grains |  |
 | 12 | good | List users together with their order count, their city's order count, their country's order count | simple_listing | dimensionalize_metric, use_existing_measure |  |
 | 13 | good | Average age of users |  | fn:date_diff |  |
@@ -46,12 +46,12 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 | 36 | good | Among the users in London, who are the top 10 users with most orders? | top_n_filtered | subset_as_table_metric, subset_by_row_filter, fn:rank, explore_filters |  |
 | 37 | good | Among the users in London, who are the top 10 users with most orders? | top_n_filtered | subset_by_row_filter, subset_by_aggregate_filter, filter_by_subset, fn:rank, use_existing_measure, explore_filters |  |
 | 38 | good | Among the products whose price are greater than 100, which are the top 4 products with the highest prices? | top_n_filtered | fn:rank, subset_by_row_filter, explore_filters |  |
-| 39 | good | List users who have made more than 100 orders of products whose price is greater than 10 | filter_on_aggregate | fn:where, use_existing_measure, explore_filters |  |
-| 40 | good | List users who have made more than 100 orders of products whose price is greater than 10 | filter_on_aggregate | fn:where, explore_filters |  |
+| 39 | good | List users who have made more than 100 orders of products whose price is greater than 10 | filter_on_aggregate | fn:where, use_existing_measure, explore_having |  |
+| 40 | good | List users who have made more than 100 orders of products whose price is greater than 10 | filter_on_aggregate | fn:where, explore_having |  |
 | 41 | good | Top 3 countries with most users created last month | top_n_filtered | fn:where, fn:rank, explore_filters |  |
 | 42 | good | List the cities whose country has more than 100 user signed up last month. | filter_on_aggregate | fn:where, subset_by_aggregate_filter, subset_as_table_metric, filter_by_subset, explore_filters |  |
 | 43 | good | List the countries that have at least 1 city with more than 100 users. | filter_on_aggregate | subset_by_aggregate_filter, subset_as_table_metric, filter_by_subset, explore_filters |  |
-| 44 | good | List the most expensive product bought in each city | top_n_per_group | fn:rank, explore_filters |  |
+| 44 | good | List the most expensive product bought in each city | top_n_per_group | fn:rank, explore_having |  |
 | 45 | good | Top 3 most expensive products | top_n | fn:rank, explore_filters |  |
 | 46 | good | Average order count of top 3 oldest users in each city | top_n_per_group, nested_aggregation | fn:rank, fn:date_diff, subset_by_aggregate_filter, subset_as_table_metric, filter_by_subset, nested_aggregation, re_aggregate_existing_measure, explore_filters |  |
 | 47 | good | Total and Average order revenue of top 3 oldest users in each city. Revenue is price - discount (discount is applied on each item). | top_n_per_group, nested_aggregation, multi_model_metric | fn:rank, fn:date_diff, subset_by_aggregate_filter, subset_as_table_metric, filter_by_subset, nested_aggregation, metric_on_many_side, explore_filters |  |
@@ -67,7 +67,7 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 | 57 | good | List users who write reviews consistently. | time_gap_analysis | window_navigation, fn:date_diff, nested_aggregation, aggregate_on_window_function |  |
 | 58 | good | List folders inside "Homework" | role_playing_relation | role_playing_via_model, explore_filters |  |
 | 59 | good | List folders inside "Homework" | role_playing_relation | role_playing_via_lookup, subset_by_row_filter, subset_as_table_metric, filter_by_subset, explore_filters |  |
-| 60 | bad | Top 3 most expensive products | top_n | fn:rank, explore_filters | rank_on_dim_not_metric |
+| 60 | bad | Top 3 most expensive products | top_n | fn:rank, explore_having | rank_on_dim_not_metric |
 | 61 | bad | Compare product prices | simple_listing |  | unaggregated_dim_in_explore_measures |
 | 62 | bad | List cities with user count | simple_listing |  | unaggregated_dim_in_explore_measures |
 | 63 | bad | List orders with their revenue (value - discount). | combine_metric_and_dim |  | combine_unaggregated_dim_with_metric |
@@ -78,3 +78,6 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 | 68 | bad | Total and Average order revenue of top 3 oldest users in each city. Revenue is price - discount (discount is applied on each item). | nested_aggregation, top_n_per_group, multi_model_metric | fn:rank, fn:date_diff, subset_by_aggregate_filter, filter_by_subset, metric_on_many_side, explore_filters, nested_aggregation | extra_dim_changes_explore_grain |
 | 69 | bad | Average order count of top 3 cities (with highest revenue) in each country. Revenue is price - discount (discount is applied on each item). | nested_aggregation, top_n_per_group, multi_model_metric | fn:rank, subset_by_aggregate_filter, filter_by_subset, metric_on_many_side, explore_filters, nested_aggregation | wrong_inner_grain_in_nested_aggregation |
 | 70 | bad | Top 10 products (dense ranking) with highest order count in last quarter, compare their order count in the same quarter of 3 previous years | top_n, period_compare | fn:top, fn:relative_period, fn:where, filter_by_subset, subset_as_table_metric, explore_filters | ranking_grain_mismatch |
+| 71 | good | Top 10 countries by user count, filtering on the rank by its measure alias | top_n, filter_on_aggregate | fn:rank, explore_filters |  |
+| 72 | bad | Top 10 countries by user count | top_n, filter_on_aggregate | fn:rank, explore_having | measure_alias_in_having |
+| 73 | bad | Top 10 countries by user count | top_n, filter_on_aggregate | fn:rank, explore_filters | metric_name_in_filters |

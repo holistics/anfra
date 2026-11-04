@@ -28,7 +28,8 @@ Positive AQL idioms.
 * `re_aggregate_existing_measure` — Re-aggregate an existing measure only via nested aggregation (unique + select + outer_agg).
 * `fn:where` — AQL `where()` function.
 * `fn:filter` — AQL `filter()` function.
-* `explore_filters` — AQL `explore.filters { ... }` block.
+* `explore_filters` — AQL `explore.filters { ... }` block: a model dimension filters before aggregation; a dimension or measure alias filters the result after aggregation.
+* `explore_having` — AQL `explore.having { ... }` block: conditions on metrics, by metric name (not alias).
 * `ai_functions` — AQL AI functions: `ai_complete`, `ai_classify`, `ai_summarize`, `ai_similarity`. Snowflake/Databricks only.
 * `role_playing_via_model` — Filter directly through the role-playing model (e.g. `parent_categories.name == ...`).
 * `role_playing_via_lookup` — Last-resort: build an ID metric and use `field in (ids)` when no role-playing model exists.
