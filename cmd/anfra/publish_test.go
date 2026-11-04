@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -323,17 +325,59 @@ func TestLoginOffersOnlyCloudAndURLEntry(t *testing.T) {
 	}
 }
 
+// screen is a terminal's output that ends the program showing it, by
+// canceling its context, once the screen holds last: the screen drawn. A test
+// so waits for the drawing, not for a guess at how long it takes, which a slow
+// or busy run outlasts.
+type screen struct {
+	mu     sync.Mutex
+	buf    bytes.Buffer
+	last   string
+	cancel context.CancelFunc
+}
+
+// drawnScreen is a screen ending ctx's program once it shows last; a program
+// that never draws it ends at a generous deadline, which fails the test.
+func drawnScreen(t *testing.T, last string) (context.Context, *screen) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	return ctx, &screen{last: last, cancel: cancel}
+}
+
+func (s *screen) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, err := s.buf.Write(p)
+	if strings.Contains(s.buf.String(), s.last) {
+		s.cancel()
+	}
+	return n, err
+}
+
+func (s *screen) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+// ended checks the program ended because its screen was drawn: canceled, not
+// out of time.
+func (s *screen) ended(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("the screen wasn't drawn (%v): %s", err, s)
+	}
+}
+
 func TestFirstPublishWithoutLoginsShowsAuthenticationImmediately(t *testing.T) {
 	seedLoginInventory(t)
 	t.Setenv("ANFRA_CLOUD_URL", "https://cloud.example.com")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	var output bytes.Buffer
-	terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;100t"), &output)
+	ctx, output := drawnScreen(t, "Enter your organization URL")
+	terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;100t"), output)
 	terminal.interactive = true
-	if _, err := terminal.selectPublishOrg(ctx); err != context.DeadlineExceeded {
-		t.Fatalf("cancel publish selection: %v", err)
-	}
+	_, err := terminal.selectPublishOrg(ctx)
+	output.ended(t, err)
 	for _, want := range []string{
 		"This repo isn't linked to an organization yet.",
 		"Authenticate to publish.",
@@ -341,11 +385,11 @@ func TestFirstPublishWithoutLoginsShowsAuthenticationImmediately(t *testing.T) {
 		"Enter your organization URL",
 	} {
 		if !strings.Contains(output.String(), want) {
-			t.Fatalf("missing %q in first publish screen: %s", want, &output)
+			t.Fatalf("missing %q in first publish screen: %s", want, output)
 		}
 	}
 	if strings.Contains(output.String(), "Authenticate with another organization") {
-		t.Fatalf("unnecessary organization selection: %s", &output)
+		t.Fatalf("unnecessary organization selection: %s", output)
 	}
 }
 
@@ -608,34 +652,36 @@ func TestPublishRecoveryPreservesCredentialErrors(t *testing.T) {
 }
 
 func TestPublishRecoveryOffersLinkedAndOtherOrganizations(t *testing.T) {
-	for _, addresses := range [][]string{nil, {"https://cloud.example.com/o/acme"}, {"https://cloud.example.com/o/beta"}, {"https://cloud.example.com/o/acme", "https://cloud.example.com/o/beta", "https://cloud.example.com/o/gamma"}} {
-		t.Run(strings.Join(addresses, "+"), func(t *testing.T) {
+	for name, addresses := range map[string][]string{
+		"none":    nil,
+		"linked":  {"https://cloud.example.com/o/acme"},
+		"other":   {"https://cloud.example.com/o/beta"},
+		"several": {"https://cloud.example.com/o/acme", "https://cloud.example.com/o/beta", "https://cloud.example.com/o/gamma"},
+	} {
+		t.Run(name, func(t *testing.T) {
 			seedLoginInventory(t, addresses...)
 			linked, _ := cloudapi.ParseOrg("https://cloud.example.com/o/acme")
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			var output bytes.Buffer
-			terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;120t"), &output)
+			ctx, output := drawnScreen(t, "Switch to another organization")
+			terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;120t"), output)
 			terminal.interactive = true
 			_, cause := (cliauth.Manager{}).Authorize(ctx, linked)
 			if cause == nil {
 				t.Fatal("missing authentication accepted")
 			}
-			if _, err := terminal.recoverPublishOrg(ctx, linked, cause); err != context.DeadlineExceeded {
-				t.Fatalf("recovery: %v", err)
-			}
+			_, err := terminal.recoverPublishOrg(ctx, linked, cause)
+			output.ended(t, err)
 			for _, want := range []string{"This repo publishes to " + linked.String(), "You're not authenticated with this organization.", "> Authenticate with acme", "Switch to another organization"} {
 				if !strings.Contains(output.String(), want) {
-					t.Fatalf("missing %q in recovery screen: %s", want, &output)
+					t.Fatalf("missing %q in recovery screen: %s", want, output)
 				}
 			}
 			if strings.Contains(output.String(), "Authenticate with a different organization") {
-				t.Fatalf("new authentication displayed in top-level menu: %s", &output)
+				t.Fatalf("new authentication displayed in top-level menu: %s", output)
 			}
 			for _, address := range addresses {
 				if address != linked.String() {
 					if strings.Contains(output.String(), address) {
-						t.Fatalf("saved org displayed in top-level menu: %s", &output)
+						t.Fatalf("saved org displayed in top-level menu: %s", output)
 					}
 				}
 			}
