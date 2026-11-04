@@ -202,14 +202,14 @@ func TestConsoleFlags(t *testing.T) {
 func TestConsoleHelp(t *testing.T) {
 	var s consoleSession
 	s.setFlags("-d sales")
-	got := consoleHelp(&s, "/tmp/acme")
+	got := consoleHelp(&s, "/tmp/acme", "none")
 	for _, want := range []string{"Repo:  /tmp/acme\nMode:  commands\nFlags: -d sales (view all with \\--)\n", "Core commands:", "types its text directly: query", "sets a flag"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("command mode: missing %q in:\n%s", want, got)
 		}
 	}
 	s.switchMode([]string{"query"})
-	got = consoleHelp(&s, "/tmp/acme")
+	got = consoleHelp(&s, "/tmp/acme", "none")
 	for _, want := range []string{"Repo:  /tmp/acme\nMode:  query AQL\nFlags: -d sales (view all with \\--)\n", "Usage:\n  Type AQL", "ending it with ;;", `\c`, "goes back to commands", "query flags:\n", "--dataset", "Global flags:\n      --jq string"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("query mode: missing %q in:\n%s", want, got)
@@ -410,5 +410,18 @@ func TestConsoleFormatSwitch(t *testing.T) {
 	s.setFlags("--yaml=false")
 	if got := s.context("acme"); got != "acme · -d sales" {
 		t.Errorf("after --yaml=false: %q", got)
+	}
+}
+
+// A command forwarded to a warm server starts one; one the CLI runs itself,
+// or a CLI-only command, doesn't.
+func TestRunsOnEngine(t *testing.T) {
+	for args, want := range map[string]bool{
+		"query": true, "query compile": true, "validate": true, "show": true,
+		"version": false, "auth status": false, "init": false, "nope": false,
+	} {
+		if got := runsOnEngine(strings.Fields(args)); got != want {
+			t.Errorf("runsOnEngine(%q) = %v", args, got)
+		}
 	}
 }

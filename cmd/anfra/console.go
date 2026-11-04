@@ -25,7 +25,7 @@ import (
 // under the prompt may cut it short, and any notice in full; then anfra's
 // own help for where it is, anfra --help in command mode, the mode's
 // command's --help in a text mode; then what the console adds.
-func consoleHelp(s *consoleSession, dir string) string {
+func consoleHelp(s *consoleSession, dir, server string) string {
 	st := s.styles
 	key := st.Accent.Render
 	var b strings.Builder
@@ -45,6 +45,7 @@ func consoleHelp(s *consoleSession, dir string) string {
 	}
 	b.WriteString(label("Mode:  ") + modeStyle.Render(mode) + "\n")
 	b.WriteString(label("Flags: ") + flags + label(" (view all with ") + st.Code.Render(`\--`) + label(")") + "\n")
+	b.WriteString(label("Server: ") + server + "\n")
 	var notices []string
 	if w := consoleWarning(s); w != "" {
 		notices = append(notices, w)
@@ -220,11 +221,28 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 
 	exe := runningAnfra()
 	history := openConsoleHistory()
-	opts := cliui.EntryOptions{Leave: `\q, exit or Ctrl-D to leave`, History: history.load(), Ends: s.ends}
+	server := newConsoleServer()
+	defer server.stop()
+	if s.mode != nil && runsOnEngine(s.mode) { //nolint:contextcheck // names the commands, runs none
+		server.ensure(session)
+	}
+	// The line under the frame: where the session is, then its server,
+	// orange while it starts, green once warm.
+	contextLine := func() string { //nolint:contextcheck // names the flags, runs nothing
+		line := s.styledContext(filepath.Base(dir), false)
+		switch server.state() {
+		case "starting":
+			line += styles.Muted.Render(" · ") + styles.Warning.Render("server")
+		case "warm":
+			line += styles.Muted.Render(" · ") + styles.Success.Render("server")
+		}
+		return line
+	}
+	opts := cliui.EntryOptions{Leave: `\q, exit or Ctrl-D to leave`, History: history.load(), Ends: s.ends, Refresh: contextLine}
 	for {
-		opts.Prompt, opts.Context = s.prompt(), s.styledContext(filepath.Base(dir), false) //nolint:contextcheck // names the flags, runs nothing
-		opts.Status = consoleBadge(s)                                                      //nolint:contextcheck // reads local state, runs nothing
-		opts.Warning = consoleWarning(s)                                                   //nolint:contextcheck // reads the commands, runs none
+		opts.Prompt, opts.Context = s.prompt(), contextLine()
+		opts.Status = consoleBadge(s)    //nolint:contextcheck // reads local state, runs nothing
+		opts.Warning = consoleWarning(s) //nolint:contextcheck // reads the commands, runs none
 		entry, err := cliui.ReadEntry(session, in, out, opts)
 		if errors.Is(err, io.EOF) {
 			return nil
@@ -250,18 +268,25 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 		case actLeave:
 			return nil
 		case actHelp:
-			fmt.Fprintln(out, consoleHelp(s, dir)) //nolint:contextcheck // names the commands, runs none
+			fmt.Fprintln(out, consoleHelp(s, dir, server.describe())) //nolint:contextcheck // names the commands, runs none
 		case actSay:
 			if msg != "" {
 				fmt.Fprintln(out, msg)
 			}
+			if s.mode != nil && runsOnEngine(s.mode) { //nolint:contextcheck // names the commands, runs none
+				server.ensure(session) // a mode about to query: warm it up while the first entry is typed
+			}
 		default:
 			args = s.withFlags(args) //nolint:contextcheck // reads the commands, runs none
+			if runsOnEngine(args) {  //nolint:contextcheck // names the commands, runs none
+				server.ready(session, out)
+			}
 			cmdCtx, stopCmd := signal.NotifyContext(session, os.Interrupt)
 			code := run(cmdCtx, args, out, errOut, runOptions{inConsole: true})
 			stopCmd()
 			if code == 0 && args[0] == "update" && exe.replaced() {
 				fmt.Fprintln(out)
+				server.stop() // the new anfra starts its own, of its version
 				return restartConsole(exe.path)
 			}
 			if code != 0 && s.mode == nil && !isCommand(args[0]) { //nolint:contextcheck // names the commands, runs none
@@ -413,4 +438,16 @@ func homeRelative(dir string) string {
 		return filepath.Join("~", rel)
 	}
 	return dir
+}
+
+// runsOnEngine reports whether args name a core command the CLI forwards to
+// a warm server, rather than one it runs itself (cliLocal), or a CLI-only
+// command (docs/designs/cli-vs-warm-server.md).
+func runsOnEngine(args []string) bool {
+	c, _, err := newRootCmd().Find(args)
+	if err != nil {
+		return false
+	}
+	name := c.Annotations[opAnnotation]
+	return name != "" && !cliLocal[name]
 }
