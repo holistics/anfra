@@ -9,8 +9,16 @@ How the CLI shows a command's structured output to a person at a terminal: laid 
 - **Formats.** A command's output is an artifact (a log, a script) or structured. Structured output comes as YAML, JSON, or pretty.
 - **Defaults.** A core command writes YAML. A CLI-only command writes the pretty format by default, through the prettifier, since people run them more than programs do: `update`, `agent setup`, `init`, `publish` and `auth`. `--yaml` or `--json` on any command gives structured output.
 - **`--pretty`** comes once the prettifier shows every command well, `query` included. Then we decide whether pretty becomes the default on an interactive terminal for every command, with YAML for everything else.
+- **In [`anfra console`](console.md)**, output is for a person, so a command whose view is reviewed writes the pretty format by default, a core command included; any other writes YAML, coloured. A core command's view reaches people there first.
 
 The bar for a pretty view: **it beats the YAML for a person, or it doesn't ship.** A generic renderer can do worse than YAML (a query's rows buried under its columns' metadata), so a view is reviewed, from real output, before a command uses it.
+
+The aim is very pretty output, reached **incrementally, and by rules**:
+
+- **One command at a time.** A command gets its view when one is reviewed and clears the bar; until then it writes YAML, which is never wrong. No date by which every command must be pretty.
+- **Rules before views.** The [conventions](#conventions) first, a [hint](#hints) where they fall short, a command's [own view](#a-commands-own-view) only where both do. A convention improved improves every command it covers; an own view is code to keep in step with its result.
+- **No formatting outside the prettifier.** No console-only view, no hand-written output beside a result: one place to change, and a command reads the same wherever it's pretty.
+- **No surprises where they buy nothing.** Labels from the JSON names, values as the YAML has them (`true`, not `yes`), nothing hidden: a person moving between the pretty format and `--yaml` recognizes the same result. A view departs from the result only where reading gains from it (a relative time, a tree of paths), and says so in a hint.
 
 ## Layers
 

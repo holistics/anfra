@@ -1,0 +1,85 @@
+# Implementation: `anfra console`
+
+Implements [anfra console](../designs/console.md): a session at a terminal, AQL typed directly, anfra's commands behind a `\`, the output coloured for the person at the keyboard.
+
+## Where it stands
+
+| Step | State |
+|---|---|
+| 1. One process, many runs | Done (`run`, `cmd/anfra/main.go`) |
+| A spike: stdin and the terminal across entries | Done on Linux; macOS and Windows to try |
+
+## Order
+
+```
+1 one process, many runs ──> 2 the skeleton ──> 3 output for a person ──> 4 modes and AQL ──> 5 a warm server
+```
+
+Each step ships on its own. Step 1 changes nothing visible, and is worth doing whether or not the console follows.
+
+## 1. One process, many runs
+
+The CLI assumes one command per process. A session runs many, each on a command tree of its own.
+
+- **A fresh tree a line.** `newRootCmd()` builds the whole tree, every command's flags bound to variables of its constructor; the shared output flags are bound to the package's `output`, which defining them resets to their defaults. So a new tree per line starts clean. Measured: about 0.16 ms a tree.
+- **`jqCode`** (`cmd/anfra/jq.go`) is set only when `--jq` is given, and `deliver` filters whenever it's set (`cmd/anfra/commands.go`): after one `--jq`, every later command would be filtered too. Cleared when `--jq` isn't given, or moved into `output`.
+- **`resultTypes`** (`cmd/anfra/schema.go`), a global map keyed by command, grew by a tree's commands every rebuild. `newRootCmd` starts it empty, as defining the flags resets `output`: the package's state is the current tree's.
+- **`run(ctx, args, stdout, stderr) int`** (`cmd/anfra/main.go`): what `main()` did around a command (the error, the exit code, the update notice, `agents.Succeeded`, `--json` asked for though the flags failed to parse), taking its args and streams rather than reading `os.Args`, returning the exit code rather than calling `os.Exit`. `main()` validates the settings, starts telemetry, and exits with `run`'s code. Step 3 adds its options.
+- **A core command's answer goes to the run's stdout** (`delivery.stdout`, from cobra's), not to `os.Stdout`; so does an export's file. Notices and warnings still go to `os.Stderr`, the same terminal in a console.
+
+Tests (`cmd/anfra/main_test.go`): two runs in one process, the first with `--json` and `--jq`, the second with neither, writes YAML unfiltered, the result types not grown; an unknown command exits 1 with its error on stderr.
+
+## A spike: stdin and the terminal across entries
+
+A throwaway (`anfra __console-spike`): a text-area prompt in a loop, alternating with the org picker, the activity spinner, `publish`'s questions, and `run`. Driven through a pseudo-terminal on Linux by a script, which also played a terminal's late replies.
+
+| Looked for | Found |
+|---|---|
+| Input taken by a reader that outlived its command | **Yes, and fixed.** After Ctrl-C at a `publish` question, `readLines` (`cmd/anfra/publish.go`) stays blocked reading stdin, and takes every later line: the session looks frozen. Reading through `muesli/cancelreader` (Bubble Tea's own, already a dependency), canceled with the question's context, ends the read with the question; the session then reads normally. Answering the question normally was fine either way. |
+| The terminal left changed | No: its settings (`stty -g`) were the same after every entry, picker (picked or canceled), spinner and command. |
+| Late replies to terminal queries typed as text | No: a reply arriving at the prompt, several in one write, or one arriving while a command runs (spinner or none) is parsed, not typed. `cliui`'s filter of Bubble Tea's capability probes (`terminal_queries.go`, bubbletea#1590) already leaves the prompt nothing to leak. |
+| Alt+Enter, Ctrl+Enter told from Enter | Yes, both: `alt+enter`, and `ctrl+enter` as the kitty protocol sends it. Enter alone continues the entry; `;;` then Enter runs it. |
+
+So step 2 needs no reader of its own for the session: each program reads stdin while it runs, as now. What it needs:
+
+- **Every read of stdin ends with its command.** `readLines` through `cancelreader`, and the rule for any reader to come: no read outlives its command. A test: Ctrl-C at a question, then the next line reaches whoever reads next.
+- **Enter on an empty entry does nothing**, rather than adding a line; and a `\` command is one line, so a `\` after a first line isn't one.
+- **The text area grows with the entry**, rather than taking three lines from the start.
+
+Not covered, for real terminals: macOS (Terminal.app, iTerm2: Option as Alt), replies' real timing over SSH, Windows Terminal (`cancelreader` supports its console).
+
+## 2. The skeleton
+
+- **`anfra console`** (`cmd/anfra/console.go`): a CLI-only command, an artifact, refusing without a terminal.
+- **The line reader** (`internal/console/reader.go`): one inline Bubble Tea program an entry, ending with it, as `cliui`'s pickers do, so the command then runs with the terminal to itself and its own questions don't fight the prompt. On `bubbles/textarea`. History in memory, Up and Down.
+- **Splitting** (`internal/console/split.go`): a `\` line into args, shell quoting.
+- **Dispatch**: a `\` line runs through `run` on a new tree; the console's own commands (`\q`, `\exit`, `\?`) first. Without modes yet, any other entry is refused, saying to start it with `\`.
+- **Ctrl-C**: each command runs on a context of its own, canceled by an interrupt; the session's isn't.
+
+Tests: the reader, driven with key sequences, as the pickers' tests are; splitting; a scripted session: `\version`, `\nope`, `\q`.
+
+## 3. Output for a person
+
+- **`run`'s `forPerson` option**, set by the console: colour on wherever the stream is a terminal, unless `NO_COLOR`, and the pretty format for every command whose view is reviewed. Which those are is a mark on the command, beside `anfra.default-format`: today the CLI-only commands, each core command joining when its view clears [the bar](../designs/cli-pretty.md#where-it-stands). Any other writes YAML.
+- **Coloured JSON** from its tokens (`jsontext`): keys, strings, numbers, booleans and null, punctuation, in the `cliui` styles.
+- **Coloured YAML**: yaml.v3 writes it as it does now, and goccy/go-yaml's lexer colours that text, as yq does. A YAML printer of our own would have to match yaml.v3's quoting exactly.
+- `--jq`'s plain lines stay plain.
+
+Tests: for every format, the coloured output with its escape codes removed is byte for byte the plain output.
+
+## 4. Modes and AQL
+
+- **Modes**: `\console <command> [flags]` and `anfra console <command> [flags]`; the commands a mode can be, from their positional args (`argsOn`, `cmd/anfra/schema.go`).
+- **How an entry ends** (`internal/console/ends.go`): `;;` for AQL, `;` for SQL, Enter otherwise; Alt+Enter and Ctrl+Enter; a `;;` in an open string ignored.
+- **`\use <dataset>`**, checked against the repo's datasets, and the dataset in the prompt.
+- Multi-line entries, with a continuation prompt.
+
+Tests: entries ending or not (a declaration's `;`, `;;` in a string, `;;` after a `//` comment); a scripted session switching modes.
+
+## 5. A warm server
+
+Without a server running, each core command starts its own sidecars (`invoke`, `cmd/anfra/commands.go`). At its start, the console uses the repo's server (`findServer`), or starts `anfra serve --idle-timeout 10m` detached (`detach_unix.go`), so it stops by itself after the session. `invoke` already prefers a running server, so the commands need no change. The banner says which.
+
+## Open questions
+
+- **Bubble Tea in a loop**: an inline program an entry, hundreds in a session. The pickers start one a command. To check on Windows, and for leaks.
