@@ -30,7 +30,7 @@ export const PROVISION_ELEMENT_ID = 'anfra-provision';
 
 /**
  * An error as it crosses the bridge: the SDK's error in the API's shape, only the fields that shape
- * names (docs/designs/errors.md, "In a Data App").
+ * names (docs/designs/errors/data-apps.md).
  */
 export interface BridgeError {
   /** `ValidationError` for a declaration's error; `DataAppError` for any other. */

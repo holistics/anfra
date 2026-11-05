@@ -3,7 +3,7 @@ import { copyCallTag } from './runtimeErrors';
 
 /**
  * A Data App's errors are the API's error document, not classes picked for it
- * (docs/designs/errors.md, "In a Data App"): every failure of a call is a `DataAppError` with the
+ * (docs/designs/errors/data-apps.md): every failure of a call is a `DataAppError` with the
  * envelope's fields, and the one other class, `ValidationError`, is what a declaration throws. An
  * app branches on `scope` (who must act) and `code` (what happened), and reads `details`.
  */

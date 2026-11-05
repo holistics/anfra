@@ -167,60 +167,7 @@ One error, rendered for each surface by the same pieces:
 
 ## In a Data App
 
-A Data App is a fourth surface, reached through the SDK rather than one of anfra's doors: its definition calls the core API through the host page, over the bridge ([data-apps.md](data-apps.md), [sdk-plugins.md](sdk-plugins.md)). The same principles hold, with the browser in place of a process.
-
-**Its readers.** The definition's own code, which decides what the person viewing the app sees; that person, who sees only what the code shows; and the agent or author building the app, who reads `query.error` to fix the next try, often with no console to look at.
-
-**One shape, the API's** (`common/errors.ts`). A Data App's error is the document the API answers, not a class picked for it: every failure of a call is a `DataAppError` with the envelope's fields, `scope` and `message` always, `code`, and `status`, `details`, `context` and `requestId` where the backend has them, plus the SDK's own `entity`, the query or control it concerns. An app branches as any other caller does: on `scope` to know who must act, on `code` to know what happened, and reads `details` to point at it (a diagnostic's line, a row limit). Nothing re-maps it, so a code a host adds reaches the app as it is, by its scope. A query's error is stored on the query, never thrown: one failed query must not blank the rest.
-
-The one other class is `ValidationError`, for what the definition declares wrong. It is thrown synchronously, at the line that declared it, never comes from a backend, and has the same shape (`declaration_invalid`, scope `client`), so code that reads `scope` and `code` treats every error alike.
-
-**Generic codes, for every backend.** A backend that is not anfra's (a host that runs the SDK over its own API, with an HTTP status and a message but no envelope) cannot speak anfra's codes. So the SDK names the few cases an app must tell apart on any backend, and every backend uses them where they apply, as `apperr`'s generic codes serve every platform. Each reuses an anfra or Cloud code where one exists, so those backends pass their own errors through:
-
-| Code | Scope | Means |
-|---|---|---|
-| `query_invalid` | user | The query was refused before it ran. |
-| `query_failed` | user | It ran, and its data source failed it. |
-| `forbidden` | user | This reader may not see it or do it. |
-| `unauthenticated` | user | The reader's session is gone: sign in again. |
-| `invalid_request` | client | The app's call was malformed: a plugin refused it. |
-| `declaration_invalid` | client | The definition declared something wrong (`ValidationError`). |
-| `connection_failed` | server | The server could not be reached, or its answer was cut or garbled. |
-| `call_failed` | server | The host failed the call, for a reason the frame is not shown. |
-| `internal_server_error` | server | The server failed. |
-
-Any other code (anfra's `result_too_large` and `page_too_large`, Cloud's own) is the backend's, with its scope. An app that branches on `scope` and the generic codes runs on any host; one that reads a backend's own codes runs best on that host. The SDK's types name the generic and anfra's codes, each with its `details` type, generated from the API's schema.
-
-**A backend answers in the shape** (`Backend` in `common/types.ts`). anfra's passes the API's envelope through (`api/errors.ts`). One without an envelope maps what it has, by a table the SDK publishes and a helper that applies it (`fromHttpStatus`): 401 is `unauthenticated`, 403 `forbidden`, any other 4xx the refusal of what was called (the caller says which: `query_invalid` for a query, `invalid_request` by default), 5xx `internal_server_error`, no answer `connection_failed`. A backend that rejects with anything else has failed in a way nobody classified: it is `call_failed`, scope `server`, since unknown means the server's fault.
-
-**Decorated, not rewritten.** The SDK keeps the document and adds to it. Where the facts are in `details` (a refused query's diagnostics, a refused input's fields) and the message is only its code's sentence ("The query is invalid."), the SDK writes them into `message` (`line 1:9: No field x.`), so a message read alone still says what is wrong; `details` stays as it came.
-
-**One request, one trail, into the frame.** Every error the server answered carries its `requestId`, kept when it crosses the bridge. With it, the person or agent who sees the error finds its line in the server's log, where the cause is whether or not it was shown. It is the one identifier allowed into the frame: it names a request, not anything in it, the server already sends it to every caller, and only someone who can read the log can turn it into anything.
-
-**What crosses the bridge.** The frame runs code anyone may write, so only the SDK's own errors cross with their fields, and only the fields the shape names (`common/endpoint.ts`): `context` as each step's `text`, never its params, which can name a dataset or a path; `details` only for a code the SDK knows the type of; a `scope` the SDK does not know as `server`. Anything else (a bug in the host, a middleware's error, a library's) crosses as `call_failed`, since its message may hold a URL, a resource's id or a server's error. Two rules keep that rare and findable:
-
-- **The SDK classifies its own failures.** A stream the server cut, or a line in it that is not an event (a proxy's error page), is `connection_failed` saying so (`api/stream.ts`, `api/backend.ts`), not an unclassified error. What remains `call_failed` is a real bug in the host.
-- **A hidden error is recorded where it was hidden.** The host reports the original as a runtime error before answering `call_failed` (below), and the frame logs one it hides to its own console: *every failure leaves a record*, in the page where it happened.
-
-**Fail only what failed.** A `subscribe()` listener is the definition's own code drawing what changed. An exception it throws is logged to the frame's console and stops nothing else: the other listeners still run, and the query whose change it was told of keeps its result (`app/observable.ts`). An author's bug can break its own drawing, never the app's data.
-
-**Every runtime error reaches the host.** What goes wrong while the app runs is reported to its host whether or not anyone inspects it (`app/reporting.ts`, `common/runtimeErrors.ts`), as one event, `anfra.error`, of four kinds:
-
-| Kind | What | Reported by |
-|---|---|---|
-| `query` | A query's run ended in `error` (`execute()`). | the frame |
-| `uncaught` | The definition's uncaught error or unhandled rejection, a `ValidationError` from a declaration no one caught included; and what the SDK catches to keep the app running: a menu item's action, a plugin's setup or drawing, a frame call that failed. | the frame |
-| `listener` | A `subscribe()` listener's exception. | the frame |
-| `hidden` | A call the host failed and showed the frame only as `call_failed`, with the original's message and stack. | the host |
-
-Each carries the error's shape (`code` and `scope` when it is one of the SDK's, `message`, `requestId`, `entity`), the time and the mount, and for `uncaught`, `listener` and `hidden` a truncated stack; never rows or a request's params. The host rewrites a frame's stack to name the definition's lines (`definition:107:48`) and the SDK's (`anfra-sdk.js`) in place of its document's (`about:srcdoc:147:48`): the document is the definition with the SDK put in its `<head>`, so its lines are not the file's. The SDK's script is named (`//# sourceURL=anfra-sdk.js`), so its frames read `anfra-sdk.js:9:7875` in a stack and in devtools, where an author can ignore-list it: a console line the frame captures is otherwise said to come from the SDK's wrapper on the app's page. An error the app handled itself is not reported: a `fetchMore()` or an export rejects to its caller, and only reaches the host if no one catches it. The host checks each event, since the frame's word is not trusted: a frame cannot claim a `hidden` error, and each string is capped. The frame sends at most 120 errors a minute, and 120 console lines apart from them, so a render loop that throws or warns on every frame cannot flood its host, and its warnings cannot crowd out its errors; how many it did not send it says in its own console when the minute is over. The host holds each mount to the same, since a frame can post events without the SDK. The SDK's own console notes (`anfra: …`) are not sent as console lines, so each failure that writes one is also reported as an error.
-
-A host receives them in one callback, `createHost({ onError })`, which defaults to the page's console, and per mount as `mounted.on('anfra.error')`. A host that passes `onError` has said where they go, so the SDK writes nothing to its page's console, not even how many a mount sent over its budget: a platform routes them to its telemetry, or drops them. A console line is not an error: the app's `console.error` and `console.warn` lines are `anfra.console`, sent only when the host captures them (`createHost({ captureConsole })`), since they can hold the app's data. Unset, a development build of the host's page captures them and a production build does not (`process.env.NODE_ENV`).
-
-Where they go is each host's choice. On `anfra serve`:
-
-- **The panel** lists them among its problems, with the static ones (markup and wiring found without running the app), the errors first; one naming a query or control links to it, any other opens to its stack. Console lines are in a section of their own.
-- **anfra.log**: the appserve page captures console lines and posts both to `POST /appserve/log`, which writes each with `"service":"app"` and the app's path ([data-apps.md](data-apps.md#appserve-what-anfra-serve-adds)). An agent reads them without a browser: `anfra status` names the log (`repo.logs`), each load of the app starts with an `app.mounted` line (the file's modification time), and a `"service":"app"` line's `request_id` finds the server's line with the cause.
+A Data App is a fourth surface, reached through the SDK in a browser frame rather than one of anfra's doors. The same rules hold: one shape (`DataAppError`, with the API's `scope` and `code`), only the SDK's own fields crossing into the frame, and every runtime error reported to the host, the inspect panel and `anfra.log`. See [errors/data-apps.md](errors/data-apps.md).
 
 ## At a platform's boundary
 
@@ -246,9 +193,6 @@ The cause travels apart from any text a host may make public. canal-query's `mes
 
 Where the code does not follow these rules yet:
 
-- **A Data App's errors say who must act, not whether to retry.** Scope `server` covers both a server that will be back and a bug; nothing yet tells an app to retry.
-- **A backend's own message reaches the frame as it is.** The SDK trusts what a backend puts in `message`: anfra's are written to be safe for callers, but another backend's may not be (a job's error log can hold SQL).
-- **An error loses its `entity` crossing the bridge.** The frame names it again where it can (a query's error, an export's), not for a plugin's own call.
 - **OpenTelemetry's own messages are text lines on stderr.** Its SDK logs a problem it meets (an endpoint it cannot parse) through its own logger, before the repo's log exists, so a YAML or JSON parser refuses the stream there.
 
-Related: [commands-and-api.md](commands-and-api.md) (how ops are defined and published), [engine.md](engine.md) (the boundary platforms translate at), [security.md](security.md) (why causes are hidden by default).
+Related: [errors/data-apps.md](errors/data-apps.md) (errors in a Data App), [commands-and-api.md](commands-and-api.md) (how ops are defined and published), [engine.md](engine.md) (the boundary platforms translate at), [security.md](security.md) (why causes are hidden by default).

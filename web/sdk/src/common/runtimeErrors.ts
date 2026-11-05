@@ -1,6 +1,6 @@
 /**
  * A Data App's runtime errors and console lines, as its frame reports them to its host
- * (docs/designs/errors.md, "In a Data App"). The frame runs code anyone may write, so the host
+ * (docs/designs/errors/data-apps.md). The frame runs code anyone may write, so the host
  * reads each event through `checkErrorEvent` / `checkConsoleEvent`: only the fields named here,
  * each string capped. Never rows or a request's params.
  */

@@ -1,7 +1,7 @@
 /**
  * The frame's half of the error stream: what goes wrong at runtime in a Data App is reported to its
  * host as `anfra.error`, whether or not anyone inspects it, and its console lines as
- * `anfra.console` when the host captures them (docs/designs/errors.md, "In a Data App").
+ * `anfra.console` when the host captures them (docs/designs/errors/data-apps.md).
  *
  * The app model reports through `reportError`, which does nothing until a frame's bootstrap
  * installs a reporter: outside a frame (tests, an SDK used on its own page) nothing is sent.
