@@ -58,7 +58,7 @@ How you name a field **to the SDK** (in `createFilter` and `mapControl`):
 `model.field` for a model field, a bare `name` for a dataset-level metric. Names come from
 `Anfra.datasets`, never from labels. A filter's `field` is checked at once (a `ValidationError`
 with a "did you mean"); a `mapControl` field is not checked until the query runs, so a typo there
-arrives as the query's `query_invalid` error.
+arrives as the query's `validation_failed` error, its violation at `input.filters[N].field`.
 
 ## App
 
@@ -257,7 +257,7 @@ Useful operators by type (the full list is in the SDK's `Operator` type):
 - boolean: `is_true`, `is_false`
 
 `matches_user_attribute` and the `transform_pop_*` operators are not supported on anfra; a query
-they reach fails with a `query_invalid` error.
+they reach fails with a `validation_failed` error, its violation at `input.filters[N].operator`.
 
 A condition with no values (or `operator: 'none'`) sends nothing: the query runs unfiltered. Give a
 filter a starting value with `default: { operator, values }`.
@@ -274,7 +274,8 @@ anfra finds every dimension of the query built directly on that exact field and 
 grain, so:
 
 - Map to the **field reference** (`orders.created_at`), never the dimension's alias. A field no
-  dimension is built on fails the query with a `query_invalid` error.
+  dimension is built on fails the query with a `validation_failed` error, its violation at
+  `input.dateDrills[N].field`.
 - The dimension must be **aliased**, and can be the raw field (`period: orders.created_at`) or
   already truncated (`period: date_trunc(orders.created_at, "month")` or
   `period: orders.created_at | month()`); the drill overrides any of them. A computed dimension
@@ -367,8 +368,8 @@ Every error is the API's error document: branch on `err.scope` (who must act) an
 | Code | Scope | When | What to do |
 | --- | --- | --- | --- |
 | `declaration_invalid` | client | Thrown synchronously while declaring (a `ValidationError`): unknown dataset, unknown filter field, duplicate name, invalid mapping, disabled capability. | Fix the declaring line it names. It surfaces as an uncaught error in the console. |
-| `query_invalid` | user | Stored on `query.error`: anfra refused the AQL, a mapped field or an operator. | Read `details.diagnostics` (or the message); fix the AQL or the mapping. |
-| `validation_failed` | user | anfra refused part of the request: `details.violations` names each field (`filters[0].field`). | Fix that entry. |
+| `query_invalid` | user | Stored on `query.error`: anfra refused the query's AQL. | Read `details.diagnostics` (or the message); fix the AQL. |
+| `validation_failed` | user | Stored on `query.error`: anfra refused part of the request a control or a cross-filter added (an unknown mapped field, an unsupported operator, a drill on a field no dimension is built on). `details.violations` names each entry (`input.filters[0].field`). | Fix that mapping or control. |
 | `query_failed` | user | The query ran and its data source failed it. | Read the message; it is the data source's. |
 | `result_too_large`, `page_too_large` | user | Too many rows or bytes: `details` holds the limit. | Aggregate, filter, or page (`pageSize`). |
 | `forbidden` / `unauthenticated` | user | This reader may not see it / their session is gone. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access" or "sign in again", not a failure. |
