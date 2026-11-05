@@ -69,7 +69,7 @@ func TestLog(t *testing.T) {
 	}
 	want := map[string]any{
 		"level": "ERROR", "event": "app.error", "msg": "column x does not exist", "service": "app", "app": "sales.html", "kind": "call.query", "code": "query_failed", "scope": "user",
-		"request_id": "req-1", "entity": "orders", "at": "2026-11-02T00:00:00Z",
+		"request_id": "req-1", "entity": "orders",
 	}
 	if a, b := jsonOf(got[0]), jsonOf(want); a != b {
 		t.Errorf("error line =\n  %s\nwant\n  %s", a, b)

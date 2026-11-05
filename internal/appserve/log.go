@@ -20,10 +20,10 @@ import (
 var (
 	eventAppError = logkit.DefineEvent("app.error",
 		"A Data App's runtime error, as its SDK host reported it from the browser.",
-		"app", "kind", "code", "scope", "request_id", "entity", "call", "stack", "at")
+		"app", "kind", "code", "scope", "request_id", "entity", "call", "stack")
 	eventAppConsole = logkit.DefineEvent("app.console",
 		"A console line a Data App wrote in the browser (a warning or an error).",
-		"app", "stack", "at")
+		"app", "stack")
 	eventAppMounted = logkit.DefineEvent("app.mounted",
 		"The appserve page loaded a Data App; the records after it are of the file as it was then.",
 		"app", "modified")
@@ -56,7 +56,6 @@ type ReportEvent struct {
 	Entity    string `json:"entity,omitempty"`
 	Call      string `json:"call,omitempty"`
 	Stack     string `json:"stack,omitempty"`
-	At        string `json:"at,omitempty"`
 }
 
 const (
@@ -247,7 +246,6 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 		add("call", e.Call, shortLimit)
 	}
 	add("stack", e.Stack, stackLimit)
-	add("at", e.At, shortLimit)
 	logger.LogAttrs(r.Context(), level, clip(e.Message, messageLimit), attrs...)
 	w.WriteHeader(http.StatusNoContent)
 }
