@@ -72,7 +72,7 @@ func TestSetConfigStringRefusesSafely(t *testing.T) {
 	if err := os.WriteFile(path, []byte("x: 1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetString(path, "org", "url", "https://bi.example.com/o/acme"); err == nil || !strings.Contains(err.Error(), ".lock exists") {
+	if err := SetString(path, "org", "url", "https://bi.example.com/o/acme"); err == nil || !strings.Contains(err.Error(), "it's locked") {
 		t.Errorf("err = %v, want the held lock refused", err)
 	}
 }

@@ -231,7 +231,7 @@ func replaceFile(path string, content []byte) error {
 	lock := path + ".lock"
 	f, err := os.OpenFile(lock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if errors.Is(err, fs.ErrExist) {
-		return fmt.Errorf("%s exists: another anfra is changing %s, or one stopped midway; remove it if none is running", lock, filepath.Base(path))
+		return fmt.Errorf("can't change %s, because it's locked. Another anfra may be changing it, so try again in a moment. If it's still locked, an anfra must have crashed while changing it. To unlock it, delete the lock file (%s)", path, lock)
 	}
 	if err != nil {
 		return err

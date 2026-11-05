@@ -14,6 +14,7 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -304,5 +305,14 @@ func TestPrettyErrorChain(t *testing.T) {
 	printError(&out, apperr.New(apperr.NotFound, "No such dataset."), "")
 	if !strings.HasPrefix(out.String(), "✗ No such dataset.\n  Code:") {
 		t.Errorf("whole: %q", &out)
+	}
+}
+
+// A sidecar that's unavailable points to the log file its logs are in.
+func TestPrintErrorSidecarHelp(t *testing.T) {
+	var out bytes.Buffer
+	printError(&out, apperr.New(errcode.SidecarUnavailable, "anfra-node didn't start within 10s"), "")
+	if !strings.Contains(out.String(), "help: The sidecar's logs are in the repo's log file") {
+		t.Errorf("got:\n%s", out.String())
 	}
 }

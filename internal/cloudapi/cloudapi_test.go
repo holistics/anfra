@@ -20,6 +20,7 @@ func TestParseOrg(t *testing.T) {
 		"https://bi.example.com/o/acme":      {Origin: "https://bi.example.com", Slug: "acme"},
 		"https://bi.example.com:8443/o/a-1/": {Origin: "https://bi.example.com:8443", Slug: "a-1"},
 		"https://BI.Example.com:443/o/acme":  {Origin: "https://bi.example.com", Slug: "acme"},
+		"https://bi.example.com/o/Acme":      {Origin: "https://bi.example.com", Slug: "acme"},
 		"http://[::1]:80/o/acme":             {Origin: "http://[::1]", Slug: "acme"},
 		"http://127.0.0.1:8080/o/acme":       {Origin: "http://127.0.0.1:8080", Slug: "acme"},
 	} {
@@ -46,7 +47,6 @@ func TestParseOrg(t *testing.T) {
 		"ftp://bi.example.com/o/acme",         // not http(s)
 		"https://bi.example.com",              // no org
 		"https://bi.example.com/o/",           // empty org
-		"https://bi.example.com/o/Acme",       // not a slug
 		"https://bi.example.com/o/acme/x",     // more than the org's address
 		"https://bi.example.com/o/acme?x=1",   // a query
 		"https://u:p@bi.example.com/o/acme",   // a credential in the address

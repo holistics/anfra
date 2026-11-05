@@ -188,3 +188,17 @@ func TestPublicErrors(t *testing.T) {
 		}
 	}
 }
+
+// A public error reads as its message alone; any other keeps its method and
+// code.
+func TestRPCErrorMessage(t *testing.T) {
+	public := &RPCError{Method: "aql.compile_to_sql", Code: RPCInvalidParams, Message: "Field orders.amout not found",
+		Data: jsontext.Value(`{"code":"query_invalid"}`)}
+	if got := public.Error(); got != "Field orders.amout not found" {
+		t.Errorf("public: %q", got)
+	}
+	failure := &RPCError{Method: "aql.compile_to_sql", Code: -32603, Message: "boom"}
+	if got := failure.Error(); got != "rpc aql.compile_to_sql error -32603: boom" {
+		t.Errorf("failure: %q", got)
+	}
+}

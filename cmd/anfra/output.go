@@ -236,28 +236,28 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	schemaInstead(root)
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		if output.schema && cmd.Annotations[outputKind] == outputArtifact {
-			return formatRefused("--schema", cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", which has no schema")
+			return artifactRefused(cmd, "--schema")
 		}
 		if output.pretty {
 			switch {
 			case output.yaml || output.json || output.jq != "":
-				return formatRefused("--pretty", "pass one format: --pretty, --yaml or --json")
+				return flagViolated("--pretty", "--pretty can't be combined with --yaml, --json or --jq. Pass one format.")
 			case cmd.Annotations[outputKind] == outputArtifact:
-				return formatRefused("--pretty", cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", not a result")
+				return artifactRefused(cmd, "--pretty")
 			case cmd.Annotations[prettyView] == "":
-				return formatRefused("--pretty", cmd.CommandPath()+" has no pretty view yet")
+				return flagViolated("--pretty", cmd.CommandPath()+" doesn't take --pretty yet. Use --yaml or --json.")
 			}
 			return nil
 		}
 		switch {
 		case output.yaml && output.json:
-			return formatRefused("--json", "pass --yaml or --json, not both")
+			return flagViolated("--json", "--yaml and --json can't be combined. Pass one.")
 		case !structuredAsked():
 			return nil
 		}
 		flag := structuredFlag()
 		if cmd.Annotations[outputKind] == outputArtifact {
-			return formatRefused(flag, cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", not structured output")
+			return artifactRefused(cmd, flag)
 		}
 		if output.jq != "" {
 			return compileJQ(output.jq)
@@ -388,9 +388,10 @@ func writeStructured(w io.Writer, v any) error {
 	return renderTo(b, "application/json", w)
 }
 
-// formatRefused is a format flag refused, as a violation of that flag.
-func formatRefused(flag, why string) error {
-	return flagViolated(flag, flag+" isn't available here: "+why+".")
+// artifactRefused is a format flag refused by an artifact's command, which
+// writes something other than a result.
+func artifactRefused(cmd *cobra.Command, flag string) error {
+	return flagViolated(flag, cmd.CommandPath()+" doesn't take "+flag+", because it writes "+cmd.Annotations[artifactDesc]+", not a result.")
 }
 
 // flagViolated is flag refused with msg, as a violation of that flag.

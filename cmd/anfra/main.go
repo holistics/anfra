@@ -151,7 +151,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	serve, updateCheck := newServeCmd(), newUpdateCheckCmd()
-	markArtifactOutput(serve, "a log, until it is stopped")
+	markArtifactOutput(serve, "a log")
 	markArtifactOutput(updateCheck, "nothing: it checks in the background") // internal
 	update, agent, skills, initCmd, publish := newUpdateCmd(), newAgentCmd(), newSkillsCmd(), newInitCmd(), newPublishCmd()
 	root.AddCommand(newConsoleCmd())
