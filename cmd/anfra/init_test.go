@@ -12,13 +12,13 @@ import (
 )
 
 var initFiles = []string{
-	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".anfra/context_sources.yml",
-	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", ".gitignore", "AGENTS.md",
+	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".gitignore", ".anfra/context_sources.yml",
+	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", "AGENTS.md",
 }
 
 func TestInitSetsUpARepo(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "shop")
-	res, err := initRepo(dir)
+	res, err := initRepo(dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +52,44 @@ func TestInitSetsUpARepo(t *testing.T) {
 	}
 }
 
+// In a clone, which has the committed example but not data_sources.yml,
+// init makes data_sources.yml from the example: the team's data sources.
+func TestInitCopiesTheExample(t *testing.T) {
+	dir := t.TempDir()
+	example := "data_sources:\n  shop:\n    type: duckdb\n"
+	if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".anfra/data_sources.yml.example"), []byte(example), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := initRepo(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, ".anfra/data_sources.yml")); string(got) != example {
+		t.Errorf("data_sources.yml: %q, want the example", got)
+	}
+}
+
+// --data-sources sets up the data source files alone.
+func TestInitDataSourcesOnly(t *testing.T) {
+	dir := t.TempDir()
+	res, err := initRepo(dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, f := range res.Files {
+		paths = append(paths, f.Path)
+	}
+	if want := initFiles[:3]; strings.Join(paths, " ") != strings.Join(want, " ") {
+		t.Errorf("files: %v, want %v", paths, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err == nil {
+		t.Error("AGENTS.md was written")
+	}
+}
+
 // A symlinked .gitignore is not read by Git, and its target may be outside
 // the repo: init leaves it alone and says so.
 func TestInitRefusesASymlinkedGitignore(t *testing.T) {
@@ -63,7 +101,7 @@ func TestInitRefusesASymlinkedGitignore(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, ".gitignore")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := initRepo(dir)
+	_, err := initRepo(dir, false)
 	if err == nil || !strings.Contains(err.Error(), ".gitignore") {
 		t.Fatalf("err = %v, want one about .gitignore", err)
 	}
@@ -85,7 +123,7 @@ func TestInitKeepsWhatIsThere(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := initRepo(dir)
+	res, err := initRepo(dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +140,7 @@ func TestInitKeepsWhatIsThere(t *testing.T) {
 	}
 
 	// Again: nothing left to create, and .gitignore gets no second line.
-	res, err = initRepo(dir)
+	res, err = initRepo(dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}

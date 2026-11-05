@@ -58,6 +58,7 @@ var initLayout = []string{"models", "datasets", "apps"}
 // newInitCmd sets up an anfra repo. It is a CLI command only, never an op: it
 // writes files on this machine, which a server must not do for its callers.
 func newInitCmd() *cobra.Command {
+	var dataSourcesOnly bool
 	cmd := &cobra.Command{
 		Use:   "init [dir]",
 		Short: "Set up an anfra repo: its data source config, and folders for models, datasets and Data Apps",
@@ -69,7 +70,9 @@ func newInitCmd() *cobra.Command {
 			"  .gitignore                       + .anfra/data_sources.yml\n" +
 			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
 			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
-			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n\n" +
+			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n" +
+			"data_sources.yml is made from data_sources.yml.example when the repo has one, as a clone of it does.\n" +
+			"--data-sources sets up only the data source files: data_sources.yml, its example, and the .gitignore line.\n\n" +
 			"Its result opens with message, the outcome; then dir, the repo's folder, and files, each with\n" +
 			"whether init changed it (created it, or added to it); and hints, last, what to do next.",
 		Args: cobra.MaximumNArgs(1),
@@ -78,13 +81,14 @@ func newInitCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			res, err := initRepo(dir)
+			res, err := initRepo(dir, dataSourcesOnly)
 			if err != nil {
 				return commandFailedWith(err.Error(), res)
 			}
 			return writeResult(cmd, res)
 		},
 	}
+	cmd.Flags().BoolVar(&dataSourcesOnly, "data-sources", false, "set up only the data source files: data_sources.yml, its example, and the .gitignore line")
 	markPrettyOutput(cmd)
 	resultIs[initResult](cmd)
 	return cmd
@@ -113,8 +117,9 @@ type initStep struct {
 }
 
 // initRepo creates what is missing of an anfra repo in dir, and says what it
-// did to each file; on a failure, as far as it got.
-func initRepo(dir string) (initResult, error) {
+// did to each file; on a failure, as far as it got. dataSourcesOnly limits it
+// to the data source files.
+func initRepo(dir string, dataSourcesOnly bool) (initResult, error) {
 	res := initResult{Files: []initFile{}}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -131,20 +136,28 @@ func initRepo(dir string) (initResult, error) {
 	}
 	sources := filepath.ToSlash(filepath.Join(config, datasource.FileName))
 
+	// A clone has the committed example but not data_sources.yml, which holds
+	// credentials and is git-ignored: the example is the team's data sources.
+	dataSources := []byte(dataSourcesTemplate)
+	if example, err := os.ReadFile(filepath.Join(dir, sources+".example")); err == nil { //nolint:gosec // G304: a path under the repo being set up
+		dataSources = example
+	}
 	steps := []initStep{
-		{sources, writeNew([]byte(dataSourcesTemplate), 0o600)},
+		{sources, writeNew(dataSources, 0o600)},
 		{sources + ".example", writeNew([]byte(dataSourcesTemplate), 0o644)},
-		{filepath.ToSlash(filepath.Join(config, "context_sources.yml")), writeNew([]byte(contextSourcesTemplate), 0o644)},
+		{".gitignore", ignoreLine(sources)},
 	}
-	for _, d := range initLayout {
-		steps = append(steps, initStep{d + "/.gitkeep", writeNew(nil, 0o644)})
+	if !dataSourcesOnly {
+		steps = append(steps, initStep{filepath.ToSlash(filepath.Join(config, "context_sources.yml")), writeNew([]byte(contextSourcesTemplate), 0o644)})
+		for _, d := range initLayout {
+			steps = append(steps, initStep{d + "/.gitkeep", writeNew(nil, 0o644)})
+		}
+		// The block agent setup writes too: what tells agents to use the skills.
+		steps = append(steps, initStep{"AGENTS.md", func(string) (bool, error) {
+			wroteBlock, wroteImport, err := agents.WriteBlock(dir)
+			return wroteBlock || wroteImport, err
+		}})
 	}
-	steps = append(steps, initStep{".gitignore", ignoreLine(sources)})
-	// The block agent setup writes too: what tells agents to use the skills.
-	steps = append(steps, initStep{"AGENTS.md", func(string) (bool, error) {
-		wroteBlock, wroteImport, err := agents.WriteBlock(dir)
-		return wroteBlock || wroteImport, err
-	}})
 
 	changed := 0
 	for _, s := range steps {
@@ -162,15 +175,24 @@ func initRepo(dir string) (initResult, error) {
 	if filepath.Clean(dir) != "." {
 		where = dir
 	}
+	what := "an anfra repo"
+	if dataSourcesOnly {
+		what = "the data source files"
+	}
 	switch kept := len(res.Files) - changed; {
+	case changed == 0 && dataSourcesOnly:
+		res.Message = fmt.Sprintf("Nothing changed: %s has its data source files already.", where)
 	case changed == 0:
 		res.Message = fmt.Sprintf("Nothing changed: %s is an anfra repo already.", where)
 	case kept == 0:
-		res.Message = fmt.Sprintf("Set up an anfra repo in %s, with %d files.", where, changed)
+		res.Message = fmt.Sprintf("Set up %s in %s, with %d files.", what, where, changed)
 	default:
-		res.Message = fmt.Sprintf("Set up an anfra repo in %s: changed %d files, kept %d already there.", where, changed, kept)
+		res.Message = fmt.Sprintf("Set up %s in %s: changed %d files, kept %d already there.", what, where, changed, kept)
 	}
 	res.Hints = []string{fmt.Sprintf("Put your database in %s, write models and datasets, then run `anfra validate`.", sources)}
+	if dataSourcesOnly {
+		res.Hints = []string{fmt.Sprintf("Fill in your database's connection in %s.", sources)}
+	}
 	return res, nil
 }
 

@@ -145,7 +145,7 @@ func Load(configDir string) (Set, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("no data source manifest at %s — define your data sources, e.g.\n\ndata_sources:\n  <name>:\n    type: postgresql", path)
+			return nil, fmt.Errorf("%s doesn't exist. Run `anfra init --data-sources` to create it, then fill in your database's connection", path)
 		}
 		return nil, err
 	}
