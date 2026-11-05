@@ -235,13 +235,14 @@ read what went wrong without the browser: while the app is open, `anfra serve` w
 runtime errors (a failed query, an uncaught error or rejection, a listener's exception, a call
 the host failed) and its `console.error` / `console.warn` lines to its log, the file `anfra
 status` prints as `repo.logs`, one JSON line each with `"service":"app"`, the app's path as `app`,
-and `"msg":"app.error"` (with the error's `kind`, `code`, `message`, `stack`) or `"msg":"app.console"`:
+and `"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `stack`) or
+`"event":"app.console"` (the line as `msg`):
 
 ```sh
 grep '"service":"app"' <repo.logs> | grep '"app":"sales/overview.html"' | tail -20
 ```
 
-Each load of the app starts with an `"msg":"app.mounted"` line, with the file's `modified` time:
+Each load of the app starts with an `"event":"app.mounted"` line, with the file's `modified` time:
 after an edit, read only the lines after the last one, or you are reading the old file's errors.
 A stack names the file's own lines as `definition:<line>:<column>`, and the SDK's as `anfra-sdk.js`.
 
