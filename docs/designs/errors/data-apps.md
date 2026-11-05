@@ -35,21 +35,34 @@ Its readers:
 
 ```mermaid
 flowchart LR
-  subgraph frame["Frame (the app's code, untrusted)"]
-    Q["query run"] --> R["reportError"]
-    C["call left unhandled"] --> R
-    U["uncaught error, listener, plugin"] --> R
-    K["console.error / warn"] -.->|captureConsole| R2["console line"]
+  subgraph frame["Frame: the app's code"]
+    Q["query run"]
+    C["unhandled<br/>call"]
+    U["uncaught,<br/>listener,<br/>plugin"]
+    K["console<br/>lines"]
   end
-  R -->|anfra.error| H{"host: check, cap, budget"}
-  R2 -->|anfra.console| H
-  HI["call the host failed and hid"] -->|host.internal| H
-  H --> OE["createHost({ onError })"]
-  H --> ON["mounted.on('anfra.error')"]
-  ON --> P["inspect panel: Problems"]
-  ON --> L["appserve: POST /appserve/log"]
-  L --> LOG[("anfra.log, service: app")]
+  HI["host failed<br/>a call"]
+  H{"host:<br/>check,<br/>cap"}
+  Q -->|anfra.error| H
+  C -->|anfra.error| H
+  U -->|anfra.error| H
+  K -.->|anfra.console| H
+  HI -->|host.internal| H
+  H --> OE["onError"]
+  H --> ON["mount<br/>listeners"]
+  ON --> P["panel:<br/>Problems"]
+  ON --> L["appserve<br/>log route"]
+  L --> LOG[("anfra.log")]
 ```
+
+| Node | In the code |
+|---|---|
+| query run, unhandled call, uncaught, listener, plugin | each reported by `reportError`, `app/reporting.ts` |
+| console lines | sent only with `createHost({ captureConsole })` |
+| host: check, cap | `checkErrorEvent` and the per-mount budget, `host/runtime.ts` |
+| onError | `createHost({ onError })`, every mount's errors |
+| mount listeners | `mounted.on('anfra.error')`, `mounted.on('anfra.console')` |
+| appserve log route | `POST /appserve/log`, written as `"service":"app"` |
 
 A query's error also stays on the query (`query.error`), and a call's rejection goes to the code that made it: reporting is in addition to the app's own handling, never in its place.
 
