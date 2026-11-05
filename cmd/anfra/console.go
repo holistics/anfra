@@ -14,11 +14,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/meta"
-	"github.com/holistics/anfra/internal/update"
 )
 
 // consoleHelp is \?'s answer: where the session is, in full, as the line
@@ -131,24 +129,15 @@ func (s *consoleSession) textName() string {
 	return "text"
 }
 
-// consoleNotices are the notices the badge stands for, in full, as the CLI
-// says them after a command elsewhere, a command as typed in the console:
-// `update`, not `anfra update`.
+// consoleNotices are the notices in full, for \?, which the badge only names
+// the first of: each command in them as typed in a console, `update`, not
+// `anfra update`.
 func consoleNotices() []string {
-	if updateNotifyDisabled() {
-		return nil
+	var texts []string
+	for _, n := range notices() {
+		texts = append(texts, strings.ReplaceAll(n.text, "`anfra ", "`"))
 	}
-	var notices []string
-	if n := update.CachedNotice(); n != "" {
-		notices = append(notices, n)
-	}
-	if n := agents.Attention(agents.System(), repoDirIfAny()); n != "" {
-		notices = append(notices, n)
-	}
-	for i, n := range notices {
-		notices[i] = strings.ReplaceAll(n, "`anfra ", "`")
-	}
-	return notices
+	return texts
 }
 
 // codeSpans is text with its `code` as code spans, without the backquotes,
@@ -300,29 +289,20 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 	}
 }
 
-// consoleBadge is the notice under the console's prompt, one at a time, as
-// short as a badge, the command dealing with it a code span
-// (docs/designs/console.md#the-rest): a newer anfra first, then what of the
-// agents' skills needs attention. What the next entry would fail for is a
-// warning, apart (consoleWarning). Both from local state, as the CLI's notices
-// after a command are, so it's checked again after each; "" when nothing
-// needs attention, or with ANFRA_NO_UPDATE_NOTIFIER.
+// consoleBadge is how a console shows its notices: the most important, as a
+// badge at the far right of the line under the prompt
+// (docs/designs/console.md#the-rest), in yellow so it's noticed, and the
+// command settling it a code span. One at a time, so the line stays a line;
+// the next shows once it's settled, and \? lists them all. Asked for again
+// before each entry, so it goes once settled.
 func consoleBadge(s *consoleSession) string {
 	styles := s.styles
-	badge := func(mark, label, cmd string) string {
-		// Yellow, a warning's: at the far right, faint went unnoticed.
-		return styles.Warning.Render(mark+" "+label+" · Run") + " " + styles.Code.Render(cmd)
-	}
-	if updateNotifyDisabled() {
+	ns := notices()
+	if len(ns) == 0 {
 		return ""
 	}
-	if r := update.Cached(); r != nil && r.IsNewer() {
-		return badge("↑", "anfra "+r.Version, "update")
-	}
-	if mark, label := agents.Badge(agents.System(), repoDirIfAny()); mark != "" {
-		return badge(mark, label, "agent setup")
-	}
-	return ""
+	// Yellow, a warning's: at the far right, faint went unnoticed.
+	return styles.Warning.Render(ns[0].mark+" "+ns[0].label+" · Run") + " " + styles.Code.Render(ns[0].command)
 }
 
 // consoleRestarted tells a console it was restarted on a new anfra, after
