@@ -167,7 +167,7 @@ One error, rendered for each surface by the same pieces:
 
 ## In a Data App
 
-A Data App is a fourth surface, reached through the SDK in a browser frame rather than one of anfra's doors. The same rules hold: one shape (`DataAppError`, with the API's `scope` and `code`), only the SDK's own fields crossing into the frame, and every runtime error reported to the host, the inspect panel and `anfra.log`. See [errors/data-apps.md](errors/data-apps.md).
+A Data App is a fourth surface, reached through the SDK in a browser frame rather than one of anfra's doors. The same rules hold: one shape (`DataAppError`, with the API's `scope` and `code`), only the SDK's own fields crossing into the frame, and every runtime error reported to the host's listeners on its mount (on `anfra serve`, the inspect panel and `anfra.log`). See [errors/data-apps.md](errors/data-apps.md).
 
 ## At a platform's boundary
 
