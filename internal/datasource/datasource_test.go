@@ -3,6 +3,7 @@ package datasource
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,5 +36,12 @@ func TestLoadSettings(t *testing.T) {
 	}
 	if s := set["archive"].Settings; s != nil {
 		t.Errorf("archive settings = %v, want none", s)
+	}
+}
+
+// Without data_sources.yml, Load says how to make it.
+func TestLoadMissing(t *testing.T) {
+	if _, err := Load(t.TempDir()); err == nil || !strings.Contains(err.Error(), "Run `anfra init --data-sources`") {
+		t.Errorf("err = %v", err)
 	}
 }
