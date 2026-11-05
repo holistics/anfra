@@ -138,7 +138,6 @@ export async function inspect (options: { snapshot?: Snapshot, tab?: string, sub
   const host = createHost({
     plugins: [corePlugin({ submitQuery, fieldSuggestions: vi.fn() } as never), inspectPlugin(), probe, ...(options.plugins ?? [])],
     frameScript: 'x',
-    onError: () => {},
     captureConsole: true,
   });
   const mounted = host.mount({ container: document.body, definition: '', datasets: { sales: salesDataset }, user: options.user ?? testUser });

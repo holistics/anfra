@@ -9,7 +9,7 @@ Its readers:
 | The definition's code | `query.error`, a rejected call | decide what the viewer sees |
 | The viewer | only what the code shows | know whether to wait, sign in again or ask |
 | The author or coding agent | the inspect panel, `anfra.log` | fix the next try, often with no console |
-| The host and its operator | `onError`, `anfra.error` | route runtime errors to their telemetry |
+| The host and its operator | `mounted.on('anfra.error')` | route runtime errors to their telemetry |
 
 ## Goals
 
@@ -29,7 +29,7 @@ Its readers:
 | **The frame's word is not trusted.** Only named fields cross, each capped; a frame cannot claim a host's kind. | [the bridge](#crossing-the-bridge), [runtime errors](#runtime-errors) |
 | **Every failure leaves a record where it happened.** An error hidden from the frame is reported by the side that hid it. | [runtime errors](#runtime-errors) |
 | **Fail only what failed.** A query's error is stored on the query; a listener or a plugin that throws stops nothing else. | [runtime errors](#runtime-errors) |
-| **Report, don't decide.** The SDK is headless: it reports, and the host and the app choose what to show. No default error UI, no wording helper. | [where they go](#where-they-go-per-host), [handling](#for-an-apps-author) |
+| **Report, don't decide.** The SDK is headless: it reports, and the host and the app choose what to show. No default error UI, no wording helper, nothing written to the host's page. | [where they go](#where-they-go-per-host), [handling](#for-an-apps-author) |
 
 ## The flow
 
@@ -48,8 +48,8 @@ flowchart LR
   U -->|anfra.error| H
   K -.->|anfra.console| H
   HI -->|host.internal| H
-  H --> OE["onError"]
   H --> ON["mount<br/>listeners"]
+  ON --> T["a platform's<br/>telemetry"]
   ON --> P["panel:<br/>Problems"]
   ON --> L["appserve<br/>log route"]
   L --> LOG[("anfra.log")]
@@ -60,8 +60,7 @@ flowchart LR
 | query run, unhandled call, uncaught, listener, plugin | each reported by `reportError`, `app/reporting.ts` |
 | console lines | sent only with `createHost({ captureConsole })` |
 | host: check, cap | `checkErrorEvent` and the per-mount budget, `host/runtime.ts` |
-| onError | `createHost({ onError })`, every mount's errors |
-| mount listeners | `mounted.on('anfra.error')`, `mounted.on('anfra.console')` |
+| mount listeners | `mounted.on('anfra.error')`, `mounted.on('anfra.console')`: the host's, and plugins' (the panel). The only place they go. |
 | appserve log route | `POST /appserve/log`, written as `"service":"app"` |
 
 A query's error also stays on the query (`query.error`), and a call's rejection goes to the code that made it: reporting is in addition to the app's own handling, never in its place.
@@ -176,20 +175,20 @@ Never rows, never a request's params.
 |---|---|---|
 | `message` 2000 characters, `stack` 4000, other strings 200 | frame, host, and `anfra.log` again | truncated, saying so |
 | 120 errors a minute, and 120 console lines apart from them | each frame | not sent; how many, in the frame's console when the minute is over |
-| the same, per mount | the host, since a frame can post without the SDK | dropped; how many, on the page's console unless `onError` is given |
+| the same, per mount | the host, since a frame can post without the SDK | dropped |
 | 300 reports a minute per Data App | `POST /appserve/log` | dropped; how many, as `app.reports_dropped` when the minute is over |
 
 The host checks each event (`checkErrorEvent`): a kind not under a known source is refused, a frame cannot claim a `host.*` kind, and only the fields above are kept.
 
 ## Where they go, per host
 
-A host receives every mount's errors in one callback, `createHost({ onError })`, and each mount's as `mounted.on('anfra.error')` (console lines as `mounted.on('anfra.console')`). `onError` defaults to the page's console; a host that passes it has said where errors go, so the SDK writes nothing to the page's console, not even how many a mount sent over its budget.
+A host listens to each mount it makes: `mounted.on('anfra.error')`, and `mounted.on('anfra.console')` for console lines. Listening where it mounts, it knows which app each error is of without the event saying. That is the only place they go: the SDK writes nothing to the host's page, so a host that listens to nothing does not see `host.internal` errors (the frame's own kinds still show in the frame's console: the browser prints uncaught errors, and the SDK writes an `anfra:` note for a listener's or a plugin's failure).
 
 | Host | Errors go to | Console lines |
 |---|---|---|
 | `anfra serve` (appserve) | the inspect panel, and `anfra.log` | always captured: the panel, and `anfra.log` |
-| A custom host | its `onError`, the console unless given | when it captures them |
-| A platform (anfra-cloud) | its `onError`: its telemetry, or nowhere | when it captures them |
+| A custom host | wherever its listeners send them | when it captures them |
+| A platform (anfra-cloud) | its listeners: its telemetry | when it captures them |
 
 On `anfra serve`:
 

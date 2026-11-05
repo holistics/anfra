@@ -203,7 +203,7 @@ When a call fails, the frame gets the error only if it is one of the SDK's (`Dat
 
 A frame's event reaches the host only if a plugin declared it in `host.events`, and only in the form that plugin's check returns. The definition makes up an event's payload just as it makes up a call's request, and the plugin that owns the event checks its shape once, so each host's listeners don't have to.
 
-The kernel's own events are checked by the runtime. Two are for every host: `anfra.error`, each runtime error of the app, and `anfra.console`, its `console.error` and `console.warn` lines when the host captures them (`createHost({ captureConsole })`). A host reads them per mount with `mounted.on`, or every mount's errors with `createHost({ onError })`. See [errors/data-apps.md](errors/data-apps.md#runtime-errors).
+The kernel's own events are checked by the runtime. Two are for every host: `anfra.error`, each runtime error of the app, and `anfra.console`, its `console.error` and `console.warn` lines when the host captures them (`createHost({ captureConsole })`). A host reads them per mount with `mounted.on`; the SDK writes neither to the host's page. See [errors/data-apps.md](errors/data-apps.md#runtime-errors).
 
 ### Middleware
 
