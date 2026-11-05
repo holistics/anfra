@@ -116,7 +116,7 @@ Use the cloud's public origin (Vite in local development), not `localhost` for H
 
 ## Debugging
 
-- **Logs:** each repo's go to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log` (`~/.anfra` by default; `anfra status` in the repo prints the path), anfra's records and the sidecars' stderr together. `anfra serve` also writes them to stderr, and `ANFRA_LOG_STDERR` changes that for any command (`1` on, `0` off); `LOG_LEVEL` sets the level.
+- **Logs:** each repo's go to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log` (`~/.anfra` by default; `anfra status` in the repo prints the path), anfra's records and the sidecars' stderr together. `anfra serve` also writes them to stderr, and `ANFRA_LOG_STDERR` changes that for any command (`1` on, `0` off); `LOG_LEVEL` sets the level. A Data App open in `anfra serve` adds its runtime errors and console warnings there too, as `"service":"app"` lines with the app's path (`ANFRA_NO_APP_LOGS=1` turns that off); see [errors in a Data App](docs/designs/errors/data-apps.md#where-they-go-per-host).
 - **Traces:** set `OTEL_EXPORTER_OTLP_ENDPOINT` to a collector's OTLP/HTTP receiver. One command or request becomes one trace, through to anfra-node.
 - **Versions:** a build from source reports `<release>+<commit>[.dirty]` (`anfra version`), so a log or trace says which source it came from.
 
