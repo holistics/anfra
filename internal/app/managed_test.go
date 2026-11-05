@@ -185,7 +185,7 @@ func TestCompilingSQLAsksForNoConnection(t *testing.T) {
 		t.Fatalf("query.compile in SQL: %v", err)
 	}
 	_, err := Invoke(context.Background(), cc, "query.compile", []byte(`{"query":"select 1","lang":"sql","data_source":"gone"}`))
-	if err == nil || !strings.Contains(err.Error(), "no data source gone") {
+	if err == nil || !strings.Contains(err.Error(), `data source "gone" is not defined`) {
 		t.Errorf("an unknown data source: %v", err)
 	}
 	if sources.connections != 0 {

@@ -19,7 +19,7 @@ var NS = apperr.DefineNamespace("anfra")
 var (
 	UnknownCommand     = apperr.DefinePublicCode(NS, "unknown_command", apperr.Client, "No such command.")
 	DataPermsMissing   = apperr.DefinePublicCode(NS, "data_perms_missing", apperr.Client, "No data permissions were decided.")
-	SidecarUnavailable = apperr.DefinePublicCode(NS, "sidecar_unavailable", apperr.Server, "A sidecar is unavailable.")
+	SidecarUnavailable = apperr.DefinePublicCode(NS, "sidecar_unavailable", apperr.Server, "A sidecar (a process anfra runs to compile AML or run queries) is unavailable.")
 	// QueryFailed: the data source did not run the query — the database
 	// rejecting it, or the data source unreachable, or its credentials refused:
 	// what canal-query scopes "User", without saying which. Each is the user's to

@@ -50,7 +50,7 @@ func TestEditConfigString(t *testing.T) {
 	}
 }
 
-// A refused edit names the line to write, and changes nothing; a held lock
+// A refused edit names the value to set, and changes nothing; a held lock
 // refuses, as git's does.
 func TestSetConfigStringRefusesSafely(t *testing.T) {
 	dir := t.TempDir()
@@ -59,8 +59,8 @@ func TestSetConfigStringRefusesSafely(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := SetString(path, "org", "url", "https://bi.example.com/o/acme")
-	if err == nil || !strings.Contains(err.Error(), "url: https://bi.example.com/o/acme") {
-		t.Errorf("err = %v, want the line to write by hand", err)
+	if err == nil || !strings.Contains(err.Error(), "Set org.url to https://bi.example.com/o/acme yourself") {
+		t.Errorf("err = %v, want the value to set by hand", err)
 	}
 	if b, _ := os.ReadFile(path); string(b) != "org:\n  other: 1\n" {
 		t.Errorf("a refused edit changed the file: %q", b)

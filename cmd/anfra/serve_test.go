@@ -79,7 +79,7 @@ func TestServeRoutes(t *testing.T) {
 			[]string{"Accept", "application/json, text/event-stream"}, 200, `"serverInfo":{"name":"anfra"`},
 		{"health says who it is", http.MethodGet, "/health", ``, nil, 200, `"repo_id":"` + r.ID + `","instance_id":"i-1"`},
 		// The guards.
-		{"another host: DNS rebinding", http.MethodPost, "/api/core.version", `{}`, []string{"Host", "evil.example:7878"}, 400, `Unknown host`},
+		{"another host: DNS rebinding", http.MethodPost, "/api/core.version", `{}`, []string{"Host", "evil.example:7878"}, 400, `only accepts requests addressed to`},
 		{"localhost is this host", http.MethodPost, "/api/core.version", `{}`, []string{"Host", "localhost:7878"}, 200, `"version"`},
 		{"a cross-site page", http.MethodPost, "/api/core.version", `{}`, []string{"Sec-Fetch-Site", "cross-site"}, 400, `Cross-origin`},
 		{"a form's body", http.MethodPost, "/api/core.version", `{}`, []string{"Content-Type", "text/plain"}, 400, `application/json`},

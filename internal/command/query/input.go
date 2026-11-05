@@ -62,9 +62,9 @@ func (in QueryRunInput) check() error {
 		for _, a := range []struct {
 			name, what string
 			set        bool
-		}{{"input", "Query Input", !in.Input.IsZero()}, {"page", "page", in.Page != 0}, {"page_size", "page size", in.PageSize != 0}, {"timezone", "time zone", in.Timezone != ""}} {
+		}{{"input", "a Query Input", !in.Input.IsZero()}, {"page", "a page", in.Page != 0}, {"page_size", "a page size", in.PageSize != 0}, {"timezone", "a time zone", in.Timezone != ""}} {
 			if a.set {
-				return command.InvalidArg(a.name, "unsupported", a.what+" is only applicable to AQL queries")
+				return command.InvalidArg(a.name, "unsupported", "only AQL queries can have "+a.what)
 			}
 		}
 		return nil
@@ -176,5 +176,5 @@ func (in QueryInput) sqlSources(cc command.CommandContext) (datasource.DataSourc
 }
 
 func (in QueryInput) unknownDataSource() error {
-	return command.InvalidArg("data_source", "invalid", "no data source "+in.DataSource+" among the repo's data sources")
+	return command.InvalidArg("data_source", "invalid", fmt.Sprintf("data source %q is not defined in this repo", in.DataSource))
 }

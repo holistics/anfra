@@ -235,7 +235,7 @@ func TestDownload(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/exports/x" {
-			httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "No such export, or its link has expired."))
+			httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "This export's link is invalid or has expired. Run the export again for a new link."))
 			return
 		}
 		_, _ = w.Write([]byte("b\n2\n"))

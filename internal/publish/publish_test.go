@@ -283,7 +283,7 @@ func TestPublishValidatesFirst(t *testing.T) {
 	write(t, dir, map[string]string{"a.aml": "Model {"})
 	env, _, _ := testEnv(never(t))
 	env.Validate = func(context.Context) error {
-		return errors.New("the repo has errors: fix them and publish again")
+		return errors.New("not published, because the repo has errors. Fix them, and publish again")
 	}
 	if _, err := Run(context.Background(), dir, Options{SetOrg: url}, env); err == nil || !strings.Contains(err.Error(), "has errors") {
 		t.Errorf("err = %v, want the validation's refusal", err)

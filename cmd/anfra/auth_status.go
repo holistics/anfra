@@ -37,7 +37,7 @@ func statusRepoOrg(dir string) (*string, error) {
 		if err == nil {
 			config, err := repoconfig.Read(dir)
 			if err != nil {
-				return nil, clierr.Precondition("Can't read a valid repo configuration from %q: check its permissions and YAML syntax.", repoconfig.Path(dir))
+				return nil, clierr.Precondition("Can't read this repo's settings: %v.", err)
 			}
 			if config.Org.URL == "" {
 				return nil, nil

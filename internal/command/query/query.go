@@ -79,7 +79,7 @@ var Validate = command.Define(command.Def[QueryInput, query.QueryValidation]{
 		if in.Lang == "sql" {
 			// The intent is a dry run on the data source; not every dialect has
 			// one through canal-query, and its errors carry no positions yet.
-			return command.InvalidArg("lang", "unsupported", "validating a SQL query is not supported yet; you can still run it directly")
+			return command.InvalidArg("lang", "unsupported", "validating a SQL query is not supported yet")
 		}
 		return in.target()
 	},

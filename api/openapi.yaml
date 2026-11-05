@@ -415,7 +415,7 @@ components:
       type: object
     ErrorBodyPageTooLarge:
       additionalProperties: false
-      description: The page is larger than this server answers at once.
+      description: The page is larger than this server may return at once.
       properties:
         code:
           const: page_too_large
@@ -533,7 +533,7 @@ components:
       type: object
     ErrorBodySidecarUnavailable:
       additionalProperties: false
-      description: A sidecar is unavailable.
+      description: A sidecar (a process anfra runs to compile AML or run queries) is unavailable.
       properties:
         code:
           const: sidecar_unavailable
