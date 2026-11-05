@@ -18,7 +18,7 @@ anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo i
 {"ts":"…","level":"INFO","msg":"Update available","service":"anfra-host","repo":"…","pid":4242,"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","event":"serve.update_available","latest":"1.4.0","current":"1.3.2"}
 ```
 
-- **`msg`**: what happened, as a sentence for people. Capitalized, no full stop: `Update available`. It may carry values. It can be reworded in any release, so nothing matches on it.
+- **`msg`**: what happened, as a sentence for people. Capitalized, no full stop: `Update available`. It may carry values, as a Data App's `app.error` carries the app's own message. It can be reworded in any release, so nothing matches on it.
 - **`event`**: what happened, as a name for programs: `<area>.<what happened>` in snake_case (`serve.update_available`, `routine.failed`, `rpc.request`). Alerts, dashboards, searches and tests match on it. Every record has one.
 - **Attributes**: the facts that vary, with snake_case keys (`routine`, `status`, `duration`). An alert reads them with the event: `http.request` with a `status` of 500 or more.
 - **`level`**: `DEBUG`, `INFO`, `WARN` or `ERROR`, in every service. For a failure, its error's scope decides it (`user` info, `client` warn, `server` error; see [errors](errors.md)), so operators alert on what anfra must fix. Otherwise, warn for what the operator should act on, info for what changed, debug for detail.

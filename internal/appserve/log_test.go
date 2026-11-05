@@ -68,16 +68,16 @@ func TestLog(t *testing.T) {
 		t.Fatalf("%d lines, want 3: %v", len(got), got)
 	}
 	want := map[string]any{
-		"level": "ERROR", "msg": "app.error", "service": "app", "app": "sales.html", "kind": "query", "code": "query_failed", "scope": "user",
-		"message": "column x does not exist", "request_id": "req-1", "entity": "orders", "at": "2026-11-02T00:00:00Z",
+		"level": "ERROR", "event": "app.error", "msg": "column x does not exist", "service": "app", "app": "sales.html", "kind": "query", "code": "query_failed", "scope": "user",
+		"request_id": "req-1", "entity": "orders", "at": "2026-11-02T00:00:00Z",
 	}
 	if a, b := jsonOf(got[0]), jsonOf(want); a != b {
 		t.Errorf("error line =\n  %s\nwant\n  %s", a, b)
 	}
-	if got[1]["level"] != "WARN" || got[1]["msg"] != "app.console" || got[1]["message"] != "careful" {
+	if got[1]["level"] != "WARN" || got[1]["event"] != "app.console" || got[1]["msg"] != "careful" {
 		t.Errorf("console line = %v", got[1])
 	}
-	if m, _ := got[2]["message"].(string); !strings.HasSuffix(m, "… (truncated)") || len([]rune(m)) != messageLimit+len([]rune("… (truncated)")) {
+	if m, _ := got[2]["msg"].(string); !strings.HasSuffix(m, "… (truncated)") || len([]rune(m)) != messageLimit+len([]rune("… (truncated)")) {
 		t.Errorf("a long message is not capped: %d runes", len([]rune(m)))
 	}
 }
@@ -106,7 +106,7 @@ func TestLogMounted(t *testing.T) {
 		}
 	}
 	got := lines(t, buf)
-	want := []map[string]any{{"level": "INFO", "msg": "app.mounted", "service": "app", "app": "sales.html", "modified": "2026-11-03T05:00:00Z"}}
+	want := []map[string]any{{"level": "INFO", "event": "app.mounted", "msg": "Data App mounted", "service": "app", "app": "sales.html", "modified": "2026-11-03T05:00:00Z"}}
 	if a, b := jsonOf(got), jsonOf(want); a != b {
 		t.Errorf("lines =\n  %s\nwant\n  %s", a, b)
 	}
@@ -151,7 +151,7 @@ func TestLogRateLimit(t *testing.T) {
 	now = now.Add(time.Minute)
 	report("sales.html")
 	got := lines(t, buf)
-	if len(got) != 2 || got[0]["msg"] != "app.reports_dropped" || got[0]["dropped"] != float64(7) || got[1]["msg"] != "app.error" {
+	if len(got) != 2 || got[0]["event"] != "app.reports_dropped" || got[0]["dropped"] != float64(7) || got[1]["event"] != "app.error" {
 		t.Errorf("after the minute: %v", got)
 	}
 }
@@ -177,7 +177,7 @@ func TestLogRateLimitFloodStops(t *testing.T) {
 	buf.Reset()
 	timers[0]()
 	got := lines(t, buf)
-	if len(got) != 1 || got[0]["msg"] != "app.reports_dropped" || got[0]["dropped"] != float64(3) {
+	if len(got) != 1 || got[0]["event"] != "app.reports_dropped" || got[0]["dropped"] != float64(3) {
 		t.Errorf("at the minute's end: %v", got)
 	}
 	if len(s.reports.windows) != 0 {

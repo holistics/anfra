@@ -12,6 +12,24 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
+	"github.com/holistics/anfra/shared/logkit"
+)
+
+// A Data App's records carry its path as app. Their msg is what the app said, for an error or a
+// console line: the sentence a person reads is the app's own (docs/designs/logs.md).
+var (
+	eventAppError = logkit.DefineEvent("app.error",
+		"A Data App's runtime error, as its SDK host reported it from the browser.",
+		"app", "kind", "code", "scope", "request_id", "entity", "call", "stack", "at")
+	eventAppConsole = logkit.DefineEvent("app.console",
+		"A console line a Data App wrote in the browser (a warning or an error).",
+		"app", "stack", "at")
+	eventAppMounted = logkit.DefineEvent("app.mounted",
+		"The appserve page loaded a Data App; the records after it are of the file as it was then.",
+		"app", "modified")
+	eventAppReportsDropped = logkit.DefineEvent("app.reports_dropped",
+		"A Data App reported more in a minute than the log takes; the ones over were dropped.",
+		"app", "dropped", "hint")
 )
 
 // Report is what the appserve page posts to /appserve/log: one runtime error, or one console line,
@@ -173,7 +191,8 @@ func (s *Server) logDropped(path string, dropped int) {
 	if s.opts.AppLogger == nil {
 		return
 	}
-	s.opts.AppLogger.LogAttrs(context.Background(), slog.LevelWarn, "app.reports_dropped", slog.String("app", path), slog.Int("dropped", dropped),
+	s.opts.AppLogger.LogAttrs(context.Background(), slog.LevelWarn, "Data App reports dropped",
+		slog.Any(logkit.EventKey, eventAppReportsDropped), slog.String("app", path), slog.Int("dropped", dropped),
 		slog.String("hint", "the Data App reported more than the log takes in a minute"))
 }
 
@@ -205,15 +224,17 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e := rep.Event
-	attrs := []slog.Attr{slog.String("app", rep.Path)}
+	level, event := slog.LevelError, eventAppError
+	if rep.Type == "console" {
+		event = eventAppConsole
+	}
+	attrs := []slog.Attr{slog.Any(logkit.EventKey, event), slog.String("app", rep.Path)}
 	add := func(key, value string, limit int) {
 		if value != "" {
 			attrs = append(attrs, slog.String(key, clip(value, limit)))
 		}
 	}
-	level, msg := slog.LevelError, "app.error"
 	if rep.Type == "console" {
-		msg = "app.console"
 		if e.Level == "warn" {
 			level = slog.LevelWarn
 		}
@@ -225,10 +246,9 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 		add("entity", e.Entity, shortLimit)
 		add("call", e.Call, shortLimit)
 	}
-	add("message", e.Message, messageLimit)
 	add("stack", e.Stack, stackLimit)
 	add("at", e.At, shortLimit)
-	logger.LogAttrs(r.Context(), level, msg, attrs...)
+	logger.LogAttrs(r.Context(), level, clip(e.Message, messageLimit), attrs...)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -244,6 +264,6 @@ func (s *Server) logMounted(ctx context.Context, logger *slog.Logger, path strin
 	if err != nil {
 		return
 	}
-	logger.LogAttrs(ctx, slog.LevelInfo, "app.mounted", slog.String("app", path),
+	logger.LogAttrs(ctx, slog.LevelInfo, "Data App mounted", slog.Any(logkit.EventKey, eventAppMounted), slog.String("app", path),
 		slog.String("modified", info.ModTime().UTC().Format(time.RFC3339Nano)))
 }
