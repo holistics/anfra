@@ -46,9 +46,12 @@ const (
 	skillsManifest = "plugins/anfra/.claude-plugin/plugin.json"
 	skillsRef      = "main"
 
-	// How long a cached update check stays fresh: half a day, so a release, of
+	// How long a cached update check stays fresh: an hour, so a release, of
 	// anfra or of the skills, is noticed within it.
-	checkTTL = 12 * time.Hour
+	checkTTL = time.Hour
+	// How long after a failed check of anfra the next waits, so that offline,
+	// each command doesn't start another.
+	retryAfter = 10 * time.Minute
 
 	// Per-request timeouts: the release lookup is a small JSON response; the asset
 	// download is a large binary (sidecars are embedded), so it gets much longer.
@@ -313,6 +316,9 @@ type cache struct {
 	// unknown, never as a version, so it can't pass for current.
 	SkillsLatest    string    `json:"skills_latest,omitempty"`
 	SkillsCheckedAt time.Time `json:"skills_checked_at,omitzero"`
+	// FailedAt is when anfra's last check failed; zero once one succeeds. The
+	// skills' needs none: their failure is cached, as unknown.
+	FailedAt time.Time `json:"failed_at,omitzero"`
 }
 
 func cachePath() (string, error) {
@@ -349,10 +355,16 @@ func writeCache(c *cache) {
 }
 
 // Stale reports whether the cached check, of anfra or of the skills, is missing
-// or older than the TTL.
+// or older than the TTL, unless anfra's check failed less than retryAfter ago.
 func Stale() bool {
 	c, ok := readCache()
-	return !ok || time.Since(c.CheckedAt) > checkTTL || time.Since(c.SkillsCheckedAt) > checkTTL
+	if !ok {
+		return true
+	}
+	if time.Since(c.FailedAt) < retryAfter {
+		return false
+	}
+	return time.Since(c.CheckedAt) > checkTTL || time.Since(c.SkillsCheckedAt) > checkTTL
 }
 
 // Refresh runs a live check, of anfra and of the skills, and updates the cache.
@@ -362,26 +374,39 @@ func Refresh(ctx context.Context) error {
 	rel, err := Latest(ctx)
 	if err == nil {
 		RecordCheck(rel)
+	} else {
+		c := cached()
+		c.FailedAt = time.Now()
+		writeCache(c)
 	}
-	skills, serr := LatestSkills(ctx)
-	c, _ := readCache()
-	if c == nil {
-		c = &cache{}
-	}
+	return errors.Join(err, RefreshSkills(ctx))
+}
+
+// RefreshSkills runs a live check of the skills alone, and updates the cache.
+// A failure is cached as unknown.
+func RefreshSkills(ctx context.Context) error {
+	skills, err := LatestSkills(ctx)
+	c := cached()
 	c.SkillsLatest, c.SkillsCheckedAt = skills, time.Now()
 	writeCache(c)
-	return errors.Join(err, serr)
+	return err
+}
+
+// cached is the cache, or an empty one when there is none.
+func cached() *cache {
+	if c, ok := readCache(); ok {
+		return c
+	}
+	return &cache{}
 }
 
 // RecordCheck stores an already-fetched release in the cache (no network), so a
 // foreground check refreshes the notice cache without a second request. It
 // keeps the skills' check as it was.
 func RecordCheck(r *Release) {
-	c, _ := readCache()
-	if c == nil {
-		c = &cache{}
-	}
+	c := cached()
 	c.CheckedAt, c.LatestVersion, c.LatestTag = time.Now(), r.Version, r.Tag
+	c.FailedAt = time.Time{}
 	writeCache(c)
 }
 

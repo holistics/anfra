@@ -49,7 +49,8 @@ func newUpdateCmd() *cobra.Command {
 		Use:   "check",
 		Short: "Check for a newer release, without installing it",
 		Long: "Check for a newer release, asking GitHub now rather than reading the background check, and\n" +
-			"install nothing.\n\n" +
+			"install nothing. It also checks the latest anfra skills version, for\n" +
+			"`anfra version --skills` to compare with.\n\n" +
 			"Its result is `anfra version`'s answer, checked now.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return updateRun(cmd, true) },
@@ -100,8 +101,11 @@ func runUpdate(ctx context.Context, checkOnly bool, errOut io.Writer) (updateRes
 	if err != nil {
 		return updateResult{}, err
 	}
-	// Record the check so the background notice stays quiet right after.
+	// Record the check so the background notice stays quiet right after, and
+	// check the skills too, so the whole cache is current: best-effort, as the
+	// result doesn't report them.
 	update.RecordCheck(rel)
+	_ = update.RefreshSkills(ctx)
 
 	res := updateResult{
 		Version:   meta.Version,
@@ -211,9 +215,8 @@ func knownSkills() *command.SkillsInfo {
 }
 
 // checkUpdates announces a newer release while serve runs: at startup and then
-// once the cache Check reads has gone stale, daily, so a server left up for days
-// still hears of one. It is a periodic routine's run, checked hourly: a fresh
-// cache costs a read. It runs off the request path and announces each version
+// hourly, so a server left up for days still hears of one. It is a periodic
+// routine's run: a fresh cache costs a read, a stale one a lookup. It runs off the request path and announces each version
 // once. Never auto-updates: the running server would keep the old version
 // anyway. Silent on any error (offline, rate limited).
 func checkUpdates(logger *slog.Logger) func(context.Context) error {
@@ -243,7 +246,7 @@ func maybeNotifyUpdate(invoked string) {
 	if updateNotifyDisabled() || noNotifyCommands[invoked] {
 		return
 	}
-	// The background refresh runs whoever reads (at most daily), so what an
+	// The background refresh runs whoever reads (at most hourly), so what an
 	// agent reads through `anfra version` and the skills' session hook stays
 	// current. CI spawns nothing.
 	defer func() {
