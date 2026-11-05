@@ -8,9 +8,19 @@ A release is one `anfra` binary per platform, with both sidecars embedded ([side
 
 To cut a release, on a branch:
 
-1. `pnpm bump <version>` (`scripts/bump.sh`) sets `version`, and the SDK's (`web/sdk/package.json`), and prepends the changes since the last `v*` tag to `CHANGELOG.md`, from conventional commits (`conventional-changelog.config.mjs` says which commit types appear).
+1. `pnpm bump <version>` (`scripts/bump.sh`), or `pnpm bump next` for the version the commits call for (below), sets `version`, and the SDK's (`web/sdk/package.json`), and prepends the changes since the last `v*` tag to `CHANGELOG.md`, from conventional commits (`conventional-changelog.config.mjs` says which commit types appear).
 2. Update the sidecar pins too, if this release takes new ones. A pin change needs a version bump, or no new tag is cut.
 3. Merge to `main`.
+
+### The release pull request
+
+`release_pr.yml` does steps 1 and 3's pull request for you, Monday to Saturday at 05:00 UTC: it runs `pnpm bump` on a branch fresh from `main`, commits `release: <version>`, and opens the pull request. Merging it is the release. The workflow only sets up and calls `scripts/release-pr.sh`, which `--dry-run` runs locally: everything but the push and the pull request, which it prints.
+
+- **The version** comes from the conventional commits since the last tag (`scripts/next-version.mjs`), read as the changelog reads them: conventional-recommended-bump with the changelog's preset and types (`conventional-changelog.config.mjs`). A breaking change bumps the major, or the minor while below 1.0; a `feat` the minor; any other type the changelog shows (`fix`, `perf`, `build`, `security`) the patch. A type the changelog hides is not releasable; with only those since the last tag, there is nothing to release. After a prerelease, it is the release that prerelease leads to. `pnpm next-version` prints it; `pnpm bump next` bumps to it.
+- **One pull request, always current.** It lives on one branch, `release/next`, which each run rebuilds from `main` and force-pushes, updating the pull request's title and notes. So there is never more than one, and it is never more than a day behind `main`. When there is nothing to release (one was merged since), the run closes it.
+- **By hand,** from the Actions tab or `gh workflow run release_pr.yml`, with an optional `version` to release instead of the computed one, and an optional `branch`.
+- **A release that needs commits of its own,** sidecar pins say: run it with a new `branch` (`-f branch=release/0.19.0`), which must not exist yet, and push them there. `release/next` is the workflow's own: commits pushed onto it are lost at the next run.
+- **CI does not start on its own** on the pull request, for now: the workflow opens it with its own `GITHUB_TOKEN`, and GitHub starts no workflow for what that token does. Approve its workflows, with the button GitHub shows on the pull request, to run CI; again after each run updates it. A GitHub App's token would fix it; the workflow's header has the TODO.
 
 `tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`. If the version has no tag yet, it creates `v<version>` and pushes it with a deploy key (`ANFRA_DEPLOY_KEY`), and the push triggers `build_release.yml`. The deploy key is needed twice over: the repository's tag ruleset blocks creating release tags, and the workflow's own token cannot bypass it, while a deploy key can; and a tag pushed with the workflow's own token would not trigger another workflow. `build_release.yml` also runs on a tag pushed by hand, and on `workflow_dispatch`: dispatched on a tag (`gh workflow run build_release.yml --ref v<version>`), it releases that tag again; dispatched on a branch, it is a test build, which uploads artifacts and publishes nothing.
 

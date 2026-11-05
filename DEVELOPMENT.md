@@ -91,7 +91,7 @@ Commit both. CI refuses a stale one, and a breaking change that no commit declar
 
 Commit messages are checked by commitlint, in a git hook and in CI: the rules, types and scopes are in `commitlint.config.mjs`. `pnpm commit` writes one interactively.
 
-A release is a version bump merged to main: `pnpm bump <version>` updates `manifest.yml`, the SDK's version and `CHANGELOG.md`, and the release workflows tag, build and publish: the binaries, the image, the SDK on npm, and the skills to [holistics/anfra-skills](https://github.com/holistics/anfra-skills), when they changed. See [release](docs/designs/release.md).
+A release is a version bump merged to main: `pnpm bump <version>`, or `pnpm bump next` for the version the commits since the last release call for (`pnpm next-version` prints it), updates `manifest.yml`, the SDK's version and `CHANGELOG.md`, and the release workflows tag, build and publish: the binaries, the image, the SDK on npm, and the skills to [holistics/anfra-skills](https://github.com/holistics/anfra-skills), when they changed. `release_pr.yml` opens that pull request every day but Sunday, on `release/next`, at the version the commits since the last release call for; run it by hand to name the version, or a new branch for a release that needs commits of its own. See [release](docs/designs/release.md).
 
 The Docker image is built from release binaries; the `Dockerfile`'s header says how to build it locally.
 

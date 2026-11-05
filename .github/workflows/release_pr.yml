@@ -1,0 +1,71 @@
+# Open the pull request that cuts the next anfra release: `pnpm bump <version>` on a fresh
+# branch from main, committed as `release: <version>`. Merging it is the release:
+# tag_and_release.yml tags it and build_release.yml publishes it.
+#
+# Daily (Monday to Saturday), onto one branch, release/next: each run rebuilds it from main
+# and force-pushes it, and creates or updates its one pull request, so there is never more
+# than one, and it is never more than a day behind main. When main has nothing releasable
+# since the last tag (scripts/next-version.mjs), it closes that pull request instead.
+# scripts/release-pr.sh does all of it, and runs locally with --dry-run.
+#
+# By hand (workflow_dispatch): `version` names the version instead of computing it; `branch`
+# names a new branch to put it on instead of release/next, for a release that needs commits
+# of its own (sidecar pins, say): push them onto that branch. That branch must not exist yet,
+# so a run never overwrites anyone's commits; release/next is the bot's own and gets
+# overwritten every day.
+#
+# TODO: push and open the pull request as a GitHub App (actions/create-github-app-token)
+# instead of GITHUB_TOKEN. GitHub starts no workflow for what GITHUB_TOKEN does, so CI
+# (continuous_integration.yml, and its required ci_passed) does not run on the pull request
+# until someone approves it, with the button GitHub shows on the pull request, and again
+# after each later run updates it.
+name: Release PR
+
+on:
+  schedule:
+    - cron: "0 5 * * 1-6" # 05:00 UTC, Monday to Saturday
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.19.0. Empty: computed from the commits since the last tag."
+        required: false
+        type: string
+      branch:
+        description: "A new branch to open the pull request from, e.g. release/0.19.0. Empty: release/next, overwritten."
+        required: false
+        type: string
+
+permissions:
+  contents: write # push the release branch
+  pull-requests: write # open, edit and close its pull request
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+env:
+  # TODO: a GitHub App's token, and its bot (`<app slug>[bot]`) as GIT_BOT; see the header.
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GIT_BOT: github-actions[bot] # the release commit's author
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          fetch-depth: 0 # the commits and tags since the last release
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0; the version is package.json's packageManager
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile # conventional-changelog and -recommended-bump
+
+      - name: Open, update or close the release pull request
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+        run: scripts/release-pr.sh ${INPUT_VERSION:+--version "$INPUT_VERSION"} ${INPUT_BRANCH:+--branch "$INPUT_BRANCH"}
