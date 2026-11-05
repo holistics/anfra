@@ -207,6 +207,50 @@ func TestRefreshCachesTheSkills(t *testing.T) {
 	}
 }
 
+// RefreshSkills, which `anfra update check` runs after its own check, caches
+// the skills and keeps anfra's check.
+func TestRefreshSkillsKeepsAnfrasCheck(t *testing.T) {
+	fakeGitHub(t, http.StatusOK, `{"version": "0.4.5"}`)
+	RecordCheck(&Release{Version: "9.0.1", Tag: "v9.0.1"})
+	if err := RefreshSkills(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if latest, _, ok := CachedSkills(); !ok || latest != "0.4.5" {
+		t.Errorf("skills: %q, %v", latest, ok)
+	}
+	if r := Cached(); r == nil || r.Version != "9.0.1" {
+		t.Errorf("anfra: %+v", r)
+	}
+	if Stale() {
+		t.Error("stale after both checks")
+	}
+}
+
+// After anfra's check fails, the cache isn't stale for retryAfter, so offline,
+// each command doesn't start another check; one that succeeds clears it.
+func TestAFailedCheckWaitsToRetry(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	setBases(t, "http://127.0.0.1:1") // nothing listens: every lookup fails
+	if err := Refresh(context.Background()); err == nil {
+		t.Fatal("got no error")
+	}
+	if Stale() {
+		t.Error("stale right after a failed check")
+	}
+
+	c, _ := readCache()
+	c.FailedAt = time.Now().Add(-retryAfter - time.Second)
+	writeCache(c)
+	if !Stale() {
+		t.Error("not stale once retryAfter has passed")
+	}
+
+	RecordCheck(&Release{Version: "9.0.0", Tag: "v9.0.0"})
+	if c, _ := readCache(); !c.FailedAt.IsZero() {
+		t.Errorf("a successful check kept the failure: %v", c.FailedAt)
+	}
+}
+
 // A cache from before the skills' check is stale, so the next background
 // refresh fills it in.
 func TestACacheWithoutTheSkillsIsStale(t *testing.T) {

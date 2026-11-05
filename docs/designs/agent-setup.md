@@ -389,8 +389,8 @@ Optional, and only if phase 1 turns out not to be enough. Phase 1 can't tell a m
 
 `anfra agent setup` is the one place that acts on the skills, and reports them. Everything else only points at it.
 
-- **`anfra update`** updates only the binary: it never runs an agent's CLI. Running `anfra agent setup` again updates the plugins. `anfra update`, and `anfra update check`, end with [the attention line](#the-attention-line) when something needs it.
-- **The background check** is the existing `__update-check`, now twice a day (its cache lasts 12 hours, for anfra's release and the skills' alike):
+- **`anfra update`** updates only the binary: it never runs an agent's CLI. Running `anfra agent setup` again updates the plugins. `anfra update`, and `anfra update check`, also check the latest skills version, for `anfra version --skills` to compare with, and end with [the attention line](#the-attention-line) when something needs it.
+- **The background check** is the existing `__update-check`, hourly while anfra is in use (its cache lasts an hour, for anfra's release and the skills' alike; after anfra's check fails, the next waits 10 minutes):
   - it fetches the latest skills version: the `version` in the skills repo's plugin manifest on `main`;
   - it records the installed plugins and their versions, through `claude plugin list --json` and `codex plugin list --marketplace anfra-skills --json`, in `~/.anfra/agents-check.json`. Setup records them too, after it acts, so the notice is current after it.
 
@@ -416,7 +416,7 @@ The last says nothing is installed: only when a coding agent is detected on the 
 - **Where it shows:**
   - at the end of `anfra update` and `anfra update check`;
   - as the notice after a command at a terminal, at most once a day, not after `anfra agent setup` itself. It respects `ANFRA_NO_UPDATE_NOTIFIER`. Agents get no notice: the session hook and the `AGENTS.md` block are theirs.
-- **Its limits:** the plugins' versions are up to 12 hours old, so an update made in the agent's own CLI shows only after the next check. Outside an anfra repo it can't see any repo's block.
+- **Its limits:** the plugins' versions are up to an hour old, so an update made in the agent's own CLI shows only after the next check. Outside an anfra repo it can't see any repo's block.
 
 Claude Code's own auto-update is off for our marketplace, because it's a third-party one. See [Open questions](#open-questions).
 
@@ -535,7 +535,7 @@ This comes after steps 3 and 4, since the block names `version --skills` and `ag
 - **Setup's result** is what it did, then the check report, as [described above](#the-result-and-exit-code).
 - **The attention line** (`agents.Attention`), as [described above](#the-attention-line), at the end of `anfra update` and `anfra update check`, and as the notice after a command, at most once a day (`agents.Notice`).
 - **The plugins recorded** (`agents.RecordPlugins`, `~/.anfra/agents-check.json`), by the background check and by setup, for the line to read without starting the agents' CLIs.
-- **The background check twice a day:** its cache lasts 12 hours.
+- **The background check hourly:** its cache lasts an hour.
 - **`anfra update` doesn't update plugins:** setup is the one place that acts on the skills.
 
 ### 7. Move the skills into anfra
