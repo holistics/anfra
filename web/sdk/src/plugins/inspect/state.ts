@@ -78,7 +78,7 @@ function createState (): InspectState {
     errors,
     console: lines,
     addError (event) {
-      if (event.kind === 'query') return;
+      if (event.kind === 'call.query') return;
       const same = errors.find((entry) => entry.event.kind === event.kind && entry.event.message === event.message && entry.event.call === event.call);
       if (same) {
         same.count += 1;

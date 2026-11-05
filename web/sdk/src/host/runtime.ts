@@ -57,8 +57,9 @@ export interface HostOptions {
   /** The theme plugin UI follows: tabs, and frame halves in the plugin layer. Light defaults unless given. */
   theme?: ThemeInput;
   /**
-   * Every mounted Data App's runtime errors: a query that failed, the app's uncaught errors, a
-   * listener's exception, and a call this host failed and hid from the frame. Each mount's also
+   * Every mounted Data App's runtime errors, by kind (`AppErrorKind`): a query that failed, a call
+   * the app left unhandled, the frame's uncaught errors, a listener's or a plugin's failure, and a
+   * call this host failed and hid from the frame. Each mount's also
    * reach `mounted.on('anfra.error')`. `console.error` unless given; when given, the SDK writes
    * nothing to the page's console, not even how many errors a mount sent over its budget.
    */
@@ -401,9 +402,9 @@ export function createHost (options: HostOptions): Host {
       endpoint = createEndpoint(post, {
         answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
         hidden: (name, err) => {
-          const { message, stack, at } = describeError('hidden', err);
+          const { message, stack, at } = describeError('host.internal', err);
           reportError({
-            kind: 'hidden',
+            kind: 'host.internal',
             code: 'call_failed',
             scope: 'server',
             message,

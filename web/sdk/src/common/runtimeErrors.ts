@@ -5,12 +5,88 @@
  * each string capped. Never rows or a request's params.
  */
 
+/** Whose code failed, or which of the SDK's calls: the first part of an error's kind. */
+export type AppErrorSource = 'call' | 'app' | 'plugin' | 'host';
+
 /**
- * Where a runtime error came from: a query that ended in `error`; the app's own uncaught error or
- * unhandled rejection; a `subscribe()` listener's exception; a call the host failed and hid from
- * the frame (`call_failed`).
+ * Where a runtime error came from, as `<source>.<what>` in snake_case. Known today:
+ *
+ * - `call.query`: a query's run ended in `error`, whether or not the app shows it;
+ * - `call.<api>`: a call the app made and left unhandled, named as the app called it
+ *   (`call.fetch_more`, `call.export`, `call.load_options`, `call.lineage`; `Anfra.foo.bar()` is
+ *   `call.foo_bar`);
+ * - `app.uncaught`: an uncaught error or unhandled rejection in the frame;
+ * - `app.listener`: a `subscribe()` listener threw;
+ * - `plugin.uncaught`: a failure the SDK caught to keep the app running (a plugin's setup, answer
+ *   or drawing, the menu);
+ * - `host.internal`: a call the host failed and showed the frame only as `call_failed`.
+ *
+ * More may come under these sources: branch on the source, and treat a kind you don't know by it.
  */
-export type AppErrorKind = 'query' | 'uncaught' | 'listener' | 'hidden';
+export type AppErrorKind = `${AppErrorSource}.${string}`;
+
+const KIND = /^(call|app|plugin|host)\.[a-z][a-z0-9_]*$/;
+
+/** Whether `kind` is a well-formed kind under a known source. */
+export function isErrorKind (kind: unknown): kind is AppErrorKind {
+  return typeof kind === 'string' && kind.length <= 100 && KIND.test(kind);
+}
+
+/** `fetchMore` as a kind's part: `fetch_more`. */
+export function snakeCase (name: string): string {
+  return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[^A-Za-z0-9]+/g, '_').toLowerCase();
+}
+
+/** What a failed call's error says of the call: as the app called it, and over the bridge. */
+interface CallTag { api?: string, call?: string }
+
+const callTags = new WeakMap<object, CallTag>();
+
+/**
+ * Note on `err` the call it failed: `api` as the app called it (the outermost wins, since it is
+ * what the app wrote), `call` the bridge call (the innermost, the one that went over the bridge).
+ */
+export function tagCall (err: unknown, tag: CallTag): void {
+  if (typeof err !== 'object' || err === null) return;
+  const had = callTags.get(err) ?? {};
+  callTags.set(err, { api: tag.api ?? had.api, call: had.call ?? tag.call });
+}
+
+/**
+ * The call `err` failed, if one was noted: on it, or on the error it wraps (a `call_failed` that
+ * hides the original).
+ */
+export function callOf (err: unknown): CallTag | undefined {
+  for (let e = err, depth = 0; typeof e === 'object' && e !== null && depth < 5; e = (e as { cause?: unknown }).cause, depth += 1) {
+    const tag = callTags.get(e);
+    if (tag) return tag;
+  }
+  return undefined;
+}
+
+/** `to`, with the call `from` failed, if one was noted: the same failure, said again. */
+export function copyCallTag<T extends object> (from: object, to: T): T {
+  const tag = callTags.get(from);
+  if (tag) callTags.set(to, { ...tag });
+  return to;
+}
+
+/**
+ * `fn`, noting on each rejection the call `api`: a call the app leaves unhandled is then reported
+ * by its name. What it throws at once, or answers, it passes on as it is.
+ */
+export function namedCall<F extends (...args: never[]) => unknown> (fn: F, api: string): F {
+  return function (this: unknown, ...args: Parameters<F>) {
+    const out = fn.apply(this, args);
+    if (out && typeof (out as PromiseLike<unknown>).then === 'function') {
+      return (out as Promise<unknown>).then(undefined, (err: unknown) => {
+        tagCall(err, { api });
+        throw err;
+      });
+    }
+    return out;
+  } as F;
+}
 
 /** One runtime error of a mounted Data App. */
 export interface AppErrorEvent {
@@ -23,9 +99,9 @@ export interface AppErrorEvent {
   requestId?: string;
   /** The query or control it concerns. */
   entity?: string;
-  /** For `uncaught`, `listener` and `hidden`: where it was thrown, truncated. */
+  /** Where it was thrown, truncated; not for `call.*`, whose stack is the SDK's. */
   stack?: string;
-  /** For `hidden`: the call the host failed. */
+  /** For `call.*` and `host.internal`: the bridge call that failed (`core.submitQuery`). */
   call?: string;
   /** When it happened, ISO 8601. */
   at: string;
@@ -42,8 +118,6 @@ export interface AppConsoleEvent {
   mount: number;
   title?: string;
 }
-
-export const ERROR_KINDS: readonly AppErrorKind[] = ['query', 'uncaught', 'listener', 'hidden'];
 
 /** The longest a message may be, and a stack. */
 export const MESSAGE_LIMIT = 2000;
@@ -68,7 +142,9 @@ export function describeError (kind: AppErrorKind, err: unknown): Omit<AppErrorE
     const value = e[key];
     if (typeof value === 'string') out[key] = value;
   }
-  if (kind !== 'query' && typeof e.stack === 'string') out.stack = truncate(e.stack, STACK_LIMIT);
+  const call = callOf(err)?.call;
+  if (call !== undefined) out.call = call;
+  if (!kind.startsWith('call.') && typeof e.stack === 'string') out.stack = truncate(e.stack, STACK_LIMIT);
   return out;
 }
 
@@ -121,9 +197,9 @@ const SHORT = 200;
 export function checkErrorEvent (payload: unknown, mount: { id: number, title?: string }): AppErrorEvent | undefined {
   const p = payload as Record<string, unknown> | null;
   if (!p || typeof p !== 'object') return undefined;
-  const kind = p.kind as AppErrorKind;
-  // `hidden` is the host's own to report: a frame cannot claim one.
-  if (!ERROR_KINDS.includes(kind) || kind === 'hidden') return undefined;
+  const kind = p.kind;
+  // `host.*` is the host's own to report: a frame cannot claim one.
+  if (!isErrorKind(kind) || kind.startsWith('host.')) return undefined;
   const event: AppErrorEvent = {
     kind,
     message: str(p.message, MESSAGE_LIMIT) || 'An error with no message.',
@@ -134,11 +210,13 @@ export function checkErrorEvent (payload: unknown, mount: { id: number, title?: 
   const scope = str(p.scope, SHORT);
   const requestId = str(p.requestId, SHORT);
   const entity = str(p.entity, SHORT);
-  const stack = kind === 'query' ? undefined : str(p.stack, STACK_LIMIT);
+  const call = kind.startsWith('call.') ? str(p.call, SHORT) : undefined;
+  const stack = kind.startsWith('call.') ? undefined : str(p.stack, STACK_LIMIT);
   if (code) event.code = code;
   if (scope) event.scope = scope;
   if (requestId) event.requestId = requestId;
   if (entity) event.entity = entity;
+  if (call) event.call = call;
   if (stack) event.stack = stack;
   if (mount.title !== undefined) event.title = mount.title;
   return event;

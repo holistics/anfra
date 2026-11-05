@@ -16,6 +16,7 @@ import { buildStructure, type BuiltStructure } from './structure';
 import { layerRoot } from './layer';
 import { overlayFor, type Overlay } from './overlay';
 import { addExtension } from './extensions';
+import { namedCall, snakeCase } from '../common/runtimeErrors';
 import type { ContentUi, FrameMenuItem, ModalInput, Opened, PopoverInput } from './menu';
 
 /** The kernel's own call: a plugin's frame body (answered by the host runtime). */
@@ -108,6 +109,29 @@ function runBody (win: Window, code: string): unknown {
   return exported.default ?? exported;
 }
 
+/**
+ * A plugin's member, its calls named as the app makes them, for a rejection the app leaves
+ * unhandled: `Anfra.lineage()` is `call.lineage`, `Anfra.foo.bar()` `call.foo_bar`. Anything else
+ * it passes on as it is.
+ */
+function namedMember (member: unknown, api: string): unknown {
+  if (typeof member === 'function') return namedCall(member as (...args: never[]) => unknown, api);
+  if (typeof member !== 'object' || member === null) return member;
+  // Made once per method, so `Anfra.foo.bar === Anfra.foo.bar`.
+  const named = new Map<string, { of: unknown, fn: unknown }>();
+  return new Proxy(member, {
+    get (target, key, receiver) {
+      const value: unknown = Reflect.get(target, key, receiver);
+      if (typeof value !== 'function' || typeof key !== 'string') return value;
+      const made = named.get(key);
+      if (made?.of === value) return made.fn;
+      const fn = namedCall((value as (...args: never[]) => unknown).bind(target), `${api}_${snakeCase(key)}`);
+      named.set(key, { of: value, fn });
+      return fn;
+    },
+  });
+}
+
 export function createKernel (plugin: string, shared: KernelShared, entities: { Query: { prototype: Query }, Control: { prototype: Control } }): FrameKernel {
   const { window: win, sdk, endpoint } = shared;
   let loading: Promise<unknown> | undefined;
@@ -142,10 +166,12 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
     },
     provide (api) {
       if (plugin in sdk) throw new ValidationError(`Plugin '${plugin}' can't add a member Anfra already has.`);
-      Object.defineProperty(sdk, plugin, { value: api, enumerable: true });
+      Object.defineProperty(sdk, plugin, { value: namedMember(api, snakeCase(plugin)), enumerable: true });
     },
-    provideOnQuery: (factory) => addExtension(sdk.extensions.query, entities.Query.prototype, 'query', plugin, factory),
-    provideOnControl: (factory) => addExtension(sdk.extensions.control, entities.Control.prototype, 'control', plugin, factory),
+    provideOnQuery: (factory) => addExtension(sdk.extensions.query, entities.Query.prototype, 'query', plugin,
+      (query: Query) => namedMember(factory(query), snakeCase(plugin))),
+    provideOnControl: (factory) => addExtension(sdk.extensions.control, entities.Control.prototype, 'control', plugin,
+      (control: Control) => namedMember(factory(control), snakeCase(plugin))),
     layer: () => layerRoot(win.document, plugin),
     menuItem: (item) => shared.contentUi?.addItem(plugin, item),
     modal: (input) => shared.contentUi!.modal(input),

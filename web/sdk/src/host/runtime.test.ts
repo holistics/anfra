@@ -435,11 +435,11 @@ describe('runtime errors', () => {
       type: 'anfra:event',
       name: 'anfra.error',
       payload: {
-        kind: 'query', code: 'query_failed', scope: 'user', message: 'boom', requestId: 'r1', entity: 'orders', at: '2026-11-02T00:00:00.000Z', stack: 'dropped', rows: [[1]],
+        kind: 'call.query', code: 'query_failed', scope: 'user', message: 'boom', requestId: 'r1', entity: 'orders', at: '2026-11-02T00:00:00.000Z', stack: 'dropped', rows: [[1]],
       },
     });
     const event = {
-      kind: 'query', code: 'query_failed', scope: 'user', message: 'boom', requestId: 'r1', entity: 'orders', at: '2026-11-02T00:00:00.000Z', mount: expect.any(Number), title: 'Sales',
+      kind: 'call.query', code: 'query_failed', scope: 'user', message: 'boom', requestId: 'r1', entity: 'orders', at: '2026-11-02T00:00:00.000Z', mount: expect.any(Number), title: 'Sales',
     };
     expect(onError).toHaveBeenCalledWith(event);
     expect(heard).toHaveBeenCalledWith(event);
@@ -452,17 +452,17 @@ describe('runtime errors', () => {
     const line = (text: string) => doc.slice(0, doc.indexOf(text)).split('\n').length;
     // 'hi' starts column 14 of its line in the document, and 20 of the definition's one line.
     const stack = `Error: x\n    at about:srcdoc:${line('hi</body>')}:14\n    at about:srcdoc:${line('window.FRAME')}:3`;
-    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'x', stack } });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'app.uncaught', message: 'x', stack } });
     expect(onError.mock.calls[0][0].stack).toBe('Error: x\n    at definition:1:20\n    at anfra-sdk.js');
   });
 
   it('drop what is not an error the frame may report, and cap what is', () => {
     const onError = vi.fn();
     mount([corePlugin(backend())], [], { onError });
-    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'hidden', message: 'made up' } });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'host.internal', message: 'made up' } });
     fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'other', message: 'x' } });
     fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: 'boom' });
-    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'x'.repeat(5000), stack: 's'.repeat(9000) } });
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'app.uncaught', message: 'x'.repeat(5000), stack: 's'.repeat(9000) } });
     expect(onError).toHaveBeenCalledTimes(1);
     const [event] = onError.mock.calls[0];
     expect(event.message.length).toBeLessThan(2100);
@@ -478,7 +478,7 @@ describe('runtime errors', () => {
     call(1, 'leaky.boom');
     await settle();
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'hidden', code: 'call_failed', scope: 'server', message: 'connect ECONNREFUSED', call: 'leaky.boom', stack: expect.any(String),
+      kind: 'host.internal', code: 'call_failed', scope: 'server', message: 'connect ECONNREFUSED', call: 'leaky.boom', stack: expect.any(String),
     }));
     expect(replies[0]).toMatchObject({ ok: false, error: { message: 'The call failed.' } });
   });
@@ -490,7 +490,7 @@ describe('runtime errors', () => {
     const heard = vi.fn();
     mounted!.on('anfra.console', heard);
     for (let i = 0; i < 130; i += 1) {
-      fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'flood' } });
+      fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'app.uncaught', message: 'flood' } });
       fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'warn', message: 'flood' } });
     }
     expect(onError).toHaveBeenCalledTimes(120);
@@ -507,7 +507,7 @@ describe('runtime errors', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mount([corePlugin(backend())], [], { captureConsole: true });
     for (let i = 0; i < 130; i += 1) {
-      fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'uncaught', message: 'flood' } });
+      fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'app.uncaught', message: 'flood' } });
       fromFrame({ type: 'anfra:event', name: 'anfra.console', payload: { level: 'warn', message: 'flood' } });
     }
     expect(logged).toHaveBeenCalledTimes(120);
@@ -522,8 +522,8 @@ describe('runtime errors', () => {
   it('go to the console unless the host says where', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     mount([corePlugin(backend())]);
-    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'listener', message: 'oops' } });
-    expect(logged).toHaveBeenCalledWith(expect.stringContaining('oops'), expect.objectContaining({ kind: 'listener' }));
+    fromFrame({ type: 'anfra:event', name: 'anfra.error', payload: { kind: 'app.listener', message: 'oops' } });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('oops'), expect.objectContaining({ kind: 'app.listener' }));
   });
 
   it('pass console lines on only when the host captures them, as the frame is told', () => {

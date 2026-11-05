@@ -8,6 +8,7 @@ import { type Check, wiringChecks } from './checks';
 import { handleFor } from './format';
 import type { RevealTarget } from './types';
 import type { RuntimeEntry } from '../state';
+import type { AppErrorKind } from '../../../common/runtimeErrors';
 
 export interface Problem {
   level: 'error' | 'warn';
@@ -20,12 +21,20 @@ export interface Problem {
   count?: number;
 }
 
-const RUNTIME_LABELS = {
-  query: 'Query failed',
-  uncaught: 'Uncaught error',
-  listener: 'A subscribe() listener threw',
-  hidden: 'The host failed a call',
-} as const;
+const RUNTIME_LABELS: Record<string, string> = {
+  'call.query': 'Query failed',
+  'app.uncaught': 'Uncaught error',
+  'app.listener': 'A subscribe() listener threw',
+  'plugin.uncaught': 'A plugin failed',
+  'host.internal': 'The host failed a call',
+};
+
+/** A runtime error's kind, as the panel says it: a kind it does not know, by its source. */
+function runtimeLabel (kind: AppErrorKind): string {
+  if (Object.hasOwn(RUNTIME_LABELS, kind)) return RUNTIME_LABELS[kind];
+  const [source, what] = kind.split('.', 2);
+  return source === 'call' ? `Unhandled ${what} call failed` : `Error (${kind})`;
+}
 
 /** A runtime error as a problem: to its query or control when it names one, else with its stack. */
 export function runtimeProblem (entry: RuntimeEntry, snapshot: Snapshot): Problem {
@@ -36,7 +45,7 @@ export function runtimeProblem (entry: RuntimeEntry, snapshot: Snapshot): Proble
     event.requestId && `Request: ${event.requestId}`,
     event.stack,
   ].filter(Boolean).join('\n');
-  const problem: Problem = { level: 'error', message: `${RUNTIME_LABELS[event.kind]}: ${event.message}` };
+  const problem: Problem = { level: 'error', message: `${runtimeLabel(event.kind)}: ${event.message}` };
   if (detail) problem.detail = detail;
   if (count > 1) problem.count = count;
   const { entity } = event;

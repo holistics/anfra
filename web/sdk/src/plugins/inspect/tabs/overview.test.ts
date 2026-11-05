@@ -121,10 +121,10 @@ describe('Overview', () => {
 
   it('lists the frame\'s runtime errors among the errors, counted, to their entity or open to their stack', async () => {
     const root = await overview();
-    harness!.event('anfra.error', { kind: 'listener', message: 'echarts is not defined', stack: 'TypeError: echarts is not defined\n    at draw' });
-    harness!.event('anfra.error', { kind: 'listener', message: 'echarts is not defined', stack: 'TypeError: echarts is not defined\n    at draw' });
-    harness!.event('anfra.error', { kind: 'uncaught', message: 'No access.', code: 'forbidden', scope: 'user', entity: 'orders' });
-    harness!.event('anfra.error', { kind: 'query', message: 'not listed: the query says so', entity: 'orders' });
+    harness!.event('anfra.error', { kind: 'app.listener', message: 'echarts is not defined', stack: 'TypeError: echarts is not defined\n    at draw' });
+    harness!.event('anfra.error', { kind: 'app.listener', message: 'echarts is not defined', stack: 'TypeError: echarts is not defined\n    at draw' });
+    harness!.event('anfra.error', { kind: 'app.uncaught', message: 'No access.', code: 'forbidden', scope: 'user', entity: 'orders' });
+    harness!.event('anfra.error', { kind: 'call.query', message: 'not listed: the query says so', entity: 'orders' });
     const problems = () => [...root.querySelectorAll<HTMLElement>('[data-testid="problem"]')];
     await vi.waitFor(() => expect(problems()).toHaveLength(5));
     expect(problems().slice(0, 4).map((p) => p.textContent)).toEqual([

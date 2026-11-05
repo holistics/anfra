@@ -21,6 +21,7 @@ import { Query } from './query';
 import { createSdk } from './sdk';
 import { installSandbox } from './sandbox';
 import { installReporting, reportError } from './reporting';
+import { tagCall } from '../common/runtimeErrors';
 
 /** A plugin's frame setup, as the host's frame script hands it over: its name and its function. */
 export type PluginSetup = readonly [name: string, setup: ((kernel: FrameKernel) => void) | undefined];
@@ -43,7 +44,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
     // A plugin's answer that failed: the host reads only that the call failed, so it is reported here.
     hidden: (name, err) => {
       (win as Window & typeof globalThis).console?.error(`anfra: '${name}' failed; the host is told only that the call failed.`, err);
-      reportError('uncaught', err);
+      reportError('plugin.uncaught', err);
     },
     event: (name, payload) => {
       listeners.get(name)?.forEach((listener) => {
@@ -51,6 +52,13 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
       });
     },
   });
+  // Each failed call names the bridge call it was, for a runtime error that reports it.
+  const bridgeCall = endpoint.call;
+  endpoint.call = <T = unknown>(name: string, request: unknown, signal?: AbortSignal) => bridgeCall<T>(name, request, signal)
+    .catch((err: unknown) => {
+      tagCall(err, { call: name });
+      throw err;
+    });
   // The host is the parent, or a window of the host's origin: a host that mounts into a nested
   // document of its own posts from its page's window, and a browser names the window whose code
   // posted, never the frame's parent. An opaque host's origin names no one.
@@ -127,7 +135,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
     } catch (err) {
       // One broken plugin leaves the others, and the app, running.
       (win as Window & typeof globalThis).console?.error(`anfra: plugin '${name}' failed to set up:`, err);
-      reportError('uncaught', err);
+      reportError('plugin.uncaught', err);
     }
   }
 

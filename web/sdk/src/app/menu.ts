@@ -208,7 +208,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
           const action = found.map((group) => group.run.get(key)).find(Boolean);
           Promise.resolve().then(action).catch((err: unknown) => {
             (win as Window & typeof globalThis).console?.error('anfra: a menu item failed:', err);
-            reportError('uncaught', err);
+            reportError('plugin.uncaught', err);
           });
         },
         onClose: () => { if (current === close) current = undefined; },
@@ -216,7 +216,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
       current = close;
     })().catch((err: unknown) => {
       (win as Window & typeof globalThis).console?.error('anfra: the menu failed to open:', err);
-      reportError('uncaught', err);
+      reportError('plugin.uncaught', err);
     });
     return true;
   }
@@ -256,7 +256,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     try {
       return mount(root);
     } catch (err) {
-      reportError('uncaught', err);
+      reportError('plugin.uncaught', err);
       throw err;
     }
   };

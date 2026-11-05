@@ -2,6 +2,7 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import { DataAppError } from '../common/errors';
+import { tagCall } from '../common/runtimeErrors';
 import type { Backend } from '../common/types';
 import type { FrameKernel } from './kernel';
 import { EVENTS_PER_MINUTE, installReporting } from './reporting';
@@ -42,7 +43,7 @@ describe('reporting', () => {
     })));
     await app.execute();
     expect(emit).toHaveBeenCalledWith('error', {
-      kind: 'query', code: 'query_failed', scope: 'user', message: 'column x does not exist', requestId: 'req-1', entity: 'revenue', at: expect.any(String),
+      kind: 'call.query', code: 'query_failed', scope: 'user', message: 'column x does not exist', requestId: 'req-1', entity: 'revenue', at: expect.any(String),
     });
   });
 
@@ -55,7 +56,7 @@ describe('reporting', () => {
     });
     app.subscribe(() => { throw new TypeError('echarts is not defined'); });
     await app.execute();
-    expect(emit).toHaveBeenCalledWith('error', expect.objectContaining({ kind: 'listener', message: 'echarts is not defined', stack: expect.any(String) }));
+    expect(emit).toHaveBeenCalledWith('error', expect.objectContaining({ kind: 'app.listener', message: 'echarts is not defined', stack: expect.any(String) }));
     expect(emit.mock.calls.filter(([name]) => name === 'console')).toEqual([]);
   });
 
@@ -66,9 +67,37 @@ describe('reporting', () => {
     Object.defineProperty(rejection, 'reason', { value: new DataAppError({ code: 'forbidden', scope: 'user', message: 'No access.', entity: 'revenue' }) });
     window.dispatchEvent(rejection);
     expect(emit.mock.calls).toEqual([
-      ['error', expect.objectContaining({ kind: 'uncaught', message: 'bad index', stack: expect.any(String) })],
-      ['error', expect.objectContaining({ kind: 'uncaught', code: 'forbidden', scope: 'user', entity: 'revenue' })],
+      ['error', expect.objectContaining({ kind: 'app.uncaught', message: 'bad index', stack: expect.any(String) })],
+      ['error', expect.objectContaining({ kind: 'app.uncaught', code: 'forbidden', scope: 'user', entity: 'revenue' })],
     ]);
+  });
+
+  it('reports a call the app left unhandled by its name, as the app called it, with the bridge call', async () => {
+    const emit = install();
+    const unhandled = (reason: unknown) => {
+      const rejection = new Event('unhandledrejection') as PromiseRejectionEvent;
+      Object.defineProperty(rejection, 'reason', { value: reason });
+      window.dispatchEvent(rejection);
+    };
+    let calls = 0;
+    const backend: Backend = {
+      submitQuery: async () => {
+        calls += 1;
+        if (calls === 1) return { values: [['1']], columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }], meta: { page: 1, pageSize: 10, numRows: 1, hasMore: true } };
+        const err = new DataAppError({ code: 'connection_failed', scope: 'server', message: 'Cut.' });
+        tagCall(err, { call: 'core.submitQuery' });
+        throw err;
+      },
+      fieldSuggestions: async () => [],
+    };
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend }).createApp();
+    const query = app.createQuery('rows', { dataset: 'sales', aql: 'explore { measures { total: orders | sum(orders.amount) } }', pageSize: 10 });
+    await app.execute();
+    const failed = await query.fetchMore().catch((err: unknown) => err);
+    emit.mockClear();
+    unhandled(failed);
+    expect(emit).toHaveBeenCalledWith('error', expect.objectContaining({ kind: 'call.fetch_more', call: 'core.submitQuery', code: 'connection_failed' }));
+    expect(emit.mock.calls[0][1]).not.toHaveProperty('stack');
   });
 
   it('sends console lines only when captured, still writing them to the console', () => {
@@ -117,6 +146,6 @@ describe('reporting', () => {
     for (let i = 0; i < EVENTS_PER_MINUTE * 2; i += 1) console.warn('render');
     window.dispatchEvent(new ErrorEvent('error', { error: new TypeError('real'), message: 'real' }));
     expect(emit.mock.calls.filter(([name]) => name === 'console')).toHaveLength(EVENTS_PER_MINUTE);
-    expect(emit).toHaveBeenLastCalledWith('error', expect.objectContaining({ kind: 'uncaught', message: 'real' }));
+    expect(emit).toHaveBeenLastCalledWith('error', expect.objectContaining({ kind: 'app.uncaught', message: 'real' }));
   });
 });
