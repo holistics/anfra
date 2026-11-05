@@ -373,7 +373,7 @@ Every error is the API's error document: branch on `err.scope` (who must act) an
 | `result_too_large`, `page_too_large` | user | Too many rows or bytes: `details` holds the limit. | Aggregate, filter, or page (`pageSize`). |
 | `forbidden` / `unauthenticated` | user | This reader may not see it / their session is gone. Not raised by a local `anfra serve`, whose reader sees everything, but a host that serves other people may. | Render "no access" or "sign in again", not a failure. |
 | `invalid_request` | client | A call the app made wrong, which a plugin refused (`Anfra.lineage` with an empty list, `Anfra.render` of a missing block). | Fix the call it names. |
-| `connection_failed`, `internal_server_error`, `call_failed` | server | The server could not be reached or failed, or the host failed the call (`call_failed`: its cause is in `anfra serve`'s log and the host page's console). | Show "couldn't load" with a Retry that calls `app.execute()`. |
+| `connection_failed`, `internal_server_error`, `call_failed` | server | The server could not be reached or failed, or the host failed the call (`call_failed`: its cause is in `anfra serve`'s log, as a `host.internal` line). | Show "couldn't load" with a Retry that calls `app.execute()`. |
 
 Other codes are the host's own: treat them by `scope`. A query's error is stored on the query,
 never thrown; `fetchMore`, exports and plugin calls reject with one.
