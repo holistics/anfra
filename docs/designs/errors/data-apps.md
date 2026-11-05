@@ -27,7 +27,7 @@ Its readers:
 | **One shape, decorated, never rewritten.** The API's envelope is the error; the SDK adds to it (`entity`, facts in `message`) and never re-maps it. | [the shape](#the-errors-shape), [backends](#how-a-backend-answers) |
 | **Unknown means the server's fault.** What nobody classified is `call_failed`, scope `server`. | [backends](#how-a-backend-answers), [the bridge](#crossing-the-bridge) |
 | **The frame's word is not trusted.** Only named fields cross, each capped; a frame cannot claim a host's kind. | [the bridge](#crossing-the-bridge), [runtime errors](#runtime-errors) |
-| **Every failure leaves a record where it happened.** An error hidden from the frame is reported by the side that hid it. | [runtime errors](#runtime-errors) |
+| **Every failure is reported where it happened.** An error hidden from the other side is reported by the side that hid it. | [runtime errors](#runtime-errors) |
 | **Fail only what failed.** A query's error is stored on the query; a listener or a plugin that throws stops nothing else. | [runtime errors](#runtime-errors) |
 | **Report, don't decide.** The SDK is headless: it reports, and the host and the app choose what to show. No default error UI, no wording helper, nothing written to the host's page. | [where they go](#where-they-go-per-host), [handling](#for-an-apps-author) |
 
@@ -129,7 +129,12 @@ The frame runs code anyone may write, so only the SDK's own errors cross with th
 Two rules keep `call_failed` rare and findable:
 
 - **The SDK classifies its own failures.** A stream the server cut, or a line in it that is not an event (a proxy's error page), is `connection_failed` saying so (`api/stream.ts`, `api/backend.ts`). What remains `call_failed` is a real bug in the host.
-- **A hidden error is recorded where it was hidden.** The host reports the original as a `host.internal` runtime error before answering `call_failed`, and the frame logs one it hides to its own console.
+- **A hidden error is reported by the side that hid it**, before it answers `call_failed`:
+
+  | Hidden by | The original goes to |
+  |---|---|
+  | the host (a host half's call failed) | a `host.internal` runtime error, to the mount's listeners; nothing on the host's page |
+  | the frame (a frame half's answer failed) | a `plugin.uncaught` runtime error, and an `anfra:` note in the frame's own console |
 
 ## Runtime errors
 
