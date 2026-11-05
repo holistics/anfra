@@ -36,7 +36,8 @@ type Options struct {
 	Watch  bool
 	Logger *slog.Logger
 	// AppLogger is where the Data Apps' reports from the browser go (POST /appserve/log): anfra.log,
-	// as "service":"app". Without one, reports are taken and dropped.
+	// as "service":"app". Without one (ANFRA_NO_APP_LOGS), the page is told not to send them, and
+	// any sent anyway are taken and dropped.
 	AppLogger *slog.Logger
 	// DevFrontendURL, when set, is a Vite dev server serving the frontend from source (make dev):
 	// the pages redirect there, and it proxies the rest back. The built-in frontend, rebuilt only
@@ -125,6 +126,8 @@ type Context struct {
 	Watch        bool      `json:"watch"`
 	AllowOrigins []string  `json:"allowOrigins"`
 	Problems     []Problem `json:"problems"`
+	// AppLogs says whether the page sends its Data Apps' reports to anfra.log (POST /appserve/log).
+	AppLogs bool `json:"appLogs"`
 }
 
 // Problem is one problem with the repo's settings, as the frontend's problems banner shows it.
@@ -141,7 +144,7 @@ type RepoInfo struct {
 func (s *Server) context(w http.ResponseWriter) {
 	ctx := Context{
 		Repo: RepoInfo{Name: filepath.Base(s.opts.RepoDir)}, Reader: LocalReader(), Watch: s.opts.Watch,
-		AllowOrigins: []string{}, Problems: []Problem{},
+		AllowOrigins: []string{}, Problems: []Problem{}, AppLogs: s.opts.AppLogger != nil,
 	}
 	conf, err := repoconfig.Read(s.opts.RepoDir)
 	if err == nil {

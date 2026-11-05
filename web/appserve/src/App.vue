@@ -40,6 +40,7 @@ const repoName = ref<string>();
 const reader = ref<User>();
 const watching = ref(false);
 const allowOrigins = ref<string[]>([]);
+const appLogs = ref(true);
 // What each Data App is provisioned with; reloaded when the AML changes.
 const datasets = ref<Record<string, DatasetDescriptor>>();
 const frameError = ref<string>();
@@ -84,6 +85,7 @@ async function loadContext (): Promise<void> {
     reader.value = ctx.reader;
     watching.value = ctx.watch;
     allowOrigins.value = ctx.allowOrigins;
+    appLogs.value = ctx.appLogs;
     contextProblems.value = ctx.problems;
   } catch { /* the status says why */ }
 }
@@ -473,6 +475,7 @@ onBeforeUnmount(() => {
           :datasets="datasets"
           :reader="reader"
           :allow-origins="allowOrigins"
+          :app-logs="appLogs"
           :theme="pluginTheme"
           @load="loading = false"
           @mounted="onAppMounted"

@@ -3,6 +3,7 @@ package appserve
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -175,6 +176,24 @@ func TestContext(t *testing.T) {
 	}
 	if got.AllowOrigins == nil || len(got.AllowOrigins) != 0 || got.Problems == nil || len(got.Problems) != 0 {
 		t.Errorf("context without settings: origins %v, problems %v; want both empty", got.AllowOrigins, got.Problems)
+	}
+}
+
+// The page sends its Data Apps' reports only when they are logged: not without an app logger
+// (ANFRA_NO_APP_LOGS).
+func TestContextAppLogs(t *testing.T) {
+	dir := repo(t)
+	for _, tc := range []struct {
+		logger *slog.Logger
+		want   bool
+	}{{slog.New(slog.DiscardHandler), true}, {nil, false}} {
+		var got Context
+		if err := jsonkit.UnmarshalRead(get(New(Options{RepoDir: dir, AppLogger: tc.logger}), "/appserve/context").Body, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.AppLogs != tc.want {
+			t.Errorf("logger %v: appLogs = %v, want %v", tc.logger != nil, got.AppLogs, tc.want)
+		}
 	}
 }
 

@@ -15,6 +15,8 @@ const props = defineProps<{
   datasets: Record<string, DatasetDescriptor>,
   reader: User,
   allowOrigins: string[],
+  // Whether to send this Data App's reports to anfra.log (not with ANFRA_NO_APP_LOGS).
+  appLogs: boolean,
   theme: ThemeInput,
 }>();
 const emit = defineEmits<{
@@ -72,9 +74,11 @@ onMounted(async () => {
     // Into anfra.log, with this Data App's path: where an agent reads what went wrong, after the
     // line that says which load of the file it was.
     const { path } = props;
-    report(path, 'mounted');
-    mounted.on('anfra.error', (event) => report(path, 'error', event));
-    mounted.on('anfra.console', (event) => report(path, 'console', event));
+    if (props.appLogs) {
+      report(path, 'mounted');
+      mounted.on('anfra.error', (event) => report(path, 'error', event));
+      mounted.on('anfra.console', (event) => report(path, 'console', event));
+    }
     emit('mounted', runtime, mounted);
   } catch (err) {
     emit('error', (err as Error).message);

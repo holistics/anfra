@@ -21,6 +21,7 @@ import (
 	"github.com/holistics/anfra/internal/appserve"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/meta"
@@ -144,7 +145,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		var apps *appserve.Server
 		if !opts.noApps {
 			apps = appserve.New(appserve.Options{
-				RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger, AppLogger: h.appLogger,
+				RepoDir: h.repo.Dir, Watch: !opts.noWatch, Logger: h.cfg.Logger, AppLogger: appLogger(h.appLogger),
 				// make dev's Vite dev server, which serves the frontend from source.
 				DevFrontendURL: os.Getenv("ANFRA_APPSERVE_DEV_URL"),
 			})
@@ -538,4 +539,13 @@ func callServe(ctx context.Context, url, name string, input []byte) ([]byte, err
 		return nil, clierr.Unreachablef(clierr.AnfraServe, nil, "anfra serve answered %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return body, nil
+}
+
+// appLogger is where the Data Apps' reports go: anfra.log, unless ANFRA_NO_APP_LOGS opts out of
+// writing what they report (their errors and console lines, which can hold their data) to it.
+func appLogger(logger *slog.Logger) *slog.Logger {
+	if envflag.On(envflag.NoAppLogs) {
+		return nil
+	}
+	return logger
 }
