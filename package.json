@@ -7,6 +7,7 @@
     "commit": "cz",
     "changelog": "conventional-changelog -n conventional-changelog.config.mjs -i CHANGELOG.md -s -t v",
     "bump": "bash scripts/bump.sh",
+    "next-version": "node scripts/next-version.mjs",
     "build:sdk": "pnpm --filter @holistics/anfra-sdk build",
     "dev:sdk": "pnpm --filter @holistics/anfra-sdk dev",
     "test:sdk": "pnpm --filter @holistics/anfra-sdk test",
@@ -31,6 +32,7 @@
     "commitizen": "^4.3.1",
     "conventional-changelog-cli": "^5.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
+    "conventional-recommended-bump": "^12.1.0",
     "glob": "^13.0.6",
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7"
