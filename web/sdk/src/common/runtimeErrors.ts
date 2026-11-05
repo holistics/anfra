@@ -37,26 +37,22 @@ export function snakeCase (name: string): string {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[^A-Za-z0-9]+/g, '_').toLowerCase();
 }
 
-/** What a failed call's error says of the call: as the app called it, and over the bridge. */
-interface CallTag { api?: string, call?: string }
-
-const callTags = new WeakMap<object, CallTag>();
+/** The call each failed call's error came from, as the app called it (`fetch_more`). */
+const callTags = new WeakMap<object, string>();
 
 /**
- * Note on `err` the call it failed: `api` as the app called it (the outermost wins, since it is
- * what the app wrote), `call` the bridge call (the innermost, the one that went over the bridge).
+ * Note on `err` the call it failed, as the app called it: the outermost wins, since it is what the
+ * app wrote (`query.export()` over `app.exportQuery`).
  */
-export function tagCall (err: unknown, tag: CallTag): void {
-  if (typeof err !== 'object' || err === null) return;
-  const had = callTags.get(err) ?? {};
-  callTags.set(err, { api: tag.api ?? had.api, call: had.call ?? tag.call });
+export function tagCall (err: unknown, api: string): void {
+  if (typeof err === 'object' && err !== null) callTags.set(err, api);
 }
 
 /**
  * The call `err` failed, if one was noted: on it, or on the error it wraps (a `call_failed` that
  * hides the original).
  */
-export function callOf (err: unknown): CallTag | undefined {
+export function callOf (err: unknown): string | undefined {
   for (let e = err, depth = 0; typeof e === 'object' && e !== null && depth < 5; e = (e as { cause?: unknown }).cause, depth += 1) {
     const tag = callTags.get(e);
     if (tag) return tag;
@@ -67,7 +63,7 @@ export function callOf (err: unknown): CallTag | undefined {
 /** `to`, with the call `from` failed, if one was noted: the same failure, said again. */
 export function copyCallTag<T extends object> (from: object, to: T): T {
   const tag = callTags.get(from);
-  if (tag) callTags.set(to, { ...tag });
+  if (tag) callTags.set(to, tag);
   return to;
 }
 
@@ -80,7 +76,7 @@ export function namedCall<F extends (...args: never[]) => unknown> (fn: F, api: 
     const out = fn.apply(this, args);
     if (out && typeof (out as PromiseLike<unknown>).then === 'function') {
       return (out as Promise<unknown>).then(undefined, (err: unknown) => {
-        tagCall(err, { api });
+        tagCall(err, api);
         throw err;
       });
     }
@@ -101,7 +97,7 @@ export interface AppErrorEvent {
   entity?: string;
   /** Where it was thrown, truncated; not for `call.*`, whose stack is the SDK's. */
   stack?: string;
-  /** For `call.*` and `host.internal`: the bridge call that failed (`core.submitQuery`). */
+  /** For `host.internal`: the call the host failed (`export.query`). */
   call?: string;
   /** When it happened, ISO 8601. */
   at: string;
@@ -142,8 +138,6 @@ export function describeError (kind: AppErrorKind, err: unknown): Omit<AppErrorE
     const value = e[key];
     if (typeof value === 'string') out[key] = value;
   }
-  const call = callOf(err)?.call;
-  if (call !== undefined) out.call = call;
   if (!kind.startsWith('call.') && typeof e.stack === 'string') out.stack = truncate(e.stack, STACK_LIMIT);
   return out;
 }
@@ -210,13 +204,11 @@ export function checkErrorEvent (payload: unknown, mount: { id: number, title?: 
   const scope = str(p.scope, SHORT);
   const requestId = str(p.requestId, SHORT);
   const entity = str(p.entity, SHORT);
-  const call = kind.startsWith('call.') ? str(p.call, SHORT) : undefined;
   const stack = kind.startsWith('call.') ? undefined : str(p.stack, STACK_LIMIT);
   if (code) event.code = code;
   if (scope) event.scope = scope;
   if (requestId) event.requestId = requestId;
   if (entity) event.entity = entity;
-  if (call) event.call = call;
   if (stack) event.stack = stack;
   if (mount.title !== undefined) event.title = mount.title;
   return event;

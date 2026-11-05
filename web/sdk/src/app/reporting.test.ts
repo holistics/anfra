@@ -2,7 +2,6 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import { DataAppError } from '../common/errors';
-import { tagCall } from '../common/runtimeErrors';
 import type { Backend } from '../common/types';
 import type { FrameKernel } from './kernel';
 import { EVENTS_PER_MINUTE, installReporting } from './reporting';
@@ -72,7 +71,7 @@ describe('reporting', () => {
     ]);
   });
 
-  it('reports a call the app left unhandled by its name, as the app called it, with the bridge call', async () => {
+  it('reports a call the app left unhandled by its name, as the app called it', async () => {
     const emit = install();
     const unhandled = (reason: unknown) => {
       const rejection = new Event('unhandledrejection') as PromiseRejectionEvent;
@@ -84,9 +83,7 @@ describe('reporting', () => {
       submitQuery: async () => {
         calls += 1;
         if (calls === 1) return { values: [['1']], columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }], meta: { page: 1, pageSize: 10, numRows: 1, hasMore: true } };
-        const err = new DataAppError({ code: 'connection_failed', scope: 'server', message: 'Cut.' });
-        tagCall(err, { call: 'core.submitQuery' });
-        throw err;
+        throw new DataAppError({ code: 'connection_failed', scope: 'server', message: 'Cut.' });
       },
       fieldSuggestions: async () => [],
     };
@@ -96,8 +93,9 @@ describe('reporting', () => {
     const failed = await query.fetchMore().catch((err: unknown) => err);
     emit.mockClear();
     unhandled(failed);
-    expect(emit).toHaveBeenCalledWith('error', expect.objectContaining({ kind: 'call.fetch_more', call: 'core.submitQuery', code: 'connection_failed' }));
+    expect(emit).toHaveBeenCalledWith('error', expect.objectContaining({ kind: 'call.fetch_more', code: 'connection_failed' }));
     expect(emit.mock.calls[0][1]).not.toHaveProperty('stack');
+    expect(emit.mock.calls[0][1]).not.toHaveProperty('call');
   });
 
   it('sends console lines only when captured, still writing them to the console', () => {
