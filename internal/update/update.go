@@ -356,15 +356,23 @@ func writeCache(c *cache) {
 
 // Stale reports whether the cached check, of anfra or of the skills, is missing
 // or older than the TTL, unless anfra's check failed less than retryAfter ago.
+// A time in the future, left by a clock moved back, counts as long ago, so
+// checks don't pause until the clock catches up.
 func Stale() bool {
 	c, ok := readCache()
 	if !ok {
 		return true
 	}
-	if time.Since(c.FailedAt) < retryAfter {
+	if within(c.FailedAt, retryAfter) {
 		return false
 	}
-	return time.Since(c.CheckedAt) > checkTTL || time.Since(c.SkillsCheckedAt) > checkTTL
+	return !within(c.CheckedAt, checkTTL) || !within(c.SkillsCheckedAt, checkTTL)
+}
+
+// within reports whether t is set, not in the future, and at most d ago.
+func within(t time.Time, d time.Duration) bool {
+	since := time.Since(t)
+	return !t.IsZero() && since >= 0 && since <= d
 }
 
 // Refresh runs a live check, of anfra and of the skills, and updates the cache.

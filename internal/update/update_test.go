@@ -251,6 +251,21 @@ func TestAFailedCheckWaitsToRetry(t *testing.T) {
 	}
 }
 
+// Times in the future, left by a clock moved back, don't pause the checks.
+func TestAClockMovedBackIsStale(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	future := time.Now().Add(time.Hour)
+	writeCache(&cache{CheckedAt: future, SkillsCheckedAt: future, FailedAt: future})
+	if !Stale() {
+		t.Error("not stale with every time in the future")
+	}
+
+	writeCache(&cache{CheckedAt: time.Now(), SkillsCheckedAt: future})
+	if !Stale() {
+		t.Error("not stale with the skills' check in the future")
+	}
+}
+
 // A cache from before the skills' check is stale, so the next background
 // refresh fills it in.
 func TestACacheWithoutTheSkillsIsStale(t *testing.T) {
