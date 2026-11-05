@@ -18,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/pretty"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -109,6 +110,9 @@ func printError(w io.Writer, err error, hint string) {
 	var help []string
 	if ce != nil && nameArgs(mapValue(e, "details"), ce.args) {
 		help = append(help, usageHelp(ce.path, mapValue(e, "details")))
+	}
+	if h := codeHelp[resp.Code]; h != "" {
+		help = append(help, h)
 	}
 	if hint != "" {
 		help = append(help, hint)
@@ -229,6 +233,14 @@ func nodeValue(n *yaml.Node) any {
 		return n.Value
 	}
 	return v
+}
+
+// codeHelp is help that the CLI adds to an error, by the error's code. It's
+// for advice that only the CLI can give. For example, a sidecar also runs
+// inside the engine that platforms embed, where there's no `anfra status` or
+// repo log, so the sidecar's own error can't point to them.
+var codeHelp = map[string]string{
+	errcode.SidecarUnavailable.String(): "The sidecar's logs are in the repo's log file, which `anfra status` shows.",
 }
 
 // failureHint records a failure the caller could fix, off a terminal and

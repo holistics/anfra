@@ -74,7 +74,7 @@ func (in QueryRunInput) check() error {
 	}
 	if in.PageSize != 0 {
 		if _, limit, err := query.ExtractLimit(in.Query); err == nil && limit != query.NoLimit {
-			return command.InvalidArg("page_size", "invalid", "page the rows or end the query with a limit: directive, not both")
+			return command.InvalidArg("page_size", "invalid", "a query can't have both a page size and a `limit:` directive")
 		}
 	}
 	if tz := in.Timezone; tz != "" {

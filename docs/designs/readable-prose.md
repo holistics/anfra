@@ -82,8 +82,9 @@ Give the reader what they need at this moment, and make it easy to find the rest
 
 To get it right:
 
-- **Order by need.** Put the common case and the next action first. Put edge cases, reasons and background later, or somewhere else.
+- **Order by need.** Put the common case and the next action first. Put edge cases, reasons and background later, or somewhere else. For example, "can't change config.yml, because it's locked" comes first, and the lock file's path only at the step that has the reader delete it.
 - **Point to the next layer.** End with where to learn more, such as `anfra <command> --help`, `--yaml` for the full result, or a doc's link. Name the exact command or flag.
+- **Put what can be skipped in brackets.** Within a sentence, brackets mark what a reader may skip on a first read. "A column's (database-agnostic) type in the semantic layer" reads first as "a column's type in the semantic layer", and the bracketed word is there for whoever needs it. Use them for a qualifier or a detail, never for the main point or the fix.
 - **Let each layer stand alone.** A one-line summary (`Short`, a command's summary, an error's message) must make sense without the detail behind it. The detail must make sense without rereading the summary.
 - **Think about how the reader got here.** An agent usually meets a command through its summary in a list, then its description, then an error. Each of those steps should lead to the next one.
 
@@ -118,6 +119,7 @@ The rules above pull against other things that matter. When they conflict, weigh
 **Be concise, but by cutting content, not context.** There are two ways to make text shorter, and only one of them helps.
 
 - **Cut what the reader doesn't need.** That means asides, background they can't act on, restated summaries, and filler like "please" and "note that". This makes the text shorter and easier to read.
+- **Cut what they already know.** Think about the least experienced reader, but weigh how rare they are, and whether they have help to fill the gap. An explanation every reader pays for should earn its place for most of them. "Requests must be application/json." reaches people and agents writing HTTP requests by hand. Nearly all of them know that's the `Content-Type` header, and the rare person who doesn't usually has an agent to ask. So the message doesn't explain it.
 - **Don't compress what they do need.** Dropping subjects, connectives like "because" and "instead of", or the context a newcomer lacks makes the text shorter but harder to read. That is exactly how note-style prose comes about. It's concise for the writer, who already knows what's missing, and costly for the reader, who has to reconstruct it.
 
 So measure conciseness by the reader's effort, not by word count. Twelve clear words beat eight cryptic ones. If a message is still too long once the clear version is written, it's carrying too much. Move some of it to the next layer ([progressive disclosure](#3-disclose-progressively)) rather than squeezing it.
@@ -138,11 +140,58 @@ So measure conciseness by the reader's effort, not by word count. Twelve clear w
 - Name things as the reader typed them. An error from a core command can reach the CLI, where the reader passed `--dataset`, and the API, where they sent `dataset`. Name the input in words both can recognise, and let the violation's field carry the exact name.
 - Bullets, tables and headings belong in `--help`, skills and docs.
 
-**Use one word for one thing.** Readers, and agents especially, learn the words anfra uses and assume a new word means a new thing. Choose a plain word for each concept and use it everywhere. If a term of anfra's own is unavoidable, use it consistently and explain it where the reader first meets it.
-
 **Be exact.** Plain words must not make the text wrong. If the simple version is wrong, keep the precise term and explain it.
 
+**Write for what really happens.** Being exact doesn't mean covering every case equally. Think about the situations readers realistically end up in, and write for those. Knowing how the code behaves tells you which situations are realistic. For example, anfra locks `.anfra/config.yml` only while it writes the file, which always takes a moment. So a lock that's still there a moment later was almost certainly left by a crash. "If none is running, remove the lock" covered every case accurately, but it asked the reader to check something they had no easy way to check. The message now says to try again in a moment, and to delete the lock if it's still there.
+
+**Sometimes the best fix is in the code.** When a message is hard to write, because it needs a caveat, an exception, or a list of manual steps, the behavior may be what's awkward. Fix that rather than the wording, and don't cut a true, actionable fact just to make the text cleaner.
+
+- *A missing command.* A repo without `.anfra/data_sources.yml` used to get a YAML sample to copy. Now `anfra init --data-sources` creates the file, and the error just names that command.
+- *Inconsistent behavior.* An org address was refused for an upper-case org name, though the server's case was ignored. The message would have needed "(the org's name in lowercase)". Lowercasing the name, as the server is already lowercased, removed the need for it.
+
+Weigh a code change like any other: it's more to build and keep working. Make it when readers realistically run into the problem, not just to shorten one message.
+
+**Stay open to how agents write.** The style this guide pushes against is common in text written by agents like Claude, and agents may find parts of it easy and cheap to read. So don't treat every trace of it as a mistake to coerce away. Some of its habits may serve both kinds of reader, such as labels instead of sentences, or terse lists of values. When one does, adopt it on purpose and add it to this guide, the way rule 2 allows a colon that introduces something.
+
+That isn't the same as accepting the style as it is. A habit earns its place by working for the reader, and that includes people. So the guide is meant to change: refine it as rewrites and agent checks show what works for people and agents together.
+
+**Work with the error flow, not around it.** An error message is usually a chain, with each part written by the function that raised or wrapped it: `start anfra-node sidecar: anfra-node didn't start in time`. Don't write the ideal final message first and then bend the code to produce it, with special cases, ad-hoc string building, or one layer rewording another's message. Instead:
+
+1. **Make each part good on its own.** Each function writes its part as well as it can, from what it knows, the way it handles its own inputs and outputs. That part should read well whoever wraps it, and wherever it ends up.
+2. **Then give the error structure.** If the chain still reads badly, let the error carry what a caller needs (a code, details, a violation, help), so the caller who shows it can present it. For example, the CLI can add help to any `sidecar_unavailable` error, where the sidecar package can't know about the CLI.
+
+The final message and the code's error handling meet in the middle. Neither is forced to fit the other.
+
 **Rewrites have a cost.** Changing text means updating the tests that match on it and regenerating the API contract when a description changes. Make the change when it helps a reader, not to polish text that already reads well.
+
+## Words
+
+Use one word for each concept, and use it everywhere. Readers, and agents especially, learn the words anfra uses and assume a new word means a new thing.
+
+Prefer a plain word to one of anfra's own. Words used inside anfra's code tend to leak into what users read, where they mean nothing to a newcomer. Whether a word fits depends on who is reading and why, so there's no fixed list of replacements. Some examples:
+
+- **answer.** "Write the answer as YAML" reads better as "write the result as YAML". As a verb, "answers with the export's link" reads better as "returns the export's link", or "prints" at the CLI.
+- **refuse.** "Refuse what would need an answer" reads better as "fail instead of asking".
+- **warm server.** "Whether a warm server is running" reads better as "whether `anfra serve` is running".
+- **document.** "`--json`: a JSON document" says no more than "`--json`: JSON".
+- **take.** A suggestion: a command *takes* a flag or an argument ("anfra serve doesn't take --json"). "Support" suggests a missing feature, and "allow" a rule.
+- **contract.** It fits where the reader cares about compatibility, such as a platform embedding anfra, which relies on the core API not changing under it. It doesn't fit `anfra openapi --help`, where the reader just wants the API's OpenAPI document.
+
+## Words we teach
+
+Some of anfra's own words are worth teaching, because they name something users need to know about and no plain word does. Use these as they're written here, and explain each one where a reader first meets it.
+
+| Word | Meaning | Explained in |
+|---|---|---|
+| repo | The folder anfra works in, with its models, datasets and Data Apps. | `anfra init`, the root `--help` |
+| core API, core commands | The commands that power what anfra does: querying, validating, and showing and searching the semantic layer. `anfra serve` also serves them over HTTP and MCP, as the core API. The other commands, such as `init`, `publish` and `update`, are CLI-only, and set up or manage anfra itself. | The root `--help` |
+| sidecar | An embedded process that anfra starts and manages. `anfra-node` compiles AML, and `canal-query` runs queries. | `anfra status`, `anfra serve --help`, the `sidecar_unavailable` error |
+| pretty format | A result laid out for reading at a terminal, with tables and colour (`--pretty`). | `--pretty` |
+| semantic type | A column's (database-agnostic) type in the semantic layer: `number`, `date`, `truefalse` and so on. | The field that carries it |
+
+Standard terms need no explaining for the readers who meet them, such as upstream (in lineage), Arrow type, OpenAPI and MCP.
+
+To add a word to this table, check first that no plain word would do, and decide where it's explained.
 
 ## By kind of text
 

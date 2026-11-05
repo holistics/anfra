@@ -101,7 +101,8 @@ func (c *Client) Health(ctx context.Context) error {
 
 // WaitReady polls /health until canal-query answers or the deadline passes.
 func (c *Client) WaitReady(ctx context.Context) error {
-	deadline := time.Now().Add(15 * time.Second)
+	const wait = 15 * time.Second
+	deadline := time.Now().Add(wait)
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
 		resp, err := c.http.Do(req)
@@ -112,7 +113,7 @@ func (c *Client) WaitReady(ctx context.Context) error {
 			}
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("canal-query not ready within deadline")
+			return fmt.Errorf("canal-query didn't start within %s", wait)
 		}
 		// Give up immediately if the caller is done; otherwise an unreachable
 		// address blocks for the whole deadline.

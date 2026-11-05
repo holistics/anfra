@@ -2,6 +2,7 @@ package cloudapi
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"regexp"
@@ -66,11 +67,15 @@ func ParseOrigin(raw string) (string, error) {
 func ParseOrg(raw string) (Org, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u == nil || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") || u.RawPath != "" {
-		return Org{}, errors.New("invalid org address: provide https://<server>/o/<org> without credentials, query or fragment")
+		// Not echoed: it may hold credentials.
+		return Org{}, errors.New("an org address can't have credentials, a query or a fragment. Use just the org's address, such as https://bi.example.com/o/acme")
 	}
 	slug, ok := strings.CutPrefix(strings.TrimSuffix(u.Path, "/"), "/o/")
+	// An org's name is lowercase, so /o/Acme is acme, as the host's case is
+	// ignored too.
+	slug = strings.ToLower(slug)
 	if !ok || !slugPattern.MatchString(slug) {
-		return Org{}, errors.New("invalid org address: expected /o/<org> with a lowercase DNS-label org slug")
+		return Org{}, fmt.Errorf("%q isn't an org address. Use the org's address, such as https://bi.example.com/o/acme", raw)
 	}
 	origin, err := ParseOrigin(u.Scheme + "://" + u.Host)
 	if err != nil {

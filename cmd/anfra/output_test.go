@@ -100,12 +100,12 @@ func TestJSONRefused(t *testing.T) {
 	t.Cleanup(resetOutput)
 	t.Chdir(t.TempDir())
 	for args, want := range map[string]string{
-		"serve --json":           "anfra serve writes a log, until it is stopped, not structured output",
-		"completion bash --json": "anfra completion bash writes a shell script, not structured output",
-		"serve --yaml":           "anfra serve writes a log, until it is stopped, not structured output",
+		"serve --json":           "anfra serve doesn't take --json, because it writes a log, not a result.",
+		"completion bash --json": "anfra completion bash doesn't take --json, because it writes a shell script, not a result.",
+		"serve --yaml":           "anfra serve doesn't take --yaml, because it writes a log, not a result.",
 		"query export --json":    "--json only works with export --link, which answers with the export's link",
 		"query export --jq .":    "--jq only works with export --link",
-		"status --yaml --json":   "pass --yaml or --json, not both",
+		"status --yaml --json":   "--yaml and --json can't be combined. Pass one.",
 	} {
 		cmd := newRootCmd()
 		cmd.SetArgs(strings.Fields(args))
@@ -329,7 +329,7 @@ func TestSchema(t *testing.T) {
 	cmd.SetArgs([]string{"serve", "--schema"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "has no schema") {
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "anfra serve doesn't take --schema") {
 		t.Errorf("serve --schema: %v", err)
 	}
 }
@@ -406,9 +406,9 @@ func TestJQRefusedBeforeRunning(t *testing.T) {
 // beside another format, before the command runs.
 func TestPrettyRefused(t *testing.T) {
 	for args, want := range map[string]string{
-		"validate --pretty":        "validate has no pretty view yet",
-		"query x --pretty --json":  "pass one format",
-		"query x --pretty --jq .a": "pass one format",
+		"validate --pretty":        "validate doesn't take --pretty yet",
+		"query x --pretty --json":  "Pass one format.",
+		"query x --pretty --jq .a": "Pass one format.",
 		"serve --pretty":           "writes a log",
 	} {
 		var stdout, stderr bytes.Buffer

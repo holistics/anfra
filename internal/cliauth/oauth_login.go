@@ -139,7 +139,9 @@ waitCallback:
 		return cloudapi.Org{}, err
 	}
 	var entry storedCredential
-	failure := "the authentication server returned an invalid authentication grant; contact your server administrator if this happens again"
+	// Why it failed, and what to do next, by cause.
+	failure := "the authentication server returned an unexpected reply"
+	next := "Run `anfra auth login` again, and if this happens again, contact your server administrator."
 	if err == nil {
 		entry, err = validateTokenResponse(response, origin, started, nil)
 	}
@@ -162,7 +164,8 @@ waitCallback:
 			return clearRefreshRecovery(path, entry.Org)
 		})
 		if err != nil {
-			failure = "could not save authentication on this device: " + err.Error()
+			failure = "couldn't save the authentication on this device: " + err.Error()
+			next = "Once the authentication can be saved, run `anfra auth login` again."
 		}
 	}
 	if err != nil {
@@ -174,9 +177,9 @@ waitCallback:
 			revocationToken = response.AccessToken
 		}
 		if !safeOpaqueToken(revocationToken) || revokeOAuthCredential(cleanupCtx, metadata.RevocationEndpoint, revocationToken) != nil {
-			return cloudapi.Org{}, clierr.Precondition("%s; server access may still be active: remove it at %s/account/connected-apps before trying again.", failure, origin)
+			return cloudapi.Org{}, clierr.Precondition("%s. This device may still have access on the server, so remove it at %s/account/connected-apps. %s", failure, origin, next)
 		}
-		return cloudapi.Org{}, clierr.Precondition("%s; server access was revoked: run anfra auth login again after resolving the problem.", failure)
+		return cloudapi.Org{}, clierr.Precondition("%s. anfra removed this device's access on the server. %s", failure, next)
 	}
 	return entry.Org, nil
 }

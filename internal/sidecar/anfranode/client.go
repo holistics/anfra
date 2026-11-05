@@ -91,7 +91,8 @@ func (r RepoRef) check() error {
 
 // WaitReady polls /health until the sidecar answers or the deadline passes.
 func (c *Client) WaitReady(ctx context.Context) error {
-	deadline := time.Now().Add(10 * time.Second)
+	const wait = 10 * time.Second
+	deadline := time.Now().Add(wait)
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
 		resp, err := c.http.Do(req)
@@ -102,7 +103,7 @@ func (c *Client) WaitReady(ctx context.Context) error {
 			}
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("anfra-node not ready within deadline")
+			return fmt.Errorf("anfra-node didn't start within %s", wait)
 		}
 		// Give up immediately if the caller is done; otherwise an unreachable
 		// address blocks for the whole deadline.
@@ -162,7 +163,14 @@ type RPCError struct {
 	Data    jsontext.Value
 }
 
+// When the error is public, meaning anfra-node refused the request and wrote
+// the message for users to read (see IsPublic), Error returns just the
+// message. Any other error also names the method and the JSON-RPC code, to
+// help with debugging.
 func (e *RPCError) Error() string {
+	if _, ok := e.public(); ok {
+		return e.Message
+	}
 	return fmt.Sprintf("rpc %s error %d: %s", e.Method, e.Code, e.Message)
 }
 

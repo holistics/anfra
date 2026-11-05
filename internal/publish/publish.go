@@ -214,12 +214,13 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if status.PublishedBy != nil && state.last(org) != status.Revision {
 		// TODO(OAUTH.md): "you" for the signed-in user's own publishes, once the
 		// CLI knows who it is.
-		t.Warn("last_published_elsewhere", "This repo was last published by %s on %s: publishing replaces that version.",
-			who(status.PublishedBy), status.PublishedAt.Local().Format(time.DateTime))
+		by, at := who(status.PublishedBy), status.PublishedAt.Local().Format(time.DateTime)
+		t.Warn("last_published_elsewhere", "This repo was last published by %s on %s: publishing replaces that version.", by, at)
 		if !o.Yes {
 			yes, ok := Confirm(ask, "Confirm publishing a new version?")
 			if !ok {
-				return Result{}, apperr.New(clierr.ConfirmationRequired, "Not published: publishing replaces the org's version, and there's no one here to confirm it. Pass --yes to publish.")
+				return Result{}, apperr.New(clierr.ConfirmationRequired, fmt.Sprintf(
+					"Not published, because it would replace the version %s published on %s, and there's no one here to confirm that. Pass --yes once the user has agreed to replace it.", by, at))
 			}
 			if err := ctx.Err(); err != nil {
 				return Result{}, err
