@@ -275,6 +275,11 @@ serve` has no authentication, so ask before serving it beyond loopback (`--addr`
 requested change the same way: restate it if it changes what a number means, change the smallest
 thing, and check that the agreed result still holds.
 
+When the user says something is wrong ("the chart is empty"), read the app's log lines since its
+last `app.mounted` before asking them anything (see "Run and check it"): the error, its `kind` and
+the server's line by `request_id` usually say what. If there is no mount since your last edit, ask
+them to reload the app first.
+
 ## Related skills
 * [](../anfra-aml/) — add the fields and metrics an app needs.
 * [](../anfra-write-aql/) — write and validate the queries.
