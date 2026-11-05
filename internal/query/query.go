@@ -118,7 +118,7 @@ type ResultLimit struct {
 // answers at once: it fails rather than being cut short, so that page numbers
 // stay exact. The maximum is in its details.
 var PageTooLarge = apperr.DefinePublicCodeWith[PageLimit](errcode.NS, "page_too_large", apperr.User,
-	"The page is larger than this server answers at once.")
+	"The page is larger than this server may return at once.")
 
 // PageLimit is the maximum a page went past.
 type PageLimit struct {
@@ -128,7 +128,7 @@ type PageLimit struct {
 // NewPageTooLarge is the error of a page past maxBytes.
 func NewPageTooLarge(maxBytes int) error {
 	return apperr.NewWith(PageTooLarge,
-		fmt.Sprintf("The page is larger than %d MiB, more than this server answers at once. Ask for fewer rows a page, or stream the result.", maxBytes>>20),
+		fmt.Sprintf("The page is larger than %d MiB, the most this server may return at once. Ask for fewer rows a page, or stream the result by leaving out the page size.", maxBytes>>20),
 		PageLimit{MaxBytes: maxBytes})
 }
 
@@ -162,10 +162,10 @@ func ExtractLimit(aql string) (string, int, error) {
 	raw := strings.TrimSpace(m[1])
 	n, err := strconv.Atoi(raw)
 	if err != nil {
-		return aql, NoLimit, fmt.Errorf("invalid limit %q: expected a non-negative integer", raw)
+		return aql, NoLimit, fmt.Errorf("the `limit:` directive takes a non-negative integer, such as `limit: 100`, not %q", raw)
 	}
 	if n < 0 {
-		return aql, NoLimit, fmt.Errorf("invalid limit %d: must be >= 0", n)
+		return aql, NoLimit, fmt.Errorf("the `limit:` directive takes a non-negative integer, such as `limit: 100`, not %d", n)
 	}
 	cleaned := limitDirectiveRe.ReplaceAllString(aql, "}")
 	return cleaned, n, nil
@@ -255,7 +255,7 @@ func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.Da
 func dataSourceOf(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (datasource.DataSource, error) {
 	ds, err := connect(ctx, sources, compiled.DataSource.Name, datasource.DataPermModeGoverned)
 	if errors.Is(err, datasource.ErrUnknown) {
-		return datasource.DataSource{}, fmt.Errorf("data source %q is not defined among the repo's data sources", compiled.DataSource.Name)
+		return datasource.DataSource{}, fmt.Errorf("the dataset uses the data source %q, which isn't defined in this repo", compiled.DataSource.Name)
 	}
 	return ds, err
 }
@@ -301,7 +301,7 @@ func stream(ctx context.Context, canal *canalquery.Client, ds datasource.DataSou
 // its settings, if any; unpooled if ds is.
 func on(ds datasource.DataSource, st canalquery.Statement) (canalquery.Statement, error) {
 	if ds.Connection == nil {
-		return st, fmt.Errorf("data source %q has no `connection` in data_sources.yml (required to run queries)", ds.Name)
+		return st, fmt.Errorf("data source %q is missing `connection` in data_sources.yml", ds.Name)
 	}
 	st.DBConfig = ds.Connection
 	st.DBSetting = ds.Settings

@@ -236,7 +236,7 @@ func serveExport(exportFiles *exports.Files) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		f, ok := exportFiles.Open(r.PathValue("token"))
 		if !ok {
-			httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "No such export, or its link has expired."))
+			httpkit.WriteError(w, r, apperr.New(apperr.NotFound, "This export's link is invalid or has expired. Run the export again for a new link."))
 			return
 		}
 		defer f.Close()
@@ -288,9 +288,9 @@ func listen(r repo.Local, addr string) (net.Listener, error) {
 	}
 	if explicit {
 		if holder := holderOf(r, addr); holder != "" {
-			return nil, clierr.Precondition("%s is taken by anfra serve for %s: pick another with --addr.", addr, holder)
+			return nil, clierr.Precondition("Can't listen on %s, because anfra serve for %s is already using it. Pass another address with --addr.", addr, holder)
 		}
-		return nil, clierr.Precondition("%s is taken: pick another with --addr.", addr)
+		return nil, clierr.Precondition("Can't listen on %s, because another program is already using it. Pass another address with --addr.", addr)
 	}
 	return net.Listen("tcp", "127.0.0.1:0")
 }
@@ -433,7 +433,7 @@ func guard(next http.Handler, addr net.Addr) http.Handler {
 				h = r.Host
 			}
 			if h != host && !isLoopback(h) {
-				httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, "Unknown host "+r.Host+"."))
+				httpkit.WriteError(w, r, apperr.New(apperr.InvalidRequest, fmt.Sprintf("This server only accepts requests addressed to %s or localhost, not %s.", host, r.Host)))
 				return
 			}
 		}

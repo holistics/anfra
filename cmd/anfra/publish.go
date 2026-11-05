@@ -247,7 +247,7 @@ func validateHere(ctx context.Context, errOut io.Writer) error {
 		}
 		return err
 	}
-	return apperr.NewWith(clierr.RepoInvalid, "The repo has errors: fix them and publish again.", clierr.RepoProblems{Validation: jsontext.Value(body)})
+	return apperr.NewWith(clierr.RepoInvalid, "Not published, because the repo has errors. Fix them, and publish again.", clierr.RepoProblems{Validation: jsontext.Value(body)})
 }
 
 // storedOrgName is an org's name as its stored login has it; "" when there's

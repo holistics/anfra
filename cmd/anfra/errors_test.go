@@ -161,12 +161,12 @@ func TestPrintErrorWithAHint(t *testing.T) {
 // the same.
 func TestRepoInvalidAsTheCloudHasIt(t *testing.T) {
 	var out bytes.Buffer
-	printError(&out, apperr.NewWith(clierr.RepoInvalid, "The repo has errors: fix them and publish again.",
+	printError(&out, apperr.NewWith(clierr.RepoInvalid, "Not published, because the repo has errors. Fix them, and publish again.",
 		clierr.RepoProblems{Validation: jsontext.Value(`{"valid":false,"diagnostics":[],"reports":[]}`)}), "")
 	want := "---\nerror:\n" +
 		"  code: repo_invalid\n" +
 		"  scope: user\n" +
-		"  message: 'The repo has errors: fix them and publish again.'\n" +
+		"  message: Not published, because the repo has errors. Fix them, and publish again.\n" +
 		"  details:\n" +
 		"    validation:\n" +
 		"      valid: false\n" +

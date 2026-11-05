@@ -77,7 +77,7 @@ func Read(dir string) (Config, error) {
 //     above it.
 //   - The key, a scalar on one line: its value's bytes are replaced.
 //   - Anything else (the section without the key, flow style, a value spanning
-//     lines): refused, naming the line to write by hand, rather than guessed at.
+//     lines): refused, naming the value to set by hand, rather than guessed at.
 //
 // value must be a plain scalar that reads back as itself; the result is parsed
 // again and checked before it replaces the file.
@@ -88,7 +88,7 @@ func SetString(path, section, key, value string) error {
 	}
 	edited, err := editString(original, section, key, value)
 	if err != nil {
-		return fmt.Errorf("%s: %w; write it by hand:\n\n%s:\n  %s: %s", path, err, section, key, value)
+		return fmt.Errorf("can't set %s.%s in %s: %w. Set %s.%s to %s yourself", section, key, path, err, section, key, value)
 	}
 	if err := checkString(edited, section, key, value); err != nil {
 		return fmt.Errorf("%s: %w (this is a bug in anfra; the file is unchanged)", path, err)
@@ -111,18 +111,18 @@ func editString(original []byte, section, key, value string) ([]byte, error) {
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode || root.Style&yaml.FlowStyle != 0 || root.Column != 1 {
-		return nil, errors.New("its top level is not a block mapping")
+		return nil, errors.New("its top level isn't a YAML mapping written one key per line")
 	}
 	sec := lookup(root, section)
 	if sec == nil {
 		return appendBlock(original, block), nil
 	}
 	if sec.Kind != yaml.MappingNode || sec.Style&yaml.FlowStyle != 0 {
-		return nil, fmt.Errorf("%s is not a block mapping", section)
+		return nil, fmt.Errorf("%s isn't a YAML mapping written one key per line", section)
 	}
 	val := lookup(sec, key)
 	if val == nil {
-		return nil, fmt.Errorf("%s has no %s yet, and anfra does not insert into a section", section, key)
+		return nil, fmt.Errorf("%s has no %s, and anfra doesn't add keys to a section that's already there", section, key)
 	}
 	if val.Kind != yaml.ScalarNode || val.Tag == "!!null" || val.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
 		return nil, fmt.Errorf("%s.%s is not a one-line value", section, key)

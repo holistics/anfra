@@ -113,7 +113,7 @@ func TestRunsWithTheDataSourcesSettings(t *testing.T) {
 func TestConnectionRefusals(t *testing.T) {
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "gone"}}
 	canal := canalquery.NewClient("http://127.0.0.1:1", false).ForTenant("org_1")
-	if err := Stream(context.Background(), canal, &spySources{set: warehouse}, compiled, Unbounded, canalquery.Handler{}); err == nil || !strings.Contains(err.Error(), `"gone" is not defined`) {
+	if err := Stream(context.Background(), canal, &spySources{set: warehouse}, compiled, Unbounded, canalquery.Handler{}); err == nil || !strings.Contains(err.Error(), `data source "gone", which isn't defined`) {
 		t.Errorf("an unknown data source: %v", err)
 	}
 	denied := errors.New("the host refuses this data source")

@@ -226,7 +226,7 @@ func writeNew(content []byte, perm fs.FileMode) func(path string) (bool, error) 
 func ignoreLine(pattern string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
 		if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
-			return false, fmt.Errorf("not a regular file, which Git does not read: add %s to the repo's ignore rules yourself", pattern)
+			return false, fmt.Errorf("it's a symlink, which Git doesn't follow. Add %s to the repo's ignore rules yourself", pattern)
 		}
 		existing, err := os.ReadFile(path) //nolint:gosec // G304: the .gitignore of the repo being set up
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {

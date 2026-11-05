@@ -174,7 +174,7 @@ Prefer a plain word to one of anfra's own. Words used inside anfra's code tend t
 - **refuse.** "Refuse what would need an answer" reads better as "fail instead of asking".
 - **warm server.** "Whether a warm server is running" reads better as "whether `anfra serve` is running".
 - **document.** "`--json`: a JSON document" says no more than "`--json`: JSON".
-- **take.** A suggestion: a command *takes* a flag or an argument ("anfra serve doesn't take --json"). "Support" suggests a missing feature, and "allow" a rule.
+- **take.** A suggestion: a command *takes* a flag or an argument ("anfra serve doesn't take --json"). "Support" suggests a missing feature, so keep it for that: "validating a SQL query is not supported yet". "Allow" suggests a rule.
 - **contract.** It fits where the reader cares about compatibility, such as a platform embedding anfra, which relies on the core API not changing under it. It doesn't fit `anfra openapi --help`, where the reader just wants the API's OpenAPI document.
 
 ## Words we teach

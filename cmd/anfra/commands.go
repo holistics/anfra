@@ -173,7 +173,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			d.link, _ = runCmd.Flags().GetBool("link")
 			if structuredAsked() && !d.link {
 				flag := structuredFlag()
-				return flagViolated(flag, flag+" only works with export --link, which answers with the export's link instead of writing the file.")
+				return flagViolated(flag, flag+" only works with export --link, which prints the export's link instead of writing the file.")
 			}
 		}
 		values, err := flagValues(runCmd.Flags(), args, flagArg)
@@ -544,7 +544,7 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 					return nil, re
 				}
 			}
-			return nil, clierr.Unreachablef(clierr.AnfraServe, nil, "download the export: the server answered %s", resp.Status)
+			return nil, clierr.Unreachablef(clierr.AnfraServe, nil, "download the export: the server returned %s", resp.Status)
 		}
 		return resp.Body, nil
 	}

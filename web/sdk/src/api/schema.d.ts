@@ -423,7 +423,7 @@ export interface components {
             /** @constant */
             status: 400;
         };
-        /** @description The page is larger than this server answers at once. */
+        /** @description The page is larger than this server may return at once. */
         ErrorBodyPageTooLarge: {
             /** @constant */
             code: "page_too_large";
@@ -474,7 +474,7 @@ export interface components {
             /** @constant */
             status: 422;
         };
-        /** @description A sidecar is unavailable. */
+        /** @description A sidecar (a process anfra runs to compile AML or run queries) is unavailable. */
         ErrorBodySidecarUnavailable: {
             /** @constant */
             code: "sidecar_unavailable";

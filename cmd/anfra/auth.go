@@ -270,7 +270,7 @@ func (t *authTerminal) loginOrg(ctx context.Context, address string) (cloudapi.O
 		return org, apperr.New(clierr.Interrupted, "Authentication canceled.")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return org, clierr.Precondition("Authentication timed out: run anfra auth login again, and complete approval in the browser.")
+		return org, clierr.Precondition("Authentication timed out before it was approved in the browser. Try again.")
 	}
 	return org, err
 }

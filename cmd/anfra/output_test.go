@@ -103,7 +103,7 @@ func TestJSONRefused(t *testing.T) {
 		"serve --json":           "anfra serve doesn't take --json, because it writes a log, not a result.",
 		"completion bash --json": "anfra completion bash doesn't take --json, because it writes a shell script, not a result.",
 		"serve --yaml":           "anfra serve doesn't take --yaml, because it writes a log, not a result.",
-		"query export --json":    "--json only works with export --link, which answers with the export's link",
+		"query export --json":    "--json only works with export --link, which prints the export's link",
 		"query export --jq .":    "--jq only works with export --link",
 		"status --yaml --json":   "--yaml and --json can't be combined. Pass one.",
 	} {

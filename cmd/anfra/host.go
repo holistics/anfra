@@ -77,7 +77,7 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 
 	lg, err := logging.Setup(repo.LogsDir(), repo.ID, envflag.OnOr(envflag.LogStderr, logStderr))
 	if err != nil {
-		return fmt.Errorf("set up logging: %w", err)
+		return fmt.Errorf("set up the repo's log in anfra's folder (ANFRA_HOME): %w", err)
 	}
 	defer lg.Close()
 	// The exporter's failures (a collector down) go to the log, not the terminal.
