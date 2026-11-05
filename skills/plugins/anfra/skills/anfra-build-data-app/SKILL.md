@@ -212,7 +212,9 @@ rows ("No sales this week", never a bare zero). Render an error by who must act,
 `unauthenticated`, the message for any other `user` or `client` error, and for a `server` one
 "couldn't load" with a Retry that calls `app.execute()`, which reruns only the failed queries. Log
 `result.columns`, `result.rows[0]` and `result.debug?.executedAql` on each query's first success:
-the real row keys, value types and the AQL that ran. Put on the page the definitions, dates and
+the real row keys, value types and the AQL that ran. A `console.log` stays in the browser's
+console (only warnings and errors reach `anfra serve`'s log): working from the log alone, run the
+query with `anfra query` for its columns. Put on the page the definitions, dates and
 any rounding a reader needs to trust a number.
 
 ## 5. Run and check it
@@ -258,7 +260,9 @@ The same errors are in the panel's Overview, under Problems. Read errors against
 (`ValidationError`) names a declaring line; `invalid_request` names a call made wrong (an
 `Anfra.lineage` call with an empty or malformed target list; an unknown field comes back as that
 target's `error` or an empty diagram); `query_invalid` carries anfra's diagnostics for the AQL, with
-their lines, and `validation_failed` names the bad entry (`filters[0].field`).
+their lines, and `validation_failed` names the bad entry a control or cross-filter added
+(`input.filters[0].field`: a `mapControl` typo, an unsupported operator, a drill on a field no
+dimension is built on).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
 explains it. When the server fails a query, its full cause is in the same log: find the server's
 line by the app line's `request_id`. A bare "The call failed." is a host-side error: its app line
