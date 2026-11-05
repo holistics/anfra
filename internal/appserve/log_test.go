@@ -54,10 +54,10 @@ func lines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 func TestLog(t *testing.T) {
 	s, buf := logged(t)
 	for _, body := range []string{
-		`{"path":"sales.html","type":"error","event":{"kind":"query","code":"query_failed","scope":"user","message":"column x does not exist",` +
+		`{"path":"sales.html","type":"error","event":{"kind":"call.query","code":"query_failed","scope":"user","message":"column x does not exist",` +
 			`"requestId":"req-1","entity":"orders","at":"2026-11-02T00:00:00Z","rows":[[1]]}}`,
 		`{"path":"sales.html","type":"console","event":{"level":"warn","message":"careful"}}`,
-		`{"path":"team/overview.html","type":"error","event":{"kind":"uncaught","message":"` + strings.Repeat("x", 3000) + `"}}`,
+		`{"path":"team/overview.html","type":"error","event":{"kind":"app.uncaught","message":"` + strings.Repeat("x", 3000) + `"}}`,
 	} {
 		if w := post(s, body); w.Code != http.StatusNoContent {
 			t.Fatalf("%s: %d %s", body, w.Code, w.Body)
@@ -68,7 +68,7 @@ func TestLog(t *testing.T) {
 		t.Fatalf("%d lines, want 3: %v", len(got), got)
 	}
 	want := map[string]any{
-		"level": "ERROR", "event": "app.error", "msg": "column x does not exist", "service": "app", "app": "sales.html", "kind": "query", "code": "query_failed", "scope": "user",
+		"level": "ERROR", "event": "app.error", "msg": "column x does not exist", "service": "app", "app": "sales.html", "kind": "call.query", "code": "query_failed", "scope": "user",
 		"request_id": "req-1", "entity": "orders", "at": "2026-11-02T00:00:00Z",
 	}
 	if a, b := jsonOf(got[0]), jsonOf(want); a != b {
@@ -138,7 +138,7 @@ func TestLogRateLimit(t *testing.T) {
 	s.reports = newLimiter(func() time.Time { return now }, s.logDropped)
 	s.reports.afterFunc = func(time.Duration, func()) {}
 	report := func(path string) {
-		post(s, `{"path":"`+path+`","type":"error","event":{"kind":"uncaught","message":"again"}}`)
+		post(s, `{"path":"`+path+`","type":"error","event":{"kind":"app.uncaught","message":"again"}}`)
 	}
 	for range reportsPerMinute + 7 {
 		report("sales.html")
@@ -169,7 +169,7 @@ func TestLogRateLimitFloodStops(t *testing.T) {
 	}
 	now = now.Add(10 * time.Second)
 	for range reportsPerMinute + 3 {
-		post(s, `{"path":"sales.html","type":"error","event":{"kind":"uncaught","message":"again"}}`)
+		post(s, `{"path":"sales.html","type":"error","event":{"kind":"app.uncaught","message":"again"}}`)
 	}
 	if len(timers) != 1 || waits[0] != time.Minute {
 		t.Fatalf("timers %d, waits %v; want one, for the window's minute", len(timers), waits)

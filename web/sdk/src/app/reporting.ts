@@ -7,16 +7,19 @@
  * installs a reporter: outside a frame (tests, an SDK used on its own page) nothing is sent.
  */
 import {
-  MESSAGE_LIMIT, createBudget, describeError, truncate, type AppErrorKind,
+  MESSAGE_LIMIT, callOf, createBudget, describeError, truncate, type AppErrorKind,
 } from '../common/runtimeErrors';
 import type { FrameKernel } from './kernel';
 
-type Reporter = (kind: Exclude<AppErrorKind, 'hidden'>, err: unknown) => void;
+/** A kind the frame reports: `host.*` is the host's. */
+type FrameKind = Exclude<AppErrorKind, `host.${string}`>;
+
+type Reporter = (kind: FrameKind, err: unknown) => void;
 
 let reporter: Reporter | undefined;
 
 /** Report a runtime error to the host, if this is a frame. Never throws. */
-export function reportError (kind: Exclude<AppErrorKind, 'hidden'>, err: unknown): void {
+export function reportError (kind: FrameKind, err: unknown): void {
   try { reporter?.(kind, err); } catch { /* reporting must not add a failure of its own */ }
 }
 
@@ -54,8 +57,12 @@ export function installReporting (own: FrameKernel, win: Window, captureConsole:
     if (errors.take()) own.emit('error', describeError(kind, err));
   };
 
-  const onError = (event: ErrorEvent) => reportError('uncaught', event.error ?? event.message);
-  const onRejection = (event: PromiseRejectionEvent) => reportError('uncaught', event.reason);
+  const onError = (event: ErrorEvent) => reportError('app.uncaught', event.error ?? event.message);
+  // A call the app made and left unhandled is reported by its name, as the app called it.
+  const onRejection = (event: PromiseRejectionEvent) => {
+    const api = callOf(event.reason)?.api;
+    reportError(api ? `call.${api}` : 'app.uncaught', event.reason);
+  };
   win.addEventListener('error', onError);
   win.addEventListener('unhandledrejection', onRejection);
 

@@ -1,4 +1,5 @@
 import type { components } from '../api/schema';
+import { copyCallTag } from './runtimeErrors';
 
 /**
  * A Data App's errors are the API's error document, not classes picked for it
@@ -104,7 +105,7 @@ export class DataAppError extends Error {
   /** This error, naming `entity`: the same failure, said of the query or control it concerns. */
   about (entity: string): DataAppError {
     if (this.entity === entity) return this;
-    return new DataAppError({ ...fieldsOf(this), entity });
+    return copyCallTag(this, new DataAppError({ ...fieldsOf(this), entity }));
   }
 }
 
@@ -121,7 +122,7 @@ export class ValidationError extends DataAppError {
   }
 
   override about (entity: string): DataAppError {
-    return this.entity === entity ? this : new ValidationError(this.message, entity);
+    return this.entity === entity ? this : copyCallTag(this, new ValidationError(this.message, entity));
   }
 }
 

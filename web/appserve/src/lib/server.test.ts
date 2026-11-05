@@ -101,7 +101,7 @@ describe('report', () => {
     const posted = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', posted);
     const event = {
-      kind: 'listener', message: 'echarts is not defined', at: '2026-11-02T00:00:00.000Z', mount: 1,
+      kind: 'app.listener', message: 'echarts is not defined', at: '2026-11-02T00:00:00.000Z', mount: 1,
     } as const;
     server.report('sales.html', 'error', event);
     expect(posted).toHaveBeenCalledWith('/appserve/log', expect.objectContaining({

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FrameKernel } from './kernel';
 import { PROVISION_ELEMENT_ID, type Provision } from '../common/bridge';
 import { bootstrap } from './bootstrap';
+import { callOf } from '../common/runtimeErrors';
 import { salesDataset, testUser } from './testSupport';
 
 /** A frame window, provisioned by a host at `hostOrigin`, whose `message` listener the test drives. */
@@ -33,7 +34,12 @@ function frameFrom (hostOrigin: string, setup: (kernel: FrameKernel) => void = (
     source: parent as unknown as Window, origin: hostOrigin, data: { type: 'anfra:call', id: 1, name, request: {} },
   });
   const errors = () => posted.filter((m) => (m as { name?: string }).name === 'anfra.error').map((m) => (m as { payload: unknown }).payload);
-  return { parent, send, received, call, errors };
+  /** Fail the frame's call `name` as the host would. */
+  const fail = (name: string, error: unknown) => {
+    const sent = posted.find((m) => (m as { type?: string, name?: string }).type === 'anfra:call' && (m as { name: string }).name === name) as { id: number };
+    onMessage!({ source: parent as unknown as Window, origin: hostOrigin, data: { type: 'anfra:result', id: sent.id, ok: false, error } });
+  };
+  return { win, parent, send, received, call, errors, fail };
 }
 
 describe('bootstrap', () => {
@@ -75,12 +81,21 @@ describe('bootstrap', () => {
 
   it('reports a plugin that failed to set up to the host', () => {
     const frame = frameFrom('https://host.test', () => { throw new TypeError('no chart lib'); });
-    expect(frame.errors()).toEqual([expect.objectContaining({ kind: 'uncaught', message: 'no chart lib' })]);
+    expect(frame.errors()).toEqual([expect.objectContaining({ kind: 'plugin.uncaught', message: 'no chart lib' })]);
+  });
+
+  it("names a plugin's call as the app made it, and the bridge call it sent", async () => {
+    const frame = frameFrom('https://host.test', (kernel) => kernel.provide({ fetchAll: () => kernel.call('probe.remote', {}) }));
+    const probe = (frame.win as unknown as { Anfra: { probe: { fetchAll: () => Promise<unknown> } } }).Anfra.probe;
+    expect(probe.fetchAll).toBe(probe.fetchAll);
+    const failed = probe.fetchAll().catch((err: unknown) => err);
+    frame.fail('probe.remote', { code: 'forbidden', scope: 'user', message: 'No access.' });
+    expect(callOf(await failed)).toEqual({ api: 'probe_fetch_all', call: 'probe.remote' });
   });
 
   it("reports a frame call's failure the host is told only the shape of", async () => {
     const frame = frameFrom('https://host.test', (kernel) => kernel.handle('boom', () => { throw new RangeError('bad index'); }));
     frame.call('probe.boom');
-    await vi.waitFor(() => expect(frame.errors()).toEqual([expect.objectContaining({ kind: 'uncaught', message: 'bad index' })]));
+    await vi.waitFor(() => expect(frame.errors()).toEqual([expect.objectContaining({ kind: 'plugin.uncaught', message: 'bad index' })]));
   });
 });

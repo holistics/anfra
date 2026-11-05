@@ -2,6 +2,7 @@
    separating them would hide that they differ only in the operators they produce. */
 import { Observable } from './observable';
 import { ValidationError } from '../common/errors';
+import { tagCall } from '../common/runtimeErrors';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
 import type { DatasetIndex, ResolvedField } from './validation';
@@ -216,7 +217,11 @@ export class Filter extends Control {
         q: search ?? '',
       },
       signal,
-    );
+    ).catch((err: unknown) => {
+      // Left unhandled, it is reported as `call.load_options`.
+      tagCall(err, { api: 'load_options' });
+      throw err;
+    });
 
     this.loadedOptions = [...(options ?? [])];
     this.notify();

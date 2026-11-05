@@ -60,7 +60,7 @@ describe('problems', () => {
   });
 
   it('points a runtime error at its query, and only at a query the app has', () => {
-    const at = (entity: string) => runtimeProblem({ event: { kind: 'uncaught', message: 'x', entity, at: '', mount: 1 }, count: 1 }, salesSnapshot());
+    const at = (entity: string) => runtimeProblem({ event: { kind: 'app.uncaught', message: 'x', entity, at: '', mount: 1 }, count: 1 }, salesSnapshot());
     expect(at('orders').target).toEqual({ entity: 'query', app: 0, name: 'orders' });
     expect(at('constructor').target).toBeUndefined();
     expect(at('toString').target).toBeUndefined();

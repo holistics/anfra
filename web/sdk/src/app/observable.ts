@@ -40,7 +40,7 @@ export class Observable implements NotificationTarget {
       } catch (err) {
         // eslint-disable-next-line no-console -- the author's bug, shown where they debug
         console.error('anfra: a subscribe() listener threw; the queries carry on.', err);
-        reportError('listener', err);
+        reportError('app.listener', err);
       }
     });
     this.parent?.notifyChange();

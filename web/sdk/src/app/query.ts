@@ -1,5 +1,6 @@
 import { Observable } from './observable';
 import { ValidationError, type DataAppError } from '../common/errors';
+import { tagCall } from '../common/runtimeErrors';
 import type { DatasetIndex } from './validation';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
@@ -174,12 +175,18 @@ export class Query extends Observable {
 
   /** Fetches the next page and appends it. Rejects rather than swallowing, unlike `execute()`. */
   async fetchMore (): Promise<void> {
-    if (this.pageSize === undefined) {
-      throw new ValidationError(`Query '${this.name}' declares no pageSize, so it has no more pages.`, this.name);
+    try {
+      if (this.pageSize === undefined) {
+        throw new ValidationError(`Query '${this.name}' declares no pageSize, so it has no more pages.`, this.name);
+      }
+      if (!this.hasMore) return;
+      this._page += 1;
+      await this.app.fetchPage(this);
+    } catch (err) {
+      // Left unhandled, it is reported as `call.fetch_more`.
+      tagCall(err, { api: 'fetch_more' });
+      throw err;
     }
-    if (!this.hasMore) return;
-    this._page += 1;
-    await this.app.fetchPage(this);
   }
 
   /**
