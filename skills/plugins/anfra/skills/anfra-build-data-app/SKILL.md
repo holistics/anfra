@@ -235,7 +235,8 @@ read what went wrong without the browser: while the app is open, `anfra serve` w
 runtime errors (a failed query, an uncaught error or rejection, a listener's exception, a call
 the host failed) and its `console.error` / `console.warn` lines to its log, the file `anfra
 status` prints as `repo.logs`, one JSON line each with `"service":"app"`, the app's path as `app`,
-and `"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `stack`) or
+and `"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `scope`,
+`request_id`, `stack`) or
 `"event":"app.console"` (the line as `msg`). The `kind` says where the error came from:
 `call.query` (a failed query), `call.fetch_more`, `call.export` and the like (a call you left
 unhandled), `app.uncaught`, `app.listener` (your code), `plugin.uncaught` (a plugin's), or
@@ -244,6 +245,9 @@ unhandled), `app.uncaught`, `app.listener` (your code), `plugin.uncaught` (a plu
 ```sh
 grep '"service":"app"' <repo.logs> | grep '"app":"sales/overview.html"' | tail -20
 ```
+
+No `"service":"app"` lines at all, with the app open, means `anfra serve` runs with
+`ANFRA_NO_APP_LOGS=1`: read the panel instead, or ask the user to.
 
 Each load of the app starts with an `"event":"app.mounted"` line, with the file's `modified` time:
 after an edit, read only the lines after the last one, or you are reading the old file's errors.
