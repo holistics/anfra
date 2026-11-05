@@ -21,9 +21,10 @@ const (
 	NoUpdateNotifier = "ANFRA_NO_UPDATE_NOTIFIER"
 	AutoUpdate       = "ANFRA_AUTO_UPDATE"
 	HideErrorCauses  = "ANFRA_HIDE_ERROR_CAUSES"
+	NoAppLogs        = "ANFRA_NO_APP_LOGS"
 )
 
-var all = []string{LogStderr, SidecarStdout, NoUpdateNotifier, AutoUpdate, HideErrorCauses}
+var all = []string{LogStderr, SidecarStdout, NoUpdateNotifier, AutoUpdate, HideErrorCauses, NoAppLogs}
 
 // Validate refuses a switch set to anything but 1 or 0, naming it and the value
 // it has. Call it once, before anything reads a switch.

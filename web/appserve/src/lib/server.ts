@@ -18,6 +18,8 @@ export interface Context {
   watch: boolean;
   allowOrigins: string[];
   problems: AmlProblem[];
+  /** Whether to send the Data Apps' reports to anfra.log: not with `ANFRA_NO_APP_LOGS`. */
+  appLogs: boolean;
 }
 
 async function json<T> (path: string): Promise<T> {
