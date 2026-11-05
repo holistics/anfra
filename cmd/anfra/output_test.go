@@ -103,7 +103,8 @@ func TestJSONRefused(t *testing.T) {
 		"serve --json":           "anfra serve writes a log, until it is stopped, not structured output",
 		"completion bash --json": "anfra completion bash writes a shell script, not structured output",
 		"serve --yaml":           "anfra serve writes a log, until it is stopped, not structured output",
-		"query export --json":    "without --link it writes the file",
+		"query export --json":    "--json only works with export --link, which answers with the export's link",
+		"query export --jq .":    "--jq only works with export --link",
 		"status --yaml --json":   "pass --yaml or --json, not both",
 	} {
 		cmd := newRootCmd()

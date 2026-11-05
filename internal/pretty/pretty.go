@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"os"
 	"reflect"
 	"slices"
@@ -694,7 +695,8 @@ func utf8Terminal() bool {
 func relativeTime(t, now time.Time) string {
 	t, now = t.Local(), now.Local()
 	day := func(x time.Time) time.Time { y, m, d := x.Date(); return time.Date(y, m, d, 0, 0, 0, 0, x.Location()) }
-	days := int(day(now).Sub(day(t)).Hours() / 24)
+	// Rounded, as midnights a DST change apart are 23 or 25 hours apart.
+	days := int(math.Round(day(now).Sub(day(t)).Hours() / 24))
 	switch {
 	case days == 0:
 		return "today"
