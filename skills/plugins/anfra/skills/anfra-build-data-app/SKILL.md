@@ -236,7 +236,10 @@ runtime errors (a failed query, an uncaught error or rejection, a listener's exc
 the host failed) and its `console.error` / `console.warn` lines to its log, the file `anfra
 status` prints as `repo.logs`, one JSON line each with `"service":"app"`, the app's path as `app`,
 and `"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `stack`) or
-`"event":"app.console"` (the line as `msg`):
+`"event":"app.console"` (the line as `msg`). The `kind` says where the error came from:
+`call.query` (a failed query), `call.fetch_more`, `call.export` and the like (a call you left
+unhandled), `app.uncaught`, `app.listener` (your code), `plugin.uncaught` (a plugin's), or
+`host.internal` (the host's):
 
 ```sh
 grep '"service":"app"' <repo.logs> | grep '"app":"sales/overview.html"' | tail -20
@@ -255,7 +258,7 @@ their lines, and `validation_failed` names the bad entry (`filters[0].field`).
 Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
 explains it. When the server fails a query, its full cause is in the same log: find the server's
 line by the app line's `request_id`. A bare "The call failed." is a host-side error: its app line
-(`"kind":"hidden"`) has the original message and the call.
+(`"kind":"host.internal"`) has the original message and the call.
 If you could not check the interface, say so rather than claiming it works.
 
 ## 6. Hand over
