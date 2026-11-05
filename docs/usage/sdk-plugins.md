@@ -75,7 +75,7 @@ The handler's second argument, `call`, is the call's context:
 
 Reject with a `DataAppError` for a failure the author should read. It has the API's error shape: a `code` saying what happened, a `scope` saying who must act (`user`, `client` or `server`), and a `message`. Make one with a helper from `@holistics/anfra-sdk/common`: `invalidRequest(message)` for a request the definition got wrong, `forbidden(message)` for something this reader may not do, and `fromHttpStatus(status, message)` for a backend's HTTP failure. For a code of your own, use `new DataAppError({ code, scope, message })`.
 
-Any other error reaches the frame only as `call_failed` ("The call failed.", scope `server`). This keeps a server's message, a URL or an id from leaking. The original is logged to the host page's console.
+Any other error reaches the frame only as `call_failed` ("The call failed.", scope `server`). This keeps a server's message, a URL or an id from leaking. The original is reported as a `host.internal` runtime error, to each listener of the mount's `anfra.error`.
 
 ### Events
 
@@ -238,7 +238,10 @@ const host = createHost({
 });
 const mounted = host.mount({ container, definition, datasets, user });
 mounted.on('notes.viewed', ({ about, count }) => analytics.track('notes viewed', { about, count }));
+mounted.on('anfra.error', (event) => telemetry.error(event.kind, { ...event, app: appId }));
 ```
+
+The Data App's runtime errors reach only the listeners of its mount's `anfra.error`: the SDK writes nothing to the host's page. Listen where you mount, and you know which app each is of ([errors in a Data App](../designs/errors/data-apps.md#runtime-errors)).
 
 A plugin that needs another lists it in `requires` (`requires: ['export']`), and the host refuses to start without it. In the frame, an author checks `Anfra.plugins.has('notes')` before offering anything that needs the plugin.
 

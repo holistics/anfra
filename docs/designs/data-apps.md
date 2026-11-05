@@ -143,7 +143,7 @@ appserve is how `anfra serve` presents Data Apps, in two halves: a backend (`int
 
 appserve is also the layer to replace. A team building its own platform, or bringing Data Apps into its own app, keeps the SDK and the core API, and swaps appserve for its own pages: its own navigation, its own place to keep Data Apps, its own idea of who the reader is, around `@holistics/anfra-sdk/host` and `@holistics/anfra-sdk/api`. anfra-cloud does this: its web app serves Data Apps beside sign-in, organisations and user management, in one richer layer ([what is core's and what is a platform's](#what-is-cores-and-what-is-a-platforms)).
 
-`anfra serve` serves the Data Apps by default (`--no-apps` turns them off), beside the core API on the same listener and origin, so the page needs no CORS (`cmd/anfra/serve.go`). appserve's routes are not ops: they are not in the spec or in discovery, since they are `anfra serve`'s alone. The page captures its Data Apps' console lines (`captureConsole`) and posts each runtime error and console line to `/appserve/log`.
+`anfra serve` serves the Data Apps by default (`--no-apps` turns them off), beside the core API on the same listener and origin, so the page needs no CORS (`cmd/anfra/serve.go`). appserve's routes are not ops: they are not in the spec or in discovery, since they are `anfra serve`'s alone. The page captures its Data Apps' console lines (`captureConsole`) and posts each runtime error, console line and mount to `/appserve/log`, unless `ANFRA_NO_APP_LOGS` is set.
 
 | Route | Serves |
 |---|---|

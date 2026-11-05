@@ -14,7 +14,7 @@ Its readers:
 ## Goals
 
 1. **An app handles any error the same way, on any host.** One shape (`scope` and `code`), so an app written against `anfra serve` runs on anfra-cloud or a custom host.
-2. **Every runtime error reaches whoever can act on it, with the tools they have.** The author in the panel, a coding agent in `anfra.log` without a browser, a host in one callback.
+2. **Every runtime error reaches whoever can act on it, with the tools they have.** The author in the panel, a coding agent in `anfra.log` without a browser, a host in the listeners it puts on each mount.
 3. **Nothing that is not the viewer's reaches the frame.** No causes, no params, no internal ids; the `requestId` is the one exception, and it is how the cause is found in the log.
 4. **One failure breaks only what failed.** Not the other queries, listeners or plugins.
 5. **No app floods its host or the log.** A render loop that throws on every frame is capped.
@@ -119,6 +119,8 @@ The frame runs code anyone may write, so only the SDK's own errors cross with th
 | What | Crosses as | Why |
 |---|---|---|
 | `code`, `message`, `requestId`, `status` | as they are | the shape |
+| `name` | as it is | a `ValidationError` stays one |
+| `entity` | does not cross | the frame names it again ([known gaps](#known-gaps)) |
 | `scope` | as it is; one the SDK does not know as `server` | unknown means the server's fault |
 | `context` | each step's `text`, never its params | a param can name a dataset or a path |
 | `details` | only for a code whose type the SDK knows | anything else is unchecked data |
@@ -178,12 +180,12 @@ Never rows, never a request's params.
 
 | Limit | Where | Over it |
 |---|---|---|
-| `message` 2000 characters, `stack` 4000, other strings 200 | frame, host, and `anfra.log` again | truncated, saying so |
+| `message` (`msg` in `anfra.log`) 2000 characters, `stack` 4000, other strings 200 | frame, host, and `anfra.log` again | truncated, saying so |
 | 120 errors a minute, and 120 console lines apart from them | each frame | not sent; how many, in the frame's console when the minute is over |
 | the same, per mount | the host, since a frame can post without the SDK | dropped |
 | 300 reports a minute per Data App | `POST /appserve/log` | dropped; how many, as `app.reports_dropped` when the minute is over |
 
-The host checks each event (`checkErrorEvent`): a kind not under a known source is refused, a frame cannot claim a `host.*` kind, and only the fields above are kept.
+The host checks each event (`checkErrorEvent`): a kind not under a known source is refused, a frame cannot claim a `host.*` kind, and only the fields above are kept, but `call`, which is the host's to set.
 
 ## Where they go, per host
 
@@ -198,7 +200,22 @@ A host listens to each mount it makes: `mounted.on('anfra.error')`, and `mounted
 On `anfra serve`:
 
 - **The panel** lists them among its Problems, with the static ones (markup and wiring found without running the app), errors first. One naming a query or control links to it; any other opens to its stack. Console lines are in a section of their own.
-- **`anfra.log`**: the appserve page posts each error and console line to `POST /appserve/log` ([data-apps.md](../data-apps.md#appserve-what-anfra-serve-adds)), which writes it as `"service":"app"` with the app's path as `app`, `event` `app.error` or `app.console`, and the app's own message as `msg` ([logs.md](../logs.md)). Each load of an app starts with an `app.mounted` record, with the file's modification time, so the lines after it are known to be of the file as it was then. An agent reads them without a browser: `anfra status` names the log (`repo.logs`), and an app line's `request_id` finds the server's line with the cause.
+- **`anfra.log`**: the appserve page posts each error and console line, and each mount, to `POST /appserve/log` ([data-apps.md](../data-apps.md#appserve-what-anfra-serve-adds)), which writes one record each, as `"service":"app"` ([logs.md](../logs.md)). An agent reads them without a browser: `anfra status` names the log (`repo.logs`).
+
+  ```json
+  {"ts":"…","level":"ERROR","msg":"The server could not be reached.","service":"app","repo":"…","pid":4242,
+   "event":"app.error","app":"sales/overview.html","kind":"call.fetch_more","code":"connection_failed",
+   "scope":"server","request_id":"…","entity":"orders"}
+  ```
+
+  | `event` | Level | Fields beside the common ones |
+  |---|---|---|
+  | `app.error` | `ERROR` | `msg`: the error's `message`; `app`; and those of `kind`, `code`, `scope`, `request_id`, `entity`, `call`, `stack` the event has |
+  | `app.console` | `ERROR` or `WARN`, as the line's level | `msg`: the line; `app` |
+  | `app.mounted` | `INFO` | `app`; `modified`: the file's modification time, read by the server. The lines after it are of the file as it was then. |
+  | `app.reports_dropped` | `WARN` | `app`; `dropped`: how many were over the 300 a minute; `hint` |
+
+  The browser's time (`at`) is not logged: a report is posted when it happens, so `ts` tells the time, by the server's clock like every other line. An app line's `request_id` finds the server's line, with the cause.
 - **Opting out**: `ANFRA_NO_APP_LOGS=1` keeps them out of `anfra.log`: the page is told not to send them (`appLogs` in `/appserve/context`), and the route drops any sent anyway. The panel still lists them ([configs.md](../../usage/configs.md)).
 
 ## For an app's author

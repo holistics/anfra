@@ -106,7 +106,7 @@ See [designs/release.md](../designs/release.md#updates).
 | Variable | Effect |
 |---|---|
 | `ANFRA_NO_UPDATE_NOTIFIER` | `1`: no update checks or notices. |
-| `ANFRA_NO_APP_LOGS` | `1`: `anfra serve` writes nothing its Data Apps report from the browser (their runtime errors and console lines, which can hold their data) to `anfra.log`. The inspect panel still lists them. |
+| `ANFRA_NO_APP_LOGS` | `1`: `anfra serve` writes nothing its Data Apps report from the browser (their runtime errors, console lines, which can hold their data, and mounts) to `anfra.log`. The inspect panel still lists them. |
 | `ANFRA_AUTO_UPDATE` | `1`: install a newer release in the background, instead of only noticing it. |
 | `CI` | When set, anfra never starts a background update check. CI systems set it. |
 
