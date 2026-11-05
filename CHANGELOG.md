@@ -1,3 +1,16 @@
+## [0.18.0](https://github.com/holistics/anfra/compare/v0.17.0...v0.18.0) (2026-11-05)
+
+### Features
+
+* **cli:** init anfra console ([a8ae4f8](https://github.com/holistics/anfra/commit/a8ae4f815a3aba3cf0e8f55fc5d98c20c02b7979))
+* **cli:** console colors ([1189025](https://github.com/holistics/anfra/commit/1189025870b0f36c2c34460054159378de47f61d))
+* **cli:** indent YAML with 2 instead of 4 spaces; indent JSON when in console ([2287e43](https://github.com/holistics/anfra/commit/2287e432bdd72a4780671bbd6162f75a9fbcc28f))
+* **cli:** persist console history ([ca30352](https://github.com/holistics/anfra/commit/ca30352990dfde2adcf8651099f6a6843550db05))
+* **cli:** console notices ([b45609b](https://github.com/holistics/anfra/commit/b45609b803dd2564d55e1f54c479694308ccf09c))
+* **cli:** console text modes ([3830039](https://github.com/holistics/anfra/commit/3830039127c0241cd9a01ecfad58f4f6d5cd40da))
+* **cli:** run server behind console ([feb9f04](https://github.com/holistics/anfra/commit/feb9f040b42bd0eb584502617ba494d54801e75a))
+* **cli:** pretty output for query in console ([dd3c6bc](https://github.com/holistics/anfra/commit/dd3c6bcb113f351bbff2b1c6bc34eb77ab489f20))
+* **cli:** prettify all commands and errors in console ([c048613](https://github.com/holistics/anfra/commit/c048613179b101e2293e75652ae60c6f63f3f527))
 ## [0.17.0](https://github.com/holistics/anfra/compare/v0.16.0...v0.17.0) (2026-11-04)
 
 ### ⚠ BREAKING CHANGES
