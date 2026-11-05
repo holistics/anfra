@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -233,7 +234,7 @@ func TestConsoleErrorHelp(t *testing.T) {
 		want      string
 	}{
 		{false, "help: Run `anfra query --help` for usage."},
-		{true, "help: '`\\--data-source <value>` sets it for every command here. Run `query --help` for usage.'"},
+		{true, "Help:  `\\--data-source <value>` sets it for every command here. Run `query --help` for usage."},
 	} {
 		output.inConsole = tc.inConsole
 		var out bytes.Buffer
@@ -241,5 +242,67 @@ func TestConsoleErrorHelp(t *testing.T) {
 		if !strings.Contains(out.String(), tc.want) {
 			t.Errorf("inConsole=%v:\n%s\nwant %s", tc.inConsole, &out, tc.want)
 		}
+	}
+}
+
+// For a person, an error is pretty: a ✗ and its message, then its code, its
+// details by the conventions, and its help; a warning a ! and its message.
+func TestPrettyError(t *testing.T) {
+	saved := output
+	t.Cleanup(func() { output = saved })
+	output = saved
+	output.inConsole, output.json, output.yaml, output.jq = true, false, false, ""
+	err := apperr.NewWith(apperr.ValidationFailed, "Some of the input is not valid.", apperr.Violate(apperr.Violation{Field: "data_source", Code: "required", Message: "name the data source"}))
+	var out bytes.Buffer
+	printError(&out, &commandError{path: "anfra query", args: []command.Arg{{Name: "data_source", Type: command.ArgString}}, err: err}, "")
+	for _, want := range []string{"✗ Some of the input is not valid.\n", "  Code:  validation_failed", "  Violations:", "FIELD", "data_source", "--data-source", "Help:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("missing %q in:\n%s", want, &out)
+		}
+	}
+	for _, unwanted := range []string{"scope", "Request ID", "---"} {
+		if strings.Contains(out.String(), unwanted) {
+			t.Errorf("%q in:\n%s", unwanted, &out)
+		}
+	}
+	out.Reset()
+	printWarning(&out, "telemetry_off", "Telemetry is off.")
+	if out.String() != "! Telemetry is off. (telemetry_off)\n" {
+		t.Errorf("warning %q", &out)
+	}
+}
+
+// A message is split into its chain of causes at ": ", a short part staying
+// with the one before it.
+func TestMessageParts(t *testing.T) {
+	for msg, want := range map[string][]string{
+		"start anfra-node sidecar: resolve anfra-node binary: no embedded anfra-node; set ANFRA_NODE_BIN": {"start anfra-node sidecar: resolve anfra-node binary", "no embedded anfra-node; set ANFRA_NODE_BIN"}, // 3 words: joined
+		`apps/a.html: line 3: "x.png" is a file beside the app`:                                           {"apps/a.html: line 3", `"x.png" is a file beside the app`},
+		"download the export: exit status 1":                                                              {"download the export: exit status 1"},
+		"Some of the input is not valid.":                                                                 {"Some of the input is not valid."},
+		"see https://example.com/a at 12:30 today":                                                        {"see https://example.com/a at 12:30 today"},
+	} {
+		if got := messageParts(msg); !slices.Equal(got, want) {
+			t.Errorf("messageParts(%q) = %q, want %q", msg, got, want)
+		}
+	}
+}
+
+// A message split into causes keeps its colons, and is set apart by a blank
+// line; one that isn't split isn't.
+func TestPrettyErrorChain(t *testing.T) {
+	saved := output
+	t.Cleanup(func() { output = saved })
+	output = saved
+	output.inConsole, output.json, output.yaml, output.jq = true, false, false, ""
+	var out bytes.Buffer
+	printError(&out, apperr.New(apperr.NotFound, `apps/a.html: line 3: "x.png" is a file beside the app`), "")
+	if !strings.HasPrefix(out.String(), "✗ apps/a.html: line 3:\n    \"x.png\" is a file beside the app\n\n  Code:") {
+		t.Errorf("split: %q", &out)
+	}
+	out.Reset()
+	printError(&out, apperr.New(apperr.NotFound, "No such dataset."), "")
+	if !strings.HasPrefix(out.String(), "✗ No such dataset.\n  Code:") {
+		t.Errorf("whole: %q", &out)
 	}
 }

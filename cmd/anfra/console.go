@@ -262,6 +262,7 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 		args, act, msg := s.dispatch(entry) //nolint:contextcheck // reads the commands, runs none
 		if act != actLeave {                // Up then Enter shouldn't leave by surprise
 			remember(entry)
+			fmt.Fprintln(out) // the entry apart from what it gives
 		}
 		switch act {
 		case actLeave:

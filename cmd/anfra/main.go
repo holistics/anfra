@@ -94,6 +94,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runO
 		return ec.code // result already rendered; exit quietly
 	}
 	output.json = output.json || jsonAsked(args) // flags that failed to parse set nothing
+	output.yaml = output.yaml || flagAsked(args, "--yaml")
 	err = runError(ctx, err)
 	printError(stderr, err, failureHint(err))
 	if apperr.From(err).Code == clierr.Interrupted.Code() {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
@@ -14,8 +15,10 @@ import (
 
 	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/clierr"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/pretty"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -113,7 +116,119 @@ func printError(w io.Writer, err error, hint string) {
 	if len(help) > 0 {
 		setKey(e, "help", strings.Join(help, "\n"))
 	}
+	if forPerson() {
+		writePrettyError(w, e)
+		return
+	}
 	writeDoc(w, "error", e)
+}
+
+// prettyError is an error's envelope as a person reads it: its message is
+// the headline, written apart; its scope and status, which its code implies,
+// and an empty request id, left to --yaml.
+type prettyError struct {
+	Code      string `json:"code"`
+	Details   any    `json:"details,omitempty" pretty:",inline"`
+	Context   any    `json:"context,omitempty"`
+	RequestID string `json:"request_id,omitempty" pretty:"Request ID"`
+	Help      string `json:"help,omitempty"`
+}
+
+// writePrettyError writes error e, its envelope, in the pretty format
+// (docs/designs/cli-pretty.md): a red ✗ and its message, a cause a line
+// (messageParts), each under the one it caused, its colon kept, faint but
+// the last, the root cause, plain; a blank line after a chain; then its code,
+// details and help by the conventions.
+func writePrettyError(w io.Writer, e *yaml.Node) {
+	env, ok := nodeValue(e).(pretty.Object)
+	if !ok {
+		writeDoc(w, "error", e)
+		return
+	}
+	str := func(k string) string { s, _ := env.Values[k].(string); return s }
+	pe := prettyError{Code: str("code"), Details: env.Values["details"], Context: env.Values["context"], RequestID: str("request_id"), Help: str("help")}
+	st := cliui.NewTerminalStyles(w)
+	parts := messageParts(cliui.SafeText(str("message")))
+	for i, part := range parts {
+		if i < len(parts)-1 {
+			// What led to it, faint, its colon kept: the line under it says why.
+			// The last, the root cause, is plain, what's read.
+			part = st.Muted.Render(part + ":")
+		}
+		if i == 0 {
+			fmt.Fprintln(w, st.Error.Render("✗")+" "+part)
+		} else {
+			fmt.Fprintln(w, strings.Repeat("  ", i+1)+part) // the cause of the line above
+		}
+	}
+	if len(parts) > 1 {
+		fmt.Fprintln(w) // a chain set apart from what follows
+	}
+	var body bytes.Buffer
+	width := cliui.Width(w)
+	if width > 2 {
+		width -= 2 // the indent under the headline; 0 stays 0, not a terminal
+	}
+	if err := pretty.RenderStyled(&body, pe, width, st); err != nil { // styled as w is, a terminal; body isn't
+		return
+	}
+	for line := range strings.Lines(body.String()) {
+		if strings.TrimSpace(line) != "" {
+			line = "  " + line // under its headline
+		}
+		fmt.Fprint(w, line)
+	}
+}
+
+// messageParts is an error's message as a chain of causes, a part a line: a
+// shown cause is folded into its message, "start anfra-node sidecar: resolve
+// anfra-node binary: no embedded anfra-node", each part after a ": " the
+// cause of the one before. A part of fewer than 4 words stays with the one
+// before it ("apps/a.html: line 3"): a detail, not a cause. Only ": " splits,
+// so a URL or a time doesn't.
+func messageParts(msg string) []string {
+	var parts []string
+	for i, part := range strings.Split(msg, ": ") {
+		if i > 0 && len(strings.Fields(part)) < 4 {
+			parts[len(parts)-1] += ": " + part
+			continue
+		}
+		parts = append(parts, part)
+	}
+	return parts
+}
+
+// nodeValue is YAML node n as the prettifier reads it, its mappings' keys in
+// order (pretty.Object), its sequences lists, its scalars as they decode.
+func nodeValue(n *yaml.Node) any {
+	switch n.Kind {
+	case yaml.DocumentNode:
+		if len(n.Content) == 0 {
+			return nil
+		}
+		return nodeValue(n.Content[0])
+	case yaml.MappingNode:
+		o := pretty.Object{Values: map[string]any{}}
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k := n.Content[i].Value
+			o.Keys = append(o.Keys, k)
+			o.Values[k] = nodeValue(n.Content[i+1])
+		}
+		return o
+	case yaml.SequenceNode:
+		list := make([]any, len(n.Content))
+		for i, c := range n.Content {
+			list[i] = nodeValue(c)
+		}
+		return list
+	case yaml.AliasNode:
+		return nodeValue(n.Alias)
+	}
+	var v any
+	if n.Decode(&v) != nil {
+		return n.Value
+	}
+	return v
 }
 
 // failureHint records a failure the caller could fix, off a terminal and
@@ -150,6 +265,11 @@ func coded(err error) bool {
 // operator's setting that could not take effect, as a YAML document like
 // printError's.
 func printWarning(w io.Writer, code, message string) {
+	if forPerson() { // as a person reads it: a yellow !, its code faint
+		st := cliui.NewTerminalStyles(w)
+		fmt.Fprintln(w, st.Warning.Render("! "+cliui.SafeText(message))+st.Muted.Render(" ("+code+")"))
+		return
+	}
 	e := &yaml.Node{Kind: yaml.MappingNode}
 	setKey(e, "code", code)
 	setKey(e, "message", message)

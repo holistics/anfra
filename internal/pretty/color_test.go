@@ -1,6 +1,7 @@
 package pretty
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
 	"testing"
@@ -153,6 +154,27 @@ func TestSectionLabels(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+// RenderStyled uses the styles given, though it writes into a buffer, which
+// isn't a terminal: for a view placed later, an error's details.
+func TestRenderStyled(t *testing.T) {
+	type item struct {
+		Field string `json:"field"`
+	}
+	type details struct {
+		Code       string `json:"code"`
+		Violations []item `json:"violations"`
+	}
+	var b bytes.Buffer
+	if err := RenderStyled(&b, details{Code: "x", Violations: []item{{"a"}}}, 0, testStyles); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{render(testStyles.Key, "Code:"), render(testStyles.Muted, "FIELD")} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("missing %q in %q", want, &b)
 		}
 	}
 }

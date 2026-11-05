@@ -139,10 +139,19 @@ func markPrettyOutput(cmd *cobra.Command) {
 }
 
 // wantsPretty reports whether a run of a command with a pretty view, or not
-// (hasView), writes it: asked with --pretty, or by default in a console,
-// unless the run asks for YAML or JSON.
+// (hasView), writes it: asked with --pretty, which a command without one
+// refuses; or by default in a console, for every command, reviewed or not, a
+// trial (docs/designs/cli-pretty.md#where-it-stands); unless the run asks
+// for YAML or JSON.
 func wantsPretty(hasView bool) bool {
-	return hasView && (output.pretty || output.inConsole && !structuredAsked())
+	return hasView && output.pretty || forPerson()
+}
+
+// forPerson reports whether the run writes for a person rather than a
+// program: a console's, or --pretty, without --yaml or --json. Its errors and
+// warnings are then pretty too.
+func forPerson() bool {
+	return (output.pretty || output.inConsole) && !structuredAsked()
 }
 
 // markArtifactOutput marks cmd and the commands under it as writing writes,
@@ -376,6 +385,16 @@ func formatRefused(flag, why string) error {
 	msg := flag + " isn't available here: " + why + "."
 	return apperr.NewWith(apperr.ValidationFailed, msg,
 		apperr.Violate(apperr.Violation{Field: flag, Code: "invalid", Message: msg}))
+}
+
+// flagAsked reports whether args give flag, a boolean, before any --: for
+// an error printed before the flags are parsed, or because they could not be.
+func flagAsked(args []string, flag string) bool {
+	end := slices.Index(args, "--")
+	if end < 0 {
+		end = len(args)
+	}
+	return slices.Contains(args[:end], flag) || slices.Contains(args[:end], flag+"=true")
 }
 
 // jsonAsked reports whether args ask for --json, for an error printed before
