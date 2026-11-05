@@ -172,11 +172,8 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			d.output, _ = runCmd.Flags().GetString("output")
 			d.link, _ = runCmd.Flags().GetBool("link")
 			if structuredAsked() && !d.link {
-				flag := "--json"
-				if output.yaml {
-					flag = "--yaml"
-				}
-				return formatRefused(flag, "without --link it writes the file; --link writes the export's link as a document")
+				flag := structuredFlag()
+				return flagViolated(flag, flag+" only works with export --link, which answers with the export's link instead of writing the file.")
 			}
 		}
 		values, err := flagValues(runCmd.Flags(), args, flagArg)

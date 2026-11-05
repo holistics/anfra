@@ -100,6 +100,22 @@ func TestRelativeTime(t *testing.T) {
 	}
 }
 
+// The day before a DST change is still yesterday, though its midnight is 23
+// hours back.
+func TestRelativeTimeAcrossDST(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip(err)
+	}
+	local := time.Local
+	time.Local = ny
+	t.Cleanup(func() { time.Local = local })
+	now := time.Date(2026, 3, 9, 10, 0, 0, 0, ny) // spring forward on 8 March
+	if got := relativeTime(time.Date(2026, 3, 8, 10, 0, 0, 0, ny), now); got != "yesterday" {
+		t.Errorf("got %q, want yesterday", got)
+	}
+}
+
 // A list of paths with the tree hint is drawn as tree draws it: folders first,
 // each sorted, a folder of one entry on its parent's line; in ASCII without
 // UTF-8.

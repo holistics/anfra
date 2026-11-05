@@ -70,6 +70,18 @@ func paintJSON(out io.Writer, b []byte, tones pretty.Tones) []byte {
 // JSON, rather than a command's default.
 func structuredAsked() bool { return output.yaml || output.json || output.jq != "" }
 
+// structuredFlag is the flag that asked for structured output, to name in a
+// refusal: --jq over --yaml over --json.
+func structuredFlag() string {
+	switch {
+	case output.jq != "":
+		return "--jq"
+	case output.yaml:
+		return "--yaml"
+	}
+	return "--json"
+}
+
 // A command's annotations about its output. Every runnable command has an
 // output kind (TestEveryCommandHasAnOutputKind).
 const (
@@ -237,17 +249,13 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 			}
 			return nil
 		}
-		flag := "--json"
 		switch {
 		case output.yaml && output.json:
 			return formatRefused("--json", "pass --yaml or --json, not both")
-		case output.jq != "":
-			flag = "--jq"
-		case output.yaml:
-			flag = "--yaml"
-		case !output.json:
+		case !structuredAsked():
 			return nil
 		}
+		flag := structuredFlag()
 		if cmd.Annotations[outputKind] == outputArtifact {
 			return formatRefused(flag, cmd.CommandPath()+" writes "+cmd.Annotations[artifactDesc]+", not structured output")
 		}
@@ -382,7 +390,11 @@ func writeStructured(w io.Writer, v any) error {
 
 // formatRefused is a format flag refused, as a violation of that flag.
 func formatRefused(flag, why string) error {
-	msg := flag + " isn't available here: " + why + "."
+	return flagViolated(flag, flag+" isn't available here: "+why+".")
+}
+
+// flagViolated is flag refused with msg, as a violation of that flag.
+func flagViolated(flag, msg string) error {
 	return apperr.NewWith(apperr.ValidationFailed, msg,
 		apperr.Violate(apperr.Violation{Field: flag, Code: "invalid", Message: msg}))
 }
