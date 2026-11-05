@@ -184,7 +184,7 @@ export class Query extends Observable {
       await this.app.fetchPage(this);
     } catch (err) {
       // Left unhandled, it is reported as `call.fetch_more`.
-      tagCall(err, { api: 'fetch_more' });
+      tagCall(err, 'fetch_more');
       throw err;
     }
   }

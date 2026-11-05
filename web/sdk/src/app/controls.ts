@@ -219,7 +219,7 @@ export class Filter extends Control {
       signal,
     ).catch((err: unknown) => {
       // Left unhandled, it is reported as `call.load_options`.
-      tagCall(err, { api: 'load_options' });
+      tagCall(err, 'load_options');
       throw err;
     });
 

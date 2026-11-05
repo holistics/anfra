@@ -60,7 +60,7 @@ export function installReporting (own: FrameKernel, win: Window, captureConsole:
   const onError = (event: ErrorEvent) => reportError('app.uncaught', event.error ?? event.message);
   // A call the app made and left unhandled is reported by its name, as the app called it.
   const onRejection = (event: PromiseRejectionEvent) => {
-    const api = callOf(event.reason)?.api;
+    const api = callOf(event.reason);
     reportError(api ? `call.${api}` : 'app.uncaught', event.reason);
   };
   win.addEventListener('error', onError);

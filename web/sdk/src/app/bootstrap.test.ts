@@ -84,13 +84,13 @@ describe('bootstrap', () => {
     expect(frame.errors()).toEqual([expect.objectContaining({ kind: 'plugin.uncaught', message: 'no chart lib' })]);
   });
 
-  it("names a plugin's call as the app made it, and the bridge call it sent", async () => {
+  it("names a plugin's call as the app made it", async () => {
     const frame = frameFrom('https://host.test', (kernel) => kernel.provide({ fetchAll: () => kernel.call('probe.remote', {}) }));
     const probe = (frame.win as unknown as { Anfra: { probe: { fetchAll: () => Promise<unknown> } } }).Anfra.probe;
     expect(probe.fetchAll).toBe(probe.fetchAll);
     const failed = probe.fetchAll().catch((err: unknown) => err);
     frame.fail('probe.remote', { code: 'forbidden', scope: 'user', message: 'No access.' });
-    expect(callOf(await failed)).toEqual({ api: 'probe_fetch_all', call: 'probe.remote' });
+    expect(callOf(await failed)).toBe('probe_fetch_all');
   });
 
   it("reports a frame call's failure the host is told only the shape of", async () => {

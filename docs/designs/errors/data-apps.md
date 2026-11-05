@@ -134,7 +134,7 @@ What goes wrong while the app runs is reported to its host whether or not anyone
 
 The sources are fixed (`call`, `app`, `plugin`, `host`); the kinds under them may grow. An app or a host branches on the source, and treats a kind it does not know by it. The type says so: `` `${'call' | 'app' | 'plugin' | 'host'}.${string}` ``.
 
-**A call is reported only when no one handles it.** `fetchMore()`, an export, `loadOptions()`, `Anfra.lineage()` and a plugin's own calls reject to the code that made them, so the app handles their errors; reporting them too would report each twice. A rejection the app leaves unhandled is reported by the call's name: the failed call's error notes it, as the app called it and as it crossed the bridge. A query's run is the exception: its error is stored on the query, not thrown, so it is reported either way.
+**A call is reported only when no one handles it.** `fetchMore()`, an export, `loadOptions()`, `Anfra.lineage()` and a plugin's own calls reject to the code that made them, so the app handles their errors; reporting them too would report each twice. A rejection the app leaves unhandled is reported by the call's name, as the app called it: the failed call's error notes it, privately, so the shape gains no field. Its `requestId` finds the server's line, which names the op that failed. A query's run is the exception: its error is stored on the query, not thrown, so it is reported either way.
 
 **Fail only what failed.** A `subscribe()` listener is the definition's own code drawing what changed: an exception it throws is reported and stops nothing else, and the query whose change it was told of keeps its result (`app/observable.ts`). A plugin that fails to set up, answer or draw leaves the others, and the app, running.
 
@@ -147,7 +147,7 @@ The sources are fixed (`call`, `app`, `plugin`, `host`); the kinds under them ma
 | `code`, `scope` | when it is one of the SDK's errors | Absent for an app's own `TypeError`. |
 | `requestId` | when the server answered | Its line in the server's log has the cause. |
 | `entity` | when known | The query or control it concerns. |
-| `call` | `call.*`, `host.internal` | The bridge call that failed (`core.submitQuery`, `export.query`). |
+| `call` | `host.internal` | The call the host failed (`export.query`): the kind says only that it was the host. |
 | `stack` | all but `call.*` | Truncated; renamed to the definition's lines (below). |
 | `at`, `mount`, `title` | always (`title` if the mount has one) | When, and in which mount. |
 
