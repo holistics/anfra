@@ -57,14 +57,6 @@ export interface HostOptions {
   /** The theme plugin UI follows: tabs, and frame halves in the plugin layer. Light defaults unless given. */
   theme?: ThemeInput;
   /**
-   * Every mounted Data App's runtime errors, by kind (`AppErrorKind`): a query that failed, a call
-   * the app left unhandled, the frame's uncaught errors, a listener's or a plugin's failure, and a
-   * call this host failed and hid from the frame. Each mount's also
-   * reach `mounted.on('anfra.error')`. `console.error` unless given; when given, the SDK writes
-   * nothing to the page's console, not even how many errors a mount sent over its budget.
-   */
-  onError?: (event: AppErrorEvent) => void;
-  /**
    * Whether frames report their `console.error` / `console.warn` lines, as `anfra.console` on each
    * mount. They can hold the app's data. Unless given, on in a development build of the host's page
    * and off in a production one (`process.env.NODE_ENV`).
@@ -89,11 +81,6 @@ export function developmentBuild (): boolean {
  * holds itself to as many, but it runs anyone's code, so the host holds it to them too.
  */
 const EVENTS_PER_MINUTE = 120;
-
-const logError = (event: AppErrorEvent) => {
-  // eslint-disable-next-line no-console -- a host that says nothing else gets its page's console
-  console.error(`anfra: a Data App's ${event.kind} error${event.entity ? ` in '${event.entity}'` : ''}: ${event.message}`, event);
-};
 
 export interface MountOptions {
   /** Where the frame goes: it is appended to this element. */
@@ -200,9 +187,6 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
 export function createHost (options: HostOptions): Host {
   const plugins = [...options.plugins];
   const answers = install(plugins);
-  const onError = options.onError ?? logError;
-  // A host that says where its errors go has said where the SDK's notes go: none on its page.
-  const quiet = options.onError !== undefined;
   const captureConsole = options.captureConsole ?? developmentBuild();
   const policy = contentPolicy(options.allowOrigins);
   const middleware = [
@@ -383,18 +367,16 @@ export function createHost (options: HostOptions): Host {
       // Set once the frame's document is made, before the frame can send anything.
       let definitionLines: DefinitionLines = { runs: [] };
       const mountInfo = { id: context.id, ...(mountOptions.title !== undefined ? { title: mountOptions.title } : {}) };
-      const dropped = (what: string) => (count: number) => {
-        if (quiet) return;
-        // eslint-disable-next-line no-console -- what is over the budget is said only here
-        console.warn(`anfra: ${count} ${what} of a Data App (mount ${mountInfo.id}) over the ${EVENTS_PER_MINUTE} a minute a host takes were dropped.`);
-      };
-      const errorBudget = createBudget(EVENTS_PER_MINUTE, dropped('runtime errors'));
-      const consoleBudget = createBudget(EVENTS_PER_MINUTE, dropped('console lines'));
-      /** A runtime error of this mount: to the host's callback, and to this mount's listeners. */
+      // The SDK writes nothing to the host's page: what is over a budget is dropped, and a host
+      // that listens sees the gap.
+      const errorBudget = createBudget(EVENTS_PER_MINUTE);
+      const consoleBudget = createBudget(EVENTS_PER_MINUTE);
+      /**
+       * A runtime error of this mount, to its listeners (`mounted.on('anfra.error')`, and plugins'):
+       * the only place it goes, so a host that listens to nothing does not see the host's own.
+       */
       const reportError = (event: AppErrorEvent) => {
-        if (!errorBudget.take()) return;
-        try { onError(event); } catch { /* the host's sink failing must not stop the listeners */ }
-        deliver('anfra.error', event);
+        if (errorBudget.take()) deliver('anfra.error', event);
       };
       const deliver = (name: string, event: unknown) => listeners.get(name)?.forEach((listener) => {
         try { listener(event); } catch { /* one listener must not stop the others */ }
