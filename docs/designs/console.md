@@ -69,7 +69,7 @@ acme · -d sales --json                     ↑ anfra 0.17.0 · Run update
 
 (The answers' shapes are cut short with `…`.)
 
-**The output is the formats the CLI has, coloured.** A command with a pretty view writes the pretty format, `query` and the CLI-only commands so far; any other writes YAML ([cli-pretty.md](cli-pretty.md#where-it-stands)). So `query` above writes a grid of its rows, the YAML sketched being what `--yaml` gives. The console gets prettier as the prettifier does, one command at a time, by its rules: no view is made for the console alone. `--yaml` and `--json` work as they do outside, coloured, and JSON, answers and errors alike, indented by 2, as gh and jq show JSON to a person: outside a console, a program reads it a line a document.
+**The output is the formats the CLI has, coloured.** Every command writes the pretty format, errors and warnings included, a core command whose view isn't reviewed too, as a trial ([cli-pretty.md](cli-pretty.md#where-it-stands)). So `query` above writes a grid of its rows, the YAML sketched being what `--yaml` gives. The console gets prettier as the prettifier does, one command at a time, by its rules: no view is made for the console alone. `--yaml` and `--json` work as they do outside, coloured, and JSON, answers and errors alike, indented by 2, as gh and jq show JSON to a person: outside a console, a program reads it a line a document.
 
 ## Lines
 

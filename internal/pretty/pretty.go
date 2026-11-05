@@ -26,8 +26,15 @@ import (
 // of width (0: not a terminal, so nothing is cut). Colors follow w: on a
 // terminal only, not with NO_COLOR.
 func Render(w io.Writer, v any, width int) error {
+	return RenderStyled(w, v, width, cliui.NewTerminalStyles(w))
+}
+
+// RenderStyled is Render in styles, the terminal's it's bound for: for a
+// view written into a buffer first, to be placed (an error's details, under
+// its headline), which isn't a terminal itself.
+func RenderStyled(w io.Writer, v any, width int, styles cliui.TerminalStyles) error {
 	doc := buildPrettyDoc(reflect.ValueOf(v))
-	r := prettyRenderer{styles: cliui.NewTerminalStyles(w), width: width}
+	r := prettyRenderer{styles: styles, width: width}
 	_, err := io.WriteString(w, r.doc(doc))
 	return err
 }
@@ -127,11 +134,35 @@ type prettyField struct {
 	root     reflect.Value // the result, for a path from its top
 }
 
+// Object is an object read from JSON or YAML with its keys in order (an
+// error's details, say), laid out as a struct is, in that order. A map is
+// too, its keys sorted, since it keeps no order.
+type Object struct {
+	Keys   []string
+	Values map[string]any
+}
+
 // prettyFields are v's fields, embedded structs inlined as encoding/json
 // does, and those a hint inlines; hidden ones left out. root is the result
-// they're part of.
+// they're part of. An object decoded from JSON (a map) has its keys as
+// fields, sorted, since a map keeps no order.
 func prettyFields(v, root reflect.Value) []prettyField {
 	var out []prettyField
+	if v.CanInterface() && v.Type() == reflect.TypeFor[Object]() {
+		o := v.Interface().(Object)
+		for _, k := range o.Keys {
+			out = append(out, prettyField{name: k, label: titleCase(k), value: reflect.ValueOf(o.Values).MapIndex(reflect.ValueOf(k)), root: root})
+		}
+		return out
+	}
+	if v.Kind() == reflect.Map {
+		keys := v.MapKeys()
+		slices.SortFunc(keys, func(a, b reflect.Value) int { return strings.Compare(a.String(), b.String()) })
+		for _, k := range keys {
+			out = append(out, prettyField{name: k.String(), label: titleCase(k.String()), value: v.MapIndex(k), root: root})
+		}
+		return out
+	}
 	t := v.Type()
 	for i := range t.NumField() {
 		sf := t.Field(i)
@@ -186,7 +217,7 @@ func prettyFields(v, root reflect.Value) []prettyField {
 		// An inlined object's shown fields are its parent's, as encoding/json
 		// inlines an embedded one: the rows of a query's result, under no
 		// heading of their own.
-		if fv := indirect(f.value); inline && fv.IsValid() && fv.Kind() == reflect.Struct {
+		if fv := indirect(f.value); inline && fv.IsValid() && (fv.Kind() == reflect.Struct || fv.Kind() == reflect.Map) {
 			out = append(out, prettyFields(fv, root)...)
 			continue
 		}
@@ -247,7 +278,7 @@ func prettyValueOf(f prettyField) prettyValue {
 			return prettyValue{kind: prettyBlock, lines: textLines(s)}
 		}
 		return prettyValue{kind: prettyText, cell: scalarCell(f, v)}
-	case v.Kind() == reflect.Struct:
+	case v.Kind() == reflect.Struct || v.Kind() == reflect.Map:
 		return prettyValue{kind: prettySection, entries: prettyEntries(prettyFields(v, f.root))}
 	case v.Kind() == reflect.Slice || v.Kind() == reflect.Array:
 		elem := shapeOf(v)
@@ -264,7 +295,7 @@ func prettyValueOf(f prettyField) prettyValue {
 				lines = append(lines, scalarCell(f, indirect(v.Index(i))))
 			}
 			return prettyValue{kind: prettyLines, lines: lines}
-		case elem.Kind() == reflect.Struct:
+		case elem.Kind() == reflect.Struct || elem.Kind() == reflect.Map:
 			return prettyListOf(v, f.root)
 		case elem.Kind() == reflect.Slice:
 			var rows [][]prettyCell
@@ -338,8 +369,11 @@ func shapeOf(v reflect.Value) reflect.Type {
 			continue
 		}
 		t := e.Type()
-		if t.Kind() == reflect.Slice {
+		switch t.Kind() {
+		case reflect.Slice:
 			t = reflect.TypeFor[[]any]()
+		case reflect.Map:
+			t = reflect.TypeFor[map[string]any]()
 		}
 		if shared != nil && shared != t {
 			return elem
@@ -434,7 +468,7 @@ func prettyListOf(v, root reflect.Value) prettyValue {
 
 		item := prettyItem{}
 		for j, f := range fields {
-			if isScalar(deref(f.value.Type())) && !isEmpty(f.value) {
+			if fv := indirect(f.value); fv.IsValid() && isScalar(fv.Type()) && !isEmpty(fv) {
 				item.heading = scalarCell(f, indirect(f.value)).plain()
 				fields = append(fields[:j:j], fields[j+1:]...)
 				break
@@ -460,10 +494,10 @@ func cellOf(f prettyField) (prettyCell, bool) {
 	switch {
 	case isScalar(v.Type()):
 		return firstLine(scalarCell(f, v)), true
-	case v.Kind() == reflect.Struct:
+	case v.Kind() == reflect.Struct || v.Kind() == reflect.Map:
 		return joinedCell(scalarsOf(v), ' ')
 	case v.Kind() == reflect.Slice || v.Kind() == reflect.Array:
-		elem := deref(v.Type().Elem())
+		elem := shapeOf(v)
 		if isScalar(elem) {
 			var cells []prettyCell
 			for i := range v.Len() {
@@ -471,7 +505,7 @@ func cellOf(f prettyField) (prettyCell, bool) {
 			}
 			return joinedCell(cells, ',')
 		}
-		if elem.Kind() == reflect.Struct && v.Len() == 1 {
+		if (elem.Kind() == reflect.Struct || elem.Kind() == reflect.Map) && v.Len() == 1 {
 			return joinedCell(scalarsOf(indirect(v.Index(0))), ' ')
 		}
 	}

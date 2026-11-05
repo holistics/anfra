@@ -57,7 +57,7 @@ Every command writes structured output, except the few that write an artifact (b
 | Default for | core commands | none | CLI-only commands |
 | For | a person or an agent reading it, and YAML tools (`yq`) | tools and languages that read only JSON (`jq`) | a person |
 | stdout | the result as a YAML document | the result as one JSON document | the result laid out for reading: `message`, sections, tables, `hints` |
-| stderr | multiple YAML documents, each after `---` | JSONL: one JSON document a line (indented, in [`anfra console`](console.md)) | as YAML |
+| stderr | multiple YAML documents, each after `---` | JSONL: one JSON document a line (indented, in [`anfra console`](console.md)) | an error a `✗` and its message, then its code, details and help; a warning a `!` and its message ([cli-pretty.md](cli-pretty.md#where-it-stands)) |
 | `openapi` | the OpenAPI document as YAML | the OpenAPI document as JSON | as YAML |
 
 **Artifacts are the exception.** A few commands write something other than a result to stdout, and refuse `--yaml` and `--json` for good: `serve`, which runs until stopped and writes a log; `completion`, a shell script; `help`, its text; and `query export` without `--link`, the file. Every other command writes structured output, and a test holds every command to that (`cmd/anfra`): a new command either has a structured result or is marked an artifact.

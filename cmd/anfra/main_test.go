@@ -55,7 +55,8 @@ func TestRunExitCodes(t *testing.T) {
 // a shell's, but for JSON's indentation, a line a document still a document.
 func TestColorOnlyAtATerminal(t *testing.T) {
 	t.Cleanup(func() { output.inConsole = false }) // run leaves it as its last run had it
-	for _, args := range [][]string{{"version"}, {"version", "--json"}, {"nope"}, {"nope", "--json"}} {
+	// YAML or JSON asked for: a console's run is otherwise pretty.
+	for _, args := range [][]string{{"version", "--yaml"}, {"version", "--json"}, {"nope", "--yaml"}, {"nope", "--json"}} {
 		var plainOut, plainErr, consoleOut, consoleErr bytes.Buffer
 		run(t.Context(), args, &plainOut, &plainErr, runOptions{})
 		run(t.Context(), args, &consoleOut, &consoleErr, runOptions{inConsole: true})
@@ -94,4 +95,20 @@ func compactJSONLines(t *testing.T, s string) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// In a console every command writes the pretty format, a core command without
+// a reviewed view too (a trial); --yaml still gives YAML.
+func TestConsoleAllPretty(t *testing.T) {
+	t.Cleanup(func() { output.inConsole = false })
+	var out, errOut bytes.Buffer
+	run(t.Context(), []string{"version"}, &out, &errOut, runOptions{inConsole: true})
+	if !strings.HasPrefix(out.String(), "Version:  ") {
+		t.Errorf("version in a console: %q", &out)
+	}
+	out.Reset()
+	run(t.Context(), []string{"version", "--yaml"}, &out, &errOut, runOptions{inConsole: true})
+	if !strings.HasPrefix(out.String(), "version: ") {
+		t.Errorf("version --yaml in a console: %q", &out)
+	}
 }
