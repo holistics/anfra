@@ -19,9 +19,8 @@ linters:
     - wastedassign
   settings:
     sloglint:
-      # A record is a constant sentence plus attributes, its `event` among
-      # them (docs/designs/architecture.md#logs-and-telemetry).
-      static-msg: true
+      # A record is a sentence plus attributes, its `event` among them
+      # (docs/designs/logs.md).
       msg-style: capitalized
       key-naming-case: snake
     depguard:
