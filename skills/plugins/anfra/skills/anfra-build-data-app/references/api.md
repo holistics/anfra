@@ -393,7 +393,8 @@ else draw(query.result);
 ```
 
 Never throw from a `subscribe()` listener, and guard a library that may load late. What you don't
-handle is still seen: every failed query, uncaught error or unhandled rejection, and listener
-exception is reported to the host, which on `anfra serve` lists it in the panel's Problems and
-writes it to its log (see the skill's "Run and check it"). An error you catch yourself (a
-`fetchMore` or export) is not reported: show it.
+handle is still seen: every failed query (`call.query`), call you leave unhandled
+(`call.fetch_more`, `call.export`), uncaught error or unhandled rejection (`app.uncaught`), and
+listener exception (`app.listener`) is reported to the host, which on `anfra serve` lists it in the
+panel's Problems and writes it to its log (see the skill's "Run and check it"). An error you catch
+yourself (a `fetchMore` or export) is not reported: show it.
