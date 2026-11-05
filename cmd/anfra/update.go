@@ -234,53 +234,52 @@ func autoUpdateEnabled() bool {
 	return envflag.On(envflag.AutoUpdate)
 }
 
-// maybeNotifyUpdate prints a cached "update available" notice (to stderr, so it
-// never pollutes command output). If opt-in auto-update is on, it instead applies
-// the update in a detached background process. When the cache is stale it spawns a
-// detached refresh so the next run's notice is current. Best-effort and silent on
-// any error — an update check must never break a command.
+// maybeNotifyUpdate is how notices are shown outside a console: after the
+// command, on stderr, each in full, so they follow what the person asked for
+// and never mix into a result. It's also where what they're worked out from is
+// kept current: a detached refresh when it's gone stale, for the next run to
+// read. Best-effort and silent: a notice never breaks a command.
 func maybeNotifyUpdate(invoked string) {
 	if updateNotifyDisabled() || noNotifyCommands[invoked] {
 		return
 	}
-	// A console shows its notices as a badge under its prompt
-	// (consoleBadge), not after each command's output: here, only the refresh.
-	if output.inConsole {
+	// The background refresh runs whoever reads (at most daily), so what an
+	// agent reads through `anfra version` and the skills' session hook stays
+	// current. CI spawns nothing.
+	defer func() {
 		if update.Stale() && os.Getenv("CI") == "" {
 			spawnDetached("__update-check")
 		}
+	}()
+	// A console shows its notices under its prompt (consoleBadge), not after
+	// each command's output. Notices are for a person at a terminal: piped or
+	// captured (an agent calling anfra, a script), none are worked out, unless
+	// opt-in auto-update needs anfra's.
+	if output.inConsole || !stderrIsInteractive() && !autoUpdateEnabled() {
 		return
 	}
-	notice := update.CachedNotice()
-
-	// Opt-in auto-update is explicit, so it runs regardless of interactivity
-	// (e.g. a service that set ANFRA_AUTO_UPDATE=1). Saying so is a notice like
-	// the one below: for a person at a terminal, not in a program's stderr.
-	if notice != "" && autoUpdateEnabled() {
-		if stderrIsInteractive() {
-			fmt.Fprintln(os.Stderr, "\n"+notice+" (auto-updating in the background)")
+	for _, n := range notices() {
+		switch {
+		case n.update && autoUpdateEnabled():
+			// Opt-in auto-update is explicit, so it runs regardless of
+			// interactivity (a service that set ANFRA_AUTO_UPDATE=1); saying
+			// so is for a person at a terminal, as the notices are.
+			if stderrIsInteractive() {
+				fmt.Fprintln(os.Stderr, "\n"+n.text+" (auto-updating in the background)")
+			}
+			spawnDetached("update")
+			return
+		case !stderrIsInteractive():
+			return
+		case n.skills:
+			// At most once a day; not after agent setup (or its former name),
+			// which has just reported it all.
+			if invoked == "setup" || invoked == "install" || !agents.NoticeDue() {
+				continue
+			}
+			agents.MarkNoticed()
 		}
-		spawnDetached("update")
-		return
-	}
-
-	// The notice is for interactive humans only: when output is piped/captured —
-	// an agent calling anfra, a script — stay silent. The background refresh still
-	// runs there (at most daily), so what an agent reads through `anfra version` and
-	// the skills' session hook stays current. CI spawns nothing.
-	if stderrIsInteractive() && notice != "" {
-		fmt.Fprintln(os.Stderr, "\n"+notice)
-	}
-	// What of the agents' skills needs attention, at most once a day; not after
-	// agent setup (or its former name), which has just reported it all. For a
-	// person at a terminal, like the update notice.
-	if stderrIsInteractive() && invoked != "setup" && invoked != "install" {
-		if line := agents.Notice(agents.System(), repoDirIfAny()); line != "" {
-			fmt.Fprintln(os.Stderr, "\n"+line)
-		}
-	}
-	if update.Stale() && os.Getenv("CI") == "" {
-		spawnDetached("__update-check")
+		fmt.Fprintln(os.Stderr, "\n"+n.text)
 	}
 }
 

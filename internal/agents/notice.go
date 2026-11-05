@@ -115,16 +115,25 @@ func noSkills(env Env, repoDir string) bool {
 // Notice is Attention, at most once a day: "" when it printed less than a day
 // ago, or nothing needs attention. It records that it printed.
 func Notice(env Env, repoDir string) string {
-	s := readState()
-	if time.Since(s.NoticedAt) < noticeEvery {
+	if !NoticeDue() {
 		return ""
 	}
 	line := Attention(env, repoDir)
 	if line != "" {
-		s.NoticedAt = time.Now()
-		writeState(s)
+		MarkNoticed()
 	}
 	return line
+}
+
+// NoticeDue reports whether a day has passed since the notice last printed,
+// for one shown after a command, at most once a day.
+func NoticeDue() bool { return time.Since(readState().NoticedAt) >= noticeEvery }
+
+// MarkNoticed records that the notice printed, now.
+func MarkNoticed() {
+	s := readState()
+	s.NoticedAt = time.Now()
+	writeState(s)
 }
 
 // attention is what Attention and Badge say: the latest skills, as last
