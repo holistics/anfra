@@ -20,15 +20,17 @@ type EntryOptions struct {
 	Prompt  string   // before the entry: "query> "
 	History []string // earlier entries, oldest first, for Up and Down
 	Leave   string   // the hint shown under the prompt after Ctrl-C on an empty entry, in Status's place
-	// Warning, Context and Status share the line under the prompt while
-	// typing: Warning first, styled, what the next entry would fail for, where
-	// the eye lands; then Context, styled, where the session is;
-	// Status on the right, styled, a notice's badge. Too narrow, Context is cut
-	// short with … first, then Status, then Warning. "" for none.
+	// Warning, Context, Aside and Status share the line under the prompt
+	// while typing, each styled: on the left, Warning, what the next entry
+	// would fail for, where the eye lands, then Context, where the session
+	// is; on the right, Aside, a state (a server's), then Status at the far
+	// right, a notice's badge. Too narrow, Context is cut short with … first,
+	// then Aside, then Status, then Warning. "" for none.
 	Warning string
 	Context string
+	Aside   string
 	Status  string
-	// Refresh, when set, gives Context again a few times a second while
+	// Refresh, when set, gives Aside again a few times a second while
 	// typing: for what changes under it, a server starting.
 	Refresh func() string
 	// Ends reports whether the text typed is a whole entry, for Enter to end
@@ -153,7 +155,7 @@ func (m *entryReader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.done || m.eof {
 			return m, nil
 		}
-		m.opts.Context = m.opts.Refresh()
+		m.opts.Aside = m.opts.Refresh()
 		return m, refreshSoon()
 	case tea.BackgroundColorMsg:
 		dark := msg.IsDark()
@@ -255,25 +257,41 @@ func (m *entryReader) View() tea.View {
 }
 
 // bottom is the line under the frame: the warning and the context on the
-// left, status on the right, two spaces apart; to fit width, the context is
-// cut short first, then status, then the warning.
+// left; aside, then status at the far right; two spaces apart. To fit width,
+// the context is cut short first, then aside, then status, then the warning.
 func (m *entryReader) bottom(width int, status string) string {
 	const gap = 2
+	w := ansi.StringWidth
 	warning := ansi.Truncate(m.opts.Warning, width, "…")
-	if warning != "" && status != "" {
-		if room := width - ansi.StringWidth(warning) - gap; room > 1 {
-			status = ansi.Truncate(status, room, "…")
-		} else {
-			status = ""
-		}
-	} else {
-		status = ansi.Truncate(status, width, "…")
-	}
-	room := width - ansi.StringWidth(warning) - ansi.StringWidth(status)
+	room := width - w(warning)
 	if warning != "" {
 		room -= gap
 	}
 	if status != "" {
+		if room > 1 {
+			status = ansi.Truncate(status, room, "…")
+		} else {
+			status = ""
+		}
+		room -= w(status)
+	}
+	aside := m.opts.Aside
+	asideGap := 0
+	if status != "" {
+		asideGap = gap
+	}
+	if aside != "" && w(aside)+asideGap > room {
+		aside = "" // dropped, not cut: a state is read whole
+	}
+	if aside != "" {
+		room -= w(aside) + asideGap
+	}
+	right := aside
+	if aside != "" && status != "" {
+		right += strings.Repeat(" ", gap)
+	}
+	right += status
+	if right != "" {
 		room -= gap
 	}
 	left := warning
@@ -284,12 +302,12 @@ func (m *entryReader) bottom(width int, status string) string {
 		left += ansi.Truncate(m.opts.Context, room, m.styles.Muted.Render("…"))
 	}
 	line := left
-	if status != "" {
-		spaces := width - ansi.StringWidth(left) - ansi.StringWidth(status)
+	if right != "" {
+		spaces := width - w(left) - w(right)
 		if left != "" {
 			spaces = max(spaces, 1)
 		}
-		line += strings.Repeat(" ", max(spaces, 0)) + status
+		line += strings.Repeat(" ", max(spaces, 0)) + right
 	}
 	if strings.TrimSpace(ansi.Strip(line)) == "" {
 		return "\u00a0" // a blank line, kept: Bubble Tea drops a last line of spaces
