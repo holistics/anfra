@@ -31,6 +31,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
 | [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
+| [readable prose](designs/readable-prose.md) | How to write error messages, notices, help and docs that a person or an agent can read and act on. |
 
 ## Research
 
@@ -59,6 +60,7 @@ Work known or agreed, not built yet.
 | [backlog](todos/backlog.md) | Work known to be needed, not yet scheduled: what, why, and where to start. |
 | [check before push](todos/check-pre-push.md) | Running `make check` from a pre-push hook, to catch what would fail CI. |
 | [publish status and check](todos/publish-status-and-check.md) | `anfra publish status`, and the rest of `anfra publish check`: asking about a publish without publishing. |
+| [improve prose](todos/improve-proses.md) | Rewriting anfra's user-facing text by the readable prose guide: errors first, then descriptions, notices and help. |
 
 ## Usage
 
