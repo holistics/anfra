@@ -116,3 +116,15 @@ func TestReadEntryBottomLine(t *testing.T) {
 		t.Errorf("with a warning, narrower: %q", got)
 	}
 }
+
+// A state sits on the right, before the badge at the far right; too narrow,
+// it goes before the badge or the warning are cut.
+func TestReadEntryBottomAside(t *testing.T) {
+	m := &entryReader{input: textarea.New(), opts: EntryOptions{Context: "acme", Aside: "● server", Warning: "! x"}}
+	if got := m.bottom(40, "↑ anfra 0.17.0"); got != "! x  acme       ● server  ↑ anfra 0.17.0" {
+		t.Errorf("wide: %q", got)
+	}
+	if got := m.bottom(26, "↑ anfra 0.17.0"); got != "! x  acme   ↑ anfra 0.17.0" {
+		t.Errorf("narrow: %q", got)
+	}
+}

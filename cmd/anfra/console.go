@@ -226,23 +226,22 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 	if s.mode != nil && runsOnEngine(s.mode) { //nolint:contextcheck // names the commands, runs none
 		server.ensure(session)
 	}
-	// The line under the frame: where the session is, then its server,
-	// orange while it starts, green once warm.
-	contextLine := func() string { //nolint:contextcheck // names the flags, runs nothing
-		line := s.styledContext(filepath.Base(dir), false)
+	// The session's server, on the right of the line under the frame: a dot,
+	// orange while it starts, green once warm, then the word, faint.
+	serverDot := func() string {
 		switch server.state() {
 		case "starting":
-			line += styles.Muted.Render(" · ") + styles.Warning.Render("server")
+			return styles.Warning.Render("●") + styles.Muted.Render(" server")
 		case "warm":
-			line += styles.Muted.Render(" · ") + styles.Success.Render("server")
+			return styles.Success.Render("●") + styles.Muted.Render(" server")
 		}
-		return line
+		return ""
 	}
-	opts := cliui.EntryOptions{Leave: `\q, exit or Ctrl-D to leave`, History: history.load(), Ends: s.ends, Refresh: contextLine}
+	opts := cliui.EntryOptions{Leave: `\q, exit or Ctrl-D to leave`, History: history.load(), Ends: s.ends, Refresh: serverDot}
 	for {
-		opts.Prompt, opts.Context = s.prompt(), contextLine()
-		opts.Status = consoleBadge(s)    //nolint:contextcheck // reads local state, runs nothing
-		opts.Warning = consoleWarning(s) //nolint:contextcheck // reads the commands, runs none
+		opts.Prompt, opts.Context, opts.Aside = s.prompt(), s.styledContext(filepath.Base(dir), false), serverDot() //nolint:contextcheck // names the flags, runs nothing
+		opts.Status = consoleBadge(s)                                                                               //nolint:contextcheck // reads local state, runs nothing
+		opts.Warning = consoleWarning(s)                                                                            //nolint:contextcheck // reads the commands, runs none
 		entry, err := cliui.ReadEntry(session, in, out, opts)
 		if errors.Is(err, io.EOF) {
 			return nil
@@ -310,7 +309,8 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 func consoleBadge(s *consoleSession) string {
 	styles := s.styles
 	badge := func(mark, label, cmd string) string {
-		return styles.Muted.Render(mark+" "+label+" · Run") + " " + styles.Code.Render(cmd)
+		// Yellow, a warning's: at the far right, faint went unnoticed.
+		return styles.Warning.Render(mark+" "+label+" · Run") + " " + styles.Code.Render(cmd)
 	}
 	if updateNotifyDisabled() {
 		return ""
