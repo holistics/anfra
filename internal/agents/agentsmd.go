@@ -86,6 +86,10 @@ func CheckBlock(repoDir string) (Block, error) {
 	default:
 		b.State = BlockUpToDate
 	}
+	if linksToAgentsMD(repoDir) {
+		b.HasClaudeMD = true
+		return b, nil
+	}
 	claude, err := readRegular(filepath.Join(repoDir, "CLAUDE.md"))
 	if err != nil {
 		return Block{}, err
@@ -99,6 +103,8 @@ func CheckBlock(repoDir string) (Block, error) {
 // file, creating it, or replaces the block that is there. It adds the import
 // to the repo's CLAUDE.md, when it has one. It refuses a symlink, which would
 // write outside the repo. It says whether it wrote the block, and the import.
+// A failure to add the import is an *ImportError, so that a caller can tell it
+// from a failure to write the block.
 func WriteBlock(repoDir string) (wroteBlock, wroteImport bool, err error) {
 	path := filepath.Join(repoDir, "AGENTS.md")
 	md, err := readRegular(path)
@@ -112,19 +118,48 @@ func WriteBlock(repoDir string) (wroteBlock, wroteImport bool, err error) {
 		wroteBlock = true
 	}
 
+	if linksToAgentsMD(repoDir) {
+		return wroteBlock, false, nil
+	}
 	claudePath := filepath.Join(repoDir, "CLAUDE.md")
 	claude, err := readRegular(claudePath)
-	if err != nil || claude == nil || hasLine(claude, claudeImport) {
-		return wroteBlock, false, err
+	if err != nil {
+		return wroteBlock, false, &ImportError{err}
+	}
+	if claude == nil || hasLine(claude, claudeImport) {
+		return wroteBlock, false, nil
 	}
 	sep := "\n"
 	if len(claude) > 0 && !bytes.HasSuffix(claude, []byte("\n")) {
 		sep = "\n\n"
 	}
 	if err := os.WriteFile(claudePath, append(claude, []byte(sep+claudeImport+"\n")...), 0o644); err != nil { //nolint:gosec // G306: as above
-		return wroteBlock, false, err
+		return wroteBlock, false, &ImportError{err}
 	}
 	return wroteBlock, true, nil
+}
+
+// ImportError is WriteBlock failing on CLAUDE.md, after AGENTS.md is done, so
+// that setup doesn't report the block as unwritten. Its text is its cause's.
+type ImportError struct{ Err error }
+
+func (e *ImportError) Error() string { return e.Err.Error() }
+func (e *ImportError) Unwrap() error { return e.Err }
+
+// linksToAgentsMD reports whether repoDir's CLAUDE.md is a symlink to its
+// AGENTS.md, a common setup: Claude Code then reads AGENTS.md through it, so
+// it needs no import, and anfra has nothing to read or write in it.
+func linksToAgentsMD(repoDir string) bool {
+	claude := filepath.Join(repoDir, "CLAUDE.md")
+	if fi, err := os.Lstat(claude); err != nil || fi.Mode()&fs.ModeSymlink == 0 {
+		return false
+	}
+	target, err := filepath.EvalSymlinks(claude)
+	if err != nil {
+		return false
+	}
+	agentsMD, err := filepath.EvalSymlinks(filepath.Join(repoDir, "AGENTS.md"))
+	return err == nil && target == agentsMD
 }
 
 // readRegular reads a file of the repo: nil when it doesn't exist, an error
@@ -137,8 +172,12 @@ func readRegular(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !fi.Mode().IsRegular() {
-		return nil, clierr.Precondition("%s is not a regular file (a symlink?): anfra writes only the repo's own files.", filepath.Base(path))
+	switch name := filepath.Base(path); {
+	case fi.Mode()&fs.ModeSymlink != 0:
+		return nil, clierr.Precondition("%s is a symlink, which anfra doesn't follow, so that it never changes a file outside the repo. "+
+			"Replace it with a regular file (such as a copy of the file it points to), and run `anfra agent setup` again.", name)
+	case !fi.Mode().IsRegular():
+		return nil, clierr.Precondition("%s isn't a regular file. Replace it with one, and run `anfra agent setup` again.", name)
 	}
 	return os.ReadFile(path) //nolint:gosec // G304: a file of the repo being set up
 }

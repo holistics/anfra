@@ -157,6 +157,9 @@ type AgentsMDSetup struct {
 	WroteBlock  bool   `json:"wrote_block" doc:"whether it wrote the anfra block"`
 	WroteImport bool   `json:"wrote_import" doc:"whether it wrote @AGENTS.md in CLAUDE.md"`
 	Message     string `json:"message,omitempty" doc:"why it couldn't write them; absent when it could"`
+	// importFailed: the failure in Message is CLAUDE.md's, so that setup's
+	// message doesn't call the block unwritten.
+	importFailed bool
 }
 
 // ErrIncomplete is setup leaving an agent without the skills, or the anfra
@@ -185,6 +188,7 @@ func Setup(ctx context.Context, env Env, o Options) (SetupResult, error) {
 		wroteBlock, wroteImport, err := WriteBlock(o.RepoDir)
 		res.Setup.AgentsMD = &AgentsMDSetup{WroteBlock: wroteBlock, WroteImport: wroteImport}
 		if err != nil {
+			_, res.Setup.AgentsMD.importFailed = errors.AsType[*ImportError](err)
 			res.Setup.AgentsMD.Message = err.Error()
 			failed = true
 		}
@@ -434,10 +438,13 @@ func setupMessage(s SetupActions) string {
 	}
 	if md := s.AgentsMD; md != nil {
 		switch {
-		case md.Message != "":
+		case md.Message != "" && !md.importFailed:
 			parts = append(parts, "Couldn't write the anfra block in AGENTS.md.")
 		case md.WroteBlock:
 			parts = append(parts, "Wrote the anfra block in AGENTS.md.")
+		}
+		if md.importFailed {
+			parts = append(parts, "Couldn't add @AGENTS.md to CLAUDE.md.")
 		}
 	}
 	return strings.Join(parts, " ")
