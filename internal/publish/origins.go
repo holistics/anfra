@@ -22,7 +22,7 @@ func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, t *told, p *
 	}
 	local, err := conf.AllowedOrigins()
 	if err != nil {
-		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", err)
+		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", errMessage(err))
 		return
 	}
 	if len(local) == 0 {
@@ -32,7 +32,7 @@ func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, t *told, p *
 	defer p.Section("")
 	have, err := c.ListAppOrigins(ctx)
 	if err != nil {
-		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", err)
+		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", errMessage(err))
 		return
 	}
 	var lacking []string

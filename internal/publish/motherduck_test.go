@@ -489,3 +489,19 @@ func TestYesToAllNeedsANamedAccount(t *testing.T) {
 		t.Errorf("asked %q, uploads %v, sources %v", ask.asked, md.uploads, s.sources)
 	}
 }
+
+// A publish over the org's limits fails before it changes anything: nothing
+// is uploaded to MotherDuck, and no data source is created on the org.
+func TestLimitsAreCheckedBeforeAnythingChanges(t *testing.T) {
+	s, url := newServer(t)
+	s.limits.Files = 0
+	dir := duckRepo(t)
+	md := newFakeMotherDuck()
+	_, err := runWith(t, dir, Options{SetOrg: url}, (&script{t: t}).ask, md)
+	if err == nil || !strings.Contains(err.Error(), "Not published, because the repo has") {
+		t.Fatalf("over the file limit: %v", err)
+	}
+	if len(s.created) != 0 || slices.ContainsFunc(md.calls, func(c string) bool { return c != "find" }) {
+		t.Errorf("changed before the limit was checked: created %v, calls %v", s.created, md.calls)
+	}
+}

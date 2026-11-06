@@ -113,7 +113,7 @@ func TestClient(t *testing.T) {
 	}
 
 	_, err = c.Status(ctx)
-	if err == nil || !strings.Contains(err.Error(), "not an anfra error") {
+	if err == nil || !strings.Contains(err.Error(), "contact your org's admin") {
 		t.Errorf("a non-anfra answer: %v", err)
 	}
 }
@@ -179,5 +179,30 @@ func TestClientStopsBeforeDispatchOnCredentialFailure(t *testing.T) {
 	}
 	if called {
 		t.Fatal("API request dispatched despite unavailable credentials")
+	}
+}
+
+// An address that's refused says why, by its cause, and never echoes what
+// may hold a credential.
+func TestAddressErrorsSayWhy(t *testing.T) {
+	for raw, want := range map[string]string{
+		"https://[bi.example.com/o/acme":    "isn't a valid URL",
+		"ftp://bi.example.com/o/acme":       "must start with https://",
+		"https://u:p@bi.example.com/o/acme": "can't have credentials",
+	} {
+		_, err := cloudapi.ParseOrg(raw)
+		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "u:p") {
+			t.Errorf("%q: %v, want %q", raw, err, want)
+		}
+	}
+	for raw, want := range map[string]string{
+		"https://bi.example.com/o/acme": "can't have credentials, a path",
+		"bi.example.com":                "must start with https://",
+		"https://bi.example.com:":       "the port is empty",
+	} {
+		_, err := cloudapi.ParseOrigin(raw)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v, want %q", raw, err, want)
+		}
 	}
 }

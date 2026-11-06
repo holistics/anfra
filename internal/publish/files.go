@@ -47,7 +47,7 @@ func selectFiles(dir string) (files []string, err error) {
 		return nil, err
 	}
 	if len(refused) > 0 {
-		return nil, clierr.Precondition("A publish carries regular files only: replace these with the files themselves: %s.", strings.Join(refused, ", "))
+		return nil, clierr.Precondition("Not published, because these files aren't regular files: %s. Replace each with a regular file (for a symlink, a copy of the file it points to), and publish again.", strings.Join(refused, ", "))
 	}
 	slices.Sort(files)
 	return files, nil

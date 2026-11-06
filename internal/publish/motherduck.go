@@ -16,6 +16,7 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/motherduck"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 // MotherDuck is a person's MotherDuck account, as copying a DuckDB file there
@@ -197,7 +198,7 @@ func (m *mdCopy) offer(ctx context.Context, f duckdbFile, rest int) (created []s
 // errSwitchAccount ends the publish for the person to switch the MotherDuck
 // account the CLI is signed in to, which anfra leaves to them: signing the CLI
 // out signs them out wherever they use it.
-var errSwitchAccount = clierr.Precondition("Not published: to upload to another MotherDuck account, run motherduck logout, then motherduck login, then publish again.")
+var errSwitchAccount = clierr.Precondition("Not published. To upload to another MotherDuck account, run `motherduck logout`, then `motherduck login`, then publish again.")
 
 // askUpload asks whether to upload f, naming the account it goes to when one is
 // known, with the choice then to quit to switch it, and, with rest files still
@@ -318,7 +319,7 @@ func (m *mdCopy) signIn(ctx context.Context) (ok bool, err error) {
 	}
 	status, err := m.md.Status(ctx)
 	if err != nil {
-		p.Fail("Could not check who the MotherDuck CLI is signed in as: %v", err)
+		p.Fail("Could not check who the MotherDuck CLI is signed in as: %v", errMessage(err))
 		return giveUp()
 	}
 	if !status.Authenticated {
@@ -327,7 +328,7 @@ func (m *mdCopy) signIn(ctx context.Context) (ok bool, err error) {
 		}
 		p.Step("Running motherduck login…")
 		if err := m.md.Login(ctx); err != nil && ctx.Err() == nil {
-			p.Fail("motherduck login failed: %v", err)
+			p.Fail("motherduck login failed: %v", errMessage(err))
 		}
 		if status, err = m.md.Status(ctx); err != nil || !status.Authenticated {
 			p.Fail("Not signed in to MotherDuck, so nothing will be uploaded.")
@@ -351,7 +352,8 @@ func (m *mdCopy) signIn(ctx context.Context) (ok bool, err error) {
 func (m *mdCopy) listSession(ctx context.Context, status motherduck.Status) (ok bool, err error) {
 	token, names, err := m.md.Session(ctx)
 	if err != nil {
-		m.p.Fail("%v, so nothing will be uploaded.", err)
+		m.p.Fail("Could not read your MotherDuck account, so nothing will be uploaded:")
+		m.p.Detail(errMessage(err))
 		m.gaveUp = true
 		return false, ctx.Err()
 	}
@@ -379,7 +381,7 @@ func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool
 	name, err = m.freeName(motherduck.DatabaseName(strings.TrimSuffix(filepath.Base(f.path), filepath.Ext(f.path))))
 	if err != nil {
 		p.Fail("Could not find a free database name in your MotherDuck account:")
-		p.Detail(err.Error())
+		p.Detail(errMessage(err))
 		return "", false, nil
 	}
 	p.Step("Uploading %s to MotherDuck as database %s… (a large file takes a while)", f.shown, name)
@@ -395,7 +397,7 @@ func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool
 		p.Note("anfra serve has the file open, so a temporary copy of it is uploaded instead.")
 		copied, cleanup, cerr := copyForUpload(f.path)
 		if cerr != nil {
-			p.Fail("Could not copy %s: %v", f.shown, cerr)
+			p.Fail("Could not copy %s: %v", f.shown, errMessage(cerr))
 			p.Note("Stop anfra serve, then publish again to upload the file.")
 			return "", false, nil
 		}
@@ -408,7 +410,7 @@ func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool
 			return "", false, ctx.Err()
 		}
 		p.Fail("Could not upload %s:", f.shown)
-		p.Detail(err.Error())
+		p.Detail(errMessage(err))
 		if strings.Contains(err.Error(), "already exists") {
 			m.databases[name] = true
 			p.Note("Another database named %s was created in the meantime. It was not changed.", name) // not this upload's: never call it partial
@@ -438,7 +440,7 @@ func (m *mdCopy) freeName(base string) (string, error) {
 			return name, nil
 		}
 	}
-	return "", clierr.Precondition("The MotherDuck database names %s to %s_99 are all taken.", base, base)
+	return "", clierr.Precondition("Databases %s and %s_2 to %s_99 already exist. Drop any you no longer need, then publish again.", base, base, base)
 }
 
 // orgToken settles the org's token, a read-only one, once per publish: never
@@ -467,7 +469,7 @@ func (m *mdCopy) orgToken(ctx context.Context, sources []string) (ok bool, err e
 		}
 		if !motherduck.NameTaken(err) {
 			p.Fail("Could not create a read-only MotherDuck token for the org:")
-			p.Detail(err.Error())
+			p.Detail(errMessage(err))
 			p.Note("Nothing was uploaded.")
 			return false, ctx.Err()
 		}
@@ -533,7 +535,7 @@ func (m *mdCopy) finish(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 	if err := m.md.RevokeToken(ctx, m.session, m.status.User, m.token.ID); err != nil {
-		m.t.Warn("token_not_revoked", "Could not revoke the unused MotherDuck token %q (%v): it can read all your MotherDuck databases.", m.token.Name, err)
+		m.t.Warn("token_not_revoked", "Could not revoke the unused MotherDuck token %q (%v): it can read all your MotherDuck databases.", m.token.Name, errMessage(err))
 		m.t.Hint("Revoke the MotherDuck token %q in MotherDuck's settings.", m.token.Name)
 		return
 	}
@@ -591,3 +593,9 @@ func copyFile(from, to string) error {
 	}
 	return dst.Close()
 }
+
+// errMessage is what a progress line shows of err. Publish reports some
+// failures on the way and carries on, so they never reach the CLI's error
+// printer. They should still read as if they had: the reader gets the message,
+// not err.Error()'s log form, which starts with the error's code.
+func errMessage(err error) string { return apperr.From(err).Response("").Message }

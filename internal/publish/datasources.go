@@ -46,7 +46,7 @@ func offerDataSourcesToOrg(ctx context.Context, m *mdCopy, dir string, create bo
 	ask := m.ask
 	local, err := localDataSources(dir)
 	if err != nil {
-		t.Warn("data_sources_not_checked", "Not checking the org's data sources: %v", err)
+		t.Warn("data_sources_not_checked", "Not checking the org's data sources: %v", errMessage(err))
 		return nil
 	}
 	if len(local) == 0 {
@@ -197,7 +197,7 @@ func createDataSource(ctx context.Context, c *cloudapi.Client, d datasource.Data
 		if cloudapi.IsForbidden(err) {
 			return false, err
 		}
-		t.Warn("data_source_not_created", "Data source %s (%s) was not created: %v", d.Name, d.DBType, err)
+		t.Warn("data_source_not_created", "Data source %s (%s) was not created: %v", d.Name, d.DBType, errMessage(err))
 		return false, nil
 	}
 	p.Success("Created data source %s (%s) on the org.", d.Name, d.DBType)

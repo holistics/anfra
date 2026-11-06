@@ -128,7 +128,7 @@ func (c CLI) Session(ctx context.Context) (token string, databases []string, err
 		if jsonkit.Unmarshal(bytes.TrimSpace(out), &failed) == nil && failed.Message != "" && !strings.Contains(failed.Message, "motherduck_token") {
 			return "", nil, &failed
 		}
-		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI did not give its token")
+		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "The MotherDuck CLI didn't give its token. Run `motherduck login` to sign it in again, then publish again.")
 	}
 	// The pragma prints a line of shell, then an empty JSON array; the
 	// SELECT, one JSON row.
@@ -142,7 +142,7 @@ func (c CLI) Session(ctx context.Context) (token string, databases []string, err
 		}
 	}
 	if token == "" {
-		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "the MotherDuck CLI did not give its token")
+		return "", nil, clierr.Unreachablef(clierr.MotherDuck, nil, "The MotherDuck CLI didn't give its token. Run `motherduck login` to sign it in again, then publish again.")
 	}
 	var rows []struct {
 		Names []string `json:"names"`

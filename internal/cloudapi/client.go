@@ -155,12 +155,12 @@ func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, e
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {
-		return out, clierr.Unreachablef(clierr.Org, err, "read %s's answer to %s: %v", c.org, op, err)
+		return out, clierr.Unreachablef(clierr.Org, err, "The connection to %s broke before its reply arrived. Check your connection, and try again.", c.org)
 	}
 	if resp.StatusCode != http.StatusOK {
 		var env apperr.Envelope
 		if jsonkit.Unmarshal(raw, &env) != nil || env.Error.Code == "" {
-			return out, clierr.Unreachablef(clierr.Org, nil, "%s answered %s with %s, not an anfra error: is it an anfra server?", c.org, op, resp.Status)
+			return out, clierr.Unreachablef(clierr.Org, nil, "%s returned %s. Try again in a moment, and if it keeps failing, contact your org's admin.", c.org, resp.Status)
 		}
 		return out, &Error{Status: resp.StatusCode, Response: env.Error}
 	}
