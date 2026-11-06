@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -386,5 +387,25 @@ func TestAuthorizationReloadsAfterAnotherProcessRotates(t *testing.T) {
 	assertAuthorizationToken(t, authorize, entry.Org, "new-access")
 	if posts.Load() != 1 {
 		t.Fatalf("refresh requests=%d", posts.Load())
+	}
+}
+
+// A store failure while renewing a login says, in its context, that anfra
+// was renewing it: the message alone names only anfra's folder.
+func TestRenewalFailureSaysTheStepInItsContext(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ANFRA_HOME", dir)
+	entry := seedCredential(t, "https://cloud.example.com", true)
+	if err := os.Chmod(dir, 0o500); err != nil { // the recovery marker can't be written
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	_, err := loadAccessToken(context.Background(), entry.Org)
+	r := apperr.From(err).Response("")
+	if r.Code != "precondition_failed" || !strings.Contains(r.Message, "can't write to anfra's folder") {
+		t.Fatalf("code %s, message %q: want the folder's write failure", r.Code, r.Message)
+	}
+	if len(r.Context) != 1 || r.Context[0].Step != "anfra_cli.renew_login" {
+		t.Errorf("context %+v, want the renewal step", r.Context)
 	}
 }

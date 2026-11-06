@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -97,8 +99,8 @@ func TestLoginDiscoveryErrorsAreActionable(t *testing.T) {
 	}{
 		{"missing endpoint", "secret-response", "HTTP 404 (Not Found)", 404},
 		{"unavailable", "secret-response", "HTTP 503 (Service Unavailable)", 503},
-		{"invalid JSON", "secret-response", "invalid JSON", 200},
-		{"incompatible server", `{}`, "compatible anfra API", 200},
+		{"invalid JSON", "secret-response", "didn't reply as an anfra server would", 200},
+		{"incompatible server", `{}`, "API this version of anfra can use", 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -110,7 +112,7 @@ func TestLoginDiscoveryErrorsAreActionable(t *testing.T) {
 				t.Error("browser opened despite discovery failure")
 				return nil
 			})
-			if err == nil || !strings.Contains(err.Error(), server.URL) || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "contact your server administrator") || strings.Contains(err.Error(), "secret-response") {
+			if err == nil || !strings.Contains(err.Error(), server.URL) || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "contact your org's admin") || strings.Contains(err.Error(), "secret-response") {
 				t.Fatalf("missing safe, actionable discovery error: %v", err)
 			}
 		})
@@ -208,5 +210,49 @@ func TestLoginFailureSaysTheServerInItsContext(t *testing.T) {
 	}
 	if len(r.Context) != 1 || r.Context[0].Step != "anfra_cli.sign_in" || r.Context[0].Text != "sign in to '"+server.URL+"'" {
 		t.Errorf("context %+v, want the sign-in step", r.Context)
+	}
+}
+
+func TestLoginChecksTheCredentialFileFirst(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ANFRA_HOME", dir)
+	path := filepath.Join(dir, "credentials.json")
+	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// No server: the file is checked before anything is asked of one.
+	_, err := (Manager{}).Login(context.Background(), "https://cloud.example.com", "", func(context.Context, string) error {
+		t.Error("browser opened despite a damaged credential file")
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "contents aren't valid") {
+		t.Fatalf("damaged credential file not reported first: %v", err)
+	}
+}
+
+func TestCredentialFileErrorsSayTheCause(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode os.FileMode
+		want string
+	}{
+		{"permissions", 0o644, "`chmod 600 "},
+		{"contents", 0o600, "contents aren't valid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("ANFRA_HOME", dir)
+			path := filepath.Join(dir, "credentials.json")
+			if err := os.WriteFile(path, []byte("not json"), tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(path, tc.mode); err != nil { // past the umask
+				t.Fatal(err)
+			}
+			_, err := (Manager{}).StoredLogins(context.Background())
+			if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q about %s, got %v", tc.want, path, err)
+			}
+		})
 	}
 }

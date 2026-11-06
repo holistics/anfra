@@ -93,14 +93,14 @@ func discoverOAuthServer(ctx context.Context, origin string) (serverMetadata, er
 		return serverMetadata{}, err
 	}
 	if resource.Resource != origin+"/api" || len(resource.Servers) != 1 || resource.Servers[0] != origin || !containsCapability(resource.Scopes, "all") || !containsCapability(resource.BearerMethods, "header") {
-		return serverMetadata{}, clierr.Precondition("The server doesn't advertise a compatible anfra API: check the organization URL, or contact your server administrator.")
+		return serverMetadata{}, clierr.Precondition("The server doesn't offer an API this version of anfra can use. Check the organization URL, and if it's right, contact your org's admin.")
 	}
 	var server serverMetadata
 	if err := oauthJSONRequest(ctx, http.MethodGet, origin+"/.well-known/oauth-authorization-server", nil, &server); err != nil {
 		return serverMetadata{}, err
 	}
 	if server.Issuer != origin || !safeOAuthEndpoint(server.AuthorizationEndpoint, origin) || !safeOAuthEndpoint(server.TokenEndpoint, origin) || !safeOAuthEndpoint(server.RevocationEndpoint, origin) || !server.ResponseIssuer || !containsCapability(server.ResponseTypes, "code") || !containsCapability(server.GrantTypes, "authorization_code") || !containsCapability(server.GrantTypes, "refresh_token") || !containsCapability(server.TokenAuth, "none") || !containsCapability(server.RevocationAuth, "none") || !containsCapability(server.Scopes, "all") || !containsCapability(server.Challenges, "S256") {
-		return serverMetadata{}, clierr.Precondition("The server doesn't advertise compatible browser authentication: check the organization URL, or contact your server administrator.")
+		return serverMetadata{}, clierr.Precondition("The server doesn't offer a browser authentication this version of anfra can use. Contact your org's admin.")
 	}
 	return server, nil
 }
@@ -126,23 +126,27 @@ func oauthJSONRequest(ctx context.Context, method, endpoint string, form url.Val
 			return ctx.Err()
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return clierr.Unreachablef(clierr.Auth, err, "The authentication server didn't respond in time: check your connection, and try again.")
+			return clierr.Unreachablef(clierr.Auth, err, "The authentication server didn't respond in time. Check your connection, and try again.")
 		}
-		return clierr.Unreachablef(clierr.Auth, err, "Couldn't connect securely to the authentication server: check your connection, the server's address and its HTTPS certificate.")
+		return clierr.Unreachablef(clierr.Auth, err, "Couldn't connect securely to the authentication server. Check your connection, the organization URL, and that this device trusts the server's HTTPS certificate.")
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 64<<10+1))
-	if err != nil || len(raw) > 64<<10 {
-		return clierr.Unreachablef(clierr.Auth, err, "Couldn't read the authentication server's response, or it exceeded the size limit: try again, or contact your server administrator.")
+	if err != nil {
+		return clierr.Unreachablef(clierr.Auth, err, "The connection to the authentication server broke before its reply arrived. Check your connection, and try again.")
+	}
+	if res.StatusCode >= 500 {
+		return clierr.Unreachablef(clierr.Auth, nil, "The authentication server returned HTTP %d (%s). Try again in a moment, and if it keeps failing, contact your org's admin.", res.StatusCode, http.StatusText(res.StatusCode))
 	}
 	if res.StatusCode != http.StatusOK {
-		return clierr.Unreachablef(clierr.Auth, nil, "The authentication server returned HTTP %d (%s): check the organization URL, or contact your server administrator.", res.StatusCode, http.StatusText(res.StatusCode))
+		return clierr.Unreachablef(clierr.Auth, nil, "The authentication server returned HTTP %d (%s). Check the organization URL, and if it's right, contact your org's admin.", res.StatusCode, http.StatusText(res.StatusCode))
 	}
 	if out == nil {
 		return nil
 	}
-	if jsonkit.Unmarshal(raw, out) != nil {
-		return clierr.Unreachablef(clierr.Auth, nil, "The authentication server returned invalid JSON: check that the URL points to an anfra server, or contact your server administrator.")
+	// anfra's replies are small, so a larger one is another site's page.
+	if len(raw) > 64<<10 || jsonkit.Unmarshal(raw, out) != nil {
+		return clierr.Unreachablef(clierr.Auth, nil, "The server didn't reply as an anfra server would. Check the organization URL, and if it's right, contact your org's admin.")
 	}
 	return nil
 }
@@ -184,7 +188,7 @@ func exchangeOAuthCode(ctx context.Context, config *oauth2.Config, code, verifie
 			return transport.response, ctx.Err()
 		}
 		// RetrieveError and transport errors may contain credentials or raw bodies.
-		return transport.response, clierr.Unreachablef(clierr.Auth, nil, "The authentication code exchange failed: try again, or contact your server administrator.")
+		return transport.response, clierr.Unreachablef(clierr.Auth, nil, "The authentication server couldn't complete the authentication after it was approved in the browser. Try again, and if this happens again, contact your org's admin.")
 	}
 	return transport.response, nil
 }

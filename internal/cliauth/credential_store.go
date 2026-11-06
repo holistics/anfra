@@ -40,11 +40,11 @@ func credentialKey(org cloudapi.Org) string { return org.String() }
 func withCredentialLock(ctx context.Context, use func(*credentialInventory, string) error) error {
 	dir := home.Dir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return clierr.Precondition("cannot create authentication directory %q; check directory permissions and available disk space", dir)
+		return clierr.Precondition("can't create anfra's folder: %v", err)
 	}
 	lock, err := os.OpenFile(filepath.Join(dir, "credentials.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return clierr.Precondition("cannot open the authentication lock in %q; check directory and credentials.lock permissions", dir)
+		return clierr.Precondition("can't open the authentication lock file: %v", err)
 	}
 	defer lock.Close()
 	if err := acquireCredentialLock(ctx, lock); err != nil {
@@ -56,21 +56,35 @@ func withCredentialLock(ctx context.Context, use func(*credentialInventory, stri
 	f, err := os.Open(path)
 	if err == nil {
 		defer f.Close()
-		info, statErr := f.Stat()
-		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-			return clierr.Precondition("cannot use authentication file %q; it must be a regular file readable and writable only by its owner (mode 0600)", path)
+		info, err := f.Stat()
+		switch {
+		case err != nil:
+			return clierr.Precondition("can't read the authentication file: %v", err)
+		case !info.Mode().IsRegular():
+			return clierr.Precondition("can't use the authentication file (%s), because it isn't a file", path)
+		case info.Mode().Perm() != 0o600:
+			return clierr.Precondition("can't use the authentication file (%s), because its permissions aren't 600 (read and write for you only). To fix them, run `chmod 600 %s`", path, path)
 		}
-		raw, readErr := io.ReadAll(io.LimitReader(f, 4<<20+1))
-		if readErr != nil || len(raw) > 4<<20 || jsonkit.Unmarshal(raw, &inventory) != nil || inventory.Version != 1 || inventory.Entries == nil {
-			return clierr.Precondition("cannot read valid authentication data from %q; restore a valid backup, or move the file aside and run anfra auth login for each organization; moving it does not revoke server access", path)
+		raw, err := io.ReadAll(io.LimitReader(f, 4<<20+1))
+		if err != nil {
+			return clierr.Precondition("can't read the authentication file: %v", err)
+		}
+		if len(raw) > 4<<20 || jsonkit.Unmarshal(raw, &inventory) != nil || inventory.Version != 1 || inventory.Entries == nil {
+			return invalidCredentialFile(path)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return clierr.Precondition("cannot read authentication file %q; check file and directory permissions", path)
+		return clierr.Precondition("can't read the authentication file: %v", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return use(&inventory, path)
+}
+
+// invalidCredentialFile is the authentication file at path holding what anfra
+// didn't write, such as after a hand edit.
+func invalidCredentialFile(path string) error {
+	return clierr.Precondition("can't read the authentication file (%s), because its contents aren't valid. Delete it and run `anfra auth login` again for each organization. Deleting it doesn't revoke its logins on the server, so also revoke them at https://<server>/account/connected-apps", path)
 }
 
 func saveCredentialInventory(path string, inventory *credentialInventory) error {
@@ -80,7 +94,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".credentials-*")
 	if err != nil {
-		return clierr.Precondition("cannot create a temporary authentication file in %q; check directory permissions and available disk space", filepath.Dir(path))
+		return clierr.Precondition("can't write to anfra's folder: %v", err)
 	}
 	temp := f.Name()
 	defer os.Remove(temp)
@@ -102,7 +116,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 		err = syncCredentialDirectory(path)
 	}
 	if err != nil {
-		return clierr.Precondition("could not safely save authentication to %q; check directory permissions and available disk space, then run anfra auth login again", path)
+		return clierr.Precondition("can't write the authentication file: %v", err)
 	}
 	return nil
 }
