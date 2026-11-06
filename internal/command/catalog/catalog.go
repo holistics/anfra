@@ -36,6 +36,7 @@ var Search = command.Define(command.Def[SearchInput, anfranode.CatalogSearchResu
 	Short:    "Search the local catalog",
 	ReadOnly: true,
 	Needs:    func(SearchInput) command.Sidecars { return command.Sidecars{Node: true, CanalQuery: true} },
+	Check:    SearchInput.check,
 	Run: func(ctx context.Context, cc command.CommandContext, in SearchInput) (anfranode.CatalogSearchResult, error) {
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return nil, err
@@ -60,6 +61,15 @@ type SearchInput struct {
 	Query  []string `json:"query,omitempty" cli:"positional" doc:"search query"`
 	Limit  int      `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"at most this many entities; absent, 50"`
 	Offset int      `json:"offset,omitempty" minimum:"0" doc:"skip this many entities first, to page with limit"`
+}
+
+// check refuses a blank query as the caller's mistake, on the arg they left
+// blank, before any sidecar starts for a search that can't run.
+func (in SearchInput) check() error {
+	if strings.TrimSpace(strings.Join(in.Query, " ")) == "" {
+		return command.InvalidArg("query", "required", "name what to search for")
+	}
+	return nil
 }
 
 func (SearchInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {

@@ -99,20 +99,32 @@ func (c *Client) Health(ctx context.Context) error {
 	return nil
 }
 
+// readyWait is how long WaitReady waits for canal-query; a variable so that a
+// test can wait less.
+var readyWait = 15 * time.Second
+
 // WaitReady polls /health until canal-query answers or the deadline passes.
+//
+// At the deadline, a sidecar that anfra spawned didn't start, and its own
+// output says why. One at a URL didn't respond, so the last check's failure
+// is kept to say why.
 func (c *Client) WaitReady(ctx context.Context) error {
-	const wait = 15 * time.Second
+	wait := readyWait
 	deadline := time.Now().Add(wait)
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
-		resp, err := c.http.Do(req)
-		if err == nil {
+		resp, last := c.http.Do(req)
+		if last == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
 			}
+			last = fmt.Errorf("health check returned %s", resp.Status)
 		}
 		if time.Now().After(deadline) {
+			if c.socketPath == "" {
+				return fmt.Errorf("canal-query at %s didn't respond within %s: %v", c.baseURL, wait, last)
+			}
 			return fmt.Errorf("canal-query didn't start within %s", wait)
 		}
 		// Give up immediately if the caller is done; otherwise an unreachable
@@ -501,7 +513,12 @@ func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read result stream: %w", err)
+		// A row over the scanner's buffer is too large a result, not
+		// canal-query out of reach, so it isn't reported as one.
+		if errors.Is(err, bufio.ErrTooLong) {
+			return fmt.Errorf("read the result: %w", err)
+		}
+		return sidecar.Unreachable(ctx, Name, fmt.Errorf("read the result: %w", err))
 	}
 	if !ended {
 		return errors.New("canal-query's answer ended before its trailer")

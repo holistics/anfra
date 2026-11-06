@@ -352,8 +352,60 @@ func TestSetupWritesTheAgentsBlock(t *testing.T) {
 	}
 	res, err = Setup(context.Background(), env.Env, Options{RepoDir: linked})
 	res = incomplete(t, res, err)
-	if !strings.Contains(res.Setup.AgentsMD.Message, "AGENTS.md is not a regular file") || res.AgentsMD.Block != BlockUnreadable {
+	if !strings.Contains(res.Setup.AgentsMD.Message, "AGENTS.md is a symlink") || res.AgentsMD.Block != BlockUnreadable {
 		t.Errorf("a symlinked AGENTS.md: %+v, %+v", res.Setup.AgentsMD, res.AgentsMD)
+	}
+	if !strings.HasSuffix(res.Message, " Couldn't write the anfra block in AGENTS.md.") {
+		t.Errorf("a symlinked AGENTS.md: message %q", res.Message)
+	}
+
+	folder := t.TempDir()
+	if err := os.Mkdir(filepath.Join(folder, "AGENTS.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err = Setup(context.Background(), env.Env, Options{RepoDir: folder})
+	res = incomplete(t, res, err)
+	if !strings.Contains(res.Setup.AgentsMD.Message, "AGENTS.md isn't a regular file") {
+		t.Errorf("a folder AGENTS.md: %+v", res.Setup.AgentsMD)
+	}
+}
+
+// A CLAUDE.md that is a symlink to the repo's AGENTS.md, a common setup,
+// already has Claude Code read AGENTS.md: setup writes the block and nothing
+// through the link, and reports it imported. A CLAUDE.md linked elsewhere is
+// refused, and the block setup wrote is still reported written.
+func TestSetupWithASymlinkedClaudeMD(t *testing.T) {
+	env := newFakeEnv(t, "opencode")
+	repoDir := t.TempDir()
+	if err := os.Symlink("AGENTS.md", filepath.Join(repoDir, "CLAUDE.md")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Setup(context.Background(), env.Env, Options{RepoDir: repoDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *res.Setup.AgentsMD != (AgentsMDSetup{WroteBlock: true}) || *res.AgentsMD != (AgentsMDState{Block: BlockUpToDate, ClaudeMD: ClaudeMDImported}) {
+		t.Errorf("agents_md: %+v, %+v", res.Setup.AgentsMD, res.AgentsMD)
+	}
+	if md, _ := os.ReadFile(filepath.Join(repoDir, "AGENTS.md")); strings.Contains(string(md), claudeImport) {
+		t.Errorf("the import was written through the link: %q", md)
+	}
+
+	elsewhere := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "notes.md")
+	if err := os.WriteFile(outside, []byte("not ours"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(elsewhere, "CLAUDE.md")); err != nil {
+		t.Fatal(err)
+	}
+	res, err = Setup(context.Background(), env.Env, Options{RepoDir: elsewhere})
+	res = incomplete(t, res, err)
+	if !res.Setup.AgentsMD.WroteBlock || !strings.Contains(res.Setup.AgentsMD.Message, "CLAUDE.md is a symlink") {
+		t.Errorf("CLAUDE.md linked elsewhere: %+v", res.Setup.AgentsMD)
+	}
+	if !strings.HasSuffix(res.Message, " Wrote the anfra block in AGENTS.md. Couldn't add @AGENTS.md to CLAUDE.md.") {
+		t.Errorf("CLAUDE.md linked elsewhere: message %q", res.Message)
 	}
 }
 

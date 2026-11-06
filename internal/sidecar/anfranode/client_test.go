@@ -202,3 +202,27 @@ func TestRPCErrorMessage(t *testing.T) {
 		t.Errorf("failure: %q", got)
 	}
 }
+
+// An anfra-node at a URL that never turns healthy fails with the URL and the
+// last check's failure, so the reader knows which anfra-node and why; one anfra
+// spawned says it didn't start, as its own output has the reason.
+func TestWaitReadyNamesTheLastFailure(t *testing.T) {
+	defer func(w time.Duration) { readyWait = w }(readyWait)
+	readyWait = 50 * time.Millisecond
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	err := NewClientHTTP(srv.URL).WaitReady(context.Background())
+	want := "anfra-node at " + srv.URL + " didn't respond within 50ms: health check returned 503 Service Unavailable"
+	if err == nil || err.Error() != want {
+		t.Errorf("at a URL: %v, want %q", err, want)
+	}
+
+	err = NewClientUnix(t.TempDir() + "/none.sock").WaitReady(context.Background())
+	if err == nil || err.Error() != "anfra-node didn't start within 50ms" {
+		t.Errorf("spawned: %v, want it didn't start", err)
+	}
+}

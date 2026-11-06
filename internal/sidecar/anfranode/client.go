@@ -23,13 +23,17 @@ import (
 // an external one reachable over TCP (docker-compose / k8s).
 type Client struct {
 	baseURL string
-	http    *http.Client
+	// socketPath is the Unix socket of an anfra-node that anfra spawned, ""
+	// for one at a URL.
+	socketPath string
+	http       *http.Client
 }
 
 // NewClientUnix dials a host-spawned sidecar over its Unix socket.
 func NewClientUnix(socketPath string) *Client {
 	return &Client{
-		baseURL: "http://unix",
+		baseURL:    "http://unix",
+		socketPath: socketPath,
 		http: &http.Client{
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -44,7 +48,8 @@ func NewClientUnix(socketPath string) *Client {
 // NewClientHTTP connects to an anfra-node reachable over TCP, e.g. a
 // docker-compose / k8s service. No process is owned.
 func NewClientHTTP(baseURL string) *Client {
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{}}
+	baseURL = strings.TrimRight(baseURL, "/")
+	return &Client{baseURL: baseURL, http: &http.Client{}}
 }
 
 // RepoRef names a request's repo to anfra-node: its compile-cache identity, and
@@ -89,20 +94,32 @@ func (r RepoRef) check() error {
 	return nil
 }
 
+// readyWait is how long WaitReady waits for anfra-node; a variable so that a
+// test can wait less.
+var readyWait = 10 * time.Second
+
 // WaitReady polls /health until the sidecar answers or the deadline passes.
+//
+// At the deadline, a sidecar that anfra spawned didn't start, and its own
+// output says why. One at a URL didn't respond, so the last check's failure
+// is kept to say why.
 func (c *Client) WaitReady(ctx context.Context) error {
-	const wait = 10 * time.Second
+	wait := readyWait
 	deadline := time.Now().Add(wait)
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
-		resp, err := c.http.Do(req)
-		if err == nil {
+		resp, last := c.http.Do(req)
+		if last == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
 			}
+			last = fmt.Errorf("health check returned %s", resp.Status)
 		}
 		if time.Now().After(deadline) {
+			if c.socketPath == "" {
+				return fmt.Errorf("anfra-node at %s didn't respond within %s: %v", c.baseURL, wait, last)
+			}
 			return fmt.Errorf("anfra-node didn't start within %s", wait)
 		}
 		// Give up immediately if the caller is done; otherwise an unreachable

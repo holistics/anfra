@@ -96,7 +96,7 @@ func StartProcess(ctx context.Context, spec ProcSpec) (*Process, error) {
 		if stdin != nil {
 			stdin.Close()
 		}
-		return nil, fmt.Errorf("start %s: %w", spec.Name, err)
+		return nil, fmt.Errorf("run %s's binary: %w", spec.Name, err)
 	}
 	logger.InfoContext(ctx, "Sidecar started", logkit.EventKey, eventSpawned, "name", spec.Name, "child_pid", cmd.Process.Pid)
 	return &Process{name: spec.Name, cmd: cmd, stdin: stdin, logger: logger}, nil

@@ -21,7 +21,7 @@ func CheckOrigin(s string) error {
 		u.Path != "" || u.RawQuery != "" || u.Fragment != "" || strings.HasSuffix(s, "?") || strings.HasSuffix(s, "#") ||
 		u.Port() == "443" || strings.ContainsAny(u.Host, "* ;") || u.Host != strings.ToLower(u.Host) || !ascii(u.Host) ||
 		s != "https://"+u.Host {
-		return fmt.Errorf("%q is not an origin: write https://<host>[:<port>], with no path, wildcard or trailing slash", s)
+		return fmt.Errorf("%q isn't an origin. Write it as https://<host>[:<port>], with no path, wildcard or trailing slash", s)
 	}
 	return nil
 }

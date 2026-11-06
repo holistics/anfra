@@ -3,6 +3,7 @@ package apikit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"reflect"
@@ -218,8 +219,9 @@ func (h HTTP[Call]) serve(w http.ResponseWriter, r *http.Request, rt *Runtime, r
 	}
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
-		if _, tooLarge := errors.AsType[*http.MaxBytesError](err); tooLarge {
-			httpkit.WriteError(w, r, apperr.Encapsulate(err, apperr.InvalidRequest, "The body is larger than the limit."))
+		if tooLarge, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			httpkit.WriteError(w, r, apperr.Encapsulate(err, apperr.InvalidRequest,
+				fmt.Sprintf("The request's body is larger than %s, the most this server accepts.", byteSize(tooLarge.Limit))))
 			return
 		}
 		httpkit.WriteError(w, r, apperr.Encapsulate(err, apperr.InvalidRequest, "The body could not be read."))
@@ -386,4 +388,20 @@ func pascal(snake string) string {
 		}
 	}
 	return b.String()
+}
+
+// byteSize writes a body's limit as a reader would set it, such as 1 MiB or
+// 512 KiB, so that a caller can tell how much to send.
+func byteSize(n int64) string {
+	switch {
+	case n >= 1<<20 && n%(1<<20) == 0:
+		return fmt.Sprintf("%d MiB", n>>20)
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	case n >= 1<<10 && n%(1<<10) == 0:
+		return fmt.Sprintf("%d KiB", n>>10)
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
+	}
+	return fmt.Sprintf("%d bytes", n)
 }

@@ -12,10 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -279,5 +282,26 @@ func TestPresentationOf(t *testing.T) {
 		if got := presentationOf(registered(t, name)); got != want {
 			t.Errorf("%s: %d, want %d", name, got, want)
 		}
+	}
+}
+
+// A sidecar that doesn't start says which one in its context, as a public
+// step, and is sidecar_unavailable, so the CLI adds its help; its message is
+// its cause's, not one glued from it.
+func TestStartNeededSidecarsFailsInItsStep(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close() // nothing listens there now
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, _, err := startNeededSidecars(ctx, hostContext{cfg: sidecar.Config{NodeURL: srv.URL}}, registered(t, "search"), []byte(`{"query":["orders"]}`))
+	if !errors.Is(err, errcode.SidecarUnavailable) {
+		t.Fatalf("got %v, want sidecar_unavailable", err)
+	}
+	r := apperr.From(err).Response("")
+	if len(r.Context) != 1 || r.Context[0].Step != "anfra_cli.start_sidecar" || !strings.Contains(r.Context[0].Text, "anfra-node") {
+		t.Errorf("context %+v, want the start_sidecar step", r.Context)
+	}
+	if strings.Contains(err.Error(), "start anfra-node sidecar") {
+		t.Errorf("a glued prefix: %v", err)
 	}
 }
