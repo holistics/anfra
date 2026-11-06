@@ -35,9 +35,9 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	if e.Message == "" {
-		return fmt.Sprintf("MotherDuck answered %d", e.Status)
+		return fmt.Sprintf("MotherDuck returned %d", e.Status)
 	}
-	return fmt.Sprintf("MotherDuck answered %d: %s", e.Status, e.Message)
+	return fmt.Sprintf("MotherDuck returned %d: %s", e.Status, e.Message)
 }
 
 // NameTaken reports whether err is MotherDuck refusing a token's name, which
@@ -61,16 +61,16 @@ func (a API) CreateReadToken(ctx context.Context, session, username, name, descr
 		TokenType string `json:"token_type"`
 	}
 	if err := a.do(ctx, http.MethodPost, "/v1/users/"+url.PathEscape(username)+"/tokens", session, body, &out); err != nil {
-		return Token{}, clierr.Unreachablef(clierr.MotherDuck, err, "create a MotherDuck token: %v", err)
+		return Token{}, clierr.Unreachable(clierr.MotherDuck, err)
 	}
 	if out.ID == "" || out.Token == "" {
-		return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "create a MotherDuck token: the answer has no token")
+		return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "MotherDuck's reply has no token.")
 	}
 	if out.TokenType != "read_scaling" {
 		// Not what was asked: one that may write is not given to an org.
 		t := Token{ID: out.ID}
 		if err := a.RevokeToken(ctx, session, username, t.ID); err != nil {
-			return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "MotherDuck made a %q token, not a read-only one, and revoking it failed (%v): revoke it in MotherDuck's settings", out.TokenType, err)
+			return Token{}, clierr.Unreachablef(clierr.MotherDuck, err, "MotherDuck created the token %q as a %q token instead of a read-only one, and anfra couldn't revoke it (%v). Revoke the token in MotherDuck's settings.", name, out.TokenType, err)
 		}
 		return Token{}, clierr.Unreachablef(clierr.MotherDuck, nil, "MotherDuck made a %q token, not a read-only one; it is revoked", out.TokenType)
 	}

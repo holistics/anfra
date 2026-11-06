@@ -132,12 +132,12 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	p := cliui.NewPrinter(env.ErrOut)
 	selected := fmt.Sprintf("%d files of the repo", len(files))
 	if len(files) == 0 {
-		return Result{}, clierr.Precondition("There are no files to publish: a publish carries .aml files and Data Apps under %s/.", repoformat.AppsDir)
+		return Result{}, clierr.Precondition("Not published, because this folder has no .aml files, and no Data Apps under %s/. Run `anfra publish` in the repo's folder.", repoformat.AppsDir)
 	}
 	var err error
 	if !configured {
 		if env.SelectOrg == nil {
-			return Result{}, apperr.New(clierr.OrgNotSet, "This repo has no org to publish to: set org.url, or pass --set-org https://<server>/o/<org>. Choosing one takes an interactive terminal.")
+			return Result{}, apperr.New(clierr.OrgNotSet, "Not published, because this repo has no org to publish to. Pass --set-org with the org's address (https://<server>/o/<org>), or run `anfra publish` in a terminal to choose one.")
 		}
 		org, err = env.SelectOrg(ctx)
 		if err != nil {
@@ -180,10 +180,6 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if err := env.Validate(ctx); err != nil {
 		return Result{}, err
 	}
-	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, t: t, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
-		return Result{}, err
-	}
-	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
 
 	oids := make(map[string]string, len(files)) // path → blob id
 	sizes := make(map[string]int, len(files))
@@ -199,15 +195,21 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if err != nil {
 		return Result{}, err
 	}
+	// The org's limits are checked before anything is changed, in MotherDuck
+	// or on the org.
 	limits := status.Publish.Limits
 	if len(files) > limits.Files {
-		return Result{}, clierr.Precondition("The repo has %d files to publish; %s takes at most %d.", len(files), org, limits.Files)
+		return Result{}, clierr.Precondition("Not published, because the repo has %d files to publish, and %s takes at most %d.", len(files), org, limits.Files)
 	}
 	for _, f := range files {
 		if sizes[f] > limits.MaxFileBytes() {
-			return Result{}, clierr.Precondition("%s is %d bytes; %s takes files of at most %d.", f, sizes[f], org, limits.MaxFileBytes())
+			return Result{}, clierr.Precondition("Not published, because %s is %s, and %s takes files of at most %s.", f, byteSize(sizes[f]), org, byteSize(limits.MaxFileBytes()))
 		}
 	}
+	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, t: t, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
+		return Result{}, err
+	}
+	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
 	// What was published since this folder last published is replaced, unseen:
 	// there is no pull. So it is said, and confirmed (PUBLISH.md §anfra publish).
 	state := publishState(dir)
@@ -340,7 +342,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 			return err
 		}
 		if repoformat.BlobID(content) != oid {
-			return clierr.Precondition("%s changed while publishing: publish again.", path)
+			return clierr.Precondition("Not published, because %s changed during the publish. Publish again.", path)
 		}
 		if len(batch) == limits.UploadBlobs || size+len(content) > limits.UploadBytes {
 			if err := flush(); err != nil {

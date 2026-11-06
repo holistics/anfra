@@ -23,32 +23,35 @@ var hostnamePattern = regexp.MustCompile(`^[a-z0-9.-]+$`)
 func ParseOrigin(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u == nil {
-		return "", errors.New("invalid server origin: provide an HTTPS origin")
+		return "", errors.New("the address isn't a valid URL. Use the server's address, such as https://bi.example.com")
 	}
 	u.Scheme = strings.ToLower(u.Scheme)
 	host := strings.ToLower(u.Hostname())
-	if (u.Scheme != "https" && u.Scheme != "http") || host == "" || u.User != nil ||
-		u.Opaque != "" || (u.Path != "" && u.Path != "/") || u.RawPath != "" ||
+	if (u.Scheme != "https" && u.Scheme != "http") || host == "" {
+		return "", errors.New("the address must start with https:// and the server's host name, such as https://bi.example.com")
+	}
+	if u.User != nil || u.Opaque != "" || (u.Path != "" && u.Path != "/") || u.RawPath != "" ||
 		u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") {
-		return "", errors.New("invalid server origin: provide only an HTTPS scheme and host")
+		// Not echoed: it may hold credentials.
+		return "", errors.New("the server's address can't have credentials, a path, a query or a fragment. Use just its https:// address, such as https://bi.example.com")
 	}
 	if strings.ContainsAny(host, "%\\") {
-		return "", errors.New("invalid server origin: scoped or escaped host")
+		return "", errors.New(`the host name can't have a "%" or a "\"`)
 	}
 	if net.ParseIP(host) == nil && !hostnamePattern.MatchString(host) {
-		return "", errors.New("invalid server origin: expected an ASCII hostname or literal IP")
+		return "", errors.New("the host name must be an IP address, or have only ASCII letters, digits, dots and hyphens")
 	}
 	if u.Scheme == "http" && host != "127.0.0.1" && host != "::1" {
-		return "", errors.New("invalid server origin: HTTP requires literal 127.0.0.1 or [::1]")
+		return "", errors.New("the address must use https://, unless it's http://127.0.0.1 or http://[::1] for a server on this machine")
 	}
 	port := u.Port()
 	if strings.HasSuffix(u.Host, ":") {
-		return "", errors.New("invalid server origin: empty port")
+		return "", errors.New(`the port is empty. Remove the ":", or add the port`)
 	}
 	if port != "" {
 		n, err := strconv.Atoi(port)
 		if err != nil || n < 1 || n > 65535 {
-			return "", errors.New("invalid server origin: port must be between 1 and 65535")
+			return "", errors.New("the port must be a number from 1 to 65535")
 		}
 		port = strconv.Itoa(n)
 	}
@@ -66,7 +69,11 @@ func ParseOrigin(raw string) (string, error) {
 // ParseOrg reads the copied org address, rejecting encoded paths and unsafe origins.
 func ParseOrg(raw string) (Org, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u == nil || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") || u.RawPath != "" {
+	if err != nil || u == nil {
+		// Not echoed: it may hold credentials.
+		return Org{}, errors.New("the address isn't a valid URL. Use the org's address, such as https://bi.example.com/o/acme")
+	}
+	if u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") || u.RawPath != "" {
 		// Not echoed: it may hold credentials.
 		return Org{}, errors.New("an org address can't have credentials, a query or a fragment. Use just the org's address, such as https://bi.example.com/o/acme")
 	}
