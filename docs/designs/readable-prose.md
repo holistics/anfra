@@ -22,7 +22,7 @@ Here is the error `anfra query export --json` used to print:
 
 Every fact in it is correct. But the reader has to work out who "it" is, what "as a document" means, and how the clauses after the colon and the semicolon relate to each other. And the fix isn't stated anywhere. The reader has to infer it. Compare:
 
-> --json only works with export --link, which answers with the export's link instead of writing the file.
+> --json only works with export --link, which prints the export's link instead of writing the file.
 
 The second version starts with what the reader needs to change, and then explains why in one plain clause.
 
@@ -52,7 +52,7 @@ Before:
 
 After:
 
-> Can't change .anfra/config.yml, because .anfra/config.yml.lock exists. Another anfra may be changing it. If none is running, delete the lock file and try again.
+> can't change .anfra/config.yml, because it's locked (.anfra/config.yml.lock). Another anfra may be changing it, so try again in a moment.
 
 ## 2. Don't join ideas with colons and semicolons
 
@@ -70,7 +70,7 @@ Before:
 
 After:
 
-> Can't add %s to .gitignore, because .gitignore is a symlink and Git doesn't follow it. Add %s to the repo's ignore rules yourself.
+> Can't set up .gitignore: it's a symlink, which Git doesn't follow. Add %s to the repo's ignore rules yourself.
 
 A wrapped error chain (`create the export's file: open /tmp/x: permission denied`) is the one place colons join clauses on purpose. Each part names a step, and the colon reads as "failed because". Keep each part short, so that the chain stays easy to read.
 
@@ -107,11 +107,13 @@ Before:
 
 When the values' names speak for themselves, just list them:
 
-> Whether the anfra skills are installed for this agent. Possible values: `installed`, `not-installed`.
+> whether the anfra skills are installed for this agent. Possible values: "installed", "not-installed".
 
 When a value needs explaining, label each one:
 
-> Whether the anfra skills are installed for this agent. `installed`: it has the plugin, or a copy of the skills. `not-installed`: it has neither.
+> whether the anfra skills are installed for this agent. "installed": it has the plugin, or a copy of the skills. "not-installed": it has neither.
+
+In a `doc` tag, quote a string value as JSON does, since a Go struct tag can't hold backquotes. Write other values, such as `true` or `50`, bare.
 
 ## Considerations
 
@@ -133,7 +135,7 @@ So measure conciseness by the reader's effort, not by word count. Twelve clear w
 
 **Don't distract.** Every hint, notice and aside competes with the one thing the reader came for. Leave out anything they can't act on now, even if it's true and interesting.
 
-**Agents act literally.** An instruction in an error may be followed without judgement. Make sure following it is safe, and state the condition it depends on ("If none is running, delete the lock file"). Don't tell an agent to do something only a person should decide.
+**Agents act literally.** An instruction in an error may be followed without judgement. Make sure following it is safe, and state the condition it depends on ("Pass --yes once the user has agreed to replace it"). Don't tell an agent to do something only a person should decide.
 
 **The same text reaches different places.** A message may be printed in a terminal, logged as one line, returned as JSON over HTTP, or shown as an MCP tool result. Formatting must degrade well:
 
@@ -143,7 +145,7 @@ So measure conciseness by the reader's effort, not by word count. Twelve clear w
 
 **Be exact.** Plain words must not make the text wrong. If the simple version is wrong, keep the precise term and explain it.
 
-**Write for what really happens.** Being exact doesn't mean covering every case equally. Think about the situations readers realistically end up in, and write for those. Knowing how the code behaves tells you which situations are realistic. For example, anfra locks `.anfra/config.yml` only while it writes the file, which always takes a moment. So a lock that's still there a moment later was almost certainly left by a crash. "If none is running, remove the lock" covered every case accurately, but it asked the reader to check something they had no easy way to check. The message now says to try again in a moment, and to delete the lock if it's still there.
+**Write for what really happens.** Being exact doesn't mean covering every case equally. Think about the situations readers realistically end up in, and write for those. Knowing how the code behaves tells you which situations are realistic. For example, anfra locks `.anfra/config.yml` only while it writes the file, which always takes a moment. So a lock that's still there a moment later was almost certainly left by a crash. "If none is running, remove the lock" covered every case accurately, but it asked the reader to check something they had no easy way to check. The message now says to try again in a moment, and names the lock file in brackets, for a reader who knows to delete one left by a crash.
 
 **State the situation, not the mechanism.** The mechanism is how you work out what happened, but the reader needs only what happened: "anfra 0.19.0 was just released, and its build for linux/amd64 isn't uploaded yet", not how releases are built. Give the mechanism only when the reader needs it to get the fix right, as in "AGENTS.md is a symlink, which anfra doesn't follow". When you can't be sure of the situation, say what anfra saw instead, such as "invalid or has expired".
 
@@ -202,7 +204,7 @@ To add a word to this table, check first that no plain word would do, and decide
 
 **Warnings and notices.** Say what the reader should know and the one thing to do about it. A notice the reader can't act on is noise.
 
-**Flag and command help.** Start with a verb that says what it does ("Writes the result as JSON"). Mention the default when there is one.
+**Flag and command help.** Start a command's summary with a verb that says what it does ("Run a query, and return its rows and the SQL that produced them"). A core command's flags take their help from its `doc` tags, so they say what the value is ("the most entities to return, 50 by default"). Mention the default when there is one.
 
 **Schema descriptions (`doc` tags).** Agents read these to decide what to send and how to read what comes back. Say what the field is. List its values, and explain one only when its name doesn't say enough. Say when the field is absent if that isn't obvious from what the field is, or if a reader who didn't know could go wrong. For example, `aql` is absent for a SQL query, but `hints` needs only "what to do next, if any".
 
