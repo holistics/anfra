@@ -99,7 +99,7 @@ type initResult struct {
 	Message string     `json:"message" doc:"the outcome, in a sentence"`
 	Dir     string     `json:"dir" doc:"the repo's folder, absolute"`
 	Files   []initFile `json:"files" doc:"the repo's files init sets up"`
-	Hints   []string   `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
+	Hints   []string   `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 // initFile is a file of the repo, by its path in it, and whether init changed

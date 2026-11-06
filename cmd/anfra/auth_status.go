@@ -68,16 +68,16 @@ func statusRepoOrg(dir string) (*string, error) {
 // read offline (docs/usage/publishing.md).
 type authStatusResult struct {
 	Message string          `json:"message" doc:"the outcome, in a sentence"`
-	Orgs    []authStatusOrg `json:"orgs" doc:"each org with a saved login, and the current repo's without one"`
-	Hints   []string        `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
+	Orgs    []authStatusOrg `json:"orgs" doc:"each org with a saved login, and the current repo's org"`
+	Hints   []string        `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 // authStatusOrg is an org with a saved login, or the current repo's without
 // one.
 type authStatusOrg struct {
-	Name        string `json:"name,omitempty" doc:"the org's name, as its login saved it; absent without a login"`
+	Name        string `json:"name,omitempty" doc:"the org's name, from its saved login. Absent when no login is saved."`
 	URL         string `json:"url" doc:"the org's address"`
-	SavedLogin  string `json:"saved_login" doc:"valid; invalid when it can't be used (expired, an interrupted refresh, a damaged entry); or missing when none is saved" pretty:",tone=valid:good invalid:warn missing:warn"`
+	SavedLogin  string `json:"saved_login" doc:"the state of the org's saved login. Possible values: \"valid\", \"invalid\", \"missing\". \"invalid\" means it can't be used, for example because it has expired. \"missing\" means no login is saved for the org." pretty:",tone=valid:good invalid:warn missing:warn"`
 	CurrentRepo bool   `json:"current_repo" doc:"whether the current repo publishes to this org"`
 }
 

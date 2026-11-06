@@ -204,7 +204,7 @@ To add a word to this table, check first that no plain word would do, and decide
 
 **Flag and command help.** Start with a verb that says what it does ("Writes the result as JSON"). Mention the default when there is one.
 
-**Schema descriptions (`doc` tags).** Agents read these to decide what to send and how to read what comes back. Say what the field is. List its values, and explain one only when its name doesn't say enough. Say when the field is absent.
+**Schema descriptions (`doc` tags).** Agents read these to decide what to send and how to read what comes back. Say what the field is. List its values, and explain one only when its name doesn't say enough. Say when the field is absent if that isn't obvious from what the field is, or if a reader who didn't know could go wrong. For example, `aql` is absent for a SQL query, but `hints` needs only "what to do next, if any".
 
 **Design docs.** Open with what the thing is and why it exists, for someone who has never seen it. Put decisions and their reasons in paragraphs, and use lists and tables for the details.
 

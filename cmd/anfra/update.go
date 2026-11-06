@@ -78,11 +78,11 @@ func updateRun(cmd *cobra.Command, checkOnly bool) error {
 // and what it replaced (docs/designs/commands-and-api.md#new-state-as-output).
 type updateResult struct {
 	Message   string             `json:"message" doc:"the outcome, in a sentence"`
-	Version   string             `json:"version" doc:"the anfra installed after the command"`
+	Version   string             `json:"version" doc:"the anfra version installed after the command"`
 	Update    command.UpdateInfo `json:"update" doc:"the latest release, checked now"`
-	Previous  string             `json:"previous,omitempty" doc:"the version the update replaced. Absent when it installed no update."`
+	Previous  string             `json:"previous,omitempty" doc:"the version the update replaced"`
 	Changelog string             `json:"changelog" doc:"the changelog as of the latest release: what it brings, and every release before it"`
-	Hints     []string           `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
+	Hints     []string           `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 // runUpdate checks for the latest release and, unless checkOnly, installs it.

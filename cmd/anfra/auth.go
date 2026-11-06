@@ -33,7 +33,7 @@ type authLogoutResult struct {
 	OrgURL                    string   `json:"org_url" doc:"the org signed out of"`
 	LocalRemoved              bool     `json:"local_removed" doc:"whether no login for the org is saved here anymore"`
 	RemoteRevocationConfirmed bool     `json:"remote_revocation_confirmed" doc:"whether the org's server revoked the login"`
-	Hints                     []string `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
+	Hints                     []string `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 func newAuthCmd() *cobra.Command {
