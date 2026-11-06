@@ -140,7 +140,7 @@ components:
             type: string
           type: array
         query:
-          description: the catalog search the lineage is
+          description: the search query that finds the lineage
           type: string
         schema:
           $ref: "#/components/schemas/DiagramSchema"
@@ -166,7 +166,7 @@ components:
       additionalProperties: false
       properties:
         detached:
-          description: its type is not a top-level one, but its container is not in the lineage
+          description: whether the card's entity is usually nested in another card, but its container isn't in the lineage
           type: boolean
         id:
           description: the catalog's id of the entity
@@ -186,7 +186,7 @@ components:
           description: the entity's properties
           type: object
         ref:
-          description: the entity this node is a copy of
+          description: the id of the entity this node is a copy of, such as the model's field behind a dataset's field
           type: string
         sections:
           description: the node's children, grouped by type
@@ -261,7 +261,7 @@ components:
           description: the entity's properties
           type: object
         ref:
-          description: the entity this node is a copy of
+          description: the id of the entity this node is a copy of, such as the model's field behind a dataset's field
           type: string
         sections:
           description: the node's children, grouped by type
@@ -795,7 +795,7 @@ components:
       additionalProperties: false
       properties:
         aggregation:
-          description: the condition applies to this aggregate of field, such as sum
+          description: the aggregation to apply to the field before filtering, such as sum
           type: string
         field:
           description: model.field for a dataset field, or the name of a dataset metric
@@ -807,7 +807,7 @@ components:
           description: the operator, such as is, contains, between, last
           type: string
         values:
-          description: "the operator's values, by the field's type: a number as a string in JSON's number syntax, such as \"9007199254740993\" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none"
+          description: the operator's values, empty for an operator that takes none. Write a number as a string, such as "9007199254740993", because a JSON number may have lost digits and is refused. Write a date or text as a string too, and a truefalse value as true or false.
           items: {}
           type: array
       required:
@@ -1012,7 +1012,7 @@ components:
             $ref: "#/components/schemas/QueryCondition"
           type: array
         dateDrills:
-          description: date fields redrawn at another grain, their columns' names kept
+          description: grain changes on date fields. The fields keep their column names.
           items:
             $ref: "#/components/schemas/QueryDateDrill"
           type: array
@@ -1201,12 +1201,12 @@ components:
         label:
           type: string
         metrics:
-          description: the dataset's metrics; absent in outline
+          description: the dataset's metrics. Absent when the dataset is shown in outline.
           items:
             $ref: "#/components/schemas/ShowField"
           type: array
         models:
-          description: the models the dataset uses; absent in outline
+          description: the models the dataset uses. Absent when the dataset is shown in outline.
           items:
             $ref: "#/components/schemas/ShowModel"
           type: array
@@ -1241,7 +1241,7 @@ components:
         label:
           type: string
         name:
-          description: AQL writes <model fqn>.<name>; a metric, its name alone
+          description: the field's or metric's name. AQL writes a field as <model fqn>.<name>, and a metric by its name alone.
           type: string
         role:
           enum:
@@ -1298,7 +1298,7 @@ components:
       additionalProperties: false
       properties:
         datasets:
-          description: the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why
+          description: the repo's datasets, each in full, or in outline (without its models and metrics) when the dataset can't be shown in full. A diagnostic then says why.
           items:
             $ref: "#/components/schemas/ShowDataset"
           type: array
@@ -1314,7 +1314,7 @@ components:
       additionalProperties: false
       properties:
         diagnostics:
-          description: "what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete"
+          description: the problems in the repo that affect what is shown, such as files that don't compile, a dataset's data source that isn't configured, or a dataset that can't be shown in full. Empty when what is shown is complete.
           items:
             $ref: "#/components/schemas/CompileError"
           type: array
@@ -1411,7 +1411,7 @@ components:
         phase:
           type: string
         position:
-          description: "while queued: how many runs are ahead of this one, 0 being next; absent otherwise"
+          description: while the run is queued, how many runs are ahead of it. 0 means it is next. Absent for other phases, or when its place in line isn't known.
           format: int64
           type: integer
         type:

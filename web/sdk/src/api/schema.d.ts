@@ -290,7 +290,7 @@ export interface components {
             layers: components["schemas"]["DiagramLayer"][];
             /** @description the ids of this page's matched entities, in search order */
             matched: string[];
-            /** @description the catalog search the lineage is */
+            /** @description the search query that finds the lineage */
             query: string;
             schema: components["schemas"]["DiagramSchema"];
             /**
@@ -305,7 +305,7 @@ export interface components {
             version: 2;
         };
         DiagramCard: {
-            /** @description its type is not a top-level one, but its container is not in the lineage */
+            /** @description whether the card's entity is usually nested in another card, but its container isn't in the lineage */
             detached?: boolean;
             /** @description the catalog's id of the entity */
             id: string;
@@ -318,7 +318,7 @@ export interface components {
             props?: {
                 [key: string]: unknown;
             };
-            /** @description the entity this node is a copy of */
+            /** @description the id of the entity this node is a copy of, such as the model's field behind a dataset's field */
             ref?: string;
             /** @description the node's children, grouped by type */
             sections?: components["schemas"]["DiagramSection"][];
@@ -353,7 +353,7 @@ export interface components {
             props?: {
                 [key: string]: unknown;
             };
-            /** @description the entity this node is a copy of */
+            /** @description the id of the entity this node is a copy of, such as the model's field behind a dataset's field */
             ref?: string;
             /** @description the node's children, grouped by type */
             sections?: components["schemas"]["DiagramSection"][];
@@ -614,7 +614,7 @@ export interface components {
             grain: string;
         };
         QueryFilter: {
-            /** @description the condition applies to this aggregate of field, such as sum */
+            /** @description the aggregation to apply to the field before filtering, such as sum */
             aggregation?: string;
             /** @description model.field for a dataset field, or the name of a dataset metric */
             field: string;
@@ -622,7 +622,7 @@ export interface components {
             modifier?: string;
             /** @description the operator, such as is, contains, between, last */
             operator: string;
-            /** @description the operator's values, by the field's type: a number as a string in JSON's number syntax, such as "9007199254740993" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none */
+            /** @description the operator's values, empty for an operator that takes none. Write a number as a string, such as "9007199254740993", because a JSON number may have lost digits and is refused. Write a date or text as a string too, and a truefalse value as true or false. */
             values: unknown[];
         };
         QueryHeader: {
@@ -733,7 +733,7 @@ export interface components {
         QueryTransforms: {
             /** @description AQL conditions ANDed with the query's own filters */
             conditions?: components["schemas"]["QueryCondition"][];
-            /** @description date fields redrawn at another grain, their columns' names kept */
+            /** @description grain changes on date fields. The fields keep their column names. */
             dateDrills?: components["schemas"]["QueryDateDrill"][];
             /** @description conditions on fields, ANDed with the query's own filters */
             filters?: components["schemas"]["QueryFilter"][];
@@ -824,9 +824,9 @@ export interface components {
              */
             kind: "dataset";
             label?: string;
-            /** @description the dataset's metrics; absent in outline */
+            /** @description the dataset's metrics. Absent when the dataset is shown in outline. */
             metrics?: components["schemas"]["ShowField"][];
-            /** @description the models the dataset uses; absent in outline */
+            /** @description the models the dataset uses. Absent when the dataset is shown in outline. */
             models?: components["schemas"]["ShowModel"][];
             name: string;
         };
@@ -844,7 +844,7 @@ export interface components {
             fqn: string;
             hidden: boolean;
             label?: string;
-            /** @description AQL writes <model fqn>.<name>; a metric, its name alone */
+            /** @description the field's or metric's name. AQL writes a field as <model fqn>.<name>, and a metric by its name alone. */
             name: string;
             /** @enum {string} */
             role: "dimension" | "measure" | "param" | "metric";
@@ -870,7 +870,7 @@ export interface components {
             name: string;
         };
         ShowRepo: {
-            /** @description the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why */
+            /** @description the repo's datasets, each in full, or in outline (without its models and metrics) when the dataset can't be shown in full. A diagnostic then says why. */
             datasets: components["schemas"]["ShowDataset"][];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -879,7 +879,7 @@ export interface components {
             kind: "repo";
         };
         ShowResult: {
-            /** @description what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete */
+            /** @description the problems in the repo that affect what is shown, such as files that don't compile, a dataset's data source that isn't configured, or a dataset that can't be shown in full. Empty when what is shown is complete. */
             diagnostics: components["schemas"]["CompileError"][];
             /** @description the object shown, by kind; a client must accept a kind it does not know */
             object: components["schemas"]["ShowRepo"] | components["schemas"]["ShowDataset"];
@@ -927,7 +927,7 @@ export interface components {
             phase: string;
             /**
              * Format: int64
-             * @description while queued: how many runs are ahead of this one, 0 being next; absent otherwise
+             * @description while the run is queued, how many runs are ahead of it. 0 means it is next. Absent for other phases, or when its place in line isn't known.
              */
             position?: number;
             /**

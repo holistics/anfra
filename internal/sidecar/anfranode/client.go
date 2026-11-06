@@ -352,7 +352,7 @@ type QueryTransforms struct {
 	Filters    []QueryFilter    `json:"filters,omitempty" doc:"conditions on fields, ANDed with the query's own filters"`
 	Conditions []QueryCondition `json:"conditions,omitempty" doc:"AQL conditions ANDed with the query's own filters"`
 	Sorts      []QuerySort      `json:"sorts,omitempty" doc:"sorts by result column, replacing the query's own"`
-	DateDrills []QueryDateDrill `json:"dateDrills,omitempty" doc:"date fields redrawn at another grain, their columns' names kept"`
+	DateDrills []QueryDateDrill `json:"dateDrills,omitempty" doc:"grain changes on date fields. The fields keep their column names."`
 }
 
 // IsZero reports transforms that change nothing: none of each.
@@ -363,9 +363,9 @@ func (t QueryTransforms) IsZero() bool {
 type QueryFilter struct {
 	Field       string `json:"field" doc:"model.field for a dataset field, or the name of a dataset metric"`
 	Operator    string `json:"operator" doc:"the operator, such as is, contains, between, last"`
-	Values      []any  `json:"values" doc:"the operator's values, by the field's type: a number as a string in JSON's number syntax, such as \"9007199254740993\" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none"`
+	Values      []any  `json:"values" doc:"the operator's values, empty for an operator that takes none. Write a number as a string, such as \"9007199254740993\", because a JSON number may have lost digits and is refused. Write a date or text as a string too, and a truefalse value as true or false."`
 	Modifier    string `json:"modifier,omitempty" doc:"the date unit of a relative operator, such as day"`
-	Aggregation string `json:"aggregation,omitempty" doc:"the condition applies to this aggregate of field, such as sum"`
+	Aggregation string `json:"aggregation,omitempty" doc:"the aggregation to apply to the field before filtering, such as sum"`
 }
 
 type QueryCondition struct {
