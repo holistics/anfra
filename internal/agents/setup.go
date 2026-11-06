@@ -32,14 +32,14 @@ type Report struct {
 	Skills   LatestSkills   `json:"skills" doc:"the latest anfra skills version"`
 	Agents   []AgentState   `json:"agents" doc:"each agent, and where its skills come from"`
 	Copies   []CopyState    `json:"copies" doc:"each folder of copies of the skills"`
-	AgentsMD *AgentsMDState `json:"agents_md" doc:"the repo's anfra block in AGENTS.md; null outside an anfra repo" pretty:"AGENTS.md"`
+	AgentsMD *AgentsMDState `json:"agents_md" doc:"the repo's anfra block in AGENTS.md. Null outside an anfra repo." pretty:"AGENTS.md"`
 }
 
 // LatestSkills is the latest anfra skills version, from the background check,
 // as `anfra version` names it; null until the check has run.
 type LatestSkills struct {
-	Latest    *string    `json:"latest" doc:"the latest anfra skills version, from the background check; null until it has run"`
-	CheckedAt *time.Time `json:"checked_at" doc:"when it was checked" pretty:",moment"`
+	Latest    *string    `json:"latest" doc:"the latest anfra skills version. Null when it isn't known."`
+	CheckedAt *time.Time `json:"checked_at" doc:"when anfra last checked for the latest version" pretty:",moment"`
 }
 
 // AgentState is where an agent's skills come from: the plugin, through its
@@ -55,7 +55,7 @@ type AgentState struct {
 	// InstallFrom is where to install the skills from: its README section;
 	// absent when they're installed. Not in the pretty format, where a hint
 	// says it, so the agents' table fits a terminal.
-	InstallFrom string `json:"install_from,omitempty" doc:"where to install the skills from; absent when they're installed" pretty:"-"`
+	InstallFrom string `json:"install_from,omitempty" doc:"a link to the instructions for installing the skills for this agent" pretty:"-"`
 }
 
 // AgentStatus is whether an agent has the anfra skills.
@@ -68,30 +68,30 @@ const (
 
 // PluginState is an installed plugin against the latest skills.
 type PluginState struct {
-	Scope   string `json:"scope" doc:"the plugin's scope"`
+	Scope   string `json:"scope" doc:"the scope the agent installed the plugin at, such as \"user\" or \"project\""`
 	Version string `json:"version" doc:"the plugin's skills version"`
-	Status  string `json:"status" doc:"latest, behind, or unknown against an unknown latest" pretty:",tone=latest:good behind:warn unknown:warn"`
+	Status  string `json:"status" doc:"how the plugin's version compares with the latest. Possible values: \"latest\", \"behind\", \"unknown\". \"unknown\" means the latest version isn't known." pretty:",tone=latest:good behind:warn unknown:warn"`
 }
 
 // CopyState is a folder of copies of the skills against the latest.
 type CopyState struct {
 	Dir             string          `json:"dir" doc:"the folder"`
-	Status          string          `json:"status" doc:"latest, behind, mixed when its skills' versions differ, unknown against an unknown latest, or deprecated when it has only skills of the old names" pretty:",tone=latest:good behind:warn mixed:warn unknown:warn deprecated:bad"`
+	Status          string          `json:"status" doc:"how the folder's skills compare with the latest version. Possible values: \"latest\", \"behind\", \"mixed\", \"unknown\", \"deprecated\". \"mixed\" means its skills are at different versions. \"unknown\" means the latest version isn't known. \"deprecated\" means all its skills have the names from before 0.15.0." pretty:",tone=latest:good behind:warn mixed:warn unknown:warn deprecated:bad"`
 	Versions        []SkillsVersion `json:"versions" doc:"its skills by version, oldest first"`
 	DeprecatedNames bool            `json:"deprecated_names" doc:"whether it has skills of the names from before 0.15.0, which an agent loads next to the new ones"`
 }
 
 // SkillsVersion is the skills of a copy at one version, oldest first.
 type SkillsVersion struct {
-	Version *string  `json:"version" doc:"the version; null for skills with no version stamp"`
-	Skills  []string `json:"skills" doc:"the skills at it"`
+	Version *string  `json:"version" doc:"the version. Null for skills with no version stamp."`
+	Skills  []string `json:"skills" doc:"the names of the skills at this version"`
 }
 
 // AgentsMDState is the repo's anfra block in AGENTS.md.
 type AgentsMDState struct {
 	Block    BlockState    `json:"block" doc:"missing, outdated, up-to-date, or unreadable" pretty:",tone=up-to-date:good missing:warn outdated:warn unreadable:bad"`
-	ClaudeMD ClaudeMDState `json:"claude_md" doc:"whether AGENTS.md is imported in the repo's CLAUDE.md: imported, not-imported, or absent when it has none" pretty:"CLAUDE.md,tone=imported:good not-imported:warn"`
-	Message  string        `json:"message,omitempty" doc:"why it's unreadable; absent otherwise"`
+	ClaudeMD ClaudeMDState `json:"claude_md" doc:"whether the repo's CLAUDE.md imports AGENTS.md. Possible values: \"imported\", \"not-imported\", \"absent\". \"absent\" means the repo has no CLAUDE.md." pretty:"CLAUDE.md,tone=imported:good not-imported:warn"`
+	Message  string        `json:"message,omitempty" doc:"why AGENTS.md or CLAUDE.md can't be read"`
 }
 
 // ClaudeMDState is a repo's CLAUDE.md, against the import of AGENTS.md
@@ -113,7 +113,7 @@ const BlockUnreadable BlockState = "unreadable"
 type CheckResult struct {
 	Message string `json:"message" doc:"the outcome, in a sentence"`
 	Report  `json:",inline"`
-	Hints   []string `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
+	Hints   []string `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 // SetupResult is setup's result: what it did, then the Report as it leaves
@@ -123,13 +123,13 @@ type SetupResult struct {
 	Message string       `json:"message" doc:"the outcome, in a sentence"`
 	Setup   SetupActions `json:"setup" doc:"what setup did"`
 	Report  `json:",inline"`
-	Hints   []string `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
+	Hints   []string `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 // SetupActions are what setup did.
 type SetupActions struct {
 	Agents   []AgentSetup   `json:"agents" doc:"what setup did for each agent"`
-	AgentsMD *AgentsMDSetup `json:"agents_md" doc:"what setup wrote of the anfra block; null outside an anfra repo" pretty:"AGENTS.md"`
+	AgentsMD *AgentsMDSetup `json:"agents_md" doc:"what setup wrote to AGENTS.md and CLAUDE.md. Null outside an anfra repo." pretty:"AGENTS.md"`
 }
 
 // AgentSetup is what setup did for one agent.
@@ -156,7 +156,7 @@ const (
 type AgentsMDSetup struct {
 	WroteBlock  bool   `json:"wrote_block" doc:"whether it wrote the anfra block"`
 	WroteImport bool   `json:"wrote_import" doc:"whether it wrote @AGENTS.md in CLAUDE.md"`
-	Message     string `json:"message,omitempty" doc:"why it couldn't write them; absent when it could"`
+	Message     string `json:"message,omitempty" doc:"why setup couldn't write the anfra block or @AGENTS.md in CLAUDE.md"`
 	// importFailed: the failure in Message is CLAUDE.md's, so that setup's
 	// message doesn't call the block unwritten.
 	importFailed bool
