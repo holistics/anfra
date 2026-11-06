@@ -177,7 +177,7 @@ components:
           format: int64
           type: integer
         links:
-          description: the node's links; a link is on its edge's from entity
+          description: the links that start at this node
           items:
             $ref: "#/components/schemas/DiagramLink"
           type: array
@@ -252,7 +252,7 @@ components:
         label:
           type: string
         links:
-          description: the node's links; a link is on its edge's from entity
+          description: the links that start at this node
           items:
             $ref: "#/components/schemas/DiagramLink"
           type: array
@@ -639,7 +639,7 @@ components:
           minLength: 1
           type: string
         timezone:
-          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
           type: string
       required:
         - query
@@ -888,7 +888,7 @@ components:
             $ref: "#/components/schemas/Column"
           type: array
         has_more:
-          description: "there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"
+          description: whether there may be rows after this page. To get them, ask for the next page, or export the query.
           type: boolean
         result:
           $ref: "#/components/schemas/QueryRows"
@@ -941,12 +941,12 @@ components:
             - sql
           type: string
         page:
-          description: the 1-based page of rows to answer; needs a page size
+          description: the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size.
           format: int64
           minimum: 1
           type: integer
         page_size:
-          description: rows per page; alone, the first page
+          description: how many rows a page has, for AQL only
           format: int64
           maximum: 10000
           minimum: 1
@@ -956,7 +956,7 @@ components:
           minLength: 1
           type: string
         timezone:
-          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
           type: string
       required:
         - query
@@ -1150,7 +1150,7 @@ components:
       additionalProperties: false
       properties:
         limit:
-          description: at most this many entities; absent, 50
+          description: the most entities to return, 50 by default
           format: int64
           maximum: 100
           minimum: 1
@@ -1251,7 +1251,7 @@ components:
             - metric
           type: string
         type:
-          description: the compiled data type, such as number, text, date, datetime, truefalse
+          description: the field's semantic type, such as number, text, date, datetime, or truefalse
           type: string
       required:
         - fqn
@@ -1613,7 +1613,7 @@ paths:
                   - error
                 type: object
           description: sidecar_unavailable
-      summary: Build the local search catalog from context sources
+      summary: Build the local search catalog from the repo's context sources
       x-destructive: true
       x-idempotent: true
       x-read-only: false
@@ -1687,9 +1687,11 @@ paths:
   /core.query:
     post:
       description: |-
-        Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
-        Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
-        Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.
+        Run a query, and return a page of its rows and the SQL that produced them.
+
+        A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+
+        Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.
       operationId: core.query
       requestBody:
         content:
@@ -1777,7 +1779,7 @@ paths:
                   - error
                 type: object
           description: sidecar_unavailable
-      summary: "Run a query: its rows, and the SQL that produced them"
+      summary: Run a query, and return its rows and the SQL that produced them
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -1849,10 +1851,7 @@ paths:
       x-read-only: true
   /core.query.export:
     post:
-      description: |-
-        Export a query's whole result as a file: a link to download it.
-
-        The query runs to completion before the answer, so a query that fails fails here. The CLI downloads the file, to stdout or --output; --link prints the answer instead.
+      description: Export a query's whole result as a file, and return a link to download it once the file is ready.
       operationId: core.query.export
       requestBody:
         content:
@@ -1925,7 +1924,7 @@ paths:
                   - error
                 type: object
           description: sidecar_unavailable
-      summary: "Export a query's whole result as a file: a link to download it"
+      summary: Export a query's whole result as a file to download
       x-destructive: false
       x-idempotent: false
       x-read-only: false

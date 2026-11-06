@@ -112,9 +112,12 @@ func (m MCP[Call]) server(ctx context.Context, rt *Runtime, reg OpSet[Call], req
 		if input["type"] == nil {
 			input["type"] = "object" // MCP requires an object schema, even for no input
 		}
+		// The description is the op's doc when it has one, as a CLI's --help
+		// shows it: a doc stands alone, opening with what the summary says, so
+		// adding the summary would load that sentence twice in every session.
 		description := meta.Summary
 		if meta.Doc != "" {
-			description += "\n\n" + meta.Doc
+			description = meta.Doc
 		}
 		readOnly, idempotent := meta.ReadOnly, meta.Idempotent
 		var destructive *bool // meaningless, so unset, for a read-only op

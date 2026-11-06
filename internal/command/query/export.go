@@ -25,10 +25,8 @@ import (
 // download it. See docs/designs/exports.md.
 var Export = command.Define(command.Def[ExportInput, command.ExportLink]{
 	Name:  "query.export",
-	Short: "Export a query's whole result as a file: a link to download it",
-	Long: "Export a query's whole result as a file: a link to download it.\n\n" +
-		"The query runs to completion before the answer, so a query that fails fails here. " +
-		"The CLI downloads the file, to stdout or --output; --link prints the answer instead.",
+	Short: "Export a query's whole result as a file to download",
+	Long:  "Export a query's whole result as a file, and return a link to download it once the file is ready.",
 	// It changes something (a file, a link), but only adds it.
 	NonDestructive: true,
 	Timeout:        30 * time.Minute,
@@ -46,7 +44,7 @@ var Export = command.Define(command.Def[ExportInput, command.ExportLink]{
 type ExportInput struct {
 	QueryInput
 	Input         anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
-	Timezone      string                    `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
+	Timezone      string                    `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"`
 	Format        string                    `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
 	FormatOptions ExportFormatOptions       `json:"format_options,omitempty" doc:"the format's options"`
 	Filename      string                    `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`

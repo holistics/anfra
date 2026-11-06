@@ -33,13 +33,13 @@ func ParseOrigin(raw string) (string, error) {
 	if u.User != nil || u.Opaque != "" || (u.Path != "" && u.Path != "/") || u.RawPath != "" ||
 		u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") {
 		// Not echoed: it may hold credentials.
-		return "", errors.New("the server's address can't have credentials, a path, a query or a fragment. Use just its https:// address, such as https://bi.example.com")
+		return "", errors.New("the server's address can't have credentials, a path, a query, or a fragment. Use just its https:// address, such as https://bi.example.com")
 	}
 	if strings.ContainsAny(host, "%\\") {
 		return "", errors.New(`the host name can't have a "%" or a "\"`)
 	}
 	if net.ParseIP(host) == nil && !hostnamePattern.MatchString(host) {
-		return "", errors.New("the host name must be an IP address, or have only ASCII letters, digits, dots and hyphens")
+		return "", errors.New("the host name must be an IP address, or have only ASCII letters, digits, dots, and hyphens")
 	}
 	if u.Scheme == "http" && host != "127.0.0.1" && host != "::1" {
 		return "", errors.New("the address must use https://, unless it's http://127.0.0.1 or http://[::1] for a server on this machine")
@@ -75,7 +75,7 @@ func ParseOrg(raw string) (Org, error) {
 	}
 	if u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") || u.RawPath != "" {
 		// Not echoed: it may hold credentials.
-		return Org{}, errors.New("an org address can't have credentials, a query or a fragment. Use just the org's address, such as https://bi.example.com/o/acme")
+		return Org{}, errors.New("an org address can't have credentials, a query, or a fragment. Use just the org's address, such as https://bi.example.com/o/acme")
 	}
 	slug, ok := strings.CutPrefix(strings.TrimSuffix(u.Path, "/"), "/o/")
 	// An org's name is lowercase, so /o/Acme is acme, as the host's case is

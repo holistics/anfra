@@ -117,7 +117,7 @@ type ShowField struct {
 	Label            string `json:"label,omitempty"`
 	Description      string `json:"description,omitempty"`
 	Role             string `json:"role" enum:"dimension,measure,param,metric"`
-	Type             string `json:"type" doc:"the compiled data type, such as number, text, date, datetime, truefalse"`
+	Type             string `json:"type" doc:"the field's semantic type, such as number, text, date, datetime, or truefalse"`
 	Aggregation      string `json:"aggregation,omitempty" doc:"a measure's aggregation, such as sum or count distinct; custom for a custom one"`
 	Hidden           bool   `json:"hidden"`
 	Format           any    `json:"format,omitzero" doc:"how a value displays, as the AML declares it"`

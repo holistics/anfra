@@ -241,7 +241,7 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 		if output.pretty {
 			switch {
 			case output.yaml || output.json || output.jq != "":
-				return flagViolated("--pretty", "--pretty can't be combined with --yaml, --json or --jq. Pass one format.")
+				return flagViolated("--pretty", "--pretty can't be combined with --yaml, --json, or --jq. Pass one format.")
 			case cmd.Annotations[outputKind] == outputArtifact:
 				return artifactRefused(cmd, "--pretty")
 			case cmd.Annotations[prettyView] == "":

@@ -20,7 +20,7 @@ type QueryResult struct {
 	AQL     string    `json:"aql,omitempty" pretty:"-" doc:"the AQL that ran: the query with its Query Input applied; absent for a SQL query"`
 	Columns []Column  `json:"columns" pretty:"-" doc:"one per field of result, in order"`
 	Result  QueryRows `json:"result" pretty:",inline"`
-	HasMore bool      `json:"has_more" doc:"there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"`
+	HasMore bool      `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
 	Timings Timings   `json:"timings" pretty:",view=timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
 }
 

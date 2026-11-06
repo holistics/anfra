@@ -43,7 +43,7 @@ Write for someone who has just hit this message or opened this doc. They don't k
 - **Lead with what matters to the reader.** In an error, that's what went wrong or what to change. In a doc, it's what the thing is and when you'd use it. Background comes after.
 - **Say what to do.** If the reader can fix it, tell them how, with the exact command or flag. Don't leave the fix to be inferred from the cause.
 - **Write whole sentences.** Give each sentence a subject and a verb. "Not a regular file" leaves the reader to guess which file. "`.gitignore` is a symlink" doesn't.
-- **Use the reader's words, not anfra's internals.** Words like "answers", "as a document", "door", "sidecar" and "op" mean something precise inside anfra and nothing to a newcomer. Say "prints", "returns" or "the CLI and the API", or explain the term the first time you use it.
+- **Use the reader's words, not anfra's internals.** Words like "answers", "as a document", "door", "sidecar", and "op" mean something precise inside anfra and nothing to a newcomer. Say "prints", "returns", or "the CLI and the API", or explain the term the first time you use it.
 - **Name things instead of pointing at them.** Avoid "it", "one" and "that" when the reader could pick the wrong thing. Repeating a noun is better than an ambiguous pronoun.
 
 Before:
@@ -62,6 +62,7 @@ A colon or a semicolon lets a writer glue two thoughts together without saying h
 - **Don't use semicolons in messages.** Write two sentences instead.
 - **Say how the ideas relate.** Use "because", "so", "but", "if", "which" or "instead of". These words are the whole point of the sentence, so don't leave them out.
 - **Keep one idea per sentence.** If a sentence needs more than one comma-separated aside, split it.
+- **Put a comma before the "and" or "or" that ends a list of three or more:** "number, text, date, or truefalse". The reader never has to check where an item ends, and the writer never has to decide.
 
 Before:
 
@@ -93,7 +94,7 @@ To get it right:
 Formatting makes the shape of the text visible, so the reader doesn't have to parse it out of punctuation.
 
 - **Paragraphs.** Give each paragraph one topic. A long paragraph is often two or three.
-- **Bullets.** Use them for three or more parallel items, such as options, conditions or steps. Use numbered lists when the order matters.
+- **Bullets.** Use them for three or more parallel items, such as options, conditions, or steps. Use numbered lists when the order matters.
 - **Tables.** Use them when several things are compared along the same attributes.
 - **Headings.** In a doc, use them so a reader can skim to what they need.
 - **Code formatting.** Put commands, flags, paths and values in backquotes, so the reader can tell them apart from prose and copy them.
@@ -197,7 +198,7 @@ To add a word to this table, check first that no plain word would do, and decide
 
 ## By kind of text
 
-**Error messages.** Say what went wrong in the reader's terms. Then say why, if the reason helps them fix it. Then say what to do. Name the flag, file or value at fault.
+**Error messages.** Say what went wrong in the reader's terms. Then say why, if the reason helps them fix it. Then say what to do. Name the flag, file, or value at fault.
 
 **Warnings and notices.** Say what the reader should know and the one thing to do about it. A notice the reader can't act on is noise.
 

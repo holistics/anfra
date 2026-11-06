@@ -18,7 +18,7 @@ import (
 // Ingest builds the local search catalog from context sources.
 var Ingest = command.Define(command.Def[IngestInput, string]{
 	Name:       "ingest",
-	Short:      "Build the local search catalog from context sources",
+	Short:      "Build the local search catalog from the repo's context sources",
 	Idempotent: true, // rebuilds the same catalog
 	Timeout:    30 * time.Minute,
 	Needs:      func(IngestInput) command.Sidecars { return command.Sidecars{Node: true, CanalQuery: true} },
@@ -59,7 +59,7 @@ func (IngestInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema
 // SearchInput is search's input: the query, and the page of what it matches.
 type SearchInput struct {
 	Query  []string `json:"query,omitempty" cli:"positional" doc:"search query"`
-	Limit  int      `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"at most this many entities; absent, 50"`
+	Limit  int      `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"the most entities to return, 50 by default"`
 	Offset int      `json:"offset,omitempty" minimum:"0" doc:"skip this many entities first, to page with limit"`
 }
 

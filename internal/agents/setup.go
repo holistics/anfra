@@ -49,7 +49,7 @@ type AgentState struct {
 	// the same to a person, and --help lists the ids.
 	ID      string        `json:"id" doc:"the agent, as --agent takes it" pretty:"-"`
 	Name    string        `json:"name" doc:"the agent's name"`
-	Status  AgentStatus   `json:"status" doc:"installed, when it has a plugin or copies; or not-installed" pretty:",tone=installed:good not-installed:warn"`
+	Status  AgentStatus   `json:"status" doc:"whether the anfra skills are installed for this agent. Possible values: \"installed\", \"not-installed\"." pretty:",tone=installed:good not-installed:warn"`
 	Plugins []PluginState `json:"plugins" doc:"its plugins, installed through its CLI"`
 	Copies  []string      `json:"copies" doc:"the folders it reads that hold anfra skills"`
 	// InstallFrom is where to install the skills from: its README section;
