@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/sidecar"
@@ -351,4 +352,28 @@ func shortTempDir(t *testing.T) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
+}
+
+// A canal-query at a URL that never turns healthy fails with the URL and the
+// last check's failure, so the reader knows which canal-query and why; one
+// anfra spawned says it didn't start, as its own output has the reason.
+func TestWaitReadyNamesTheLastFailure(t *testing.T) {
+	defer func(w time.Duration) { readyWait = w }(readyWait)
+	readyWait = 100 * time.Millisecond
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	err := NewClient(srv.URL, false).WaitReady(context.Background())
+	want := "canal-query at " + srv.URL + " didn't respond within 100ms: health check returned 503 Service Unavailable"
+	if err == nil || err.Error() != want {
+		t.Errorf("at a URL: %v, want %q", err, want)
+	}
+
+	err = NewClientUnix(t.TempDir()+"/none.sock", false).WaitReady(context.Background())
+	if err == nil || err.Error() != "canal-query didn't start within 100ms" {
+		t.Errorf("spawned: %v, want it didn't start", err)
+	}
 }

@@ -60,7 +60,7 @@ func New(ttl time.Duration) *Files {
 // of old files in the temp directory), and the next export makes it again.
 func (fs *Files) prepare() error {
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
-		return fmt.Errorf("create the exports folder %s: %w (set TMPDIR to put it elsewhere)", Dir(), err)
+		return fmt.Errorf("create the exports folder in the temp folder (TMPDIR): %w", err)
 	}
 	fs.swept.Do(func() { fs.Sweep(time.Now()) })
 	return nil
@@ -123,7 +123,7 @@ func (s Store) Create(_ context.Context, filename, contentType string) (command.
 	}
 	f, err := os.OpenFile(filepath.Join(Dir(), token), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("create the export's file: %w (set TMPDIR to put exports elsewhere)", err)
+		return nil, err // the export command names the step
 	}
 	return &export{File: f, store: s, token: token, filename: filename, contentType: contentType}, nil
 }

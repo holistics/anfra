@@ -377,12 +377,12 @@ func Connect(ctx context.Context, nodeURL, canalQueryURL string, opts ...Connect
 
 	node := anfranode.New(cfg)
 	if err := node.Start(ctx); err != nil {
-		return Clients{}, nil, fmt.Errorf("engine.Connect: anfra-node at %s: %w", nodeURL, err)
+		return Clients{}, nil, fmt.Errorf("engine.Connect: %w", err)
 	}
 	canal := canalquery.New(cfg)
 	if err := canal.Start(ctx); err != nil {
 		node.Close(ctx)
-		return Clients{}, nil, fmt.Errorf("engine.Connect: canal-query at %s: %w", canalQueryURL, err)
+		return Clients{}, nil, fmt.Errorf("engine.Connect: %w", err)
 	}
 
 	clients := Clients{Node: node.Client(), CanalQuery: canal.Client()}

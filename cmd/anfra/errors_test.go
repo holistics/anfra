@@ -277,11 +277,11 @@ func TestPrettyError(t *testing.T) {
 // with the one before it.
 func TestMessageParts(t *testing.T) {
 	for msg, want := range map[string][]string{
-		"start anfra-node sidecar: resolve anfra-node binary: no embedded anfra-node; set ANFRA_NODE_BIN": {"start anfra-node sidecar: resolve anfra-node binary", "no embedded anfra-node; set ANFRA_NODE_BIN"}, // 3 words: joined
-		`apps/a.html: line 3: "x.png" is a file beside the app`:                                           {"apps/a.html: line 3", `"x.png" is a file beside the app`},
-		"download the export: exit status 1":                                                              {"download the export: exit status 1"},
-		"Some of the input is not valid.":                                                                 {"Some of the input is not valid."},
-		"see https://example.com/a at 12:30 today":                                                        {"see https://example.com/a at 12:30 today"},
+		"resolve anfra-node binary: unpack anfra-node into anfra's folder (ANFRA_HOME): mkdir /home/ana/.anfra/sidecars: permission denied": {"resolve anfra-node binary", "unpack anfra-node into anfra's folder (ANFRA_HOME): mkdir /home/ana/.anfra/sidecars: permission denied"}, // 2 words: joined
+		`apps/a.html: line 3: "x.png" is a file beside the app`:                                                                             {"apps/a.html: line 3", `"x.png" is a file beside the app`},
+		"download the export: exit status 1":                                                                                                {"download the export: exit status 1"},
+		"Some of the input is not valid.":                                                                                                   {"Some of the input is not valid."},
+		"see https://example.com/a at 12:30 today":                                                                                          {"see https://example.com/a at 12:30 today"},
 	} {
 		if got := messageParts(msg); !slices.Equal(got, want) {
 			t.Errorf("messageParts(%q) = %q, want %q", msg, got, want)

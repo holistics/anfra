@@ -185,8 +185,8 @@ func writePrettyError(w io.Writer, e *yaml.Node) {
 }
 
 // messageParts is an error's message as a chain of causes, a part a line: a
-// shown cause is folded into its message, "start anfra-node sidecar: resolve
-// anfra-node binary: no embedded anfra-node", each part after a ": " the
+// shown cause is folded into its message, "resolve anfra-node binary: unpack
+// anfra-node into anfra's folder (ANFRA_HOME)", each part after a ": " the
 // cause of the one before. A part of fewer than 4 words stays with the one
 // before it ("apps/a.html: line 3"): a detail, not a cause. Only ": " splits,
 // so a URL or a time doesn't.

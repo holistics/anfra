@@ -364,3 +364,25 @@ func TestSpec(t *testing.T) {
 		}
 	}
 }
+
+// A body over a platform's limit (http.MaxBytesReader) is refused with the
+// limit, so the caller knows how much it may send.
+func TestBodyOverTheLimit(t *testing.T) {
+	for limit, want := range map[int64]string{
+		1 << 20:   "larger than 1 MiB, the most",
+		512 << 10: "larger than 512 KiB, the most",
+		1500:      "larger than 1.5 KiB, the most",
+		100:       "larger than 100 bytes, the most",
+	} {
+		h := server(t)
+		limited := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+			h.ServeHTTP(w, r)
+		})
+		body := `{"name":"` + strings.Repeat("z", int(limit)) + `"}`
+		w := do(limited, http.MethodPost, "/api/greetings.create", "ann", body)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), want) {
+			t.Errorf("limit %d: %d %s, want %q", limit, w.Code, w.Body, want)
+		}
+	}
+}

@@ -42,7 +42,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 	if c.cfg.CanalQueryURL != "" {
 		c.client = NewClient(c.cfg.CanalQueryURL, c.cfg.EnablePooling)
 		if err := c.client.WaitReady(ctx); err != nil {
-			return fmt.Errorf("canal-query at %s not ready: %w", c.cfg.CanalQueryURL, err)
+			return err
 		}
 		c.cfg.Wrap(Name, c.client.http)
 		c.cfg.Log().InfoContext(ctx, "Sidecar ready", logkit.EventKey, sidecar.EventReady, "name", Name, "url", c.cfg.CanalQueryURL, "owned", false)

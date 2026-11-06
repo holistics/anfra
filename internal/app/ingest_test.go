@@ -26,7 +26,7 @@ func TestSearchDeclaresRequiredSidecars(t *testing.T) {
 	if !ok {
 		t.Fatal("search command was not registered")
 	}
-	needs := cmd.Needs(nil)
+	needs := cmd.Needs([]byte(`{"query":["revenue"]}`)) // a blank query is refused before any sidecar
 	if !needs.Node || !needs.CanalQuery {
 		t.Fatalf("search sidecars = %+v, want both anfra-node and canal-query", needs)
 	}

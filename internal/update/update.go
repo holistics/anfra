@@ -27,6 +27,8 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/shared/appstep"
+	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/minio/selfupdate"
 	"golang.org/x/mod/semver"
 )
@@ -100,6 +102,11 @@ func get(ctx context.Context, url string, timeout time.Duration) (*http.Response
 	return (&http.Client{Timeout: timeout}).Do(req)
 }
 
+// checkUpdateStep is looking for a newer release: public, so that a failure
+// in it, such as GitHub out of reach, says what anfra was doing in its context,
+// and its message is the failure's own.
+var checkUpdateStep = appstep.Define(clierr.NS, "check_update", appstep.Public("check for a newer anfra"))
+
 // Latest fetches the newest release and resolves the asset for this platform.
 //
 // It asks GitHub's site, not its API: the API allows 60 anonymous calls an
@@ -107,7 +114,9 @@ func get(ctx context.Context, url string, timeout time.Duration) (*http.Response
 // site's latest release redirects to its tag, and its asset downloads at a
 // fixed path. A release whose asset for this platform isn't there yet, as
 // while its build uploads, isn't the latest.
-func Latest(ctx context.Context) (*Release, error) {
+func Latest(ctx context.Context) (_ *Release, err error) {
+	ctx, span := apptracing.Start(ctx, checkUpdateStep)
+	defer span.End(&err)
 	base, err := assetName()
 	if err != nil {
 		return nil, err
@@ -118,24 +127,31 @@ func Latest(ctx context.Context) (*Release, error) {
 	page := fmt.Sprintf("%s/%s/releases/latest", webBase, repoSlug)
 	resp, err := noRedirect(ctx, http.MethodGet, page)
 	if err != nil {
-		return nil, clierr.Unreachablef(clierr.GitHub, err, "check for a newer anfra: %v", err)
+		return nil, clierr.Unreachable(clierr.GitHub, err)
 	}
 	resp.Body.Close()
 	_, tag, ok := strings.Cut(resp.Header.Get("Location"), "/releases/tag/")
 	if resp.StatusCode < 300 || resp.StatusCode >= 400 || !ok || tag == "" || strings.Contains(tag, "/") {
-		return nil, clierr.Unreachablef(clierr.GitHub, nil, "check for a newer anfra: %s answered %s, without pointing at a release", page, resp.Status)
+		return nil, clierr.Unreachablef(clierr.GitHub, nil, "%s returned %s, instead of redirecting to the latest release.", page, resp.Status)
 	}
 	if tag, err = url.PathUnescape(tag); err != nil {
-		return nil, clierr.Unreachablef(clierr.GitHub, err, "check for a newer anfra: %s pointed at a release tag that isn't one: %v", page, err)
+		return nil, clierr.Unreachablef(clierr.GitHub, err, "%s redirected to an invalid release tag: %v", page, err)
 	}
 	asset := fmt.Sprintf("%s/%s/releases/download/%s/%s", webBase, repoSlug, url.PathEscape(tag), want)
 	head, err := noRedirect(ctx, http.MethodHead, asset)
 	if err != nil {
-		return nil, clierr.Unreachablef(clierr.GitHub, err, "check for a newer anfra: %v", err)
+		return nil, clierr.Unreachable(clierr.GitHub, err)
 	}
 	head.Body.Close()
-	if head.StatusCode >= 400 {
-		return nil, clierr.Unreachablef(clierr.GitHub, nil, "anfra %s has no build for this platform (%s) yet: its release may still be uploading, so try again in a few minutes", tagVersion(tag), want)
+	switch {
+	// A missing asset can only be a release that's still uploading its builds:
+	// they're all built before it's published, then uploaded together, and
+	// assetName has already refused a platform no release has a build for.
+	case head.StatusCode == http.StatusNotFound:
+		return nil, clierr.Unreachablef(clierr.GitHub, nil, "anfra %s was just released, and its build for %s/%s isn't uploaded yet. Try again in a few minutes.",
+			tagVersion(tag), runtime.GOOS, runtime.GOARCH)
+	case head.StatusCode >= 400:
+		return nil, clierr.Unreachablef(clierr.GitHub, nil, "%s returned %s.", asset, head.Status)
 	}
 	return &Release{Tag: tag, Version: tagVersion(tag), AssetURL: asset}, nil
 }
@@ -230,7 +246,7 @@ func Apply(ctx context.Context, r *Release, progress io.Writer) error {
 	defer gz.Close()
 	if err := selfupdate.Apply(gz, selfupdate.Options{}); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
-			return fmt.Errorf("update failed and rollback also failed: %v (rollback: %v)", err, rerr)
+			return fmt.Errorf("Couldn't replace this anfra (%v), or put it back (%v). Reinstall it with `curl -fsSL https://anfra.ai/install.sh | bash`.", err, rerr) //nolint:staticcheck // ST1005: the whole message, shown as it is
 		}
 		if errors.Is(err, fs.ErrPermission) {
 			return clierr.Precondition("Can't replace this anfra: %v. Update it as the user that installed it.", err)

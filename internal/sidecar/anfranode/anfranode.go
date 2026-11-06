@@ -43,7 +43,7 @@ func (a *Sidecar) Start(ctx context.Context) error {
 	if a.cfg.NodeURL != "" {
 		a.client = NewClientHTTP(a.cfg.NodeURL)
 		if err := a.client.WaitReady(ctx); err != nil {
-			return fmt.Errorf("anfra-node at %s not ready: %w", a.cfg.NodeURL, err)
+			return err
 		}
 		a.cfg.Wrap(Name, a.client.http)
 		a.cfg.Log().InfoContext(ctx, "Sidecar ready", logkit.EventKey, sidecar.EventReady, "name", Name, "url", a.cfg.NodeURL, "owned", false)

@@ -21,7 +21,7 @@ func Binary(name, env string, embedded []byte) (string, error) {
 	if path := os.Getenv(env); path != "" {
 		return path, nil
 	}
-	return "", fmt.Errorf("no embedded %s; set %s", name, env)
+	return "", fmt.Errorf("this build of anfra doesn't include %[1]s. Set %[2]s to the path of %[1]s's binary", name, env)
 }
 
 // extractRuntime writes an embedded sidecar binary to anfra's folder, keyed by
@@ -31,7 +31,7 @@ func extractRuntime(name string, data []byte) (string, error) {
 	home.RemoveLegacy()
 	dir := filepath.Join(home.Dir(), "sidecars")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("make %s, where anfra unpacks its sidecars (set ANFRA_HOME to move it): %w", dir, err)
+		return "", unpackErr(name, err)
 	}
 
 	sum := sha256.Sum256(data)
@@ -41,16 +41,24 @@ func extractRuntime(name string, data []byte) (string, error) {
 	if info, err := os.Stat(path); err != nil || info.Size() != int64(len(data)) {
 		tmp := path + ".tmp"
 		if err := os.WriteFile(tmp, data, 0o755); err != nil { //nolint:gosec // G306: an extracted sidecar binary must be executable
-			return "", err
+			return "", unpackErr(name, err)
 		}
 		if err := os.Rename(tmp, path); err != nil {
-			return "", err
+			return "", unpackErr(name, err)
 		}
 	}
 
 	// Prune stale versions of *this* binary; leave other sidecars' binaries alone.
 	pruneRuntimes(dir, name, fname)
 	return path, nil
+}
+
+// unpackErr names the step that failed and where anfra's folder comes from,
+// whichever file operation failed: the OS error already names the path, and a
+// reader who can't write there (a full disk, a read-only home) may move the
+// folder with ANFRA_HOME.
+func unpackErr(name string, err error) error {
+	return fmt.Errorf("unpack %s into anfra's folder (ANFRA_HOME): %w", name, err)
 }
 
 // pruneRuntimes removes "<prefix>-*" entries in dir except keep (best-effort).

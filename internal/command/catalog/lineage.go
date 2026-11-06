@@ -73,7 +73,7 @@ func (in LineageInput) check() error {
 	}
 	for _, t := range targets {
 		if t.Parent == "" || t.Child == "" {
-			return command.InvalidArg("targets", "invalid", "name each field by its parent and its name in it, neither blank")
+			return command.InvalidArg("targets", "invalid", "each target needs a non-blank `parent` and `child`")
 		}
 	}
 	return nil

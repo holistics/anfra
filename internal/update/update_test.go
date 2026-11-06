@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/shared/apperr"
 )
 
 func TestIsNewer(t *testing.T) {
@@ -324,8 +326,43 @@ func TestLatestWithoutTheAsset(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	setBases(t, srv.URL)
-	if _, err := Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "anfra 9.0.0 has no build for this platform") {
+	if _, err := Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "anfra 9.0.0 was just released, and its build for "+runtime.GOOS+"/"+runtime.GOARCH+" isn't uploaded yet.") {
 		t.Errorf("got %v, want no build", err)
+	}
+}
+
+// Only a missing asset is a build not uploaded yet: any other failure names the
+// asset and its status.
+func TestLatestWhenTheAssetFails(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/holistics/anfra/releases/latest" {
+			http.Redirect(w, r, srv.URL+"/holistics/anfra/releases/tag/v9.0.0", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(srv.Close)
+	setBases(t, srv.URL)
+	_, err := Latest(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "/releases/download/v9.0.0/") || !strings.Contains(err.Error(), " returned 502 Bad Gateway.") {
+		t.Errorf("got %v, want the asset's status", err)
+	}
+}
+
+// A failed check says what anfra was doing in its context, as a public step,
+// and keeps the failure's own text as its message.
+func TestLatestFailsInItsStep(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close() // nothing listens there now
+	setBases(t, srv.URL)
+	_, err := Latest(context.Background())
+	r := apperr.From(err).Response("")
+	if len(r.Context) != 1 || r.Context[0].Step != "anfra_cli.check_update" || r.Context[0].Text != "check for a newer anfra" {
+		t.Errorf("context %+v, want the check_update step", r.Context)
+	}
+	if strings.Contains(r.Message, "check for a newer anfra") || !strings.Contains(err.Error(), "connection refused") {
+		t.Errorf("message %q (%v), want the failure's own", r.Message, err)
 	}
 }
 
@@ -335,7 +372,7 @@ func TestLatestWithoutARelease(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setBases(t, srv.URL)
 	_, err := Latest(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "check for a newer anfra: "+srv.URL+"/holistics/anfra/releases/latest answered 404 Not Found, without pointing at a release") {
+	if err == nil || !strings.Contains(err.Error(), srv.URL+"/holistics/anfra/releases/latest returned 404 Not Found, instead of redirecting") {
 		t.Errorf("got %v", err)
 	}
 }

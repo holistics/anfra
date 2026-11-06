@@ -66,6 +66,7 @@ Problems the sweep turned up that a rewrite can't fix. They're for the backlog, 
 - **User mistakes come back as `internal_server_error`.** Over the API and MCP, the reader then sees only the generic internal error. Examples: `anfra search` with no query, `--set-org` with a bad URL, a data source without a `connection`, and a held lock on `.anfra/config.yml`.
 - **The CLI's error printer splits a message at `: `** to show its causes a line each (`messageParts` in `cmd/anfra/errors.go`). A part of fewer than 4 words stays with the one before, so most `: ` inside a sentence stay joined, and only a longer clause after one is split. It's cosmetic, and if it matters, the printer's heuristic is what should change, not the messages.
 - **`anfra logs` is coming** (something like `anfra logs --filter --follow`). When it lands, text that points to the repo's log file should name that command instead. That includes the help on `sidecar_unavailable` errors (`codeHelp` in `cmd/anfra/errors.go`), which says the logs are in the file `anfra status` shows.
+- **A sidecar that crashes as it starts still takes 10 to 15 seconds to fail.** `WaitReady` polls the health check until its deadline without watching whether the process has exited. The reader waits for nothing, and then gets "didn't start within" instead of the crash.
 - **Text the extraction misses:** cobra's built-in help (such as `anfra completion`'s), the SDK and appserve, and the skills.
 
 ## Open questions

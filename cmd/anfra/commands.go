@@ -23,6 +23,8 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/appstep"
+	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/holistics/anfra/shared/jsonkit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -591,23 +593,40 @@ func startNeededSidecars(ctx context.Context, h hostContext, c command.Command, 
 
 	if need.Node {
 		node := anfranode.New(h.cfg)
-		if err := node.Start(ctx); err != nil {
+		if err := startSidecar(ctx, anfranode.Name, node.Start); err != nil {
 			closeAll()
-			return command.Clients{}, nil, apperr.Encapsulate(err, errcode.SidecarUnavailable, "start anfra-node sidecar: "+err.Error())
+			return command.Clients{}, nil, err
 		}
 		closers = append(closers, func() { node.Close(ctx) })
 		clients.Node = node.Client()
 	}
 	if need.CanalQuery {
 		canal := canalquery.New(h.cfg)
-		if err := canal.Start(ctx); err != nil {
+		if err := startSidecar(ctx, canalquery.Name, canal.Start); err != nil {
 			closeAll()
-			return command.Clients{}, nil, apperr.Encapsulate(err, errcode.SidecarUnavailable, "start canal-query sidecar: "+err.Error())
+			return command.Clients{}, nil, err
 		}
 		closers = append(closers, func() { canal.Close(ctx) })
 		clients.CanalQuery = canal.Client()
 	}
 	return clients, closeAll, nil
+}
+
+// startSidecarStep is starting a sidecar a command needs: public, so that a
+// failure in it says which sidecar anfra was starting in its context, and its
+// message is the failure's own.
+var startSidecarStep = appstep.Define(clierr.NS, "start_sidecar", appstep.Public("start {sidecar}"))
+
+// startSidecar runs start, the sidecar's, in its step. Any failure is the
+// sidecar being unavailable, so that the CLI adds the help for it; its message
+// is its cause's when causes are shown, the code's own otherwise.
+func startSidecar(ctx context.Context, sidecar string, start func(context.Context) error) (err error) {
+	ctx, span := apptracing.Start(ctx, startSidecarStep, "sidecar", sidecar)
+	defer span.End(&err)
+	if err := start(ctx); err != nil {
+		return apperr.Encapsulate(err, errcode.SidecarUnavailable, "")
+	}
+	return nil
 }
 
 // renderTo prints a command response. A JSON body (per its Content-Type) is

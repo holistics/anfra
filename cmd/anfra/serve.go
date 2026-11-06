@@ -118,13 +118,13 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		cfg := h.cfg
 		cfg.EnablePooling = true
 		node := anfranode.New(cfg)
-		if err := node.Start(ctx); err != nil {
-			return fmt.Errorf("start anfra-node sidecar: %w", err)
+		if err := startSidecar(ctx, anfranode.Name, node.Start); err != nil {
+			return err
 		}
 		defer node.Close(ctx)
 		canal := canalquery.New(cfg)
-		if err := canal.Start(ctx); err != nil {
-			return fmt.Errorf("start canal-query sidecar: %w", err)
+		if err := startSidecar(ctx, canalquery.Name, canal.Start); err != nil {
+			return err
 		}
 		defer canal.Close(ctx)
 
