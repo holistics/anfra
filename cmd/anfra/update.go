@@ -80,7 +80,7 @@ type updateResult struct {
 	Message   string             `json:"message" doc:"the outcome, in a sentence"`
 	Version   string             `json:"version" doc:"the anfra installed after the command"`
 	Update    command.UpdateInfo `json:"update" doc:"the latest release, checked now"`
-	Previous  string             `json:"previous,omitempty" doc:"the version the update replaced; absent when it installed none"`
+	Previous  string             `json:"previous,omitempty" doc:"the version the update replaced. Absent when it installed no update."`
 	Changelog string             `json:"changelog" doc:"the changelog as of the latest release: what it brings, and every release before it"`
 	Hints     []string           `json:"hints,omitempty" doc:"what to do next; absent when nothing is"`
 }

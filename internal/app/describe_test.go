@@ -48,9 +48,9 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	}
 	want = append(want,
 		ArgSpec{Name: "input", Type: command.ArgObject, Usage: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"},
-		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "the 1-based page of rows to answer; needs a page size"},
-		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "rows per page; alone, the first page"},
-		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"},
+		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size."},
+		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "how many rows a page has, for AQL only"},
+		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"},
 	)
 	for _, name := range []string{"query", "query.compile"} {
 		if args := byName[name].Args; !reflect.DeepEqual(args, want) {

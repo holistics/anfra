@@ -35,7 +35,9 @@ type Def[In, Out any] struct {
 	// the op core.query.compile.
 	Name  string
 	Short string // one line
-	Long  string // optional; full usage
+	// Long is optional full usage. --help and MCP show it instead of Short,
+	// so it opens with Short's point.
+	Long string
 	// Needs declares the sidecars the command needs for in (so the one-shot CLI
 	// knows what to spawn; under `serve` they are all warm regardless). Nil: none.
 	Needs func(in In) Sidecars

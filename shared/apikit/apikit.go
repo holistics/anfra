@@ -40,7 +40,10 @@ type Def[Caller, In, Out any] struct {
 	// discovery.
 	Name    string
 	Summary string // one line
-	Doc     string // full usage, written for an agent: when to use it, the common mistake
+	// Doc is full usage, written for an agent: when to use it, the common
+	// mistake. MCP shows it instead of the summary, so it opens with the
+	// summary's point.
+	Doc string
 
 	// Errors are the public codes the op itself returns, beyond those the host's
 	// admission and transports produce. Published in OpenAPI; checked in strict

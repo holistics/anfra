@@ -13,7 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Build the local search catalog from context sources */
+        /** Build the local search catalog from the repo's context sources */
         post: operations["core.ingest"];
         delete?: never;
         options?: never;
@@ -52,10 +52,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Run a query: its rows, and the SQL that produced them
-         * @description Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
-         *     Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
-         *     Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.
+         * Run a query, and return its rows and the SQL that produced them
+         * @description Run a query, and return a page of its rows and the SQL that produced them.
+         *
+         *     A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+         *
+         *     Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.
          */
         post: operations["core.query"];
         delete?: never;
@@ -91,10 +93,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Export a query's whole result as a file: a link to download it
-         * @description Export a query's whole result as a file: a link to download it.
-         *
-         *     The query runs to completion before the answer, so a query that fails fails here. The CLI downloads the file, to stdout or --output; --link prints the answer instead.
+         * Export a query's whole result as a file to download
+         * @description Export a query's whole result as a file, and return a link to download it once the file is ready.
          */
         post: operations["core.query.export"];
         delete?: never;
@@ -315,7 +315,7 @@ export interface components {
             label: string;
             /** Format: int64 */
             layer: number;
-            /** @description the node's links; a link is on its edge's from entity */
+            /** @description the links that start at this node */
             links?: components["schemas"]["DiagramLink"][];
             /** @description the entity's properties */
             props?: {
@@ -350,7 +350,7 @@ export interface components {
             /** @description the catalog's id of the entity */
             id: string;
             label: string;
-            /** @description the node's links; a link is on its edge's from entity */
+            /** @description the links that start at this node */
             links?: components["schemas"]["DiagramLink"][];
             /** @description the entity's properties */
             props?: {
@@ -533,7 +533,7 @@ export interface components {
             lang?: "aql" | "sql";
             /** @description the query */
             query: string;
-            /** @description the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh */
+            /** @description the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only */
             timezone?: string;
         };
         ExportLink: {
@@ -666,7 +666,7 @@ export interface components {
             aql?: string;
             /** @description one per field of result, in order */
             columns: components["schemas"]["Column"][];
-            /** @description there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row */
+            /** @description whether there may be rows after this page. To get them, ask for the next page, or export the query. */
             has_more: boolean;
             result: components["schemas"]["QueryRows"];
             sql: string;
@@ -693,17 +693,17 @@ export interface components {
             lang?: "aql" | "sql";
             /**
              * Format: int64
-             * @description the 1-based page of rows to answer; needs a page size
+             * @description the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size.
              */
             page?: number;
             /**
              * Format: int64
-             * @description rows per page; alone, the first page
+             * @description how many rows a page has, for AQL only
              */
             page_size?: number;
             /** @description the query */
             query: string;
-            /** @description the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh */
+            /** @description the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only */
             timezone?: string;
         };
         QuerySort: {
@@ -798,7 +798,7 @@ export interface components {
         SearchInput: {
             /**
              * Format: int64
-             * @description at most this many entities; absent, 50
+             * @description the most entities to return, 50 by default
              */
             limit?: number;
             /**
@@ -851,7 +851,7 @@ export interface components {
             name: string;
             /** @enum {string} */
             role: "dimension" | "measure" | "param" | "metric";
-            /** @description the compiled data type, such as number, text, date, datetime, truefalse */
+            /** @description the field's semantic type, such as number, text, date, datetime, or truefalse */
             type: string;
         };
         ShowInput: {

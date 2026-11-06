@@ -40,9 +40,9 @@ func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema 
 type QueryRunInput struct {
 	QueryInput
 	Input    anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
-	Page     int                       `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to answer; needs a page size"`
-	PageSize int                       `json:"page_size,omitempty" minimum:"1" maximum:"10000" doc:"rows per page; alone, the first page"`
-	Timezone string                    `json:"timezone,omitempty" doc:"the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh"`
+	Page     int                       `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size."`
+	PageSize int                       `json:"page_size,omitempty" minimum:"1" maximum:"10000" doc:"how many rows a page has, for AQL only"`
+	Timezone string                    `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"`
 }
 
 func (QueryRunInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {

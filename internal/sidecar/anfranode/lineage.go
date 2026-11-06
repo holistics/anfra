@@ -83,7 +83,7 @@ type DiagramNode struct {
 	Ref      string           `json:"ref,omitempty" doc:"the entity this node is a copy of"`
 	Tags     []string         `json:"tags,omitempty"`
 	Props    map[string]any   `json:"props,omitempty" doc:"the entity's properties"`
-	Links    []DiagramLink    `json:"links,omitempty" doc:"the node's links; a link is on its edge's from entity"`
+	Links    []DiagramLink    `json:"links,omitempty" doc:"the links that start at this node"`
 	Sections []DiagramSection `json:"sections,omitempty" doc:"the node's children, grouped by type"`
 }
 

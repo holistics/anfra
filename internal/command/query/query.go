@@ -17,10 +17,12 @@ import (
 // or streamed as it runs (QueryRun).
 var Query = command.Define(command.Def[QueryRunInput, QueryRun]{
 	Name:  "query",
-	Short: "Run a query: its rows, and the SQL that produced them",
-	Long: `Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
-Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
-Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.`,
+	Short: "Run a query, and return its rows and the SQL that produced them",
+	Long: `Run a query, and return a page of its rows and the SQL that produced them.
+
+A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+
+Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.`,
 	ReadOnly: true,
 	Timeout:  10 * time.Minute,
 	Needs: func(in QueryRunInput) command.Sidecars {
