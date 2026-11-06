@@ -49,7 +49,7 @@ var Search = command.Define(command.Def[SearchInput, anfranode.CatalogSearchResu
 
 // IngestInput is ingest's input.
 type IngestInput struct {
-	Source string `json:"source,omitempty" short:"s" doc:"optional context source key to ingest"`
+	Source string `json:"source,omitempty" short:"s" doc:"the context source to ingest, every source by default"`
 }
 
 func (IngestInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {

@@ -413,8 +413,8 @@ type CompileToSQLResult struct {
 // these names, amql's and the Anfra SDK's.
 type ExploreColumn struct {
 	Name        string `json:"name" doc:"the column's key, as in fields"`
-	FieldName   string `json:"fieldName" doc:"the field it draws; for an adhoc column, its name"`
-	ModelID     string `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column"`
+	FieldName   string `json:"fieldName" doc:"the field it draws, or for an adhoc column, its name"`
+	ModelID     string `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column."`
 	Label       string `json:"label"`
 	Adhoc       bool   `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
 	IsMeasure   bool   `json:"isMeasure"`

@@ -31,9 +31,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Trace fields through the local catalog: what each one is built from
-         * @description Trace each field through the local catalog to what it is built from (the fields, models and
-         *     sources upstream of it), as a diagram: cards in layers, upstream first, linked by what uses it.
+         * Trace fields through the local catalog to what each one is built from
+         * @description Trace each field through the local catalog to the fields, models, and sources it is built from. Return each field's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.
          */
         post: operations["core.lineage"];
         delete?: never;
@@ -112,7 +111,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Validate a query: its diagnostics, without running it */
+        /** Validate a query without running it, and return its diagnostics */
         post: operations["core.query.validate"];
         delete?: never;
         options?: never;
@@ -147,12 +146,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Show the repo's datasets, or one dataset: their models, fields and metrics
-         * @description Show an object of the repo, read from its compiled AML: with no fqn, the repo and every dataset
-         *     in full; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not its
-         *     implementation: names, labels, types, roles and AQL definitions, never SQL or tables. What is
-         *     wrong in the repo for it comes with it, as diagnostics: files that do not compile, a data source
-         *     it does not configure.
+         * Show the repo's datasets, or one dataset, with their models, fields, and metrics
+         * @description Show the repo's datasets, or one dataset, with their models, fields, and metrics, as AQL can query them.
+         *
+         *     With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. It shows names, labels, types, roles, and AQL definitions, never SQL or tables. Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, or a data source the repo doesn't configure.
          */
         post: operations["core.show"];
         delete?: never;
@@ -171,8 +168,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Report the repo, and whether a warm server is running and its sidecars are healthy
-         * @description Report the repo, and whether a warm server is running and its sidecars are healthy.
+         * Report the repo, and whether anfra serve is running and its sidecars are healthy
+         * @description Report the repo, and whether `anfra serve` is running and its sidecars are healthy.
          *
          *     For this anfra's own version, and whether it is behind, see `anfra version`.
          */
@@ -239,7 +236,7 @@ export interface components {
             adhoc: boolean;
             /** @description an aggregated field's aggregation, such as sum or count distinct */
             aggregation?: string;
-            /** @description the Arrow type canal-query read the values as, by which they are written; absent before the query runs */
+            /** @description the column's Arrow type, which says how its values are written. Absent before the query runs. */
             arrow_type?: {
                 /** @description the type as arrow-go spells it, such as decimal(38, 2): for people, not to decide on */
                 label: string;
@@ -248,18 +245,18 @@ export interface components {
             } & {
                 [key: string]: unknown;
             };
-            /** @description the database's own name of the column's type: for debugging, never to decide on, since it varies by database and driver; absent before the query runs */
+            /** @description the database's own name for the column's type, for debugging only. Don't base decisions on it, because it varies by database and driver. Absent before the query runs. */
             db_type?: string;
-            /** @description the field it draws; for an adhoc column, its name */
+            /** @description the field it draws, or for an adhoc column, its name */
             fieldName: string;
             isMeasure: boolean;
             label: string;
-            /** @description the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column */
+            /** @description the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column. */
             modelId?: string;
             /** @description the column's key, as in fields */
             name: string;
             /**
-             * @description what the column's values mean, in AML's types, plus bit: a true or false stored as a bit, written as true and false or as "1" and "0" by how the database produced it. Decide by it. Absent when no AQL types the column (a SQL query, or AQL that is not an explore): see arrow_type. Unknown when its AQL type has no meaning in AML (time, duration, ...)
+             * @description the column's (database-agnostic) type in the semantic layer, such as number, date, or truefalse. Read the values by it. "bit" is a true or false stored as a bit, written as true and false or as "1" and "0", depending on how the database produced it. "unknown" is a type that has no meaning in AML, such as time or duration. Absent when no AQL typed the column, as for a SQL query or AQL that isn't an explore, so read arrow_type instead.
              * @enum {string}
              */
             semantic_type?: "bit" | "date" | "datetime" | "json" | "number" | "text" | "truefalse" | "unknown";
@@ -273,9 +270,9 @@ export interface components {
             row?: number;
         };
         CompiledQuery: {
-            /** @description the AQL compiled: the query with its Query Input applied; absent for a SQL query */
+            /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
             aql?: string;
-            /** @description what each column of an explore query's answer will be, and its semantic type; absent for other queries */
+            /** @description what each column of an explore query's result will be, with its semantic type. Absent for other queries. */
             columns?: components["schemas"]["Column"][];
             sql: string;
         };
@@ -503,7 +500,7 @@ export interface components {
             /** @description csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open */
             bom?: boolean;
             /**
-             * @description csv: the header row: the columns' labels (the default; what readers see), their names (their keys in a query's answer, stable for programs), or none
+             * @description csv: the header row, the columns' labels by default. "names" writes their names instead, which stay stable for programs, and "none" leaves the header row out.
              * @enum {string}
              */
             header?: "labels" | "names" | "none";
@@ -548,30 +545,30 @@ export interface components {
             format: string;
             /**
              * Format: int64
-             * @description the rows the file holds
+             * @description how many rows the file holds
              */
             row_count: number;
             /** @description where to download the file: a plain GET, with no credentials, until expires_at */
             url: string;
         };
         FieldLineage: {
-            /** @description the field's lineage; absent with error */
+            /** @description the field's lineage. Absent when error is set. */
             diagram?: components["schemas"]["Diagram"];
             /** @description why the field's lineage could not be traced */
             error?: string;
-            /** @description the catalog search its lineage is, which search also takes; empty when the field could not be searched for */
+            /** @description the search query that finds the field's lineage, which the search command also takes. Empty when the field could not be searched for. */
             query: string;
             /** @description the field, as asked */
             target: components["schemas"]["LineageTarget"];
         };
         IngestInput: {
-            /** @description optional context source key to ingest */
+            /** @description the context source to ingest, every source by default */
             source?: string;
         };
         LineageInput: {
             /**
              * Format: int64
-             * @description at most this many upstream entities per field; absent, all of them
+             * @description the most upstream entities to return per field, all of them by default
              */
             limit?: number;
             /**
@@ -597,7 +594,7 @@ export interface components {
             max_bytes: number;
         };
         QueryCompiled: {
-            /** @description the AQL that runs: the query with its Query Input applied; absent for a SQL query */
+            /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
             aql?: string;
             sql: string;
             /**
@@ -662,7 +659,7 @@ export interface components {
             type: "rows";
         };
         QueryResult: {
-            /** @description the AQL that ran: the query with its Query Input applied; absent for a SQL query */
+            /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
             aql?: string;
             /** @description one per field of result, in order */
             columns: components["schemas"]["Column"][];
@@ -670,12 +667,12 @@ export interface components {
             has_more: boolean;
             result: components["schemas"]["QueryRows"];
             sql: string;
-            /** @description the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again */
+            /** @description the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps. */
             timings: components["schemas"]["Timings"];
         };
         QueryRows: {
             fields: string[];
-            /** @description one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as "NaN", "Infinity" and "-Infinity", and so at any depth of a list, map or struct; null as null */
+            /** @description one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are "NaN", "Infinity", and "-Infinity". The same holds at any depth of a list, map, or struct. A database NULL is null. */
             records: unknown[][];
         };
         QueryRunInput: {
@@ -721,11 +718,11 @@ export interface components {
              * @description the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)
              */
             bytes_scanned?: number;
-            /** @description a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false */
+            /** @description whether there may be rows after this page. Without page_size, every row was sent, and this is false. */
             has_more: boolean;
             /** Format: int64 */
             row_count: number;
-            /** @description the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again */
+            /** @description the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps. */
             timings: components["schemas"]["Timings"];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -759,7 +756,7 @@ export interface components {
         RepoStatus: {
             /** @description the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id> */
             id: string;
-            /** @description the repo's log file: anfra's and its sidecars' log; absent for a managed repo */
+            /** @description the repo's log file, which holds anfra's and its sidecars' logs. Absent for a managed repo. */
             logs?: string;
         };
         RepoValidation: {
@@ -855,10 +852,10 @@ export interface components {
             type: string;
         };
         ShowInput: {
-            /** @description the fqn of the object to show; absent, the repo */
+            /** @description the fqn of the dataset to show, the whole repo by default */
             fqn?: string;
             /**
-             * @description the catalog's entity type of fqn; aml.dataset is the only one for now
+             * @description the catalog's entity type of fqn
              * @default aml.dataset
              * @enum {string}
              */
@@ -945,16 +942,16 @@ export interface components {
              * @description when it started, in ms since the run started
              */
             start_ms: number;
-            /** @description the step's name, as what ran names it; a child step as <parent>.<child>, within its parent */
+            /** @description the step's name. A child step is named <parent>.<child>, and runs within its parent. */
             step: string;
         };
         Timings: {
             /**
              * Format: int64
-             * @description when the run ended, in ms since it started: its total time, and where its last steps end
+             * @description when the run ended, in ms since it started, which is its total time and when its last step ends
              */
             end_ms: number;
-            /** @description each step as it started, in order; a step run again is here again */
+            /** @description each step, in the order it started. A step that runs again appears again. */
             steps: components["schemas"]["TimedStep"][];
         };
         UpdateInfo: {
@@ -962,7 +959,7 @@ export interface components {
             latest: string;
         };
         ValidateInput: {
-            /** @description optional file globs, at most 100; report only diagnostics for matching files */
+            /** @description globs of the files to report diagnostics for, every file by default */
             globs?: string[];
         };
         ValidationReport: {
@@ -976,7 +973,7 @@ export interface components {
             validator: string;
         };
         VersionInput: {
-            /** @description the version of the anfra skills in use, from the line ending each skill (anfra skills <version>), or unknown when a skill has no such line; adds the latest skills version to the answer */
+            /** @description the version of the anfra skills in use, from the "anfra skills <version>" line that ends each skill, or "unknown" when a skill has none. With it, the result also says whether the skills are behind. */
             skills?: string;
         };
         VersionResult: {
