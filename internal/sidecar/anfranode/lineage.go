@@ -47,7 +47,7 @@ func (c *Client) CatalogLineage(ctx context.Context, req CatalogLineageRequest) 
 // through as anfra-node formats it.
 type Diagram struct {
 	Version int            `json:"version" enum:"2"`
-	Query   string         `json:"query" doc:"the catalog search the lineage is"`
+	Query   string         `json:"query" doc:"the search query that finds the lineage"`
 	Total   int            `json:"total" doc:"how many entities the search matched, over every page"`
 	Matched []string       `json:"matched" doc:"the ids of this page's matched entities, in search order"`
 	Schema  DiagramSchema  `json:"schema"`
@@ -80,7 +80,7 @@ type DiagramNode struct {
 	ID       string           `json:"id" doc:"the catalog's id of the entity"`
 	Type     string           `json:"type" doc:"the catalog's entity type, such as aml.model or aml.metric"`
 	Label    string           `json:"label"`
-	Ref      string           `json:"ref,omitempty" doc:"the entity this node is a copy of"`
+	Ref      string           `json:"ref,omitempty" doc:"the id of the entity this node is a copy of, such as the model's field behind a dataset's field"`
 	Tags     []string         `json:"tags,omitempty"`
 	Props    map[string]any   `json:"props,omitempty" doc:"the entity's properties"`
 	Links    []DiagramLink    `json:"links,omitempty" doc:"the links that start at this node"`
@@ -97,7 +97,7 @@ type DiagramSection struct {
 type DiagramCard struct {
 	DiagramNode
 	Layer    int  `json:"layer"`
-	Detached bool `json:"detached,omitzero" doc:"its type is not a top-level one, but its container is not in the lineage"`
+	Detached bool `json:"detached,omitzero" doc:"whether the card's entity is usually nested in another card, but its container isn't in the lineage"`
 }
 
 // DiagramLink is an edge from a node.

@@ -25,7 +25,7 @@ type ShowRequest struct {
 // object shown, and what is wrong in the repo for it.
 type ShowResult struct {
 	Object      ShowObject     `json:"object"`
-	Diagnostics []CompileError `json:"diagnostics" doc:"what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete"`
+	Diagnostics []CompileError `json:"diagnostics" doc:"the problems in the repo that affect what is shown, such as files that don't compile, a dataset's data source that isn't configured, or a dataset that can't be shown in full. Empty when what is shown is complete."`
 }
 
 // ShowObject is one object of the repo, tagged by its kind: the repo, or a
@@ -83,7 +83,7 @@ func (ShowObject) Schema(r huma.Registry) *huma.Schema {
 // when it cannot be shown in full (a diagnostic says why).
 type ShowRepo struct {
 	Kind     string        `json:"kind" enum:"repo"`
-	Datasets []ShowDataset `json:"datasets" doc:"the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why"`
+	Datasets []ShowDataset `json:"datasets" doc:"the repo's datasets, each in full, or in outline (without its models and metrics) when the dataset can't be shown in full. A diagnostic then says why."`
 }
 
 // ShowDataset is a dataset: in outline, who it is; in full, also its models
@@ -96,8 +96,8 @@ type ShowDataset struct {
 	Name        string      `json:"name"`
 	Label       string      `json:"label,omitempty"`
 	Description string      `json:"description,omitempty"`
-	Models      []ShowModel `json:"models,omitempty" doc:"the models the dataset uses; absent in outline"`
-	Metrics     []ShowField `json:"metrics,omitempty" doc:"the dataset's metrics; absent in outline"`
+	Models      []ShowModel `json:"models,omitempty" doc:"the models the dataset uses. Absent when the dataset is shown in outline."`
+	Metrics     []ShowField `json:"metrics,omitempty" doc:"the dataset's metrics. Absent when the dataset is shown in outline."`
 }
 
 // ShowModel is a model as a dataset uses it, with the fields AQL can
@@ -113,7 +113,7 @@ type ShowModel struct {
 // ShowField is a field or a metric.
 type ShowField struct {
 	Fqn              string `json:"fqn" doc:"the catalog's identity: <model fqn>.<name>, or <dataset fqn>.<name> for a dataset-level field or a metric"`
-	Name             string `json:"name" doc:"AQL writes <model fqn>.<name>; a metric, its name alone"`
+	Name             string `json:"name" doc:"the field's or metric's name. AQL writes a field as <model fqn>.<name>, and a metric by its name alone."`
 	Label            string `json:"label,omitempty"`
 	Description      string `json:"description,omitempty"`
 	Role             string `json:"role" enum:"dimension,measure,param,metric"`

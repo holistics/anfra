@@ -162,7 +162,7 @@ type StreamStatus struct {
 	Phase string `json:"phase"`
 	// Position is, while queued, how many runs are ahead of this one: 0 is next.
 	// Absent for any other phase, and when the executor does not say.
-	Position *int `json:"position,omitempty" doc:"while queued: how many runs are ahead of this one, 0 being next; absent otherwise"`
+	Position *int `json:"position,omitempty" doc:"while the run is queued, how many runs are ahead of it. 0 means it is next. Absent for other phases, or when its place in line isn't known."`
 }
 
 // StreamEnd is a stream's last event: how the run ended. Error is set when it
