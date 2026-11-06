@@ -158,7 +158,7 @@ That isn't the same as accepting the style as it is. A habit earns its place by 
 **Work with the error flow, not around it.** An error message is usually a chain, with each part written by the function that raised or wrapped it: `start anfra-node sidecar: anfra-node didn't start in time`. Don't write the ideal final message first and then bend the code to produce it, with special cases, ad-hoc string building, or one layer rewording another's message. Instead:
 
 1. **Make each part good on its own.** Each function writes its part as well as it can, from what it knows, the way it handles its own inputs and outputs. That part should read well whoever wraps it, and wherever it ends up.
-2. **Then give the error structure.** If the chain still reads badly, let the error carry what a caller needs (a code, details, a violation, help), so the caller who shows it can present it. For example, the CLI can add help to any `sidecar_unavailable` error, where the sidecar package can't know about the CLI.
+2. **Then give the error structure.** If the chain still reads badly, let the error carry what a caller needs (a code, details, a violation, help), so the caller who shows it can present it. For example, the CLI can add help to any `sidecar_unavailable` error, where the sidecar package can't know about the CLI. If it's missing what anfra was doing, make that operation a public step, which shows as the error's context ([steps](errors.md#steps-context-written-once)), rather than writing a "couldn't …" prefix into the message. For example, a failed write to anfra's folder while renewing a login shows "renew the login to …" as its context.
 
 The final message and the code's error handling meet in the middle. Neither is forced to fit the other.
 

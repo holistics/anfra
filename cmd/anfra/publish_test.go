@@ -142,7 +142,7 @@ func TestAuthStatusExplainsDamagedCredentials(t *testing.T) {
 		t.Fatal("damaged credentials accepted")
 	}
 	printError(&diagnostics, err, "")
-	for _, want := range []string{path, "move the file aside", "anfra auth login for each organization", "does not revoke server access"} {
+	for _, want := range []string{path, "Delete it", "`anfra auth login` again for each organization", "doesn't revoke its logins on the server"} {
 		if !strings.Contains(diagnostics.String(), want) {
 			t.Fatalf("missing %q in %s", want, &diagnostics)
 		}
@@ -501,7 +501,7 @@ func TestAuthLoginBrowserFallback(t *testing.T) {
 			cmd.SetErr(io.MultiWriter(&diagnostics, writer))
 			err := cmd.ExecuteContext(ctx)
 			if mode == "json" {
-				if err == nil || !strings.Contains(err.Error(), "Couldn't open your browser") || out.Len() != 0 || diagnostics.Len() != 0 {
+				if err == nil || !strings.Contains(err.Error(), "Couldn't open a browser") || !strings.Contains(err.Error(), "(without --json)") || out.Len() != 0 || diagnostics.Len() != 0 {
 					t.Fatalf("JSON launcher failure: err=%v stdout=%q stderr=%q", err, out.String(), diagnostics.String())
 				}
 				return

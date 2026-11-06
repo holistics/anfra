@@ -12,6 +12,8 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/appstep"
+	"github.com/holistics/anfra/shared/apptracing"
 )
 
 // Manager uses the machine's home directory; its zero value is ready for use.
@@ -50,7 +52,7 @@ func (Manager) StoredLogins(ctx context.Context) ([]StoredLogin, error) {
 		for key, entry := range inventory.Entries {
 			org, err := canonicalCredentialOrg(entry.Org)
 			if err != nil || key != credentialKey(org) {
-				return errors.New("cliauth: invalid stored org address")
+				return invalidCredentialFile(path)
 			}
 			name := entry.OrgName
 			if name == "" {
@@ -108,39 +110,54 @@ func loadAccessToken(ctx context.Context, org cloudapi.Org) (string, error) {
 			return loginRequired(org)
 		}
 		if time.Until(entry.AccessExpiry) < 5*time.Minute {
-			if err := markRefreshRecovery(path, org); err != nil {
+			var err error
+			if entry, err = renewLogin(ctx, inventory, path, entry); err != nil {
 				return err
 			}
-			entry.Pending = true
-			inventory.Entries[credentialKey(org)] = entry
-			if err := saveCredentialInventory(path, inventory); err != nil {
-				return err
-			}
-			started := time.Now()
-			var response tokenResponse
-			err := oauthJSONRequest(ctx, http.MethodPost, entry.TokenEndpoint, url.Values{"grant_type": {"refresh_token"}, "client_id": {oauthClientID}, "refresh_token": {entry.RefreshToken}, "resource": {org.Origin + "/api"}}, &response)
-			if err != nil {
-				return loginRequired(org)
-			}
-			successor, err := validateTokenResponse(response, org.Origin, started, &entry)
-			if err != nil {
-				return loginRequired(org)
-			}
-			successor.TokenEndpoint = entry.TokenEndpoint
-			successor.RevocationEndpoint = entry.RevocationEndpoint
-			inventory.Entries[credentialKey(org)] = successor
-			if err := saveCredentialInventory(path, inventory); err != nil {
-				return err
-			}
-			if err := clearRefreshRecovery(path, org); err != nil {
-				return err
-			}
-			entry = successor
 		}
 		token = entry.AccessToken
 		return nil
 	})
 	return token, err
+}
+
+// renewLoginStep is renewing an org's login before it expires: public, so a
+// failure in it, such as in writing anfra's folder, says what anfra was doing.
+var renewLoginStep = appstep.Define(clierr.NS, "renew_login", appstep.Public("renew the login to {org}"))
+
+// renewLogin trades entry's refresh token for a new login, and saves it.
+func renewLogin(ctx context.Context, inventory *credentialInventory, path string, entry storedCredential) (_ storedCredential, err error) {
+	org := entry.Org
+	ctx, span := apptracing.Start(ctx, renewLoginStep, "org", org.String())
+	defer span.End(&err)
+	if err := markRefreshRecovery(path, org); err != nil {
+		return entry, err
+	}
+	entry.Pending = true
+	inventory.Entries[credentialKey(org)] = entry
+	if err := saveCredentialInventory(path, inventory); err != nil {
+		return entry, err
+	}
+	started := time.Now()
+	var response tokenResponse
+	err = oauthJSONRequest(ctx, http.MethodPost, entry.TokenEndpoint, url.Values{"grant_type": {"refresh_token"}, "client_id": {oauthClientID}, "refresh_token": {entry.RefreshToken}, "resource": {org.Origin + "/api"}}, &response)
+	if err != nil {
+		return entry, loginRequired(org)
+	}
+	successor, err := validateTokenResponse(response, org.Origin, started, &entry)
+	if err != nil {
+		return entry, loginRequired(org)
+	}
+	successor.TokenEndpoint = entry.TokenEndpoint
+	successor.RevocationEndpoint = entry.RevocationEndpoint
+	inventory.Entries[credentialKey(org)] = successor
+	if err := saveCredentialInventory(path, inventory); err != nil {
+		return entry, err
+	}
+	if err := clearRefreshRecovery(path, org); err != nil {
+		return entry, err
+	}
+	return successor, nil
 }
 
 func apiOrgRequestPath(u *url.URL, org cloudapi.Org) bool {

@@ -26,7 +26,7 @@ func refreshRecoveryRequired(path string, org cloudapi.Org) bool {
 func markRefreshRecovery(path string, org cloudapi.Org) error {
 	marker, err := os.OpenFile(refreshRecoveryPath(path, org), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
-		return clierr.Precondition("cannot save authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
+		return clierr.Precondition("can't write to anfra's folder: %v", err)
 	}
 	err = marker.Sync()
 	closeErr := marker.Close()
@@ -37,7 +37,7 @@ func markRefreshRecovery(path string, org cloudapi.Org) error {
 		err = syncCredentialDirectory(path)
 	}
 	if err != nil {
-		return clierr.Precondition("cannot save authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
+		return clierr.Precondition("can't write to anfra's folder: %v", err)
 	}
 	return nil
 }
@@ -53,7 +53,7 @@ func clearRefreshRecovery(path string, org cloudapi.Org) error {
 	if err != nil {
 		// A failed removal sync must not make an uncertain save look usable locally.
 		_ = markRefreshRecovery(path, org)
-		return clierr.Precondition("cannot finish saving authentication recovery state in %q; check directory permissions and available disk space, then run anfra auth login again", filepath.Dir(path))
+		return clierr.Precondition("can't write to anfra's folder: %v", err)
 	}
 	return nil
 }

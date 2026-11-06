@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
+
 	"golang.org/x/sys/windows"
 )
 
@@ -16,7 +18,7 @@ func acquireCredentialLock(ctx context.Context, f *os.File) error {
 			return nil
 		}
 		if !errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
-			return errors.New("cliauth: cannot lock credentials")
+			return clierr.Precondition("can't lock %s: %v. anfra's folder may be on a network drive that doesn't support file locks. If so, set ANFRA_HOME to a folder on a local disk", f.Name(), err)
 		}
 		select {
 		case <-ctx.Done():

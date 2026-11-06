@@ -58,6 +58,11 @@ func (m Manager) Login(ctx context.Context, origin, hint string, openBrowser fun
 	if openBrowser == nil {
 		return cloudapi.Org{}, errors.New("cliauth: browser loopback authentication is required")
 	}
+	// Check the authentication file before the browser, so a problem with it
+	// stops the login before the reader approves anything.
+	if err := withCredentialLock(ctx, func(*credentialInventory, string) error { return nil }); err != nil {
+		return cloudapi.Org{}, err
+	}
 	if m.LoginProgress != nil {
 		m.LoginProgress(LoginConnecting)
 	}
@@ -67,7 +72,7 @@ func (m Manager) Login(ctx context.Context, origin, hint string, openBrowser fun
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return cloudapi.Org{}, clierr.Precondition("Couldn't listen on 127.0.0.1 for browser approval: allow anfra to open a local port, and try again.")
+		return cloudapi.Org{}, clierr.Precondition("Couldn't open a local port to receive the browser's approval. Allow anfra to listen on 127.0.0.1, and try again.")
 	}
 	defer listener.Close()
 	redirect := "http://" + listener.Addr().String() + "/oauth/callback"
@@ -113,17 +118,22 @@ waitCallback:
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return cloudapi.Org{}, clierr.Precondition("Authentication timed out: run anfra auth login to try again.")
+				return cloudapi.Org{}, clierr.Precondition("Authentication timed out before it was approved in the browser. Try again.")
 			}
 			return cloudapi.Org{}, ctx.Err()
 		case <-serveErrors:
-			return cloudapi.Org{}, clierr.Precondition("The local listener stopped before browser approval arrived: run anfra auth login again.")
+			return cloudapi.Org{}, clierr.Precondition("Couldn't receive the browser's approval, because anfra's local server stopped unexpectedly. Try again.")
 		case err := <-launchErrors:
 			if err != nil {
 				if ctx.Err() != nil {
 					return cloudapi.Org{}, ctx.Err()
 				}
-				return cloudapi.Org{}, clierr.Precondition("Couldn't open your browser: check your default browser, and try again.")
+				// The opener may say what to do instead, as the CLI does.
+				var public *apperr.Error
+				if errors.As(err, &public) {
+					return cloudapi.Org{}, err
+				}
+				return cloudapi.Org{}, clierr.Precondition("Couldn't open a browser to approve the authentication.")
 			}
 			launchErrors = nil
 		case callback = <-result:
@@ -131,7 +141,7 @@ waitCallback:
 		}
 	}
 	if callback.denied {
-		return cloudapi.Org{}, apperr.New(clierr.Interrupted, "The browser returned an authentication error, or access was denied: run anfra auth login again, and complete approval in the browser.")
+		return cloudapi.Org{}, apperr.New(clierr.Interrupted, "The authentication was denied or failed in the browser. If you meant to approve it, try again.")
 	}
 	started := time.Now()
 	response, err := exchangeOAuthCode(ctx, &config, callback.code, verifier, origin+"/api")
@@ -141,7 +151,7 @@ waitCallback:
 	var entry storedCredential
 	// Why it failed, and what to do next, by cause.
 	failure := "the authentication server returned an unexpected reply"
-	next := "Run `anfra auth login` again, and if this happens again, contact your server administrator."
+	next := "Run `anfra auth login` again, and if this happens again, contact your org's admin."
 	if err == nil {
 		entry, err = validateTokenResponse(response, origin, started, nil)
 	}

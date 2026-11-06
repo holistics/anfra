@@ -90,7 +90,7 @@ func newAuthCmd() *cobra.Command {
 			})
 			res := authLogoutResult{OrgURL: org.String(), LocalRemoved: result.LocalRemoved, RemoteRevocationConfirmed: result.RemoteRevocationConfirmed}
 			switch {
-			case err != nil && result.LocalRemoved:
+			case err != nil && result.LocalRemoved && !result.RemoteRevocationConfirmed:
 				// Gone from here, maybe not from the server: a credential left live.
 				res.Message = fmt.Sprintf("Signed out of %s on this machine, but couldn't revoke the login on the server.", org)
 				res.Hints = []string{fmt.Sprintf("Revoke it at %s/account/connected-apps.", org.Origin)}
@@ -247,7 +247,13 @@ func (t *authTerminal) loginOrg(ctx context.Context, address string) (cloudapi.O
 		manager := cliauth.Manager{LoginProgress: func(stage cliauth.LoginStage) { progress(string(stage)) }}
 		org, loginErr = manager.Login(ctx, origin, hint, func(ctx context.Context, address string) error {
 			if t.machine {
-				return openAuthBrowser(ctx, address)
+				// The link isn't printed here, so it stays out of logs and
+				// transcripts.
+				err := openAuthBrowser(ctx, address)
+				if err != nil && ctx.Err() == nil {
+					return clierr.Precondition("Couldn't open a browser to approve the authentication. Run `anfra auth login` in a terminal (without %s), which prints a link to open instead.", structuredFlag())
+				}
+				return err
 			}
 			authorizationURL, err := url.Parse(address)
 			if err != nil {
