@@ -13,13 +13,13 @@ import (
 // ends where the next step at its level or above starts (a child step,
 // "<parent>.<child>", is within its parent), or at EndMs.
 type Timings struct {
-	Steps []TimedStep `json:"steps" doc:"each step as it started, in order; a step run again is here again"`
-	EndMs int64       `json:"end_ms" doc:"when the run ended, in ms since it started: its total time, and where its last steps end"`
+	Steps []TimedStep `json:"steps" doc:"each step, in the order it started. A step that runs again appears again."`
+	EndMs int64       `json:"end_ms" doc:"when the run ended, in ms since it started, which is its total time and when its last step ends"`
 }
 
 // TimedStep is when a step of the run started.
 type TimedStep struct {
-	Step    string `json:"step" doc:"the step's name, as what ran names it; a child step as <parent>.<child>, within its parent"`
+	Step    string `json:"step" doc:"the step's name. A child step is named <parent>.<child>, and runs within its parent."`
 	StartMs int64  `json:"start_ms" doc:"when it started, in ms since the run started"`
 }
 

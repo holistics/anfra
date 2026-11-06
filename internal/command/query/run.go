@@ -34,7 +34,7 @@ type QueryEvent interface{ queryEvent() }
 type QueryCompiled struct {
 	Type string `json:"type" enum:"compiled"`
 	SQL  string `json:"sql"`
-	AQL  string `json:"aql,omitempty" doc:"the AQL that runs: the query with its Query Input applied; absent for a SQL query"`
+	AQL  string `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
 }
 
 // QueryWarehouse is the query's id on the warehouse, as soon as it has one: to
@@ -63,11 +63,11 @@ type QueryRecords struct {
 type QuerySummary struct {
 	Type     string `json:"type" enum:"summary"`
 	RowCount int    `json:"row_count"`
-	HasMore  bool   `json:"has_more" doc:"a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false"`
+	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without page_size, every row was sent, and this is false."`
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
 	BytesScanned *int64  `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
-	Timings      Timings `json:"timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
+	Timings      Timings `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 }
 
 func (QueryCompiled) queryEvent()  {}

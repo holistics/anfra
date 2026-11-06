@@ -17,23 +17,23 @@ import (
 // and what each column is are for --yaml.
 type QueryResult struct {
 	SQL     string    `json:"sql" pretty:"-"`
-	AQL     string    `json:"aql,omitempty" pretty:"-" doc:"the AQL that ran: the query with its Query Input applied; absent for a SQL query"`
+	AQL     string    `json:"aql,omitempty" pretty:"-" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
 	Columns []Column  `json:"columns" pretty:"-" doc:"one per field of result, in order"`
 	Result  QueryRows `json:"result" pretty:",inline"`
 	HasMore bool      `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
-	Timings Timings   `json:"timings" pretty:",view=timings" doc:"the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"`
+	Timings Timings   `json:"timings" pretty:",view=timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 }
 
 type QueryRows struct {
 	Fields  []string         `json:"fields" pretty:"-"`
-	Records []canalquery.Row `json:"records" pretty:"Result,labels=columns.label" doc:"one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as \"NaN\", \"Infinity\" and \"-Infinity\", and so at any depth of a list, map or struct; null as null"`
+	Records []canalquery.Row `json:"records" pretty:"Result,labels=columns.label" doc:"one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are \"NaN\", \"Infinity\", and \"-Infinity\". The same holds at any depth of a list, map, or struct. A database NULL is null."`
 }
 
 // CompiledQuery is the `query compile` result: the SQL the query compiles to.
 type CompiledQuery struct {
 	SQL     string   `json:"sql"`
-	AQL     string   `json:"aql,omitempty" doc:"the AQL compiled: the query with its Query Input applied; absent for a SQL query"`
-	Columns []Column `json:"columns,omitempty" doc:"what each column of an explore query's answer will be, and its semantic type; absent for other queries"`
+	AQL     string   `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Columns []Column `json:"columns,omitempty" doc:"what each column of an explore query's result will be, with its semantic type. Absent for other queries."`
 }
 
 // Column is one column of a query's answer: what it draws from the dataset, as
@@ -41,16 +41,16 @@ type CompiledQuery struct {
 // the core adds, in the API's (snake_case). See docs/designs/result-values.md.
 type Column struct {
 	Name        string `json:"name" doc:"the column's key, as in fields"`
-	FieldName   string `json:"fieldName" doc:"the field it draws; for an adhoc column, its name"`
-	ModelID     string `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column"`
+	FieldName   string `json:"fieldName" doc:"the field it draws, or for an adhoc column, its name"`
+	ModelID     string `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column."`
 	Label       string `json:"label"`
 	Adhoc       bool   `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
 	IsMeasure   bool   `json:"isMeasure"`
 	Aggregation string `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
 
-	SemanticType SemanticType         `json:"semantic_type,omitempty" doc:"what the column's values mean, in AML's types, plus bit: a true or false stored as a bit, written as true and false or as \"1\" and \"0\" by how the database produced it. Decide by it. Absent when no AQL types the column (a SQL query, or AQL that is not an explore): see arrow_type. Unknown when its AQL type has no meaning in AML (time, duration, ...)"`
-	ArrowType    canalquery.ArrowType `json:"arrow_type,omitzero" doc:"the Arrow type canal-query read the values as, by which they are written; absent before the query runs"`
-	DBType       string               `json:"db_type,omitempty" doc:"the database's own name of the column's type: for debugging, never to decide on, since it varies by database and driver; absent before the query runs"`
+	SemanticType SemanticType         `json:"semantic_type,omitempty" doc:"the column's (database-agnostic) type in the semantic layer, such as number, date, or truefalse. Read the values by it. \"bit\" is a true or false stored as a bit, written as true and false or as \"1\" and \"0\", depending on how the database produced it. \"unknown\" is a type that has no meaning in AML, such as time or duration. Absent when no AQL typed the column, as for a SQL query or AQL that isn't an explore, so read arrow_type instead."`
+	ArrowType    canalquery.ArrowType `json:"arrow_type,omitzero" doc:"the column's Arrow type, which says how its values are written. Absent before the query runs."`
+	DBType       string               `json:"db_type,omitempty" doc:"the database's own name for the column's type, for debugging only. Don't base decisions on it, because it varies by database and driver. Absent before the query runs."`
 }
 
 // SemanticType is what a column's values mean: AML's types, plus bit.

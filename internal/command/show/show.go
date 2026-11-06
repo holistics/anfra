@@ -18,12 +18,12 @@ import (
 // Show shows the repo, or a dataset in full.
 var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 	Name:  "show",
-	Short: "Show the repo's datasets, or one dataset: their models, fields and metrics",
-	Long: "Show an object of the repo, read from its compiled AML: with no fqn, the repo and every dataset\n" +
-		"in full; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not its\n" +
-		"implementation: names, labels, types, roles and AQL definitions, never SQL or tables. What is\n" +
-		"wrong in the repo for it comes with it, as diagnostics: files that do not compile, a data source\n" +
-		"it does not configure.",
+	Short: "Show the repo's datasets, or one dataset, with their models, fields, and metrics",
+	Long: "Show the repo's datasets, or one dataset, with their models, fields, and metrics, as AQL can query them.\n\n" +
+		"With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. " +
+		"It shows names, labels, types, roles, and AQL definitions, never SQL or tables. " +
+		"Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, " +
+		"or a data source the repo doesn't configure.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Timeout:    2 * time.Minute,
@@ -57,8 +57,8 @@ var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 // ShowInput is what to show, as the semantic catalog identifies it: an entity
 // type and its fqn. No fqn: the repo.
 type ShowInput struct {
-	Fqn  string `json:"fqn,omitempty" cli:"positional" doc:"the fqn of the object to show; absent, the repo"`
-	Type string `json:"type,omitempty" enum:"aml.dataset" default:"aml.dataset" doc:"the catalog's entity type of fqn; aml.dataset is the only one for now"`
+	Fqn  string `json:"fqn,omitempty" cli:"positional" doc:"the fqn of the dataset to show, the whole repo by default"`
+	Type string `json:"type,omitempty" enum:"aml.dataset" default:"aml.dataset" doc:"the catalog's entity type of fqn"`
 }
 
 func (ShowInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {

@@ -57,7 +57,7 @@ func (ExportInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema
 // ExportFormatOptions are a format's options. Each applies to the formats it names;
 // given to another, it is refused (check).
 type ExportFormatOptions struct {
-	Header string `json:"header,omitempty" enum:"labels,names,none" doc:"csv: the header row: the columns' labels (the default; what readers see), their names (their keys in a query's answer, stable for programs), or none"`
+	Header string `json:"header,omitempty" enum:"labels,names,none" doc:"csv: the header row, the columns' labels by default. \"names\" writes their names instead, which stay stable for programs, and \"none\" leaves the header row out."`
 	BOM    bool   `json:"bom,omitempty" doc:"csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open"`
 }
 

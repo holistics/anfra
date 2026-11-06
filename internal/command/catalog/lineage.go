@@ -13,9 +13,9 @@ import (
 // Lineage traces fields through the local catalog: what each one is built from.
 var Lineage = command.Define(command.Def[LineageInput, LineageResult]{
 	Name:  "lineage",
-	Short: "Trace fields through the local catalog: what each one is built from",
-	Long: "Trace each field through the local catalog to what it is built from (the fields, models and\n" +
-		"sources upstream of it), as a diagram: cards in layers, upstream first, linked by what uses it.",
+	Short: "Trace fields through the local catalog to what each one is built from",
+	Long: "Trace each field through the local catalog to the fields, models, and sources it is built from. " +
+		"Return each field's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Needs:      func(LineageInput) command.Sidecars { return command.Sidecars{Node: true, CanalQuery: true} },
@@ -50,7 +50,7 @@ var Lineage = command.Define(command.Def[LineageInput, LineageResult]{
 // each one is built from.
 type LineageInput struct {
 	Targets []anfranode.LineageTarget `json:"targets,omitempty" doc:"the fields to trace, each by its parent and its name in it: {\"parent\": \"orders\", \"child\": \"amount\"}"`
-	Limit   int                       `json:"limit,omitempty" minimum:"1" doc:"at most this many upstream entities per field; absent, all of them"`
+	Limit   int                       `json:"limit,omitempty" minimum:"1" doc:"the most upstream entities to return per field, all of them by default"`
 	Offset  int                       `json:"offset,omitempty" minimum:"0" doc:"skip this many upstream entities first, to page with limit"`
 }
 
@@ -88,7 +88,7 @@ type LineageResult struct {
 // FieldLineage is one field's lineage, or why it could not be traced.
 type FieldLineage struct {
 	Target  anfranode.LineageTarget `json:"target" doc:"the field, as asked"`
-	Query   string                  `json:"query" doc:"the catalog search its lineage is, which search also takes; empty when the field could not be searched for"`
-	Diagram *anfranode.Diagram      `json:"diagram,omitempty" doc:"the field's lineage; absent with error"`
+	Query   string                  `json:"query" doc:"the search query that finds the field's lineage, which the search command also takes. Empty when the field could not be searched for."`
+	Diagram *anfranode.Diagram      `json:"diagram,omitempty" doc:"the field's lineage. Absent when error is set."`
 	Error   string                  `json:"error,omitempty" doc:"why the field's lineage could not be traced"`
 }

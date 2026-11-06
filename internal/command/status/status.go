@@ -105,8 +105,8 @@ func newer(a, b string) bool {
 // sidecars are healthy.
 var Status = command.Define(command.Def[command.NoInput, StatusResult]{
 	Name:  "status",
-	Short: "Report the repo, and whether a warm server is running and its sidecars are healthy",
-	Long: "Report the repo, and whether a warm server is running and its sidecars are healthy.\n\n" +
+	Short: "Report the repo, and whether anfra serve is running and its sidecars are healthy",
+	Long: "Report the repo, and whether `anfra serve` is running and its sidecars are healthy.\n\n" +
 		"For this anfra's own version, and whether it is behind, see `anfra version`.",
 	ReadOnly: true,
 	// No Needs on purpose: status must NOT spawn sidecars. One-shot (no warm
@@ -124,7 +124,7 @@ var Status = command.Define(command.Def[command.NoInput, StatusResult]{
 
 // VersionInput is the version of the anfra skills in use, to compare.
 type VersionInput struct {
-	Skills string `json:"skills,omitempty" doc:"the version of the anfra skills in use, from the line ending each skill (anfra skills <version>), or unknown when a skill has no such line; adds the latest skills version to the answer"`
+	Skills string `json:"skills,omitempty" doc:"the version of the anfra skills in use, from the \"anfra skills <version>\" line that ends each skill, or \"unknown\" when a skill has none. With it, the result also says whether the skills are behind."`
 }
 
 func (VersionInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
@@ -170,7 +170,7 @@ type RepoStatus struct {
 	ID string `json:"id" doc:"the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id>"`
 	// Logs is the repo's log file; absent for a repo with no directory (a
 	// managed repo), whose host keeps its logs.
-	Logs string `json:"logs,omitempty" doc:"the repo's log file: anfra's and its sidecars' log; absent for a managed repo"`
+	Logs string `json:"logs,omitempty" doc:"the repo's log file, which holds anfra's and its sidecars' logs. Absent for a managed repo."`
 }
 
 // ServerStatus is the warm server's state and, when it is running, where it is,

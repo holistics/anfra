@@ -31,7 +31,7 @@ type ExportLink struct {
 	URL       string    `json:"url" doc:"where to download the file: a plain GET, with no credentials, until expires_at"`
 	Filename  string    `json:"filename" doc:"the file's name, as a download saves it"`
 	Format    string    `json:"format" doc:"the file's format"`
-	RowCount  int       `json:"row_count" doc:"the rows the file holds"`
+	RowCount  int       `json:"row_count" doc:"how many rows the file holds"`
 	ExpiresAt time.Time `json:"expires_at" doc:"when the link stops working"`
 }
 

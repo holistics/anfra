@@ -73,7 +73,7 @@ var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
 // Validate checks a query: its diagnostics, without running it.
 var Validate = command.Define(command.Def[QueryInput, query.QueryValidation]{
 	Name:     "query.validate",
-	Short:    "Validate a query: its diagnostics, without running it",
+	Short:    "Validate a query without running it, and return its diagnostics",
 	ReadOnly: true,
 	Timeout:  2 * time.Minute,
 	Needs:    func(QueryInput) command.Sidecars { return command.Sidecars{Node: true} },
