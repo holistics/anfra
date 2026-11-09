@@ -67,6 +67,11 @@ type Config struct {
 			MaxDuration string `yaml:"max_duration"`
 		} `yaml:"cache"`
 	} `yaml:"query"`
+	AQL struct {
+		// Compiler is the AQL compiler the repo's queries compile and type-check
+		// with: "legacy" (also when unset) or "v2" (UseV2Compiler checks it).
+		Compiler string `yaml:"compiler"`
+	} `yaml:"aql"`
 }
 
 // RelPath is the settings file's path in a repo, as messages name it.
@@ -95,6 +100,19 @@ func (c Config) QueryDefaults() command.QueryDefaults {
 		Timezone: d.Input.Timezone, WeekStartDay: d.Input.WeekStartDay, CacheDuration: duration,
 		Locked: c.Query.LockedDefaults,
 	}
+}
+
+// UseV2Compiler reports whether aql.compiler is "v2", or an error naming any
+// value other than "legacy" or "v2", so a mistyped setting never silently runs
+// the other compiler.
+func (c Config) UseV2Compiler() (bool, error) {
+	switch c.AQL.Compiler {
+	case "", "legacy":
+		return false, nil
+	case "v2":
+		return true, nil
+	}
+	return false, fmt.Errorf("aql.compiler in %s/%s is %q: use legacy or v2", repo.ConfigDirName, FileName, c.AQL.Compiler)
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content
