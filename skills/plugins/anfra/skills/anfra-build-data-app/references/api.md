@@ -82,6 +82,9 @@ is almost always right.
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
 | `app.hasChanges` | A control or the selection changed since the last execute: use for an "Apply" button. |
 | `app.selection` / `app.clearSelection()` | The current cross-filter selection. |
+| `app.appliedSelection` | The selection the cross-filtered queries last ran with, or `undefined`. It differs from `app.selection` after a `select()` and before the next `execute()`: render what the numbers show from it. |
+| `app.crossFilters` | Every `mapCrossFilter` declared, as `{ kind: 'crossFilter', from, to }` with `from` and `to` the queries. Use it to mark which queries a selection filters. |
+| `app.setTimezone(zone)` / `app.timezone` | Changes the app's time zone (an IANA zone, or `undefined` for anfra's default), as `createApp`'s `timezone` sets it. Every query re-runs on the next `execute()`: for a time zone picker. |
 | `app.abort()` | Cancels in-flight queries. |
 
 Names are unique per app across queries and controls.
@@ -318,6 +321,10 @@ chart.on('click', (p) => {
   rebuilds the series on every change (ECharts' `replaceMerge`, or `clear()` then `setOption`)
   replays the chart's entry animation each time the reader clicks. Rebuild only when `result`
   changed.
+- With an "Apply" button, `app.selection` is what the reader picked and `app.appliedSelection`
+  what the filtered queries last ran with. Say what the numbers are filtered by from
+  `app.appliedSelection`, and list the queries it filters from `app.crossFilters` (each `to` whose
+  `from.name` is `app.appliedSelection.source`, the source query's name).
 - Both queries must use the same dataset. No self-edges.
 - Clear with `app.clearSelection(); app.execute();`.
 
