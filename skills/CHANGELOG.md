@@ -1,3 +1,21 @@
+## [0.19.0](https://github.com/holistics/anfra/compare/v0.18.0...v0.19.0) (2026-11-09)
+
+### Features
+
+* **cli:** check for updates hourly, not twice a day ([b376f22](https://github.com/holistics/anfra/commit/b376f22fc99bcdd3c81c46aa7045bd8d2ca25185))
+* **skills:** handle a Data App's errors by scope, and read them in anfra.log ([58c2c0d](https://github.com/holistics/anfra/commit/58c2c0d2331bef64ff52cf15f700c77c709b4e47))
+* **skills:** add skill and links to docs ([d1ab32a](https://github.com/holistics/anfra/commit/d1ab32a326229a62ce379443c6c8a8dfd07594d7))
+* **skills:** update new AML features - new relationship types, ai_context prop ([451fe69](https://github.com/holistics/anfra/commit/451fe69460b2093d77ff2d7a2e58ad74c29ac401))
+
+### Bug Fixes
+
+* **skills:** read a Data App's log from its last mount, and its stack lines ([d70e50a](https://github.com/holistics/anfra/commit/d70e50ae87c6517275ea543d94f829edf0b5a7f8))
+* **skills:** name the SDK's stack frames anfra-sdk.js ([9204594](https://github.com/holistics/anfra/commit/9204594e2865b2e37ea5d8814d3e2ac980fbcb35))
+* **skills:** read a Data App's log lines by event ([3a538d8](https://github.com/holistics/anfra/commit/3a538d8d07925396bb060739e88105a23910bf0b))
+* **skills:** read a Data App's errors by their new kinds ([24ede33](https://github.com/holistics/anfra/commit/24ede3302a6f2d474dc662278a670d3441568e3c))
+* **skills:** read request_id, and an empty log, in a Data App's log ([66f98c1](https://github.com/holistics/anfra/commit/66f98c18e0e588e7851dfd144b2b895a4f5e2482))
+* **skills:** read a Data App's log first when the user reports a problem ([e802f3c](https://github.com/holistics/anfra/commit/e802f3c664a546b5ca0a6293b674d11856a2b1ec))
+* **skills:** name validation_failed for what a control or cross-filter adds wrong ([4e9d01c](https://github.com/holistics/anfra/commit/4e9d01c86b199f938ed5622a5b4f3e8b1b224299))
 ## [0.17.0](https://github.com/holistics/anfra/compare/v0.16.0...v0.17.0) (2026-11-04)
 
 ### Features
