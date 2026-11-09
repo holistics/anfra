@@ -5,31 +5,23 @@ import (
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/query"
-	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
 // sourceOf is what the invocation's queries compile against and run on: its
 // repo, with the repo's data sources (command.CommandContext.ResolveDataSources)
-// and, for a local repo, the AQL compiler its config.yml picks. A managed repo
-// has no config.yml here, so it compiles with the legacy compiler.
+// and the AQL compiler it picks (command.CommandContext.UseV2Compiler).
 func sourceOf(cc command.CommandContext) (query.Source, error) {
 	sources, err := cc.ResolveDataSources()
 	if err != nil {
 		return query.Source{}, err
 	}
-	src := query.Source{Repo: cc.Repo, DataSources: sources}
-	if local, ok := cc.Repo.Local(); ok {
-		conf, err := repoconfig.Read(local.Dir)
-		if err != nil {
-			return query.Source{}, err
-		}
-		if src.UseV2Compiler, err = conf.UseV2Compiler(); err != nil {
-			return query.Source{}, err
-		}
+	v2, err := cc.UseV2Compiler()
+	if err != nil {
+		return query.Source{}, err
 	}
-	return src, nil
+	return query.Source{Repo: cc.Repo, DataSources: sources, UseV2Compiler: v2}, nil
 }
 
 // compileAQL compiles a query (see query.Compile) against src, with anfra-node's

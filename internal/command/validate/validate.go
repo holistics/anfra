@@ -34,7 +34,11 @@ var Validate = command.Define(command.Def[ValidateInput, aml.RepoValidation]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return aml.RepoValidation{}, err
 		}
-		res, err := aml.Validate(ctx, cc.Clients.Node, cc.Repo, in.Globs)
+		v2, err := cc.UseV2Compiler()
+		if err != nil {
+			return aml.RepoValidation{}, err
+		}
+		res, err := aml.Validate(ctx, cc.Clients.Node, cc.Repo, in.Globs, v2)
 		if v, ok := refused(err); ok {
 			return aml.RepoValidation{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}

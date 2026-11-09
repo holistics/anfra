@@ -20,7 +20,7 @@ anfra reads them on every command, so an edit needs no restart.
 |---|---|
 | `org.url` | The org `anfra publish` publishes the repo to, by its address on its server (`https://bi.example.com/o/acme`), committed so everyone publishes to the same org. `anfra publish --set-org` sets it, changing nothing else in the file. |
 | `apps.allow_origins` | Origins the repo's Data Apps may load scripts, styles and fonts from, and send requests to, beyond the SDK's own CDNs, as `anfra serve` runs them, each `https://<host>[:<port>]` (`[https://cdn.acme.com]`). Never published, since an org keeps its own list, and `anfra publish` says which of them the org does not allow. |
-| `aql.compiler` | The AQL compiler that queries use: `legacy` (default) or `v2` (experimental). `anfra validate` always uses `legacy`. |
+| `aql.compiler.version` | The AQL compiler that queries and `anfra validate` use: `v1` (default) or `v2` (experimental). |
 
 ## `anfra serve`
 

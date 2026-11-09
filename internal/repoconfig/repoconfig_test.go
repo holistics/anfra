@@ -77,8 +77,8 @@ func TestSetConfigStringRefusesSafely(t *testing.T) {
 	}
 }
 
-// aql.compiler picks the AQL compiler: legacy when unset, and any value but
-// legacy or v2 is refused rather than read as one of them.
+// aql.compiler.version picks the AQL compiler: v1 when unset, and any value but
+// v1 or v2 is refused rather than read as one of them.
 func TestUseV2Compiler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		file    string
@@ -87,9 +87,9 @@ func TestUseV2Compiler(t *testing.T) {
 	}{
 		"no file":  {"", false, false},
 		"unset":    {"org:\n  url: https://bi.example.com/o/acme\n", false, false},
-		"legacy":   {"aql:\n  compiler: legacy\n", false, false},
-		"v2":       {"aql:\n  compiler: v2\n", true, false},
-		"mistyped": {"aql:\n  compiler: V2\n", false, true},
+		"v1":       {"aql:\n  compiler:\n    version: v1\n", false, false},
+		"v2":       {"aql:\n  compiler:\n    version: v2\n", true, false},
+		"mistyped": {"aql:\n  compiler:\n    version: V2\n", false, true},
 	} {
 		dir := t.TempDir()
 		if tc.file != "" {
@@ -108,8 +108,8 @@ func TestUseV2Compiler(t *testing.T) {
 		if (err != nil) != tc.wantErr {
 			t.Fatalf("%s: err = %v, want error %v", name, err, tc.wantErr)
 		}
-		if err != nil && !strings.Contains(err.Error(), "aql.compiler") {
-			t.Errorf("%s: error %q does not name aql.compiler", name, err)
+		if err != nil && !strings.Contains(err.Error(), "aql.compiler.version") {
+			t.Errorf("%s: error %q does not name aql.compiler.version", name, err)
 		}
 		if got != tc.want {
 			t.Errorf("%s: UseV2Compiler = %v, want %v", name, got, tc.want)

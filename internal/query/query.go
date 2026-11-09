@@ -178,7 +178,7 @@ type Source struct {
 	Repo        repo.Repo
 	DataSources datasource.DataSources
 	// UseV2Compiler compiles and type-checks with the AQL v2 compiler instead of
-	// the legacy one: a local repo's aql.compiler (repoconfig.Config.UseV2Compiler).
+	// v1 (command.CommandContext.UseV2Compiler).
 	UseV2Compiler bool
 }
 

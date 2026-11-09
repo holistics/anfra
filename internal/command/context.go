@@ -9,6 +9,7 @@ import (
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
@@ -107,6 +108,21 @@ func (cc CommandContext) ResolveDataSources() (datasource.DataSources, error) {
 		return nil, fmt.Errorf("load data sources: %w", err)
 	}
 	return sources, nil
+}
+
+// UseV2Compiler is whether the repo's AQL compiles and type-checks with the AQL
+// v2 compiler: a local repo's aql.compiler.version (repoconfig). A managed repo
+// has no config.yml here, so it uses v1.
+func (cc CommandContext) UseV2Compiler() (bool, error) {
+	local, ok := cc.Repo.Local()
+	if !ok {
+		return false, nil
+	}
+	conf, err := repoconfig.Read(local.Dir)
+	if err != nil {
+		return false, err
+	}
+	return conf.UseV2Compiler()
 }
 
 // ServerInfo is a running `anfra serve`, as status reports it.

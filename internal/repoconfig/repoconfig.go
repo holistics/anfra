@@ -35,23 +35,26 @@ type Config struct {
 		AllowOrigins []string `yaml:"allow_origins"`
 	} `yaml:"apps"`
 	AQL struct {
-		// Compiler is the AQL compiler the repo's queries compile and type-check
-		// with: "legacy" (also when unset) or "v2" (UseV2Compiler checks it).
-		Compiler string `yaml:"compiler"`
+		Compiler struct {
+			// Version is the AQL compiler the repo's AQL compiles and type-checks
+			// with: "v1" (also when unset) or "v2" (UseV2Compiler checks it).
+			Version string `yaml:"version"`
+		} `yaml:"compiler"`
 	} `yaml:"aql"`
 }
 
-// UseV2Compiler reports whether aql.compiler is "v2", or an error naming any
-// value other than "legacy" or "v2", so a mistyped setting never silently runs
+// UseV2Compiler reports whether aql.compiler.version is "v2", or an error naming
+// any value other than "v1" or "v2", so a mistyped setting never silently runs
 // the other compiler.
 func (c Config) UseV2Compiler() (bool, error) {
-	switch c.AQL.Compiler {
-	case "", "legacy":
+	switch v := c.AQL.Compiler.Version; v {
+	case "", "v1":
 		return false, nil
 	case "v2":
 		return true, nil
+	default:
+		return false, fmt.Errorf("aql.compiler.version in %s/%s is %q: use v1 or v2", repo.ConfigDirName, FileName, v)
 	}
-	return false, fmt.Errorf("aql.compiler in %s/%s is %q: use legacy or v2", repo.ConfigDirName, FileName, c.AQL.Compiler)
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content
