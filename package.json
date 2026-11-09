@@ -33,7 +33,7 @@
     "conventional-changelog-cli": "^5.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "conventional-recommended-bump": "^12.1.0",
-    "glob": "^13.0.6",
+    "glob": "^14.0.4",
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7"
   },
