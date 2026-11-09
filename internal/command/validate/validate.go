@@ -18,6 +18,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/aml"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/repoformat"
@@ -34,7 +35,11 @@ var Validate = command.Define(command.Def[ValidateInput, aml.RepoValidation]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return aml.RepoValidation{}, err
 		}
-		res, err := aml.Validate(ctx, cc.Clients.Node, cc.Repo, in.Globs)
+		v2, err := repoconfig.UseV2Compiler(cc.Repo)
+		if err != nil {
+			return aml.RepoValidation{}, err
+		}
+		res, err := aml.Validate(ctx, cc.Clients.Node, cc.Repo, in.Globs, v2)
 		if v, ok := refused(err); ok {
 			return aml.RepoValidation{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}

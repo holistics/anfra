@@ -67,10 +67,13 @@ type Config struct {
 			MaxDuration string `yaml:"max_duration"`
 		} `yaml:"cache"`
 	} `yaml:"query"`
+	// AQL is how the repo's AQL compiles.
 	AQL struct {
-		// Compiler is the AQL compiler the repo's queries compile and type-check
-		// with: "legacy" (also when unset) or "v2" (UseV2Compiler checks it).
-		Compiler string `yaml:"compiler"`
+		Compiler struct {
+			// Version is the AQL compiler the repo's AQL compiles and type-checks
+			// with: "v1" (also when unset) or "v2". Read checked it.
+			Version string `yaml:"version"`
+		} `yaml:"compiler"`
 	} `yaml:"aql"`
 }
 
@@ -102,17 +105,19 @@ func (c Config) QueryDefaults() command.QueryDefaults {
 	}
 }
 
-// UseV2Compiler reports whether aql.compiler is "v2", or an error naming any
-// value other than "legacy" or "v2", so a mistyped setting never silently runs
-// the other compiler.
-func (c Config) UseV2Compiler() (bool, error) {
-	switch c.AQL.Compiler {
-	case "", "legacy":
+// UseV2Compiler is whether r's AQL compiles and type-checks with the AQL v2
+// compiler: a local repo's aql.compiler.version, read on every call, so an edit
+// needs no restart. A managed repo has no config.yml here, so it uses v1.
+func UseV2Compiler(r repo.Repo) (bool, error) {
+	local, ok := r.Local()
+	if !ok {
 		return false, nil
-	case "v2":
-		return true, nil
 	}
-	return false, fmt.Errorf("aql.compiler in %s/%s is %q: use legacy or v2", repo.ConfigDirName, FileName, c.AQL.Compiler)
+	c, err := Read(local.Dir)
+	if err != nil {
+		return false, err
+	}
+	return c.AQL.Compiler.Version == "v2", nil
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content
