@@ -2,6 +2,7 @@
 import { Moon, SearchIcon, Sun } from '@lucide/vue';
 import { computed } from 'vue';
 import Logo from '@/components/Logo.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import type { CatalogEntry } from '@/lib/catalog';
@@ -116,6 +117,8 @@ const paletteShortcut = IS_MAC ? 'Meta+K' : 'Ctrl+K';
         >
           {{ statusLabel }}
         </StatusPill>
+        <!-- ANF-82: the alpha launch. The neutral badge, so it does not read as a status. -->
+        <Badge variant="secondary" data-testid="alpha-badge">Alpha</Badge>
         <StatusPill
           v-if="version?.latest && health !== 'unreachable'"
           class="cursor-help"
