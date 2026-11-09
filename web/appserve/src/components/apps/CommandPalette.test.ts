@@ -1,6 +1,6 @@
 import { Download } from '@lucide/vue';
 import { afterEach, expect, it, vi } from 'vitest';
-import { nextTick } from 'vue';
+import { nextTick, reactive } from 'vue';
 import { mount, unmountAll } from '@/test/mount';
 import CommandPalette, { type PaletteEntry } from './CommandPalette.vue';
 
@@ -35,4 +35,22 @@ it('closes, then runs the entry chosen', async () => {
   await nextTick();
   expect(onUpdateOpen).toHaveBeenCalledWith(false);
   expect(onRun).toHaveBeenCalledWith('app:sales');
+});
+
+it('finds an entry renamed while it is open by its new name', async () => {
+  const props = reactive({
+    open: true,
+    entries: [{ id: 'sidebar', title: 'Hide sidebar', group: 'View' }, ...entries] as PaletteEntry[],
+  });
+  await mount(CommandPalette, props);
+  const input = document.querySelector<HTMLInputElement>('[data-testid="palette-input"]')!;
+  input.value = 'show sidebar';
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  expect(item('sidebar')).toBeNull();
+
+  props.entries = [{ id: 'sidebar', title: 'Show sidebar', group: 'View' }, ...entries];
+  await nextTick();
+  await nextTick();
+  expect(item('sidebar')?.textContent).toContain('Show sidebar');
 });

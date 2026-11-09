@@ -5,7 +5,7 @@ import type { HTMLAttributes } from 'vue';
 import { reactiveOmit, useCurrentElement } from '@vueuse/core';
 import { cn } from '@/lib/utils';
 import { ListboxItem, useForwardPropsEmits, useId } from 'reka-ui';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useCommand, useCommandGroup } from '.';
 
 // filterValue: the text a search matches, when not the item's own text.
@@ -39,10 +39,16 @@ const isRender = computed(() => {
 const itemRef = ref();
 const currentElement = useCurrentElement(itemRef);
 onMounted(() => {
-  if (!(currentElement.value instanceof HTMLElement)) return;
+  const element = currentElement.value;
+  if (!(element instanceof HTMLElement)) return;
 
-  // textValue to perform filter
-  allItems.value.set(id, props.filterValue ?? currentElement.value.textContent ?? props.value?.toString() ?? '');
+  // The text a search matches, kept current: an entry renamed while the list is open (Hide sidebar,
+  // then Show sidebar) is found by its new name. Made in this hook, the watch stops with the item.
+  watch(
+    () => [props.filterValue, props.value],
+    () => allItems.value.set(id, props.filterValue ?? element.textContent ?? props.value?.toString() ?? ''),
+    { immediate: true },
+  );
 
   const groupId = groupContext?.id;
   if (groupId) {

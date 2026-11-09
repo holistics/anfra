@@ -66,8 +66,9 @@ function filterItems() {
   filterState.filtered.count = itemCount;
 }
 
-// Again when items mount or go: one mounted during a search has no score, so would show unfiltered.
-watch([() => filterState.search, () => allItems.value.size], () => {
+// Again when an item mounts, goes or changes the text it is found by: one mounted during a search
+// has no score, so would show unfiltered; one renamed would keep its old name's score.
+watch([() => filterState.search, () => [...allItems.value.values()]], () => {
   filterItems();
 });
 
