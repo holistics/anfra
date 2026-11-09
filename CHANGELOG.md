@@ -1,3 +1,55 @@
+## [0.19.0](https://github.com/holistics/anfra/compare/v0.18.0...v0.19.0) (2026-11-09)
+
+### Features
+
+* **appserve:** write a Data App's runtime errors to anfra.log ([87ee4e7](https://github.com/holistics/anfra/commit/87ee4e78daba731b57e2ba10f0d11d25e68d15ca))
+* **appserve:** log each mount of a Data App, with its file's modification time ([0e39ee0](https://github.com/holistics/anfra/commit/0e39ee05d9d4be021eb806cf138c95e8011c2d37))
+* **appserve:** opt out of a Data App's log with ANFRA_NO_APP_LOGS ([a9603ee](https://github.com/holistics/anfra/commit/a9603ee2bbde1b4f8a987155a87df79feefcb6b6))
+* **cli:** check for updates hourly, not twice a day ([b376f22](https://github.com/holistics/anfra/commit/b376f22fc99bcdd3c81c46aa7045bd8d2ca25185))
+* **cli:** point agents at the repo's logs in the AGENTS.md block ([23eb2c3](https://github.com/holistics/anfra/commit/23eb2c30b70c5b6865c4a3f8b1b0204223aca5a9))
+* **cli:** init --data-sources ([62f8d9c](https://github.com/holistics/anfra/commit/62f8d9c6a8f84d062aff837a00def3e05493ba2c))
+* **cli:** improve some proses and calibrate the design ([3748ad1](https://github.com/holistics/anfra/commit/3748ad1c99af686a569f31fc54c5d14c9816068e))
+* **cli:** improve 2nd batch of proses ([87ee410](https://github.com/holistics/anfra/commit/87ee41063b42c45de43d4cf544aa4153b2407205))
+* **cli:** improve 3rd batch of proses ([55e7d13](https://github.com/holistics/anfra/commit/55e7d13082aba41499a52eeac5602a74c0ca283d))
+* **cli:** improve 4th batch of proses ([6f2344d](https://github.com/holistics/anfra/commit/6f2344d6d5a7ff5f8d93dfb9f6db6931d961191e))
+* **cli:** improve 5th batch of proses ([3f97917](https://github.com/holistics/anfra/commit/3f97917e85ea2e3ba7926bd2162a5b0f2be02ebc))
+* **cli:** improve 6th batch of proses ([dd49a7d](https://github.com/holistics/anfra/commit/dd49a7d6c68e8ed82fc4970a7652b373f02345ba))
+* **cli:** improve 7th batch of proses ([fc82da9](https://github.com/holistics/anfra/commit/fc82da968affcc278eca30be7dcc70bba76e9e2f))
+* **cli:** improve 8th batch of proses ([d49dc8b](https://github.com/holistics/anfra/commit/d49dc8b4411d7d49b9021ff44c66485b154385a3))
+* **cli:** improve 9th batch of proses ([a87951f](https://github.com/holistics/anfra/commit/a87951f67175b36681114b81b16362399e6d4379))
+* **sdk:** report a Data App's runtime errors to its host ([8e479fb](https://github.com/holistics/anfra/commit/8e479fb052f70f594a19fe664ba286643a53a271))
+* **sdk:** list a Data App's runtime errors among its panel's problems ([faa4012](https://github.com/holistics/anfra/commit/faa4012204d5fef2fe6d317addc61298d4b448c8))
+* **skills:** handle a Data App's errors by scope, and read them in anfra.log ([58c2c0d](https://github.com/holistics/anfra/commit/58c2c0d2331bef64ff52cf15f700c77c709b4e47))
+* **skills:** add skill and links to docs ([d1ab32a](https://github.com/holistics/anfra/commit/d1ab32a326229a62ce379443c6c8a8dfd07594d7))
+* **skills:** update new AML features - new relationship types, ai_context prop ([451fe69](https://github.com/holistics/anfra/commit/451fe69460b2093d77ff2d7a2e58ad74c29ac401))
+
+### Bug Fixes
+
+* **appserve:** forget stale report windows and log drops when the minute ends ([441bdf8](https://github.com/holistics/anfra/commit/441bdf83a3d510fe13f448ec6e0ee39cd790e475))
+* **appserve:** log a Data App's report once, without a request line ([6ec226b](https://github.com/holistics/anfra/commit/6ec226bf34e0617b0e17b4d85a63c2d349a91bdf))
+* **appserve:** log a Data App's report under an event, with its message as msg ([00801e2](https://github.com/holistics/anfra/commit/00801e2de1ae03c0d0755b02f33c312491c23a37))
+* **appserve:** leave a report's browser time out of anfra.log ([c677b19](https://github.com/holistics/anfra/commit/c677b19c0c26b755ca8c0c618f2461ff923bdaba))
+* **cli:** check for update immediately when the clock is moved backward ([618849e](https://github.com/holistics/anfra/commit/618849e60310ec31dd67def2764568d0901f8849))
+* **cli:** handle CLAUDE.md symlink ([8bbf29b](https://github.com/holistics/anfra/commit/8bbf29be8e490c4e31413fc6754eb85efd270b8b))
+* **sdk:** give runtime errors and console lines their own budgets, held by the host too ([42cf525](https://github.com/holistics/anfra/commit/42cf525a18885c95b4f4085df6755f1a2ca6b0cf))
+* **sdk:** point a runtime error only at a query or control the app owns ([f6b6819](https://github.com/holistics/anfra/commit/f6b6819ce68336b1aa0175ad57a27e4233de3b2b))
+* **sdk.app:** rerun a failed query on the next execute ([9c46ae3](https://github.com/holistics/anfra/commit/9c46ae378da6bc9a9d2833cee4acbf010f0405c3))
+* **sdk.app:** report the failures the SDK catches to keep an app running ([a9fcce5](https://github.com/holistics/anfra/commit/a9fcce5dee9a89b16ea8684190950306dedcd791))
+* **sdk.app:** keep a query's loaded pages when a fetchMore failed ([6b4bad8](https://github.com/holistics/anfra/commit/6b4bad869c61e352a5510fa3e47313479b645bd0))
+* **sdk.host:** write nothing to the page's console when the host takes its errors ([d25d88c](https://github.com/holistics/anfra/commit/d25d88c6f7ac93194e4a3214538f81b6582bd0d4))
+* **sdk.host:** name the definition's lines in a frame's stack ([c1cd062](https://github.com/holistics/anfra/commit/c1cd0624126acc1c3af86073241bfbbf1a4c9785))
+* **sdk.host:** name the frame script anfra-sdk.js in devtools and stacks ([83b386a](https://github.com/holistics/anfra/commit/83b386aea82d0eeee7f441d1b555873e600f0f88))
+* **skills:** read a Data App's log from its last mount, and its stack lines ([d70e50a](https://github.com/holistics/anfra/commit/d70e50ae87c6517275ea543d94f829edf0b5a7f8))
+* **skills:** name the SDK's stack frames anfra-sdk.js ([9204594](https://github.com/holistics/anfra/commit/9204594e2865b2e37ea5d8814d3e2ac980fbcb35))
+* **skills:** read a Data App's log lines by event ([3a538d8](https://github.com/holistics/anfra/commit/3a538d8d07925396bb060739e88105a23910bf0b))
+* **skills:** read a Data App's errors by their new kinds ([24ede33](https://github.com/holistics/anfra/commit/24ede3302a6f2d474dc662278a670d3441568e3c))
+* **skills:** read request_id, and an empty log, in a Data App's log ([66f98c1](https://github.com/holistics/anfra/commit/66f98c18e0e588e7851dfd144b2b895a4f5e2482))
+* **skills:** read a Data App's log first when the user reports a problem ([e802f3c](https://github.com/holistics/anfra/commit/e802f3c664a546b5ca0a6293b674d11856a2b1ec))
+* **skills:** name validation_failed for what a control or cross-filter adds wrong ([4e9d01c](https://github.com/holistics/anfra/commit/4e9d01c86b199f938ed5622a5b4f3e8b1b224299))
+
+### Build
+
+* bump canal-query 2.24.0 ([d7644fc](https://github.com/holistics/anfra/commit/d7644fc98fed355e8aec42c93e46e7b1d8a31fdf))
 ## [0.18.0](https://github.com/holistics/anfra/compare/v0.17.0...v0.18.0) (2026-11-05)
 
 ### Features
