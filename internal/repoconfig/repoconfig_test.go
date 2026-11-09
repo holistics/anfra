@@ -132,7 +132,7 @@ func TestReadRefuses(t *testing.T) {
 		"a typo":                  {"query:\n  cache:\n    enabeld: false\n", "line 3: query.cache.enabeld isn't a setting. Did you mean enabled?"},
 		"no default for it": {"query:\n  default:\n    input:\n      pagination: {page: 1}\n",
 			"query.default.input.pagination isn't a setting. The settings under query.default.input are timezone and weekStartDay. If a newer anfra added it, update anfra (`anfra update`)."},
-		"an unknown section": {"queries: {}\n", "The settings at the top level are org, apps, and query."},
+		"an unknown section": {"queries: {}\n", "The settings at the top level are org, apps, query, and aql."},
 		"the old key":        {"cache:\n  query:\n    enabled: false\n", "line 1: cache isn't a setting."},
 		"not a duration":     {"query:\n  default:\n    cache:\n      duration: 1 hour\n", `.anfra/config.yml: query.default.cache.duration is "1 hour", which isn't a duration.`},
 		"a negative default": {"query:\n  default:\n    cache:\n      duration: -1m\n", "is -1m, which is negative"},
@@ -158,5 +158,45 @@ func TestReadRefuses(t *testing.T) {
 				t.Errorf("err = %v\nwant one containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// aql.compiler picks the AQL compiler: legacy when unset, and any value but
+// legacy or v2 is refused rather than read as one of them.
+func TestUseV2Compiler(t *testing.T) {
+	for name, tc := range map[string]struct {
+		file    string
+		want    bool
+		wantErr bool
+	}{
+		"no file":  {"", false, false},
+		"unset":    {"org:\n  url: https://bi.example.com/o/acme\n", false, false},
+		"legacy":   {"aql:\n  compiler: legacy\n", false, false},
+		"v2":       {"aql:\n  compiler: v2\n", true, false},
+		"mistyped": {"aql:\n  compiler: V2\n", false, true},
+	} {
+		dir := t.TempDir()
+		if tc.file != "" {
+			if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(Path(dir), []byte(tc.file), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		conf, err := Read(dir)
+		if err != nil {
+			t.Fatalf("%s: read: %v", name, err)
+		}
+		got, err := conf.UseV2Compiler()
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("%s: err = %v, want error %v", name, err, tc.wantErr)
+		}
+		if err != nil && !strings.Contains(err.Error(), "aql.compiler") {
+			t.Errorf("%s: error %q does not name aql.compiler", name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s: UseV2Compiler = %v, want %v", name, got, tc.want)
+		}
 	}
 }
