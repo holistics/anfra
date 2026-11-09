@@ -20,7 +20,7 @@ the type definition.**
    properties, types, defaults). Open the one you're working with:
    * `data_model.aml` — models (`TableModel`, `QueryModel`) and their fields (`dimension`, `measure`, `param`), field types, and how to reference fields with `r(...)` / `ref(...)`.
    * `dataset.aml` — datasets: which models + relationships they bundle, plus dataset-level `dimension` and `metric` fields.
-   * `relationship.aml` — relationships between models (`many_to_one`, `one_to_one`) and `rel_config`.
+   * `relationship.aml` — relationships between models and `rel_config`: equality (`many_to_one`, `one_to_one`, with extra `on` keys for a composite key), `range` (a fact row matches the row whose window contains it, such as price bands or SCD Type 2), `many_to_many`, and `where` filters on either side. The `relationship(a.x > b.id, true)` shorthand makes a single-key equality one. Write the others in full, as `RelationshipConfig { rel: RangeRelationship { ... } active: true }`.
    * `persistence.aml` — materializing a query model as a table (full / incremental / external).
    * `pre_aggregate.aml` — pre-aggregated tables for performance.
    * `format.aml` — the `Format` type used by a field's `format` property.

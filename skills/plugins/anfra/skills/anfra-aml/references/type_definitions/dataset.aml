@@ -37,6 +37,8 @@ Type DatasetDimension (elem_name_as: 'name') {
   type                           : DimensionType
   hidden        (default: false) : Boolean
   description   (optional)       : String
+  @doc Additional context about this dimension for AI ;;
+  ai_context    (optional)       : String | Heredoc[Any]
   definition    (optional)       : Heredoc[Any]
   format        (optional)       : Format
 }
@@ -47,6 +49,8 @@ Type Metric (elem_name_as: 'name') {
   type                           : MeasureType
   hidden        (default: false) : Boolean
   description   (optional)       : String
+  @doc Additional context about this metric for AI ;;
+  ai_context    (optional)       : String | Heredoc[Any]
   definition                     : Heredoc['aql']
   format        (optional)       : Format
 }
@@ -63,6 +67,8 @@ Type Dataset (elem_name_as: 'name') {
   __engine__ (optional): String
   label (optional): String
   description (optional): String
+  @doc Additional context about this dataset for AI ;;
+  ai_context (optional): String | Heredoc[Any]
   owner (optional): String
   data_source_name: String | Slot[String]
   models: List[Any]
@@ -80,6 +86,9 @@ Type Dataset (elem_name_as: 'name') {
     unique_elem_name,
     root_namespace
   ): Metric
+
+  // `function` and `function_module` (user-defined AQL functions) are left out: anfra
+  // validates them, but its AQL compiler can't call them yet.
 
   view (optional, multiple: true) {
     model (
