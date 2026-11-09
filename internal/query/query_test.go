@@ -127,6 +127,32 @@ func TestCompileRequestCarriesTheRepo(t *testing.T) {
 	}
 }
 
+// The compiler choice travels on every request, both ways: anfra-node defaults
+// to v2, so a source that says legacy must still say so on the wire.
+func TestCompileRequestCarriesTheCompiler(t *testing.T) {
+	sources := datasource.Set{"demo": {Name: "demo", DBType: "postgresql"}}
+	local := repo.Local{Dir: "/repos/acme/sales", ID: "sales-1a2b3c4d"}.Repo()
+	for _, v2 := range []bool{false, true} {
+		req, err := CompileRequest(context.Background(), Source{Repo: local, DataSources: sources, UseV2Compiler: v2}, "ecommerce", "products | select(products.name)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := jsonkit.Marshal(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire struct {
+			Options map[string]any `json:"options"`
+		}
+		if err := jsonkit.Unmarshal(raw, &wire); err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := wire.Options["useV2Compiler"]; !ok || got != v2 {
+			t.Errorf("v2=%v: wire options.useV2Compiler = %v (present %v)", v2, got, ok)
+		}
+	}
+}
+
 func TestEngineTimezone(t *testing.T) {
 	for in, want := range map[string]string{
 		"UTC": "Etc/UTC", "utc": "Etc/UTC", "GMT": "Etc/UTC", "gmt": "Etc/UTC",

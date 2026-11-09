@@ -177,6 +177,9 @@ func ExtractLimit(aql string) (string, int, error) {
 type Source struct {
 	Repo        repo.Repo
 	DataSources datasource.DataSources
+	// UseV2Compiler compiles and type-checks with the AQL v2 compiler instead of
+	// the legacy one: a local repo's aql.compiler (repoconfig.Config.UseV2Compiler).
+	UseV2Compiler bool
 }
 
 // CompileRequest builds the sidecar compile request for a (dataset, aql) against
@@ -193,9 +196,7 @@ func CompileRequest(ctx context.Context, src Source, dataset, aql string) (anfra
 		DatasetFqn:  dataset,
 		AQL:         aql,
 		DataSources: anfranode.CompileDataSources(dialects),
-		// The AQL v2 compiler is off: anfra-node compiles and type-checks with
-		// the legacy one.
-		Options: &anfranode.CompileOptions{UseV2Compiler: false},
+		Options:     &anfranode.CompileOptions{UseV2Compiler: src.UseV2Compiler},
 	}, nil
 }
 
