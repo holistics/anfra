@@ -83,6 +83,9 @@ func yamlName(f reflect.StructField) string {
 // check refuses values anfra doesn't take, and settings that contradict each
 // other, each error naming the setting and how to fix it.
 func (c Config) check() error {
+	if v := c.AQL.Compiler.Version; v != "" && v != "v1" && v != "v2" {
+		return fmt.Errorf(RelPath+": aql.compiler.version is %q. Use v1 or v2", v)
+	}
 	q := c.Query
 	if s := q.Cache.MaxDuration; s != "" {
 		d, err := time.ParseDuration(s)
