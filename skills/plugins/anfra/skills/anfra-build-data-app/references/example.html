@@ -597,6 +597,11 @@
     function renderTrend (theme) {
       if (!trend.result) return;
       const rows = trend.result.rows;
+      // No rows: the empty state shows over the block, so drop the last result's lines under it.
+      if (rows.length === 0) {
+        trendChart.clear();
+        return;
+      }
       const latest = kpis.result?.rows[0]?.latest;
       const labels = rows.map((row, i) => {
         const label = periodLabel(row.period, currentGrain);
@@ -630,6 +635,11 @@
     function renderByRegion (theme) {
       if (!byRegion.result) return;
       const rows = byRegion.result.rows;
+      // No rows: clear, since the axis max below would be Math.max() of nothing, -Infinity.
+      if (rows.length === 0) {
+        byRegionChart.clear();
+        return;
+      }
       const selected = new Set(byRegion.selectedRows.map((row) => row.region));
       const max = Math.max(...rows.map((row) => Number(row.revenue)));
         // A plain setOption merges into the series the chart has: a click only restyles the bars.
