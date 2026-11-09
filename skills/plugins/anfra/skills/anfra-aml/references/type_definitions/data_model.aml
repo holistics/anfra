@@ -3,6 +3,8 @@ Type Dimension (elem_name_as: 'name') {
   type                                      : DimensionType
   hidden        (default: false)            : Boolean
   description   (optional)                  : String
+  @doc Additional context about this dimension for AI ;;
+  ai_context    (optional)                  : String | Heredoc[Any]
   definition    (optional)                  : Heredoc[Any] | Slot[Heredoc[Any]]
   format        (optional)                  : Format
   primary_key   (default: false)            : Boolean
@@ -13,6 +15,8 @@ Type Measure (elem_name_as: 'name') {
   type                                      : MeasureType
   hidden        (default: false)            : Boolean
   description   (optional)                  : String
+  @doc Additional context about this measure for AI ;;
+  ai_context    (optional)                  : String | Heredoc[Any]
   definition                                : Heredoc[Any]
   aggregation_type (default: 'custom')      : String
   format        (optional)                  : Format
@@ -23,6 +27,8 @@ Type Param (elem_name_as: 'name') {
   type                                      : ParamType
   hidden        (default: false)            : Boolean
   description   (optional)                  : String
+  @doc Additional context about this param for AI ;;
+  ai_context    (optional)                  : String | Heredoc[Any]
   allowed_values (optional)                 : List[Any]
 }
 
@@ -30,6 +36,8 @@ Type TableModel (elem_name_as: 'name') {
   type                        : 'table'
   label             (optional): String
   description       (optional): String
+  @doc Additional context about this data model for AI ;;
+  ai_context        (optional): String | Heredoc[Any]
   owner             (optional): String // email
   data_source_name  (optional): String | Slot[String]
   table_name: String | Slot[String]
@@ -62,6 +70,8 @@ Type QueryModel (elem_name_as: 'name') {
   type                           : 'query'
   label             (optional)   : String
   description       (optional)   : String
+  @doc Additional context about this data model for AI ;;
+  ai_context        (optional)   : String | Heredoc[Any]
   owner             (optional)   : String // email
   data_source_name  (optional)   : String | Slot[String]
   query                          : Heredoc[Any] | Slot[Heredoc[Any]]
