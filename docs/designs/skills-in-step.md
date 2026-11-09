@@ -12,7 +12,7 @@ For where the skills live, how they install and how their versions work, see [ag
 
 When a feature changes, its skill has to change too, and that step is easy to miss. An agent then works from the old skill. It calls a method that was renamed, misses one that was added, or passes a flag that no longer exists. The agent can't tell that the skill is wrong. It trusts the skill, and the user sees an app or a query that fails.
 
-This already happens. In 0.19.0, the `App` class has three members that look meant for app authors, and `anfra-build-data-app` mentions none of them: `app.setTimezone()`, `app.appliedSelection` and `app.crossFilters`. Two design docs name the build-data-app skill by an old name or an old location. [numbers in the SDK](sdk-numbers.md) calls it `build-anfra-app` with an `API.md`, and [revamp query result data types](../implementations/revamp-query-result-data-types.md) places its source in `anfra-skills`. These are small, but nothing would have caught them, and nothing will catch the next one.
+This already happens. In 0.19.0, the `App` class had three members meant for app authors that `anfra-build-data-app` didn't mention: `app.setTimezone()`, `app.appliedSelection` and `app.crossFilters`. The skill documents them now. Two design docs name the build-data-app skill by an old name or an old location. [numbers in the SDK](sdk-numbers.md) calls it `build-anfra-app` with an `API.md`, and [revamp query result data types](../implementations/revamp-query-result-data-types.md) places its source in `anfra-skills`. These are small, but nothing would have caught them, and nothing will catch the next one.
 
 No rule in this repo says a code change has to update a skill. [DEVELOPMENT.md](../../DEVELOPMENT.md#the-skills) covers how to work on the skills, and `pnpm skills:check` checks their front matter, their links and their build. It doesn't check what they say.
 
@@ -74,7 +74,7 @@ This check compares the SDK's author surface with what the build-data-app skill 
 Two things are needed before the check can run:
 
 - **Tag the kernel's methods `@internal`.** Any public member that only the SDK calls gets the tag, such as `mappingsTo`, `selectionConditionsFor`, `selectionExpressionFor`, `datasetIndex`, `signature`, `assertGrain`, `isFieldBacked`, `toInspectJSON` and `toJSON`. That makes the surface the check reads the same as the surface authors are meant to use, and it helps anyone reading the types too.
-- **Decide about the three undocumented members.** For `setTimezone`, `appliedSelection` and `crossFilters`, either document them in the skill or tag them `@internal`.
+- **Document every author member.** `setTimezone`, `appliedSelection` and `crossFilters` are author API, and the skill documents them. Any other member the first run finds gets the same decision: document it, or tag it `@internal`.
 
 A member that is author API but that the skill leaves out on purpose goes on an allowlist in the script, with the reason beside it. The allowlist should stay short.
 
@@ -98,7 +98,7 @@ Placeholders such as `<fqn>` and `'<aql>'` are fine as arguments. Only command n
 
 ## Plan
 
-1. Tag the kernel's methods `@internal`, and decide about `setTimezone`, `appliedSelection` and `crossFilters`.
+1. Tag the kernel's methods `@internal`. (`setTimezone`, `appliedSelection` and `crossFilters` are author API, and the skill documents them.)
 2. Add the rule to `AGENTS.md` and `DEVELOPMENT.md`, and fix the stale skill names in [numbers in the SDK](sdk-numbers.md) and [revamp query result data types](../implementations/revamp-query-result-data-types.md).
 3. Add the SDK surface check to `pnpm skills:check`.
 4. Type-check the examples.
@@ -117,5 +117,4 @@ Each step is useful on its own. They can ship in one pull request or several.
 
 ## Open questions
 
-- Are `app.setTimezone()`, `app.appliedSelection` and `app.crossFilters` author API? If they are, the skill needs to document them. If they aren't, they need the `@internal` tag.
 - Should the surface check cover the host-side entrypoints (`/host`, `/plugins`) too? No skill teaches them today.
