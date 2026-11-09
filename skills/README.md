@@ -149,6 +149,7 @@ Develop analytics with Anfra.
 | `anfra-aml` | Write and edit AML models, fields, relationships, and datasets. |
 | `anfra-setup-repo` | Set up a new Anfra repo: `anfra init`, connect a data source, a first model and dataset. |
 | `anfra-build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve`. |
+| `anfra-docs` | Look up the anfra and AMQL docs, for what the other skills don't cover. |
 
 | Agent | What it does |
 |---|---|

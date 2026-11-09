@@ -108,3 +108,4 @@ well-formed, not that the numbers are right.
 * [](../anfra-aml/) — write the models, relationships and datasets.
 * [](../anfra-run-aql/) — query a dataset.
 * [](../anfra-build-data-app/) — build a Data App on the datasets.
+* [](../anfra-docs/) — look up the anfra and AMQL docs, for what these skills don't cover.
