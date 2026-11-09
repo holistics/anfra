@@ -25,6 +25,8 @@ the type definition.**
    * `pre_aggregate.aml` — pre-aggregated tables for performance.
    * `format.aml` — the `Format` type used by a field's `format` property.
 2. **`references/examples/*.aml`** — complete worked files to pattern-match against: `ecommerce_orders.model.aml` (a model) and `demo_ecommerce.dataset.aml` (a dataset).
+3. **The AML docs**, for what these references don't cover, such as modeling patterns and how
+   joins are generated: look it up with [](../anfra-docs/).
 
 ## Core concepts
 * **Models** define data. A `TableModel` (`type: 'table'`) maps to a table; a `QueryModel` (`type: 'query'`) maps to a SQL query. Each has `dimension`s (attributes), `measure`s (aggregations), and optional `param`s.

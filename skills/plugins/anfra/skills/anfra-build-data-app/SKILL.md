@@ -23,6 +23,7 @@ References, read when a step needs them:
   new file from its skeleton, or from the closest app already in `apps/`.
 - [references/DESIGN.md](references/DESIGN.md): the anfra app design guide (colors, type,
   spacing, chart palette) behind the default look. Read it when you build in the default look.
+- The SDK docs, for what these references don't cover: look it up with [](../anfra-docs/).
 
 ## 1. Learn the datasets
 

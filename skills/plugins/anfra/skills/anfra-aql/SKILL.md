@@ -32,3 +32,5 @@ it with actionable skills such as [](../anfra-write-aql/), [](../anfra-validate-
      frame the problem), `TECHNIQUES.md` (AQL idioms), `GOTCHAS.md` (pitfalls;
      entries marked `[silent]` fail with **no** validation error — a
      wrong-but-valid result — so look these up proactively).
+4. **The AQL docs**, for what these references don't cover: look it up with
+   [](../anfra-docs/).
