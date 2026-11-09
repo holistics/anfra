@@ -19,7 +19,7 @@ func TestPublishWarnsOfOriginsTheOrgLacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(errOut, "The org does not allow https://fonts.acme.com, https://maps.acme.com, which this repo's Data Apps may load from (.anfra/config.yml apps.allow_origins): apps loading from them are blocked there.") {
+	if !strings.Contains(errOut, "This repo's Data Apps may load from https://fonts.acme.com, https://maps.acme.com (.anfra/config.yml apps.allow_origins), but the org doesn't allow them, so they're blocked there.") {
 		t.Errorf("the lacking origins are not said: %q", errOut)
 	}
 	if strings.Contains(errOut, "allow https://cdn.acme.com") {

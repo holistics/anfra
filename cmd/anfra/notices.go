@@ -28,6 +28,8 @@ type notice struct {
 	// The sentence said after a command, a command in it as `anfra <command>`,
 	// as it's typed at a shell.
 	text string
+	// What an update notice says instead when opt-in auto-update installs it.
+	autoText string
 	// The command that settles it, as typed in a console.
 	command string
 
@@ -46,7 +48,7 @@ func notices() []notice {
 	}
 	var ns []notice
 	if r := update.Cached(); r != nil && r.IsNewer() {
-		ns = append(ns, notice{mark: "↑", label: "anfra " + r.Version, text: update.Notice(r), command: "update", update: true})
+		ns = append(ns, notice{mark: "↑", label: "anfra " + r.Version, text: update.Notice(r), autoText: update.AutoNotice(r), command: "update", update: true})
 	}
 	env, repoDir := agents.System(), repoDirIfAny()
 	if text := agents.Attention(env, repoDir); text != "" {

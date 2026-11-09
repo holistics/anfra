@@ -84,7 +84,7 @@ func TestSetupInstallsIntoEachAgentFound(t *testing.T) {
 		t.Errorf("ran:\n%s\nwant:\n%s", strings.Join(env.ran, "\n"), strings.Join(want, "\n"))
 	}
 	if got := res.Setup.Agents; len(got) != 2 ||
-		got[0] != (AgentSetup{"claude-code", "Claude Code", OutcomeInstalled, "Restart Claude Code, or run /reload-plugins, to load it."}) ||
+		got[0] != (AgentSetup{"claude-code", "Claude Code", OutcomeInstalled, "Restart Claude Code, or run /reload-plugins, to load the skills."}) ||
 		got[1].Agent != "codex" || got[1].Outcome != OutcomeInstalled {
 		t.Errorf("setup: %+v", got)
 	}

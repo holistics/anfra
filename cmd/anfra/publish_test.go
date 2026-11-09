@@ -538,7 +538,7 @@ func TestAuthStatusIsLocalInventoryWithoutTokens(t *testing.T) {
 		"  NAME   URL                               SAVED LOGIN   CURRENT REPO\n",
 		"  one    https://bi.example.com/o/one      invalid       false\n",
 		"  two    https://other.example.com/o/two   invalid       false\n",
-		"Hints:\n  Run `anfra auth login https://bi.example.com/o/one` to sign in to one again: its saved login can't be used.\n",
+		"Hints:\n  Run `anfra auth login https://bi.example.com/o/one` to sign in to one again.\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("lacks %q:\n%s", want, text)

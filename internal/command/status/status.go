@@ -43,7 +43,7 @@ const staleAfter = 48 * time.Hour
 
 func checkVersion(in VersionInput) error {
 	if in.Skills != "" && in.Skills != SkillsUnknown && !validVersion(in.Skills) {
-		return command.InvalidArg("skills", "invalid", fmt.Sprintf("%q is not a version such as 0.16.0, nor %s", in.Skills, SkillsUnknown))
+		return command.InvalidArg("skills", "invalid", fmt.Sprintf("Pass a version, such as 0.16.0, or %q, not %q.", SkillsUnknown, in.Skills))
 	}
 	return nil
 }
@@ -54,7 +54,7 @@ func runVersion(cc command.CommandContext, in VersionInput, now time.Time) Versi
 		r.Update = cc.Update()
 	}
 	if r.Update != nil && r.Update.Available {
-		r.Hints = append(r.Hints, fmt.Sprintf("anfra %s is out: ask the user to run `anfra update`.", r.Update.Latest))
+		r.Hints = append(r.Hints, fmt.Sprintf("Ask the user to run `anfra update` to get anfra %s.", r.Update.Latest))
 	}
 	if in.Skills != "" {
 		var known *command.SkillsInfo

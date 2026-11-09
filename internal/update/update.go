@@ -479,6 +479,15 @@ func Notice(r *Release) string {
 	return fmt.Sprintf("anfra %s is available (you have %s). Run `anfra update`.", r.Version, meta.Version)
 }
 
+// AutoNotice is Notice for when opt-in auto-update installs the release, so
+// that the reader isn't told to run what already runs.
+func AutoNotice(r *Release) string {
+	if r == nil || !r.IsNewer() {
+		return ""
+	}
+	return fmt.Sprintf("anfra %s is available (you have %s). Updating in the background.", r.Version, meta.Version)
+}
+
 // CachedNotice returns a one-line "update available" message from the cached
 // check, or "" if none is available / the cache says we're current.
 func CachedNotice() string {

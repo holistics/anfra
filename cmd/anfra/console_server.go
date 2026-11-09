@@ -62,15 +62,15 @@ func (cs *consoleServer) describe() string {
 	defer cs.mu.Unlock()
 	switch {
 	case cs.starting != nil:
-		return "starting, started by this console; stops when you leave"
+		return "starting"
 	case cs.url != "" && cs.started != nil:
-		return "warm, at " + cs.url + ", started by this console; stops when you leave"
+		return "running at " + cs.url + ", started by this console"
 	case cs.url != "":
-		return "warm, at " + cs.url + ", already running"
+		return "running at " + cs.url + ", started outside this console"
 	case cs.repoDir == "":
-		return "none: not in an anfra repo"
+		return "none, because this folder isn't an anfra repo"
 	}
-	return "none yet: one starts when a query or a mode needs it"
+	return "none yet. One starts when you run a query, or enter a mode that needs it."
 }
 
 // ensure starts the server in the background, unless one runs, is starting,

@@ -76,7 +76,7 @@ func TestFlagValues(t *testing.T) {
 	for _, a := range c.Args() {
 		flagArg[a.Flag()] = a.Name
 	}
-	values, err := flagValues(cmd.Flags(), c.Args(), flagArg)
+	values, err := flagValues(cmd.Flags(), cmd.CommandPath(), c.Args(), flagArg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestFlagValues(t *testing.T) {
 		if err := cmd.ParseFlags([]string{"--input", bad}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := flagValues(cmd.Flags(), c.Args(), flagArg); err == nil {
+		if _, err := flagValues(cmd.Flags(), cmd.CommandPath(), c.Args(), flagArg); err == nil {
 			t.Errorf("--input %s was accepted", bad)
 		}
 	}
@@ -118,7 +118,7 @@ func TestObjectArrayFlag(t *testing.T) {
 	if err := cmd.ParseFlags([]string{"--items", ` [{"name":"a"}] `}); err != nil {
 		t.Fatal(err)
 	}
-	values, err := flagValues(cmd.Flags(), listed.Args(), flagArg)
+	values, err := flagValues(cmd.Flags(), cmd.CommandPath(), listed.Args(), flagArg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestObjectArrayFlag(t *testing.T) {
 		if err := cmd.ParseFlags([]string{"--items", bad}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := flagValues(cmd.Flags(), listed.Args(), flagArg); err == nil {
+		if _, err := flagValues(cmd.Flags(), cmd.CommandPath(), listed.Args(), flagArg); err == nil {
 			t.Errorf("--items %s was accepted", bad)
 		}
 	}
@@ -169,7 +169,7 @@ func dottedValues(t *testing.T, argv ...string) (map[string]any, error) {
 	for _, f := range dotted.Args()[0].Fields {
 		flagArg["format-options."+f.Flag()] = "format_options." + f.Name
 	}
-	return flagValues(cmd.Flags(), dotted.Args(), flagArg)
+	return flagValues(cmd.Flags(), cmd.CommandPath(), dotted.Args(), flagArg)
 }
 
 // An object arg's fields are flags of their own, named by their path, and make

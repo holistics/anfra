@@ -48,7 +48,7 @@ func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, t *told, p *
 	if len(lacking) > 1 {
 		it = "them"
 	}
-	t.Warn("origin_not_allowed", "The org does not allow %s, which this repo's Data Apps may load from (%s): apps loading from %s are blocked there.",
+	t.Warn("origin_not_allowed", "This repo's Data Apps may load from %s (%s), but the org doesn't allow %s, so they're blocked there.",
 		strings.Join(lacking, ", "), repoconfig.Hint("apps", "allow_origins"), it)
-	t.Hint("Ask an org admin to allow %s in Organization settings → Data Apps.", strings.Join(lacking, ", "))
+	t.Hint("Ask your org's admin to allow %s in Organization settings → Data Apps.", strings.Join(lacking, ", "))
 }

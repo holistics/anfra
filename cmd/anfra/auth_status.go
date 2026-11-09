@@ -99,7 +99,7 @@ func authStatus(ctx context.Context, dir string) (authStatusResult, error) {
 		o := authStatusOrg{Name: cliui.SafeText(login.Name), URL: login.Org.String(), SavedLogin: "valid"}
 		if login.LocalState == "sign_in_again" {
 			o.SavedLogin = "invalid"
-			res.Hints = append(res.Hints, fmt.Sprintf("Run `anfra auth login %s` to sign in to %s again: its saved login can't be used.", o.URL, o.Name))
+			res.Hints = append(res.Hints, fmt.Sprintf("Run `anfra auth login %s` to sign in to %s again.", o.URL, o.Name))
 		} else {
 			valid++
 		}

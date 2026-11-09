@@ -95,7 +95,7 @@ func TestVersionHints(t *testing.T) {
 		Skills: func() *command.SkillsInfo { return &command.SkillsInfo{Latest: "0.16.0", CheckedAt: now} },
 	}
 	plain := runVersion(cc, VersionInput{}, now)
-	if plain.Skills != nil || len(plain.Hints) != 1 || plain.Hints[0] != "anfra 9.0.0 is out: ask the user to run `anfra update`." {
+	if plain.Skills != nil || len(plain.Hints) != 1 || plain.Hints[0] != "Ask the user to run `anfra update` to get anfra 9.0.0." {
 		t.Errorf("without --skills: %+v", plain)
 	}
 	both := runVersion(cc, VersionInput{Skills: "0.15.0"}, now)

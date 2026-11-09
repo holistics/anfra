@@ -35,7 +35,7 @@ func newUpdateCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if checkOnly {
-				printWarning(cmd.ErrOrStderr(), "deprecated", "--check is deprecated: use `anfra update check`.")
+				printWarning(cmd.ErrOrStderr(), "deprecated", "--check is deprecated. Use `anfra update check` instead.")
 			}
 			return updateRun(cmd, checkOnly)
 		},
@@ -268,7 +268,7 @@ func maybeNotifyUpdate(invoked string) {
 			// interactivity (a service that set ANFRA_AUTO_UPDATE=1); saying
 			// so is for a person at a terminal, as the notices are.
 			if stderrIsInteractive() {
-				fmt.Fprintln(os.Stderr, "\n"+n.text+" (auto-updating in the background)")
+				fmt.Fprintln(os.Stderr, "\n"+n.autoText)
 			}
 			spawnDetached("update")
 			return

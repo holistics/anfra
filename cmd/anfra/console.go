@@ -226,7 +226,7 @@ func runConsole(ctx context.Context, in io.Reader, out, errOut io.Writer, s *con
 		}
 		return ""
 	}
-	opts := cliui.EntryOptions{Leave: `\q, exit or Ctrl-D to leave`, History: history.load(), Ends: s.ends, Refresh: serverDot}
+	opts := cliui.EntryOptions{Leave: `\q, exit, or Ctrl-D to leave`, History: history.load(), Ends: s.ends, Refresh: serverDot}
 	for {
 		opts.Prompt, opts.Context, opts.Aside = s.prompt(), s.styledContext(filepath.Base(dir), false), serverDot() //nolint:contextcheck // names the flags, runs nothing
 		opts.Status = consoleBadge(s)                                                                               //nolint:contextcheck // reads local state, runs nothing

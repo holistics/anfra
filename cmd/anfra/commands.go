@@ -150,7 +150,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 	// The command's input as its flags make it, with text for its positional,
 	// checked as the command would before running: for a console asking ahead.
 	inputChecks[cmd] = func(text []string) error {
-		values, err := flagValues(cmd.Flags(), args, flagArg)
+		values, err := flagValues(cmd.Flags(), cmd.CommandPath(), args, flagArg)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 				return flagViolated(flag, flag+" only works with export --link, which prints the export's link instead of writing the file.")
 			}
 		}
-		values, err := flagValues(runCmd.Flags(), args, flagArg)
+		values, err := flagValues(runCmd.Flags(), runCmd.CommandPath(), args, flagArg)
 		if err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 // not an object; or its fields are set by their own flags, and make the object,
 // but not both. An object array arg's flag is JSON, refused when it is not an
 // array of objects.
-func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string) (map[string]any, error) {
+func flagValues(fs *pflag.FlagSet, path string, args []command.Arg, flagArg map[string]string) (map[string]any, error) {
 	values := map[string]any{}
 	objects := map[string]map[string]any{} // an object arg set by its fields' flags
 	var err error
@@ -227,7 +227,7 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 		if t == command.ArgObjectArray {
 			var objs []map[string]any
 			if jsonkit.Unmarshal(raw, &objs) != nil || objs == nil || slices.ContainsFunc(objs, func(o map[string]any) bool { return o == nil }) {
-				err = refused("--"+f.Name, "invalid", fmt.Sprintf("--%s takes a JSON array of objects, such as '[{\"name\": \"a\"}]'.", f.Name))
+				err = refused("--"+f.Name, "invalid", fmt.Sprintf("--%s takes a JSON array of objects. Run `%s --schema` to see their fields.", f.Name, path))
 				return
 			}
 			values[key] = raw
@@ -239,7 +239,7 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 		}
 		var obj map[string]any
 		if jsonkit.Unmarshal(raw, &obj) != nil || obj == nil {
-			err = refused("--"+f.Name, "invalid", fmt.Sprintf("--%s takes a JSON object, such as '{\"filters\": []}'.", f.Name))
+			err = refused("--"+f.Name, "invalid", fmt.Sprintf("--%s takes a JSON object. Run `%s --schema` to see its fields.", f.Name, path))
 			return
 		}
 		values[key] = raw

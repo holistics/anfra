@@ -84,7 +84,7 @@ var Known = []Agent{
 			},
 			list:      []string{"plugin", "list", "--json"},
 			installed: claudeInstalled,
-			note:      "Restart Claude Code, or run /reload-plugins, to load it.",
+			note:      "Restart Claude Code, or run /reload-plugins, to load the skills.",
 		},
 	},
 	{
@@ -99,7 +99,7 @@ var Known = []Agent{
 			},
 			list:      []string{"plugin", "list", "--marketplace", Marketplace, "--json"},
 			installed: codexInstalled,
-			note:      "Restart Codex to load it. The aql-writer agent is not included: Codex plugins carry skills and hooks only.",
+			note:      "Restart Codex to load the skills. Codex plugins hold only skills and hooks, so the aql-writer agent isn't included.",
 		},
 	},
 	{

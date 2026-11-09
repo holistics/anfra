@@ -58,7 +58,7 @@ After:
 
 A colon or a semicolon lets a writer glue two thoughts together without saying how they relate. The reader is left to work that out. Is the second part a cause? A consequence? An example? A fix?
 
-- **Use a colon only to introduce something.** That can be a list, an example, a command to run, or a value after a label (`Repo: /tmp/acme`). Don't use one to join two clauses.
+- **Use a colon only when the right side elaborates the left: it says specifically what the left side is.** That's a value after a label (`Repo: /tmp/acme`), the items of a list, or how a step failed in an error chain. If "that is" or "specifically" could replace the colon, it's fine. A reason, a consequence, a guess at what the left side may mean, or a fix isn't an elaboration: write "because", "so", or "may", or two sentences.
 - **Don't use semicolons in messages.** Write two sentences instead.
 - **Say how the ideas relate.** Use "because", "so", "but", "if", "which" or "instead of". These words are the whole point of the sentence, so don't leave them out.
 - **Keep one idea per sentence.** If a sentence needs more than one comma-separated aside, split it.
@@ -72,7 +72,7 @@ After:
 
 > Can't set up .gitignore: it's a symlink, which Git doesn't follow. Add %s to the repo's ignore rules yourself.
 
-A wrapped error chain (`create the export's file: open /tmp/x: permission denied`) is the one place colons join clauses on purpose. Each part names a step, and the colon reads as "failed because". Keep each part short, so that the chain stays easy to read.
+A wrapped error chain (`create the export's file: open /tmp/x: permission denied`) follows the same rule: each part says how the step before it failed. Keep each part short, so that the chain stays easy to read.
 
 ## 3. Disclose progressively
 
@@ -99,7 +99,7 @@ Formatting makes the shape of the text visible, so the reader doesn't have to pa
 - **Headings.** In a doc, use them so a reader can skim to what they need.
 - **Code formatting.** Put commands, flags, paths and values in backquotes, so the reader can tell them apart from prose and copy them.
 
-Short messages have structure too. An error has a `message` and a `help`, so put the fix in `help` when it doesn't fit in one sentence. A description can use labels, the way a list would, in a single line. Rule 2 allows this, because each colon introduces something.
+Short messages have structure too. An error has a `message` and a `help`, so put the fix in `help` when it doesn't fit in one sentence. A description can use labels, the way a list would, in a single line. Rule 2 allows this, because what follows each label elaborates it.
 
 Before:
 
@@ -147,6 +147,8 @@ So measure conciseness by the reader's effort, not by word count. Twelve clear w
 
 **Write for what really happens.** Being exact doesn't mean covering every case equally. Think about the situations readers realistically end up in, and write for those. Knowing how the code behaves tells you which situations are realistic. For example, anfra locks `.anfra/config.yml` only while it writes the file, which always takes a moment. So a lock that's still there a moment later was almost certainly left by a crash. "If none is running, remove the lock" covered every case accurately, but it asked the reader to check something they had no easy way to check. The message now says to try again in a moment, and names the lock file in brackets, for a reader who knows to delete one left by a crash.
 
+**State the fact, and let the reader who cares work out the rest.** The lock message names the lock file, but doesn't say a leftover one can be deleted. A reader who knows about lock files works that out, and one who doesn't would only be led to delete a lock that's in use. In the same way, the console says its server was "started by this console", not that it stops when you exit. A reader who cares about that knows what a child process is.
+
 **State the situation, not the mechanism.** The mechanism is how you work out what happened, but the reader needs only what happened: "anfra 0.19.0 was just released, and its build for linux/amd64 isn't uploaded yet", not how releases are built. Give the mechanism only when the reader needs it to get the fix right, as in "AGENTS.md is a symlink, which anfra doesn't follow". When you can't be sure of the situation, say what anfra saw instead, such as "invalid or has expired".
 
 **Sometimes the best fix is in the code.** When a message is hard to write, because it needs a caveat, an exception, or a list of manual steps, the behavior may be what's awkward. Fix that rather than the wording, and don't cut a true, actionable fact just to make the text cleaner.
@@ -156,7 +158,7 @@ So measure conciseness by the reader's effort, not by word count. Twelve clear w
 
 Weigh a code change like any other: it's more to build and keep working. Make it when readers realistically run into the problem, not just to shorten one message.
 
-**Stay open to how agents write.** The style this guide pushes against is common in text written by agents like Claude, and agents may find parts of it easy and cheap to read. So don't treat every trace of it as a mistake to coerce away. Some of its habits may serve both kinds of reader, such as labels instead of sentences, or terse lists of values. When one does, adopt it on purpose and add it to this guide, the way rule 2 allows a colon that introduces something.
+**Stay open to how agents write.** The style this guide pushes against is common in text written by agents like Claude, and agents may find parts of it easy and cheap to read. So don't treat every trace of it as a mistake to coerce away. Some of its habits may serve both kinds of reader, such as labels instead of sentences, or terse lists of values. When one does, adopt it on purpose and add it to this guide, the way rule 2 allows a colon that elaborates.
 
 That isn't the same as accepting the style as it is. A habit earns its place by working for the reader, and that includes people. So the guide is meant to change: refine it as rewrites and agent checks show what works for people and agents together.
 
@@ -204,6 +206,8 @@ To add a word to this table, check first that no plain word would do, and decide
 
 **Warnings and notices.** Say what the reader should know and the one thing to do about it. A notice the reader can't act on is noise.
 
+**Hints.** Start with the action. Give the reason only if what's around the hint doesn't already show it, and then as the action's purpose rather than a second sentence: "Ask the user to run `anfra update` to get anfra 0.20.0."
+
 **Flag and command help.** Start a command's summary with a verb that says what it does ("Run a query, and return its rows and the SQL that produced them"). A core command's flags take their help from its `doc` tags, so they say what the value is ("the most entities to return, 50 by default"). Mention the default when there is one.
 
 **Schema descriptions (`doc` tags).** Agents read these to decide what to send and how to read what comes back. Say what the field is. List its values, and explain one only when its name doesn't say enough. Say when the field is absent if that isn't obvious from what the field is, or if a reader who didn't know could go wrong. For example, `aql` is absent for a SQL query, but `hints` needs only "what to do next, if any".
@@ -216,7 +220,7 @@ Read the text as someone who has just hit it, with no context:
 
 1. Can they tell what happened?
 2. Can they tell what to do, without guessing?
-3. Does every colon introduce something, and is every semicolon gone?
+3. Does what follows every colon elaborate what comes before it, and is every semicolon gone?
 4. Does every word earn its place?
 5. Does it lead with what they need now, and point to where the rest is?
 6. Would a list, a table or a second paragraph make it easier to read?

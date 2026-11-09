@@ -506,12 +506,15 @@ func sentence(issues []string) string {
 	return strings.ToUpper(s[:1]) + s[1:] + "."
 }
 
-// joinAnd joins items as prose: "a", "a and b", "a, b and c".
+// joinAnd joins items as prose: "a", "a and b", "a, b, and c".
 func joinAnd(items []string) string {
 	if len(items) <= 1 {
 		return strings.Join(items, "")
 	}
-	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
+	if len(items) == 2 {
+		return items[0] + " and " + items[1]
+	}
+	return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
 }
 
 // skillsVersions is a copy's skills by version, oldest first, those with no

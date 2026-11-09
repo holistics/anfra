@@ -72,7 +72,7 @@ func newAgentSetupCmd(use, deprecated string) *cobra.Command {
 				printWarning(cmd.ErrOrStderr(), "deprecated", deprecated)
 			}
 			if check {
-				printWarning(cmd.ErrOrStderr(), "deprecated", "--check is deprecated: use `anfra agent setup check`.")
+				printWarning(cmd.ErrOrStderr(), "deprecated", "--check is deprecated. Use `anfra agent setup check` instead.")
 			}
 			return agentSetupRun(cmd, ids, check)
 		},

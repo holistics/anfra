@@ -63,7 +63,7 @@ func TestPublishOffersMissingDataSources(t *testing.T) {
 	if s.settings["warehouse"]["require_ssl"] != true || s.settings["dev"] != nil {
 		t.Errorf("created with settings %v, want warehouse's alone", s.settings)
 	}
-	if _, ok := s.created["events"]; ok || s.sources["events"] != "snowflake" || !strings.Contains(errOut, "events is bigquery here and snowflake on the org") {
+	if _, ok := s.created["events"]; ok || s.sources["events"] != "snowflake" || !strings.Contains(errOut, "events is bigquery here, but snowflake on the org") {
 		t.Errorf("events: created %v, now %s; said %q", s.created["events"], s.sources["events"], errOut)
 	}
 	if !strings.Contains(errOut, "Queries on the models using dev fail until the org has them") || len(s.deployed) != 1 {

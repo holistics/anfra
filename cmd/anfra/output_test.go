@@ -41,7 +41,7 @@ func TestJSONWarningAndError(t *testing.T) {
 	t.Cleanup(resetOutput)
 	output.json = true
 	var out bytes.Buffer
-	printWarning(&out, "deprecated", "--dry-run is deprecated: use --list.")
+	printWarning(&out, "deprecated", "--dry-run is deprecated. Use --list instead.")
 	err := apperr.NewWith(apperr.ValidationFailed, "bad dataset",
 		apperr.Violate(apperr.Violation{Field: "dataset", Code: "invalid", Message: "no such dataset"}))
 	printError(&out, &commandError{path: "anfra query", args: registered(t, "query").Args(), err: err}, "")
@@ -50,7 +50,7 @@ func TestJSONWarningAndError(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("want 2 lines, got:\n%s", out.String())
 	}
-	if lines[0] != `{"warning":{"code":"deprecated","message":"--dry-run is deprecated: use --list."}}` {
+	if lines[0] != `{"warning":{"code":"deprecated","message":"--dry-run is deprecated. Use --list instead."}}` {
 		t.Errorf("warning = %s", lines[0])
 	}
 	var doc struct {

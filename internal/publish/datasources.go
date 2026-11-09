@@ -73,7 +73,7 @@ func offerDataSourcesToOrg(ctx context.Context, m *mdCopy, dir string, create bo
 		l := local[name]
 		if r, ok := byName[name]; ok {
 			if r.Type != l.DBType && !sameSQL[[2]string{l.DBType, r.Type}] {
-				t.Warn("data_source_type_differs", "Data source %s is %s here and %s on the org: the org's models compile to %s's SQL.", name, l.DBType, r.Type, r.Type)
+				t.Warn("data_source_type_differs", "Data source %s is %s here, but %s on the org, so the org's models compile to %s's SQL.", name, l.DBType, r.Type, r.Type)
 			}
 			continue
 		}

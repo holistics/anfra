@@ -49,7 +49,7 @@ func newPublishCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			for _, former := range []string{"list", "dry-run"} {
 				if cmd.Flags().Changed(former) {
-					printWarning(cmd.ErrOrStderr(), "deprecated", "--"+former+" is deprecated: use `anfra publish check`.")
+					printWarning(cmd.ErrOrStderr(), "deprecated", "--"+former+" is deprecated. Use `anfra publish check` instead.")
 				}
 			}
 			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())

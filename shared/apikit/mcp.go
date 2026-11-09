@@ -153,8 +153,8 @@ func (m MCP[Call]) discoveryTools(s *mcp.Server, rt *Runtime, reg OpSet[Call], r
 	}
 	s.AddTool(&mcp.Tool{
 		Name: "list_operations",
-		Description: "List the operations you may call: without a group, the groups, each in one line; with a group, " +
-			"its operations, each in one line. Then describe_operation for how to call one.",
+		Description: "List the operations you can call. Without a group, it lists the groups. With a group, it lists the group's " +
+			"operations. Both list one per line. Call describe_operation to see how to call one.",
 		InputSchema: object(map[string]any{"group": map[string]any{"type": "string", "description": "a group's name, from the list"}}),
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, func(ctx context.Context, call *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
