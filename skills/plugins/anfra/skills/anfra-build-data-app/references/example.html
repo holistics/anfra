@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"
     integrity="sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD" crossorigin="anonymous"></script>
   <style>
-    /* anfra tokens (DESIGN.md) on Basecoat's variables; dark is derived from light. */
+    /* anfra's tokens on Basecoat's variables; dark is derived from light. */
     :root {
       --background: oklch(0.955 0.007 88.6);          /* paper: the page */
       --foreground: oklch(0.201 0.022 301.1);         /* ink */
@@ -407,7 +407,8 @@
 
     // The change vs last year, rounded before the sign is chosen.
     function delta (current, previous) {
-      if (current == null || previous == null || Number(previous) === 0) return { note: 'No figure for last year' };
+      if (current == null) return { note: 'Nothing to compare' };
+      if (previous == null || Number(previous) === 0) return { note: 'No figure for last year' };
       const ratio = Math.round((Number(current) / Number(previous) - 1) * 1000) / 1000;
       if (ratio === 0) return { note: 'No change vs last year' };
       return { value: minus(change.format(ratio)), direction: ratio > 0 ? 'up' : 'down' };
@@ -418,6 +419,7 @@
     const app = Anfra.createApp({ title: 'Sales' });
 
     // Each figure and the same figure one year earlier. relative_period shifts the period filter.
+    // No alias is named after a model (orders), because it would hide the model from the others.
     const kpis = app.createQuery('kpis', {
       dataset: 'ecommerce',
       aql: `
@@ -425,8 +427,8 @@
           measures {
             revenue: orders | sum(orders.amount),
             revenue_ly: orders | sum(orders.amount) | relative_period(orders.created_at, interval(-1 year)),
-            orders: orders | count(orders.id),
-            orders_ly: orders | count(orders.id) | relative_period(orders.created_at, interval(-1 year)),
+            order_count: orders | count(orders.id),
+            order_count_ly: orders | count(orders.id) | relative_period(orders.created_at, interval(-1 year)),
             aov: safe_divide(orders | sum(orders.amount), orders | count(orders.id)),
             aov_ly: safe_divide(orders | sum(orders.amount), orders | count(orders.id)) | relative_period(orders.created_at, interval(-1 year)),
             latest: orders | max(orders.created_at)
@@ -570,7 +572,7 @@
       tiles.forEach((tile) => tile.classList.toggle('is-updating', kpis.state === 'executing'));
       const row = kpis.result.rows[0] ?? {};
       setKpi('kpi-revenue', row.revenue, (v) => moneyShort.format(v), row.revenue_ly, 'up');
-      setKpi('kpi-orders', row.orders, (v) => count.format(v), row.orders_ly, 'up');
+      setKpi('kpi-orders', row.order_count, (v) => count.format(v), row.order_count_ly, 'up');
       setKpi('kpi-aov', row.aov, (v) => money.format(v), row.aov_ly, 'up');
       document.getElementById('as-of').textContent = row.latest ? `Latest order in this view: ${fullDate.format(new Date(row.latest))}.` : '';
     }
@@ -582,7 +584,7 @@
         : regions.length <= 2 ? regions.join(' and ') : `${regions.length} regions`;
       document.getElementById('scope').textContent =
         `${currentPeriod}, ${regionText}, compared with the same dates a year earlier`;
-      document.getElementById('clear-selection').hidden = selected.length === 0;
+      document.getElementById('clear-selection').hidden = !app.selection;
     }
 
     function axisStyle (theme) {
@@ -641,7 +643,7 @@
         return;
       }
       const selected = new Set(byRegion.selectedRows.map((row) => row.region));
-      const max = Math.max(...rows.map((row) => Number(row.revenue)));
+      const max = Math.max(0, ...rows.filter((row) => row.revenue != null).map((row) => Number(row.revenue)));
         // A plain setOption merges into the series the chart has: a click only restyles the bars.
       byRegionChart.setOption({
         animation: false,
@@ -649,7 +651,7 @@
         textStyle: { fontFamily: 'Inter Variable, Inter, system-ui, sans-serif' },
         grid: { left: 8, right: 56, top: 0, bottom: 0, containLabel: true },
         tooltip: { ...tooltipStyle(theme), formatter: (p) => tooltipHtml(p.name,
-          [{ name: 'Revenue', color: theme.cat[0], value: money.format(rows[p.dataIndex].revenue) }], 'Click to filter the page') },
+          [{ name: 'Revenue', color: theme.cat[0], value: rows[p.dataIndex].revenue == null ? 'No data' : money.format(rows[p.dataIndex].revenue) }], 'Click to filter the page') },
         xAxis: { type: 'value', show: false, max },
         // triggerEvent: a click on a region's name selects it too. Long names truncate, never squeeze the bars.
         yAxis: { type: 'category', inverse: true, triggerEvent: true, data: rows.map((row) => row.region ?? 'No region'), ...axisStyle(theme),
@@ -660,9 +662,9 @@
             emphasis: { disabled: true }, label: { show: false }, data: rows.map(() => max) },
           { name: 'Revenue', type: 'bar', barMaxWidth: 20, barGap: '-100%', z: 2, cursor: 'pointer',
             emphasis: { itemStyle: { borderColor: theme.text, borderWidth: 1 } },
-            label: { show: true, position: 'right', color: theme.text, fontSize: 12, formatter: (p) => moneyShort.format(p.value) },
+            label: { show: true, position: 'right', color: theme.text, fontSize: 12, formatter: (p) => (p.value == null ? 'No data' : moneyShort.format(p.value)) },
             data: rows.map((row) => ({
-              value: Number(row.revenue),
+              value: row.revenue == null ? null : Number(row.revenue),
               itemStyle: { color: theme.cat[0], borderRadius: [0, 4, 4, 0],
                 opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
             })) },
@@ -724,14 +726,14 @@
       });
     });
 
-    // Region multi-select. The select element is its own instance: refresh() rescans its options.
-    // Basecoat's deferred script initializes it on DOMContentLoaded, so wait for that before refresh().
+    // Region multi-select. Basecoat's deferred script sets the select up after this script's own
+    // DOMContentLoaded listeners, and only then adds refresh(), so wait for its signal.
     const regionSelect = document.getElementById('region-select');
     const regionList = document.getElementById('region-listbox');
-    const domReady = document.readyState === 'loading'
-      ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve))
-      : Promise.resolve();
-    Promise.all([region.loadOptions(), domReady]).then(([options]) => {
+    const selectReady = regionSelect.dataset.selectInitialized
+      ? Promise.resolve()
+      : new Promise((resolve) => regionSelect.addEventListener('basecoat:initialized', resolve, { once: true }));
+    Promise.all([region.loadOptions(), selectReady]).then(([options]) => {
       regionList.replaceChildren(...options.map((value) => {
         const option = document.createElement('div');
         option.setAttribute('role', 'option');
@@ -806,9 +808,12 @@
       if (wasInside) regionChips.querySelector('.chip-more')?.focus();
     });
     regionSelect.addEventListener('change', (event) => {
+      if (event.target !== regionSelect) return; // a search input's own change bubbles here too
       pickedRegions = Array.isArray(event.detail.value) ? event.detail.value : [];
       renderChips();
       region.setCondition({ operator: 'is', values: pickedRegions });
+      // A bar picked in the old scope would keep filtering the KPIs and trend, unseen.
+      app.clearSelection();
       app.execute();
     });
 

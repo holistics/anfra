@@ -25,9 +25,6 @@ References, read when a step needs them:
 - [references/example.html](references/example.html): a complete app in the default look: header
   with page controls, KPI row with delta pills, a trend beside its breakdown, a footer of
   definitions. Start a new file from it, or from the closest app already in `apps/`.
-- [references/DESIGN.md](references/DESIGN.md): the anfra web app's design guide. The example
-  already carries its tokens, so don't read it for a default-look build. Open it only for a token
-  the example lacks.
 - The SDK docs, for what these references don't cover: look it up with [](../anfra-docs/).
 
 ## 1. Learn the datasets
@@ -55,8 +52,9 @@ Also ask which look the user wants, unless they already said: the **default anfr
 (recommended), **something creative** (you choose the palette and type), or **their own design**
 (a brand, colors or a reference to follow). See [Look and feel](#look-and-feel).
 
-Then write the **page plan**, one line each. Where you must guess, write the guess and mark it
-"(assumed)", because the user corrects a written guess in one reply.
+In the default look, read [references/app-design.md](references/app-design.md) first. Then write
+the **page plan**, one line each. Where you must guess, write the guess and mark it "(assumed)",
+because the user corrects a written guess in one reply.
 
 1. **Kind of page:** a KPI or monitoring page (the reader checks numbers against a comparison), or
    another kind: an explorer, a catalog, a lineage view, a detail lookup, an ops list.
@@ -72,9 +70,8 @@ Then write the **page plan**, one line each. Where you must guess, write the gue
    the story is (the last full month vs the same month last year) rather than on all time with no
    comparison, which leaves the analysis to the reader. An explorer or catalog may open on all time.
 
-In the default look, read [references/app-design.md](references/app-design.md) before writing the
-plan. The plan comes before the queries because it decides them: a comparison
-in the lead needs its own measure, a breakdown its own query.
+The plan comes before the queries because it decides them. A comparison in the lead needs its
+own measure, and a breakdown its own query.
 
 Then write the declaration list: every `createQuery` (dataset, dimensions, measures),
 `createFilter`, `createDateDrill`, `mapControl` and `mapCrossFilter`, with real field names, how
@@ -106,7 +103,7 @@ text are not acceptable.
 - **Default anfra style:** start from [references/example.html](references/example.html) and follow
   app-design.md. The example applies anfra's tokens to [Basecoat UI](https://basecoatui.com), a
   plain HTML/CSS component library, and already has the type scale, 32px controls, cards, chart
-  theme and tooltips: keep them, and spend your effort on the plan.
+  theme and tooltips. Keep them, and spend your effort on the plan.
 - **Their own design:** take its colors, type and layout from what they gave.
 - **Creative:** you choose the palette, type, density and chart style. Write the direction into
   the plan first (a tradition to borrow from, a palette drawn from the data's domain, one move
@@ -129,21 +126,24 @@ direction, and the floors below.
 
 In every look:
 
-- **A single HTML file uses Basecoat** (pinned CDN CSS and JS, as in the example). Use shadcn
-  (`shadcn-vue` for Vue) only when the app is written in React or Vue.
+- **Write plain HTML, CSS and JS, with Basecoat for the components** (pinned CDN CSS and JS, as in
+  the example). Don't bring in a framework or its component kit (React, Vue, shadcn), because the
+  app is one HTML file with no build step, and the example and these references assume none.
 - **Controls are Basecoat's, as in the example:** never a native `<select>`. Several picks stay one
   32px line of removable chips (the example's multi-select) rather than the combobox's chips, which
   wrap and grow the field. For a long list, add a search input to its menu that hides the options
   that don't match, because Basecoat's select has no search of its own.
-- **Never put controls in a Basecoat `.card` body.** It is a flex column that clips its overflow,
-  so a dropdown is cut off at the card's bottom edge. Page controls sit in the header row.
+- **Never put a dropdown in a Basecoat `.card`.** It is a flex column that clips its overflow, so
+  a dropdown is cut off at the card's edge, in its header too. Page controls sit in the page's
+  header row. A control that changes one chart goes in that card's header: a segmented control,
+  or a dropdown only with `overflow: visible` on that card.
 - **Basecoat's script wires components by class name**, on `DOMContentLoaded` and then for every
   node added later: `.accordion`, `.combobox`, `.command`, `.drawer`, `.dropdown-menu`,
   `.popover`, `div.select`, `.sidebar`, `.tabs`, `.toast`, `#toaster` and `input[type="range"]`.
   Use those names only on that component's own markup. An app's own `.drawer` makes Basecoat
   throw "Failed to initialize drawer", so name it `app-drawer`. The script loads with `defer`, so
-  `basecoat` is undefined while the page's inline scripts run: never call it. A call at the top
-  level throws before `execute()`, and the page runs no query.
+  `basecoat` is undefined while the page's inline scripts run. Never call it, because a call at
+  the top level throws before `execute()`, and the page runs no query.
 - Charts: in the default look, follow app-design.md's chooser. If a
   `dataviz` skill is available, use it for what app-design.md does not cover. Give ECharts hex
   colors: it cannot parse `oklch`.
@@ -159,7 +159,9 @@ anfra applies to the query's `explore { }` before it runs.
   Any AQL expression works inside it. A pipe-style query (`orders | select(...)`) runs, but fails
   as soon as a reader touches a control, sort or date drill mapped to it.
 - **Alias every dimension and measure** (`revenue: sum(orders.amount)`). The alias is the row key
-  in `query.result.rows`, and what `sorts` and `setSort` name.
+  in `query.result.rows`, and what `sorts` and `setSort` name. Never name an alias after a model
+  (`orders: orders | count(orders.id)`), because the alias then hides the model from the query's
+  other measures.
 - **No limit.** Paging is the SDK's (`pageSize`, `fetchMore`). A query without `pageSize` gets
   every row, up to the server's maximum, past which it fails rather than truncating. The 10,000
   rows `anfra query` stops at are that command's page, not a cap on apps.
@@ -183,17 +185,17 @@ anfra lineage --targets '[{"parent":"<dataset fqn>","child":"<metric>"}]'
 
 ## 4. Write the file
 
-One self-contained `.html` file in `apps/` (subfolders group apps in the list), with a `<title>`
-the list shows.
-`apps/sales/overview.html` opens at `/apps/sales/overview`. Follow the example's skeleton: declare
-everything, `subscribe` a render function, `execute()`, then wire controls and clicks to set state
-and `execute()` again. Keep its two layers apart: the look (styles, markup, chart theme) and the
-SDK wiring. Lay the page out in the plan's order.
+One self-contained `.html` file in `apps/` (subfolders group apps in the list), with a `<title>` the
+list shows. `apps/sales/overview.html` opens at `/apps/sales/overview`. Follow the example's
+skeleton: declare everything, `subscribe` a render function, `execute()`, then wire controls and
+clicks to set state and `execute()` again. Keep its two layers apart: the look (styles, markup,
+chart theme) and the SDK wiring. Lay the page out in the plan's order.
 
-Delete what the plan doesn't use from the example together with its script: a control's markup
-without its JS (or JS without its markup) throws on `null` before `execute()`, and the page shows
-skeletons forever. Replace the example's header comment with one line on the page's purpose and
-the plan's decisions (the lead, the defaults, what was left out), so the next change starts there.
+Delete what the plan doesn't use from the example, markup and script together. Script left without
+its markup throws on `null` before `execute()`, so the page shows skeletons forever. Markup left
+without its script is a control that does nothing. Replace the example's header comment with one
+line on the page's purpose and the plan's decisions (the lead, the defaults, what was left out), so
+the next change starts there.
 
 The frame is a **sandbox** (`allow-scripts` only, opaque origin) under a **content policy**. Write
 for it:
@@ -226,7 +228,8 @@ for it:
   the `dark` class in `<head>`, as the example does, or a dark-mode reader sees a white flash on
   every reload. If the repo's instructions set dark mode another way (a `data-theme` attribute),
   follow them, and keep the `dark` class in step with it, because Basecoat and the tokens key off
-  `.dark`.
+  `.dark`. When you follow `Anfra.theme`, toggle the class in its listener too
+  (`classList.toggle('dark', theme.scheme === 'dark')`).
 - Forms, popups, navigation, `<iframe>` and `<base>` are blocked: use buttons and `change`
   listeners, never `<form>`.
 - **The app is its one HTML file: nothing it loads may be a file of the repo.** No relative `src`
@@ -258,18 +261,19 @@ host's toolbar, so keep every app render-safe: chart entry animations off (EChar
 `animation: false`), images and web fonts from servers that send CORS headers (jsDelivr, Google
 Fonts), and `preserveDrawingBuffer: true` on a WebGL chart.
 
-Render each query's states, each in the block's loaded size, as the example's `renderStatus()`
-does: loading (a skeleton), updating (the old result, dimmed), empty (the empty scope in words,
-never a bare zero), and error. Render an error by who must act, as
+Render each query's states, each in the block's loaded size, as the example's `renderStatus()` does:
+loading (a skeleton), updating (the old result, dimmed), empty (the empty scope in words, never a
+bare zero), and error. Render an error by who must act, as
 [references/api.md](references/api.md#errors) shows: no access or sign in again for `forbidden` and
 `unauthenticated`, the message for any other `user` or `client` error, and for a `server` one
 "couldn't load" with a Retry that calls `app.execute()`, which reruns only the failed queries. Log
 `result.columns`, `result.rows[0]` and `result.debug?.executedAql` on each query's first success:
-the real row keys, value types and the AQL that ran. That log is the app's only console output, so
-delete other debug logging and commented-out code before handing over. A `console.log` stays in
-the browser's console (only warnings and errors reach `anfra serve`'s log): working from the log
-alone, run the query with `anfra query` for its columns. Put on the page the definitions, dates and
-any rounding a reader needs to trust a number.
+the real row keys, value types and the AQL that ran. Keep that log, and a `console.error` for each
+failure you catch, since that is what reaches `anfra serve`'s log. Delete other debug logging and
+commented-out code before handing over. A `console.log` stays in the browser's console (only
+warnings and errors reach `anfra serve`'s log): working from the log alone, run the query with
+`anfra query` for its columns. Put on the page the definitions, dates and any rounding a reader
+needs to trust a number.
 
 ## 5. Run and check it
 
@@ -286,16 +290,15 @@ Leave it running: it reloads the open app whenever its file, or the AML, changes
 exception: run `anfra ingest` after an AML change, or it shows the old definitions. Its header shows
 the repo's problems (AML that does not compile, a data source not configured).
 
-Open the app in a browser and click every control once: each click should change the page and log
-no error. Open every dropdown too. Start a browser yourself only after asking the user once,
-because it opens processes and windows on their machine. Otherwise ask them to open the app. Then
-read what went wrong without the browser: while the app is open, `anfra serve` writes each of its
-runtime errors (a failed query, an uncaught error or rejection, a listener's exception, a call
-the host failed) and its `console.error` / `console.warn` lines to its log, the file `anfra
-status` prints as `repo.logs`, one JSON line each with `"service":"app"`, the app's path as `app`,
-and `"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `scope`,
-`request_id`, `stack`) or
-`"event":"app.console"` (the line as `msg`). The `kind` says where the error came from:
+Open the app in a browser and click every control once. Each click should change the page and log no
+error. Open every dropdown too. Start a browser yourself only after asking the user once, because it
+opens processes and windows on their machine. Otherwise ask them to open the app. Then read what
+went wrong without the browser: while the app is open, `anfra serve` writes each of its runtime
+errors (a failed query, an uncaught error or rejection, a listener's exception, a call the host
+failed) and its `console.error` / `console.warn` lines to its log, the file `anfra status` prints as
+`repo.logs`, one JSON line each with `"service":"app"`, the app's path as `app`, and
+`"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `scope`, `request_id`,
+`stack`) or `"event":"app.console"` (the line as `msg`). The `kind` says where the error came from:
 `call.query` (a failed query), `call.fetch_more`, `call.export` and the like (a call you left
 unhandled), `app.uncaught`, `app.listener` (your code), `plugin.uncaught` (a plugin's), or
 `host.internal` (the host's):
@@ -318,12 +321,11 @@ The same errors are in the panel's Overview, under Problems. Read errors against
 target's `error` or an empty diagram); `query_invalid` carries anfra's diagnostics for the AQL, with
 their lines, and `validation_failed` names the bad entry a control or cross-filter added
 (`input.filters[0].field`: a `mapControl` typo, an unsupported operator, a drill on a field no
-dimension is built on).
-Compare a misbehaving query's `executedAql` with what you meant, and fix the smallest thing that
-explains it. When the server fails a query, its full cause is in the same log: find the server's
-line by the app line's `request_id`. A bare "The call failed." is a host-side error: its app line
-(`"kind":"host.internal"`) has the original message and the call.
-If you could not check the interface, say so rather than claiming it works.
+dimension is built on). Compare a misbehaving query's `executedAql` with what you meant, and fix the
+smallest thing that explains it. When the server fails a query, its full cause is in the same log:
+find the server's line by the app line's `request_id`. A bare "The call failed." is a host-side
+error: its app line (`"kind":"host.internal"`) has the original message and the call. If you could
+not check the interface, say so rather than claiming it works.
 
 Then read the file against the floors (Look and feel) and, in the default look, app-design.md's
 self-check (section 7). Fix every "no" before you hand over. With a
