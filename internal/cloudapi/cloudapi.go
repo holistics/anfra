@@ -34,6 +34,8 @@ const (
 	OpListMissingBlobs = "repos.list_missing_blobs"
 	OpCreateBlobs      = "repos.create_blobs"
 	OpPublish          = "repos.publish"
+	OpListFiles        = "repos.list_files"
+	OpGetBlobs         = "repos.get_blobs"
 	OpListDataSources  = "data_sources.list"
 	OpCreateDataSource = "data_sources.create"
 	OpTestDataSource   = "data_sources.test"
@@ -53,27 +55,47 @@ const (
 	// CodeInvalidRequest: an input the op's schema refuses; its details are
 	// apperr.Violations.
 	CodeInvalidRequest = "invalid_request"
+	// CodeBaseOutdated: a publish whose base is no longer the published
+	// revision; its details are the published revision (LiveRevision).
+	CodeBaseOutdated = "base_outdated"
+	// CodeRateLimited: too many calls; its details say how long to wait
+	// (RetryAfter).
+	CodeRateLimited = "rate_limited"
+	// CodeUnavailable: the server can't take the call now; its details say how
+	// long to wait when the server knows (RetryAfter).
+	CodeUnavailable = "unavailable"
 )
+
+// LiveRevision are the details of base_outdated: the revision published
+// since the publish's base, to pull.
+type LiveRevision struct {
+	Revision    string    `json:"revision"`
+	PublishedBy *Person   `json:"published_by,omitempty"`
+	PublishedAt time.Time `json:"published_at"`
+}
+
+// RetryAfter are the details of rate_limited and unavailable, when the server
+// knows how long to wait.
+type RetryAfter struct {
+	Seconds int `json:"retry_after_seconds"`
+}
 
 // MissingBlobs are the details of blobs_missing.
 type MissingBlobs struct {
 	OIDs []string `json:"oids"`
 }
 
-// StatusOut is the org's published revision, and the server's publishing limits.
+// StatusOut is the org's published revision, and the server's limits.
 type StatusOut struct {
-	Revision    string          `json:"revision"`
-	PublishedBy *Person         `json:"published_by,omitempty"`
-	PublishedAt time.Time       `json:"published_at"`
-	Publish     PublishSettings `json:"publish"`
-}
-
-// PublishSettings are how to publish to the server.
-type PublishSettings struct {
+	Revision    string    `json:"revision"`
+	PublishedBy *Person   `json:"published_by,omitempty"`
+	PublishedAt time.Time `json:"published_at"`
+	// Limits are read from the root: the server's deprecated publish.limits,
+	// the same values, is for CLIs from before pull.
 	Limits Limits `json:"limits"`
 }
 
-// Limits are the server's bounds on publishing, which the client batches by.
+// Limits are the server's bounds on the repo ops, which the client batches by.
 type Limits struct {
 	Files       int `json:"files"`
 	UploadBlobs int `json:"upload_blobs"`
@@ -81,6 +103,11 @@ type Limits struct {
 	// FileBytes is the largest file; a server that does not send it takes any
 	// file that fits in one upload call.
 	FileBytes int `json:"file_bytes"`
+	// DownloadBlobs is the most blob ids one repos.get_blobs call names.
+	DownloadBlobs int `json:"download_blobs"`
+	// DownloadBytes is the most content one repos.get_blobs answer carries:
+	// past it, the answer leaves the rest out, to ask again for.
+	DownloadBytes int `json:"download_bytes"`
 }
 
 // MaxFileBytes is the largest file the server takes.
@@ -122,6 +149,39 @@ type CreateBlobsOut struct {
 type PublishIn struct {
 	Files   []File `json:"files"`
 	Message string `json:"message,omitempty"`
+	// Base is the revision the files were built on: the one last pulled or
+	// published. When it's no longer the published revision, the server
+	// refuses with base_outdated. Empty, the publish replaces whatever is
+	// published.
+	Base string `json:"base,omitempty"`
+}
+
+// ListFilesIn names a revision of the org's repo.
+type ListFilesIn struct {
+	Revision string `json:"revision"`
+}
+
+// ListFilesOut is a revision's files, as a publish carries them, by path.
+type ListFilesOut struct {
+	Files []File `json:"files"`
+}
+
+// GetBlobsIn is blob ids to read.
+type GetBlobsIn struct {
+	OIDs []string `json:"oids"`
+}
+
+// GetBlobsOut is the blobs' content, in the order named, and the ids that
+// didn't fit in this answer, to ask again for.
+type GetBlobsOut struct {
+	Blobs   []BlobContent `json:"blobs"`
+	Omitted []string      `json:"omitted"`
+}
+
+// BlobContent is one blob's content.
+type BlobContent struct {
+	OID     string `json:"oid"`
+	Content []byte `json:"content"`
 }
 
 // File is one file to publish.

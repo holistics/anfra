@@ -32,7 +32,9 @@ func TestConformsToTheServersContract(t *testing.T) {
 		{cloudapi.OpStatus, empty{}, cloudapi.StatusOut{}, nil},
 		{cloudapi.OpListMissingBlobs, cloudapi.ListMissingBlobsIn{}, cloudapi.ListMissingBlobsOut{}, nil},
 		{cloudapi.OpCreateBlobs, cloudapi.CreateBlobsIn{}, cloudapi.CreateBlobsOut{}, nil},
-		{cloudapi.OpPublish, cloudapi.PublishIn{}, cloudapi.PublishOut{}, []string{cloudapi.CodeBlobsMissing, cloudapi.CodeRepoInvalid}},
+		{cloudapi.OpPublish, cloudapi.PublishIn{}, cloudapi.PublishOut{}, []string{cloudapi.CodeBlobsMissing, cloudapi.CodeRepoInvalid, cloudapi.CodeBaseOutdated}},
+		{cloudapi.OpListFiles, cloudapi.ListFilesIn{}, cloudapi.ListFilesOut{}, nil},
+		{cloudapi.OpGetBlobs, cloudapi.GetBlobsIn{}, cloudapi.GetBlobsOut{}, []string{cloudapi.CodeRateLimited}},
 		{cloudapi.OpListDataSources, empty{}, cloudapi.ListDataSourcesOut{}, []string{cloudapi.CodeForbidden}},
 		{cloudapi.OpCreateDataSource, cloudapi.CreateDataSourceIn{}, cloudapi.DataSource{}, []string{cloudapi.CodeForbidden}},
 		{cloudapi.OpTestDataSource, cloudapi.TestDataSourceIn{}, cloudapi.TestDataSourceOut{}, []string{cloudapi.CodeForbidden}},
@@ -79,9 +81,17 @@ func TestConformsToTheServersContract(t *testing.T) {
 					t.Errorf("%s never answers %s", c.op, code)
 				}
 			}
-			if body, ok := errs[cloudapi.CodeBlobsMissing]; ok {
-				for _, p := range spec.read(dig(body, "properties", "details"), reflect.TypeOf(cloudapi.MissingBlobs{}), "blobs_missing.details") {
-					t.Error(p)
+			// The details the client reads, wherever an op answers them.
+			for code, typ := range map[string]reflect.Type{
+				cloudapi.CodeBlobsMissing: reflect.TypeOf(cloudapi.MissingBlobs{}),
+				cloudapi.CodeBaseOutdated: reflect.TypeOf(cloudapi.LiveRevision{}),
+				cloudapi.CodeRateLimited:  reflect.TypeOf(cloudapi.RetryAfter{}),
+				cloudapi.CodeUnavailable:  reflect.TypeOf(cloudapi.RetryAfter{}),
+			} {
+				if body, ok := errs[code]; ok {
+					for _, p := range spec.read(dig(body, "properties", "details"), typ, code+".details") {
+						t.Error(p)
+					}
 				}
 			}
 		})

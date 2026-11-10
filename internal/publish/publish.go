@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net/http"
 	"os"
@@ -77,6 +78,9 @@ type Env struct {
 	// Input asks for a line of text, as Ask asks a question; nil with no
 	// terminal.
 	Input Input
+	// Logger is the repo's log, for what the publish absorbed that no one
+	// sees, such as a retry; nil records nothing.
+	Logger *slog.Logger
 }
 
 // Run publishes the repo at dir: PUBLISH.md's flow, from file selection to the
@@ -174,7 +178,14 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		}
 		p.Success("This repo publishes to %s (%s).", org, repoconfig.Hint("org", "url"))
 	}
-	client := cloudapi.NewClient(org, cloudapi.ClientOptions{Authorize: authorize, UserAgent: env.UserAgent})
+	client := cloudapi.NewClient(org, cloudapi.ClientOptions{
+		Authorize: authorize,
+		UserAgent: env.UserAgent,
+		Logger:    env.Logger,
+		Waiting: func(_ string, wait time.Duration) {
+			p.Step("%s asked anfra to slow down. Trying again in %s…", org, wait.Round(time.Second))
+		},
+	})
 
 	p.Step("Validating…")
 	if err := env.Validate(ctx); err != nil {
@@ -197,7 +208,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	}
 	// The org's limits are checked before anything is changed, in MotherDuck
 	// or on the org.
-	limits := status.Publish.Limits
+	limits := status.Limits
 	if len(files) > limits.Files {
 		return Result{}, clierr.Precondition("Not published, because the repo has %d files to publish, and %s takes at most %d.", len(files), org, limits.Files)
 	}
