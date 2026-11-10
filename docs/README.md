@@ -27,6 +27,8 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
 | [background routines](designs/background-routines.md) | Work a server runs beside its requests: its kinds, the rules, panics, and the `shared/routine` helper. |
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |
+| [publish and pull](designs/publish.md) | The CLI's side of publishing: `anfra pull`, publishes that name their base, the sync state, the flows, and what the CLI needs from the org's server (proposal). |
+| [treemerge](designs/treemerge.md) | Merging three versions of a repo's files, and of one file's text: what it owns, its flows, conflicts and markers, its architecture (proposal). |
 | [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
 | [init sample](designs/init-sample.md) | `anfra init --example`: the e-commerce sample from its own public repo, asked in a terminal and offered to agents. |
