@@ -11,6 +11,7 @@ import (
 
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/internal/filelock"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -47,10 +48,13 @@ func withCredentialLock(ctx context.Context, use func(*credentialInventory, stri
 		return clierr.Precondition("can't open the authentication lock file: %v", err)
 	}
 	defer lock.Close()
-	if err := acquireCredentialLock(ctx, lock); err != nil {
-		return err
+	if err := filelock.Lock(ctx, lock); err != nil {
+		if ctx.Err() != nil {
+			return err
+		}
+		return clierr.Precondition("can't lock %s: %v. anfra's folder may be on a network drive that doesn't support file locks. If so, set ANFRA_HOME to a folder on a local disk", lock.Name(), err)
 	}
-	defer releaseCredentialLock(lock)
+	defer filelock.Unlock(lock)
 	path := filepath.Join(dir, "credentials.json")
 	inventory := credentialInventory{Version: 1, Entries: map[string]storedCredential{}}
 	f, err := os.Open(path)
