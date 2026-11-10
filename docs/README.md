@@ -29,6 +29,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [sidecars](designs/sidecars.md) | The sidecars' lifecycle: embedding, spawning, shutdown, caches, what passes between processes. |
 | [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
 | [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
+| [init sample](designs/init-sample.md) | `anfra init --example`: the e-commerce sample from its own public repo, asked in a terminal and offered to agents. |
 | [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
 | [readable prose](designs/readable-prose.md) | How to write error messages, notices, help and docs that a person or an agent can read and act on. |
