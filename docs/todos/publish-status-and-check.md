@@ -26,6 +26,7 @@ published:
   current: false        # this folder's files differ
 ```
 
+- Once `anfra pull` exists ([publish](../designs/publish.md)), it also shows the sync state: the base, and a pull's unresolved conflicts, each with its kind and whether it's resolved yet. That's where a member or agent finds the conflicts again after the pull's output is gone.
 - One call, `repos.status`, and hashing the files the publish would take: no validation, no sidecars. An agent can ask it after every change.
 - Exits 0 whatever the state: it describes, it doesn't judge.
 - `auth status` also names the destination, as where a login is used. Both keep it, so each answer is whole.

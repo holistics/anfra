@@ -70,7 +70,8 @@ A convenient default should cost nothing to those who don't use it: live reload 
 ### Don't bloat the user's machine or repo
 
 - Everything anfra keeps goes in one folder, `~/.anfra` or `ANFRA_HOME` (`internal/home/home.go`): one place to find, mount or delete.
-- A repo holds only what its author writes. anfra's state about a repo (logs, caches, the catalog, the running server) lives under that folder, never in the repo.
+- A repo holds only what its author writes. anfra's state about a repo (logs, caches, the catalog, the running server) lives under that folder, never in the repo, so that the source stays apart from what anfra writes, for read-only mounts, containers and deployments.
+- The exception is state that stays true with the repo's content, can't be rebuilt from it, and never arises where the repo is read-only. It travels with the repo, in a folder of `.anfra/` that ignores itself, so it survives moves and copies, and is never committed. Today that is publish's sync state alone, in `.anfra/publish/`: which org revision the files match ([publish](publish.md#the-sync-state)).
 - A repo's own config folder is always `.anfra/`. It is part of the repo's format, like `.git`, so it is the same for everyone who clones it, and no setting renames it.
 - Commands generate nothing into the repo unless that is their purpose (`anfra init`), and even then never overwrite (`cmd/anfra/init.go`).
 
