@@ -7,4 +7,11 @@
 version: 0.19.0
 sidecars:
   anfra_node: anfra-node-v0.13.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
-  canal_query: query-v2.24.0 # holistics/canal release tag (build_and_release_binaries.yml)
+  # The binary anfra runs canal-query from (anfra-canal query), and canal-lake once anfra uses it.
+  anfra_canal: anfra-canal-v1.0.0 # holistics/canal release tag (build_and_release_binaries.yml)
+  # The services anfra_canal runs, as the releases it contains, for deployments that
+  # run each as a service of its own (anfra-cloud's scripts/bump-anfra.sh).
+  # scripts/sidecars.sh check holds them to what the binary reports.
+  anfra_canal_services:
+    canal_query: query-v2.25.0
+    canal_lake: lake-v2.9.0

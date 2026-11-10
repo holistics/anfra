@@ -295,19 +295,22 @@ func TestUnusedTokenIsRevoked(t *testing.T) {
 // not uploaded at all, since a copy of a file being written may be torn, and the
 // token made for it is revoked.
 func TestHeldFile(t *testing.T) {
-	s, url := newServer(t)
 	dir := duckRepo(t)
-	md := newFakeMotherDuck()
-	md.lockedBy = "/home/a/.anfra/sidecars/canal-query-1a2b"
-	errOut, err := runWith(t, dir, Options{SetOrg: url}, (&script{t: t, answers: []string{"yes"}}).ask, md)
-	if err != nil || string(md.uploads["n"]) != "DUCK" || s.sources["local"] != "motherduck" || !strings.Contains(errOut, "a temporary copy of it is uploaded instead") {
-		t.Errorf("err %v, uploads %v, sources %v; said %s", err, md.uploads, s.sources, errOut)
+	// anfra's engine: the embedded anfra-canal, or a standalone canal-query (ANFRA_CANAL_QUERY_BIN)
+	for _, engine := range []string{"/home/a/.anfra/sidecars/anfra-canal-1a2b", "/home/a/canal/canal-query"} {
+		s, url := newServer(t)
+		md := newFakeMotherDuck()
+		md.lockedBy = engine
+		errOut, err := runWith(t, dir, Options{SetOrg: url}, (&script{t: t, answers: []string{"yes"}}).ask, md)
+		if err != nil || string(md.uploads["n"]) != "DUCK" || s.sources["local"] != "motherduck" || !strings.Contains(errOut, "a temporary copy of it is uploaded instead") {
+			t.Errorf("held by %s: err %v, uploads %v, sources %v; said %s", engine, err, md.uploads, s.sources, errOut)
+		}
 	}
 
-	s, url = newServer(t)
-	md = newFakeMotherDuck()
+	s, url := newServer(t)
+	md := newFakeMotherDuck()
 	md.lockedBy = "/usr/bin/python3"
-	errOut, err = runWith(t, dir, Options{SetOrg: url}, (&script{t: t, answers: []string{"yes"}}).ask, md)
+	errOut, err := runWith(t, dir, Options{SetOrg: url}, (&script{t: t, answers: []string{"yes"}}).ask, md)
 	if err != nil || len(md.uploads) != 0 || !slices.Equal(md.revoked, []string{"t1"}) || len(s.created) != 0 || !strings.Contains(errOut, "open in another program (/usr/bin/python3, PID 7)") {
 		t.Errorf("err %v, uploads %v, revoked %v; said %s", err, md.uploads, md.revoked, errOut)
 	}

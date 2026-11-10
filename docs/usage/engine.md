@@ -13,7 +13,7 @@ Import `github.com/holistics/anfra/engine`, and `shared/*` for the API and error
 The engine does its work through two sidecars, which your deployment runs as services: anfra-node (the semantic layer's compiler, for AML and AQL today, among other Node.js functions) and canal-query (which runs queries on the data sources). See [designs/sidecars.md](../designs/sidecars.md).
 
 - **anfra-node** listens on a port with `--port=<n>` (or `ANFRA_PORT`). Its releases are published by holistics-core, and anfra pins the version it was built against in `manifest.yml`.
-- **canal-query** is published by holistics/canal; `manifest.yml` pins its release too.
+- **canal-query** is published by holistics/canal, as a Docker image of its own. Run the release that `manifest.yml` names under `sidecars.anfra_canal_services.canal_query`, e.g. `query-v2.25.0` is the image `canal-query:2.25.0`. (anfra's own binary runs canal-query from anfra-canal, which `sidecars.anfra_canal` pins, and which contains exactly that release.)
 
 Use the versions your anfra's `manifest.yml` names: the engine and its sidecars are released together.
 

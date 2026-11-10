@@ -10,7 +10,7 @@ anfra is a Go program and two sidecar processes it talks to. Each sidecar exists
 |---|---|---|
 | **anfra** (Go) | The main process: commands, the CLI, `anfra serve` (HTTP API, MCP, Data App pages), config and credentials, orchestration, logs. | `cmd/anfra`, `internal/`, `engine/`, `shared/` |
 | **anfra-node** (Node.js) | Supplies anfra with core functions that exist in Node.js. Today these are mainly the semantic layer's (compiling, validating and showing AML; compiling and validating AQL) and the local catalog's (ingest, search, lineage). | holistics-core `apps/anfra-node`; Go client in `internal/sidecar/anfranode` |
-| **canal-query** (Go) | Executes SQL against the warehouse, with connection pooling. | holistics/canal; Go client in `internal/sidecar/canalquery` |
+| **canal-query** (Go) | Executes SQL against the warehouse, with connection pooling. | holistics/canal, run from its anfra-canal binary (`internal/sidecar/anfracanal`); Go client in `internal/sidecar/canalquery` |
 
 anfra talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on another (`internal/sidecar`). The catalog commands also pass anfra-node canal-query's address (`internal/ingest/ingest.go`), `unix:<path>` for the one anfra spawns, for the catalog's database context sources to reach it. Those are off today, and anfra-node's query client cannot dial a socket yet: with them back, it fails on that address (`unknown scheme`) until it can.
 

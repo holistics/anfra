@@ -16,6 +16,8 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/motherduck"
+	"github.com/holistics/anfra/internal/sidecar/anfracanal"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -387,7 +389,7 @@ func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool
 	p.Step("Uploading %s to MotherDuck as database %s… (a large file takes a while)", f.shown, name)
 	err = m.md.CreateDatabaseFrom(ctx, name, f.path)
 	if holder, pid, locked := motherduck.LockedBy(err); locked {
-		if !strings.HasPrefix(filepath.Base(holder), "canal-query") {
+		if !ownEngine(holder) {
 			p.Fail("%s is open in another program (%s, PID %d), so it can't be read right now.", f.shown, holder, pid)
 			p.Note("Close it, then publish again to upload the file.")
 			return "", false, nil
@@ -540,6 +542,15 @@ func (m *mdCopy) finish(ctx context.Context) {
 		return
 	}
 	m.p.Note("Revoked the unused MotherDuck token %q. The secret shown above no longer works.", m.token.Name)
+}
+
+// ownEngine reports whether the program at path, which holds a DuckDB file, is
+// anfra's own query engine: the anfra-canal binary anfra runs canal-query from,
+// or a standalone canal-query (ANFRA_CANAL_QUERY_BIN), by their files' names
+// (<home>/sidecars/anfra-canal-<hash> for an embedded one).
+func ownEngine(path string) bool {
+	base := filepath.Base(path)
+	return strings.HasPrefix(base, anfracanal.Name) || strings.HasPrefix(base, canalquery.Name)
 }
 
 // copyForUpload copies the DuckDB file at path, and its write-ahead log if it

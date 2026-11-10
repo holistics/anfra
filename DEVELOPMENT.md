@@ -33,7 +33,8 @@ It needs [gh](https://cli.github.com), logged in (`gh auth login`) as an account
 To run your own build of a sidecar instead, set, in `.env.local`, an absolute path to it. The check holds it to the pin too; `ANFRA_SIDECAR_SKIP_VERSION_CHECK=1` runs one whose version is not the pin on purpose.
 
 - `ANFRA_NODE_BIN`: anfra-node. In anfra-node's repo, from its folder: `bash scripts/build-sidecar.sh <out path>`.
-- `ANFRA_CANAL_QUERY_BIN`: canal-query. In canal-query's repo, from its root: `CGO_ENABLED=1 go build -tags=duckdb_arrow -o <out path> ./app/query`. It needs cgo, for DuckDB, so it builds for the machine it runs on only.
+- `ANFRA_CANAL_BIN`: anfra-canal, which runs canal-query. In canal's repo, from its root: `CGO_ENABLED=1 go build -tags=duckdb_arrow -o <out path> ./app/anfra-canal`. It needs cgo, for DuckDB, so it builds for the machine it runs on only.
+- `ANFRA_CANAL_QUERY_BIN`, optional: a standalone canal-query (`./app/query`), which anfra runs instead of anfra-canal's. The check holds it to the canal-query release inside the pinned anfra-canal, `sidecars.anfra_canal_services.canal_query` in `manifest.yml`.
 
 Or set `ANFRA_NODE_URL` / `ANFRA_CANAL_QUERY_URL` to dial sidecars already running, so a rebuild of anfra doesn't respawn them; the check leaves those alone. See [sidecars](docs/designs/sidecars.md).
 

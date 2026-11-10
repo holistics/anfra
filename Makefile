@@ -34,7 +34,7 @@ SDK_ONCE := @test -f web/sdk/dist/api.js || pnpm build:sdk
 # also checks, before any of them starts, that each sidecar is the pinned version.
 SIDECARS := $(CURDIR)/.sidecars
 dev dev-tmux test-sidecars build: ANFRA_NODE_BIN := $(or $(ANFRA_NODE_BIN),$(SIDECARS)/anfra-node)
-dev dev-tmux test-sidecars build: ANFRA_CANAL_QUERY_BIN := $(or $(ANFRA_CANAL_QUERY_BIN),$(SIDECARS)/canal-query)
+dev dev-tmux test-sidecars build: ANFRA_CANAL_BIN := $(or $(ANFRA_CANAL_BIN),$(SIDECARS)/anfra-canal)
 
 # Where make dev's Vite dev server serves the Data App frontend from source; anfra serve redirects
 # its pages there. Override it in .env.local.
@@ -68,13 +68,14 @@ dev-tmux: ## The same, under overmind in tmux: restart or attach to each process
 	$(SDK_ONCE)
 	$(TOOL) overmind start -f Procfile.dev
 
-# The sidecars are embedded whatever ANFRA_<NAME>_URL says, so the check must not leave them alone.
+# The sidecars are embedded whatever ANFRA_<NAME>_URL says, or a standalone service's
+# ANFRA_<SERVICE>_BIN, so the check must not leave them alone.
 build: ## Build the Data App frontend, then anfra with it and the sidecars, into bin/, as a release is
-	ANFRA_NODE_URL= ANFRA_CANAL_QUERY_URL= scripts/sidecars.sh check
+	ANFRA_NODE_URL= ANFRA_CANAL_QUERY_URL= ANFRA_CANAL_QUERY_BIN= scripts/sidecars.sh check
 	pnpm build:web
-	mkdir -p internal/sidecar/anfranode/assets internal/sidecar/canalquery/assets
+	mkdir -p internal/sidecar/anfranode/assets internal/sidecar/anfracanal/assets
 	cp "$$ANFRA_NODE_BIN" internal/sidecar/anfranode/assets/anfra-node
-	cp "$$ANFRA_CANAL_QUERY_BIN" internal/sidecar/canalquery/assets/canal-query
+	cp "$$ANFRA_CANAL_BIN" internal/sidecar/anfracanal/assets/anfra-canal
 	@cloud_url="$$(go run ./scripts/cloud-url)" && \
 		go build -tags embed_sidecar $(BUILD_FLAGS) -o bin/ ./cmd/anfra
 
@@ -83,16 +84,16 @@ build-dev:
 	@cloud_url="$$(go run ./scripts/cloud-url)" && \
 		go build $(BUILD_FLAGS) -o ./tmp/anfra ./cmd/anfra
 
-# The Go tests that run against real sidecars run only when .env.local names both; make
-# test-sidecars runs them against the pinned releases.
-REAL_SIDECARS = $(and $(ANFRA_NODE_BIN),$(ANFRA_CANAL_QUERY_BIN))
+# The Go tests that run against real sidecars run only when .env.local names both (anfra-canal, or a
+# standalone canal-query); make test-sidecars runs them against the pinned releases.
+REAL_SIDECARS = $(and $(ANFRA_NODE_BIN),$(or $(ANFRA_CANAL_BIN),$(ANFRA_CANAL_QUERY_BIN)))
 
 test: ## Run the Go, SDK, frontend and skills tests
 	$(if $(REAL_SIDECARS),scripts/sidecars.sh check)
 	go test ./...
 	pnpm test:web
 	pnpm skills:check
-	$(if $(REAL_SIDECARS),,@echo "WARNING: the real-sidecar tests were skipped: ANFRA_NODE_BIN and ANFRA_CANAL_QUERY_BIN are not both set. make test-sidecars runs them.")
+	$(if $(REAL_SIDECARS),,@echo "WARNING: the real-sidecar tests were skipped: ANFRA_NODE_BIN and ANFRA_CANAL_BIN are not both set. make test-sidecars runs them.")
 
 test-sidecars: ## Run the Go tests, those against real sidecars too (needs the dev warehouse: DEVELOPMENT.md)
 	scripts/sidecars.sh check

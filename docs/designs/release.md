@@ -4,7 +4,7 @@ A release is one `anfra` binary per platform, with both sidecars embedded ([side
 
 ## `manifest.yml`, the single source
 
-`manifest.yml` holds the release's `version` and the sidecar releases it embeds (`sidecars:`, a holistics-core release tag for anfra-node and a canal release tag for canal-query). The version names the git tag (`v<version>`, which is also the Go module version of `github.com/holistics/anfra`; releases up to 0.8.0 were tagged `anfra-v<version>`, which Go does not read as a version), is compiled into the binary, and names the image's tags, so the three always agree.
+`manifest.yml` holds the release's `version` and the sidecar releases it embeds (`sidecars:`, a holistics-core release tag for anfra-node, a canal release tag for anfra-canal, which runs canal-query, and the canal-query release inside it, `anfra_canal_services`). The version names the git tag (`v<version>`, which is also the Go module version of `github.com/holistics/anfra`; releases up to 0.8.0 were tagged `anfra-v<version>`, which Go does not read as a version), is compiled into the binary, and names the image's tags, so the three always agree.
 
 To cut a release, on a branch:
 

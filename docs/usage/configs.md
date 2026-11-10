@@ -44,7 +44,8 @@ See [designs/sidecars.md](../designs/sidecars.md).
 | Variable | Effect |
 |---|---|
 | `ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL` | Use sidecars something else runs (a compose or Kubernetes deployment) instead of spawning them: their base URLs, e.g. `http://anfra-node:8080`. Default: unset, and anfra spawns its own. |
-| `ANFRA_NODE_BIN`, `ANFRA_CANAL_QUERY_BIN` | The sidecar binaries, as absolute paths, for a build that embeds none (`go build`, `make dev`). Releases and `make build` embed them, and ignore these. |
+| `ANFRA_NODE_BIN`, `ANFRA_CANAL_BIN` | The sidecar binaries, as absolute paths, for a build that embeds none (`go build`, `make dev`): anfra-node, and anfra-canal, which runs canal-query. Releases and `make build` embed them, and ignore these. |
+| `ANFRA_CANAL_QUERY_BIN` | A standalone canal-query binary, which anfra runs instead of anfra-canal's, for a build that embeds none. For developing canal-query. |
 | `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_NODE_ENV_<NAME>` | Set `<NAME>` in the canal-query or anfra-node that anfra spawns, and in no other process: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061` serves canal-query's pprof there. The sidecars inherit anfra's environment otherwise, except anfra's own `ANFRA_*` and the settings each process has its own of, which they get only this way: `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` ([designs/sidecars.md](../designs/sidecars.md#environment)). Values anfra sets for a sidecar, such as canal-query's `SOCKET`, cannot be changed, except anfra-node's `ANFRA_PROGRAM_MEMORY_SIZE` (below). |
 
 #### Running anfra-node (the sidecar, not anfra) yourself
@@ -131,7 +132,7 @@ For working on anfra itself; see [DEVELOPMENT.md](../../DEVELOPMENT.md). `make` 
 
 **`ANFRA_DEV_REPO`:** the repo `make dev` runs `anfra serve` in, as a path, relative to the anfra checkout or absolute. Required by `make dev`; no default.
 
-**`ANFRA_NODE_BIN`, `ANFRA_CANAL_QUERY_BIN`:** the sidecars for a build from source, as above. Absolute paths, since `anfra serve` runs from inside `ANFRA_DEV_REPO`. Or set `ANFRA_NODE_URL` and `ANFRA_CANAL_QUERY_URL` to dial sidecars already running, so a rebuild doesn't respawn them.
+**`ANFRA_NODE_BIN`, `ANFRA_CANAL_BIN`:** the sidecars for a build from source, as above. Absolute paths, since `anfra serve` runs from inside `ANFRA_DEV_REPO`. Or set `ANFRA_NODE_URL` and `ANFRA_CANAL_QUERY_URL` to dial sidecars already running, so a rebuild doesn't respawn them.
 
 **`ANFRA_APPSERVE_DEV_URL`:** where `make dev`'s Vite dev server serves the Data App frontend from source; `anfra serve`'s pages redirect there. A base URL. Default under `make dev`: `http://127.0.0.1:5173` (the `Makefile`); without it, `anfra serve` serves its built frontend and redirects nothing.
 

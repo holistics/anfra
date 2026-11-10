@@ -7,11 +7,19 @@ import (
 	"fmt"
 
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfracanal"
 	"github.com/holistics/anfra/shared/logkit"
 )
 
-// Name is the sidecar's name, in its logs, its errors and its binary's.
+// Name is the sidecar's name, in its logs, its errors and a standalone build's binary's.
 const Name = "canal-query"
+
+// BinEnv names a standalone canal-query binary, run bare instead of anfra-canal in query mode, in a build that embeds
+// none (anfracanal.Command).
+const BinEnv = "ANFRA_CANAL_QUERY_BIN"
+
+// binMode is anfra-canal's argument that runs canal-query.
+const binMode = "query"
 
 // EnvPrefix sets canal-query's own settings from anfra's environment, for the
 // one anfra spawns: ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061 is its
@@ -49,7 +57,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 		return nil
 	}
 
-	binPath, err := sidecar.Binary(Name, "ANFRA_CANAL_QUERY_BIN", embedded)
+	binPath, args, err := anfracanal.Command(Name, BinEnv, binMode)
 	if err != nil {
 		return fmt.Errorf("resolve canal-query binary: %w", err)
 	}
@@ -61,6 +69,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 	proc, err := sidecar.StartProcess(ctx, sidecar.ProcSpec{
 		Name: Name,
 		Path: binPath,
+		Args: args,
 		ExtraEnv: []string{
 			"SOCKET=" + c.socketPath,
 			"SKIP_HOLISTICS_DB=1",       // standalone: no monolith DB / job ops
