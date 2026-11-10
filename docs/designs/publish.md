@@ -132,6 +132,7 @@ Kept in the repo, in `.anfra/publish/`, which never reaches git:
   publish/                    never committed: its own .gitignore holds `*`
     .gitignore
     state.json                per org: the base, and the pending record
+    lock                      held while a pull or publish runs in this folder
     backup/                   an unfinished pull's backup, for --abort
 ```
 
@@ -147,11 +148,10 @@ Unlike anfra's other state, which lives in `ANFRA_HOME` ([philosophy](philosophy
       "revision": "acme@4c1d07e…",
       "state": "conflicted",
       "conflicts": [
-        {"paths": ["datasets/sales.aml"], "kind": "content", "base": "…", "local": "…", "org": "…", "marker_size": 7},
-        {"paths": ["apps/logo.png"], "kind": "binary", "base": "…", "local": "…", "org": "…"}
+        {"kind": "content", "files": [{"path": "datasets/sales.aml", "base": "…", "local": "…", "org": "…"}], "marker_size": 7},
+        {"kind": "binary", "files": [{"path": "apps/logo.png", "base": "…", "local": "…", "org": "…"}]}
       ],
-      "added": ["models/refunds.aml"],
-      "backup": "backup/"
+      "added": ["models/refunds.aml"]
     }
   }
 }
@@ -159,7 +159,9 @@ Unlike anfra's other state, which lives in `ANFRA_HOME` ([philosophy](philosophy
 
 - **`base`** is written after a publish, after a pull with no conflicts, and when a pull's conflicts are found resolved.
 - **`pending`,** the pending record, exists only while a pull writes files (`writing`), or until its conflicts are resolved (`conflicted`). Each conflict is `treemerge`'s: its kind, paths, blob ids and marker size, so `--take` and the resolution check need nothing else.
-- **`backup`** points into `.anfra/publish/backup/`.
+- **A conflict** lists every path it covers with its three versions, since one conflict can cover several (`file_folder`, `path_collision`). `resolved` is set when a side is taken. A conflict with markers is resolved by its file's content, checked each time.
+- **The backup** is always `.anfra/publish/backup/`.
+- **`lock`** is held by a pull or publish for as long as it runs, so two in one folder don't interleave. A second one fails at once, saying another is running. The system releases it when the process ends, so a crash never leaves it held.
 - **On first run,** the revision in `ANFRA_HOME`'s `published.json` becomes `base`, and that file is removed.
 - **`.anfra/publish/` ignores itself:** its own `.gitignore` holds `*`, as pytest's cache folder does, so nothing in it is committed, whatever the repo's own `.gitignore` says. `.anfra/` as a whole can't be ignored, since it holds committed config.
 - **Nothing scans it.** Publish skips dot folders, and anfra's scan of the repo for validation must too, so the backup's `.aml` files are never compiled. *To confirm in anfra-node's scan.*
@@ -296,7 +298,7 @@ The "last published elsewhere" warning and its confirmation go away, since the r
 - **Selected versus present.** A file on disk that's in the base or the published revision but isn't selected (a symlink, or a file a newer anfra no longer publishes) makes pull and publish stop and name it. Otherwise the merge would read it as deleted, and the next publish would delete it from the org.
 - **The merge is worked out in memory** by `treemerge` before any file is touched.
 - **Each file is written to a temporary file and renamed into place,** after the backup and the pending record are written. A pull that's killed partway leaves `writing`, and `--abort` restores from the backup whatever was written.
-- **Two commands in one folder don't interleave:** pull and publish hold the sync state's lock.
+- **Two commands in one folder don't interleave:** pull and publish hold the sync state's lock (`.anfra/publish/lock`). A second one fails at once, saying another is running, rather than waiting behind an upload. The lock goes with the process, so a crash never leaves it held.
 
 ## What the CLI needs from the org's server
 
