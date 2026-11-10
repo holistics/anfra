@@ -4,6 +4,7 @@ Guides for running and building on anfra, beyond using it to write models, queri
 
 | Guide | For |
 |---|---|
+| [windows](windows.md) | Installing and running anfra on Windows, through WSL2. |
 | [engine](engine.md) | Embedding anfra in another Go application or platform. |
 | [docker](docker.md) | Running anfra from its Docker image, and building images on it. |
 | [configs](configs.md) | Configuring a setup: a repo's `.anfra/`, `anfra serve`'s flags, environment variables. |

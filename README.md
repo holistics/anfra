@@ -77,7 +77,7 @@ Replace the text in brackets with the app you want, or leave it and the agent wi
 curl -fsSL https://anfra.ai/install.sh | bash
 ```
 
-The installer puts `anfra` in `~/.anfra/bin` and adds it to your `PATH`. Works on macOS and Linux; see [Installation](https://anfra.ai/docs/local-dev/installation) for other options.
+The installer puts `anfra` in `~/.anfra/bin` and adds it to your `PATH`. Works on macOS and Linux; on Windows, install it inside WSL2 ([guide](docs/usage/windows.md)). See [Installation](https://anfra.ai/docs/local-dev/installation) for other options.
 
 Open a new terminal, then install the skills that teach your coding agent to build with anfra:
 
