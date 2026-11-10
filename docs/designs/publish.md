@@ -199,7 +199,7 @@ The first step of every pull and publish.
 
 1. `syncstate`: lock, then [flow 1](#1-checking-resolution).
 2. `remote`: read the published revision. **Pick the base** ([above](#the-base)). If it's the published revision, the folder is up to date.
-3. **Build the three trees:** the folder's (`folder`, refusing a file on disk that isn't selected), the base's and the published revision's (`remote`). Paths the org has that aren't publishable, such as a starting `.gitignore`, are left out.
+3. **Build the three trees:** the folder's (`folder`, refusing a file on disk that isn't selected), the base's and the published revision's (`remote`). Paths the org has that aren't publishable, such as a starting `.gitignore`, never appear: `repos.list_files` lists only publishable files.
 4. **`treemerge.Merge`** ([treemerge, flow 1](treemerge.md#1-merge-three-trees), or [flow 2](treemerge.md#2-merge-with-no-base) with no base), with `remote` and the folder as its blob reader, and the labels "local" and "org".
 5. **`folder.Apply`:** check every path ([below](#writing-files-safely)), back up each file that will change, write the pending record as `writing`, write each file through a temporary file and a rename, delete the files to delete.
 6. **`syncstate`:** with no conflicts, the base becomes the published revision and the record is dropped. Otherwise the record becomes `conflicted`.

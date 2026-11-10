@@ -48,6 +48,15 @@ func Merge(base, ours, theirs []byte) Result {
 	return assemble(b, o, t, recs)
 }
 
+// Whole is one conflict over the whole of each version, for a file one side
+// changed and the other deleted: the deleted side is empty. Its markers'
+// line endings are decided as Merge's are.
+func Whole(base, ours, theirs []byte) Result {
+	b, o, t := splitLines(base), splitLines(ours), splitLines(theirs)
+	r := record{mode: conflict, b1: len(b), o1: len(o), t1: len(t)}
+	return assemble(b, o, t, []record{r})
+}
+
 // A change is one side's replacement of base[b0:b1] by side[s0:s1]: a
 // stretch the side changed, deleted (s0 == s1), or inserted at (b0 == b1).
 type change struct{ b0, b1, s0, s1 int }

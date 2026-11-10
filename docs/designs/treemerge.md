@@ -83,7 +83,7 @@ These are the flows `treemerge` supports and keeps working. Each is a function o
 
 `Merge(base, ours, theirs, blobs, options) → Result`
 
-1. **Check paths.** Find paths that collide ignoring case or Unicode form, and paths that are a file on one side and a folder on the other. Each becomes a `path_collision` or `file_folder` conflict, and isn't merged further.
+1. **Check paths,** among those that exist after the merge, so that a clash one side already resolved, by deleting, isn't one: paths that collide ignoring case or Unicode form, and a path that's a file while other paths are inside it as a folder. Each group becomes one `path_collision` or `file_folder` conflict over all its paths, keeping ours' versions, and isn't merged further. (Built after classifying, since existence depends on it.)
 2. **Pair renames.** Among paths that one side deleted and the other changed, pair each with a path the deleting side added with the same blob id. A pair is then merged as one file, at its new path. Only these paths are considered, so the cost stays small however many files moved.
 3. **Classify each path,** or rename pair, from its three blob ids alone:
 
@@ -293,62 +293,67 @@ Two callers, as examples. Neither flow is `treemerge`'s: each caller combines th
 
 ### The API
 
+As built for the first stage (`shared/treemerge`, `shared/textmerge`). Later stages add what's marked.
+
 ```go
 package treemerge
 
-type BlobID [20]byte
-type Tree map[string]BlobID // slash-separated paths
+type Tree map[string]string // slash-separated path → blob id (repoformat.BlobID)
 
 type BlobReader interface {
-	ReadBlob(ctx context.Context, id BlobID) ([]byte, error)
-}
-
-// FileMerger merges one file's content. The text and binary mergers are built in.
-type FileMerger interface {
-	Merge(ctx context.Context, path string, base, ours, theirs []byte) (FileResult, error)
+	ReadBlob(ctx context.Context, id string) ([]byte, error)
 }
 
 type Options struct {
-	Labels      [3]string                 // shown after "base", "ours" and "theirs" in markers
-	Mergers     func(path string) FileMerger // nil, or nil for a path: the built-in mergers
-	MaxFileSize int                       // larger files are treated as binary
+	Labels      Labels // Ours, Base, Theirs: shown after each marker
+	MaxFileSize int    // larger files are treated as binary
+	// Later: a file merger per path, for the AML merger.
 }
 
 type Result struct {
-	Paths    []PathResult      // sorted by path
-	NewBlobs map[BlobID][]byte // merged files, and files with markers
+	Paths     []PathResult      // every path in any tree, sorted
+	NewBlobs  map[string][]byte // merged files, and files with markers, by blob id
+	Conflicts int               // one conflict can cover several paths
+}
+
+type Version struct {
+	Path               string
+	Base, Ours, Theirs string // blob ids; "" is absent
 }
 
 type PathResult struct {
-	Path, From string // From is set for a rename
-	Outcome    Outcome
-	Conflict   *Conflict
-	Result     *BlobID // the file's new content, absent when it's deleted
+	Version
+	Outcome  Outcome       // unchanged, ours, theirs, merged, conflict; needs_merge from Classify
+	Conflict *ConflictInfo // shared by the paths one conflict covers
+	Result   string        // the content after the merge; "" when the path doesn't exist
+	// Later: From, the source path of a rename.
 }
 
-type Conflict struct {
-	Kind               Kind
-	Paths              []string   // every path it covers
-	Base, Ours, Theirs *BlobID    // absent versions are nil
-	Regions            []Region   // conflicts inside the file, for content and add_add
-	MarkerSize         int        // for kinds with markers
+type ConflictInfo struct {
+	Kind       Kind
+	Files      []Version // every path it covers, with its three versions
+	MarkerSize int       // 0: no markers, resolved only by taking a side
+	// Later: Regions, for conflicts inside a file.
 }
 
-type Region struct {
-	Base, Ours, Theirs []byte     // the fragments; empty when a side has none
-	Lines              LineRange  // in the rendered file, between its markers
-	Location           []Step     // e.g. model "orders", dimension "revenue"; empty from the text merger
-}
-
+func Classify(base, ours, theirs Tree) []PathResult // blob ids only, no content read
 func Merge(ctx context.Context, base, ours, theirs Tree, blobs BlobReader, o Options) (Result, error)
-func Render(ctx context.Context, c Conflict, blobs BlobReader, o Options) ([]byte, error)
-func Resolved(c Conflict, current []byte, exists bool) bool
-func Take(c Conflict, side Side) []Change
-func TakeRegion(c Conflict, region int, side Side) ([]byte, error) // later
-func Classify(ctx context.Context, base, ours, theirs Tree, o Options) ([]PathResult, error)
+func Render(ctx context.Context, c ConflictInfo, blobs BlobReader, o Options) ([]byte, error)
+func Resolved(c ConflictInfo, current []byte, exists bool) bool
+func Take(c ConflictInfo, side Side) []Change // Change: a path, and its blob id or "" to delete
 ```
 
-The names are a sketch, to settle when it's built.
+```go
+package textmerge
+
+func Merge(base, ours, theirs []byte) Result     // hunks: clean lines, or conflicts
+func Whole(base, ours, theirs []byte) Result     // one conflict over whole files, for modify/delete
+func (r Result) Render(o Options) []byte         // git's diff3 markers
+func MarkerSize(versions ...[]byte) int          // 7, or longer than marker-like lines
+func Resolved(content []byte, size int) bool     // no marker-like line of that size
+```
+
+A conflict covering several paths (`file_folder`, `path_collision`) holds each path's three versions, so taking a side writes or deletes each of them.
 
 ### Extension points
 
@@ -384,5 +389,5 @@ What's planned plugs in at a named place, without changing the flows:
 | | `textmerge` | `treemerge` |
 |---|---|---|
 | **First** | Myers, diff3 at git's eager level, git's markers with the base, the strict resolution check | Path checks (collisions and file-vs-folder reported), classification, `Classify`, no base, binary, `Render`, `Resolved`, `Take`, the comparison with git |
-| **Next** | Marker size grown past marker-like lines. Measuring Myers against histogram on AML | Exact renames, `rename_rename`, `rename_delete`. `Conflict` with regions, from the text merger, without locations |
-| **Later** | Histogram, if measured better | Renames by similarity, moving the file in a file-vs-folder clash, the AML merger and its locations, `TakeRegion` |
+| **Next** | Lining up repeated lines as git's diff does (setting aside lines found in one file only before matching), so conflicts are laid out as git's are. Measured on real AML merges, Myers and histogram merged identically, so the diff stays Myers | Exact renames, `rename_rename`, `rename_delete`. `Conflict` with regions, from the text merger, without locations |
+| **Later** | Histogram, if AML ever shows it merging better | Renames by similarity, moving the file in a file-vs-folder clash, the AML merger and its locations, `TakeRegion` |
