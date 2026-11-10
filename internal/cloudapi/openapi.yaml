@@ -94,6 +94,19 @@ components:
       required:
         - repo
       type: object
+    BlobContent:
+      additionalProperties: false
+      properties:
+        content:
+          contentEncoding: base64
+          description: The file's bytes, base64.
+          type: string
+        oid:
+          type: string
+      required:
+        - oid
+        - content
+      type: object
     CancelOut:
       additionalProperties: false
       properties:
@@ -177,7 +190,7 @@ components:
           type: string
         arrow_type:
           additionalProperties: true
-          description: the Arrow type canal-query read the values as, by which they are written; absent before the query runs
+          description: the column's Arrow type, which says how its values are written. Absent before the query runs.
           properties:
             label:
               description: "the type as arrow-go spells it, such as decimal(38, 2): for people, not to decide on"
@@ -190,23 +203,23 @@ components:
             - label
           type: object
         db_type:
-          description: "the database's own name of the column's type: for debugging, never to decide on, since it varies by database and driver; absent before the query runs"
+          description: the database's own name for the column's type, for debugging only. Don't base decisions on it, because it varies by database and driver. Absent before the query runs.
           type: string
         fieldName:
-          description: the field it draws; for an adhoc column, its name
+          description: the field it draws, or for an adhoc column, its name
           type: string
         isMeasure:
           type: boolean
         label:
           type: string
         modelId:
-          description: the model of fieldName, as the dataset names it; absent for a dataset metric or an adhoc column
+          description: the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column.
           type: string
         name:
           description: the column's key, as in fields
           type: string
         semantic_type:
-          description: "what the column's values mean, in AML's types, plus bit: a true or false stored as a bit, written as true and false or as \"1\" and \"0\" by how the database produced it. Decide by it. Absent when no AQL types the column (a SQL query, or AQL that is not an explore): see arrow_type. Unknown when its AQL type has no meaning in AML (time, duration, ...)"
+          description: the column's (database-agnostic) type in the semantic layer, such as number, date, or truefalse. Read the values by it. "bit" is a true or false stored as a bit, written as true and false or as "1" and "0", depending on how the database produced it. "unknown" is a type that has no meaning in AML, such as time or duration. Absent when no AQL typed the column, as for a SQL query or AQL that isn't an explore, so read arrow_type instead.
           enum:
             - bit
             - date
@@ -244,10 +257,10 @@ components:
       additionalProperties: false
       properties:
         aql:
-          description: "the AQL compiled: the query with its Query Input applied; absent for a SQL query"
+          description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
         columns:
-          description: what each column of an explore query's answer will be, and its semantic type; absent for other queries
+          description: what each column of an explore query's result will be, with its semantic type. Absent for other queries.
           items:
             $ref: "#/components/schemas/Column"
           type: array
@@ -402,7 +415,7 @@ components:
             type: string
           type: array
         query:
-          description: the catalog search the lineage is
+          description: the search query that finds the lineage
           type: string
         schema:
           $ref: "#/components/schemas/DiagramSchema"
@@ -428,7 +441,7 @@ components:
       additionalProperties: false
       properties:
         detached:
-          description: its type is not a top-level one, but its container is not in the lineage
+          description: whether the card's entity is usually nested in another card, but its container isn't in the lineage
           type: boolean
         id:
           description: the catalog's id of the entity
@@ -439,7 +452,7 @@ components:
           format: int64
           type: integer
         links:
-          description: the node's links; a link is on its edge's from entity
+          description: the links that start at this node
           items:
             $ref: "#/components/schemas/DiagramLink"
           type: array
@@ -448,7 +461,7 @@ components:
           description: the entity's properties
           type: object
         ref:
-          description: the entity this node is a copy of
+          description: the id of the entity this node is a copy of, such as the model's field behind a dataset's field
           type: string
         sections:
           description: the node's children, grouped by type
@@ -514,7 +527,7 @@ components:
         label:
           type: string
         links:
-          description: the node's links; a link is on its edge's from entity
+          description: the links that start at this node
           items:
             $ref: "#/components/schemas/DiagramLink"
           type: array
@@ -523,7 +536,7 @@ components:
           description: the entity's properties
           type: object
         ref:
-          description: the entity this node is a copy of
+          description: the id of the entity this node is a copy of, such as the model's field behind a dataset's field
           type: string
         sections:
           description: the node's children, grouped by type
@@ -676,6 +689,36 @@ components:
           type: string
         status:
           const: 412
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyBaseOutdated:
+      additionalProperties: false
+      description: Someone published to this organization since the revision these files are based on. Pull their changes, then publish again.
+      properties:
+        code:
+          const: base_outdated
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/LiveRevision"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 409
           type: integer
       required:
         - code
@@ -1142,7 +1185,7 @@ components:
       type: object
     ErrorBodyPageTooLarge:
       additionalProperties: false
-      description: The page is larger than this server answers at once.
+      description: The page is larger than this server may return at once.
       properties:
         code:
           const: page_too_large
@@ -1378,7 +1421,7 @@ components:
       type: object
     ErrorBodySidecarUnavailable:
       additionalProperties: false
-      description: A sidecar is unavailable.
+      description: A sidecar (a process anfra runs to compile AML or run queries) is unavailable.
       properties:
         code:
           const: sidecar_unavailable
@@ -1499,7 +1542,7 @@ components:
           description: "csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open"
           type: boolean
         header:
-          description: "csv: the header row: the columns' labels (the default; what readers see), their names (their keys in a query's answer, stable for programs), or none"
+          description: "csv: the header row, the columns' labels by default. \"names\" writes their names instead, which stay stable for programs, and \"none\" leaves the header row out."
           enum:
             - labels
             - names
@@ -1542,7 +1585,7 @@ components:
           minLength: 1
           type: string
         timezone:
-          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
           type: string
       required:
         - query
@@ -1561,7 +1604,7 @@ components:
           description: the file's format
           type: string
         row_count:
-          description: the rows the file holds
+          description: how many rows the file holds
           format: int64
           type: integer
         url:
@@ -1609,12 +1652,12 @@ components:
       properties:
         diagram:
           $ref: "#/components/schemas/Diagram"
-          description: the field's lineage; absent with error
+          description: the field's lineage. Absent when error is set.
         error:
           description: why the field's lineage could not be traced
           type: string
         query:
-          description: the catalog search its lineage is, which search also takes; empty when the field could not be searched for
+          description: the search query that finds the field's lineage, which the search command also takes. Empty when the field could not be searched for.
           type: string
         target:
           $ref: "#/components/schemas/LineageTarget"
@@ -1660,6 +1703,34 @@ components:
         - name
         - revision
         - definition
+      type: object
+    GetBlobsIn:
+      additionalProperties: false
+      properties:
+        oids:
+          description: Blob ids of the files to read, as repos.list_files answered them. At most limits.download_blobs.
+          items:
+            type: string
+          type: array
+      required:
+        - oids
+      type: object
+    GetBlobsOut:
+      additionalProperties: false
+      properties:
+        blobs:
+          description: "The content of the blobs named, in the order named, within limits.download_bytes: always the first, then each that still fits."
+          items:
+            $ref: "#/components/schemas/BlobContent"
+          type: array
+        omitted:
+          description: "The blob ids named that did not fit, in order: ask again for them. Empty when every one is answered."
+          items:
+            type: string
+          type: array
+      required:
+        - blobs
+        - omitted
       type: object
     GetDataSourceOut:
       additionalProperties: false
@@ -1779,7 +1850,7 @@ components:
       additionalProperties: false
       properties:
         source:
-          description: optional context source key to ingest
+          description: the context source to ingest, every source by default
           type: string
       type: object
     InvitationDirectoryOptions:
@@ -2070,6 +2141,14 @@ components:
     Limits:
       additionalProperties: false
       properties:
+        download_blobs:
+          description: The most blob ids one repos.get_blobs call may name.
+          format: int64
+          type: integer
+        download_bytes:
+          description: "The most content bytes one repos.get_blobs answer carries, before base64: past it, the answer leaves the rest out, to ask again for."
+          format: int64
+          type: integer
         file_bytes:
           description: The largest file a publish may have, in bytes.
           format: int64
@@ -2091,12 +2170,14 @@ components:
         - upload_blobs
         - upload_bytes
         - file_bytes
+        - download_blobs
+        - download_bytes
       type: object
     LineageInput:
       additionalProperties: false
       properties:
         limit:
-          description: at most this many upstream entities per field; absent, all of them
+          description: the most upstream entities to return per field, all of them by default
           format: int64
           minimum: 1
           type: integer
@@ -2160,6 +2241,26 @@ components:
           type: array
       required:
         - data_sources
+      type: object
+    ListFilesIn:
+      additionalProperties: false
+      properties:
+        revision:
+          description: A revision of the organization's repo, as repos.status or repos.publish answered it.
+          type: string
+      required:
+        - revision
+      type: object
+    ListFilesOut:
+      additionalProperties: false
+      properties:
+        files:
+          description: "The revision's files, by path: those of an anfra repo, as a publish carries them."
+          items:
+            $ref: "#/components/schemas/ListedFile"
+          type: array
+      required:
+        - files
       type: object
     ListJobsIn:
       additionalProperties: false
@@ -2256,6 +2357,74 @@ components:
           type: array
       required:
         - types
+      type: object
+    ListedFile:
+      additionalProperties: false
+      properties:
+        oid:
+          description: Its content's git blob id, to read with repos.get_blobs.
+          type: string
+        path:
+          description: Slash-separated, relative to the repo root.
+          type: string
+        size:
+          description: "Its content's size in bytes, before base64: to batch repos.get_blobs within limits.download_bytes, and to show progress."
+          format: int64
+          type: integer
+      required:
+        - path
+        - oid
+        - size
+      type: object
+    LiveRevision:
+      additionalProperties: false
+      properties:
+        published_at:
+          format: date-time
+          type: string
+        published_by:
+          $ref: "#/components/schemas/Person"
+          description: Who published it; absent for the repo's starting files, which the organization's creation put there.
+        revision:
+          description: "The published revision, to pull. Opaque: show it, do not parse it."
+          type: string
+      required:
+        - revision
+        - published_at
+      type: object
+    MCPSettings:
+      additionalProperties: false
+      properties:
+        callback_mode:
+          description: Allow all valid MCP OAuth callbacks, or require a matching pattern. Does not restrict API-only approvals.
+          enum:
+            - allow_all
+            - allowlist
+          type: string
+        callback_patterns:
+          description: Whole callback URI patterns. In the host, * may only replace the leftmost label (*.example.com); as the port, it matches any port; after the host, it matches any characters; scheme://* matches every URI with that scheme. Required in allowlist mode; empty in allow_all mode. At most 20 patterns of 2048 bytes each.
+          items:
+            type: string
+          type: array
+        enabled:
+          description: Allow new MCP approvals and existing MCP connections. Does not disable API or CLI access.
+          type: boolean
+      required:
+        - enabled
+        - callback_mode
+        - callback_patterns
+      type: object
+    MarkOnboardingIn:
+      additionalProperties: false
+      properties:
+        key:
+          description: "The mark: org_setup.entered_app (Go to app) or org_setup.account_card_dismissed (the account card's Dismiss)."
+          enum:
+            - org_setup.entered_app
+            - org_setup.account_card_dismissed
+          type: string
+      required:
+        - key
       type: object
     Member:
       additionalProperties: false
@@ -2370,9 +2539,6 @@ components:
       required:
         - name
       type: object
-    NoInput:
-      additionalProperties: false
-      type: object
     OAuthApprovalInput:
       additionalProperties: false
       properties:
@@ -2403,6 +2569,8 @@ components:
           items:
             $ref: "#/components/schemas/OAuthConsentOrg"
           type: array
+        policy_blocked:
+          type: boolean
         redirect_uri:
           type: string
         resources:
@@ -2560,6 +2728,30 @@ components:
       required:
         - grant_id
       type: object
+    Onboarding:
+      additionalProperties: false
+      properties:
+        cli_signed_in:
+          description: The member's anfra CLI holds a live sign-in to this organization.
+          type: boolean
+        data_source_added:
+          description: The organization has a data source.
+          type: boolean
+        marks:
+          additionalProperties:
+            format: date-time
+            type: string
+          description: The member's onboarding marks, by key (org_setup.entered_app, org_setup.account_card_dismissed), with when each was first set. A key that is absent was not set.
+          type: object
+        published:
+          description: "Someone published to the organization: its repo is no longer the starting files. A publish may carry no app."
+          type: boolean
+      required:
+        - cli_signed_in
+        - data_source_added
+        - published
+        - marks
+      type: object
     OrgView:
       additionalProperties: false
       properties:
@@ -2648,6 +2840,9 @@ components:
     PublishIn:
       additionalProperties: false
       properties:
+        base:
+          description: "The revision these files were built on: the one last pulled or published. When it is no longer the published revision, the publish is refused with base_outdated, and nothing is published. Without it, the publish replaces whatever is published."
+          type: string
         files:
           description: "Every file of the repo, as it is to be published: a file not listed is deleted. At most limits.files."
           items:
@@ -2687,7 +2882,7 @@ components:
       additionalProperties: false
       properties:
         aql:
-          description: "the AQL that runs: the query with its Query Input applied; absent for a SQL query"
+          description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
         sql:
           type: string
@@ -2725,7 +2920,7 @@ components:
       additionalProperties: false
       properties:
         aggregation:
-          description: the condition applies to this aggregate of field, such as sum
+          description: the aggregation to apply to the field before filtering, such as sum
           type: string
         field:
           description: model.field for a dataset field, or the name of a dataset metric
@@ -2737,7 +2932,7 @@ components:
           description: the operator, such as is, contains, between, last
           type: string
         values:
-          description: "the operator's values, by the field's type: a number as a string in JSON's number syntax, such as \"9007199254740993\" (a JSON number is refused, since it may have lost digits before it was sent); true or false; a date or text as a string. Empty for an operator that takes none"
+          description: the operator's values, empty for an operator that takes none. Write a number as a string, such as "9007199254740993", because a JSON number may have lost digits and is refused. Write a date or text as a string too, and a truefalse value as true or false.
           items: {}
           type: array
       required:
@@ -2810,7 +3005,7 @@ components:
       additionalProperties: false
       properties:
         aql:
-          description: "the AQL that ran: the query with its Query Input applied; absent for a SQL query"
+          description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
         columns:
           description: one per field of result, in order
@@ -2818,7 +3013,7 @@ components:
             $ref: "#/components/schemas/Column"
           type: array
         has_more:
-          description: "there may be rows after this page: ask for the next page, or stream the query (without page_size) for every row"
+          description: whether there may be rows after this page. To get them, ask for the next page, or export the query.
           type: boolean
         result:
           $ref: "#/components/schemas/QueryRows"
@@ -2826,7 +3021,7 @@ components:
           type: string
         timings:
           $ref: "#/components/schemas/Timings"
-          description: "the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"
+          description: the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps.
       required:
         - sql
         - columns
@@ -2842,7 +3037,7 @@ components:
             type: string
           type: array
         records:
-          description: "one array per row, its values in fields' order, as its column's types say: every number a string, with every digit (a JSON number loses some in JavaScript), a float's NaN and infinities as \"NaN\", \"Infinity\" and \"-Infinity\", and so at any depth of a list, map or struct; null as null"
+          description: one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are "NaN", "Infinity", and "-Infinity". The same holds at any depth of a list, map, or struct. A database NULL is null.
           items:
             items: {}
             type: array
@@ -2871,12 +3066,12 @@ components:
             - sql
           type: string
         page:
-          description: the 1-based page of rows to answer; needs a page size
+          description: the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size.
           format: int64
           minimum: 1
           type: integer
         page_size:
-          description: rows per page; alone, the first page
+          description: how many rows a page has, for AQL only
           format: int64
           maximum: 10000
           minimum: 1
@@ -2886,7 +3081,7 @@ components:
           minLength: 1
           type: string
         timezone:
-          description: the IANA time zone relative dates and date truncation use, such as Asia/Ho_Chi_Minh
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
           type: string
       required:
         - query
@@ -2954,14 +3149,14 @@ components:
           format: int64
           type: integer
         has_more:
-          description: "a page that may not be the last: there may be rows after it. Without page_size, every row was sent, and this is false"
+          description: whether there may be rows after this page. Without page_size, every row was sent, and this is false.
           type: boolean
         row_count:
           format: int64
           type: integer
         timings:
           $ref: "#/components/schemas/Timings"
-          description: "the query's steps: compiling_query, for AQL; canal-query's own (connecting_to_dw, executing_query, fetching_query_result, and their children, as <parent>.<child>); retrying_query, the wait before canal-query attempts the query again"
+          description: the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps.
         type:
           enum:
             - summary
@@ -2981,7 +3176,7 @@ components:
             $ref: "#/components/schemas/QueryCondition"
           type: array
         dateDrills:
-          description: date fields redrawn at another grain, their columns' names kept
+          description: grain changes on date fields. The fields keep their column names.
           items:
             $ref: "#/components/schemas/QueryDateDrill"
           type: array
@@ -3183,6 +3378,17 @@ components:
     SearchInput:
       additionalProperties: false
       properties:
+        limit:
+          description: the most entities to return, 50 by default
+          format: int64
+          maximum: 100
+          minimum: 1
+          type: integer
+        offset:
+          description: skip this many entities first, to page with limit
+          format: int64
+          minimum: 0
+          type: integer
         query:
           description: search query
           items:
@@ -3331,12 +3537,12 @@ components:
         label:
           type: string
         metrics:
-          description: the dataset's metrics; absent in outline
+          description: the dataset's metrics. Absent when the dataset is shown in outline.
           items:
             $ref: "#/components/schemas/ShowField"
           type: array
         models:
-          description: the models the dataset uses; absent in outline
+          description: the models the dataset uses. Absent when the dataset is shown in outline.
           items:
             $ref: "#/components/schemas/ShowModel"
           type: array
@@ -3371,7 +3577,7 @@ components:
         label:
           type: string
         name:
-          description: AQL writes <model fqn>.<name>; a metric, its name alone
+          description: the field's or metric's name. AQL writes a field as <model fqn>.<name>, and a metric by its name alone.
           type: string
         role:
           enum:
@@ -3381,7 +3587,7 @@ components:
             - metric
           type: string
         type:
-          description: the compiled data type, such as number, text, date, datetime, truefalse
+          description: the field's semantic type, such as number, text, date, datetime, or truefalse
           type: string
       required:
         - fqn
@@ -3394,11 +3600,11 @@ components:
       additionalProperties: false
       properties:
         fqn:
-          description: the fqn of the object to show; absent, the repo
+          description: the fqn of the dataset to show, the whole repo by default
           type: string
         type:
           default: aml.dataset
-          description: the catalog's entity type of fqn; aml.dataset is the only one for now
+          description: the catalog's entity type of fqn
           enum:
             - aml.dataset
           type: string
@@ -3428,7 +3634,7 @@ components:
       additionalProperties: false
       properties:
         datasets:
-          description: the repo's datasets, each in full; in outline (no models or metrics) when it cannot be shown in full, which a diagnostic says why
+          description: the repo's datasets, each in full, or in outline (without its models and metrics) when the dataset can't be shown in full. A diagnostic then says why.
           items:
             $ref: "#/components/schemas/ShowDataset"
           type: array
@@ -3444,7 +3650,7 @@ components:
       additionalProperties: false
       properties:
         diagnostics:
-          description: "what is wrong in the repo for what is shown: its files that do not compile, a dataset's data source it does not configure, a dataset it cannot show in full; empty, what is shown is complete"
+          description: the problems in the repo that affect what is shown, such as files that don't compile, a dataset's data source that isn't configured, or a dataset that can't be shown in full. Empty when what is shown is complete.
           items:
             $ref: "#/components/schemas/CompileError"
           type: array
@@ -3499,11 +3705,26 @@ components:
     SignedOut:
       additionalProperties: false
       type: object
+    SkillsResult:
+      additionalProperties: false
+      properties:
+        checked:
+          type: string
+        latest:
+          type: string
+        version:
+          type: string
+      type: object
     StatusOut:
       additionalProperties: false
       properties:
+        limits:
+          $ref: "#/components/schemas/Limits"
+          description: "The bounds of the repo ops, to batch calls within: publishing, and reading files back."
         publish:
           $ref: "#/components/schemas/PublishSettings"
+          deprecated: true
+          description: "Deprecated: read limits. Removed in a later version."
         published_at:
           format: date-time
           type: string
@@ -3516,6 +3737,7 @@ components:
       required:
         - revision
         - published_at
+        - limits
         - publish
       type: object
     StreamEnd:
@@ -3565,7 +3787,7 @@ components:
         phase:
           type: string
         position:
-          description: "while queued: how many runs are ahead of this one, 0 being next; absent otherwise"
+          description: while the run is queued, how many runs are ahead of it. 0 means it is next. Absent for other phases, or when its place in line isn't known.
           format: int64
           type: integer
         type:
@@ -3614,7 +3836,7 @@ components:
           format: int64
           type: integer
         step:
-          description: the step's name, as what ran names it; a child step as <parent>.<child>, within its parent
+          description: the step's name. A child step is named <parent>.<child>, and runs within its parent.
           type: string
       required:
         - step
@@ -3624,11 +3846,11 @@ components:
       additionalProperties: false
       properties:
         end_ms:
-          description: "when the run ended, in ms since it started: its total time, and where its last steps end"
+          description: when the run ended, in ms since it started, which is its total time and when its last step ends
           format: int64
           type: integer
         steps:
-          description: each step as it started, in order; a step run again is here again
+          description: each step, in the order it started. A step that runs again appears again.
           items:
             $ref: "#/components/schemas/TimedStep"
           type: array
@@ -3767,9 +3989,10 @@ components:
       additionalProperties: false
       properties:
         globs:
-          description: optional file globs; report only diagnostics for matching files
+          description: globs of the files to report diagnostics for, every file by default
           items:
             type: string
+          maxItems: 100
           type: array
       type: object
     ValidationReport:
@@ -3816,9 +4039,22 @@ components:
         - challenge
         - code
       type: object
+    VersionInput:
+      additionalProperties: false
+      properties:
+        skills:
+          description: the version of the anfra skills in use, from the "anfra skills <version>" line that ends each skill, or "unknown" when a skill has none. With it, the result also says whether the skills are behind.
+          type: string
+      type: object
     VersionResult:
       additionalProperties: false
       properties:
+        hints:
+          items:
+            type: string
+          type: array
+        skills:
+          $ref: "#/components/schemas/SkillsResult"
         update:
           $ref: "#/components/schemas/UpdateInfo"
         version:
@@ -4925,7 +5161,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: Build the local search catalog from context sources
+      summary: Build the local search catalog from the repo's context sources
       x-destructive: true
       x-idempotent: true
       x-read-only: false
@@ -4936,9 +5172,7 @@ paths:
         - all
   /core.lineage:
     post:
-      description: |-
-        Trace each field through the local catalog to what it is built from (the fields, models and
-        sources upstream of it), as a diagram: cards in layers, upstream first, linked by what uses it.
+      description: Trace each field through the local catalog to the fields, models, and sources it is built from. Return each field's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.
       operationId: core.lineage
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -5078,7 +5312,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: "Trace fields through the local catalog: what each one is built from"
+      summary: Trace fields through the local catalog to what each one is built from
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -5090,9 +5324,11 @@ paths:
   /core.query:
     post:
       description: |-
-        Answers one page of rows: page_size's, or without it the first 10000, with has_more saying whether there may be more.
-        Ask the query for what you need (aggregate, filter, a limit: directive) rather than paging through rows; for every row of a large result, export it.
-        Over HTTP, a request that accepts application/x-ndjson is answered as the query runs: its phase, its SQL, its columns, then its rows in batches — every row without page_size, up to the server's maximum.
+        Run a query, and return a page of its rows and the SQL that produced them.
+
+        A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+
+        Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.
 
         Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have.
       operationId: core.query
@@ -5274,7 +5510,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: "Run a query: its rows, and the SQL that produced them"
+      summary: Run a query, and return its rows and the SQL that produced them
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -5439,9 +5675,7 @@ paths:
   /core.query.export:
     post:
       description: |-
-        Export a query's whole result as a file: a link to download it.
-
-        The query runs to completion before the answer, so a query that fails fails here. The CLI downloads the file, to stdout or --output; --link prints the answer instead.
+        Export a query's whole result as a file, and return a link to download it once the file is ready.
 
         Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have.
       operationId: core.query.export
@@ -5597,7 +5831,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: "Export a query's whole result as a file: a link to download it"
+      summary: Export a query's whole result as a file to download
       x-destructive: false
       x-idempotent: false
       x-read-only: false
@@ -5748,7 +5982,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: "Validate a query: its diagnostics, without running it"
+      summary: Validate a query without running it, and return its diagnostics
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -5911,11 +6145,9 @@ paths:
   /core.show:
     post:
       description: |-
-        Show an object of the repo, read from its compiled AML: with no fqn, the repo and every dataset
-        in full; with a dataset's fqn, that dataset in full, as AQL can query it. Its interface, not its
-        implementation: names, labels, types, roles and AQL definitions, never SQL or tables. What is
-        wrong in the repo for it comes with it, as diagnostics: files that do not compile, a data source
-        it does not configure.
+        Show the repo's datasets, or one dataset, with their models, fields, and metrics, as AQL can query them.
+
+        With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. It shows names, labels, types, roles, and AQL definitions, never SQL or tables. Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, or a data source the repo doesn't configure.
 
         Showing a dataset needs access to query it; showing the repo, every dataset at once, needs access to them all.
       operationId: core.show
@@ -6057,7 +6289,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: "Show the repo's datasets, or one dataset: their models, fields and metrics"
+      summary: Show the repo's datasets, or one dataset, with their models, fields, and metrics
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -6218,6 +6450,10 @@ paths:
         - all
   /core.version:
     post:
+      description: |-
+        Print the anfra version, and say when anfra or the anfra skills are behind.
+
+        For this repo's server, and whether it is running, see `anfra status`.
       operationId: core.version
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -6229,7 +6465,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NoInput"
+              $ref: "#/components/schemas/VersionInput"
         required: true
       responses:
         "200":
@@ -6355,7 +6591,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: Print the anfra version
+      summary: Print the anfra version, and say when anfra or the anfra skills are behind
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -7861,6 +8097,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -7891,7 +8138,7 @@ paths:
         - sessionCookie: []
   /invitations.accept:
     post:
-      description: "Signed in, send only the token: the account joins the organization if it has the invited address (invitation_email_mismatch otherwise), verified where the installation sends email (email_unverified otherwise: verify it with an email code). Signed out, also send the invited address and a password: a new account is created and signed in, and joins unless it must verify its address first (verify_email). An address that already has an account is account_exists — sign in, then accept. An organization with as many members as it may is quota_exceeded: an invitation holds no seat, so one of its Admins must make room first."
+      description: "Signed in, send only the token: the account joins the organization if it has the invited address (invitation_email_mismatch otherwise), verified where the installation sends email (email_unverified otherwise: verify it with an email code). Signed out, also send the invited address and a password: a new account is created and signed in, and joins unless it must verify its address first (verify_email); invalid_request where passwords are not a sign-in method. An address that already has an account is account_exists — sign in, then accept. An organization with as many members as it may is quota_exceeded: an invitation holds no seat, so one of its Admins must make room first."
       operationId: invitations.accept
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -9127,6 +9374,276 @@ paths:
       x-read-only: true
       security:
         - sessionCookie: []
+  /mcp.settings.get:
+    post:
+      operationId: mcp.settings.get
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MCPSettings"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Read the organization's MCP access and callback settings.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+  /mcp.settings.update:
+    post:
+      operationId: mcp.settings.update
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MCPSettings"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MCPSettings"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Replace the organization's MCP access and callback settings.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
   /members.list:
     post:
       operationId: members.list
@@ -10137,6 +10654,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -10248,6 +10776,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -10276,9 +10815,281 @@ paths:
       x-read-only: false
       security:
         - sessionCookie: []
+  /onboarding.get:
+    post:
+      description: Whether their CLI is signed in to this organization, whether the organization has a data source and a publish, and the caller's onboarding marks.
+      operationId: onboarding.get
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Onboarding"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Where the caller is in the organization's onboarding.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+  /onboarding.mark:
+    post:
+      description: The web app calls it on Go to app (org_setup.entered_app) and on the account card's Dismiss (org_setup.account_card_dismissed). The first time is kept; marking again changes nothing. A mark changes only what the caller sees.
+      operationId: onboarding.mark
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkOnboardingIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Onboarding"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Set one of the caller's onboarding marks.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
   /orgs.create:
     post:
-      description: "Anyone signed in may create an organization, and becomes its admin. An installation may cap how many organizations one account creates: quota_exceeded past it, with the cap and how many the account has created."
+      description: "Anyone signed in may create an organization, and becomes its admin. An installation may cap how many organizations one account creates: quota_exceeded past it, with the cap and how many the account has created. Some addresses are reserved (validation_failed, code reserved); those containing our names are open to installation admins."
       operationId: orgs.create
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -10473,6 +11284,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -10940,6 +11762,293 @@ paths:
         - oauthBearer: []
       x-anfra-required-scopes:
         - all
+  /repos.get_blobs:
+    post:
+      description: "Name the blob ids repos.list_files answered, in calls within limits.download_blobs. An answer stops within limits.download_bytes, and lists what it left out in omitted: ask again for those. Calls are limited per user, more tightly than most: make them one at a time, and only for content not already held."
+      operationId: repos.get_blobs
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetBlobsIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetBlobsOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+          headers:
+            WWW-Authenticate:
+              description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
+              schema:
+                type: string
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Read file contents from the organization's repo, by blob id.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
+      x-anfra-required-scopes:
+        - all
+  /repos.list_files:
+    post:
+      description: Name the published revision (repos.status), or one this client pulled or published before, to merge from. Read the content of the blobs it lacks with repos.get_blobs, batched by size within limits.download_bytes. A revision of another organization's repo, or none, is not_found.
+      operationId: repos.list_files
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListFilesIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListFilesOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+          headers:
+            WWW-Authenticate:
+              description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
+              schema:
+                type: string
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: "The files of a revision of the organization's repo, by path and blob id: what a pull merges."
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
+      x-anfra-required-scopes:
+        - all
   /repos.list_missing_blobs:
     post:
       description: Compute each file's git blob id locally and name them all; upload only what is listed, with repos.create_blobs. A repeat publish of a small edit uploads one blob.
@@ -11091,7 +12200,7 @@ paths:
         - all
   /repos.publish:
     post:
-      description: "List every file, as path and blob id: a file not listed is deleted. Upload the content first; blobs_missing names any that is not. Files that fail validation are refused with repo_invalid, carrying the engine's problems, and nothing is published. The last publish wins: the answer says what it replaced."
+      description: "List every file, as path and blob id: a file not listed is deleted. Upload the content first; blobs_missing names any that is not. Files that fail validation are refused with repo_invalid, carrying the engine's problems, and nothing is published. Name the files' base, so that someone else's publish since is refused with base_outdated rather than replaced unseen; without one, the last publish wins. The answer says what it replaced."
       operationId: repos.publish
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -11174,11 +12283,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyBlobsMissing"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyBlobsMissing"
+                      - $ref: "#/components/schemas/ErrorBodyBaseOutdated"
                 required:
                   - error
                 type: object
-          description: blobs_missing
+          description: blobs_missing, base_outdated
         "412":
           content:
             application/json:
@@ -11253,7 +12364,7 @@ paths:
         - all
   /repos.status:
     post:
-      description: Read before publishing, to show what a publish will replace, and to batch uploads within the limits.
+      description: Read before publishing or pulling, to show what a publish will replace, and to batch uploads and downloads within the limits.
       operationId: repos.status
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -11381,7 +12492,7 @@ paths:
             org:
               default: my-org
               description: The organization the request acts in, by its slug.
-      summary: The published revision of the organization's repo, who published it and when, and the limits for publishing.
+      summary: The published revision of the organization's repo, who published it and when, and the limits for publishing and pulling.
       x-destructive: false
       x-idempotent: true
       x-read-only: true
@@ -11860,6 +12971,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -12074,6 +13196,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -12308,6 +13441,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -12410,6 +13554,17 @@ paths:
                   - error
                 type: object
           description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
         "500":
           content:
             application/json:
@@ -12441,4 +13596,4 @@ paths:
         - sessionCookie: []
 servers:
   - url: /api
-x-anfra-compat: 9
+x-anfra-compat: 11

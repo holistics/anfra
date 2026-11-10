@@ -6,6 +6,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -17,9 +18,12 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/internal/envflag"
+	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/motherduck"
 	"github.com/holistics/anfra/internal/publish"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
@@ -73,8 +77,11 @@ func newPublishCmd() *cobra.Command {
 				selectOrg = terminal.selectPublishOrg
 				recoverOrg = terminal.recoverPublishOrg
 			}
+			logger, closeLog := repoLog()
+			defer closeLog()
 			res, err := publish.Run(cmd.Context(), ".", o, publish.Env{
 				ErrOut:     progress,
+				Logger:     logger,
 				Warn:       func(code, message string) { printWarning(cmd.ErrOrStderr(), code, message) },
 				OrgName:    storedOrgName(cmd.Context()),
 				Ask:        ask,
@@ -232,6 +239,22 @@ func readLines(ctx context.Context, in io.Reader) chan string {
 // does: a repo that fails refuses the publish, as repo_invalid with validate's
 // answer. What in its Data Apps will not work in a host is a warning on
 // errOut, and refuses nothing.
+// repoLog opens the repo's log (anfra.log) for a command that records without
+// running the repo's sidecars, and closes it. Best-effort: a log that can't be
+// opened records nothing, and never stops the command.
+func repoLog() (*slog.Logger, func()) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil, func() {}
+	}
+	r := repo.Resolve(dir)
+	lg, err := logging.Setup(r.LogsDir(), r.ID, envflag.OnOr(envflag.LogStderr, false))
+	if err != nil {
+		return nil, func() {}
+	}
+	return lg.Logger, func() { _ = lg.Close() }
+}
+
 func validateHere(ctx context.Context, errOut io.Writer) error {
 	c, ok := app.Find("validate")
 	if !ok {

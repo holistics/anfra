@@ -164,7 +164,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rev := func() string { return "repo@" + strings.Repeat(string(rune('0'+s.revision)), 40) }
 	switch op {
 	case cloudapi.OpStatus:
-		reply(cloudapi.StatusOut{Revision: rev(), PublishedBy: s.by, PublishedAt: time.Now(), Publish: cloudapi.PublishSettings{Limits: s.limits}})
+		reply(cloudapi.StatusOut{Revision: rev(), PublishedBy: s.by, PublishedAt: time.Now(), Limits: s.limits})
 	case cloudapi.OpListMissingBlobs:
 		var in cloudapi.ListMissingBlobsIn
 		_ = jsonkit.UnmarshalRead(r.Body, &in)

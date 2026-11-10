@@ -5,12 +5,22 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
+	"slices"
+	"time"
 
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
+	"github.com/holistics/anfra/shared/logkit"
 )
+
+// eventRetry is a call tried again because the server asked to wait: a delay
+// the caller may not see, so it leaves a record.
+var eventRetry = logkit.DefineEvent("cloudapi.retry",
+	"A call to the org's server was tried again after the server asked to wait.",
+	"op", "code", "wait_seconds", "attempt")
 
 // Client calls the ops `anfra publish` uses on one org: one call each, which
 // the caller batches within the server's Limits.
@@ -29,7 +39,24 @@ type ClientOptions struct {
 	// UserAgent names the client and its version, for a server to tell which
 	// clients still call it.
 	UserAgent string
+	// Waiting is told before a call waits to be tried again, after the server
+	// asked it to (rate_limited, unavailable), so a person can see why nothing
+	// moves. nil says nothing.
+	Waiting func(op string, wait time.Duration)
+	// Logger records each retry (cloudapi.retry), for a caller who sees no
+	// progress, such as an agent. nil records nothing.
+	Logger *slog.Logger
 }
+
+// Retries: how often a call is tried again when the server asks it to wait,
+// and the longest wait taken. A longer wait is the server saying not to come
+// back soon: the call fails with the server's answer instead.
+const (
+	maxRetries = 3
+	maxWait    = time.Minute
+	// defaultWait is for a rate_limited answer that doesn't say how long.
+	defaultWait = 5 * time.Second
+)
 
 // NewClient is a client of org.
 func NewClient(org Org, opts ClientOptions) *Client {
@@ -81,6 +108,43 @@ func Missing(err error) (oids []string, ok bool) {
 	return d.OIDs, true
 }
 
+// Outdated is the revision a base_outdated answer names, published since
+// the publish's base; ok is false for any other error.
+func Outdated(err error) (live LiveRevision, ok bool) {
+	e, isServers := errors.AsType[*Error](err)
+	if !isServers || e.Response.Code != CodeBaseOutdated {
+		return LiveRevision{}, false
+	}
+	return details[LiveRevision](e)
+}
+
+// retryAfter is how long the server asked to wait before trying the call
+// again, and whether it asked: rate_limited always, unavailable when it knows.
+func retryAfter(err error) (time.Duration, bool) {
+	e, ok := errors.AsType[*Error](err)
+	if !ok {
+		return 0, false
+	}
+	d, _ := details[RetryAfter](e)
+	wait := time.Duration(d.Seconds) * time.Second
+	switch {
+	case e.Response.Code == CodeRateLimited && wait <= 0:
+		return defaultWait, true
+	case e.Response.Code == CodeRateLimited, e.Response.Code == CodeUnavailable && wait > 0:
+		return wait, wait <= maxWait
+	}
+	return 0, false
+}
+
+func details[T any](e *Error) (T, bool) {
+	var d T
+	raw, err := jsonkit.Marshal(e.Response.Details)
+	if err != nil || jsonkit.Unmarshal(raw, &d) != nil {
+		return d, false
+	}
+	return d, true
+}
+
 // Status is the org's published revision, and the server's limits.
 func (c *Client) Status(ctx context.Context) (StatusOut, error) {
 	return call[StatusOut](ctx, c, OpStatus, struct{}{})
@@ -101,6 +165,42 @@ func (c *Client) CreateBlobs(ctx context.Context, blobs [][]byte) ([]string, err
 // Publish publishes in.Files as the whole of the org's repo.
 func (c *Client) Publish(ctx context.Context, in PublishIn) (PublishOut, error) {
 	return call[PublishOut](ctx, c, OpPublish, in)
+}
+
+// ListFiles is a revision's files, as paths and blob ids.
+func (c *Client) ListFiles(ctx context.Context, revision string) ([]File, error) {
+	out, err := call[ListFilesOut](ctx, c, OpListFiles, ListFilesIn{Revision: revision})
+	return out.Files, err
+}
+
+// GetBlobs reads blobs' content: one call, within limits.DownloadBlobs. An
+// answer past limits.DownloadBytes leaves some out, in Omitted.
+func (c *Client) GetBlobs(ctx context.Context, oids []string) (GetBlobsOut, error) {
+	return call[GetBlobsOut](ctx, c, OpGetBlobs, GetBlobsIn{OIDs: oids})
+}
+
+// ReadBlobs reads every blob in oids, in calls within limits, asking again
+// for what an answer left out.
+func (c *Client) ReadBlobs(ctx context.Context, oids []string, limits Limits) (map[string][]byte, error) {
+	out := make(map[string][]byte, len(oids))
+	for batch := range slices.Chunk(oids, max(limits.DownloadBlobs, 1)) {
+		for len(batch) > 0 {
+			got, err := c.GetBlobs(ctx, batch)
+			if err != nil {
+				return nil, err
+			}
+			if len(got.Blobs) == 0 && len(got.Omitted) > 0 {
+				// The server always answers the first blob named: one that
+				// answers none would have this ask forever.
+				return nil, errors.New("the server answered none of the blobs asked for")
+			}
+			for _, b := range got.Blobs {
+				out[b.OID] = b.Content
+			}
+			batch = got.Omitted
+		}
+	}
+	return out, nil
 }
 
 // ListDataSources is the org's data sources, by name and type.
@@ -128,12 +228,54 @@ func (c *Client) ListAppOrigins(ctx context.Context) ([]string, error) {
 
 // call posts in to op and decodes its answer, ignoring members it does not know:
 // a server may answer with more than this client was built for.
+//
+// When the server asks the caller to wait (rate_limited, or unavailable saying
+// how long), call waits and tries again, up to maxRetries times. The server
+// answers those before doing anything, so any op is safe to try again.
 func call[Out, In any](ctx context.Context, c *Client, op string, in In) (Out, error) {
 	var out Out
 	body, err := jsonkit.Marshal(in)
 	if err != nil {
 		return out, err
 	}
+	for attempt := 0; ; attempt++ {
+		out, err = callOnce[Out](ctx, c, op, body)
+		wait, ok := retryAfter(err)
+		if !ok || attempt == maxRetries {
+			return out, err
+		}
+		if c.opts.Waiting != nil {
+			c.opts.Waiting(op, wait)
+		}
+		if c.opts.Logger != nil {
+			code := ""
+			if e, ok := errors.AsType[*Error](err); ok {
+				code = e.Response.Code
+			}
+			c.opts.Logger.InfoContext(ctx, "Retrying a call the server asked to wait", logkit.EventKey, eventRetry,
+				"op", op, "code", code, "wait_seconds", int(wait.Seconds()), "attempt", attempt+1)
+		}
+		if err := sleep(ctx, wait); err != nil {
+			return out, err
+		}
+	}
+}
+
+// sleep waits d, or until ctx is done. Tests replace it, to retry at once.
+var sleep = func(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// callOnce posts body to op once.
+func callOnce[Out any](ctx context.Context, c *Client, op string, body []byte) (Out, error) {
+	var out Out
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.org.Endpoint(op), bytes.NewReader(body))
 	if err != nil {
 		return out, err
