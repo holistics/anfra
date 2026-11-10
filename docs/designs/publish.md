@@ -107,7 +107,7 @@ A pull with no base says so: "This folder had no record of the org's files, so a
  anfra pull, anfra publish     the commands: run the flows, write the output
  ─────────────────────────────────────────────────────────────────────────────
  syncstate   the sync state: base, pending record, lock
- folder      folder ⇄ tree: select and hash files, apply a merge safely, back up, restore
+ workdir     the folder ⇄ tree: select and hash files, apply a merge safely, back up, restore
  remote      the org's server ⇄ tree: the published revision, file lists, file contents
  ─────────────────────────────────────────────────────────────────────────────
  treemerge   the merge itself (pure): three trees in, a result out
@@ -116,7 +116,7 @@ A pull with no base says so: "This folder had no record of the org's files, so a
 | Component | Owns | Doesn't |
 |---|---|---|
 | `syncstate` | Reading and writing the sync state per org, its lock, its folder's `.gitignore`, moving `published.json` into it | Deciding anything about files |
-| `folder` | Which files are the repo's (`repoformat.Publishable`), hashing them, refusing a file that's on disk but not selected, checking paths before writing, writing through temporary files, the backup, restoring it | Merging |
+| `workdir` | Which files are the repo's (`repoformat.Publishable`), hashing them, refusing a file that's on disk but not selected, checking paths before writing, writing through temporary files, the backup, restoring it | Merging |
 | `remote` | `repos.status`, `repos.list_files`, `repos.get_blobs`, batching within the server's limits, a blob reader over them | Anything about the folder |
 | `treemerge` | Deciding the merge, conflicts and markers, checking resolution, taking a side ([treemerge](treemerge.md)) | Files, the network, the sync state |
 | The commands | The flows below, choosing the base, refusals, output | |
@@ -133,7 +133,7 @@ Kept in the repo, in `.anfra/publish/`, which never reaches git:
     .gitignore
     state.json                per org: the base, and the pending record
     lock                      held while a pull or publish runs in this folder
-    backup/                   an unfinished pull's backup, for --abort
+    backup/                   an unfinished pull's backup, by blob id, for --abort
 ```
 
 Unlike anfra's other state, which lives in `ANFRA_HOME` ([philosophy](philosophy.md#dont-bloat-the-users-machine-or-repo)), the sync state stays true with the repo's content: it says which org revision these files match, wherever they are. So it travels with them. A moved or renamed folder keeps its base, and a copy carries the base its files really match. It can't be rebuilt from the files, and losing it costs a pull full of conflicts.
@@ -151,7 +151,7 @@ Unlike anfra's other state, which lives in `ANFRA_HOME` ([philosophy](philosophy
         {"kind": "content", "files": [{"path": "datasets/sales.aml", "base": "…", "local": "…", "org": "…"}], "marker_size": 7},
         {"kind": "binary", "files": [{"path": "apps/logo.png", "base": "…", "local": "…", "org": "…"}]}
       ],
-      "added": ["models/refunds.aml"]
+      "before": {"datasets/sales.aml": "…", "models/refunds.aml": ""}
     }
   }
 }
@@ -160,11 +160,11 @@ Unlike anfra's other state, which lives in `ANFRA_HOME` ([philosophy](philosophy
 - **`base`** is written after a publish, after a pull with no conflicts, and when a pull's conflicts are found resolved.
 - **`pending`,** the pending record, exists only while a pull writes files (`writing`), or until its conflicts are resolved (`conflicted`). Each conflict is `treemerge`'s: its kind, paths, blob ids and marker size, so `--take` and the resolution check need nothing else.
 - **A conflict** lists every path it covers with its three versions, since one conflict can cover several (`file_folder`, `path_collision`). `resolved` is set when a side is taken. A conflict with markers is resolved by its file's content, checked each time.
-- **The backup** is always `.anfra/publish/backup/`.
+- **`before`** is each path the pull wrote or deleted, with its blob id before the pull, `""` for one the pull created. Undoing the pull, or `--take local`, puts these back.
+- **The backup** is `.anfra/publish/backup/`, each file named by its blob id, never by its path: anfra-node reads every `.aml` file under the repo, dot folders included, so a backup named `models/orders.aml` would be compiled with the repo.
 - **`lock`** is held by a pull or publish for as long as it runs, so two in one folder don't interleave. A second one fails at once, saying another is running. The system releases it when the process ends, so a crash never leaves it held.
 - **On first run,** the revision in `ANFRA_HOME`'s `published.json` becomes `base`, and that file is removed.
 - **`.anfra/publish/` ignores itself:** its own `.gitignore` holds `*`, as pytest's cache folder does, so nothing in it is committed, whatever the repo's own `.gitignore` says. `.anfra/` as a whole can't be ignored, since it holds committed config.
-- **Nothing scans it.** Publish skips dot folders, and anfra's scan of the repo for validation must too, so the backup's `.aml` files are never compiled. *To confirm in anfra-node's scan.*
 - **Recording the base is best-effort,** as recording `published.json` is today. In a folder that can't be written, such as a read-only mount, a publish still goes through, and the next one finds its base with [rule 2](#the-base). A pull can't run there anyway, since it writes the files.
 
 ```
@@ -201,9 +201,9 @@ The first step of every pull and publish.
 
 1. `syncstate`: lock, then [flow 1](#1-checking-resolution).
 2. `remote`: read the published revision. **Pick the base** ([above](#the-base)). If it's the published revision, the folder is up to date.
-3. **Build the three trees:** the folder's (`folder`, refusing a file on disk that isn't selected), the base's and the published revision's (`remote`). Paths the org has that aren't publishable, such as a starting `.gitignore`, never appear: `repos.list_files` lists only publishable files.
+3. **Build the three trees:** the folder's (`workdir`, refusing a file on disk that isn't selected), the base's and the published revision's (`remote`). Paths the org has that aren't publishable, such as a starting `.gitignore`, never appear: `repos.list_files` lists only publishable files.
 4. **`treemerge.Merge`** ([treemerge, flow 1](treemerge.md#1-merge-three-trees), or [flow 2](treemerge.md#2-merge-with-no-base) with no base), with `remote` and the folder as its blob reader, and the labels "local" and "org".
-5. **`folder.Apply`:** check every path ([below](#writing-files-safely)), back up each file that will change, write the pending record as `writing`, write each file through a temporary file and a rename, delete the files to delete.
+5. **`workdir.Apply`:** check every path ([below](#writing-files-safely)), back up each file that will change, write the pending record as `writing`, write each file through a temporary file and a rename, delete the files to delete.
 6. **`syncstate`:** with no conflicts, the base becomes the published revision and the record is dropped. Otherwise the record becomes `conflicted`.
 7. **Report** the changes and conflicts ([what members see](#what-members-see)).
 
@@ -251,7 +251,7 @@ So two commands list them, without publishing, following anfra's convention that
 ### 5. Undoing a pull: `anfra pull --abort`
 
 1. `syncstate`: lock, read the pending record, `writing` or `conflicted`.
-2. `folder`: restore every backed-up file, delete the files the pull added.
+2. `workdir`: restore every backed-up file, delete the files the pull added.
 3. `syncstate`: drop the record. The base is unchanged.
 
 Many folders aren't git repos, and uncommitted work isn't in git anyway, so the backup is what makes a pull safe to run. Aborting after editing a file loses those edits too, and the command says so at a terminal before it runs.
@@ -261,7 +261,7 @@ Many folders aren't git repos, and uncommitted work isn't in git anyway, so the 
 What changes from today's flow, in order:
 
 1. `syncstate`: lock, then [flow 1](#1-checking-resolution).
-2. `folder`: select and hash the files, refusing a file on disk that isn't selected.
+2. `workdir`: select and hash the files, refusing a file on disk that isn't selected.
 3. Authenticate and validate, as today.
 4. `remote`: read the published revision, and **pick the base.** If it's the published revision, carry on. Otherwise, before uploading anything, **ask whether a pull would change the folder** ([below](#when-a-pull-would-change-nothing)):
    - **It would:** refuse with `pull_required`.
@@ -294,7 +294,8 @@ The "last published elsewhere" warning and its confirmation go away, since the r
 
 ## Writing files safely
 
-- **Paths from the server are untrusted.** Before writing anything, `folder` refuses a path that isn't publishable, is absolute, contains `..`, or leads through a symlink in the folder. Pull writes only inside the repo's folder, and only files a publish would send.
+- **Paths from the server are untrusted.** Before writing anything, `workdir` refuses a path that isn't publishable, is absolute, contains `..`, or leads through a symlink in the folder. Pull writes only inside the repo's folder, and only files a publish would send.
+- **And the system enforces it.** Every read, write, rename and delete goes through an `os.Root` opened at the repo, or at the backup, so none can leave it, by `..` or by a symlink, even one made between the check and the write.
 - **Selected versus present.** A file on disk that's in the base or the published revision but isn't selected (a symlink, or a file a newer anfra no longer publishes) makes pull and publish stop and name it. Otherwise the merge would read it as deleted, and the next publish would delete it from the org.
 - **The merge is worked out in memory** by `treemerge` before any file is touched.
 - **Each file is written to a temporary file and renamed into place,** after the backup and the pending record are written. A pull that's killed partway leaves `writing`, and `--abort` restores from the backup whatever was written.

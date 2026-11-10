@@ -66,9 +66,11 @@ type Pending struct {
 	Revision  string     `json:"revision"`
 	Stage     Stage      `json:"state"`
 	Conflicts []Conflict `json:"conflicts,omitempty"`
-	// Added is the files the pull created, which undoing it deletes. The
-	// files it changed or deleted are in the backup.
-	Added []string `json:"added,omitempty"`
+	// Before is each path the pull wrote or deleted, with its blob id before
+	// the pull: its content in the backup, named by that id. "" is a path the
+	// pull created. Undoing the pull, or taking the folder's side, puts these
+	// back.
+	Before map[string]string `json:"before,omitempty"`
 }
 
 // Conflict is one of a pull's conflicts, as treemerge reported it.
@@ -112,7 +114,7 @@ func For(repoDir string) Folder {
 }
 
 // BackupDir is where an unfinished pull keeps the files it changed, for
-// undoing it.
+// undoing it, each named by its blob id (Pending.Before).
 func (f Folder) BackupDir() string { return filepath.Join(f.dir, backupDir) }
 
 // Load reads the sync state. A folder with none has an empty one, or, the first
