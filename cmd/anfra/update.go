@@ -282,8 +282,29 @@ func maybeNotifyUpdate(invoked string) {
 			}
 			agents.MarkNoticed()
 		}
+		if n.update {
+			// The update notice stands out as a banner; the skills' stays one line.
+			if b := updateBanner(update.Cached(), cliui.NewTerminalStyles(os.Stderr)); b != "" {
+				fmt.Fprintln(os.Stderr, "\n"+b+"\n")
+			}
+			continue
+		}
 		fmt.Fprintln(os.Stderr, "\n"+n.text)
 	}
+}
+
+// updateBanner is the update notice set apart for a person at a terminal: a
+// heading, the version change and the command to run, with styles (the zero
+// value is plain). "" when r is not newer than the running version.
+func updateBanner(r *update.Release, st cliui.TerminalStyles) string {
+	if r == nil || !r.IsNewer() {
+		return ""
+	}
+	return fmt.Sprintf("%s  %s → %s\n  %s",
+		st.Warning.Inherit(st.Heading).Render("▲ Update available"),
+		st.Muted.Render(meta.Version),
+		st.Success.Inherit(st.Heading).Render(r.Version),
+		codeSpans("Run `anfra update` to install.", st))
 }
 
 // stderrIsInteractive reports whether stderr is a terminal (not a pipe/file),
