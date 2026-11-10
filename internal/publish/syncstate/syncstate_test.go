@@ -44,7 +44,7 @@ func TestSaveAndLoad(t *testing.T) {
 				Kind: "content", MarkerSize: 7,
 				Files: []syncstate.File{{Path: "datasets/sales.aml", Base: "b", Local: "l", Org: "o"}},
 			}},
-			Added: []string{"models/refunds.aml"},
+			Before: map[string]string{"models/refunds.aml": "", "datasets/sales.aml": "l"},
 		},
 	}}
 	if err := f.Save(want); err != nil {
@@ -60,7 +60,7 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 	p := got[org].Pending
 	if got[org].Base != "acme@1" || p == nil || p.Stage != syncstate.Conflicted || len(p.Conflicts) != 1 ||
-		p.Conflicts[0].Files[0].Local != "l" || p.Added[0] != "models/refunds.aml" {
+		p.Conflicts[0].Files[0].Local != "l" || p.Before["datasets/sales.aml"] != "l" || p.Before["models/refunds.aml"] != "" {
 		t.Errorf("loaded %+v, pending %+v", got[org], p)
 	}
 }
