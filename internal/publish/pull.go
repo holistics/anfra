@@ -153,20 +153,33 @@ func pendingRefusal(dir string, s *syncstate.Org, v verb) (settled bool, err err
 	case syncstate.Writing:
 		return false, apperr.New(clierr.PullInterrupted, fmt.Sprintf("%s, because the last pull stopped partway through writing files. Run `anfra pull --abort` to put them back as they were, then try again.", v.not))
 	case syncstate.Conflicted:
-		var open []string
-		for _, c := range openConflicts(dir, s) {
-			for _, f := range c.Files {
-				open = append(open, f.Path)
-			}
-		}
-		if len(open) > 0 {
+		if open := openConflicts(dir, s); len(open) > 0 {
+			files, details := listConflicts(open)
 			return false, apperr.NewWith(clierr.ConflictsUnresolved,
-				fmt.Sprintf("%s, because %s still %s conflicts from the last pull. Resolve them, or undo that pull with `anfra pull --abort`, then try again.", v.not, joinPaths(open), hasHave(len(open))),
-				clierr.UnresolvedFiles{Paths: open})
+				fmt.Sprintf("%s, because %s still %s conflicts from the last pull. Resolve them (`anfra publish status` says how), or undo that pull with `anfra pull --abort`, then try again.", v.not, files, hasHave(len(details.Paths))),
+				details)
 		}
 		return true, nil
 	}
 	return false, nil
+}
+
+// listConflicts names conflicts' files, each with its kind ("a.aml
+// (content) and logo.png (binary)"), and is them as conflicts_unresolved's
+// details.
+func listConflicts(cs []syncstate.Conflict) (string, clierr.UnresolvedFiles) {
+	details := clierr.UnresolvedFiles{}
+	var named []string
+	for _, c := range cs {
+		var paths []string
+		for _, f := range c.Files {
+			paths = append(paths, f.Path)
+		}
+		details.Paths = append(details.Paths, paths...)
+		details.Conflicts = append(details.Conflicts, clierr.UnresolvedConflict{Kind: c.Kind, Paths: paths})
+		named = append(named, strings.Join(paths, ", ")+" ("+c.Kind+")")
+	}
+	return joinPaths(named), details
 }
 
 // openConflicts is the pending pull's conflicts not resolved yet.
@@ -250,83 +263,14 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 		res.Message = fmt.Sprintf("This folder already has everything published to %s.", ref.shown())
 		return res, nil
 	}
-	s.Base = c.base // "" when the org no longer has it: merged from nothing
-	noBase := s.Base == ""
-	res.Base = s.Base
-	baseTree, orgTree := c.baseTree, c.live
-
-	// Read only the content the merge needs, that the folder doesn't have.
-	need := map[string]bool{}
-	for _, r := range c.paths {
-		switch {
-		case r.Outcome == treemerge.Theirs, r.Outcome == treemerge.NeedsMerge,
-			r.Conflict != nil && (r.Conflict.Kind == treemerge.ModifyDelete || r.Conflict.Kind == treemerge.DeleteModify):
-			need[r.Base], need[r.Theirs] = true, true
-		}
-	}
-	delete(need, "")
-	blobs, err := client.ReadBlobs(ctx, slices.Sorted(maps.Keys(need)), status.Limits)
+	res.Base = c.base
+	noBase := c.base == ""
+	merged, err := pl.merge(ctx, client, org, c)
 	if err != nil {
 		return PullResult{}, err
 	}
-	reader := blobReader{local: local, fetched: blobs}
-
-	// Markers name the sides as people know them: who published the org's
-	// version, and when. Revisions are long and opaque, so they stay in the
-	// result's fields.
-	labels := treemerge.Labels{Ours: "local", Base: "base", Theirs: "org"}
-	if who := publishedText(res.PublishedBy, res.PublishedAt); who != "" {
-		labels.Theirs = "org (" + who + ")"
-	}
-	merged, err := treemerge.Merge(ctx, baseTree, local.Files(), orgTree, reader, treemerge.Options{Labels: labels})
-	if err != nil {
-		return PullResult{}, err
-	}
-
-	var changes []workdir.Change
-	var conflicts []syncstate.Conflict
-	seen := map[*treemerge.ConflictInfo]bool{}
-	for _, r := range merged.Paths {
-		if r.Conflict != nil && !seen[r.Conflict] {
-			seen[r.Conflict] = true
-			conflicts = append(conflicts, fromConflictInfo(*r.Conflict))
-		}
-		if r.Result == r.Ours {
-			continue
-		}
-		c := workdir.Change{Path: r.Path, Delete: r.Result == ""}
-		if !c.Delete {
-			if c.Content, err = content(ctx, merged, reader, r.Result); err != nil {
-				return PullResult{}, err
-			}
-		}
-		changes = append(changes, c)
-		if r.Conflict == nil {
-			res.Changes = append(res.Changes, FileChange{Path: r.Path, Change: changeOf(r)})
-		}
-	}
-
-	if len(changes) > 0 {
-		err := workdir.Apply(pl.dir, pl.sync.BackupDir(), changes, func(before map[string]string) error {
-			s.Pending = &syncstate.Pending{Revision: status.Revision, Stage: syncstate.Writing, Conflicts: conflicts, Before: before}
-			return pl.sync.Save(pl.state)
-		})
-		if err != nil {
-			return PullResult{}, err
-		}
-	}
-	if len(conflicts) == 0 {
-		s.Base, s.Pending = status.Revision, nil
-		_ = os.RemoveAll(pl.sync.BackupDir())
-	} else {
-		if s.Pending == nil { // conflicts that wrote nothing: kept by the folder's versions
-			s.Pending = &syncstate.Pending{Revision: status.Revision, Conflicts: conflicts, Before: map[string]string{}}
-		}
-		s.Pending.Stage = syncstate.Conflicted
-	}
-	if err := pl.sync.Save(pl.state); err != nil {
-		return PullResult{}, err
-	}
+	res.Changes = merged.changes
+	conflicts := merged.conflicts
 
 	res.Message = fmt.Sprintf("Pulled the changes published to %s.", ref.shown())
 	if res.PublishedBy != "" {
@@ -334,7 +278,7 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 	}
 	// Only a folder that had files could have one that differs, or one
 	// deleted on purpose: a folder fresh from `anfra init` has neither.
-	if noBase && len(local.Files()) > 0 {
+	if noBase && len(c.local.Files()) > 0 {
 		res.Hints = append(res.Hints, fmt.Sprintf("anfra has no record of this folder pulling from or publishing to %s, so where a file differs, it can't tell whose version is newer. In a git repo, `git log -- <path>` shows which is newer.", ref.shown()))
 		if slices.ContainsFunc(res.Changes, func(c FileChange) bool { return c.Change == "added" }) {
 			res.Hints = append(res.Hints, "The org had the files added, and this folder didn't. If you deleted any of them on purpose, delete them again.")
@@ -348,6 +292,106 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 	res.Conflicts, res.HowToResolve = describe(conflicts, noBase)
 	res.Hints = append(res.Hints, conflictHints("this pull")...)
 	return res, nil
+}
+
+// merged is what a merge wrote: its changes, other than conflicts, and the
+// conflicts left to resolve.
+type merged struct {
+	changes   []FileChange
+	conflicts []syncstate.Conflict
+}
+
+// merge merges the published revision of c into the folder, keeping a copy of
+// every file it changes, and records the pull in the sync state: the base, or
+// its conflicts left to resolve. The caller holds the folder's lock.
+func (pl *puller) merge(ctx context.Context, client *cloudapi.Client, org cloudapi.Org, c comparison) (merged, error) {
+	s := pl.org(org)
+	s.Base = c.base // "" when the org no longer has it: merged from nothing
+	status, local := c.status, c.local
+	var out merged
+
+	// Read only the content the merge needs, that the folder doesn't have.
+	need := map[string]bool{}
+	for _, r := range c.paths {
+		switch {
+		case r.Outcome == treemerge.Theirs, r.Outcome == treemerge.NeedsMerge,
+			r.Conflict != nil && (r.Conflict.Kind == treemerge.ModifyDelete || r.Conflict.Kind == treemerge.DeleteModify):
+			need[r.Base], need[r.Theirs] = true, true
+		}
+	}
+	delete(need, "")
+	blobs, err := client.ReadBlobs(ctx, slices.Sorted(maps.Keys(need)), status.Limits)
+	if err != nil {
+		return merged{}, err
+	}
+	reader := blobReader{local: local, fetched: blobs}
+
+	// Markers name the sides as people know them: who published the org's
+	// version, and when. Revisions are long and opaque, so they stay in the
+	// result's fields.
+	labels := treemerge.Labels{Ours: "local", Base: "base", Theirs: "org"}
+	var by string
+	if status.PublishedBy != nil {
+		by = status.PublishedBy.Email
+	}
+	var at *time.Time
+	if !status.PublishedAt.IsZero() {
+		at = &status.PublishedAt
+	}
+	if who := publishedText(by, at); who != "" {
+		labels.Theirs = "org (" + who + ")"
+	}
+	m, err := treemerge.Merge(ctx, c.baseTree, local.Files(), c.live, reader, treemerge.Options{Labels: labels})
+	if err != nil {
+		return merged{}, err
+	}
+
+	var changes []workdir.Change
+	var conflicts []syncstate.Conflict
+	seen := map[*treemerge.ConflictInfo]bool{}
+	for _, r := range m.Paths {
+		if r.Conflict != nil && !seen[r.Conflict] {
+			seen[r.Conflict] = true
+			conflicts = append(conflicts, fromConflictInfo(*r.Conflict))
+		}
+		if r.Result == r.Ours {
+			continue
+		}
+		ch := workdir.Change{Path: r.Path, Delete: r.Result == ""}
+		if !ch.Delete {
+			if ch.Content, err = content(ctx, m, reader, r.Result); err != nil {
+				return merged{}, err
+			}
+		}
+		changes = append(changes, ch)
+		if r.Conflict == nil {
+			out.changes = append(out.changes, FileChange{Path: r.Path, Change: changeOf(r)})
+		}
+	}
+
+	if len(changes) > 0 {
+		err := workdir.Apply(pl.dir, pl.sync.BackupDir(), changes, func(before map[string]string) error {
+			s.Pending = &syncstate.Pending{Revision: status.Revision, Stage: syncstate.Writing, Conflicts: conflicts, Before: before}
+			return pl.sync.Save(pl.state)
+		})
+		if err != nil {
+			return merged{}, err
+		}
+	}
+	if len(conflicts) == 0 {
+		s.Base, s.Pending = status.Revision, nil
+		_ = os.RemoveAll(pl.sync.BackupDir())
+	} else {
+		if s.Pending == nil { // conflicts that wrote nothing: kept by the folder's versions
+			s.Pending = &syncstate.Pending{Revision: status.Revision, Conflicts: conflicts, Before: map[string]string{}}
+		}
+		s.Pending.Stage = syncstate.Conflicted
+	}
+	if err := pl.sync.Save(pl.state); err != nil {
+		return merged{}, err
+	}
+	out.conflicts = conflicts
+	return out, nil
 }
 
 // take resolves the conflicts on o.Paths by keeping one side's version of

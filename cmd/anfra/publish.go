@@ -45,8 +45,10 @@ func newPublishCmd() *cobra.Command {
 			"Without a destination, an interactive terminal offers stored logins or new authentication.\n" +
 			"If the destination needs authentication, log in or choose another org here. Changing\n" +
 			"the destination requires confirmation before updating .anfra/config.yml.\n" +
-			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n" +
-			"--yes skips overwrite confirmation only.\n\n" +
+			"Non-interactive publishing requires a destination and matching anfra auth login credentials.\n\n" +
+			"Others' work: when someone published since this folder last pulled or published, publish stops,\n" +
+			"so their work isn't replaced unseen. Run `anfra pull` to merge their changes and review them, or\n" +
+			"pass --pull to merge and publish in one step. `anfra publish status` shows how this folder stands.\n\n" +
 			"Its result is the revision published, and what came of it. A repo that fails validation fails\n" +
 			"with repo_invalid, whose details are validate's answer, as validation.",
 		Args: cobra.NoArgs,
@@ -116,6 +118,7 @@ func newPublishCmd() *cobra.Command {
 	_ = f.MarkHidden("list")
 	_ = f.MarkHidden("dry-run")
 	f.BoolVar(&o.CreateDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server. DuckDB ones, files on this machine, are never sent")
+	f.BoolVar(&o.Pull, "pull", false, "when someone published since this folder last pulled or published, merge their changes in first, then publish. It stops if their changes conflict with this folder's")
 	// --yes confirmed replacing a version published elsewhere. Publish now
 	// stops instead, so it warns that it does nothing, until a later release
 	// removes it.

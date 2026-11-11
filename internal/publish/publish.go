@@ -41,6 +41,9 @@ type Options struct {
 	// part done here, offline, without authentication or config writes: the
 	// files, and where they'd go.
 	Check bool
+	// Pull merges what the org has that this folder hasn't seen before
+	// publishing, instead of refusing; it stops on conflicts.
+	Pull bool
 	// Yes did nothing since publish stopped asking before replacing a
 	// version; kept for a release, with a warning.
 	Yes bool
@@ -155,7 +158,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if o.Yes {
 		t.Warn("yes_ignored", "`--yes` is deprecated and does nothing now, so stop passing it. Publish no longer asks before replacing someone else's work. Instead, it stops, and asks you to run `anfra pull` first.")
 	}
-	sc, release, err := openSync(dir, p)
+	sc, release, err := openSync(dir, p, env)
 	if err != nil {
 		return Result{}, err
 	}
@@ -168,13 +171,27 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		return Result{}, err
 	}
 
-	p.Step("Validating…")
-	if err := env.Validate(ctx); err != nil {
-		return Result{}, err
-	}
-
 	status, err := client.Status(ctx)
 	if err != nil {
+		return Result{}, err
+	}
+	// What the org has that this folder hasn't seen is never replaced unseen
+	// (docs/designs/publish.md, flow 6). Checked before anything changes, in
+	// this folder or on the org; with --pull, merged into the folder first.
+	pulled, err := sc.catchUp(ctx, client, org, status, tg.tree, o.Pull)
+	if err != nil {
+		return Result{}, err
+	}
+	if pulled != nil {
+		if tg.tree, err = readFolder(dir, verbPublish); err != nil {
+			return Result{}, err
+		}
+		files, oids = tg.tree.Paths(), tg.tree.Files()
+		selected = fmt.Sprintf("%d files of the repo", len(files))
+	}
+
+	p.Step("Validating…")
+	if err := env.Validate(ctx); err != nil {
 		return Result{}, err
 	}
 	// The org's limits are checked before anything is changed, in MotherDuck
@@ -192,11 +209,6 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		return Result{}, err
 	}
 	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
-	// What the org has that this folder hasn't seen is never replaced unseen
-	// (docs/designs/publish.md, flow 6).
-	if err := sc.catchUp(ctx, client, org, status, tg.tree); err != nil {
-		return Result{}, err
-	}
 
 	byOID := map[string]string{} // blob id → a path holding it
 	for _, f := range files {
@@ -241,7 +253,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	}
 	shown := cmp.Or(ref.Name, ref.URL)
 	out := Result{Org: ref, Revision: res.Revision, Changed: res.Changed, Replaced: res.Replaced, Files: len(files),
-		DataSourcesCreated: append([]string{}, t.created...)}
+		DataSourcesCreated: append([]string{}, t.created...), Pulled: pulled}
 	if res.Changed {
 		out.Message = fmt.Sprintf("Published %d files to %s, as revision %s.", len(files), shown, res.Revision)
 	} else {
