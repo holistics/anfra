@@ -68,9 +68,10 @@ step 4.
 
 1. Run `anfra auth status`. It lists the orgs the user is signed in to on this machine, with their
    addresses. If one is the org, confirm it with the user.
-2. Otherwise, ask the user for it. It's the start of the address their browser shows when they
-   open the org: for `https://bi.example.com/o/acme/dashboards/12`, it's
-   `https://bi.example.com/o/acme`. Only that part is accepted.
+2. Otherwise, ask the user to open the org in their browser, and paste the address of any of its
+   pages, such as `https://bi.example.com/o/acme/dashboards/12`. anfra keeps only the org's part.
+3. If the user knows only the server's address, run `anfra auth login https://<server>`. The user
+   chooses the org in the browser, and the login's result gives its address.
 
 Then pull, which saves the address as the repo's org (`org.url` in `.anfra/config.yml`):
 

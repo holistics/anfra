@@ -47,7 +47,7 @@ func newAuthCmd() *cobra.Command {
 	}
 	auth.AddCommand(&cobra.Command{
 		Use: "login [<org URL>]", Short: "Authenticate with an organization",
-		Long: "Authenticate through your browser. Choose an organization or enter its URL.\n\nSupply an organization URL when using --non-interactive or without a\nterminal. Browser approval is required. It saves the org's login on this\nmachine, and never changes the repo's publish destination.\n\n" +
+		Long: "Authenticate through your browser. Choose an organization or enter its URL.\n\nSupply an organization URL when using --non-interactive or without a\nterminal. A server's address alone, such as https://bi.example.com, works too:\nyou choose the organization in the browser. Browser approval is required. It\nsaves the org's login on this machine, and never changes the repo's publish\ndestination.\n\n" +
 			"Its result is message, the outcome, and org_url, the org signed in to.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -166,11 +166,12 @@ func loginServer(address string) (origin, hint string, err error) {
 		}
 		return origin, "", err
 	}
-	org, err := cloudapi.ParseOrg(address)
+	// A server's address alone works: its consent page chooses the org.
+	origin, hint, err = cloudapi.ParseAddress(address)
 	if err != nil {
 		return "", "", refused("org URL", "invalid", err.Error())
 	}
-	return org.Origin, org.Slug, nil
+	return origin, hint, nil
 }
 
 // openAuthBrowser passes the authorization URL directly to the platform launcher,
@@ -291,7 +292,7 @@ func (t *authTerminal) pickStored(ctx context.Context, orgs []cliauth.StoredLogi
 
 func logoutOrg(ctx context.Context, args []string, terminal *authTerminal) (cloudapi.Org, error) {
 	if len(args) != 0 {
-		org, err := cloudapi.ParseOrg(args[0])
+		org, err := cloudapi.ParseOrgAddress(args[0])
 		if err != nil {
 			return cloudapi.Org{}, refused("org URL", "invalid", err.Error())
 		}

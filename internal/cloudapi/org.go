@@ -91,6 +91,57 @@ func ParseOrg(raw string) (Org, error) {
 	return Org{Origin: origin, Slug: slug}, nil
 }
 
+// ParseAddress reads an address a person gave: an org's, any page under it, or
+// only its server's. It returns the server's origin, and the org's slug when
+// the address names one, or "". What follows the org in the address, its path,
+// query and fragment, is dropped unread: a page's address copied from a
+// browser works. Addresses anfra keeps, or a server returns, are parsed with
+// ParseOrg, which allows only the org's own.
+//
+// An org named by its host, such as https://acme.anfra.ai, would need asking
+// its server: here it reads as a server's address.
+func ParseAddress(raw string) (origin, slug string, err error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		// Not echoed: it may hold credentials.
+		return "", "", errors.New("the address isn't a valid URL. Use the org's address, such as https://bi.example.com/o/acme")
+	}
+	if u.User != nil {
+		// Not echoed: it holds a credential.
+		return "", "", errors.New("an org address can't have credentials. Use just the org's address, such as https://bi.example.com/o/acme")
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", "", errors.New("the address must start with https:// and the server's host name, such as https://bi.example.com/o/acme")
+	}
+	if origin, err = ParseOrigin(u.Scheme + "://" + u.Host); err != nil {
+		return "", "", err
+	}
+	segments := strings.Split(strings.TrimPrefix(u.EscapedPath(), "/"), "/")
+	if len(segments) < 2 || segments[0] != "o" {
+		return origin, "", nil
+	}
+	// An org's name is lowercase, so /o/Acme is acme, as the host's case is
+	// ignored too. An escaped name, such as %61cme, isn't one.
+	slug = strings.ToLower(segments[1])
+	if !slugPattern.MatchString(slug) {
+		return "", "", fmt.Errorf("the address doesn't name an org: an org's name, after /o/, has only letters, digits, and hyphens. Use the org's address, such as %s/o/acme", origin)
+	}
+	return origin, slug, nil
+}
+
+// ParseOrgAddress reads an org's address a person gave, or any page's under
+// it (ParseAddress).
+func ParseOrgAddress(raw string) (Org, error) {
+	origin, slug, err := ParseAddress(raw)
+	if err != nil {
+		return Org{}, err
+	}
+	if slug == "" {
+		return Org{}, fmt.Errorf("%s doesn't name an org. Use the org's address, such as %s/o/acme: open the org in a browser, and copy the address of any of its pages", origin, origin)
+	}
+	return Org{Origin: origin, Slug: slug}, nil
+}
+
 // String is the org's canonical address.
 func (o Org) String() string { return o.Origin + "/o/" + o.Slug }
 

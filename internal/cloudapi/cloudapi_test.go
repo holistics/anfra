@@ -66,6 +66,45 @@ func TestParseOrg(t *testing.T) {
 	}
 }
 
+// An address a person gives may be any page of the org, or its server's alone.
+func TestParseAddress(t *testing.T) {
+	for raw, want := range map[string][2]string{
+		"https://bi.example.com/o/acme":                           {"https://bi.example.com", "acme"},
+		"https://BI.example.com/o/Acme/":                          {"https://bi.example.com", "acme"},
+		"https://bi.example.com/o/acme/datasets/orders?tab=sql#x": {"https://bi.example.com", "acme"},
+		"https://bi.example.com/o/acme/x%2Fy?token=secret":        {"https://bi.example.com", "acme"},
+		"https://bi.example.com:8443/o/a-1":                       {"https://bi.example.com:8443", "a-1"},
+		"https://bi.example.com":                                  {"https://bi.example.com", ""},
+		"https://bi.example.com/?next=/o/acme":                    {"https://bi.example.com", ""},
+		"https://bi.example.com/api/o/acme/x":                     {"https://bi.example.com", ""},
+		"https://bi.example.com/o":                                {"https://bi.example.com", ""},
+	} {
+		origin, slug, err := cloudapi.ParseAddress(raw)
+		if err != nil || origin != want[0] || slug != want[1] {
+			t.Errorf("%q: %q %q %v; want %v", raw, origin, slug, err, want)
+		}
+	}
+	for raw, want := range map[string]string{
+		"https://u:secret@bi.example.com/o/acme":      "can't have credentials",
+		"bi.example.com/o/acme":                       "must start with https://",
+		"http://bi.example.com/o/acme":                "must use https://",
+		"https://bi.example.com/o/%61cme":             "doesn't name an org",
+		"https://bi.example.com/o/a_b/x?token=secret": "doesn't name an org",
+	} {
+		_, _, err := cloudapi.ParseAddress(raw)
+		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "secret") {
+			t.Errorf("%q: %v; want %q, without the address's secret", raw, err, want)
+		}
+	}
+	if org, err := cloudapi.ParseOrgAddress("https://bi.example.com/o/acme/datasets?x=1"); err != nil || org.String() != "https://bi.example.com/o/acme" {
+		t.Errorf("a page's address: %v %v", org, err)
+	}
+	if _, err := cloudapi.ParseOrgAddress("https://bi.example.com/?token=secret"); err == nil ||
+		!strings.Contains(err.Error(), "https://bi.example.com doesn't name an org") || strings.Contains(err.Error(), "secret") {
+		t.Errorf("a server's address: %v", err)
+	}
+}
+
 // The client posts to the org's endpoint with its credential and user agent,
 // reads answers carrying members it does not know, and returns refusals as
 // errors IsCode and Missing read.
