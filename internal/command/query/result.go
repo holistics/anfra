@@ -26,7 +26,7 @@ type QueryResult struct {
 
 type QueryRows struct {
 	Fields  []string         `json:"fields" pretty:"-"`
-	Records []canalquery.Row `json:"records" pretty:"Result,labels=columns.label" doc:"one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are \"NaN\", \"Infinity\", and \"-Infinity\". The same holds at any depth of a list, map, or struct. A database NULL is null."`
+	Records []canalquery.Row `json:"records" pretty:"Result,rowlabels=columns.label" doc:"one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are \"NaN\", \"Infinity\", and \"-Infinity\". The same holds at any depth of a list, map, or struct. A database NULL is null."`
 }
 
 // CompiledQuery is the `query compile` result: the SQL the query compiles to.

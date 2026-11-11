@@ -146,10 +146,55 @@ func TestTree(t *testing.T) {
 	}
 }
 
-func TestTitleCase(t *testing.T) {
-	for name, want := range map[string]string{"checked_at": "Checked At", "url": "URL", "org_id": "Org ID", "deprecated_names": "Deprecated Names"} {
-		if got := titleCase(name); got != want {
-			t.Errorf("titleCase(%q) = %q, want %q", name, got, want)
+func TestSentenceCase(t *testing.T) {
+	for name, want := range map[string]string{"checked_at": "Checked at", "url": "URL", "org_id": "Org ID", "deprecated_names": "Deprecated names", "how_to_resolve": "How to resolve"} {
+		if got := sentenceCase(name); got != want {
+			t.Errorf("sentenceCase(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+// A map's keys are shown as they are, a list of objects showing one field is
+// a list of that field's values, and a run of lines too wide for the terminal
+// puts each value under its label.
+func TestMapKeysOneFieldListsAndOverflow(t *testing.T) {
+	type conflict struct {
+		Paths   []string `json:"paths" pretty:"-"`
+		Message string   `json:"message"`
+	}
+	type result struct {
+		Message      string                `json:"message"`
+		Conflicts    map[string][]conflict `json:"conflicts"`
+		HowToResolve map[string]string     `json:"how_to_resolve"`
+	}
+	r := result{
+		Message: "m",
+		Conflicts: map[string][]conflict{
+			"content":       {{Paths: []string{"a.aml"}, Message: "a.aml changed."}, {Paths: []string{"b.aml"}, Message: "b.aml changed."}},
+			"modify_delete": {{Paths: []string{"c.aml"}, Message: "c.aml deleted."}},
+		},
+		HowToResolve: map[string]string{"content": "Edit it.", "modify_delete": "Delete it, or keep it by removing the markers."},
+	}
+	render := func(width int) string {
+		var b strings.Builder
+		if err := Render(&b, r, width); err != nil {
+			t.Fatal(err)
+		}
+		return b.String()
+	}
+	wide := "m\n\nConflicts:\n  content:        a.aml changed.\n                  b.aml changed.\n  modify_delete:  c.aml deleted.\n\n" +
+		"How to resolve:\n  content:        Edit it.\n  modify_delete:  Delete it, or keep it by removing the markers.\n"
+	if got := render(0); got != wide {
+		t.Errorf("not a terminal:\n%s\nwant\n%s", got, wide)
+	}
+	if got := render(100); got != wide {
+		t.Errorf("wide:\n%s\nwant\n%s", got, wide)
+	}
+	// 40 columns: How to resolve's modify_delete overflows, so its whole run
+	// goes under the labels; Conflicts fits, and stays as it is.
+	narrow := "m\n\nConflicts:\n  content:        a.aml changed.\n                  b.aml changed.\n  modify_delete:  c.aml deleted.\n\n" +
+		"How to resolve:\n  content:\n    Edit it.\n  modify_delete:\n    Delete it, or keep it by removing the markers.\n"
+	if got := render(40); got != narrow {
+		t.Errorf("narrow:\n%s\nwant\n%s", got, narrow)
 	}
 }

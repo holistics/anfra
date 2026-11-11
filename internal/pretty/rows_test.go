@@ -24,7 +24,7 @@ type rowColumn struct {
 
 type rowsOf struct {
 	Fields  []string         `json:"fields" pretty:"-"`
-	Records []jsontext.Value `json:"records" pretty:"Result,labels=columns.label"`
+	Records []jsontext.Value `json:"records" pretty:"Result,rowlabels=columns.label"`
 }
 
 type timings struct {
@@ -66,7 +66,7 @@ func TestRowsGrid(t *testing.T) {
   │ refunded  │      <none> │
   └───────────┴─────────────┘
 
-Has More:  true
+Has more:  true
 
 Timings:
   compiling_query         12 ms
