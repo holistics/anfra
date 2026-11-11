@@ -123,7 +123,8 @@ func (c prettyCell) width() int { return ansi.StringWidth(c.plain()) }
 type prettyField struct {
 	name      string // its json name
 	label     string
-	omit      bool // omitempty or omitzero: an empty one is left out of key/values
+	omit      bool // omitempty: an empty one is left out of key/values
+	omitZero  bool // omitzero: a zero one (false, 0, …) is left out too
 	block     bool
 	tree      bool
 	moment    bool
@@ -186,7 +187,7 @@ func prettyFields(v, root reflect.Value) []prettyField {
 			name = sf.Name
 		}
 		f := prettyField{name: name, label: sentenceCase(name), value: v.Field(i), root: root,
-			omit: strings.Contains(jsonOpts, "omitempty") || strings.Contains(jsonOpts, "omitzero")}
+			omit: strings.Contains(jsonOpts, "omitempty"), omitZero: strings.Contains(jsonOpts, "omitzero")}
 		inline := false
 		label, opts, _ := strings.Cut(sf.Tag.Get("pretty"), ",")
 		if label != "" {
@@ -250,12 +251,12 @@ func buildPrettyDoc(v reflect.Value) prettyDoc {
 	return doc
 }
 
-// prettyEntries are fields as entries: an empty one marked omitempty left
-// out, as the YAML leaves it out.
+// prettyEntries are fields as entries: an empty one marked omitempty, or a
+// zero one marked omitzero, left out, as the YAML leaves it out.
 func prettyEntries(fields []prettyField) []prettyEntry {
 	var out []prettyEntry
 	for _, f := range fields {
-		if f.omit && isEmpty(f.value) {
+		if f.omit && isEmpty(f.value) || f.omitZero && f.value.IsZero() {
 			continue
 		}
 		out = append(out, prettyEntry{label: f.label, value: prettyValueOf(f)})

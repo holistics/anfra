@@ -44,7 +44,7 @@ type PullResult struct {
 	PublishedBy  string                    `json:"published_by,omitempty" doc:"who published that revision. Absent for the org's starting files."`
 	PublishedAt  *time.Time                `json:"published_at,omitempty" doc:"when that revision was published" pretty:",moment"`
 	Base         string                    `json:"base,omitempty" doc:"the org's revision this folder matched before the pull. Absent when anfra had no record of one."`
-	Changes      []PullChange              `json:"changes,omitempty" doc:"the files the pull wrote or deleted, other than those with conflicts"`
+	Changes      []FileChange              `json:"changes,omitempty" doc:"the files the pull wrote or deleted, other than those with conflicts"`
 	Conflicts    map[string][]PullConflict `json:"conflicts,omitempty" doc:"the conflicts left to resolve, by kind. Kinds: \"content\", \"add_add\", \"modify_delete\", \"delete_modify\", \"binary\", \"file_folder\", \"path_collision\"."`
 	HowToResolve map[string]string         `json:"how_to_resolve,omitempty" doc:"how to resolve each kind of conflict left, by kind"`
 	Taken        []TakenSide               `json:"taken,omitempty" doc:"with --take: the conflicts resolved, and the side kept"`
@@ -52,10 +52,11 @@ type PullResult struct {
 	Hints        []string                  `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
-// PullChange is a file a pull wrote or deleted.
-type PullChange struct {
+// FileChange is a file a pull changed, or one a pull or a publish would
+// change.
+type FileChange struct {
 	Path   string `json:"path" doc:"the file's path in the repo"`
-	Change string `json:"change" doc:"what the pull did to it. \"updated\", \"added\", \"deleted\", or \"merged\": both the folder and the org changed it, and the changes were combined without conflict."`
+	Change string `json:"change" doc:"what happens to it. \"added\", \"updated\", \"deleted\", \"merged\" (both the folder and the org changed it, and the changes combine), or \"conflict\" (they changed it in ways that can't combine)."`
 }
 
 // PullConflict is one conflict: the paths it covers, and what happened.
@@ -153,11 +154,9 @@ func pendingRefusal(dir string, s *syncstate.Org, v verb) (settled bool, err err
 		return false, apperr.New(clierr.PullInterrupted, fmt.Sprintf("%s, because the last pull stopped partway through writing files. Run `anfra pull --abort` to put them back as they were, then try again.", v.not))
 	case syncstate.Conflicted:
 		var open []string
-		for _, c := range s.Pending.Conflicts {
-			if !resolved(dir, c) {
-				for _, f := range c.Files {
-					open = append(open, f.Path)
-				}
+		for _, c := range openConflicts(dir, s) {
+			for _, f := range c.Files {
+				open = append(open, f.Path)
 			}
 		}
 		if len(open) > 0 {
@@ -168,6 +167,20 @@ func pendingRefusal(dir string, s *syncstate.Org, v verb) (settled bool, err err
 		return true, nil
 	}
 	return false, nil
+}
+
+// openConflicts is the pending pull's conflicts not resolved yet.
+func openConflicts(dir string, s *syncstate.Org) []syncstate.Conflict {
+	if s == nil || s.Pending == nil {
+		return nil
+	}
+	var open []syncstate.Conflict
+	for _, c := range s.Pending.Conflicts {
+		if !resolved(dir, c) {
+			open = append(open, c)
+		}
+	}
+	return open
 }
 
 // resolved says whether a conflict is resolved, from its file's content now.
@@ -216,31 +229,20 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 		return res, nil
 	}
 
-	local, err := workdir.Read(pl.dir)
-	if e, ok := errors.AsType[*workdir.NotRegularError](err); ok {
-		return PullResult{}, clierr.Precondition("Not pulled, because these files aren't regular files: %s. Replace each with a regular file (for a symlink, a copy of the file it points to), and pull again.", strings.Join(e.Files, ", "))
-	}
+	local, err := readFolder(pl.dir, verbPull)
 	if err != nil {
 		return PullResult{}, err
 	}
-	orgTree, err := listTree(ctx, client, status.Revision)
+	c, err := compare(ctx, client, status, s.Base, local)
 	if err != nil {
 		return PullResult{}, err
 	}
-	baseTree := treemerge.Tree{}
-	if s.Base != "" {
-		if baseTree, err = listTree(ctx, client, s.Base); err != nil {
-			if !cloudapi.IsCode(err, "not_found") {
-				return PullResult{}, err
-			}
-			// The org no longer has the base: it's merged from nothing.
-			s.Base, baseTree = "", treemerge.Tree{}
-		}
+	if err := c.unselected(verbPull); err != nil {
+		return PullResult{}, err
 	}
-	noBase := s.Base == ""
-	if noBase && contains(local.Files(), orgTree) {
-		// Every file the org has is here, unchanged: a pull would take
-		// nothing, so the published revision is the base.
+	if !c.pullWouldChange() {
+		// The org's changes since the base, if any, are all here already:
+		// the published revision is the base.
 		s.Base = status.Revision
 		if err := pl.sync.Save(pl.state); err != nil {
 			return PullResult{}, err
@@ -248,16 +250,14 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 		res.Message = fmt.Sprintf("This folder already has everything published to %s.", ref.shown())
 		return res, nil
 	}
+	s.Base = c.base // "" when the org no longer has it: merged from nothing
+	noBase := s.Base == ""
 	res.Base = s.Base
-
-	if odd := local.Unselected(slices.Sorted(maps.Keys(union(baseTree, orgTree)))); len(odd) > 0 {
-		return PullResult{}, clierr.Precondition("Not pulled, because %s %s in this folder, but anfra doesn't publish %s (a symlink, or a file anfra no longer publishes), and the org has a file at that path. Replace %s with a regular file, or remove %s, then pull again.",
-			joinPaths(odd), isAre(len(odd)), itThem(len(odd)), itThem(len(odd)), itThem(len(odd)))
-	}
+	baseTree, orgTree := c.baseTree, c.live
 
 	// Read only the content the merge needs, that the folder doesn't have.
 	need := map[string]bool{}
-	for _, r := range treemerge.Classify(baseTree, local.Files(), orgTree) {
+	for _, r := range c.paths {
 		switch {
 		case r.Outcome == treemerge.Theirs, r.Outcome == treemerge.NeedsMerge,
 			r.Conflict != nil && (r.Conflict.Kind == treemerge.ModifyDelete || r.Conflict.Kind == treemerge.DeleteModify):
@@ -302,7 +302,7 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 		}
 		changes = append(changes, c)
 		if r.Conflict == nil {
-			res.Changes = append(res.Changes, PullChange{Path: r.Path, Change: changeOf(r)})
+			res.Changes = append(res.Changes, FileChange{Path: r.Path, Change: changeOf(r)})
 		}
 	}
 
@@ -336,7 +336,7 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 	// deleted on purpose: a folder fresh from `anfra init` has neither.
 	if noBase && len(local.Files()) > 0 {
 		res.Hints = append(res.Hints, fmt.Sprintf("anfra has no record of this folder pulling from or publishing to %s, so where a file differs, it can't tell whose version is newer. In a git repo, `git log -- <path>` shows which is newer.", ref.shown()))
-		if slices.ContainsFunc(res.Changes, func(c PullChange) bool { return c.Change == "added" }) {
+		if slices.ContainsFunc(res.Changes, func(c FileChange) bool { return c.Change == "added" }) {
 			res.Hints = append(res.Hints, "The org had the files added, and this folder didn't. If you deleted any of them on purpose, delete them again.")
 		}
 	}
@@ -346,7 +346,7 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 	}
 	res.Message += fmt.Sprintf(" %s to resolve.", countConflicts(conflicts))
 	res.Conflicts, res.HowToResolve = describe(conflicts, noBase)
-	res.Hints = append(res.Hints, conflictHints()...)
+	res.Hints = append(res.Hints, conflictHints("this pull")...)
 	return res, nil
 }
 
@@ -476,7 +476,7 @@ func (pl *puller) take(ctx context.Context, org cloudapi.Org, configured bool, o
 	}
 	res.Message += fmt.Sprintf(" %s left to resolve.", countConflicts(left))
 	res.Conflicts, res.HowToResolve = describe(left, false)
-	res.Hints = conflictHints()
+	res.Hints = conflictHints("the last pull")
 	return res, nil
 }
 
@@ -505,10 +505,14 @@ func (pl *puller) abort(org cloudapi.Org, configured bool) (PullResult, error) {
 	}, nil
 }
 
-func (pl *puller) orgRef(org cloudapi.Org) OrgRef {
+func (pl *puller) orgRef(org cloudapi.Org) OrgRef { return orgRef(pl.env, org) }
+
+// orgRef is org as a result names it: its address, and its name when the
+// login knows it.
+func orgRef(env Env, org cloudapi.Org) OrgRef {
 	ref := OrgRef{URL: org.String()}
-	if pl.env.OrgName != nil {
-		ref.Name = pl.env.OrgName(org)
+	if env.OrgName != nil {
+		ref.Name = env.OrgName(org)
 	}
 	return ref
 }
@@ -568,16 +572,6 @@ func listTree(ctx context.Context, c *cloudapi.Client, revision string) (treemer
 	return t, nil
 }
 
-// contains says whether every file of sub is in t, unchanged.
-func contains(t map[string]string, sub treemerge.Tree) bool {
-	for p, id := range sub {
-		if t[p] != id {
-			return false
-		}
-	}
-	return true
-}
-
 func union(trees ...treemerge.Tree) treemerge.Tree {
 	out := treemerge.Tree{}
 	for _, t := range trees {
@@ -587,15 +581,10 @@ func union(trees ...treemerge.Tree) treemerge.Tree {
 }
 
 func changeOf(r treemerge.PathResult) string {
-	switch {
-	case r.Outcome == treemerge.Merged:
+	if r.Outcome == treemerge.Merged {
 		return "merged"
-	case r.Result == "":
-		return "deleted"
-	case r.Ours == "":
-		return "added"
 	}
-	return "updated"
+	return sideChange(r.Ours, r.Result)
 }
 
 func toConflictInfo(c syncstate.Conflict) treemerge.ConflictInfo {
@@ -677,11 +666,13 @@ var howToResolve = map[string]string{
 	string(treemerge.PathCollision): "Keep one side with --take. Only --take resolves these.",
 }
 
-func conflictHints() []string {
+// conflictHints are the hints for a pull's conflicts; which names the pull:
+// "this pull", or "the last pull".
+func conflictHints(which string) []string {
 	return []string{
 		"To keep one version of whole files, run `anfra pull --take local <path>...` for yours, or `--take org <path>...` for the org's. It can resolve any conflict.",
 		"Once every conflict is resolved, run `anfra validate`, then `anfra publish`.",
-		"To undo this pull, run `anfra pull --abort`.",
+		"To undo " + which + ", run `anfra pull --abort`.",
 	}
 }
 

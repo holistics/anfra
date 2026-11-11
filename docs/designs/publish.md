@@ -211,7 +211,7 @@ The first step of every pull and publish.
 
 How a member, or their agent, resolves the conflicts a pull left. anfra takes no part until the next command: resolution is read from the files ([flow 1](#1-checking-resolution)).
 
-1. **See what's conflicted.** The pull's output lists each conflict, its kind and what to do. Later, the same list comes from a refused publish, or from `anfra publish status` ([below](#seeing-the-conflicts-again)).
+1. **See what's conflicted.** The pull's output lists each conflict, its kind and what to do. Later, the same files come from a refused publish, and the list from `anfra publish status` ([below](#seeing-the-conflicts-again)).
 2. **Resolve each file, by its kind:**
    - **`content`, `add_add`:** edit the file. Each conflict shows the local version, the base and the org's, between markers. Keep the right result, and remove the markers.
    - **`modify_delete`, `delete_modify`:** the whole file is between markers. Delete the file to keep the deletion, or remove the markers to keep the changed version.
@@ -240,7 +240,7 @@ Each needs the conflicts listed again, with what each needs, and the obvious way
 So two commands list them, without publishing, following anfra's convention that `status` describes and `check` judges ([todo](../todos/publish-status-and-check.md)):
 
 - **`anfra publish check`,** the preflight, refuses as publish would, with `conflicts_unresolved` naming the files. Listing each conflict's kind is planned.
-- **`anfra publish status`,** planned, shows the sync state: the base, whether the folder is behind, and each conflict of the pending record, resolved or not, with its kind.
+- **`anfra publish status`** shows how the folder stands, changing nothing: what a pull would bring in (`incoming`), what a publish would send (`unpublished`), and the pending record's unresolved conflicts, with their kinds. It compares the same three versions publish does, by blob id. `anfra status` hints at it in a repo with an org.
 
 ### 4. Taking a side: `anfra pull --take org|local <path>...`
 
@@ -434,4 +434,4 @@ Teams that share through git and publish from CI need publishing driven by git i
 ## Later
 
 - **Offering the pull.** At a terminal, a refused publish could ask "bob@acme.com published since. Pull their changes now?", then, if the pull is clean, validate and ask to publish. For agents, an opt-in `anfra publish --pull` could do the same, stopping on conflicts.
-- **Pulling earlier, so conflicts are smaller.** `anfra serve` could show that the org has new changes, and the skills could tell agents to pull before starting a task. `anfra publish status` ([todo](../todos/publish-status-and-check.md)) could say whether the folder is behind.
+- **Pulling earlier, so conflicts are smaller.** `anfra serve` could show that the org has new changes, and the skills could tell agents to pull before starting a task. `anfra publish status` already says whether the folder is behind.

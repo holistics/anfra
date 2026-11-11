@@ -20,6 +20,7 @@ import (
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/pretty"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
@@ -556,6 +557,10 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 // presentTo shows an answer as YAML on out, and turns an invalid verdict into a
 // silent exit code 1: the answer says why.
 func presentTo(c command.Command, body []byte, out io.Writer) error {
+	body, err := addHints(c, body)
+	if err != nil {
+		return err
+	}
 	if wantsPretty(prettyViews[c.Name()]) {
 		// Its pretty view reads its type's hints: the answer, its JSON, as
 		// that type again, though a server answered it.
@@ -577,6 +582,43 @@ func presentTo(c command.Command, body []byte, out io.Writer) error {
 		return &exitCodeError{code: 1}
 	}
 	return nil
+}
+
+// resultHints is hints that the CLI adds to a command's answer, by the
+// command's name. As codeHelp is for errors, it's for advice only the CLI
+// can give: the same command, served over HTTP or MCP, has no CLI commands
+// to point to.
+var resultHints = map[string]func() []string{
+	"status": func() []string {
+		c, err := repoconfig.Read(".")
+		if err != nil || c.Org.URL == "" {
+			return nil
+		}
+		return []string{"To see whether this folder is behind its org, or has changes it hasn't published, run `anfra publish status`."}
+	},
+}
+
+// addHints adds resultHints to an answer's hints field, keeping its fields'
+// order: the answer, decoded as its type, encoded again.
+func addHints(c command.Command, body []byte) ([]byte, error) {
+	hints := resultHints[c.Name()]
+	if hints == nil {
+		return body, nil
+	}
+	more := hints()
+	if len(more) == 0 {
+		return body, nil
+	}
+	v := reflect.New(c.Output())
+	if err := jsonkit.Unmarshal(body, v.Interface()); err != nil {
+		return nil, fmt.Errorf("decode %s's answer: %w", c.Name(), err)
+	}
+	f := v.Elem().FieldByName("Hints")
+	if !f.IsValid() || f.Type() != reflect.TypeFor[[]string]() {
+		return body, nil
+	}
+	f.Set(reflect.AppendSlice(f, reflect.ValueOf(more)))
+	return jsonkit.Marshal(v.Interface())
 }
 
 // startNeededSidecars spawns just the sidecars the command declares it needs

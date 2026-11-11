@@ -305,3 +305,27 @@ func TestStartNeededSidecarsFailsInItsStep(t *testing.T) {
 		t.Errorf("a glued prefix: %v", err)
 	}
 }
+
+// anfra status hints at publish status in a repo with an org: advice the CLI
+// adds, which the same command served over HTTP can't give.
+func TestStatusHintsPublishStatus(t *testing.T) {
+	t.Chdir(t.TempDir())
+	body := []byte(`{"repo":{"id":"r"},"server":{"state":"not_running"}}`)
+	var out bytes.Buffer
+	// A server not running exits 1: only the output matters here.
+	_ = presentTo(registered(t, "status"), body, &out)
+	if strings.Contains(out.String(), "publish status") {
+		t.Fatalf("no org: %q", out.String())
+	}
+	if err := os.MkdirAll(".anfra", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(".anfra/config.yml", []byte("org:\n  url: https://bi.example.com/o/acme\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	_ = presentTo(registered(t, "status"), body, &out)
+	if !strings.Contains(out.String(), "run `anfra publish status`") {
+		t.Errorf("with an org: %q", out.String())
+	}
+}

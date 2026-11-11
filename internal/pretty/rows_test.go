@@ -124,3 +124,23 @@ func TestTimingsStyles(t *testing.T) {
 		}
 	}
 }
+
+// A field marked omitzero is left out when zero, as the YAML leaves it out.
+func TestOmitZero(t *testing.T) {
+	type r struct {
+		Message string `json:"message"`
+		Stopped bool   `json:"stopped,omitzero"`
+		Count   int    `json:"count,omitzero"`
+	}
+	var out bytes.Buffer
+	if err := Render(&out, r{Message: "done"}, 80); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Stopped") || strings.Contains(out.String(), "Count") {
+		t.Errorf("zero fields shown: %q", out.String())
+	}
+	out.Reset()
+	if err := Render(&out, r{Message: "done", Stopped: true}, 80); err != nil || !strings.Contains(out.String(), "Stopped") {
+		t.Errorf("true field hidden: %v %q", err, out.String())
+	}
+}

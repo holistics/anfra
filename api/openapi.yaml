@@ -1356,6 +1356,11 @@ components:
     StatusResult:
       additionalProperties: false
       properties:
+        hints:
+          description: what to do next, if any
+          items:
+            type: string
+          type: array
         repo:
           $ref: "#/components/schemas/RepoStatus"
         server:
