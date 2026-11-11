@@ -77,7 +77,7 @@ What a program should know becomes a warning document, with a code; what exists 
 | `data_source_local_file` | "Data source X (duckdb) uses a local file that the org's server can't read…" |
 | `origin_not_allowed` | "The org does not allow X, which this repo's Data Apps may load from…" |
 | `origins_not_checked` | "Not checking the org's allowed origins: …" |
-| `last_published_elsewhere` | "This repo was last published by X on Y: publishing replaces that version." |
+| `yes_ignored` | "`--yes` is deprecated and does nothing now, so stop passing it…": publish stops with `pull_required` instead of asking (`last_published_elsewhere` until then) |
 | `token_not_revoked` | "Could not revoke the unused MotherDuck token X…": a live credential left behind, though only the interactive flow makes one |
 | `data_source_unreachable` | "Data source X is not reachable from the org's server, so it wasn't created": without a terminal to choose to create it anyway |
 | `data_source_not_created` | "Data source X was not created: …": the server refused it |

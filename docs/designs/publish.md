@@ -239,7 +239,7 @@ Each needs the conflicts listed again, with what each needs, and the obvious way
 
 So two commands list them, without publishing, following anfra's convention that `status` describes and `check` judges ([todo](../todos/publish-status-and-check.md)):
 
-- **`anfra publish check`,** the preflight, reports unresolved conflicts as a failing step, listing each with its kind. It exists, so this is the first to build.
+- **`anfra publish check`,** the preflight, refuses as publish would, with `conflicts_unresolved` naming the files. Listing each conflict's kind is planned.
 - **`anfra publish status`,** planned, shows the sync state: the base, whether the folder is behind, and each conflict of the pending record, resolved or not, with its kind.
 
 ### 4. Taking a side: `anfra pull --take org|local <path>...`
@@ -286,7 +286,7 @@ Refusing for a pull that would do nothing is a step that protects no one's work,
 
 With no base, the same check runs from an empty base, which is [rule 2](#the-base). It costs two file-list calls (paths and blob ids, no content) only when the folder is behind. The base's list isn't kept in the sync state: fetching it is simpler than keeping state that could go stale.
 
-The "last published elsewhere" warning and its confirmation go away, since the refusal replaces them. `--yes` has nothing left to confirm, so it's kept for a release with a warning that it does nothing, then removed. There's no `--force`: a member who wants to remove a colleague's work pulls it, deletes or edits those files, and publishes, so the removal is a choice made after seeing them. `anfra publish check` runs steps 1, 2 and 4, and reports a refusal as a failing step.
+The "last published elsewhere" warning and its confirmation go away, since the refusal replaces them. `--yes` has nothing left to confirm, so it's kept for a release with a warning that it does nothing, then removed. There's no `--force`: a member who wants to remove a colleague's work pulls it, deletes or edits those files, and publishes, so the removal is a choice made after seeing them. `anfra publish check` refuses, as publish would, when the last pull stopped partway or left conflicts unresolved, which it can tell offline. Step 4 needs the org, so check doesn't run it yet ([todo](../todos/publish-status-and-check.md)).
 
 ### 7. Starting a folder
 

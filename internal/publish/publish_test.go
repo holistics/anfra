@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/repoconfig"
@@ -148,12 +149,20 @@ type server struct {
 	tested       int                        // data_sources.test calls
 	origins      []string                   // the org's allowed origins; nil: a server without app_origins.list
 	history      map[string][]cloudapi.File // every revision's files, for repos.list_files
+	// race, when set, is published by someone else just before the next
+	// publish arrives, as if they published in between.
+	race map[string]string
+	base string // the base the last publish named
 }
 
 // publishAs publishes files to the org as email, as another member would.
 func (s *server) publishAs(email string, files map[string]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.publishLocked(email, files)
+}
+
+func (s *server) publishLocked(email string, files map[string]string) {
 	var list []cloudapi.File
 	for _, p := range slices.Sorted(maps.Keys(files)) {
 		id := repoformat.BlobID([]byte(files[p]))
@@ -206,6 +215,18 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case cloudapi.OpPublish:
 		var in cloudapi.PublishIn
 		_ = jsonkit.UnmarshalRead(r.Body, &in)
+		s.base = in.Base
+		if s.race != nil {
+			s.publishLocked("bob@example.com", s.race)
+			s.race = nil
+		}
+		if in.Base != "" && in.Base != rev() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = jsonkit.MarshalWrite(w, apperr.Envelope{Error: apperr.Response{Code: cloudapi.CodeBaseOutdated, Message: "m",
+				Details: cloudapi.LiveRevision{Revision: rev(), PublishedBy: s.by, PublishedAt: time.Now()}}})
+			return
+		}
 		if s.forget {
 			s.blobs, s.forget = map[string][]byte{}, false
 		}
@@ -475,41 +496,127 @@ func TestPublishUploadsAgainWhatWasCollected(t *testing.T) {
 	}
 }
 
-// A deployed revision that changed since this folder last published is replaced
-// only once confirmed: asked at a terminal, --yes without one. One this folder
-// published is replaced without asking, as are the org's starting files.
-func TestPublishConfirmsReplacingChanges(t *testing.T) {
+// Someone published since this folder last published: the publish goes
+// through only when a pull would change nothing here, and names its base, so
+// the server refuses it when someone publishes in between.
+func TestPublishRequiresPull(t *testing.T) {
+	start := map[string]string{"a.aml": "a", "b.aml": "b"}
+	for _, c := range []struct {
+		name   string
+		org    map[string]string // what bob publishes
+		folder map[string]string // this folder's changes; "" deletes
+		ok     bool
+	}{
+		{"their change already here", map[string]string{"a.aml": "a2", "b.aml": "b"}, map[string]string{"a.aml": "a2"}, true},
+		{"their change and ours, apart", map[string]string{"a.aml": "a2", "b.aml": "b"}, map[string]string{"a.aml": "a2", "c.aml": "c"}, true},
+		{"they added a file", map[string]string{"a.aml": "a", "b.aml": "b", "r.aml": "r"}, map[string]string{"b.aml": "b2"}, false},
+		{"they deleted a file", map[string]string{"a.aml": "a"}, nil, false},
+		{"we both changed a file", map[string]string{"a.aml": "a2", "b.aml": "b"}, map[string]string{"a.aml": "a3"}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, url := newServer(t)
+			dir := t.TempDir()
+			write(t, dir, start)
+			o := Options{SetOrg: url}
+			if _, _, err := run(t, dir, o, never(t)); err != nil {
+				t.Fatal(err)
+			}
+			s.publishAs("bob@example.com", c.org)
+			bobs := s.rev()
+			for p, content := range c.folder {
+				if content == "" {
+					_ = os.Remove(filepath.Join(dir, p))
+				} else {
+					write(t, dir, map[string]string{p: content})
+				}
+			}
+			_, said, err := run(t, dir, o, never(t))
+			if !c.ok {
+				if codeOf(err) != clierr.PullRequired.Code() || !strings.Contains(err.Error(), "bob@example.com") || !strings.Contains(err.Error(), "anfra pull") {
+					t.Fatalf("err = %v, want pull_required naming bob and `anfra pull`", err)
+				}
+				if s.rev() != bobs {
+					t.Errorf("published over bob's revision")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if s.base != bobs || !strings.Contains(said, "already in this folder") {
+				t.Errorf("base %q, said %q: want bob's revision as the base, and that said", s.base, said)
+			}
+			// Bob's revision is now the base: the next publish needs no check.
+			write(t, dir, map[string]string{"a.aml": "a4"})
+			if _, _, err := run(t, dir, o, never(t)); err != nil || s.base == "" {
+				t.Errorf("publishing again: %v, base %q", err, s.base)
+			}
+		})
+	}
+}
+
+// Someone publishing between the check and the publish is refused by the
+// server, and read as the same pull_required.
+func TestPublishRace(t *testing.T) {
 	s, url := newServer(t)
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a"})
 	o := Options{SetOrg: url}
 	if _, _, err := run(t, dir, o, never(t)); err != nil {
-		t.Fatalf("over the starting files: %v", err)
+		t.Fatal(err)
 	}
-
-	// Someone publishes elsewhere.
-	s.by, s.revision = &cloudapi.Person{ID: "u2", Email: "bob@example.com"}, s.revision+1
 	write(t, dir, map[string]string{"a.aml": "a2"})
-	var asked string
-	_, errOut, err := run(t, dir, o, func(q string, _ ...string) (int, bool) { asked = q; return 1, true })
-	if err == nil || asked == "" || !strings.Contains(errOut, "bob@example.com") || !strings.Contains(errOut, "This repo was last published by bob@example.com") {
-		t.Fatalf("declined: err %v, asked %q, said %q", err, asked, errOut)
+	s.race = map[string]string{"a.aml": "a", "r.aml": "r"}
+	_, _, err := run(t, dir, o, never(t))
+	if codeOf(err) != clierr.PullRequired.Code() {
+		t.Fatalf("err = %v, want pull_required", err)
 	}
-	if _, _, err := run(t, dir, o, noTerminal); err == nil || !strings.Contains(err.Error(), "--yes") {
-		t.Errorf("without a terminal: %v, want a refusal naming --yes", err)
+	if d, ok := apperr.DetailsOf(err, clierr.PullRequired); !ok || d.Revision != s.rev() || d.PublishedBy != "bob@example.com" {
+		t.Errorf("details = %+v, want bob's revision", d)
 	}
-	deployed := len(s.deployed)
-	if _, _, err := run(t, dir, Options{SetOrg: url, Yes: true}, never(t)); err != nil {
-		t.Fatalf("--yes: %v", err)
-	}
-	if got := s.blobs[s.deployed[0].OID]; string(got) != "a2" || deployed != 1 {
-		t.Errorf("deployed %q, want a2", got)
-	}
+}
 
-	// Published from here: no question.
-	write(t, dir, map[string]string{"a.aml": "a3"})
-	if _, _, err := run(t, dir, o, never(t)); err != nil {
-		t.Errorf("replacing what this folder published: %v", err)
+// A folder with no record of syncing publishes over the org's files only when
+// it has them all, unchanged.
+func TestPublishWithoutBase(t *testing.T) {
+	s, url := newServer(t)
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "a"})
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"b.aml": "b"})
+	_, _, err := run(t, dir, Options{SetOrg: url}, never(t))
+	if codeOf(err) != clierr.PullRequired.Code() || !strings.Contains(err.Error(), "no record") {
+		t.Fatalf("missing the org's file: %v, want pull_required saying there's no record", err)
+	}
+	write(t, dir, map[string]string{"a.aml": "a"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Fatalf("with the org's file: %v", err)
+	}
+}
+
+// --yes still parses, and says it does nothing.
+func TestPublishYesIgnored(t *testing.T) {
+	_, url := newServer(t)
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"a.aml": "a"})
+	_, said, err := run(t, dir, Options{SetOrg: url, Yes: true}, never(t))
+	if err != nil || !strings.Contains(said, "yes_ignored") {
+		t.Errorf("err %v, said %q: want the yes_ignored warning", err, said)
+	}
+}
+
+// A publish's unresolved conflicts from a pull refuse it, naming the files.
+func TestPublishRefusesUnresolvedConflicts(t *testing.T) {
+	s, url := newServer(t)
+	dir := newRepo(t, map[string]string{"a.aml": "a\n"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "bob\n"})
+	write(t, dir, map[string]string{"a.aml": "ada\n"})
+	mustPull(t, dir, PullOptions{})
+	_, _, err := run(t, dir, Options{}, never(t))
+	if codeOf(err) != clierr.ConflictsUnresolved.Code() || !strings.Contains(err.Error(), "Not published") {
+		t.Errorf("err = %v, want conflicts_unresolved", err)
 	}
 }
 
@@ -738,5 +845,22 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 				t.Fatalf("destination changed unexpectedly: %s", after)
 			}
 		})
+	}
+}
+
+// publish check refuses as publish would for a pull not finished, offline,
+// changing nothing.
+func TestPublishCheckSeesConflicts(t *testing.T) {
+	s, url := newServer(t)
+	dir := newRepo(t, map[string]string{"a.aml": "a\n"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "bob\n"})
+	write(t, dir, map[string]string{"a.aml": "ada\n"})
+	mustPull(t, dir, PullOptions{})
+	_, _, err := run(t, dir, Options{Check: true}, never(t))
+	if codeOf(err) != clierr.ConflictsUnresolved.Code() || !strings.Contains(err.Error(), "Wouldn't publish, because a.aml") {
+		t.Errorf("err = %v, want conflicts_unresolved", err)
 	}
 }

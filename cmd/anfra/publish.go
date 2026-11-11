@@ -116,7 +116,11 @@ func newPublishCmd() *cobra.Command {
 	_ = f.MarkHidden("list")
 	_ = f.MarkHidden("dry-run")
 	f.BoolVar(&o.CreateDataSources, "create-data-sources", false, "add to the org the data sources this repo uses (.anfra/data_sources.yml) and the org lacks, without asking (needed without a terminal); their connections are sent to the server. DuckDB ones, files on this machine, are never sent")
-	f.BoolVarP(&o.Yes, "yes", "y", false, "publish without asking, though the repo was last published elsewhere (needed without a terminal)")
+	// --yes confirmed replacing a version published elsewhere. Publish now
+	// stops instead, so it warns that it does nothing, until a later release
+	// removes it.
+	f.BoolVarP(&o.Yes, "yes", "y", false, "deprecated, and does nothing now. It confirmed replacing a version someone else published")
+	_ = f.MarkHidden("yes")
 	cmd.AddCommand(newPublishCheckCmd())
 	return cmd
 }

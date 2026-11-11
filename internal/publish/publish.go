@@ -22,6 +22,7 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
+	"github.com/holistics/anfra/internal/publish/syncstate"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/repoformat"
@@ -39,7 +40,8 @@ type Options struct {
 	// part done here, offline, without authentication or config writes: the
 	// files, and where they'd go.
 	Check bool
-	// Yes publishes without asking, though the repo was last published elsewhere.
+	// Yes did nothing since publish stopped asking before replacing a
+	// version; kept for a release, with a warning.
 	Yes bool
 	// CreateDataSources adds the data sources the repo uses and the org lacks
 	// without asking.
@@ -102,6 +104,16 @@ func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 	}
 	tg := target{files: files, org: org, configured: configured}
 	if o.Check {
+		if configured {
+			// The one refusal known offline: the last pull isn't finished.
+			state, err := syncstate.For(dir).Load()
+			if err != nil {
+				return nil, err
+			}
+			if _, err := pendingRefusal(dir, state[org.String()], verbCheck); err != nil {
+				return nil, err
+			}
+		}
 		return check(tg), nil
 	}
 	return publish(ctx, dir, o, env, t, tg)
@@ -138,8 +150,19 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if len(files) == 0 {
 		return Result{}, clierr.Precondition("Not published, because this folder has no .aml files, and no Data Apps under %s/. Run `anfra publish` in the repo's folder.", repoformat.AppsDir)
 	}
+	if o.Yes {
+		t.Warn("yes_ignored", "`--yes` is deprecated and does nothing now, so stop passing it. Publish no longer asks before replacing someone else's work. Instead, it stops, and asks you to run `anfra pull` first.")
+	}
+	sc, release, err := openSync(dir, p)
+	if err != nil {
+		return Result{}, err
+	}
+	defer release()
 	org, client, err := connect(ctx, dir, destination{org, configured, o.SetOrg != ""}, env, p, verbPublish)
 	if err != nil {
+		return Result{}, err
+	}
+	if err := settle(dir, sc.sync, sc.state, org, verbPublish); err != nil {
 		return Result{}, err
 	}
 
@@ -177,27 +200,10 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		return Result{}, err
 	}
 	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
-	// What was published since this folder last published is replaced, unseen:
-	// there is no pull. So it is said, and confirmed (PUBLISH.md §anfra publish).
-	state := publishState(dir)
-	if status.PublishedBy != nil && state.last(org) != status.Revision {
-		// TODO(OAUTH.md): "you" for the signed-in user's own publishes, once the
-		// CLI knows who it is.
-		by, at := who(status.PublishedBy), status.PublishedAt.Local().Format(time.DateTime)
-		t.Warn("last_published_elsewhere", "This repo was last published by %s on %s: publishing replaces that version.", by, at)
-		if !o.Yes {
-			yes, ok := Confirm(ask, "Confirm publishing a new version?")
-			if !ok {
-				return Result{}, apperr.New(clierr.ConfirmationRequired, fmt.Sprintf(
-					"Not published, because it would replace the version %s published on %s, and there's no one here to confirm that. Pass --yes once the user has agreed to replace it.", by, at))
-			}
-			if err := ctx.Err(); err != nil {
-				return Result{}, err
-			}
-			if !yes {
-				return Result{}, apperr.New(clierr.Interrupted, "Not published.")
-			}
-		}
+	// What the org has that this folder hasn't seen is never replaced unseen
+	// (docs/designs/publish.md, flow 6).
+	if err := sc.catchUp(ctx, client, org, status, oids); err != nil {
+		return Result{}, err
 	}
 
 	byOID := map[string]string{} // blob id → a path holding it
@@ -219,6 +225,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		in.Files = append(in.Files, cloudapi.File{Path: f, OID: oids[f]})
 	}
 	p.Step("Publishing %s to %s…", selected, org)
+	in.Base = sc.base
 	res, err := client.Publish(ctx, in)
 	if again, ok := cloudapi.Missing(err); ok {
 		// Uploaded, then collected before this publish named it: once more.
@@ -227,10 +234,14 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		}
 		res, err = client.Publish(ctx, in)
 	}
+	if live, ok := cloudapi.Outdated(err); ok {
+		// Someone published between the check and this publish.
+		return Result{}, pullRequired(org, live, true)
+	}
 	if err != nil {
 		return Result{}, err
 	}
-	state.record(org, res.Revision)
+	sc.record(org, res.Revision)
 
 	ref := OrgRef{URL: org.String()}
 	if env.OrgName != nil {
@@ -362,6 +373,7 @@ type verb struct{ not, command, toOrg string }
 var (
 	verbPublish = verb{not: "Not published", command: "anfra publish", toOrg: "to publish to"}
 	verbPull    = verb{not: "Not pulled", command: "anfra pull", toOrg: "to pull from"}
+	verbCheck   = verb{not: "Wouldn't publish", command: "anfra publish", toOrg: "to publish to"}
 )
 
 // destination is the org a command acts on, as the repo or its flags give it.

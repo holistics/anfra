@@ -129,12 +129,28 @@ func (pl *puller) org(org cloudapi.Org) *syncstate.Org {
 // and conflicts all resolved make the pull's revision the base.
 func settle(dir string, sync syncstate.Folder, state syncstate.State, org cloudapi.Org, v verb) error {
 	s := state[org.String()]
+	settled, err := pendingRefusal(dir, s, v)
+	if err != nil || !settled {
+		return err
+	}
+	s.Base, s.Pending = s.Pending.Revision, nil
+	if err := sync.Save(state); err != nil {
+		return err
+	}
+	_ = os.RemoveAll(sync.BackupDir())
+	return nil
+}
+
+// pendingRefusal is settle's check alone, changing nothing: the refusal of a
+// pull stopped partway, or of unresolved conflicts. settled says the pending
+// pull's conflicts are all resolved, so its revision can become the base.
+func pendingRefusal(dir string, s *syncstate.Org, v verb) (settled bool, err error) {
 	if s == nil || s.Pending == nil {
-		return nil
+		return false, nil
 	}
 	switch s.Pending.Stage {
 	case syncstate.Writing:
-		return apperr.New(clierr.PullInterrupted, fmt.Sprintf("%s, because the last pull stopped partway through writing files. Run `anfra pull --abort` to put them back as they were, then try again.", v.not))
+		return false, apperr.New(clierr.PullInterrupted, fmt.Sprintf("%s, because the last pull stopped partway through writing files. Run `anfra pull --abort` to put them back as they were, then try again.", v.not))
 	case syncstate.Conflicted:
 		var open []string
 		for _, c := range s.Pending.Conflicts {
@@ -145,17 +161,13 @@ func settle(dir string, sync syncstate.Folder, state syncstate.State, org clouda
 			}
 		}
 		if len(open) > 0 {
-			return apperr.NewWith(clierr.ConflictsUnresolved,
+			return false, apperr.NewWith(clierr.ConflictsUnresolved,
 				fmt.Sprintf("%s, because %s still %s conflicts from the last pull. Resolve them, or undo that pull with `anfra pull --abort`, then try again.", v.not, joinPaths(open), hasHave(len(open))),
 				clierr.UnresolvedFiles{Paths: open})
 		}
-		s.Base, s.Pending = s.Pending.Revision, nil
-		if err := sync.Save(state); err != nil {
-			return err
-		}
-		_ = os.RemoveAll(sync.BackupDir())
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 // resolved says whether a conflict is resolved, from its file's content now.
