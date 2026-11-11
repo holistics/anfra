@@ -344,10 +344,17 @@ func gitMessage(ctx context.Context, dir string) string {
 		return ""
 	}
 	msg := strings.TrimSpace(string(head))
-	if dirty, err := exec.CommandContext(ctx, "git", "-C", dir, "status", "--porcelain", "--", ".").Output(); err == nil && len(bytes.TrimSpace(dirty)) > 0 {
+	if gitDirty(ctx, dir) {
 		msg += " (with uncommitted changes)"
 	}
 	return msg
+}
+
+// gitDirty says whether the folder, in a git repo, has changes not committed,
+// other than anfra's own under .anfra/; false outside git.
+func gitDirty(ctx context.Context, dir string) bool {
+	dirty, err := exec.CommandContext(ctx, "git", "-C", dir, "status", "--porcelain", "--", ".", ":(exclude).anfra").Output()
+	return err == nil && len(bytes.TrimSpace(dirty)) > 0
 }
 
 func who(p *cloudapi.Person) string {

@@ -265,6 +265,7 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 	}
 	res.Base = c.base
 	noBase := c.base == ""
+	dirty := gitDirty(ctx, pl.dir) // before the merge's own changes
 	merged, err := pl.merge(ctx, client, org, c)
 	if err != nil {
 		return PullResult{}, err
@@ -283,6 +284,12 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 		if slices.ContainsFunc(res.Changes, func(c FileChange) bool { return c.Change == "added" }) {
 			res.Hints = append(res.Hints, "The org had the files added, and this folder didn't. If you deleted any of them on purpose, delete them again.")
 		}
+	}
+	if dirty {
+		res.Hints = append(res.Hints, uncommittedHint())
+	}
+	if h := missingDataSources(ctx, pl.dir, client); h != "" {
+		res.Hints = append(res.Hints, h)
 	}
 	if len(conflicts) == 0 {
 		res.Hints = append(res.Hints, "Run `anfra validate` to check the merged files, then `anfra publish`.")

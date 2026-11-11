@@ -38,7 +38,7 @@ func TestInitSetsUpARepo(t *testing.T) {
 			t.Errorf("not reported as created: %s\n%+v", f, res.Files)
 		}
 	}
-	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 8 files." || len(res.Hints) != 1 {
+	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 8 files." || len(res.Hints) != 2 {
 		t.Errorf("result: %+v", res)
 	}
 

@@ -208,7 +208,9 @@ The first step of every pull and publish.
 4. **`treemerge.Merge`** ([treemerge, flow 1](treemerge.md#1-merge-three-trees), or [flow 2](treemerge.md#2-merge-with-no-base) with no base), with `remote` and the folder as its blob reader, and the labels "local" and "org".
 5. **`workdir.Apply`:** check every path ([below](#writing-files-safely)), back up each file that will change, write the pending record as `writing`, write each file through a temporary file and a rename, delete the files to delete.
 6. **`syncstate`:** with no conflicts, the base becomes the published revision and the record is dropped. Otherwise the record becomes `conflicted`.
-7. **Report** the changes and conflicts ([what members see](#what-members-see)).
+7. **Report** the changes and conflicts ([what members see](#what-members-see)), with two hints for what the pull leaves to the member:
+   - **Data sources the repo uses that `.anfra/data_sources.yml` lacks,** each with its type on the org (`data_sources.list`), so the agent asks the user for that connection only. The names come from a text scan of the `.aml` files: pull runs no sidecar. It runs on every pull, since any pull can bring a model on a new data source. Scaffolding the file instead would cover only the first pull.
+   - **Uncommitted changes in a git working tree** before the pull, other than under `.anfra/`: the hint says `--abort`, commit, and pull again keeps them apart in `git diff`.
 
 ### 3. Resolving by editing
 
@@ -442,7 +444,7 @@ $ anfra publish --pull
 
 anfra doesn't read git, but git helps a member see what anfra did:
 
-- **A pull writes into the working tree,** so its changes show in `git diff`, mixed with uncommitted work. When the working tree has uncommitted changes, pull suggests committing first, so the pull's changes can be told apart. After a pull, the member commits the result.
+- **A pull writes into the working tree,** so its changes show in `git diff`, mixed with uncommitted work. When the working tree had uncommitted changes, pull says so after the fact, with the way back: `--abort`, commit, and pull again. Asking first would need a terminal, and agents have none. After a pull, the member commits the result.
 - **`git log -- <path>`** tells which version is newer when a folder with no base has conflicts.
 - **Switching branches doesn't change the base.** Publishing from `main` after publishing from `feature` replaces the org's files with `main`'s, as today, including files only `feature` had. Pull and publish see only the folder's files, and the org keeps the history of what was replaced.
 
@@ -451,4 +453,5 @@ Teams that share through git and publish from CI need publishing driven by git i
 ## Later
 
 - **Offering the pull.** At a terminal, a refused publish could ask "bob@acme.com published since. Pull their changes and publish?", for a member who doesn't know `--pull`.
+- **`anfra cloudapi <op>`,** a generic call to any of the org's ops, as `gh api` is to GitHub's. The ops are public, and hiding them adds no security, so what makes a raw caller safe is each op itself (such as `repos.publish` requiring `base`). Before building it, ops that take secrets, such as `data_sources.create`'s connection, need an annotation in the contract, so the caller reads them from a file or stdin rather than from arguments ([secrets never in arguments](commands-and-api.md#secrets-never-in-arguments)).
 - **Pulling earlier, so conflicts are smaller.** `anfra serve` could show that the org has new changes, and the skills could tell agents to pull before starting a task. `anfra publish status` already says whether the folder is behind.
