@@ -158,6 +158,9 @@ func TestLoginServerAndExplicitLogout(t *testing.T) {
 	if err != nil || origin != "https://bi.example.com" || hint != "acme" {
 		t.Fatalf("%s %s %v", origin, hint, err)
 	}
+	if origin, hint, err := loginServer("https://bi.example.com/"); err != nil || origin != "https://bi.example.com" || hint != "" {
+		t.Fatalf("a server's address alone: %q %q %v", origin, hint, err)
+	}
 	if origin, hint, err := loginServer(""); err != nil || origin != "https://runtime.example.com" || hint != "" {
 		t.Fatalf("runtime cloud URL: %q %q %v", origin, hint, err)
 	}
@@ -170,7 +173,10 @@ func TestLoginServerAndExplicitLogout(t *testing.T) {
 	if _, err := logoutOrg(context.Background(), nil, terminal); err == nil || !strings.Contains(err.Error(), "anfra auth logout https://<server>/o/<org>") {
 		t.Fatalf("noninteractive logout used repo destination: %v", err)
 	}
-	org, err := logoutOrg(context.Background(), []string{"https://other.example.com/o/explicit"}, terminal)
+	if _, err := logoutOrg(context.Background(), []string{"https://other.example.com"}, terminal); err == nil || !strings.Contains(err.Error(), "doesn't name an org") {
+		t.Fatalf("logout from a server's address: %v", err)
+	}
+	org, err := logoutOrg(context.Background(), []string{"https://other.example.com/o/explicit/datasets"}, terminal)
 	if err != nil || org.Slug != "explicit" {
 		t.Fatalf("%v %v", org, err)
 	}

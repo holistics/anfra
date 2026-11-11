@@ -12,7 +12,7 @@ anfra auth logout https://bi.example.com/o/acme
 ```
 
 Login opens a browser with a loopback callback. Consent chooses the org; it may differ
-from the address's hint. Login saves the returned org's credentials but never changes
+from the address's hint. A server's address alone, with no org, works too. Login saves the returned org's credentials but never changes
 the repo's destination. Device/headless login is not supported yet.
 
 Human-readable login also prints the authorization URL to stderr so you can open it

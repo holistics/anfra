@@ -96,7 +96,7 @@ func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 	t := &told{warn: env.Warn}
 	org, configured, err := readOrg(dir)
 	if o.SetOrg != "" {
-		org, err = cloudapi.ParseOrg(o.SetOrg)
+		org, err = cloudapi.ParseOrgAddress(o.SetOrg)
 		configured = true
 	}
 	if err != nil {

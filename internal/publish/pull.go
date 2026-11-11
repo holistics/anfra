@@ -80,7 +80,7 @@ func Pull(ctx context.Context, dir string, o PullOptions, env Env) (PullResult, 
 	}
 	org, configured, err := readOrg(dir)
 	if o.SetOrg != "" {
-		org, err = cloudapi.ParseOrg(o.SetOrg)
+		org, err = cloudapi.ParseOrgAddress(o.SetOrg)
 		configured = true
 	}
 	if err != nil {

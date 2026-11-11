@@ -200,12 +200,16 @@ func (m *orgPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "enter":
 			if m.editing {
-				org, err := cloudapi.ParseOrg(m.input.Value())
+				// An org's address, any page's under it, or its server's alone.
+				origin, slug, err := cloudapi.ParseAddress(m.input.Value())
 				if err != nil {
 					m.validation = "Invalid organization URL. Use https://bi.example.com/o/acme."
 					return m, nil
 				}
-				m.index, m.address = -1, org.String()
+				m.index, m.address = -1, origin
+				if slug != "" {
+					m.address = cloudapi.Org{Origin: origin, Slug: slug}.String()
+				}
 			} else {
 				i := m.choices.SelectedItem().(orgItem)
 				if i.input {
