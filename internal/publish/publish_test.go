@@ -782,7 +782,9 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 			write(t, dir, map[string]string{"a.aml": "a", ".anfra/config.yml": original})
 			env, _, _ := testEnv(never(t))
 			missing := errors.New("authentication required")
-			validated := errors.New("validation reached")
+			// The publish's first request to the org stops it: recovery got
+			// it that far, with the chosen destination saved.
+			reached := errors.New("org reached")
 			loaded, recovered := 0, false
 			env.Credential = func(_ context.Context, org cloudapi.Org) (func(*http.Request) error, error) {
 				before, err := os.ReadFile(repoconfig.Path(dir))
@@ -796,7 +798,12 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 				if org != selected {
 					t.Fatalf("loaded credentials for %v instead of %v", org, selected)
 				}
-				return func(*http.Request) error { return nil }, nil
+				return func(*http.Request) error {
+					if org, _, err := readOrg(dir); err != nil || org != selected {
+						t.Fatal("the publish reached the org before the selected destination was saved")
+					}
+					return reached
+				}, nil
 			}
 			env.RecoverOrg = func(_ context.Context, org cloudapi.Org, cause error) (cloudapi.Org, error) {
 				if org != linked || cause != missing {
@@ -807,13 +814,6 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 					return cloudapi.Org{}, context.Canceled
 				}
 				return selected, nil
-			}
-			env.Validate = func(context.Context) error {
-				org, _, err := readOrg(dir)
-				if err != nil || org != selected {
-					t.Fatal("validation began before selected destination was saved")
-				}
-				return validated
 			}
 			_, err := Run(context.Background(), dir, Options{Yes: true, Check: scenario == "list"}, env)
 			switch scenario {
@@ -830,8 +830,8 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 					t.Fatalf("credential failure: %v", err)
 				}
 			default:
-				if !errors.Is(err, validated) || !recovered {
-					t.Fatalf("recovered publish did not reach validation: %v", err)
+				if !errors.Is(err, reached) || !recovered {
+					t.Fatalf("recovered publish did not reach the org: %v", err)
 				}
 			}
 			after, readErr := os.ReadFile(repoconfig.Path(dir))
@@ -863,5 +863,74 @@ func TestPublishCheckSeesConflicts(t *testing.T) {
 	_, _, err := run(t, dir, Options{Check: true}, never(t))
 	if codeOf(err) != clierr.ConflictsUnresolved.Code() || !strings.Contains(err.Error(), "Wouldn't publish, because a.aml") {
 		t.Errorf("err = %v, want conflicts_unresolved", err)
+	}
+}
+
+// publish --pull merges what someone published since into the folder, then
+// validates the merged files and publishes them.
+func TestPublishPull(t *testing.T) {
+	s, url := newServer(t)
+	dir := newRepo(t, map[string]string{"a.aml": "a\n", "b.aml": "b\n"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "a\n", "b.aml": "b\n", "r.aml": "r\n"})
+	bobs := s.rev()
+	write(t, dir, map[string]string{"a.aml": "ada\n"})
+
+	env, _, errOut := testEnv(never(t))
+	var validated bool
+	env.Validate = func(context.Context) error {
+		_, err := os.Stat(filepath.Join(dir, "r.aml"))
+		validated = err == nil
+		return nil
+	}
+	res, err := Run(context.Background(), dir, Options{Pull: true}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := res.(Result)
+	if out.Pulled == nil || out.Pulled.Revision != bobs || !slices.Equal(paths(out.Pulled.Changes), []string{"r.aml added"}) {
+		t.Errorf("pulled = %+v", out.Pulled)
+	}
+	if !validated || s.base != bobs || len(s.deployed) != 3 || !strings.Contains(errOut.String(), "Pulled bob@example.com's changes: 1 file added.") {
+		t.Errorf("validated after the pull %v, base %q, deployed %v, said %q", validated, s.base, s.deployed, errOut.String())
+	}
+
+	// Nothing to pull: it publishes as usual.
+	write(t, dir, map[string]string{"a.aml": "ada2\n"})
+	res, err = Run(context.Background(), dir, Options{Pull: true}, env)
+	if err != nil || res.(Result).Pulled != nil {
+		t.Errorf("nothing to pull: %v %+v", err, res)
+	}
+}
+
+// publish --pull stops when the merge leaves conflicts, naming each with its
+// kind, and publishes nothing.
+func TestPublishPullConflicts(t *testing.T) {
+	s, url := newServer(t)
+	dir := newRepo(t, map[string]string{"a.aml": "a\n"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "bob\n"})
+	bobs := s.rev()
+	write(t, dir, map[string]string{"a.aml": "ada\n"})
+	_, _, err := run(t, dir, Options{Pull: true}, never(t))
+	if codeOf(err) != clierr.ConflictsUnresolved.Code() || !strings.Contains(err.Error(), "pulling bob@example.com's changes left 1 conflict, in a.aml (content)") {
+		t.Fatalf("err = %v", err)
+	}
+	if d, ok := apperr.DetailsOf(err, clierr.ConflictsUnresolved); !ok || len(d.Conflicts) != 1 || d.Conflicts[0].Kind != "content" {
+		t.Errorf("details = %+v", d)
+	}
+	if s.rev() != bobs {
+		t.Error("published over bob's revision")
+	}
+	if content, _ := os.ReadFile(filepath.Join(dir, "a.aml")); !strings.Contains(string(content), "<<<<<<<") {
+		t.Errorf("a.aml = %q, want conflict markers", content)
+	}
+	// A second try refuses for the same conflicts, and says where to see them.
+	if _, _, err := run(t, dir, Options{Pull: true}, never(t)); codeOf(err) != clierr.ConflictsUnresolved.Code() || !strings.Contains(err.Error(), "`anfra publish status` says how") {
+		t.Errorf("again: %v", err)
 	}
 }

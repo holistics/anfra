@@ -9,7 +9,7 @@ This design stops a publish from replacing work it hasn't seen, with two changes
 1. **A publish names its base,** the org's revision its files were built on. The server refuses it if the org has moved on, so a publish can't replace work it hasn't seen.
 2. **`anfra pull` merges the org's published files into the folder,** with a three-way merge against the base ([treemerge](treemerge.md)). Files only one side changed are merged without asking. Files both sides changed get conflict markers, which the member resolves, usually with their agent. After a pull, the published revision is the folder's base, and the next publish goes through.
 
-The refusal is what keeps work safe. Pull is how a member gets past it. Publish doesn't pull by itself, because a pull rewrites the member's files and can leave conflicts, and both should be seen before anything is published. So a refused publish says to run `anfra pull`, which an agent can follow literally.
+The refusal is what keeps work safe. Pull is how a member gets past it. Publish doesn't pull unless asked. A refused publish offers both ways past it, which an agent can follow literally: `anfra pull` to merge and review before publishing, or `anfra publish --pull` to merge and publish in one step when the member trusts their colleagues' changes. Either way, conflicts stop it, and nothing a colleague published is removed: their work is merged in, never replaced.
 
 ```mermaid
 flowchart LR
@@ -20,6 +20,9 @@ flowchart LR
     R --> PL[anfra pull]
     PL -->|clean| V[anfra validate] --> P
     PL -->|conflicts| C[resolve with the agent] --> V
+    R --> PP[anfra publish --pull]
+    PP -->|clean| OK
+    PP -->|conflicts| C
 ```
 
 The same everywhere: pull and publish read the folder's files and anfra's own state, never the folder's git history. A folder that's a git repo behaves exactly like one that isn't ([git in the folder](#git-in-the-folder)).
@@ -239,7 +242,7 @@ Each needs the conflicts listed again, with what each needs, and the obvious way
 
 So two commands list them, without publishing, following anfra's convention that `status` describes and `check` judges ([todo](../todos/publish-status-and-check.md)):
 
-- **`anfra publish check`,** the preflight, refuses as publish would, with `conflicts_unresolved` naming the files. Listing each conflict's kind is planned.
+- **Every refusal for unresolved conflicts** (`conflicts_unresolved`, from pull, publish or `publish check`) names each file with its kind, in its message and its details, and points to `anfra publish status`.
 - **`anfra publish status`** shows how the folder stands, changing nothing: what a pull would bring in (`incoming`), what a publish would send (`unpublished`), and the pending record's unresolved conflicts, with their kinds. It compares the same three versions publish does, by blob id. `anfra status` hints at it in a repo with an org.
 
 ### 4. Taking a side: `anfra pull --take org|local <path>...`
@@ -262,12 +265,13 @@ What changes from today's flow, in order:
 
 1. `syncstate`: lock, then [flow 1](#1-checking-resolution).
 2. `workdir`: select and hash the files, refusing a file on disk that isn't selected.
-3. Authenticate and validate, as today.
-4. `remote`: read the published revision, and **pick the base.** If it's the published revision, carry on. Otherwise, before uploading anything, **ask whether a pull would change the folder** ([below](#when-a-pull-would-change-nothing)):
-   - **It would:** refuse with `pull_required`.
+3. Authenticate, as today.
+4. `remote`: read the published revision, and **pick the base.** If it's the published revision, carry on. Otherwise, before anything changes, in the folder or on the org, **ask whether a pull would change the folder** ([below](#when-a-pull-would-change-nothing)):
+   - **It would:** refuse with `pull_required`. With `--pull`, merge instead, as [flow 2](#2-pull) does: conflicts stop the publish with `conflicts_unresolved`, naming each file with its kind. A clean merge carries on, reading the folder again, and the result's `pulled` lists what came in.
    - **It wouldn't:** the org's changes since the base are already in the folder. Carry on, with the published revision as the base, and say so in the output.
-5. Upload the missing blobs, as today, and publish with `base`. If the server answers `base_outdated`, someone published in between: refuse with the same `pull_required`.
-6. `syncstate`: the base becomes the new revision.
+5. Validate, after step 4, so it sees the merged files, then check the org's limits and data sources, as today.
+6. Upload the missing blobs, as today, and publish with `base`. If the server answers `base_outdated`, someone published in between: refuse with the same `pull_required`.
+7. `syncstate`: the base becomes the new revision.
 
 #### When a pull would change nothing
 
@@ -399,7 +403,7 @@ A pull with conflicts exits 0: the conflicts are part of its result ([philosophy
 
 | When | Code |
 |---|---|
-| The last pull's conflicts are unresolved | `conflicts_unresolved`, its details naming the files |
+| The last pull's conflicts are unresolved | `conflicts_unresolved`, its details naming each conflict's kind and files |
 | The last pull stopped partway through writing files | `pull_interrupted` |
 | Not an anfra repo, another pull or publish running, a file anfra won't read as deleted | `precondition_failed` |
 | No org, no terminal | `org_not_set` |
@@ -416,9 +420,22 @@ $ anfra publish
 Refusals:
 
 ```
-✗ Not published, because bob@acme.com published to https://cloud.example.com/o/acme on 2026-11-08 16:20, after this folder last pulled or published. Run `anfra pull` to merge their changes, then publish again.
+✗ Not published, because bob@acme.com published to https://cloud.example.com/o/acme on 2026-11-08 16:20, after this folder last pulled or published. Run `anfra publish --pull` to merge their changes and publish, or `anfra pull` to review them first.
 
-✗ Not published, because datasets/sales.aml still has conflict markers from `anfra pull`. Resolve it, or run `anfra pull --abort`, then publish again.
+✗ Not published, because datasets/sales.aml (content) still has conflicts from the last pull. Resolve them (`anfra publish status` says how), or undo that pull with `anfra pull --abort`, then try again.
+```
+
+With `--pull`:
+
+```
+$ anfra publish --pull
+• Pulling bob@acme.com's changes…
+✓ Pulled bob@acme.com's changes: 1 file added, 1 merged.
+• Validating…
+✓ Published 43 files to Acme, as revision acme@91b2e4f.
+
+$ anfra publish --pull
+✗ Not published, because pulling bob@acme.com's changes left 1 conflict, in models/orders.aml (content). Resolve it (`anfra publish status` says how), then run `anfra publish` again.
 ```
 
 ## Git in the folder
@@ -433,5 +450,5 @@ Teams that share through git and publish from CI need publishing driven by git i
 
 ## Later
 
-- **Offering the pull.** At a terminal, a refused publish could ask "bob@acme.com published since. Pull their changes now?", then, if the pull is clean, validate and ask to publish. For agents, an opt-in `anfra publish --pull` could do the same, stopping on conflicts.
+- **Offering the pull.** At a terminal, a refused publish could ask "bob@acme.com published since. Pull their changes and publish?", for a member who doesn't know `--pull`.
 - **Pulling earlier, so conflicts are smaller.** `anfra serve` could show that the org has new changes, and the skills could tell agents to pull before starting a task. `anfra publish status` already says whether the folder is behind.

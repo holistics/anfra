@@ -117,7 +117,15 @@ func Unreachablef(service string, cause error, format string, args ...any) error
 // UnresolvedFiles are the details of conflicts_unresolved: the files that
 // still have conflicts.
 type UnresolvedFiles struct {
-	Paths []string `json:"paths" doc:"the files that still have conflicts"`
+	Paths     []string             `json:"paths" doc:"the files that still have conflicts"`
+	Conflicts []UnresolvedConflict `json:"conflicts" doc:"each conflict left, with its kind"`
+}
+
+// UnresolvedConflict is a conflict not resolved yet: its kind, which says how
+// to resolve it, and its files.
+type UnresolvedConflict struct {
+	Kind  string   `json:"kind" doc:"the kind of conflict. \"content\", \"add_add\", \"modify_delete\", \"delete_modify\", \"binary\", \"file_folder\", or \"path_collision\"."`
+	Paths []string `json:"paths" doc:"the files the conflict covers"`
 }
 
 // Published are the details of pull_required: the revision the org has

@@ -122,7 +122,11 @@ func statusText(res StatusResult, ref OrgRef, open []syncstate.Conflict) (string
 	}
 
 	if in > 0 {
-		hints = append(hints, "Run `anfra pull` to bring the org's changes into this folder.")
+		if out > 0 {
+			hints = append(hints, "Run `anfra publish --pull` to merge the org's changes and publish yours, or `anfra pull` to review theirs first.")
+		} else {
+			hints = append(hints, "Run `anfra pull` to bring the org's changes into this folder.")
+		}
 		var both []string
 		for _, c := range res.Incoming {
 			if c.Change == "merged" || c.Change == "conflict" {

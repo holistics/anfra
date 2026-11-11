@@ -2,6 +2,7 @@ package publish
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/holistics/anfra/internal/cloudapi"
 )
@@ -25,7 +26,16 @@ type Result struct {
 	Replaced           *cloudapi.Replaced `json:"replaced,omitempty" doc:"the revision it replaced"`
 	Files              int                `json:"files" doc:"how many files it published"`
 	DataSourcesCreated []string           `json:"data_sources_created" doc:"the data sources it added to the org"`
+	Pulled             *Pulled            `json:"pulled,omitempty" doc:"with --pull: the changes pulled into this folder before publishing. Absent when there were none."`
 	Hints              []string           `json:"hints,omitempty" doc:"what to do next, if any"`
+}
+
+// Pulled is what publish --pull merged into the folder before publishing.
+type Pulled struct {
+	Revision    string       `json:"revision" doc:"the org's revision pulled"`
+	PublishedBy string       `json:"published_by,omitempty" doc:"who published it. Absent for the org's starting files."`
+	PublishedAt *time.Time   `json:"published_at,omitempty" doc:"when it was published" pretty:",moment"`
+	Changes     []FileChange `json:"changes" doc:"the files the pull wrote or deleted"`
 }
 
 // OrgRef is an org a publish goes to: its address, and its name when the
