@@ -366,8 +366,8 @@
 .a-kbd-group { display: inline-flex; flex: none; align-items: center; gap: 4px; }
 
 /* Sidebar: shadcn's SidebarGroupLabel, SidebarMenuButton (.a-nav-item), SidebarMenuSub (.a-tree) and
-   SidebarMenuSubButton (.a-tree-row). The current page is aria-current="page" (or data-active): a
-   raised chip with a hairline, and a violet icon. */
+   SidebarMenuSubButton (.a-tree-row). The current page is aria-current="page" (or data-active): the
+   soft neutral fill and weight 500, its icon still ink. */
 .a-nav-label {
   display: flex;
   flex-shrink: 0;
@@ -414,13 +414,10 @@
 .a-tree-row:is(:disabled, [aria-disabled="true"]) { pointer-events: none; color: var(--anfra-color-text-disabled); }
 .a-nav-item:is([aria-current="page"], [data-active]),
 .a-tree-row:is([aria-current="page"], [data-active]) {
-  background: var(--anfra-color-background-current-default);
+  background: var(--anfra-color-background-active);
   color: var(--anfra-color-text-default);
-  box-shadow: inset 0 0 0 1px var(--anfra-color-border-weak);
+  font-weight: 500;
 }
-.a-nav-item:is([aria-current="page"], [data-active]) { font-weight: 500; }
-.a-nav-item:is([aria-current="page"], [data-active]) svg,
-.a-tree-row:is([aria-current="page"], [data-active]) svg { color: var(--anfra-color-icon-highlight-default); }
 .a-tree {
   display: flex;
   flex-direction: column;
