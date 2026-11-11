@@ -27,6 +27,22 @@ Ask before installing. Reuse a working CLI rather than upgrading it unless the u
 
 ## 2. Create the repo's files
 
+Ask the user whether they're starting a new repo, or joining one their org already publishes.
+
+`anfra init` sets up the repo's files. It creates what is missing and never changes an existing
+file beyond adding to it, so it is safe to run again:
+
+| Path | What it is |
+|---|---|
+| `.anfra/data_sources.yml` | The data sources to query, **with credentials**. Git-ignored. |
+| `.anfra/data_sources.yml.example` | The same without credentials, to commit, so a collaborator knows what to fill in. |
+| `.anfra/context_sources.yml` | What `anfra ingest` reads for `anfra search`: the repo's own AML. |
+| `models/`, `datasets/`, `apps/` | AML models, AML datasets, Data Apps. |
+| `.gitignore` | Gains `.anfra/data_sources.yml`. |
+| `AGENTS.md` | Gains the anfra block, telling coding agents to use the anfra skills (and `@AGENTS.md` in an existing `CLAUDE.md`). |
+
+### Starting a new repo
+
 Before running `anfra init`, ask the user whether to add the e-commerce sample: 6 models, a
 dataset, a small DuckDB file and a Data App, so they can try anfra without a warehouse of their own.
 Ask first, because init writes `.anfra/data_sources.yml` and never changes it afterwards. Then run
@@ -39,30 +55,20 @@ anfra init --yes       # they don't; or: anfra init <dir> --yes
 
 With the sample, the repo already queries its DuckDB file: skip step 3 and run `anfra validate`.
 
-`anfra init` creates what is missing and never changes an existing file beyond adding to it, so it is safe
-to run again:
+### Joining the org's repo
 
-| Path | What it is |
-|---|---|
-| `.anfra/data_sources.yml` | The data sources to query, **with credentials**. Git-ignored. |
-| `.anfra/data_sources.yml.example` | The same without credentials, to commit, so a collaborator knows what to fill in. |
-| `.anfra/context_sources.yml` | What `anfra ingest` reads for `anfra search`: the repo's own AML. |
-| `models/`, `datasets/`, `apps/` | AML models, AML datasets, Data Apps. |
-| `.gitignore` | Gains `.anfra/data_sources.yml`. |
-| `AGENTS.md` | Gains the anfra block, telling coding agents to use the anfra skills (and `@AGENTS.md` in an existing `CLAUDE.md`). |
+Don't offer the sample: the repo has its own models.
 
-Ask the user whether they're starting a new repo, or joining one their org already publishes. To
-join one:
+- **If the team shares it through git,** clone it, and run `anfra init --yes` in the clone, which
+  adds what isn't committed. The org's address is committed in `.anfra/config.yml`, so there's
+  nothing to pull, and the committed `.anfra/data_sources.yml.example` names the data sources.
+- **Otherwise,** run `anfra init --yes` in a new folder, then bring the repo's files from the org,
+  as below.
 
-- **If the team shares it through git,** clone it, and run `anfra init` in the clone, which adds
-  what isn't committed. The org's address is committed in `.anfra/config.yml`, so there's nothing
-  to pull, and the committed `.anfra/data_sources.yml.example` names the data sources.
-- **Otherwise,** bring its files from the org, as below.
+Either way, once the repo's files are here, connect the data source (step 3) and query it (step 5).
+The models are already there, so skip step 4.
 
-Then connect the data source (step 3) and query it (step 5). The models are already there, so skip
-step 4.
-
-### Joining from the org, without git
+#### Without git: pull from the org
 
 `anfra pull` needs the org's address, `https://<server>/o/<org>`. Find it with the user:
 

@@ -107,9 +107,9 @@ Once every conflict is resolved, run `anfra validate`. If the user had asked you
 
 ## Joining an org's repo
 
-- **Without git:** `anfra init`, then `anfra pull --set-org https://<server>/o/<org>`.
+- **Without git:** `anfra init --yes`, then `anfra pull --set-org https://<server>/o/<org>`.
   [](../anfra-setup-repo/) says how to find the org's address with the user, and how to sign in.
-- **With git:** clone the repo, then run `anfra init` in it, which adds what isn't committed, such
+- **With git:** clone the repo, then run `anfra init --yes` in it, which adds what isn't committed, such
   as `.anfra/data_sources.yml`. The org's address is already in `.anfra/config.yml`, so there's
   nothing to pull.
 
