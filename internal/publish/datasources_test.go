@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/holistics/anfra/internal/clierr"
 )
 
 // localSources is a data_sources.yml with warehouse and dev, which the org lacks,
@@ -182,5 +184,27 @@ func TestPublishWithoutLocalDataSources(t *testing.T) {
 	write(t, dir, map[string]string{"a.aml": "a"})
 	if _, errOut, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil || strings.Contains(errOut, "data source") {
 		t.Errorf("%v, said %q", err, errOut)
+	}
+}
+
+// A publish refused for a pull changes nothing on the org: its data sources
+// are neither checked nor created before the refusal, nor asked about.
+func TestPublishRefusedCreatesNoDataSources(t *testing.T) {
+	s, url := newServer(t)
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"a.aml": "a"})
+	if _, _, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "a", "r.aml": "r"})
+	write(t, dir, map[string]string{"b.aml": "b", ".anfra/data_sources.yml": localSources})
+	for _, o := range []Options{{SetOrg: url, CreateDataSources: true}, {SetOrg: url}} {
+		_, _, err := run(t, dir, o, never(t))
+		if codeOf(err) != clierr.PullRequired.Code() {
+			t.Fatalf("err = %v, want pull_required", err)
+		}
+		if len(s.created) != 0 || s.tested != 0 {
+			t.Errorf("before the refusal: created %v, checked %d", s.created, s.tested)
+		}
 	}
 }
