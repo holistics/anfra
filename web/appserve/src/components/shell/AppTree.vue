@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ChevronRight, Folder, FolderOpen, LayoutDashboard } from '@lucide/vue';
+// The repo's Data Apps as their folders hold them: a folder opens and closes in place (its icon
+// gives way to a chevron under the pointer or the focus), an app opens in the viewer, the current
+// one marked. The top level is the sidebar's menu; each folder's contents are a sub-menu below it.
+import { ChevronRight, Folder, FolderOpen } from '@lucide/vue';
+import { AppIcon } from '@/lib/appIcon';
 import type { CatalogEntry } from '@/lib/catalog';
 import { cn } from '@/lib/utils';
 import {
@@ -20,6 +24,8 @@ const emit = defineEmits<{ select: [path: string], toggle: [path: string] }>();
 const open = (path: string) => !props.collapsed.has(path);
 const button = () => (props.depth ? sidebarMenuSubButton : sidebarMenuButton);
 const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-button');
+// Under the pointer or the focus, the folder's icon hides and the chevron shows in its place.
+const folderIcon = 'size-4 icon-weak group-hover/folder:invisible group-focus-visible/folder:invisible';
 </script>
 
 <template>
@@ -35,10 +41,15 @@ const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-butt
           :data-folder="entry.path"
           @click="emit('toggle', entry.path)"
         >
-          <FolderOpen v-if="open(entry.path)" />
-          <Folder v-else />
+          <span class="relative grid size-4 shrink-0 place-items-center">
+            <FolderOpen v-if="open(entry.path)" :class="folderIcon" />
+            <Folder v-else :class="folderIcon" />
+            <ChevronRight
+              class="invisible absolute size-4 icon-weak transition-transform duration-160 ease-anfra-out group-hover/folder:visible group-focus-visible/folder:visible group-aria-expanded/folder:rotate-90"
+              data-chevron
+            />
+          </span>
           <span class="truncate">{{ entry.name }}</span>
-          <ChevronRight class="ml-auto transition-transform duration-160 ease-anfra-out group-aria-expanded/folder:rotate-90" />
         </button>
         <AppTree
           v-if="open(entry.path) && entry.children.length"
@@ -61,7 +72,7 @@ const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-butt
         :title="entry.path"
         @click="emit('select', entry.path)"
       >
-        <LayoutDashboard /><span>{{ entry.label }}</span>
+        <AppIcon /><span>{{ entry.label }}</span>
       </button>
     </li>
   </ul>

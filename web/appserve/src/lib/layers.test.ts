@@ -3,6 +3,9 @@ import { h, nextTick } from 'vue';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { RepoProblems } from '@/components/shell';
 import { mount, unmountAll } from '@/test/mount';
 import { layerOpen } from './layers';
@@ -18,6 +21,17 @@ it('sees an open menu, which takes Escape before the shell', async () => {
   await nextTick();
   expect(layerOpen()).toBe(true);
   menu.unmount();
+  expect(layerOpen()).toBe(false);
+});
+
+it('leaves Escape to the shell while only a tooltip shows', async () => {
+  // jsdom has no ResizeObserver, which the tooltip's arrow measures with.
+  globalThis.ResizeObserver ??= class { observe () {} unobserve () {} disconnect () {} } as unknown as typeof ResizeObserver;
+  await mount(TooltipProvider, {}, () => h(Tooltip, { open: true }, {
+    default: () => [h(TooltipTrigger, null, { default: () => 'Theme' }), h(TooltipContent, null, { default: () => 'Theme' })],
+  }));
+  await nextTick();
+  expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeNull();
   expect(layerOpen()).toBe(false);
 });
 

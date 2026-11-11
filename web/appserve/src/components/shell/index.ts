@@ -6,3 +6,7 @@ export { default as LoadingBar } from './LoadingBar.vue';
 export { default as RepoProblems } from './RepoProblems.vue';
 export { default as Scrim } from './Scrim.vue';
 export { default as ShortcutKeys } from './ShortcutKeys.vue';
+export { default as SidebarFoot } from './SidebarFoot.vue';
+export { default as SidebarPanel } from './SidebarPanel.vue';
+export { default as SidebarPeek } from './SidebarPeek.vue';
+export { default as SidebarResizer } from './SidebarResizer.vue';
