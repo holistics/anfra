@@ -37,11 +37,17 @@ func TestLock(t *testing.T) {
 	if err := filelock.Lock(ctx, b); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Lock while held: %v", err)
 	}
+	released := make(chan struct{})
 	go func() {
+		defer close(released)
 		time.Sleep(30 * time.Millisecond)
 		filelock.Unlock(a)
 	}()
-	if err := filelock.Lock(context.Background(), b); err != nil {
+	err := filelock.Lock(context.Background(), b)
+	// Done with a before the test's cleanup closes it: the lock orders the
+	// two, but the race detector can't see a lock between processes.
+	<-released
+	if err != nil {
 		t.Fatalf("Lock after release: %v", err)
 	}
 	filelock.Unlock(b)
