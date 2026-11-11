@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LayoutDashboard, PanelLeft, RefreshCw } from '@lucide/vue';
+import { RefreshCw } from '@lucide/vue';
 import type { Command, CommandState } from '@holistics/anfra-sdk/host';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +12,6 @@ import LoadingBar from './LoadingBar.vue';
 import RepoProblems from './RepoProblems.vue';
 
 defineProps<{
-  sidebarOpen: boolean;
   hasApp: boolean;
   title: string;
   crumbs: { path: string, name: string }[];
@@ -24,7 +23,6 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  toggleSidebar: [];
   revealFolder: [path: string];
   reload: [];
   run: [command: Command];
@@ -33,17 +31,8 @@ const emit = defineEmits<{
 
 <template>
   <header class="relative flex h-12 shrink-0 items-center gap-2 border-b border-default px-3">
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      :aria-label="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
-      title="Toggle sidebar"
-      data-testid="sidebar-toggle"
-      @click="emit('toggleSidebar')"
-    >
-      <PanelLeft />
-    </Button>
-    <LayoutDashboard v-if="hasApp" class="size-4 shrink-0 icon-highlight-default" />
+    <!-- The sidebar's toggle, with its peek (SidebarPeek). Then the open Data App's name only, as Cloud's header has it. -->
+    <slot name="toggle" />
     <h2 class="max-w-1/2 shrink-0 truncate text-label text-default" data-testid="viewer-title">{{ title }}</h2>
     <nav v-if="crumbs.length" class="flex min-w-0 items-center overflow-hidden text-caption whitespace-nowrap text-weak" aria-label="Folder">
       <template v-for="(crumb, i) in crumbs" :key="crumb.path">
