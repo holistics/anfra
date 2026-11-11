@@ -1,3 +1,22 @@
+## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
+
+### Features
+
+* docs and skills for new publish flows ([08f4c5b](https://github.com/holistics/anfra/commit/08f4c5b5b8645de01877749258bd04cfd5811042))
+* **appserve:** show an Alpha badge after the anfra status in the sidebar foot ([1ff1213](https://github.com/holistics/anfra/commit/1ff12139b6f4d52a8e51c2484de4563cc03717b5))
+* **cli:** offer an e-commerce sample project in anfra init ([59b7a61](https://github.com/holistics/anfra/commit/59b7a61e5a1d9b3e08c8b61e9cffa5361d742b80))
+* **cli:** make the update notice stand out on a terminal ([d4fb450](https://github.com/holistics/anfra/commit/d4fb45040b97305c08bb4b9cca58ab0bf9edcbb7))
+* **cli:** improvements to pretty format ([dbc817c](https://github.com/holistics/anfra/commit/dbc817c2b47d92f50c1176b8ec48d083cfa131a3))
+* **cli:** add pull command ([aa1a524](https://github.com/holistics/anfra/commit/aa1a524da0441cb35569fbfef3aa481cd7ea13be))
+* **cli:** check pull status before publish ([fe6fef5](https://github.com/holistics/anfra/commit/fe6fef5268c4e54893f5a7ac8982cbc9f30de537))
+* **cli:** anfra publish status ([e4489fc](https://github.com/holistics/anfra/commit/e4489fc9e7a0a771909b0464258272bac739bdee))
+* **cli:** anfra publish --pull ([64d0e0f](https://github.com/holistics/anfra/commit/64d0e0f3d5fe906e0060a4da98fcf9b8782c2c24))
+* **cli:** tolerate sub pages for org url ([9ebd872](https://github.com/holistics/anfra/commit/9ebd872d9dd7e9f3b760e8a3136f42a19cb76b23))
+* **cli:** warnings for when anfra publish might not be in step with git ([761c676](https://github.com/holistics/anfra/commit/761c67633a44607abf9fbfc39f0ac25f99882f79))
+
+### Security
+
+* bump glob to 14 so minimatch moves to 11 (W46) ([69b3d17](https://github.com/holistics/anfra/commit/69b3d171b67c15ca687558ea48a99eeadaf7c506))
 ## [0.19.0](https://github.com/holistics/anfra/compare/v0.18.0...v0.19.0) (2026-11-09)
 
 ### Features

@@ -1,3 +1,11 @@
+## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
+
+### Features
+
+* docs and skills for new publish flows ([08f4c5b](https://github.com/holistics/anfra/commit/08f4c5b5b8645de01877749258bd04cfd5811042))
+* **cli:** offer an e-commerce sample project in anfra init ([59b7a61](https://github.com/holistics/anfra/commit/59b7a61e5a1d9b3e08c8b61e9cffa5361d742b80))
+* **cli:** tolerate sub pages for org url ([9ebd872](https://github.com/holistics/anfra/commit/9ebd872d9dd7e9f3b760e8a3136f42a19cb76b23))
+* **cli:** warnings for when anfra publish might not be in step with git ([761c676](https://github.com/holistics/anfra/commit/761c67633a44607abf9fbfc39f0ac25f99882f79))
 ## [0.19.0](https://github.com/holistics/anfra/compare/v0.18.0...v0.19.0) (2026-11-09)
 
 ### Features
