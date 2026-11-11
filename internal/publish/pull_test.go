@@ -262,3 +262,43 @@ func TestPullRefusals(t *testing.T) {
 		t.Errorf("abort: %v", err)
 	}
 }
+
+// A pull names the data sources the repo uses that this folder lacks, with
+// their types on the org.
+func TestPullHintsMissingDataSources(t *testing.T) {
+	s, url := newServer(t)
+	s.sources["events"] = "clickhouse"
+	s.publishAs("bob@example.com", map[string]string{
+		"models/a.aml": "Model a {\n  data_source_name: 'demo'\n}\n",
+		"models/b.aml": "Model b {\n  data_source_name: \"events\"\n}\n",
+		"models/c.aml": "Model c {\n  data_source_name: 'logs'\n}\n",
+	})
+	dir := newRepo(t, map[string]string{".anfra/data_sources.yml": "data_sources:\n  demo:\n    type: postgresql\n"})
+	res := mustPull(t, dir, PullOptions{SetOrg: url})
+	want := "This repo uses data sources that aren't in .anfra/data_sources.yml yet: events (clickhouse) and logs. Add them, with their connections."
+	if !slices.Contains(res.Hints, want) {
+		t.Errorf("hints = %q", res.Hints)
+	}
+}
+
+// A pull into a git working tree with uncommitted changes says how to keep
+// them apart from the pull's.
+func TestPullHintsUncommittedChanges(t *testing.T) {
+	requireGit(t)
+	s, url := newServer(t)
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "a\n", "r.aml": "r\n"})
+	dir := newRepo(t, map[string]string{"a.aml": "a\n"})
+	git(t, dir, "init", "-q")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-qm", "start")
+	if res := mustPull(t, dir, PullOptions{SetOrg: url}); slices.Contains(res.Hints, uncommittedHint()) {
+		t.Errorf("clean tree: %q", res.Hints)
+	}
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-qm", "pulled")
+	s.publishAs("bob@example.com", map[string]string{"a.aml": "a\n", "r.aml": "r2\n"})
+	write(t, dir, map[string]string{"mine.aml": "m\n"})
+	if res := mustPull(t, dir, PullOptions{}); !slices.Contains(res.Hints, uncommittedHint()) {
+		t.Errorf("uncommitted: %q", res.Hints)
+	}
+}

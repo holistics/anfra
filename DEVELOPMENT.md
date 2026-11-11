@@ -76,6 +76,10 @@ The anfra skills' source is in `skills/`: the `anfra` plugin, its marketplaces f
 
 See [where the skills live](docs/designs/agent-setup.md#where-the-skills-live).
 
+#### Writing a skill for anfra users
+
+A skill is a shortcut to anfra's commands, not a reference to them. [skills/AGENTS.md](skills/AGENTS.md) says how to write one.
+
 ### When the API changes
 
 An op's input or answer is part of the core API's contract:

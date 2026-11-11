@@ -296,7 +296,10 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 		res.Message += fmt.Sprintf(" The sample is %s@%s.", sampleRepo, commit)
 		res.Hints = sampleHints(dir, r.ConfigDir, sources)
 	default:
-		res.Hints = []string{fmt.Sprintf("Put your database in %s, write models and datasets, then run `anfra validate`.", sources)}
+		res.Hints = []string{
+			fmt.Sprintf("Put your database in %s, write models and datasets, then run `anfra validate`.", sources),
+			"To work on a repo your org already publishes, run `anfra pull --set-org https://<server>/o/<org>` to bring its files here, or `anfra pull` at a terminal to choose the org.",
+		}
 		if opts.offer {
 			res.Hints = append(res.Hints, fmt.Sprintf("An e-commerce sample project is available, with 6 models, a dataset with 8 metrics, "+
 				"a small DuckDB file, a Data App, and business definitions. It wasn't added, because nobody was asked. "+
