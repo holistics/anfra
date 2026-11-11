@@ -442,9 +442,10 @@ $ anfra publish --pull
 
 ## Git in the folder
 
-anfra doesn't read git, but git helps a member see what anfra did:
+anfra decides nothing from git: pull and publish read only the folder's files. It reads git only to tell the member what they may not have meant, and git helps a member see what anfra did:
 
 - **A pull writes into the working tree,** so its changes show in `git diff`, mixed with uncommitted work. When the working tree had uncommitted changes, pull says so after the fact, with the way back: `--abort`, commit, and pull again. Asking first would need a terminal, and agents have none. After a pull, the member commits the result.
+- **Publish warns of what it gives the org that git's shared copy lacks,** without refusing, since a team may share through the org and use git only on its own. `publish` and `publish check` read `git status` locally, never fetching: the folder is on a branch other than the remote's default (`git_non_default_branch`), has commits not pushed (`git_unpushed`), or has files to publish not committed (`git_uncommitted`, counting only files a publish sends). Each warning states the fact and a general recommendation, such as merging into `main`, not git commands: someone who knows git doesn't need them, and someone who doesn't could lose work following them. Nothing is said outside git, without git installed, or about the branch on a detached HEAD, as CI checks out.
 - **`git log -- <path>`** tells which version is newer when a folder with no base has conflicts.
 - **Switching branches doesn't change the base.** Publishing from `main` after publishing from `feature` replaces the org's files with `main`'s, as today, including files only `feature` had. Pull and publish see only the folder's files, and the org keeps the history of what was replaced.
 

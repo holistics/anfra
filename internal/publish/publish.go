@@ -118,6 +118,7 @@ func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 				return nil, err
 			}
 		}
+		warnOfGit(ctx, t, dir)
 		return check(tg), nil
 	}
 	return publish(ctx, dir, o, env, t, tg)
@@ -259,6 +260,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	} else {
 		out.Message = fmt.Sprintf("Nothing changed: %s is already published to %s.", res.Revision, shown)
 	}
+	warnOfGit(ctx, t, dir)
 	t.Hint("Open it at %s.", org)
 	out.Hints = t.hints
 	return out, nil
