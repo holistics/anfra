@@ -49,7 +49,7 @@ func TestPrettyCheck(t *testing.T) {
 
 Skills:
   Latest:      0.4.5
-  Checked At:  today
+  Checked at:  today
 
 Agents:
   NAME          STATUS          PLUGINS             COPIES
@@ -64,12 +64,12 @@ Copies:
       VERSION   SKILLS
       0.4.4     anfra-aql,anfra-write-aql
       0.4.5     anfra-amql,anfra-search
-    Deprecated Names:  false
+    Deprecated names:  false
 
   ~/.claude/skills:
     Status:            deprecated
     Versions:          <none>
-    Deprecated Names:  true
+    Deprecated names:  true
 
 AGENTS.md:
   Block:      up-to-date

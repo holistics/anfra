@@ -121,18 +121,18 @@ func (c prettyCell) width() int { return ansi.StringWidth(c.plain()) }
 
 // prettyField is a struct field as the view sees it.
 type prettyField struct {
-	name     string // its json name
-	label    string
-	omit     bool // omitempty or omitzero: an empty one is left out of key/values
-	block    bool
-	tree     bool
-	moment   bool
-	truncate bool
-	labels   string // rows: the path, from the result's top, of their values' labels (columns.label)
-	view     string // a named view of the value (views), rather than its shape's
-	tones    map[string]prettyStyle
-	value    reflect.Value
-	root     reflect.Value // the result, for a path from its top
+	name      string // its json name
+	label     string
+	omit      bool // omitempty or omitzero: an empty one is left out of key/values
+	block     bool
+	tree      bool
+	moment    bool
+	truncate  bool
+	rowLabels string // rows: the path, from the result's top, of their values' labels (columns.label)
+	view      string // a named view of the value (views), rather than its shape's
+	tones     map[string]prettyStyle
+	value     reflect.Value
+	root      reflect.Value // the result, for a path from its top
 }
 
 // Object is an object read from JSON or YAML with its keys in order (an
@@ -152,7 +152,7 @@ func prettyFields(v, root reflect.Value) []prettyField {
 	if v.CanInterface() && v.Type() == reflect.TypeFor[Object]() {
 		o := v.Interface().(Object)
 		for _, k := range o.Keys {
-			out = append(out, prettyField{name: k, label: titleCase(k), value: reflect.ValueOf(o.Values).MapIndex(reflect.ValueOf(k)), root: root})
+			out = append(out, prettyField{name: k, label: sentenceCase(k), value: reflect.ValueOf(o.Values).MapIndex(reflect.ValueOf(k)), root: root})
 		}
 		return out
 	}
@@ -160,7 +160,9 @@ func prettyFields(v, root reflect.Value) []prettyField {
 		keys := v.MapKeys()
 		slices.SortFunc(keys, func(a, b reflect.Value) int { return strings.Compare(a.String(), b.String()) })
 		for _, k := range keys {
-			out = append(out, prettyField{name: k.String(), label: titleCase(k.String()), value: v.MapIndex(k), root: root})
+			// A map's keys are data (names, addresses), not field names:
+			// shown as they are.
+			out = append(out, prettyField{name: k.String(), label: k.String(), value: v.MapIndex(k), root: root})
 		}
 		return out
 	}
@@ -183,7 +185,7 @@ func prettyFields(v, root reflect.Value) []prettyField {
 		if name == "" {
 			name = sf.Name
 		}
-		f := prettyField{name: name, label: titleCase(name), value: v.Field(i), root: root,
+		f := prettyField{name: name, label: sentenceCase(name), value: v.Field(i), root: root,
 			omit: strings.Contains(jsonOpts, "omitempty") || strings.Contains(jsonOpts, "omitzero")}
 		inline := false
 		label, opts, _ := strings.Cut(sf.Tag.Get("pretty"), ",")
@@ -201,8 +203,8 @@ func prettyFields(v, root reflect.Value) []prettyField {
 				f.moment = true
 			case "truncate":
 				f.truncate = true
-			case "labels":
-				f.labels = val
+			case "rowlabels":
+				f.rowLabels = val
 			case "view":
 				f.view = val
 			case "inline":
@@ -297,6 +299,9 @@ func prettyValueOf(f prettyField) prettyValue {
 			}
 			return prettyValue{kind: prettyLines, lines: lines}
 		case elem.Kind() == reflect.Struct || elem.Kind() == reflect.Map:
+			if lines, ok := singleFieldLines(v, f.root); ok {
+				return prettyValue{kind: prettyLines, lines: lines}
+			}
 			return prettyListOf(v, f.root)
 		case elem.Kind() == reflect.Slice:
 			var rows [][]prettyCell
@@ -317,7 +322,7 @@ func prettyValueOf(f prettyField) prettyValue {
 				}
 				rows = append(rows, row)
 			}
-			return prettyValue{kind: prettyRows, rows: rows, labels: pathStrings(f.root, f.labels)}
+			return prettyValue{kind: prettyRows, rows: rows, labels: pathStrings(f.root, f.rowLabels)}
 		}
 	}
 	return prettyValue{kind: prettyText, cell: prettyCell{{text: fmt.Sprint(v.Interface())}}}
@@ -482,6 +487,25 @@ func prettyListOf(v, root reflect.Value) prettyValue {
 		out.table = table
 	}
 	return out
+}
+
+// singleFieldLines is a list of objects that each show one scalar field, as
+// that field's values: a list of scalars, one a line. A table of one column
+// would add only a header naming it.
+func singleFieldLines(v, root reflect.Value) ([]prettyCell, bool) {
+	var lines []prettyCell
+	for i := range v.Len() {
+		fields := prettyFields(indirect(v.Index(i)), root)
+		if len(fields) != 1 {
+			return nil, false
+		}
+		fv := indirect(fields[0].value)
+		if !fv.IsValid() || !isScalar(fv.Type()) {
+			return nil, false
+		}
+		lines = append(lines, scalarCell(fields[0], fv))
+	}
+	return lines, len(lines) > 0
 }
 
 // cellOf is a field's value in a table cell, and whether it fits in one: a
@@ -711,15 +735,16 @@ func relativeTime(t, now time.Time) string {
 // acronyms are words a label writes in capitals.
 var acronyms = map[string]bool{"id": true, "url": true, "sql": true, "aql": true, "aml": true, "api": true, "json": true, "yaml": true, "md": true}
 
-// titleCase is a json name as a label: its words capitalized, acronyms in
-// capitals (checked_at → Checked At, org_url → Org URL).
-func titleCase(name string) string {
+// sentenceCase is a json name as a label: its first word capitalized, the
+// rest as they are, acronyms in capitals (checked_at → Checked at, org_url →
+// Org URL).
+func sentenceCase(name string) string {
 	words := strings.Split(name, "_")
 	for i, w := range words {
 		switch {
 		case acronyms[w]:
 			words[i] = strings.ToUpper(w)
-		case w != "":
+		case i == 0 && w != "":
 			words[i] = strings.ToUpper(w[:1]) + w[1:]
 		}
 	}
@@ -812,9 +837,10 @@ func (r prettyRenderer) doc(d prettyDoc) string {
 // holds. Bold is the message's alone.
 func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, indent int, top bool) {
 	labelWidths := runLabelWidths(entries)
+	under := r.overflowingRuns(entries, labelWidths, indent)
 	pad := strings.Repeat(" ", indent)
 	apart := func(i int) bool { // a blank line, or the edge, between entries i-1 and i
-		return i == 0 || i == len(entries) || hasRows(entries[i].value.kind) || hasRows(entries[i-1].value.kind)
+		return i == 0 || i == len(entries) || setApart(entries[i].value.kind) || setApart(entries[i-1].value.kind)
 	}
 	for i, e := range entries {
 		if top && i > 0 && apart(i) {
@@ -823,6 +849,18 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 		labelWidth := labelWidths[i]
 		label := e.label + ":"
 		heading := r.styles.Key.Render(label)
+		if under[i] {
+			// A run that doesn't fit the terminal: each value under its label.
+			b.WriteString(pad + heading + "\n")
+			lines := e.value.lines
+			if e.value.kind == prettyText {
+				lines = []prettyCell{e.value.cell}
+			}
+			for _, l := range lines {
+				b.WriteString(pad + "  " + r.cell(l) + "\n")
+			}
+			continue
+		}
 		switch e.value.kind {
 		case prettyText:
 			b.WriteString(pad + heading + spaces(labelWidth-ansi.StringWidth(label)+2) + r.cell(e.value.cell) + "\n")
@@ -864,6 +902,45 @@ func (r prettyRenderer) entries(b *strings.Builder, entries []prettyEntry, inden
 
 // keyValue reports whether a value of kind goes on its label's line.
 func keyValue(kind prettyValueKind) bool { return kind == prettyText || kind == prettyLines }
+
+// overflowingRuns marks the entries of each run of key/value lines that
+// doesn't fit the terminal: one of its lines, its label and value side by
+// side, is wider than the terminal. The whole run then puts each value under
+// its label, so siblings stay alike. Not a terminal (width 0), none does.
+func (r prettyRenderer) overflowingRuns(entries []prettyEntry, labelWidths []int, indent int) []bool {
+	under := make([]bool, len(entries))
+	if r.width <= 0 {
+		return under
+	}
+	for start := 0; start < len(entries); {
+		if !keyValue(entries[start].value.kind) {
+			start++
+			continue
+		}
+		end, overflows := start, false
+		for ; end < len(entries) && keyValue(entries[end].value.kind); end++ {
+			e := entries[end]
+			cells := e.value.lines
+			if e.value.kind == prettyText {
+				cells = []prettyCell{e.value.cell}
+			}
+			for _, c := range cells {
+				if indent+labelWidths[end]+2+c.width() > r.width {
+					overflows = true
+				}
+			}
+		}
+		for i := start; i < end; i++ {
+			under[i] = overflows
+		}
+		start = end
+	}
+	return under
+}
+
+// setApart reports whether a value of kind is set apart by a blank line at
+// the top: what has rows, and a section, whose contents are its own.
+func setApart(kind prettyValueKind) bool { return hasRows(kind) || kind == prettySection }
 
 // hasRows reports whether a value of kind has rows, set apart at the top.
 func hasRows(kind prettyValueKind) bool {

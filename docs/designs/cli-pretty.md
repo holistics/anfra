@@ -41,11 +41,11 @@ A core command's answer reaches the CLI as JSON, often forwarded from the warm s
 A result is a **detail** view, as `kubectl describe` is: one document, in sections. A table is for a list of like items, not for the document itself.
 
 0. **`message` and `hints`.** A CLI-only command's result opens with `message` and closes with `hints` ([CLI output](commands-and-api.md#cli-output)). The pretty view shows `message` as its first line, unlabelled, and `hints` as its last section, one a line, after a blank line: the outcome first, what to do next last.
-1. **Key/value lines.** `Label:  value`. The label is the JSON name in Title Case (`checked_at` → `Checked At`, acronyms in capitals: `URL`, `ID`), unless a hint says otherwise. Values align within a run of consecutive key/value lines at one level, as gofmt aligns a struct literal's fields: a nested section ends the run, and lines at different levels never align.
-2. **Nesting.** A nested object is a `Label:` heading, its contents indented by 2. At the top, a blank line sets apart what has rows (a table, a list of blocks, a text block or a tree) and the message and hints; a section of key/values stays with its neighbours.
+1. **Key/value lines.** `Label:  value`. The label is the JSON name in sentence case (`checked_at` → `Checked at`, acronyms in capitals: `URL`, `ID`), unless a hint says otherwise. A map's keys are shown as they are: they're data (names, addresses, codes such as a conflict's kind), not field names, and recasing them would change them. Values align within a run of consecutive key/value lines at one level, as gofmt aligns a struct literal's fields: a nested section ends the run, and lines at different levels never align.
+2. **Nesting.** A nested object is a `Label:` heading, its contents indented by 2. At the top, a blank line sets apart what has rows (a table, a list of blocks, a text block or a tree), a section, and the message and hints; key/value lines at the top stay with their neighbours.
 3. **Lists of objects** (a listing: agents, orgs, a few named fields each). A table when every column holds a scalar (or a one-item list or object, flattened) and the table fits the terminal: UPPERCASE headers, columns 3 spaces apart, no borders, as kubectl and gh draw them. Otherwise, one block per item, separated by blank lines, its first scalar as its heading, its nested parts shown in full.
-4. **Lists of scalars.** One per line, aligned in the value column. In a table cell, a CSV row (rule 10).
-5. **Lists of lists** (rows: data, as a query answers). A bordered grid, as psql and duckdb draw one: a value may hold spaces or be empty, and only a border says where a cell ends. Its header is its values' labels when a hint gives them (`labels=`), faint; none otherwise. Wider than the terminal, one block per row, a label and a value a line (`-[ ROW 1 ]-`), as psql's expanded mode; never cut cells. In ASCII without a UTF-8 terminal, as trees are. Which is a grid and which a table is the data's shape, never where it's shown.
+4. **Lists of scalars.** One per line, aligned in the value column. In a table cell, a CSV row (rule 10). A list of objects that each show one scalar field, the others hidden, is the list of that field's values: a table of one column would add only a header naming it. A run of key/value lines that doesn't fit the terminal, one of its labels and values wider than it, puts each value under its label instead, indented by 2: the whole run alike, so siblings look alike. Not a terminal, a run never does.
+5. **Lists of lists** (rows: data, as a query answers). A bordered grid, as psql and duckdb draw one: a value may hold spaces or be empty, and only a border says where a cell ends. Its header is its values' labels when a hint gives them (`rowlabels=`), faint; none otherwise. Wider than the terminal, one block per row, a label and a value a line (`-[ ROW 1 ]-`), as psql's expanded mode; never cut cells. In ASCII without a UTF-8 terminal, as trees are. Which is a grid and which a table is the data's shape, never where it's shown.
 5b. **Numbers are right-aligned**, in a grid or a table: a column whose every value, `<none>` aside, is a number.
 5c. **Raw JSON** (a `jsontext.Value`, a query's row) is laid out as the value it holds; an object decoded from JSON as a struct is, its keys sorted (a map keeps no order), or in order when read as a `pretty.Object`.
 6. **Nothing hidden.** No counts in place of items: a count can't be drilled into (there's no command for one item), so it's a dead end. A view may choose a count deliberately (`files: 42`) where the items don't matter.
@@ -69,7 +69,7 @@ A field's `pretty` tag adjusts the layout; it never adds a field or text beyond 
 | `pretty:",truncate"` | a column that may be cut to fit the terminal |
 | `pretty:",tree"`, `pretty:",tree=path"` | a list of paths, or of objects with a path in the named field, drawn as a [tree](#trees). Built for a list of paths (`publish check`); `tree=path` not yet |
 | `pretty:",tone=latest:good behind:warn failed:bad"` | the [tone](#color) of some of a field's values |
-| `pretty:",labels=columns.label"` | rows' values' labels, from a path from the result's top, through objects and lists: a grid's header, a block's labels |
+| `pretty:",rowlabels=columns.label"` | rows' values' labels, from a path from the result's top, through objects and lists: a grid's header, a block's labels |
 | `pretty:",inline"` | an object's shown fields are its parent's, under no heading of their own, as encoding/json inlines an embedded one |
 | `pretty:",view=timings"` | a [named view](#named-views) of the value, for one no convention shows well |
 
@@ -127,7 +127,7 @@ Claude Code's plugin is behind 0.4.5, and ~/.claude/skills has deprecated skills
 
 Skills:                                                                             blue
   Latest:      0.4.5                                                                labels blue
-  Checked At:  today
+  Checked at:  today
 
 Agents:                                                                             blue
   NAME          STATUS          PLUGINS             COPIES                       headers faint
@@ -164,7 +164,7 @@ Claude Code's plugin is behind 0.4.5, ~/.agents/skills is mixed, and ~/.claude/s
 
 Skills:
   Latest:      0.4.5
-  Checked At:  today
+  Checked at:  today
 
 Agents:
   NAME          STATUS          PLUGINS             COPIES
@@ -179,12 +179,12 @@ Copies:
       VERSION   SKILLS
       0.4.4     anfra-aql,anfra-write-aql
       0.4.5     anfra-amql,anfra-build-dashboard,anfra-develop-amql,anfra-search,anfra-setup-repo,anfra-viz
-    Deprecated Names:  false
+    Deprecated names:  false
 
   ~/.claude/skills:
     Status:            deprecated
     Versions:          <none>
-    Deprecated Names:  true
+    Deprecated names:  true
 
 AGENTS.md:
   Block:      up-to-date
@@ -277,7 +277,7 @@ Columns:
 
 ### `anfra query`
 
-`query --pretty`, and `query` in a console: the SQL, the AQL and what each column is are hidden (`pretty:"-"`), left to `--yaml`; the rows, inlined from `result` (`inline`), under `Result:`, the YAML's own key, labelled by each column's `label` (`labels=columns.label`); then `has_more`; then the timings by their view.
+`query --pretty`, and `query` in a console: the SQL, the AQL and what each column is are hidden (`pretty:"-"`), left to `--yaml`; the rows, inlined from `result` (`inline`), under `Result:`, the YAML's own key, labelled by each column's `label` (`rowlabels=columns.label`); then `has_more`; then the timings by their view.
 
 ```
 Result:
@@ -289,7 +289,7 @@ Result:
   │ refunded  │      3 │ Hà Nội   │
   └───────────┴────────┴──────────┘
 
-Has More:  false
+Has more:  false
 
 Timings:
   connecting_to_dw        60 ms
@@ -299,7 +299,7 @@ Timings:
   total                   68 ms
 ```
 
-Values are as the answer has them: no thousands separators, no rounding. `Has More: false` shows on every result; a hint showing a field only when true would hide it, should it prove noise.
+Values are as the answer has them: no thousands separators, no rounding. `Has more: false` shows on every result; a hint showing a field only when true would hide it, should it prove noise.
 
 ## Other formats considered
 

@@ -162,14 +162,15 @@ func TestSectionLabels(t *testing.T) {
 // isn't a terminal: for a view placed later, an error's details.
 func TestRenderStyled(t *testing.T) {
 	type item struct {
-		Field string `json:"field"`
+		Field   string `json:"field"`
+		Message string `json:"message"`
 	}
 	type details struct {
 		Code       string `json:"code"`
 		Violations []item `json:"violations"`
 	}
 	var b bytes.Buffer
-	if err := RenderStyled(&b, details{Code: "x", Violations: []item{{"a"}}}, 0, testStyles); err != nil {
+	if err := RenderStyled(&b, details{Code: "x", Violations: []item{{"a", "Required."}}}, 0, testStyles); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{render(testStyles.Key, "Code:"), render(testStyles.Muted, "FIELD")} {
