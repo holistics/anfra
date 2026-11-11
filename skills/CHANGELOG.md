@@ -1,3 +1,8 @@
+## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
+
+### Features
+
+* **cli:** offer an e-commerce sample project in anfra init ([59b7a61](https://github.com/holistics/anfra/commit/59b7a61e5a1d9b3e08c8b61e9cffa5361d742b80))
 ## [0.19.0](https://github.com/holistics/anfra/compare/v0.18.0...v0.19.0) (2026-11-09)
 
 ### Features

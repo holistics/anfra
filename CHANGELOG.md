@@ -1,3 +1,14 @@
+## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
+
+### Features
+
+* **appserve:** show an Alpha badge after the anfra status in the sidebar foot ([1ff1213](https://github.com/holistics/anfra/commit/1ff12139b6f4d52a8e51c2484de4563cc03717b5))
+* **cli:** offer an e-commerce sample project in anfra init ([59b7a61](https://github.com/holistics/anfra/commit/59b7a61e5a1d9b3e08c8b61e9cffa5361d742b80))
+* **cli:** make the update notice stand out on a terminal ([d4fb450](https://github.com/holistics/anfra/commit/d4fb45040b97305c08bb4b9cca58ab0bf9edcbb7))
+
+### Security
+
+* bump glob to 14 so minimatch moves to 11 (W46) ([69b3d17](https://github.com/holistics/anfra/commit/69b3d171b67c15ca687558ea48a99eeadaf7c506))
 ## [0.19.0](https://github.com/holistics/anfra/compare/v0.18.0...v0.19.0) (2026-11-09)
 
 ### Features
