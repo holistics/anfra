@@ -894,6 +894,8 @@ export interface components {
             version?: string;
         };
         StatusResult: {
+            /** @description what to do next, if any */
+            hints?: string[];
             repo: components["schemas"]["RepoStatus"];
             server: components["schemas"]["ServerStatus"];
         };

@@ -121,7 +121,7 @@ func newPublishCmd() *cobra.Command {
 	// removes it.
 	f.BoolVarP(&o.Yes, "yes", "y", false, "deprecated, and does nothing now. It confirmed replacing a version someone else published")
 	_ = f.MarkHidden("yes")
-	cmd.AddCommand(newPublishCheckCmd())
+	cmd.AddCommand(newPublishCheckCmd(), newPublishStatusCmd())
 	return cmd
 }
 
@@ -311,4 +311,44 @@ func appWarnings(body []byte, errOut io.Writer) {
 			printWarning(errOut, "data_app_not_portable", r.FilePath+": "+r.Message)
 		}
 	}
+}
+
+// newPublishStatusCmd is publish's status (docs/todos/publish-status-and-check.md):
+// how this folder stands against what its org has published, changing nothing.
+func newPublishStatusCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show how this folder stands against what its org has published, without changing anything",
+		Long: "Show how this folder stands against what its org has published, without changing anything:\n" +
+			"  - what the org changed since this folder last pulled or published, which `anfra pull` would bring in,\n" +
+			"  - what this folder changed that the org doesn't have, which `anfra publish` would send,\n" +
+			"  - and the last pull's conflicts that aren't resolved yet.\n\n" +
+			"It compares files by their content's id, so it reads no file from the org.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			terminal := newAuthTerminal(cmd.InOrStdin(), cmd.ErrOrStderr())
+			var recoverOrg func(context.Context, cloudapi.Org, error) (cloudapi.Org, error)
+			if terminal.interactive {
+				recoverOrg = terminal.recoverPublishOrg
+			}
+			logger, closeLog := repoLog()
+			defer closeLog()
+			res, err := publish.Status(cmd.Context(), ".", publish.Env{
+				ErrOut:     io.Discard,
+				Logger:     logger,
+				Warn:       func(code, message string) { printWarning(cmd.ErrOrStderr(), code, message) },
+				OrgName:    storedOrgName(cmd.Context()),
+				Credential: (cliauth.Manager{}).Authorize,
+				RecoverOrg: recoverOrg,
+				UserAgent:  "anfra/" + meta.Version,
+			})
+			if err != nil {
+				return err
+			}
+			return writeResult(cmd, res)
+		},
+	}
+	markPrettyOutput(cmd)
+	resultIs[publish.StatusResult](cmd)
+	return cmd
 }

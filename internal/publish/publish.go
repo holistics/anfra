@@ -23,6 +23,7 @@ import (
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/publish/syncstate"
+	"github.com/holistics/anfra/internal/publish/workdir"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/repoformat"
@@ -98,11 +99,11 @@ func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := selectFiles(dir)
+	tree, err := readFolder(dir, verbPublish)
 	if err != nil {
 		return nil, err
 	}
-	tg := target{files: files, org: org, configured: configured}
+	tg := target{tree: tree, org: org, configured: configured}
 	if o.Check {
 		if configured {
 			// The one refusal known offline: the last pull isn't finished.
@@ -122,14 +123,14 @@ func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
 // target is what a publish sends, and where: its org, configured, or to
 // choose.
 type target struct {
-	files      []string
+	tree       workdir.Tree
 	org        cloudapi.Org
 	configured bool
 }
 
 // check is what a publish would send, and where.
 func check(tg target) CheckResult {
-	files, org, configured := tg.files, tg.org, tg.configured
+	files, org, configured := tg.tree.Paths(), tg.org, tg.configured
 	res := CheckResult{Files: files}
 	if !configured {
 		res.Message = fmt.Sprintf("Would publish %d files. No org is configured.", len(files))
@@ -143,7 +144,8 @@ func check(tg target) CheckResult {
 
 // publish publishes tg's files to its org, configured or chosen here.
 func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg target) (Result, error) {
-	files, org, configured := tg.files, tg.org, tg.configured
+	files, org, configured := tg.tree.Paths(), tg.org, tg.configured
+	oids := tg.tree.Files()
 	ask := env.Ask
 	p := cliui.NewPrinter(env.ErrOut)
 	selected := fmt.Sprintf("%d files of the repo", len(files))
@@ -171,16 +173,6 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		return Result{}, err
 	}
 
-	oids := make(map[string]string, len(files)) // path → blob id
-	sizes := make(map[string]int, len(files))
-	for _, f := range files {
-		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(f)))
-		if err != nil {
-			return Result{}, err
-		}
-		oids[f], sizes[f] = repoformat.BlobID(content), len(content)
-	}
-
 	status, err := client.Status(ctx)
 	if err != nil {
 		return Result{}, err
@@ -192,8 +184,8 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		return Result{}, clierr.Precondition("Not published, because the repo has %d files to publish, and %s takes at most %d.", len(files), org, limits.Files)
 	}
 	for _, f := range files {
-		if sizes[f] > limits.MaxFileBytes() {
-			return Result{}, clierr.Precondition("Not published, because %s is %s, and %s takes files of at most %s.", f, byteSize(sizes[f]), org, byteSize(limits.MaxFileBytes()))
+		if size := tg.tree.Size(f); size > limits.MaxFileBytes() {
+			return Result{}, clierr.Precondition("Not published, because %s is %s, and %s takes files of at most %s.", f, byteSize(size), org, byteSize(limits.MaxFileBytes()))
 		}
 	}
 	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, t: t, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
@@ -202,7 +194,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
 	// What the org has that this folder hasn't seen is never replaced unseen
 	// (docs/designs/publish.md, flow 6).
-	if err := sc.catchUp(ctx, client, org, status, oids); err != nil {
+	if err := sc.catchUp(ctx, client, org, status, tg.tree); err != nil {
 		return Result{}, err
 	}
 
@@ -215,7 +207,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		return Result{}, err
 	}
 	p.Gap()
-	up := uploader{client: client, dir: dir, byOID: byOID, sizes: sizes, limits: limits, progress: p}
+	up := uploader{client: client, dir: dir, byOID: byOID, tree: tg.tree, limits: limits, progress: p}
 	if err := up.upload(ctx, missing); err != nil {
 		return Result{}, err
 	}
@@ -279,7 +271,7 @@ type uploader struct {
 	client   *cloudapi.Client
 	dir      string
 	byOID    map[string]string // blob id → a file holding it
-	sizes    map[string]int    // file → its size
+	tree     workdir.Tree      // the folder's files, with their sizes
 	limits   cloudapi.Limits
 	progress *cliui.Printer
 }
@@ -293,7 +285,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 	c, dir, byOID, limits := u.client, u.dir, u.byOID, u.limits
 	total := 0
 	for _, oid := range oids {
-		total += u.sizes[byOID[oid]]
+		total += u.tree.Size(byOID[oid])
 	}
 	u.progress.Step("Uploading %d files (%s)…", len(oids), byteSize(total))
 	var batch [][]byte
@@ -368,12 +360,13 @@ func byteSize(n int) string {
 
 // verb is how a command's messages name it: "Not published", or "Not
 // pulled".
-type verb struct{ not, command, toOrg string }
+type verb struct{ not, command, toOrg, again string }
 
 var (
-	verbPublish = verb{not: "Not published", command: "anfra publish", toOrg: "to publish to"}
-	verbPull    = verb{not: "Not pulled", command: "anfra pull", toOrg: "to pull from"}
-	verbCheck   = verb{not: "Wouldn't publish", command: "anfra publish", toOrg: "to publish to"}
+	verbPublish = verb{not: "Not published", command: "anfra publish", toOrg: "to publish to", again: "publish again"}
+	verbPull    = verb{not: "Not pulled", command: "anfra pull", toOrg: "to pull from", again: "pull again"}
+	verbStatus  = verb{not: "Can't compare with the org", command: "anfra pull", toOrg: "to compare with", again: "run `anfra publish status` again"}
+	verbCheck   = verb{not: "Wouldn't publish", command: "anfra publish", toOrg: "to publish to", again: "check again"}
 )
 
 // destination is the org a command acts on, as the repo or its flags give it.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +19,7 @@ type Tree struct {
 	dir   string
 	files map[string]string // path → blob id
 	byID  map[string]string // blob id → a path holding it
+	sizes map[string]int    // path → size in bytes
 }
 
 // Read selects the folder's files (Files) and hashes each.
@@ -26,20 +28,26 @@ func Read(dir string) (Tree, error) {
 	if err != nil {
 		return Tree{}, err
 	}
-	t := Tree{dir: dir, files: make(map[string]string, len(paths)), byID: make(map[string]string, len(paths))}
+	t := Tree{dir: dir, files: make(map[string]string, len(paths)), byID: make(map[string]string, len(paths)), sizes: make(map[string]int, len(paths))}
 	for _, p := range paths {
 		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
 		if err != nil {
 			return Tree{}, err
 		}
 		id := repoformat.BlobID(content)
-		t.files[p], t.byID[id] = id, p
+		t.files[p], t.byID[id], t.sizes[p] = id, p, len(content)
 	}
 	return t, nil
 }
 
 // Files is the tree's paths and blob ids. Callers mustn't change it.
 func (t Tree) Files() map[string]string { return t.files }
+
+// Paths is the tree's paths, sorted.
+func (t Tree) Paths() []string { return slices.Sorted(maps.Keys(t.files)) }
+
+// Size is a file's size in bytes, when it was read.
+func (t Tree) Size(path string) int { return t.sizes[path] }
 
 // ReadBlob reads a file's content by blob id, from a path holding it. A file
 // changed since Read fails: the merge would otherwise work from content

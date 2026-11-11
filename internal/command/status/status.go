@@ -163,6 +163,9 @@ type SkillsResult struct {
 type StatusResult struct {
 	Repo   RepoStatus   `json:"repo"`
 	Server ServerStatus `json:"server"`
+	// Hints are left to the host: the CLI adds its own, such as where to see
+	// the repo's publishing.
+	Hints []string `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
 // RepoStatus is the repo the command runs on.

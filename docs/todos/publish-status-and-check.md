@@ -1,6 +1,6 @@
 # `publish status`, and the rest of `publish check`
 
-*Not built. Noted 2026-11-02.*
+*`publish status` built 2026-11-11. The rest of `publish check` not built. Noted 2026-11-02.*
 
 Two ways to ask about publishing without publishing, and the convention that tells them apart. `publish check` exists, doing the offline part of the preflight so far: the files, and where they'd go. It was `publish --list`, and before it `--dry-run`.
 
@@ -15,25 +15,7 @@ The first two are written down in [commands-and-api.md](../designs/commands-and-
 
 ## `anfra publish status`
 
-Where this repo publishes, what is published there, and whether it is this folder's files as they are now.
-
-```yaml
-destination: https://cloud.example.com/o/acme
-published:
-  revision: acme@8f3a…
-  by: alex@example.com
-  at: 2026-11-01T14:02:00Z
-  current: false        # this folder's files differ
-```
-
-- Once `anfra pull` exists ([publish](../designs/publish.md)), it also shows the sync state: the base, and a pull's unresolved conflicts, each with its kind and whether it's resolved yet. That's where a member or agent finds the conflicts again after the pull's output is gone.
-- One call, `repos.status`, and hashing the files the publish would take: no validation, no sidecars. An agent can ask it after every change.
-- Exits 0 whatever the state: it describes, it doesn't judge.
-- `auth status` also names the destination, as where a login is used. Both keep it, so each answer is whole.
-
-**`current` needs anfra-cloud.** A revision is `<repo>@<commit sha>` (`Repo.Revision` in anfra-cloud's `internal/bi/repos/repos.go`), and a commit covers its message, time and parent, so the CLI cannot compute it from the files. A git tree id it can: `repoformat.BlobID` is git's blob id, and a tree's id follows from its paths and blobs. So `repos.status` answers the published revision's tree id too, an additive field, and `current` compares it with the folder's.
-
-Until then, the CLI can record the tree id it published beside the revision it already records (`internal/publish/state.go`): `current` is known when the published revision is this folder's last, and `unknown` when someone else published since.
+Built, with pull: [publish](../designs/publish.md#seeing-the-conflicts-again). It compares the folder with the base and the published revision through `repos.list_files`, so it needs nothing more from the server, and it lists the last pull's unresolved conflicts. `anfra status` hints at it, a hint the CLI adds, since the core command has no CLI commands to point to over HTTP or MCP.
 
 ## The rest of `anfra publish check`
 

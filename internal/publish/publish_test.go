@@ -78,10 +78,11 @@ func TestSelectFiles(t *testing.T) {
 		"README.md":                       "readme",
 		"build/out.js":                    "b",
 	})
-	got, err := selectFiles(dir)
+	tree, err := readFolder(dir, verbPublish)
 	if err != nil {
 		t.Fatal(err)
 	}
+	got := tree.Paths()
 	want := []string{"apps/dash/data/rows.json", "apps/dash/index.html", "datasets/sales.aml", "models/orders.aml", "nested/deep/x.AML"}
 	if !slices.Equal(got, want) {
 		t.Errorf("files = %v\nwant    %v", got, want)
@@ -121,7 +122,7 @@ func TestSelectFilesRefusesSymlinks(t *testing.T) {
 	if err := os.Symlink("/etc/passwd", filepath.Join(dir, "notes.txt")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := selectFiles(dir)
+	_, err := readFolder(dir, verbPublish)
 	if err == nil || !strings.Contains(err.Error(), "models/link.aml (a symlink)") || strings.Contains(err.Error(), "notes.txt") {
 		t.Errorf("err = %v, want the repo's symlink refused by name, and only it", err)
 	}
