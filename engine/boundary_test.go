@@ -46,6 +46,9 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 		// How a server runs its background routines, anfra's and an embedding
 		// platform's alike (docs/designs/background-routines.md).
 		"shared/routine": true,
+		// The three-way merge of a repo's files, and of one file's text.
+		"shared/textmerge": true,
+		"shared/treemerge": true,
 	}
 
 	root, err := filepath.Abs("..")
@@ -91,7 +94,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoformat,requestid,routine} are meant to be. Move it under internal/, "+
+				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoformat,requestid,routine,textmerge,treemerge} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}
