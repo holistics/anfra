@@ -65,9 +65,9 @@ one member's work in progress. The usual practice, which anfra doesn't enforce:
 - Publishing happens from an up-to-date checkout of that branch. Colleagues' published work then
   came from it too, so publish goes through without `anfra pull`.
 
-When the user asks to publish from a git repo, check the branch with `git status`. If the folder
-isn't on the team's shared branch, or is behind it, tell the user before publishing, and let them
-decide. Publishing from another branch replaces the org's files with that branch's. Leave
+When the user asks to publish from a git repo, run `anfra publish check` first. If it warns about
+git, or `git status` says the branch is behind its remote, tell the user before publishing, and let
+them decide. Publishing from another branch replaces the org's files with that branch's. Leave
 switching, pulling and merging in git to the user, or do them with the user's consent.
 
 If publish stops with `pull_required`, someone published what isn't in the shared branch.

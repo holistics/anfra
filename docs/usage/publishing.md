@@ -168,10 +168,10 @@ result. A pull with conflicts exits 0, since its conflicts are its result.
 
 ### With git: merge first, then publish
 
-git is the shared copy, and the org publishes it. anfra doesn't read git and doesn't require any
-practice, but staying close to the usual one keeps the org in step with git: work on a branch,
-merge it through your usual review, then publish from `main`, up to date. Here, `main` stands for
-your team's shared branch, whatever its name:
+git is the shared copy, and the org publishes it. anfra doesn't require any practice, but staying
+close to the usual one keeps the org in step with git: work on a branch, merge it through your
+usual review, then publish from `main`, up to date. Here, `main` stands for your team's shared
+branch, whatever its name:
 
 ```sh
 git switch -c my-change
@@ -183,6 +183,9 @@ anfra publish
 
 That's all a git team needs. `anfra publish` goes through, because what colleagues published came
 from `main` too, and is already in your clone.
+
+`anfra publish` and `anfra publish check` warn when the folder is on a branch other than the
+remote's default, or has commits not pushed or files not committed. They never refuse for it.
 
 You need `anfra pull` only when `anfra publish` stops with `pull_required`: someone published
 something that isn't in `main`, such as from another branch, or without pushing. Bring it into

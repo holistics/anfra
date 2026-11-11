@@ -81,6 +81,9 @@ What a program should know becomes a warning document, with a code; what exists 
 | `token_not_revoked` | "Could not revoke the unused MotherDuck token X…": a live credential left behind, though only the interactive flow makes one |
 | `data_source_unreachable` | "Data source X is not reachable from the org's server, so it wasn't created": without a terminal to choose to create it anyway |
 | `data_source_not_created` | "Data source X was not created: …": the server refused it |
+| `git_non_default_branch` | "This folder is on the branch X, not main, the remote's default…": new, not a former warning |
+| `git_unpushed` | "This folder has N commits not pushed to origin/main…": new |
+| `git_uncommitted` | "N files publish sends have uncommitted changes: …": new |
 | `data_app_not_portable` | validate's Data App warnings: what in a Data App won't work in a host |
 
 Advice that was prose (`p.Note`: ask an admin, pass `--create-data-sources`, load a DuckDB file's data into a warehouse) is in the result's `hints`.
