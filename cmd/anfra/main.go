@@ -159,7 +159,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(serve, newOpenAPICmd())
 	root.AddCommand(update, updateCheck)
 	root.AddCommand(agent, skills, initCmd)
-	root.AddCommand(publish, newAuthCmd())
+	root.AddCommand(publish, newPullCmd(), newAuthCmd())
 	core := appCommands() // ping, query, … generated from the registry
 	root.AddCommand(core...)
 	addOutputFlags(root, core)

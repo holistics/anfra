@@ -138,54 +138,10 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if len(files) == 0 {
 		return Result{}, clierr.Precondition("Not published, because this folder has no .aml files, and no Data Apps under %s/. Run `anfra publish` in the repo's folder.", repoformat.AppsDir)
 	}
-	var err error
-	if !configured {
-		if env.SelectOrg == nil {
-			return Result{}, apperr.New(clierr.OrgNotSet, "Not published, because this repo has no org to publish to. Pass --set-org with the org's address (https://<server>/o/<org>), or run `anfra publish` in a terminal to choose one.")
-		}
-		org, err = env.SelectOrg(ctx)
-		if err != nil {
-			return Result{}, err
-		}
-		// Selection is supplied by the command; keep the same address validation
-		// as configured destinations before selecting credentials or writing config.
-		org, err = cloudapi.ParseOrg(org.String())
-		if err != nil {
-			return Result{}, err
-		}
-	}
-	authorize, err := env.Credential(ctx, org)
-	destinationChanged := false
-	if err != nil && configured && env.RecoverOrg != nil {
-		recovered, recoverErr := env.RecoverOrg(ctx, org, err)
-		if recoverErr != nil {
-			return Result{}, recoverErr
-		}
-		recovered, err = cloudapi.ParseOrg(recovered.String())
-		if err != nil {
-			return Result{}, err
-		}
-		destinationChanged = recovered != org
-		org = recovered
-		authorize, err = env.Credential(ctx, org)
-	}
+	org, client, err := connect(ctx, dir, destination{org, configured, o.SetOrg != ""}, env, p, verbPublish)
 	if err != nil {
 		return Result{}, err
 	}
-	if !configured || o.SetOrg != "" || destinationChanged {
-		if err := setOrg(dir, org); err != nil {
-			return Result{}, err
-		}
-		p.Success("This repo publishes to %s (%s).", org, repoconfig.Hint("org", "url"))
-	}
-	client := cloudapi.NewClient(org, cloudapi.ClientOptions{
-		Authorize: authorize,
-		UserAgent: env.UserAgent,
-		Logger:    env.Logger,
-		Waiting: func(_ string, wait time.Duration) {
-			p.Step("%s asked anfra to slow down. Trying again in %s…", org, wait.Round(time.Second))
-		},
-	})
 
 	p.Step("Validating…")
 	if err := env.Validate(ctx); err != nil {
@@ -397,4 +353,76 @@ func byteSize(n int) string {
 		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
 	}
 	return fmt.Sprintf("%d bytes", n)
+}
+
+// verb is how a command's messages name it: "Not published", or "Not
+// pulled".
+type verb struct{ not, command, toOrg string }
+
+var (
+	verbPublish = verb{not: "Not published", command: "anfra publish", toOrg: "to publish to"}
+	verbPull    = verb{not: "Not pulled", command: "anfra pull", toOrg: "to pull from"}
+)
+
+// destination is the org a command acts on, as the repo or its flags give it.
+type destination struct {
+	org         cloudapi.Org
+	configured  bool // the repo's org, or one --set-org gave
+	setOrgGiven bool // given by --set-org: saved as the repo's
+}
+
+// connect is a command's org and a client of it: the org configured, or one
+// chosen at a terminal, its login checked, recovered at a terminal when it
+// fails, and saved as the repo's org when it's new or changed.
+func connect(ctx context.Context, dir string, d destination, env Env, p *cliui.Printer, v verb) (cloudapi.Org, *cloudapi.Client, error) {
+	org, configured, setOrgGiven := d.org, d.configured, d.setOrgGiven
+	var err error
+	if !configured {
+		if env.SelectOrg == nil {
+			return org, nil, apperr.New(clierr.OrgNotSet, fmt.Sprintf("%s, because this repo has no org %s. Pass --set-org with the org's address (https://<server>/o/<org>), or run `%s` in a terminal to choose one.", v.not, v.toOrg, v.command))
+		}
+		org, err = env.SelectOrg(ctx)
+		if err != nil {
+			return org, nil, err
+		}
+		// Selection is supplied by the command; keep the same address validation
+		// as configured destinations before selecting credentials or writing config.
+		org, err = cloudapi.ParseOrg(org.String())
+		if err != nil {
+			return org, nil, err
+		}
+	}
+	authorize, err := env.Credential(ctx, org)
+	destinationChanged := false
+	if err != nil && configured && env.RecoverOrg != nil {
+		recovered, recoverErr := env.RecoverOrg(ctx, org, err)
+		if recoverErr != nil {
+			return org, nil, recoverErr
+		}
+		recovered, err = cloudapi.ParseOrg(recovered.String())
+		if err != nil {
+			return org, nil, err
+		}
+		destinationChanged = recovered != org
+		org = recovered
+		authorize, err = env.Credential(ctx, org)
+	}
+	if err != nil {
+		return org, nil, err
+	}
+	if !configured || setOrgGiven || destinationChanged {
+		if err := setOrg(dir, org); err != nil {
+			return org, nil, err
+		}
+		p.Success("This repo publishes to %s (%s).", org, repoconfig.Hint("org", "url"))
+	}
+	client := cloudapi.NewClient(org, cloudapi.ClientOptions{
+		Authorize: authorize,
+		UserAgent: env.UserAgent,
+		Logger:    env.Logger,
+		Waiting: func(_ string, wait time.Duration) {
+			p.Step("%s asked anfra to slow down. anfra will try again in %s…", org, wait.Round(time.Second))
+		},
+	})
+	return org, client, nil
 }

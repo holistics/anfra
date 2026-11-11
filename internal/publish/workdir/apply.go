@@ -122,11 +122,12 @@ func Restore(dir, backupDir string, before map[string]string) error {
 		return err
 	}
 	defer repo.Close()
-	backups, err := os.OpenRoot(backupDir)
-	if err != nil {
-		return fmt.Errorf("the pull's backup is missing (%s), so nothing can be put back: %w", backupDir, err)
-	}
-	defer backups.Close()
+	var backups *os.Root // opened when a file needs it: a pull stopped before backing anything up has none
+	defer func() {
+		if backups != nil {
+			_ = backups.Close()
+		}
+	}()
 	for _, p := range slices.Sorted(maps.Keys(before)) {
 		if err := checkPath(repo, p); err != nil {
 			return err
@@ -138,6 +139,11 @@ func Restore(dir, backupDir string, before map[string]string) error {
 				return err
 			}
 			continue
+		}
+		if backups == nil {
+			if backups, err = os.OpenRoot(backupDir); err != nil {
+				return fmt.Errorf("the pull's backup is missing (%s), so %s can't be put back: %w", backupDir, p, err)
+			}
 		}
 		content, err := backups.ReadFile(id)
 		if err != nil {

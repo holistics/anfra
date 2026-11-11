@@ -54,6 +54,16 @@ var (
 	// no coding agent, a file anfra won't write through, a port taken.
 	PreconditionFailed = apperr.DefinePublicCode(NS, "precondition_failed", apperr.User, "The command can't run as things are.")
 
+	// ConflictsUnresolved: a pull left conflicts that aren't resolved yet, so
+	// the folder can't pull again or publish. Its details name the files. A
+	// program resolves them (editing them, or anfra pull --take), or undoes the
+	// pull (anfra pull --abort).
+	ConflictsUnresolved = apperr.DefinePublicCodeWith[UnresolvedFiles](NS, "conflicts_unresolved", apperr.User, "A pull's conflicts aren't resolved yet.")
+
+	// PullInterrupted: a pull stopped partway through writing files. A program
+	// runs anfra pull --abort, which puts them back, then pulls again.
+	PullInterrupted = apperr.DefinePublicCode(NS, "pull_interrupted", apperr.User, "The last pull stopped partway.")
+
 	// Unavailable: a service anfra needs didn't answer, or not as it should:
 	// anfra-cloud's code, with which service. A program retries later.
 	Unavailable = apperr.DefinePublicCodeWith[Service](NS, "unavailable", apperr.Server, "A service anfra needs is unavailable. Try again shortly.")
@@ -95,4 +105,10 @@ func Unreachable(service string, cause error) error {
 // Unreachablef is service failing, as format says, cause kept for the log.
 func Unreachablef(service string, cause error, format string, args ...any) error {
 	return apperr.EncapsulateWith(cause, Unavailable, fmt.Sprintf(format, args...), Service{Service: service})
+}
+
+// UnresolvedFiles are the details of conflicts_unresolved: the files that
+// still have conflicts.
+type UnresolvedFiles struct {
+	Paths []string `json:"paths" doc:"the files that still have conflicts"`
 }
