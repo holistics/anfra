@@ -308,7 +308,7 @@ A change to a Cloud component's look is a change to its class here, in the same 
 
 ### Surfaces and status
 
-- **Current nav item**: on the paper, a white chip with a violet icon; in a nav inside the panel (tabs, settings), `background-active` and weight 500. Both carry `aria-current="page"` or `aria-selected`.
+- **Current nav item**: in the sidebar and in a nav inside the panel (tabs, settings) alike, `background-active`, `text-default` and weight 500, with no ring and no violet icon. Each carries `aria-current="page"` or `aria-selected`.
 - **Alerts**: a tinted container with an icon and the body role.
 - **A control keeps its edge on any ground**: a control's fill is translucent (`background-fill-*`), never a surface color, so a tab list or a secondary button in a well (`background-secondary-default`) still stands off it.
 - **Badges and status pills**: caption at 500, a label or an icon always beside the color.

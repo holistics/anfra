@@ -14,7 +14,6 @@ import COMPONENTS from '@holistics/anfra-design/components.css?raw';
 export const FALLBACKS: Readonly<Record<string, string>> = {
   '--anfra-color-background-default': 'var(--anfra-color-bg)',
   '--anfra-color-background-raised-default': 'var(--anfra-color-bg)',
-  '--anfra-color-background-current-default': 'var(--anfra-color-bg)',
   '--anfra-color-background-secondary-default': 'var(--anfra-color-bg-sunken)',
   '--anfra-color-background-hover': 'var(--anfra-color-hover)',
   '--anfra-color-background-active': 'var(--anfra-color-active)',
@@ -47,7 +46,6 @@ export const FALLBACKS: Readonly<Record<string, string>> = {
   '--anfra-color-text-warning-default': 'var(--anfra-color-warning)',
   '--anfra-color-text-success-default': 'var(--anfra-color-success)',
   '--anfra-color-border-default': 'var(--anfra-color-border)',
-  '--anfra-color-border-weak': 'var(--anfra-color-border)',
   '--anfra-color-border-hover': 'var(--anfra-color-muted)',
   '--anfra-color-border-disabled': 'var(--anfra-color-border)',
   '--anfra-color-border-highlight-strong': 'var(--anfra-color-accent)',
@@ -58,7 +56,6 @@ export const FALLBACKS: Readonly<Record<string, string>> = {
   '--anfra-color-focus-ring-default': 'var(--anfra-color-accent)',
   '--anfra-color-icon-weak': 'var(--anfra-color-muted)',
   '--anfra-color-icon-disabled': 'var(--anfra-color-muted)',
-  '--anfra-color-icon-highlight-default': 'var(--anfra-color-accent)',
   '--anfra-e1': '0 0 0 1px var(--anfra-color-border), 0 1px 2px oklch(0 0 0 / 0.06)',
   '--anfra-e2': '0 0 0 1px var(--anfra-color-border), 0 12px 32px -12px oklch(0 0 0 / 0.3)',
   '--anfra-ease-out': 'cubic-bezier(0.22, 1, 0.36, 1)',

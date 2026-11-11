@@ -1,17 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { mount, unmountAll } from '@/test/mount';
-import type { CatalogEntry } from '@/lib/catalog';
 import type { AmlProblem } from '@/lib/server';
 import {
-  AppHeader, AppSidebar, EmptyState, InlineCode, LoadingBar, RepoProblems, Scrim, ShortcutKeys,
+  AppHeader, EmptyState, InlineCode, LoadingBar, RepoProblems, Scrim, ShortcutKeys,
 } from '.';
 
 afterEach(unmountAll);
-
-const app = (path: string): CatalogEntry => ({
-  kind: 'app', path, name: path.split('/').pop()!, label: path.split('/').pop()!,
-} as CatalogEntry);
 
 describe('Scrim', () => {
   it('covers the window behind what floats, and takes the click that closes it', async () => {
@@ -27,7 +22,7 @@ describe('Scrim', () => {
 describe('EmptyState', () => {
   it('says why there is no Data App, beside the app icon', async () => {
     const { host } = await mount(EmptyState, {}, () => 'Pick a Data App on the left.');
-    expect(host.querySelector('svg')).not.toBeNull();
+    expect(host.querySelector('svg')!.getAttribute('class')).toContain('lucide-app-window-mac');
     expect(host.textContent).toContain('Pick a Data App on the left.');
   });
 });
@@ -78,52 +73,6 @@ describe('RepoProblems', () => {
   });
 });
 
-describe('AppSidebar', () => {
-  const props = {
-    open: true,
-    narrow: false,
-    repoName: 'shop',
-    entries: [app('sales'), app('churn')],
-    loaded: true,
-    collapsed: new Set<string>(),
-    health: 'up',
-    version: { current: '0.16.0' },
-    theme: 'light',
-  };
-
-  it('names the repo, and says which anfra is running', async () => {
-    const { host } = await mount(AppSidebar, props);
-    expect(host.querySelector('[data-testid="brand"]')!.textContent).toBe('shop');
-    const status = host.querySelector('[data-testid="anfra-status"]')!;
-    expect(status.textContent).toContain('anfra v0.16.0');
-    expect(status.getAttribute('data-tone')).toBe('success');
-  });
-
-  it('lists every Data App', async () => {
-    const { host } = await mount(AppSidebar, props);
-    expect([...host.querySelectorAll('[data-app]')].map((row) => row.getAttribute('data-app'))).toEqual(['sales', 'churn']);
-  });
-
-  it('marks the open Data App as the current page', async () => {
-    const { host } = await mount(AppSidebar, { ...props, selected: 'sales' });
-    const row = host.querySelector('[data-app="sales"]')!;
-    expect(row.getAttribute('aria-current')).toBe('page');
-    expect(row.hasAttribute('data-active')).toBe(true);
-  });
-
-  it('searches in the palette, and asks for the other theme', async () => {
-    const onOpenPalette = vi.fn();
-    const onToggleTheme = vi.fn();
-    const { host } = await mount(AppSidebar, { ...props, onOpenPalette, onToggleTheme });
-    const search = host.querySelector<HTMLButtonElement>('[data-testid="palette-open"]')!;
-    expect(search.getAttribute('aria-haspopup')).toBe('dialog');
-    search.click();
-    host.querySelector<HTMLButtonElement>('[data-testid="theme-toggle"]')!.click();
-    expect(onOpenPalette).toHaveBeenCalledOnce();
-    expect(onToggleTheme).toHaveBeenCalledOnce();
-  });
-});
-
 describe('ShortcutKeys', () => {
   it('draws a combination as one key each', async () => {
     const { host } = await mount(ShortcutKeys, { combo: 'Alt+Shift+I' });
@@ -136,7 +85,6 @@ describe('ShortcutKeys', () => {
 describe('AppHeader', () => {
   const inspect = { id: 'inspect.toggle', title: 'Inspect', icon: 'inspect', run: { call: 'inspect.toggle' } };
   const props = {
-    sidebarOpen: true,
     hasApp: true,
     title: 'Sales',
     crumbs: [{ path: 'finance', name: 'finance' }],
@@ -147,10 +95,11 @@ describe('AppHeader', () => {
     commandState: () => ({ pressed: true }),
   };
 
-  it('shows the open Data App and the folders it is in', async () => {
+  it('shows the open Data App by its name only, and the folders it is in', async () => {
     const onRevealFolder = vi.fn();
     const { host } = await mount(AppHeader, { ...props, onRevealFolder });
     expect(host.querySelector('[data-testid="viewer-title"]')!.textContent).toBe('Sales');
+    expect(host.querySelector('header > svg')).toBeNull();
     host.querySelector<HTMLButtonElement>('[data-crumb="finance"]')!.click();
     expect(onRevealFolder).toHaveBeenCalledWith('finance');
   });

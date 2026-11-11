@@ -3,25 +3,31 @@ import {
   computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch,
 } from 'vue';
 import {
-  LayoutDashboard, Moon, PanelLeft, RefreshCw, Sun,
+  Moon, PanelLeft, RefreshCw, Sun,
 } from '@lucide/vue';
 import CommandPalette, { type PaletteEntry } from '@/components/apps/CommandPalette.vue';
 import DataAppFrame from '@/components/apps/DataAppFrame.vue';
 import PluginPanel from '@/components/apps/PluginPanel.vue';
 import {
-  AppHeader, AppSidebar, EmptyState, InlineCode, Scrim,
+  AppHeader, AppSidebar, EmptyState, InlineCode, Scrim, SidebarPanel, SidebarPeek, SidebarResizer,
 } from '@/components/shell';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { designTheme } from '@holistics/anfra-sdk/common';
 import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
+import { AppIcon } from '@/lib/appIcon';
 import {
   allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from '@/lib/catalog';
 import { layerOpen } from '@/lib/layers';
 import { commandIcon, overflowMenus } from '@/lib/pluginUI';
 import * as server from '@/lib/server';
+import {
+  isSidebarKey, rememberOpen, rememberWidth, SIDEBAR_SHORTCUT, storedOpen, storedWidth,
+} from '@/lib/sidebar';
+import { useTheme } from '@/lib/theme';
 
 const entries = ref<CatalogEntry[]>([]);
 const loaded = ref(false);
@@ -122,32 +128,40 @@ function toggleFolder (path: string): void {
 
 const narrowQuery = window.matchMedia('(max-width: 800px)');
 const narrow = ref(narrowQuery.matches);
-const sidebarOpen = ref(!narrow.value);
+// Wide, the sidebar is as the reader left it, at the width they dragged it to; narrow, it floats
+// over the viewer and starts closed (lib/sidebar.ts).
+const sidebarOpen = ref(!narrow.value && storedOpen());
 function onNarrowChange (): void {
   narrow.value = narrowQuery.matches;
-  sidebarOpen.value = !narrow.value;
+  sidebarOpen.value = !narrow.value && storedOpen();
 }
+function setSidebarOpen (open: boolean): void {
+  sidebarOpen.value = open;
+  if (!narrow.value) rememberOpen(open);
+}
+const toggleSidebar = (): void => setSidebarOpen(!sidebarOpen.value);
+const sidebarWidth = ref(storedWidth());
+// From the press on the sidebar's edge to the release no frame takes the pointer; through a drag
+// the sidebar follows the pointer, without easing.
+const sidebarDrag = ref<'pressing' | 'resizing'>();
+function releaseSidebarEdge (width?: number): void {
+  if (width !== undefined) rememberWidth(width);
+  sidebarDrag.value = undefined;
+}
+function resizeSidebar (width: number): void {
+  sidebarDrag.value = 'resizing';
+  sidebarWidth.value = width;
+}
+// The edge goes when the sidebar closes or the window turns narrow, with its release: a press it
+// leaves held would keep the Data App's frame from the pointer.
+watch([sidebarOpen, narrow], () => { sidebarDrag.value = undefined; });
 
-const THEME_KEY = 'anfra-appserve:theme';
-function systemTheme (): 'light' | 'dark' {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-function storedTheme (): 'light' | 'dark' {
-  try {
-    const saved = window.localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark') return saved;
-  } catch { /* storage unavailable: follow the system */ }
-  return systemTheme();
-}
-const theme = ref(storedTheme());
-watch(theme, (value) => { document.documentElement.dataset.theme = value; }, { immediate: true });
+// Light, Dark or System, which follows the device (lib/theme.ts).
+const { choice: themeChoice, theme, setTheme } = useTheme();
 // The plugins' UI follows the shell: its scheme, and anfra-design's tokens as the SDK's.
 const pluginTheme = computed<ThemeInput>(() => designTheme(theme.value, getComputedStyle(document.documentElement)));
 function toggleTheme (): void {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark';
-  try {
-    window.localStorage.setItem(THEME_KEY, theme.value);
-  } catch { /* the choice just doesn't persist */ }
+  setTheme(theme.value === 'dark' ? 'light' : 'dark');
 }
 
 // The host runtime and the open Data App's mount, for the plugins' commands and its panel. The
@@ -266,6 +280,13 @@ async function loadCatalog (): Promise<void> {
   }
 }
 
+// Try again after a failed read: the sidebar loads afresh, its skeleton in place of the error.
+function retryCatalog (): void {
+  loadError.value = undefined;
+  loaded.value = false;
+  void loadCatalog();
+}
+
 function select (path: string): void {
   window.history.pushState(null, '', urlFor(path));
   selectedPath.value = pathFromLocation(window.location.pathname);
@@ -278,7 +299,7 @@ function reload (): void {
 
 // Breadcrumb folders: open the sidebar, expand the folder and bring it into view.
 async function revealFolder (path: string): Promise<void> {
-  sidebarOpen.value = true;
+  setSidebarOpen(true);
   const next = new Set(collapsed.value);
   next.delete(path);
   setCollapsed(next);
@@ -294,6 +315,11 @@ const title = computed(() => selected.value?.label ?? selectedPath.value?.split(
 
 watch(() => (selected.value ? `${selected.value.path}#${revision.value}` : ''), (key) => {
   loading.value = key !== '';
+}, { immediate: true });
+// The tree opens down to the open Data App, however it was opened: the tree, the palette, a link.
+watch(() => selected.value?.path, (path) => {
+  const closed = path ? folderPaths(path).filter((folder) => collapsed.value.has(folder)) : [];
+  if (closed.length) setCollapsed(new Set([...collapsed.value].filter((folder) => !closed.includes(folder))));
 }, { immediate: true });
 watch(selectedPath, () => {
   keptPanel = undefined;
@@ -314,10 +340,12 @@ const paletteEntries = computed<PaletteEntry[]>(() => {
   return [
     ...plugins,
     { id: 'reload', title: 'Reload Data App', group: 'Data App', icon: RefreshCw, disabled: noApp },
-    { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: PanelLeft },
+    {
+      id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: PanelLeft, shortcut: SIDEBAR_SHORTCUT,
+    },
     { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View', icon: theme.value === 'dark' ? Sun : Moon },
     ...allApps(entries.value).map((entry): PaletteEntry => ({
-      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: LayoutDashboard, disabled: entry.path === selected.value?.path ? 'Already open' : undefined,
+      id: `app:${entry.path}`, title: entry.label, group: 'Open a Data App', icon: AppIcon, disabled: entry.path === selected.value?.path ? 'Already open' : undefined,
     })),
   ];
 });
@@ -330,7 +358,7 @@ function runPaletteEntry (id: string): void {
   } else if (id === 'reload') {
     reload();
   } else if (id === 'sidebar') {
-    sidebarOpen.value = !sidebarOpen.value;
+    toggleSidebar();
   } else if (id === 'theme') {
     toggleTheme();
   }
@@ -340,6 +368,11 @@ function onKeydown (event: KeyboardEvent): void {
   if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
     event.preventDefault();
     paletteOpen.value = !paletteOpen.value;
+    return;
+  }
+  if (isSidebarKey(event)) {
+    event.preventDefault();
+    toggleSidebar();
     return;
   }
   if (paletteOpen.value) return;
@@ -357,6 +390,25 @@ function onKeydown (event: KeyboardEvent): void {
     else app.value?.panel.hide();
   }
 }
+
+// What the sidebar shows, and what its picks do: the same in the sidebar and in its peek.
+const sidebarPanel = computed(() => ({
+  repoName: repoName.value,
+  entries: entries.value,
+  loaded: loaded.value,
+  loadError: loadError.value,
+  selected: selected.value?.path,
+  collapsed: collapsed.value,
+  health: health.value,
+  version: version.value,
+  themeChoice: themeChoice.value,
+  theme: theme.value,
+  onSelect: select,
+  onToggle: toggleFolder,
+  onOpenPalette: () => { paletteOpen.value = true; },
+  onSetTheme: setTheme,
+  onRetry: retryCatalog,
+}));
 
 function onPopState (): void {
   selectedPath.value = pathFromLocation(window.location.pathname);
@@ -407,111 +459,116 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- The sidebar beside the viewer, 256px; closed, it slides to nothing. Narrow, the sidebar and the
-       panel float over the viewer instead, over a scrim. -->
-  <div
-    class="grid h-screen transition-[grid-template-columns] duration-180 ease-[ease]"
-    :class="narrow ? 'grid-cols-[minmax(0,1fr)]' : sidebarOpen ? 'grid-cols-[256px_minmax(0,1fr)]' : 'grid-cols-[0_minmax(0,1fr)]'"
-  >
-    <Scrim v-if="narrow && sidebarOpen" @click="sidebarOpen = false" />
-    <AppSidebar
-      :open="sidebarOpen"
-      :narrow="narrow"
-      :repo-name="repoName"
-      :entries="entries"
-      :loaded="loaded"
-      :load-error="loadError"
-      :selected="selected?.path"
-      :collapsed="collapsed"
-      :health="health"
-      :version="version"
-      :theme="theme"
-      @select="select"
-      @toggle="toggleFolder"
-      @open-palette="paletteOpen = true"
-      @toggle-theme="toggleTheme"
-    />
-
-    <main
-      class="relative my-2 mr-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-default bg-background"
-      :class="narrow || !sidebarOpen ? 'ml-2' : 'ml-0'"
-      data-testid="viewer"
+  <!-- The sidebar beside the viewer, at the width the reader dragged it to; closed, it slides to
+       nothing. Narrow, the sidebar and the panel float over the viewer instead, over a scrim. -->
+  <TooltipProvider :delay-duration="0">
+    <div
+      class="grid h-screen transition-[grid-template-columns] duration-180 ease-[ease] data-resizing:transition-none"
+      :style="{
+        '--sidebar-width': `${sidebarWidth}px`,
+        gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : `${sidebarOpen ? sidebarWidth : 0}px minmax(0, 1fr)`,
+      }"
+      :data-pressing="sidebarDrag ? '' : undefined"
+      :data-resizing="sidebarDrag === 'resizing' ? '' : undefined"
     >
-      <AppHeader
-        :sidebar-open="sidebarOpen"
-        :has-app="!!selected"
-        :title="title"
-        :crumbs="crumbs"
-        :problems="problems"
-        :loading="loading"
-        :commands="toolbarCommands"
-        :menus="menus"
-        :command-state="commandState"
-        @toggle-sidebar="sidebarOpen = !sidebarOpen"
-        @reveal-folder="revealFolder"
-        @reload="reload"
-        @run="runCommand"
+      <Scrim v-if="narrow && sidebarOpen" @click="setSidebarOpen(false)" />
+      <AppSidebar :open="sidebarOpen" :narrow="narrow">
+        <SidebarPanel v-bind="sidebarPanel" />
+      </AppSidebar>
+      <SidebarResizer
+        v-if="!narrow && sidebarOpen"
+        :width="sidebarWidth"
+        @press="sidebarDrag = 'pressing'"
+        @resize="resizeSidebar"
+        @release="releaseSidebarEdge"
+        @collapse="setSidebarOpen(false)"
       />
-      <div
-        ref="viewerBody"
-        class="relative flex min-h-0 flex-1"
-        :class="dragging && 'cursor-col-resize select-none'"
-        :data-pressing="dragging || undefined"
+
+      <main
+        class="relative my-2 mr-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-default bg-background"
+        :class="narrow || !sidebarOpen ? 'ml-2' : 'ml-0'"
+        data-testid="viewer"
       >
-        <p
-          v-if="toast"
-          class="fixed right-4 bottom-4 z-20 max-w-[min(480px,90vw)] rounded-[8px] border px-3.5 py-2.5 shadow-e2"
-          :class="toast.error ? 'border-transparent bg-danger-secondary-default text-danger-default' : 'border-default bg-background'"
-          :role="toast.error ? 'alert' : 'status'"
-          data-testid="render-toast"
+        <AppHeader
+          :has-app="!!selected"
+          :title="title"
+          :crumbs="crumbs"
+          :problems="problems"
+          :loading="loading"
+          :commands="toolbarCommands"
+          :menus="menus"
+          :command-state="commandState"
+          @reveal-folder="revealFolder"
+          @reload="reload"
+          @run="runCommand"
         >
-          {{ toast.text }}
-        </p>
-        <p v-if="selected && frameError" class="m-2 text-danger-default" role="alert" data-testid="frame-error">{{ frameError }}</p>
-        <DataAppFrame
-          v-else-if="selected && datasets && reader"
-          :key="`${selected.path}#${revision}`"
-          :path="selected.path"
-          :datasets="datasets"
-          :reader="reader"
-          :allow-origins="allowOrigins"
-          :app-logs="appLogs"
-          :theme="pluginTheme"
-          @load="loading = false"
-          @mounted="onAppMounted"
-          @unmounted="onAppUnmounted"
-          @error="frameError = $event"
-        />
-        <EmptyState v-else-if="selectedPath && loaded" data-testid="not-found">
-          No Data App at <InlineCode>{{ selectedPath }}</InlineCode>.
-        </EmptyState>
-        <EmptyState v-else>Pick a Data App on the left.</EmptyState>
-        <template v-if="panelOpen && selected && app && runtime">
-          <Scrim v-if="narrow" @click="app.panel.hide()" />
-          <div
-            class="flex shrink-0 border-l border-default bg-background"
-            :class="narrow ? 'fixed inset-y-0 right-0 z-20 w-[min(380px,100vw)] shadow-e2' : 'relative'"
-            :style="narrow ? undefined : { width: `${inspectWidth}px` }"
+          <template #toggle>
+            <SidebarPeek :open="sidebarOpen" :narrow="narrow" :width="sidebarWidth" @toggle-sidebar="toggleSidebar">
+              <SidebarPanel v-bind="sidebarPanel" />
+            </SidebarPeek>
+          </template>
+        </AppHeader>
+        <div
+          ref="viewerBody"
+          class="relative flex min-h-0 flex-1"
+          :class="dragging && 'cursor-col-resize select-none'"
+          :data-pressing="dragging || undefined"
+        >
+          <p
+            v-if="toast"
+            class="fixed right-4 bottom-4 z-20 max-w-[min(480px,90vw)] rounded-[8px] border px-3.5 py-2.5 shadow-e2"
+            :class="toast.error ? 'border-transparent bg-danger-secondary-default text-danger-default' : 'border-default bg-background'"
+            :role="toast.error ? 'alert' : 'status'"
+            data-testid="render-toast"
           >
+            {{ toast.text }}
+          </p>
+          <p v-if="selected && frameError" class="m-2 text-danger-default" role="alert" data-testid="frame-error">{{ frameError }}</p>
+          <DataAppFrame
+            v-else-if="selected && datasets && reader"
+            :key="`${selected.path}#${revision}`"
+            :path="selected.path"
+            :datasets="datasets"
+            :reader="reader"
+            :allow-origins="allowOrigins"
+            :app-logs="appLogs"
+            :theme="pluginTheme"
+            @load="loading = false"
+            @mounted="onAppMounted"
+            @unmounted="onAppUnmounted"
+            @error="frameError = $event"
+          />
+          <EmptyState v-else-if="selectedPath && loaded" data-testid="not-found">
+            No Data App at <InlineCode>{{ selectedPath }}</InlineCode>.
+          </EmptyState>
+          <EmptyState v-else>Pick a Data App on the left.</EmptyState>
+          <template v-if="panelOpen && selected && app && runtime">
+            <Scrim v-if="narrow" @click="app.panel.hide()" />
             <div
-              v-if="!narrow"
-              class="absolute inset-y-0 -left-[3px] z-2 w-1.5 cursor-col-resize touch-none hover:bg-interactive-highlight-default"
-              role="separator"
-              aria-orientation="vertical"
-              @pointerdown.prevent="startResize"
-            />
-            <PluginPanel
-              :panel="app.panel"
-              :tabs="runtime.tabs"
-              :commands="panelCommands"
-              :command-state="commandState"
-              :version="panelVersion"
-              @run="runCommand"
-            />
-          </div>
-        </template>
-      </div>
-    </main>
-    <CommandPalette v-model:open="paletteOpen" :entries="paletteEntries" @run="runPaletteEntry" />
-  </div>
+              class="flex shrink-0 border-l border-default bg-background"
+              :class="narrow ? 'fixed inset-y-0 right-0 z-20 w-[min(380px,100vw)] shadow-e2' : 'relative'"
+              :style="narrow ? undefined : { width: `${inspectWidth}px` }"
+            >
+              <div
+                v-if="!narrow"
+                class="absolute inset-y-0 -left-[3px] z-2 w-1.5 cursor-col-resize touch-none hover:bg-interactive-highlight-default"
+                role="separator"
+                aria-orientation="vertical"
+                @pointerdown.prevent="startResize"
+              />
+              <PluginPanel
+                :panel="app.panel"
+                :tabs="runtime.tabs"
+                :commands="panelCommands"
+                :command-state="commandState"
+                :version="panelVersion"
+                @run="runCommand"
+              />
+            </div>
+          </template>
+        </div>
+      </main>
+      <CommandPalette v-model:open="paletteOpen" :entries="paletteEntries" @run="runPaletteEntry" />
+    </div>
+  </TooltipProvider>
 </template>
