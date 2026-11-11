@@ -317,65 +317,93 @@ The CLI relies on these ops of the org's API, which the server defines:
 
 ## What members see
 
-Conflict kinds are `treemerge`'s codes, in `--yaml` and `--json`, with ours as local and theirs as the org. People read them as:
+Pull's result follows the pretty-output conventions ([cli-pretty](cli-pretty.md)): `--yaml` and `--json` for agents and scripts, and the same fields drawn for a person at a terminal.
 
-| Kind | Shown as |
-|---|---|
-| `content` | changed here and on the org |
-| `add_add` | added here and on the org |
-| `modify_delete` | changed here, deleted on the org |
-| `delete_modify` | deleted here, changed on the org |
-| `binary` | a binary file changed here and on the org |
-| `rename_rename` | renamed differently here and on the org |
-| `rename_delete` | renamed on one side, deleted on the other |
-| `file_folder` | a file on one side, a folder on the other |
-| `path_collision` | two paths that are one file on this system |
+- **`conflicts`** groups the conflicts by kind, each with the paths it covers and a message saying what happened, naming its files. A kind is `treemerge`'s code, with ours as local and theirs as the org, so a program can branch on it.
+- **`how_to_resolve`** says, once per kind present, how to resolve that kind. The same key leads to both: `conflicts.content` and `how_to_resolve.content`.
+- **`hints`** say what's true of every conflict: `--take` can resolve any, then validate and publish, or undo the pull.
 
-A clean pull:
+A pull with conflicts, at a terminal:
 
 ```
-$ anfra pull
-✓ Pulled acme@4c1d07e from https://cloud.example.com/o/acme, published by bob@acme.com on 2026-11-08 16:20.
-  updated  models/orders.aml
-  added    models/refunds.aml
-  deleted  apps/old-report.html
-  merged   datasets/sales.aml
-Run `anfra validate` to check the merged repo, then `anfra publish`.
+Pulled the changes bob@acme.com published on 2026-11-08 at 16:20 (acme@4c1d07e). 3 conflicts, of 3 kinds, to resolve.
+
+Revision:      acme@4c1d07e
+Published by:  bob@acme.com
+Published at:  yesterday
+Base:          acme@8f3a91c
+
+Changes:
+  PATH             CHANGE
+  models/new.aml   added
+
+Conflicts:
+  binary:         You and the org both changed apps/logo.png, a binary file.
+  content:        You and the org changed the same lines of models/a.aml.
+  modify_delete:  You changed models/old.aml, and the org deleted it.
+
+How to resolve:
+  binary:         These files can't hold conflict markers. Keep one version with --take.
+  content:        Edit each file to keep the right changes, and remove the conflict markers.
+  modify_delete:  Delete the file to keep the deletion, or remove the conflict markers to keep your version.
+
+Hints:
+  To keep one version of whole files, run `anfra pull --take local <path>...` for yours, or `--take org <path>...` for the org's. It can resolve any conflict.
+  Once every conflict is resolved, run `anfra validate`, then `anfra publish`.
+  To undo this pull, run `anfra pull --abort`.
 ```
 
-A pull with conflicts:
-
-```
-$ anfra pull
-! Pulled acme@4c1d07e from https://cloud.example.com/o/acme, published by bob@acme.com on 2026-11-08 16:20, with 2 conflicts.
-  updated  models/orders.aml
-  merged   datasets/customers.aml
-Resolve these files, then run `anfra publish`:
-  datasets/sales.aml   changed here and on the org. Edit it to keep the right changes, and remove the conflict markers.
-  models/legacy.aml    changed here, deleted on the org. Delete it, or remove the conflict markers to keep it.
-Or pick a side for a whole file with `anfra pull --take org|local <path>`. To undo this pull, run `anfra pull --abort`.
-```
-
-The same with `--yaml`, for agents and scripts:
+On a terminal too narrow for a section's lines, each value goes under its label instead. The same with `--yaml`:
 
 ```yaml
-message: Pulled acme@4c1d07e from https://cloud.example.com/o/acme, with 2 conflicts to resolve.
-org: {url: https://cloud.example.com/o/acme}
+message: Pulled the changes bob@acme.com published on 2026-11-08 at 16:20 (acme@4c1d07e). 3 conflicts, of 3 kinds, to resolve.
+org: {url: https://cloud.example.com/o/acme, name: Acme}
 revision: acme@4c1d07e
 published_by: bob@acme.com
 published_at: 2026-11-08T16:20:00Z
+base: acme@8f3a91c
 changes:
-  - {path: models/orders.aml, change: updated}
-  - {path: datasets/customers.aml, change: merged}
+  - {path: models/new.aml, change: added}
 conflicts:
-  - {paths: [datasets/sales.aml], kind: content}
-  - {paths: [models/legacy.aml], kind: modify_delete}
+  binary:
+    - {paths: [apps/logo.png], message: "You and the org both changed apps/logo.png, a binary file."}
+  content:
+    - {paths: [models/a.aml], message: You and the org changed the same lines of models/a.aml.}
+  modify_delete:
+    - {paths: [models/old.aml], message: "You changed models/old.aml, and the org deleted it."}
+how_to_resolve:
+  binary: These files can't hold conflict markers. Keep one version with --take.
+  content: Edit each file to keep the right changes, and remove the conflict markers.
+  modify_delete: Delete the file to keep the deletion, or remove the conflict markers to keep your version.
 hints:
-  - Resolve each conflict, then run `anfra publish`.
+  - To keep one version of whole files, run `anfra pull --take local <path>...` for yours, or `--take org <path>...` for the org's. It can resolve any conflict.
+  - Once every conflict is resolved, run `anfra validate`, then `anfra publish`.
   - To undo this pull, run `anfra pull --abort`.
 ```
 
-A pull with conflicts exits 0: the conflicts are part of its result ([philosophy](philosophy.md#make-interfaces-work-for-agents-and-programs-not-only-people)). A pull that couldn't run, such as one refused for earlier conflicts, exits non-zero.
+Conflict kinds, and how each is resolved:
+
+| Kind | What happened | Resolved by |
+|---|---|---|
+| `content` | You and the org changed the same lines | Editing the file and removing the markers, or `--take` |
+| `add_add` | You and the org both added the file, differently (or, with no record of an earlier sync, it differs) | The same |
+| `modify_delete` | You changed the file, and the org deleted it | Deleting it, or removing the markers to keep it, or `--take` |
+| `delete_modify` | You deleted the file, and the org changed it | The same |
+| `binary` | You and the org both changed a binary file | `--take` only: it can't hold markers |
+| `file_folder` | A path is a file on one side and a folder on the other | `--take` only |
+| `path_collision` | Two paths would be one file on systems that ignore case | `--take` only |
+
+A clean pull ends with "Run `anfra validate` to check the merged files, then `anfra publish`." A pull with nothing new: "This folder already has everything published to Acme (acme@4c1d07e)." `--take` answers which conflicts it resolved (`taken`) and those left, and `--abort` the files it put back (`restored`).
+
+A pull with conflicts exits 0: the conflicts are part of its result ([philosophy](philosophy.md#make-interfaces-work-for-agents-and-programs-not-only-people)). A pull that couldn't run exits non-zero:
+
+| When | Code |
+|---|---|
+| The last pull's conflicts are unresolved | `conflicts_unresolved`, its details naming the files |
+| The last pull stopped partway through writing files | `pull_interrupted` |
+| Not an anfra repo, another pull or publish running, a file anfra won't read as deleted | `precondition_failed` |
+| No org, no terminal | `org_not_set` |
+| `--take` on a path with no conflict, or a side other than `org` or `local` | `validation_failed` |
 
 A publish that goes through although someone published since, because their changes are already in the folder:
 

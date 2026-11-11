@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -143,10 +144,27 @@ type server struct {
 	settings     map[string]map[string]any // the settings each one was created with
 	forbidList   bool
 	forbidCreate bool
-	unreachable  map[string]string // a data source's check failing, with this reason
-	tested       int               // data_sources.test calls
-	origins      []string          // the org's allowed origins; nil: a server without app_origins.list
+	unreachable  map[string]string          // a data source's check failing, with this reason
+	tested       int                        // data_sources.test calls
+	origins      []string                   // the org's allowed origins; nil: a server without app_origins.list
+	history      map[string][]cloudapi.File // every revision's files, for repos.list_files
 }
+
+// publishAs publishes files to the org as email, as another member would.
+func (s *server) publishAs(email string, files map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var list []cloudapi.File
+	for _, p := range slices.Sorted(maps.Keys(files)) {
+		id := repoformat.BlobID([]byte(files[p]))
+		s.blobs[id] = []byte(files[p])
+		list = append(list, cloudapi.File{Path: p, OID: id})
+	}
+	s.deployed, s.revision, s.by = list, s.revision+1, &cloudapi.Person{ID: "u2", Email: email}
+	s.history[s.rev()] = list
+}
+
+func (s *server) rev() string { return "repo@" + strings.Repeat(string(rune('0'+s.revision)), 40) }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
@@ -161,7 +179,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply := func(v any) { w.Header().Set("Content-Type", "application/json"); _ = jsonkit.MarshalWrite(w, v) }
-	rev := func() string { return "repo@" + strings.Repeat(string(rune('0'+s.revision)), 40) }
+	rev := s.rev
 	switch op {
 	case cloudapi.OpStatus:
 		reply(cloudapi.StatusOut{Revision: rev(), PublishedBy: s.by, PublishedAt: time.Now(), Limits: s.limits})
@@ -209,7 +227,25 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		replaced := &cloudapi.Replaced{Revision: rev(), PublishedBy: s.by}
 		s.deployed, s.revision, s.by = in.Files, s.revision+1, &cloudapi.Person{ID: "u1", Email: "ada@example.com"}
+		s.history[rev()] = in.Files
 		reply(cloudapi.PublishOut{Revision: rev(), Changed: true, Replaced: replaced})
+	case cloudapi.OpListFiles:
+		var in cloudapi.ListFilesIn
+		_ = jsonkit.UnmarshalRead(r.Body, &in)
+		files, ok := s.history[in.Revision]
+		if !ok {
+			refuse(w, http.StatusNotFound, "not_found")
+			return
+		}
+		reply(cloudapi.ListFilesOut{Files: append([]cloudapi.File{}, files...)})
+	case cloudapi.OpGetBlobs:
+		var in cloudapi.GetBlobsIn
+		_ = jsonkit.UnmarshalRead(r.Body, &in)
+		out := cloudapi.GetBlobsOut{Omitted: []string{}}
+		for _, id := range in.OIDs {
+			out.Blobs = append(out.Blobs, cloudapi.BlobContent{OID: id, Content: s.blobs[id]})
+		}
+		reply(out)
 	case cloudapi.OpListAppOrigins:
 		if s.origins == nil { // a server from before allowed origins
 			http.NotFound(w, r)
@@ -252,7 +288,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newServer(t *testing.T) (*server, string) {
 	t.Helper()
-	s := &server{blobs: map[string][]byte{}, sources: map[string]string{}, created: map[string]map[string]any{}, settings: map[string]map[string]any{}, limits: cloudapi.Limits{Files: 100, UploadBlobs: 1000, UploadBytes: 1 << 20}}
+	s := &server{blobs: map[string][]byte{}, sources: map[string]string{}, created: map[string]map[string]any{}, settings: map[string]map[string]any{}, limits: cloudapi.Limits{Files: 100, UploadBlobs: 1000, UploadBytes: 1 << 20, DownloadBlobs: 1000, DownloadBytes: 1 << 20},
+		history: map[string][]cloudapi.File{}}
+	s.history[s.rev()] = nil // the org's starting files: none a publish carries
 	srv := httptest.NewServer(s)
 	t.Cleanup(srv.Close)
 	t.Setenv("ANFRA_HOME", t.TempDir())
