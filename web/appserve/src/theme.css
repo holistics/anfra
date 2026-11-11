@@ -142,7 +142,7 @@
   --border-color-success-default: var(--anfra-color-border-success-default);
   --outline-color-focus: var(--anfra-color-focus-ring-default);
   --ring-color-focus: var(--anfra-color-focus-ring-default);
-  --ring-color-weak: var(--anfra-color-border-weak); /* current nav chip edge (ring-1 ring-inset) */
+  --ring-color-weak: var(--anfra-color-border-weak); /* a floating surface's edge: the sidebar's peek */
   --ring-color-strong: var(
     --anfra-color-border-strong
   ); /* floating surface edge without layout shift */
@@ -296,9 +296,34 @@
   }
 }
 
-/* While the panel's edge is pressed, the Data App's frame doesn't take the pointer. */
+/* While the panel's edge or the sidebar's is pressed, the Data App's frame doesn't take the pointer. */
 [data-pressing] iframe {
   pointer-events: none;
+}
+
+/*
+ * The sidebar's peek (SidebarPeek), as Cloud's: seen tens of times a day, so it is quick and light.
+ * In: 160 ms, fade plus a 4 px drop and a 1.5% scale from its corner under the toggle, on a strong
+ * ease-out. Out: 90 ms, fade only, so leaving never lags the pointer. Reduced motion drops both
+ * (the rule above).
+ */
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -4px, 0) scale(0.985);
+  }
+}
+@keyframes peek-out {
+  to {
+    opacity: 0;
+  }
+}
+[data-peek][data-state='open'] {
+  transform-origin: var(--reka-popover-content-transform-origin);
+  animation: peek-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+[data-peek][data-state='closed'] {
+  animation: peek-out 90ms ease-out forwards;
 }
 
 /*
