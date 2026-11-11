@@ -42,20 +42,17 @@ anfra publish status      # behind? anything unpublished? conflicts left?
 anfra pull                # when something is incoming
 ```
 
-Conflicts are smaller when you're less behind. If the pull brought changes in, tell the user which
-files changed, then run `anfra validate` before you build on them.
+If the pull brought changes in, run `anfra validate` before you build on them.
 
 Once the user asks to publish:
 
 ```sh
-anfra validate
 anfra publish --pull
 ```
 
-`--pull` brings in what colleagues published since this folder last pulled or published, then
-publishes. Their work is merged in, never removed. Tell the user what the result's `pulled` lists.
-If the user wants to review colleagues' changes before publishing, run `anfra pull` first, show
-them, then `anfra publish`.
+`--pull` merges in what colleagues published since this folder last pulled or published, then
+publishes. If the user wants to review their changes first, run `anfra pull`, show them, then
+`anfra publish`.
 
 When publish stops, its error says what to do next. Do that, then publish again.
 
@@ -105,8 +102,8 @@ name to keep. When the changes are independent, such as two different fields add
 Then remove every marker line. A file that can't hold markers, such as an image, needs `--take`:
 ask the user which side to keep.
 
-Once every conflict is resolved, run `anfra validate`, then `anfra publish`. If the user would
-rather start over, `anfra pull --abort` puts the folder back as it was before the pull.
+Once every conflict is resolved, run `anfra validate`. If the user had asked you to publish, run
+`anfra publish` again, without asking again. If the user would rather start over, `anfra pull --abort` puts the folder back as it was before the pull.
 
 ## Joining an org's repo
 
