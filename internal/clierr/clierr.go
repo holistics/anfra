@@ -8,6 +8,7 @@ package clierr
 import (
 	"encoding/json/jsontext"
 	"fmt"
+	"time"
 
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -60,6 +61,12 @@ var (
 	// pull (anfra pull --abort).
 	ConflictsUnresolved = apperr.DefinePublicCodeWith[UnresolvedFiles](NS, "conflicts_unresolved", apperr.User, "A pull's conflicts aren't resolved yet.")
 
+	// PullRequired: someone published to the org since this folder last
+	// pulled or published, and a pull would change this folder, so publishing
+	// would replace their work unseen. Its details are what's published now.
+	// A program runs anfra pull, resolves any conflicts, then publishes again.
+	PullRequired = apperr.DefinePublicCodeWith[Published](NS, "pull_required", apperr.User, "Pull the org's changes before publishing.")
+
 	// PullInterrupted: a pull stopped partway through writing files. A program
 	// runs anfra pull --abort, which puts them back, then pulls again.
 	PullInterrupted = apperr.DefinePublicCode(NS, "pull_interrupted", apperr.User, "The last pull stopped partway.")
@@ -111,4 +118,12 @@ func Unreachablef(service string, cause error, format string, args ...any) error
 // still have conflicts.
 type UnresolvedFiles struct {
 	Paths []string `json:"paths" doc:"the files that still have conflicts"`
+}
+
+// Published are the details of pull_required: the revision the org has
+// published, who published it, and when.
+type Published struct {
+	Revision    string    `json:"revision" doc:"the org's published revision"`
+	PublishedBy string    `json:"published_by,omitempty" doc:"who published it. Absent for the org's starting files."`
+	PublishedAt time.Time `json:"published_at" doc:"when it was published"`
 }
