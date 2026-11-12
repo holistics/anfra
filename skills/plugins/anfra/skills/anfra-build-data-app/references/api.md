@@ -75,8 +75,8 @@ is almost always right.
 | `app.createQuery(name, { dataset, aql, pageSize? })` | Declares a query. Without `pageSize` it is not paged and returns every row. With one (a whole number of at least 1; anything else throws) it returns a page at a time: page further with `fetchMore()`. A pivot query (`rows { }` / `columns { }`) can't be paged, so must not declare one. |
 | `app.createFilter(name, decl)` | Declares a filter. See [Filter](#filter). |
 | `app.createDateDrill(name, { default?, label? })` | Declares a date grain switch. See [Date drill](#date-drill). |
-| `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. |
-| `app.mapCrossFilter(fromQuery, toQuery)` | Rows selected in `fromQuery` filter `toQuery`. |
+| `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. Returns the mapping; `mapping.remove()` takes it out. |
+| `app.mapCrossFilter(fromQuery, toQuery)` | Rows selected in `fromQuery` filter `toQuery`. Returns the edge; `edge.remove()` takes it out. |
 | `await app.execute()` | Runs every query whose inputs changed, and every query whose last run failed: it is also the retry. Resolves `{ succeeded, failed }`, never rejects. |
 | `await app.refresh()` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
@@ -86,19 +86,49 @@ is almost always right.
 
 Names are unique per app across queries and controls.
 
-### Adding queries later
+### Changing the app while it runs
 
-Entities and mappings can be declared at any time, including after `execute()`: the next
-`execute()` runs whatever is new. A query's AQL is fixed once declared, and nothing can be removed,
-so an app whose query changes with the reader's choices (a query builder, a pivot picker) declares
-a **new query** for each new AQL:
+A dynamic app (a chart builder whose reader drags fields, a dashboard builder whose reader adds,
+edits and deletes widgets) can change what it declared at any time, including after `execute()`:
 
-- Give each one a unique name (`run1`, `run2`, …) and render only the latest.
-- `query.abort()` the previous one if it may still be running.
-- Earlier queries keep their last result and stay idle, since `execute()` only re-runs a query
-  whose own inputs changed. A mapping can't be removed, though, so a control mapped onto an old
-  query keeps re-running it. Give each new query its own controls, or start a fresh
-  `Anfra.createApp()` and `abort()` the old app.
+- **Add**: `createQuery`, `createFilter`, `createDateDrill`, `mapControl`, `mapCrossFilter`.
+- **Edit in place**: `query.update({ dataset?, aql?, pageSize?, sort? })`,
+  `filter.update({ field?, dataset?, type?, options?, label?, default? })`,
+  `dateDrill.update({ label?, default? })`. The entity keeps its name and its edges.
+- **Remove**: `query.remove()`, `filter.remove()`, `dateDrill.remove()` take their edges with them;
+  `mapping.remove()` and `edge.remove()` take one edge. An edge never changes: to change one,
+  remove it and map again.
+
+Nothing runs until the next `app.execute()`, so several edits go out as one run: edit, then call
+`execute()` once.
+
+A name is an entity's identity, and is never renamed: a new name is `remove()` then `create…`.
+Name what a reader builds with a stable id (`widget-7f3a`) and keep the title the reader sees in
+your own markup and state, so renaming a widget changes no query.
+
+`query.update`:
+
+- Is checked as `createQuery` is (AQL present, `pageSize` a whole number of at least 1, the dataset
+  one the reader can see), and throws a `ValidationError` changing nothing.
+- Keeps the last `result` until the rerun replaces it, and goes back to page 1.
+- A new `aql` or `dataset` clears the query's sort (unless you pass `sort`) and a selection made in
+  it, since its columns may differ. `pageSize` alone keeps both. `pageSize: undefined` drops paging.
+- Moving to another dataset throws, naming the edges, when a cross-filter to or from the query
+  would span two datasets: remove those first. A mapped control's field the new dataset lacks fails
+  the query when it runs, as its `error`.
+
+`filter.update` keeps the reader's condition when only `label`, `options` or `default` change
+(`reset()` then goes to the new default). A new `field`, `dataset` or `type` is checked as
+`createFilter` checks it, the condition goes back to the new default, and loaded options are
+dropped: call `loadOptions()` again. Mappings stay as they are: each mapping's own `field` is what
+the condition applies to, so remap when the filter now filters another field.
+
+`remove()` aborts the entity's request in flight (`execute`, `fetchMore`, `loadOptions`, whose
+promise rejects with an `AbortError`), clears a selection made in the removed query, frees the
+name, and closes the menu or the "View underlying data" modal open on its rows. The queries it
+filtered rerun without it at the next `execute()`. A removed object is dead: calling any of its
+methods throws a `ValidationError`, so drop your references to it (and its `subscribe`) along with
+its markup.
 
 ### Mappings are explicit
 
@@ -124,6 +154,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
 | `await query.export(options?)` | The `export` plugin, where installed: downloads the query's whole result as a file for the reader. See [plugins/export.md](plugins/export.md). |
 | `query.abort()` | Cancels this query's in-flight request. |
+| `query.update(changes)` / `query.remove()` | Edits the query in place, or takes it out with its edges. See [Changing the app while it runs](#changing-the-app-while-it-runs). |
 | `query.subscribe(fn)` | Change listener for just this query. |
 | `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
 
@@ -244,6 +275,7 @@ Read a filter's value back instead of keeping your own copy, which drifts from t
 | `filter.appliedCondition` | The value its queries last ran with; `undefined` before the first `execute()`. |
 | `filter.isDirty` | `condition` differs from `appliedCondition`. |
 | `filter.subscribe(fn)` | Calls `fn` whenever its value changes, by the reader's input or by `setCondition()`/`reset()` from code. Returns an unsubscribe. |
+| `filter.update(changes)` / `filter.remove()` | Edits the filter in place, or takes it out with its mappings. See [Changing the app while it runs](#changing-the-app-while-it-runs). |
 
 For example, highlight the row a filter is focused on by reading `region.condition.values` in the
 render function, and let a row click call `region.setCondition(…)` then `execute()`.
@@ -270,6 +302,9 @@ const grain = app.createDateDrill('grain', { default: 'month' });
 app.mapControl(grain, trend, { field: 'orders.created_at' });
 grain.setGrain('week'); // 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute'
 ```
+
+`grain.update({ label?, default? })` keeps the reader's grain; `grain.remove()` takes it out with
+its mappings.
 
 anfra finds every dimension of the query built directly on that exact field and redraws it at the
 grain, so:
@@ -320,6 +355,7 @@ chart.on('click', (p) => {
   replays the chart's entry animation each time the reader clicks. Rebuild only when `result`
   changed.
 - Both queries must use the same dataset. No self-edges.
+- `edge.remove()` stops the selection reaching the target, which reruns at the next `execute()`.
 - Clear with `app.clearSelection(); app.execute();`.
 
 ## The menu on the page

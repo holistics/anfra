@@ -147,6 +147,10 @@ everything, `subscribe` a render function, `execute()`, then wire controls and c
 and `execute()` again. Keep its two layers apart: the look (styles, markup, chart theme) and the
 SDK wiring.
 
+An app whose reader builds what it shows (a chart builder, a dashboard builder) edits and removes
+its queries, controls and edges as the reader works: name each with a stable id, never a title,
+and see [Changing the app while it runs](references/api.md#changing-the-app-while-it-runs).
+
 The frame is a **sandbox** (`allow-scripts` only, opaque origin) under a **content policy**. Write
 for it:
 
