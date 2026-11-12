@@ -112,10 +112,112 @@ describe('editing a query', () => {
     query.update({ aql: AQL.byStatus });
     expect(query.ranInput).toBeUndefined();
 
+    await app.execute();
     await query.fetchMore();
     const sent = stub.queries.at(-1);
     expect(sent?.aql).toBe(AQL.byStatus);
+    expect(sent?.input.pagination).toEqual({ page: 2, pageSize: 2 });
     expect(sent?.input.sorts ?? []).toEqual([]);
+  });
+
+  it('has no more pages until the rerun: fetchMore sends nothing, and the rerun starts at page 1', async () => {
+    const { stub, app } = build((request) => ({
+      ...shape(request), meta: { hasMore: true },
+    }));
+    const query = app.createQuery('table', { dataset: 'sales', aql: AQL.byRegion, pageSize: 2 });
+    await app.execute();
+    const rows = query.result?.rows;
+
+    query.update({ aql: AQL.byStatus });
+    expect(query.hasMore).toBe(false);
+    await query.fetchMore();
+
+    expect(stub.queries).toHaveLength(1);
+    expect(query.result?.rows).toBe(rows);
+    expect(query.isDirty).toBe(true);
+
+    await app.execute();
+    expect(stub.queries).toHaveLength(2);
+    expect(stub.queries[1]).toMatchObject({ aql: AQL.byStatus, input: { pagination: { page: 1, pageSize: 2 } } });
+    expect(query.hasMore).toBe(true);
+  });
+
+  it('drops a run in flight: its late answer lands nothing, and the next execute runs the new AQL', async () => {
+    let hold: ReturnType<typeof deferred<BackendQueryResult>> | undefined;
+    const { stub, app } = build((request) => {
+      if (stub.queries.length === 2) {
+        hold = deferred<BackendQueryResult>();
+        return hold.promise;
+      }
+      return shape(request);
+    });
+    const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+    const before = query.result;
+    const running = app.refresh();
+    await vi.waitFor(() => expect(hold).toBeDefined());
+    expect(query.state).toBe('executing');
+
+    query.update({ aql: AQL.byStatus });
+    expect(query.state).toBe('success');
+    const listener = vi.fn();
+    query.subscribe(listener);
+    hold!.resolve(shape({ aql: AQL.byRegion } as BackendQueryRequest));
+
+    expect(await running).toEqual({ succeeded: [], failed: [] });
+    expect(query.result).toBe(before);
+    expect(query.ranInput).toBeUndefined();
+    expect(query.state).toBe('success');
+    expect(listener).not.toHaveBeenCalled();
+    expect(query.isDirty).toBe(true);
+
+    await app.execute();
+    expect(stub.queries.at(-1)?.aql).toBe(AQL.byStatus);
+    expect(query.result?.rows).toEqual([{ status: 'completed', total: 50 }, { status: 'pending', total: 10 }]);
+  });
+
+  it('goes back to idle when its first run is in flight', async () => {
+    const pending = deferred<BackendQueryResult>();
+    const { app } = build(() => pending.promise);
+    const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    const running = app.execute();
+    expect(query.state).toBe('executing');
+
+    query.update({ aql: AQL.byStatus });
+    pending.resolve(shape({ aql: AQL.byRegion } as BackendQueryRequest));
+
+    await running;
+    expect(query.state).toBe('idle');
+    expect(query.result).toBeUndefined();
+  });
+
+  it('drops a page in flight: the old AQL\'s page is not appended', async () => {
+    let hold: ReturnType<typeof deferred<BackendQueryResult>> | undefined;
+    const { stub, app } = build((request) => {
+      if (request.input.pagination?.page === 2) {
+        hold = deferred<BackendQueryResult>();
+        return hold.promise;
+      }
+      return { ...shape(request), meta: { hasMore: true } };
+    });
+    const query = app.createQuery('table', { dataset: 'sales', aql: AQL.byRegion, pageSize: 2 });
+    await app.execute();
+    const more = query.fetchMore();
+    await vi.waitFor(() => expect(hold).toBeDefined());
+
+    query.update({ aql: AQL.byStatus });
+    hold!.resolve({ ...shape({ aql: AQL.byRegion } as BackendQueryRequest), meta: { hasMore: true } });
+    await more;
+
+    expect(query.result?.rows).toHaveLength(2);
+    expect(query.page).toBe(1);
+    expect(query.state).toBe('success');
+    expect(query.hasMore).toBe(false);
+
+    await app.execute();
+    expect(stub.queries.at(-1)).toMatchObject({ aql: AQL.byStatus, input: { pagination: { page: 1, pageSize: 2 } } });
+    expect(query.result?.rows).toHaveLength(2);
+    expect(query.hasMore).toBe(true);
   });
 
   it('validates the new declaration as createQuery does, and changes nothing when it fails', () => {
