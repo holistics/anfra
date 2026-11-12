@@ -1,6 +1,6 @@
 # A query's input
 
-> Status: 2026-11-12. Partly built: `input` holds the page, the time zone and the seeds, the deprecated inputs beside it move into it, and answers return it. Not yet: the CLI's flags for nested fields (today's `--page`, `--page-size` and `--timezone` still work, shown as deprecated), and the SDK sending and replaying `input`. Built for the [query cache](query-cache.md).
+> Status: 2026-11-12. Partly built: `input` holds the page, the time zone and the seeds, the deprecated inputs beside it move into it, and answers return it. The CLI sets each of `input`'s fields by a flag of its own (`--input.pagination.page-size`), and matches flags ignoring case, `_` and `-`. Not yet: the SDK sending and replaying `input`, and suggesting the name meant when one is refused. Built for the [query cache](query-cache.md).
 
 A query has two parts: its text (AQL, or SQL), and everything else a caller chooses about running it. The second part is one input, `input`, and this doc says what goes in it, and why it is kept together.
 
@@ -72,6 +72,6 @@ One hazard comes with replaying: a client that stores a response's `input` and s
 
 Two changes to how anfra reads names come with it, since callers used to `page_size` will send it inside `input`, where it is now `pageSize`:
 
-- **The CLI sets an object's nested fields by flags of their own,** a level deeper than today's `--format-options.header`: `--input.pagination.page-size`. Today's `--page`, `--page-size` and `--timezone` stay, as aliases of `--input.pagination.page`, `--input.pagination.page-size` and `--input.timezone`, so paging at the terminal doesn't change.
-- **The CLI accepts a flag in any case and with `_` or `-`.** A camelCase field's flag is named in hyphens (`pageSize` as `page-size`, as `page_size` is `--page-size` today), and a name typed as `--input.pagination.pageSize` or `--input.pagination.page_size` is normalized to it (pflag's `SetNormalizeFunc`, on the root command).
+- **The CLI sets an object's nested fields by flags of their own,** a level deeper than today's `--format-options.header`: `--input.pagination.page-size`. These are the fields' only names at the CLI ([one name per field](commands-and-api.md#one-name-per-field)). Today's `--page`, `--page-size` and `--timezone` are the deprecated inputs' flags, and go with them.
+- **The CLI names a camelCase field in hyphens** (`pageSize` as `page-size`, as `page_size` is `--page-size` today), **and matches a flag ignoring case, `_` and `-`**, so `--input.pagination.pageSize` works too (pflag's `SetNormalizeFunc`, on the root command).
 - **A refused name suggests the one meant.** The API stays strict, one name per field, but its refusal of an unknown property names the nearest one the schema allows at that place ("Unexpected property. Did you mean pageSize?"), in `shared/apikit/internal/decode/violations.go`. So does the CLI's refusal of an unknown flag (`flagRefused`). The nearest is a name equal with case, `_` and `-` ignored, or else one within a small edit distance; one is suggested, or none. An enhancement, after the move.

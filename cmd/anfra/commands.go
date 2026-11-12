@@ -129,17 +129,10 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 			addFlag(cmd, a, al, "", "alias of --"+a.Flag())
 			flagArg[al] = a.Name
 		}
-		// An object's fields, each a flag of its own, named by its path:
-		// --format-options.header sets format_options.header.
-		for _, fa := range a.Fields {
-			usage := fa.Usage
-			if len(fa.Enum) > 0 {
-				usage += " (one of: " + strings.Join(fa.Enum, ", ") + ")"
-			}
-			name := a.Flag() + "." + fa.Flag()
-			addFlag(cmd, fa, name, "", usage)
-			flagArg[name] = a.Name + "." + fa.Name
-		}
+		// An object's fields, each a flag of its own, named by its path, at any
+		// depth: --format-options.header sets format_options.header, and
+		// --input.pagination.page-size sets input.pagination.pageSize.
+		addFieldFlags(cmd, a.Fields, a.Flag(), a.Name, flagArg)
 	}
 
 	// An export's answer is a link; the CLI downloads it, unless asked for the link.
@@ -220,7 +213,7 @@ func flagValues(fs *pflag.FlagSet, args []command.Arg, flagArg map[string]string
 			if objects[arg] == nil {
 				objects[arg] = map[string]any{}
 			}
-			objects[arg][field] = flagValue(f, fieldType(args, arg, field))
+			setPath(objects[arg], strings.Split(field, "."), flagValue(f, fieldType(args, key)))
 			return
 		}
 		raw := jsontext.Value(strings.TrimSpace(f.Value.String()))
@@ -276,6 +269,25 @@ func flagValue(f *pflag.Flag, t command.ArgType) any {
 	return f.Value.String()
 }
 
+// addFieldFlags adds a flag for each of an object's fields the CLI sets one by
+// one, named under flag and keyed under key; an object field's own fields, a
+// level deeper.
+func addFieldFlags(cmd *cobra.Command, fields []command.Arg, flag, key string, flagArg map[string]string) {
+	for _, fa := range fields {
+		name, path := flag+"."+fa.Flag(), key+"."+fa.Name
+		if fa.Type == command.ArgObject {
+			addFieldFlags(cmd, fa.Fields, name, path, flagArg)
+			continue
+		}
+		usage := fa.Usage
+		if len(fa.Enum) > 0 {
+			usage += " (one of: " + strings.Join(fa.Enum, ", ") + ")"
+		}
+		addFlag(cmd, fa, name, "", usage)
+		flagArg[name] = path
+	}
+}
+
 func addFlag(cmd *cobra.Command, a command.Arg, name, short, usage string) {
 	switch a.Type {
 	case command.ArgString, command.ArgObject, command.ArgObjectArray:
@@ -300,13 +312,42 @@ func argType(args []command.Arg, name string) command.ArgType {
 }
 
 // fieldType is the type of the field named field of the object arg named arg.
-func fieldType(args []command.Arg, arg, field string) command.ArgType {
-	for _, a := range args {
-		if a.Name == arg {
-			return argType(a.Fields, field)
+// fieldType is the type of the object field at path (arg.field.field…).
+func fieldType(args []command.Arg, path string) command.ArgType {
+	names := strings.Split(path, ".")
+	for i, name := range names {
+		a, ok := findArg(args, name)
+		if !ok {
+			return ""
 		}
+		if i == len(names)-1 {
+			return a.Type
+		}
+		args = a.Fields
 	}
 	return ""
+}
+
+func findArg(args []command.Arg, name string) (command.Arg, bool) {
+	for _, a := range args {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return command.Arg{}, false
+}
+
+// setPath sets v at path in m, making the objects on the way.
+func setPath(m map[string]any, path []string, v any) {
+	for _, name := range path[:len(path)-1] {
+		next, ok := m[name].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			m[name] = next
+		}
+		m = next
+	}
+	m[path[len(path)-1]] = v
 }
 
 // groupFlags are the CLI flags of a group's args.
@@ -699,4 +740,23 @@ func renderTo(body []byte, contentType string, out io.Writer) error {
 
 func isJSONContentType(contentType string) bool {
 	return strings.HasPrefix(strings.TrimSpace(contentType), "application/json")
+}
+
+// flagNamed is the flag a name typed on the command line reaches: fs's flag
+// whose name is the same ignoring case, _ and - (command.FlagKey), so
+// --input.pagination.pageSize reaches --input.pagination.page-size. Without
+// one (a flag being added, or a name no flag has), the name in the CLI's form.
+func flagNamed(fs *pflag.FlagSet, name string) string {
+	key, found := command.FlagKey(name), ""
+	if fs != nil {
+		fs.VisitAll(func(f *pflag.Flag) {
+			if found == "" && command.FlagKey(f.Name) == key {
+				found = f.Name
+			}
+		})
+	}
+	if found != "" {
+		return found
+	}
+	return command.FlagName(name)
 }
