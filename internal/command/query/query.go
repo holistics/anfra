@@ -20,29 +20,31 @@ var Query = command.Define(command.Def[QueryRunInput, QueryRun]{
 	Short: "Run a query, and return its rows and the SQL that produced them",
 	Long: `Run a query, and return a page of its rows and the SQL that produced them.
 
-A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+A page is input.pagination.pageSize rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
 
-Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.`,
+Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without input.pagination, that's every row, up to the server's maximum.`,
 	ReadOnly: true,
 	Timeout:  10 * time.Minute,
 	Needs: func(in QueryRunInput) command.Sidecars {
 		return command.Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 	},
-	Check:  QueryRunInput.check,
-	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge},
-	Events: queryEvents,
-	Run:    newQueryRun,
+	Normalize: QueryRunInput.normalize,
+	Check:     QueryRunInput.check,
+	Errors:    []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge},
+	Events:    queryEvents,
+	Run:       newQueryRun,
 })
 
 // Compile compiles a query to SQL, without running it.
 var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
-	Name:     "query.compile",
-	Short:    "Compile a query to SQL, without running it",
-	ReadOnly: true,
-	Timeout:  2 * time.Minute,
-	Needs:    func(in QueryRunInput) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
-	Check:    QueryRunInput.check,
-	Errors:   []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable},
+	Name:      "query.compile",
+	Short:     "Compile a query to SQL, without running it",
+	ReadOnly:  true,
+	Timeout:   2 * time.Minute,
+	Needs:     func(in QueryRunInput) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
+	Normalize: QueryRunInput.normalize,
+	Check:     QueryRunInput.check,
+	Errors:    []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable},
 	Run: func(ctx context.Context, cc command.CommandContext, in QueryRunInput) (CompiledQuery, error) {
 		if in.Lang == "sql" {
 			// Already the SQL that would run.
@@ -66,7 +68,7 @@ var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
 		if err != nil {
 			return CompiledQuery{}, err
 		}
-		return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Columns: compiledColumns(compiled.Columns)}, nil
+		return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Input: in.Input.ran(compiled.Seeds), Columns: compiledColumns(compiled.Columns)}, nil
 	},
 })
 

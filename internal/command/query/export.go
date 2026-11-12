@@ -38,16 +38,16 @@ var Export = command.Define(command.Def[ExportInput, command.ExportLink]{
 	Run:    runExport,
 })
 
-// ExportInput is what query.export takes: a query and what shapes its run, as
-// query takes them, but no page, since an export is the whole result; and the
-// file's format.
+// ExportInput is what query.export takes: a query and its input, as query
+// takes them (a page among it, which exports that page); and the file's
+// format.
 type ExportInput struct {
 	QueryInput
-	Input         anfranode.QueryTransforms `json:"input,omitempty" doc:"the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"`
-	Timezone      string                    `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"`
-	Format        string                    `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
-	FormatOptions ExportFormatOptions       `json:"format_options,omitempty" doc:"the format's options"`
-	Filename      string                    `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
+	Input         RunInput            `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."`
+	Timezone      string              `json:"timezone,omitempty" deprecated:"true" doc:"deprecated: use input.timezone. Ignored when input.timezone is set."`
+	Format        string              `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
+	FormatOptions ExportFormatOptions `json:"format_options,omitempty" doc:"the format's options"`
+	Filename      string              `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
 }
 
 func (ExportInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
@@ -92,7 +92,7 @@ func (in ExportInput) filename(exported, ext string) string {
 
 // runInput is the export's query as query takes it: no page.
 func (in ExportInput) runInput() QueryRunInput {
-	return QueryRunInput{QueryInput: in.QueryInput, Input: in.Input, Timezone: in.Timezone}
+	return QueryRunInput{QueryInput: in.QueryInput, Input: in.Input, Timezone: in.Timezone}.normalize()
 }
 
 func (in ExportInput) options() ExportFormatOptions { return in.FormatOptions }

@@ -102,6 +102,9 @@ components:
           items:
             $ref: "#/components/schemas/Column"
           type: array
+        input:
+          $ref: "#/components/schemas/RunInput"
+          description: the query's input as it compiled, every default filled in, its seeds included. Send it back with the same query to compile it the same way again. Absent for a SQL query.
         sql:
           type: string
       required:
@@ -625,8 +628,8 @@ components:
           $ref: "#/components/schemas/ExportFormatOptions"
           description: the format's options
         input:
-          $ref: "#/components/schemas/QueryTransforms"
-          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
+          $ref: "#/components/schemas/RunInput"
+          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."
         lang:
           default: aql
           description: the language the query is written in
@@ -639,7 +642,8 @@ components:
           minLength: 1
           type: string
         timezone:
-          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
+          deprecated: true
+          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
           type: string
       required:
         - query
@@ -753,12 +757,32 @@ components:
       required:
         - max_bytes
       type: object
+    Pagination:
+      additionalProperties: false
+      properties:
+        page:
+          description: the 1-based page of rows to return, 1 by default
+          format: int64
+          minimum: 1
+          type: integer
+        pageSize:
+          description: how many rows a page has
+          format: int64
+          maximum: 10000
+          minimum: 1
+          type: integer
+      required:
+        - pageSize
+      type: object
     QueryCompiled:
       additionalProperties: false
       properties:
         aql:
           description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
+        input:
+          $ref: "#/components/schemas/RunInput"
+          description: the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
         sql:
           type: string
         type:
@@ -890,6 +914,9 @@ components:
         has_more:
           description: whether there may be rows after this page. To get them, ask for the next page, or export the query.
           type: boolean
+        input:
+          $ref: "#/components/schemas/RunInput"
+          description: the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
         result:
           $ref: "#/components/schemas/QueryRows"
         sql:
@@ -931,8 +958,8 @@ components:
           description: the dataset an AQL query runs against
           type: string
         input:
-          $ref: "#/components/schemas/QueryTransforms"
-          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
+          $ref: "#/components/schemas/RunInput"
+          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."
         lang:
           default: aql
           description: the language the query is written in
@@ -941,12 +968,14 @@ components:
             - sql
           type: string
         page:
-          description: the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size.
+          deprecated: true
+          description: "deprecated: use input.pagination.page. Ignored when input.pagination is set."
           format: int64
           minimum: 1
           type: integer
         page_size:
-          description: how many rows a page has, for AQL only
+          deprecated: true
+          description: "deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."
           format: int64
           maximum: 10000
           minimum: 1
@@ -956,7 +985,8 @@ components:
           minLength: 1
           type: string
         timezone:
-          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
+          deprecated: true
+          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
           type: string
       required:
         - query
@@ -985,7 +1015,7 @@ components:
           format: int64
           type: integer
         has_more:
-          description: whether there may be rows after this page. Without page_size, every row was sent, and this is false.
+          description: whether there may be rows after this page. Without input.pagination, every row was sent, and this is false.
           type: boolean
         row_count:
           format: int64
@@ -1002,30 +1032,6 @@ components:
         - row_count
         - has_more
         - timings
-      type: object
-    QueryTransforms:
-      additionalProperties: false
-      properties:
-        conditions:
-          description: AQL conditions ANDed with the query's own filters
-          items:
-            $ref: "#/components/schemas/QueryCondition"
-          type: array
-        dateDrills:
-          description: grain changes on date fields. The fields keep their column names.
-          items:
-            $ref: "#/components/schemas/QueryDateDrill"
-          type: array
-        filters:
-          description: conditions on fields, ANDed with the query's own filters
-          items:
-            $ref: "#/components/schemas/QueryFilter"
-          type: array
-        sorts:
-          description: sorts by result column, replacing the query's own
-          items:
-            $ref: "#/components/schemas/QuerySort"
-          type: array
       type: object
     QueryValidation:
       additionalProperties: false
@@ -1146,6 +1152,39 @@ components:
           format: int64
           type: integer
       type: object
+    RunInput:
+      additionalProperties: false
+      properties:
+        conditions:
+          description: AQL conditions ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryCondition"
+          type: array
+        dateDrills:
+          description: grain changes on date fields. The fields keep their column names.
+          items:
+            $ref: "#/components/schemas/QueryDateDrill"
+          type: array
+        filters:
+          description: conditions on fields, ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryFilter"
+          type: array
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+          description: "which rows to return: pageSize rows, from the 1-based page. Without it, every row."
+        seeds:
+          $ref: "#/components/schemas/Seeds"
+          description: values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time.
+        sorts:
+          description: sorts by result column, replacing the query's own
+          items:
+            $ref: "#/components/schemas/QuerySort"
+          type: array
+        timezone:
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default.
+          type: string
+      type: object
     SearchInput:
       additionalProperties: false
       properties:
@@ -1165,6 +1204,14 @@ components:
           items:
             type: string
           type: array
+      type: object
+    Seeds:
+      additionalProperties: false
+      properties:
+        referenceTime:
+          description: the time the query runs as of. Relative dates, such as last 7 days, are counted from this time's day.
+          format: date-time
+          type: string
       type: object
     ServerStatus:
       additionalProperties: false
@@ -1692,9 +1739,9 @@ paths:
       description: |-
         Run a query, and return a page of its rows and the SQL that produced them.
 
-        A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+        A page is input.pagination.pageSize rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
 
-        Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.
+        Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without input.pagination, that's every row, up to the server's maximum.
       operationId: core.query
       requestBody:
         content:
