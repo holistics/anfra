@@ -19,9 +19,11 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [logs](designs/logs.md) | What a log record carries for people and for programs, and the events: a soft contract for alerts and dashboards. |
 | [JSON](designs/json.md) | How anfra reads and writes JSON: one package, `shared/jsonkit`, and the rule that every package uses it. |
 | [exports](designs/exports.md) | A query's whole result as a file, through one op that answers a link, on every door and server. |
+| [query cache](designs/query-cache.md) | Proposal: a query's exact result kept on canal-lake and answered again within its `cache.duration`; the structural key, the store and its contract, cleaning, the Data App and CLI interactions, and the extension points a platform builds on. |
 | [export stores](designs/export-store.md) | Where an export's file goes and how its link is served: anfra's own store, its cleanup, and how a platform's differs. |
 | [result values](designs/result-values.md) | What a query's answer holds: values encoded (every number a string), and each column's semantic, Arrow and database types. |
 | [numbers in the SDK](designs/sdk-numbers.md) | What a Data App gets for a number: the API's string and its column's type, which say what it is; helpers come later. |
+| [a query's input](designs/query-input.md) | What a caller chooses about a query, kept together in `input` so a query can be run again (paged, exported, replayed, requeried) by sending it back; seeds (proposal). |
 | [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, appserve. |
 | [SDK plugins](designs/sdk-plugins.md) | Everything a Data App reaches is a plugin the host installs: how host, frame and plugins talk, middleware, the plugin layer. |
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |

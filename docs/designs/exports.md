@@ -10,7 +10,7 @@ Exports here are data: a query's rows in a data format (CSV first). A picture of
 
 One op, `query.export`, and a link:
 
-1. **`query.export`** takes the same input as `query` (a dataset and AQL, or a data source and SQL, and the Query Input: filters, conditions, sorts, date drills), without `page` and `page_size`, plus the format and, optionally, the file's name. It runs the query to completion, writes the file to the server's storage, and answers once the file is ready:
+1. **`query.export`** takes the same input as `query` (a dataset and AQL, or a data source and SQL, and its `input`: filters, conditions, sorts, date drills, the time zone, the seeds, and a page, which exports that page; without `input.pagination`, every row: [a query's input](query-input.md)), plus the format and, optionally, the file's name. It runs the query to completion, writes the file to the server's storage, and answers once the file is ready:
 
    ```jsonc
    { "url": "…", "filename": "sales.csv", "format": "csv", "row_count": 123456, "expires_at": "…" }

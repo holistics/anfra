@@ -32,9 +32,10 @@ type QueryEvent interface{ queryEvent() }
 
 // QueryCompiled is the SQL the query runs, as soon as it is known.
 type QueryCompiled struct {
-	Type string `json:"type" enum:"compiled"`
-	SQL  string `json:"sql"`
-	AQL  string `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Type  string    `json:"type" enum:"compiled"`
+	SQL   string    `json:"sql"`
+	AQL   string    `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Input *RunInput `json:"input,omitempty" doc:"the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
 }
 
 // QueryWarehouse is the query's id on the warehouse, as soon as it has one: to
@@ -63,7 +64,7 @@ type QueryRecords struct {
 type QuerySummary struct {
 	Type     string `json:"type" enum:"summary"`
 	RowCount int    `json:"row_count"`
-	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without page_size, every row was sent, and this is false."`
+	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without input.pagination, every row was sent, and this is false."`
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
 	BytesScanned *int64  `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
@@ -133,7 +134,7 @@ func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRunInpu
 // sink receives a run's result as it is produced.
 type sink struct {
 	status    func(phase string) error
-	compiled  func(sql, aql string) error
+	compiled  func(sql, aql string, input *RunInput) error
 	warehouse func(id string) error
 	scanned   func(bytes int64)
 	header    func(columns []Column, fields []string) error
@@ -216,7 +217,7 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 		})
 	}
 	if q.in.Lang == "sql" {
-		if err := s.compiled(q.in.Query, ""); err != nil {
+		if err := s.compiled(q.in.Query, "", nil); err != nil {
 			return Timings{}, err
 		}
 		o.compiled(ctx, q.in.DataSource, "", "", q.in.Query)
@@ -233,7 +234,7 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 	if err != nil {
 		return Timings{}, err
 	}
-	if err := s.compiled(compiled.SQL, compiled.AQL); err != nil {
+	if err := s.compiled(compiled.SQL, compiled.AQL, q.in.Input.ran(compiled.Seeds)); err != nil {
 		return Timings{}, err
 	}
 	o.compiled(ctx, compiled.DataSource.Name, q.in.Dataset, compiled.AQL, compiled.SQL)
@@ -320,7 +321,7 @@ func asQueryFailed(err error) error {
 // full page may have more after it. Without, it is the first MaxPageSize rows,
 // and one more row asked for says whether there are more.
 func (q queryRun) page(ctx context.Context) (QueryResult, error) {
-	keep, truncate := q.in.PageSize, query.NoLimit
+	keep, truncate := q.in.Input.pageSize(), query.NoLimit
 	if keep == 0 {
 		keep, truncate = MaxPageSize, MaxPageSize+1
 		if q.limit != query.NoLimit && q.limit <= MaxPageSize {
@@ -334,8 +335,8 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 		status:    func(string) error { return nil },
 		warehouse: func(string) error { return nil },
 		scanned:   func(int64) {},
-		compiled: func(sql, aql string) error {
-			r.SQL, r.AQL = sql, aql
+		compiled: func(sql, aql string, input *RunInput) error {
+			r.SQL, r.AQL, r.Input = sql, aql, input
 			return nil
 		},
 		header: func(columns []Column, fields []string) error {
@@ -357,8 +358,8 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 	if err != nil {
 		return QueryResult{}, err
 	}
-	if q.in.PageSize > 0 {
-		r.HasMore = len(r.Result.Records) == q.in.PageSize
+	if n := q.in.Input.pageSize(); n > 0 {
+		r.HasMore = len(r.Result.Records) == n
 	}
 	r.Timings = timings
 	return r, nil
@@ -380,8 +381,8 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 	}
 	timings, err := q.execute(ctx, q.limit, sink{
 		status: events.Status,
-		compiled: func(sql, aql string) error {
-			return events.Emit(QueryCompiled{Type: "compiled", SQL: sql, AQL: aql})
+		compiled: func(sql, aql string, input *RunInput) error {
+			return events.Emit(QueryCompiled{Type: "compiled", SQL: sql, AQL: aql, Input: input})
 		},
 		warehouse: func(id string) error {
 			return events.Emit(QueryWarehouse{Type: "warehouse_query", ID: id})
@@ -404,6 +405,6 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 	if err := flush(); err != nil {
 		return err
 	}
-	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: q.in.PageSize > 0 && count == q.in.PageSize,
+	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: q.in.Input.pageSize() > 0 && count == q.in.Input.pageSize(),
 		BytesScanned: scanned, Timings: timings})
 }

@@ -31,15 +31,15 @@ func compileAQL(ctx context.Context, cc command.CommandContext, src query.Source
 
 // runArgs are the args of a query command anfra-node's compile params are. A
 // Query Input entry's path is the same under input in the API, which passes the
-// Query Input through.
-var runArgs = anfranode.ArgMap{"datasetFqn": "dataset", "input": "input", "pagination": "page_size"}
+// Query Input through; the page and the seeds are input's too.
+var runArgs = anfranode.ArgMap{"datasetFqn": "dataset", "input": "input", "pagination": "input.pagination", "seeds": "input.seeds"}
 
 // runViolation is anfra-node's refusal of what the caller gave a run, as the
 // violation of the arg at fault: a dataset that cannot be used, a Query Input
 // entry, or the paging of a query that cannot be paged.
 func runViolation(err error) (apperr.Violation, bool) {
 	v, ok := anfranode.Violation(err, runArgs)
-	if ok && v.Field == "page_size" {
+	if ok && v.Field == "input.pagination" {
 		v.Code = "unsupported"
 	}
 	return v, ok

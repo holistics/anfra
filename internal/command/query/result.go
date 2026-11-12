@@ -18,6 +18,7 @@ import (
 type QueryResult struct {
 	SQL     string    `json:"sql" pretty:"-"`
 	AQL     string    `json:"aql,omitempty" pretty:"-" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Input   *RunInput `json:"input,omitempty" pretty:"-" doc:"the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
 	Columns []Column  `json:"columns" pretty:"-" doc:"one per field of result, in order"`
 	Result  QueryRows `json:"result" pretty:",inline"`
 	HasMore bool      `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
@@ -31,9 +32,10 @@ type QueryRows struct {
 
 // CompiledQuery is the `query compile` result: the SQL the query compiles to.
 type CompiledQuery struct {
-	SQL     string   `json:"sql"`
-	AQL     string   `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
-	Columns []Column `json:"columns,omitempty" doc:"what each column of an explore query's result will be, with its semantic type. Absent for other queries."`
+	SQL     string    `json:"sql"`
+	AQL     string    `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Input   *RunInput `json:"input,omitempty" doc:"the query's input as it compiled, every default filled in, its seeds included. Send it back with the same query to compile it the same way again. Absent for a SQL query."`
+	Columns []Column  `json:"columns,omitempty" doc:"what each column of an explore query's result will be, with its semantic type. Absent for other queries."`
 }
 
 // Column is one column of a query's answer: what it draws from the dataset, as

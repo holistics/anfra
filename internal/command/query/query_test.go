@@ -21,12 +21,15 @@ import (
 func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	var in QueryRunInput
 	if err := jsonkit.Unmarshal([]byte(`{
-		"query": "q", "dataset": "d", "page_size": 20, "timezone": "Asia/Ho_Chi_Minh",
+		"query": "q", "dataset": "d",
 		"input": {
 			"filters": [{"field": "orders.status", "operator": "is_null", "values": []}, {"field": "orders.amount", "operator": "greater_than", "values": [10], "aggregation": "sum"}],
 			"conditions": [{"expr": "orders.id > 1"}],
 			"sorts": [{"field": "status", "direction": "desc"}],
-			"dateDrills": [{"field": "orders.created_at", "grain": "month"}]
+			"dateDrills": [{"field": "orders.created_at", "grain": "month"}],
+			"pagination": {"pageSize": 20},
+			"timezone": "Asia/Ho_Chi_Minh",
+			"seeds": {"referenceTime": "2026-11-12T09:41:27Z"}
 		}
 	}`), &in); err != nil {
 		t.Fatal(err)
@@ -34,6 +37,7 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	want := query.Run{
 		Timezone:   "Asia/Ho_Chi_Minh",
 		Pagination: &anfranode.Pagination{Page: 1, PageSize: 20},
+		Seeds:      &anfranode.Seeds{ReferenceTime: "2026-11-12T09:41:27Z"},
 		Input: &anfranode.QueryTransforms{
 			Filters: []anfranode.QueryFilter{
 				{Field: "orders.status", Operator: "is_null", Values: []any{}},
@@ -44,7 +48,7 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 			DateDrills: []anfranode.QueryDateDrill{{Field: "orders.created_at", Grain: "month"}},
 		},
 	}
-	if got := in.run(); !reflect.DeepEqual(got, want) {
+	if got := in.normalize().run(); !reflect.DeepEqual(got, want) {
 		t.Errorf("run =\n  %+v\nwant\n  %+v", got, want)
 	}
 	wire, _ := jsonkit.Marshal(want.Input)
@@ -55,6 +59,77 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	// Nothing set: nothing sent.
 	if got := (QueryRunInput{QueryInput: QueryInput{Query: "q", Dataset: "d"}}).run(); !reflect.DeepEqual(got, query.Run{}) {
 		t.Errorf("an unshaped run = %+v, want none", got)
+	}
+}
+
+// The inputs beside input, deprecated, move into it, unless input sets them:
+// input is what a caller replaying an answer means.
+func TestDeprecatedInputsMoveIntoInput(t *testing.T) {
+	q := QueryInput{Query: "q", Dataset: "d"}
+	for _, tc := range []struct {
+		name string
+		in   QueryRunInput
+		want RunInput
+	}{
+		{"beside input", QueryRunInput{QueryInput: q, Page: 2, PageSize: 20, Timezone: "Asia/Ho_Chi_Minh"},
+			RunInput{Pagination: &Pagination{Page: 2, PageSize: 20}, Timezone: "Asia/Ho_Chi_Minh"}},
+		{"both ways: input's", QueryRunInput{QueryInput: q, Page: 2, PageSize: 20, Timezone: "Asia/Ho_Chi_Minh",
+			Input: RunInput{Pagination: &Pagination{Page: 3, PageSize: 50}, Timezone: "Europe/Paris"}},
+			RunInput{Pagination: &Pagination{Page: 3, PageSize: 50}, Timezone: "Europe/Paris"}},
+		{"neither", QueryRunInput{QueryInput: q}, RunInput{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.in.normalize()
+			if !reflect.DeepEqual(got.Input, tc.want) || got.Page != 0 || got.PageSize != 0 || got.Timezone != "" {
+				t.Errorf("normalized = %+v, want input %+v and nothing beside it", got, tc.want)
+			}
+		})
+	}
+}
+
+// A refusal names what the caller sent: input's field, or the deprecated one
+// it came from.
+func TestRunInputRefusals(t *testing.T) {
+	aql := QueryInput{Query: "q", Dataset: "d"}
+	sql := QueryInput{Query: "select 1", Lang: "sql", DataSource: "s"}
+	for _, tc := range []struct {
+		name  string
+		in    QueryRunInput
+		field string
+	}{
+		{"a page without its size", QueryRunInput{QueryInput: aql, Input: RunInput{Pagination: &Pagination{Page: 2}}}, "input.pagination"},
+		{"a page without its size, the old way", QueryRunInput{QueryInput: aql, Page: 2}, "page_size"},
+		{"not a time zone", QueryRunInput{QueryInput: aql, Input: RunInput{Timezone: "Mars/Olympus"}}, "input.timezone"},
+		{"not a time zone, the old way", QueryRunInput{QueryInput: aql, Timezone: "Mars/Olympus"}, "timezone"},
+		{"not a reference time", QueryRunInput{QueryInput: aql, Input: RunInput{Seeds: &Seeds{ReferenceTime: "yesterday"}}}, "input.seeds.referenceTime"},
+		{"a page for SQL", QueryRunInput{QueryInput: sql, Input: RunInput{Pagination: &Pagination{PageSize: 10}}}, "input.pagination"},
+		{"seeds for SQL", QueryRunInput{QueryInput: sql, Input: RunInput{Seeds: &Seeds{}}}, "input.seeds"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.in.normalize().check()
+			v, ok := apperr.DetailsOf(err, apperr.ValidationFailed)
+			if !ok || len(v.Violations) != 1 || v.Violations[0].Field != tc.field {
+				t.Errorf("refused %v, want a violation on %s", err, tc.field)
+			}
+		})
+	}
+}
+
+// An answer's input is the input as the query ran: the first page made
+// explicit, the default time zone, and anfra-node's seeds.
+func TestInputAsItRan(t *testing.T) {
+	in := RunInput{Pagination: &Pagination{PageSize: 20}}
+	got := in.ran(&anfranode.Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"})
+	want := &RunInput{Pagination: &Pagination{Page: 1, PageSize: 20}, Timezone: "Etc/UTC", Seeds: &Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ran = %+v, want %+v", got, want)
+	}
+	if in.Pagination.Page != 0 {
+		t.Error("ran changed the input it was given")
+	}
+	// An anfra-node that returns no seeds: the ones sent, if any.
+	if got := (RunInput{Seeds: &Seeds{ReferenceTime: "2026-01-01T00:00:00Z"}}).ran(nil); got.Seeds.ReferenceTime != "2026-01-01T00:00:00Z" {
+		t.Errorf("seeds = %+v, want the ones sent", got.Seeds)
 	}
 }
 
@@ -87,7 +162,9 @@ func TestRunViolation(t *testing.T) {
 		{"the input as a whole", refusal("input", "Query Input can only be applied to a query with exactly one `explore { }` block."),
 			&apperr.Violation{Field: "input", Code: "invalid", Message: "Query Input can only be applied to a query with exactly one `explore { }` block."}},
 		{"paging a pivot", refusal("pagination", "Pagination for pivot queries isn't supported yet."),
-			&apperr.Violation{Field: "page_size", Code: "unsupported", Message: "Pagination for pivot queries isn't supported yet."}},
+			&apperr.Violation{Field: "input.pagination", Code: "unsupported", Message: "Pagination for pivot queries isn't supported yet."}},
+		{"a seed", refusal("seeds.referenceTime", "Invalid referenceTime."),
+			&apperr.Violation{Field: "input.seeds.referenceTime", Code: "invalid", Message: "Invalid referenceTime."}},
 		{"a param the engine builds", refusal("options.weekStartDay", `Invalid weekStartDay "x".`), nil},
 		{"a param that only shares a prefix", refusal("inputs", "bad"), nil},
 		{"a public error with no path", &anfranode.RPCError{Code: anfranode.RPCInvalidParams, Message: "bad", Data: jsontext.Value(`{"code":"invalid_input"}`)}, nil},

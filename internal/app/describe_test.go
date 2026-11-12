@@ -47,10 +47,10 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 		t.Errorf("query.validate's args =\n  %+v\nwant\n  %+v", v, want)
 	}
 	want = append(want,
-		ArgSpec{Name: "input", Type: command.ArgObject, Usage: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"},
-		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size."},
-		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "how many rows a page has, for AQL only"},
-		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"},
+		ArgSpec{Name: "input", Type: command.ArgObject, Usage: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."},
+		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "deprecated: use input.pagination.page. Ignored when input.pagination is set."},
+		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."},
+		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "deprecated: use input.timezone. Ignored when input.timezone is set."},
 	)
 	for _, name := range []string{"query", "query.compile"} {
 		if args := byName[name].Args; !reflect.DeepEqual(args, want) {

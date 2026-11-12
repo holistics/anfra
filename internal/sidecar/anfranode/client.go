@@ -339,8 +339,19 @@ type CompileToSQLRequest struct {
 	Input *QueryTransforms `json:"input,omitempty"`
 	// Pagination asks for one page of rows, compiled into LIMIT/OFFSET. Nil: every
 	// row. Refused for a pivot query.
-	Pagination *Pagination     `json:"pagination,omitempty"`
-	Options    *CompileOptions `json:"options,omitempty"`
+	Pagination *Pagination `json:"pagination,omitempty"`
+	// Seeds are the values the query compiles with that anfra-node would
+	// otherwise generate for the request. Nil: all generated.
+	Seeds   *Seeds          `json:"seeds,omitempty"`
+	Options *CompileOptions `json:"options,omitempty"`
+}
+
+// Seeds are values generated for each request when unset, and returned with
+// the result, so the query sent again with them compiles to the same SQL and
+// cache key. ReferenceTime is the time relative dates are counted from, as an
+// ISO 8601 date-time.
+type Seeds struct {
+	ReferenceTime string `json:"referenceTime,omitempty"`
 }
 
 // QueryTransforms is a query's Query Input: the structured transforms it
@@ -405,6 +416,13 @@ type CompileToSQLResult struct {
 	// Columns describes each output column of an explore query; absent for other
 	// query shapes.
 	Columns []ExploreColumn `json:"columns,omitempty"`
+	// CacheKey identifies the query as it runs: two with the same key return
+	// the same rows, in the same order, from the same data source. Empty from
+	// an anfra-node that doesn't compute one.
+	CacheKey string `json:"cacheKey,omitempty"`
+	// Seeds are the seeds the query compiled with, every one filled in. Nil
+	// from an anfra-node that doesn't return them.
+	Seeds *Seeds `json:"seeds,omitempty"`
 }
 
 // ExploreColumn is one column of a query's answer: the key its values come back
