@@ -71,6 +71,12 @@ export class Query extends Observable {
    */
   private _sort: readonly QuerySort[] = [];
 
+  /**
+   * The result belongs to the declaration before the last `update`: it stays on screen until the
+   * rerun, but its pages can't be continued with the new AQL. Cleared when a run's first page lands.
+   */
+  private resultSuperseded = false;
+
   /** The input signature of the last successful run; undefined until one has happened. */
   private lastRunSignature?: string;
 
@@ -112,8 +118,9 @@ export class Query extends Observable {
    * Swaps what this query is: its dataset, its AQL, its page size, checked as `createQuery` checks
    * them. Its name, its edges and its result stay; the result until the rerun replaces it. Runs
    * nothing: the query is dirty, and the next `app.execute()` reruns it, so several edits go out
-   * as one run. Back to the first page. A new AQL or dataset clears the sort (unless `sort` is
-   * given) and a selection made in this query, whose rows no longer mean the same.
+   * as one run. Back to the first page. A run or page in flight is aborted, and `fetchMore` does
+   * nothing until the rerun. A new AQL or dataset clears the sort (unless `sort` is given) and a
+   * selection made in this query, whose rows no longer mean the same.
    */
   update (changes: QueryUpdate): void {
     this.assertLive();
@@ -140,6 +147,11 @@ export class Query extends Observable {
 
   /** @internal The app's half of `update`, checked by then: swap the declaration. */
   replaceDeclaration (declaration: QueryDeclaration, dataset: DatasetIndex, sort: readonly QuerySort[]): void {
+    // A run or page in flight is for the old declaration: its answer must not land.
+    this.controller?.abort();
+    this.controller = undefined;
+    if (this._state === 'executing') this._state = this._result ? 'success' : 'idle';
+    this.resultSuperseded = true;
     this._declaration = declaration;
     this._dataset = dataset;
     this._sort = [...sort];
@@ -201,10 +213,10 @@ export class Query extends Observable {
 
   /**
    * Whether another page may follow: as the backend said of the last page, or, when it did not
-   * say, whether that page came back full.
+   * say, whether that page came back full. False after `update` until the rerun.
    */
   get hasMore (): boolean {
-    if (!this._result || this.pageSize === undefined) return false;
+    if (!this._result || this.pageSize === undefined || this.resultSuperseded) return false;
     return this._result.meta.hasMore ?? this.lastPageRows >= this.pageSize;
   }
 
@@ -372,7 +384,10 @@ export class Query extends Observable {
   markSuccess (result: QueryResult, signature: string, append: boolean, ranInput?: QueryInput): void {
     if (this.removed) return;
     this._state = 'success';
-    if (!append) this._ranInput = ranInput;
+    if (!append) {
+      this._ranInput = ranInput;
+      this.resultSuperseded = false;
+    }
     this._error = undefined;
     if (!append) this.runFailed = false;
     this.lastRunSignature = signature;

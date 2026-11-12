@@ -743,11 +743,12 @@ export class App extends Observable implements AppContext {
         context,
       );
       const { result, input } = await runQuery(query, request, context.backend, controller.signal, this.stampOf(query));
-      if (superseded(query, controller) || query.isRemoved) return undefined;
+      // Also after `remove()` or `update()`, which take the controller away.
+      if (superseded(query, controller)) return undefined;
       query.markSuccess(result, signature, false, input);
       return 'succeeded';
     } catch (err) {
-      if (superseded(query, controller) || query.isRemoved) return undefined;
+      if (superseded(query, controller)) return undefined;
       if (isAbort(err)) return undefined;
       const error = toDataAppError(err, query.name);
       query.markError(error);
@@ -787,11 +788,14 @@ export class App extends Observable implements AppContext {
           expression: this.selectionExpressionFor(query.name, 'applied'),
         }, { backend: this.backend, timezone: this._timezone });
       const { result } = await runQuery(query, request, this.backend, controller.signal, this.stampOf(query));
-      if (query.isRemoved) return;
+      // A newer run, `remove()` or `update()` took the query over: this page is not its any more.
+      if (superseded(query, controller)) return;
       query.markSuccess(result, signature, true);
     } catch (err) {
+      // Its page count was reset by whatever took it over: nothing to rewind.
+      if (superseded(query, controller)) return;
       query.rewindPage();
-      if (isAbort(err) || query.isRemoved) return;
+      if (isAbort(err)) return;
       const error = toDataAppError(err, query.name);
       query.markError(error, true);
       throw error;
