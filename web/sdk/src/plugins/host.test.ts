@@ -62,6 +62,131 @@ const answered = (count: number) => vi.waitFor(() => { expect(replies.length).to
 
 const query = { dataset: 'sales', aql: 'explore {}', input: { filters: [], conditions: [], sorts: [], dateDrills: [] } };
 
+describe('core', () => {
+  /** The frame's `core.execute` calls, as the host made them. */
+  const executes = () => replies.filter((message) => message.type === 'anfra:call' && message.name === 'core.execute') as { id: number, request: unknown }[];
+  const answer = (id: number, result: unknown) => fromFrame({ type: 'anfra:result', id, ok: true, result });
+  const results = (payload: unknown) => fromFrame({ type: 'anfra:event', name: 'core.results', payload });
+
+  it('refreshes the frame: every query again, busting the cache unless told not to, answering its summary', async () => {
+    const app = mount();
+    const busting = app.call('core.refresh');
+    await answered(1);
+    expect(executes()[0].request).toEqual({ force: true, bustCache: true });
+    answer(executes()[0].id, { succeeded: ['revenue'], failed: [] });
+    await expect(busting).resolves.toEqual({ succeeded: ['revenue'], failed: [] });
+
+    const keeping = app.call('core.refresh', { bustCache: false });
+    await answered(2);
+    expect(executes()[1].request).toEqual({ force: true, bustCache: false });
+    answer(executes()[1].id, { succeeded: [], failed: ['orders'] });
+    await expect(keeping).resolves.toEqual({ succeeded: [], failed: ['orders'] });
+  });
+
+  it('runs one refresh at a time, whatever it busts, and clears it once one ends however it ends', async () => {
+    const app = mount();
+    const first = app.call('core.refresh');
+    await answered(1);
+    await expect(app.call('core.refresh', { bustCache: false })).rejects.toThrow('A refresh is running already.');
+    fromFrame({ type: 'anfra:result', id: executes()[0].id, ok: false, error: { name: 'DataAppError', code: 'call_failed', scope: 'server', message: 'gone' } });
+    await expect(first).rejects.toThrow('gone');
+
+    const second = app.call('core.refresh');
+    await answered(2);
+    answer(executes()[1].id, { succeeded: [], failed: [] });
+    await second;
+
+    const third = app.call('core.refresh');
+    await answered(3);
+    app.unmount();
+    mounted = undefined;
+    await expect(third).rejects.toThrow(/unmounted/);
+    expect(app.commandState('core.refresh')).not.toHaveProperty('disabled');
+  });
+
+  it('is not the frame\'s to call: neither the refresh nor the frame\'s own execute', async () => {
+    mount();
+    fromFrame({ type: 'anfra:call', id: 1, name: 'core.refresh', request: null });
+    fromFrame({ type: 'anfra:call', id: 2, name: 'core.execute', request: { force: true } });
+    await answered(2);
+    expect(replies).toEqual([
+      { type: 'anfra:result', id: 1, ok: false, error: expect.objectContaining({ code: 'forbidden' }) },
+      { type: 'anfra:result', id: 2, ok: false, error: expect.objectContaining({ code: 'invalid_request' }) },
+    ]);
+  });
+
+  it('offers Refresh, disabled while a refresh runs and not while the frame runs its queries', async () => {
+    const host = createHost({ plugins: [corePlugin(backend())], frameScript: 'x' });
+    expect(host.commands).toEqual([expect.objectContaining({
+      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary', shortcut: 'Alt+Shift+R', run: { call: 'core.refresh', request: { bustCache: true } },
+    })]);
+    const app = mount();
+    const states: unknown[] = [];
+    app.onCommandsChange(() => states.push(app.commandState('core.refresh')));
+
+    fromFrame({ type: 'anfra:call', id: 1, name: 'core.submitQuery', request: query });
+    expect(app.commandState('core.refresh')).toEqual({});
+
+    const run = app.run('core.refresh');
+    await vi.waitFor(() => { expect(executes()).toHaveLength(1); });
+    expect(app.commandState('core.refresh')).toEqual({ disabled: 'Refreshing…' });
+    await expect(app.run('core.refresh')).rejects.toThrow('Refreshing…');
+    answer(executes()[0].id, { succeeded: [], failed: [] });
+    await run;
+    expect(states).toEqual([{ disabled: 'Refreshing…' }, {}]);
+  });
+
+  it('says how old the figures are while a cached result shows, each minute, and nothing once none does', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-12T09:00:00Z'));
+      const app = mount();
+      let changes = 0;
+      app.onCommandsChange(() => { changes += 1; });
+
+      results({ cached: false });
+      expect(app.commandState('core.refresh')).toEqual({});
+      results({ cached: true, cachedSince: '2026-11-12T08:55:00Z' });
+      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from 5 minutes ago' });
+      expect(changes).toBe(1);
+
+      vi.advanceTimersByTime(60_000);
+      expect(changes).toBe(2);
+      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from 6 minutes ago' });
+
+      results({ cached: false });
+      expect(app.commandState('core.refresh')).toEqual({});
+      vi.advanceTimersByTime(180_000);
+      expect(changes).toBe(3);
+
+      // What isn't a status is dropped.
+      results({ cached: 'yes' });
+      results({ cached: true, cachedSince: 'yesterday' });
+      expect(app.commandState('core.refresh')).toEqual({});
+      // A cache that doesn't say when it ran.
+      results({ cached: true });
+      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from a cache' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says it is refreshing, not how old the figures are, while a refresh runs', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-12T09:00:00Z'));
+      const app = mount();
+      results({ cached: true, cachedSince: '2026-11-12T07:00:00Z' });
+      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from 2 hours ago' });
+      app.call('core.refresh').catch(() => {});
+      await vi.waitFor(() => { expect(executes()).toHaveLength(1); });
+      expect(app.commandState('core.refresh')).toEqual({ disabled: 'Refreshing…' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('export', () => {
   const link = {
     url: 'http://host/exports/download/t0k3n/revenue.csv', filename: 'revenue.csv', format: 'csv', rowCount: 3, expiresAt: new Date(0),
@@ -126,7 +251,7 @@ describe('render', () => {
     const app = mount(renderPlugin({ renderer: 'R' }));
     const host = createHost({ plugins: [corePlugin(backend()), renderPlugin({ renderer: 'R' })], frameScript: 'x' });
     expect(host.commands.map((command) => [command.id, command.title, command.placement])).toEqual([
-      ['render.png', 'Download as PNG', 'overflow'], ['render.pdf', 'Download as PDF', 'overflow'],
+      ['core.refresh', 'Refresh', 'primary'], ['render.png', 'Download as PNG', 'overflow'], ['render.pdf', 'Download as PDF', 'overflow'],
     ]);
     app.run('render.pdf').catch(() => {}); // the frame never answers: it is unmounted after
     await answered(1);

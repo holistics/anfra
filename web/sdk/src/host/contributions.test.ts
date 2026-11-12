@@ -15,7 +15,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const core = () => corePlugin({ submitQuery: vi.fn(), fieldSuggestions: vi.fn() });
+/** `core` without its Refresh command, so each test sees only the contributions it installs. */
+const core = (): Plugin => {
+  const plugin = corePlugin({ submitQuery: vi.fn(), fieldSuggestions: vi.fn() });
+  return { ...plugin, host: { ...plugin.host, commands: [] } };
+};
 
 const notes = (handler: CallHandler = vi.fn(() => 'saved')) => definePlugin({
   name: 'notes',
