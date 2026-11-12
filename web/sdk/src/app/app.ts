@@ -33,6 +33,7 @@ import type {
   FilterAggregation,
   QueryRequest,
   QueryStamp,
+  CallStamp,
   ConditionValue,
   FilterDeclaration,
   InspectedApp,
@@ -828,7 +829,7 @@ export class App extends Observable implements AppContext {
   async exportQuery (
     query: Query,
     options: ExportOptions,
-    send: (request: BackendExportRequest, signal: AbortSignal, stamp: QueryStamp) => Promise<ExportResult>,
+    send: (request: BackendExportRequest, signal: AbortSignal, stamp: CallStamp) => Promise<ExportResult>,
   ): Promise<ExportResult> {
     const request = buildExportRequest(
       query,
@@ -843,7 +844,8 @@ export class App extends Observable implements AppContext {
       query.ranInput,
     );
     try {
-      return await send(request, options.signal ?? new AbortController().signal, this.stampOf(query));
+      // Sent through `kernel.call`, which adds the query's id.
+      return await send(request, options.signal ?? new AbortController().signal, { app: this.index, query: query.name });
     } catch (err) {
       if (isAbort(err)) throw err;
       throw toDataAppError(err, query.name, 'The export failed.');

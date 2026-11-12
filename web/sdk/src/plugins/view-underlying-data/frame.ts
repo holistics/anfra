@@ -38,7 +38,7 @@ export default function setup (kernel: FrameKernel): void {
     // The rows behind a point are a variant of the query: inspect lists them under it, and never as
     // its result.
     const about = { app: target.app, query: target.query };
-    const stamp = { ...about, id: query.id, variant: 'underlying' };
+    const stamp = { ...about, variant: 'underlying' };
     await kernel.modal({
       title: planned.title,
       size: 'lg',

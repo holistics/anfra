@@ -7,7 +7,7 @@ import {
   DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest, isDataAppError,
 } from '../common/errors';
 import type { Endpoint } from '../common/endpoint';
-import type { QueryRequest, QueryStamp } from '../common/types';
+import type { CallStamp, QueryRequest, QueryStamp } from '../common/types';
 import type { App } from './app';
 import type { Control } from './controls';
 import type { Query } from './query';
@@ -51,9 +51,9 @@ export interface FrameKernel {
   queryRequest: (query: Query) => QueryRequest;
   /**
    * Make a host half's call, by its full name (`core.submitQuery`). `stamp` names the query the call
-   * is for, so the host shows it under that query (its request log).
+   * is for, so the host shows it under that query (its request log). The kernel adds the query's id.
    */
-  call: <T = unknown>(name: string, request?: unknown, signal?: AbortSignal, stamp?: QueryStamp) => Promise<T>;
+  call: <T = unknown>(name: string, request?: unknown, signal?: AbortSignal, stamp?: CallStamp) => Promise<T>;
   /** Send the host one of this plugin's events, by its name under the plugin. */
   emit: (name: string, payload?: unknown) => void;
   /** Answer one of this plugin's calls made by the host, by its name under the plugin. */
@@ -135,6 +135,18 @@ function namedMember (member: unknown, api: string): unknown {
   });
 }
 
+/**
+ * A plugin's stamp as it is sent: with the id of the query by that name in that app now, so the host
+ * doesn't show the call under an earlier query of the name. A plugin never handles the id.
+ */
+function withQueryId (sdk: Sdk, { app, query, variant }: CallStamp): QueryStamp {
+  const queries = sdk.apps[app]?.queries ?? {};
+  const id = Object.hasOwn(queries, query) ? queries[query]?.id : undefined;
+  return {
+    app, query, ...(id !== undefined && { id }), ...(variant !== undefined && { variant }),
+  };
+}
+
 export function createKernel (plugin: string, shared: KernelShared, entities: { Query: { prototype: Query }, Control: { prototype: Control } }): FrameKernel {
   const { window: win, sdk, endpoint } = shared;
   let loading: Promise<unknown> | undefined;
@@ -153,7 +165,7 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
       if (!app) throw new ValidationError(`Query '${String(query?.name)}' belongs to no app.`, query?.name);
       return app.requestFor(query);
     },
-    call: (name, request, signal, stamp) => endpoint.call(name, request ?? null, signal, stamp),
+    call: (name, request, signal, stamp) => endpoint.call(name, request ?? null, signal, stamp && withQueryId(sdk, stamp)),
     emit: (name, payload) => endpoint.emit(`${plugin}.${name}`, payload ?? null),
     handle (name, handler) {
       shared.handlers.set(`${plugin}.${name}`, handler);

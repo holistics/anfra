@@ -47,3 +47,24 @@ describe('kernel.queryRequest', () => {
     expect(() => kernel.queryRequest(other)).toThrow(/belongs to no app/);
   });
 });
+
+describe('kernel.call', () => {
+  it('adds the id of the query the stamp names, now, and none for a query the app lacks', async () => {
+    let kernel!: FrameKernel;
+    const f = testFrame({ setups: [['notes', (k) => { kernel = k; }]], answers: { 'notes.look': () => null } });
+    const app = f.anfra.createApp();
+    const first = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    first.remove();
+    const again = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+
+    await kernel.call('notes.look', null, undefined, { app: 0, query: 'revenue', variant: 'notes' });
+    await kernel.call('notes.look', null, undefined, { app: 0, query: 'revenue', id: first.id } as never);
+    await kernel.call('notes.look', null, undefined, { app: 0, query: 'gone' });
+
+    expect(f.calls.map((call) => call.stamp)).toEqual([
+      { app: 0, query: 'revenue', id: again.id, variant: 'notes' },
+      { app: 0, query: 'revenue', id: again.id },
+      { app: 0, query: 'gone' },
+    ]);
+  });
+});

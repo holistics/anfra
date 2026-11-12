@@ -151,7 +151,7 @@ What the kernel gives a setup:
 |---|---|
 | `provide(api)` | Adds `Anfra.<plugin>`. Once. |
 | `provideOnQuery(factory)`, `provideOnControl(factory)` | Adds `query.<plugin>` / `control.<plugin>` to every one, made the first time it is read. |
-| `call(name, request?, signal?, stamp?)` | Makes a call by its full name (`notes.list`, `core.submitQuery`): any call the frame may make. `stamp` (`{ app, query, id?, variant? }`) names the query the call is for, so the host shows it under that query. Take `id` from the query (`query.id`), so the call isn't shown under a later query of the same name. Give `variant` a short name when the call is your plugin's variant of the query rather than the query itself, so the host doesn't show it as the query's result. |
+| `call(name, request?, signal?, stamp?)` | Makes a call by its full name (`notes.list`, `core.submitQuery`): any call the frame may make. `stamp` (`{ app, query, variant? }`) names the query the call is for, so the host shows it under that query. The kernel adds the query's id when it sends the call, so you never pass one. Give `variant` a short name when the call is your plugin's variant of the query rather than the query itself, so the host doesn't show it as the query's result. |
 | `queryRequest(query)` | What a query runs with now: its dataset, AQL, input (mapped controls, the selection, the reader's sort, date drills) and timezone, as its own run is built. Change what you need and send it as `core.submitQuery` to run a variant of the query through the pipeline. |
 | `emit(name, payload?)` | Sends the host one of this plugin's events, by its short name. |
 | `handle(name, handler)` | Answers a call the host makes into the frame (`mounted.call('notes.focus')`). |

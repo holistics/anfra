@@ -823,6 +823,12 @@ export interface QueryStamp {
 }
 
 /**
+ * The stamp a plugin's frame half passes to `kernel.call`: the query's `id` is left out, and the
+ * kernel adds the current one of the query by that name when it sends the call.
+ */
+export type CallStamp = Omit<QueryStamp, 'id'>;
+
+/**
  * What the SDK sends queries to, supplied by the provisioner. Each call either resolves or
  * rejects; how the backend gets there (synchronously, as polled jobs, over a bridge) is its own
  * business. A call whose `signal` aborts may reject with an `AbortError`, and its result is
