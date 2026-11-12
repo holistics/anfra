@@ -15,14 +15,40 @@ import type {
   Row,
 } from '../common/types';
 
+/** What `query.update` may change. `pageSize: undefined` drops the paging. */
+export interface QueryUpdate {
+  dataset?: string;
+  aql?: string;
+  pageSize?: number;
+  /** The sort to keep; left out, a new AQL or dataset clears the sort, and anything else keeps it. */
+  sort?: readonly QuerySort[];
+}
+
+/** What `createQuery` and `update` check of a declaration. */
+export function assertDeclaration (name: string, declaration: QueryDeclaration): void {
+  if (!declaration.aql?.trim()) {
+    throw new ValidationError(`Query '${name}' declares no AQL.`, name);
+  }
+  const { pageSize } = declaration;
+  if (pageSize !== undefined && !(Number.isInteger(pageSize) && pageSize >= 1)) {
+    throw new ValidationError(
+      `Query '${name}' declares pageSize ${pageSize}; it must be a whole number of at least 1.`,
+      name,
+    );
+  }
+}
+
 export class Query extends Observable {
   readonly kind = 'query' as const;
 
   readonly name: string;
 
-  readonly declaration: QueryDeclaration;
+  private _declaration: QueryDeclaration;
 
-  readonly dataset: DatasetIndex;
+  private _dataset: DatasetIndex;
+
+  /** Set once `remove()` took it out of its app; every method then throws. */
+  private removed = false;
 
   private readonly app: AppContext & Observable;
 
@@ -60,20 +86,75 @@ export class Query extends Observable {
   constructor (name: string, app: AppContext & Observable, declaration: QueryDeclaration) {
     // Parented to the app so one `app.subscribe` sees every entity's changes.
     super(app);
-    if (!declaration.aql?.trim()) {
-      throw new ValidationError(`Query '${name}' declares no AQL.`, name);
-    }
-    const { pageSize } = declaration;
-    if (pageSize !== undefined && !(Number.isInteger(pageSize) && pageSize >= 1)) {
-      throw new ValidationError(
-        `Query '${name}' declares pageSize ${pageSize}; it must be a whole number of at least 1.`,
-        name,
-      );
-    }
+    assertDeclaration(name, declaration);
     this.name = name;
     this.app = app;
-    this.declaration = declaration;
-    this.dataset = app.datasetIndex(declaration.dataset, name);
+    this._declaration = declaration;
+    this._dataset = app.datasetIndex(declaration.dataset, name);
+  }
+
+  /** What it was declared with, or last updated to. */
+  get declaration (): QueryDeclaration {
+    return this._declaration;
+  }
+
+  /** The dataset its declaration names, resolved. */
+  get dataset (): DatasetIndex {
+    return this._dataset;
+  }
+
+  /** False once `remove()` took it out of its app. */
+  get isRemoved (): boolean {
+    return this.removed;
+  }
+
+  /**
+   * Swaps what this query is: its dataset, its AQL, its page size, checked as `createQuery` checks
+   * them. Its name, its edges and its result stay; the result until the rerun replaces it. Runs
+   * nothing: the query is dirty, and the next `app.execute()` reruns it, so several edits go out
+   * as one run. Back to the first page. A new AQL or dataset clears the sort (unless `sort` is
+   * given) and a selection made in this query, whose rows no longer mean the same.
+   */
+  update (changes: QueryUpdate): void {
+    this.assertLive();
+    this.app.updateQuery(this, changes);
+  }
+
+  /**
+   * Takes this query out of its app: its control mappings and cross-filters go with it, a run in
+   * flight is aborted, a selection made in it is cleared, and its name is free again. The queries
+   * it cross-filtered rerun without it at the next `app.execute()`. Every method of it throws from
+   * then on.
+   */
+  remove (): void {
+    this.assertLive();
+    this.app.removeEntity(this);
+  }
+
+  /** @internal Throws once the query was removed. */
+  assertLive (): void {
+    if (this.removed) {
+      throw new ValidationError(`Query '${this.name}' was removed from its app; it can't be used any more.`, this.name);
+    }
+  }
+
+  /** @internal The app's half of `update`, checked by then: swap the declaration. */
+  replaceDeclaration (declaration: QueryDeclaration, dataset: DatasetIndex, sort: readonly QuerySort[]): void {
+    this._declaration = declaration;
+    this._dataset = dataset;
+    this._sort = [...sort];
+    // The last run's input belongs to the old declaration: replaying it with the new AQL would
+    // bring back a sort the edit cleared. Pages and exports build from the applied state instead.
+    this._ranInput = undefined;
+    this.resetPage();
+    this.notify();
+  }
+
+  /** @internal The app's half of `remove`: stop what is in flight, and stay quiet from then on. */
+  markRemoved (): void {
+    this.removed = true;
+    this.controller?.abort();
+    this.controller = undefined;
   }
 
   /**
@@ -82,6 +163,7 @@ export class Query extends Observable {
    * marked with it yet; never throws, so an author's own button is safe.
    */
   locate (): boolean {
+    this.assertLive();
     return this.app.locate('query', this.name);
   }
 
@@ -112,6 +194,7 @@ export class Query extends Observable {
 
   /** Replaces the sort applied to this query's result. Pass `[]` to clear it back to the AQL's own. */
   setSort (sort: readonly QuerySort[]): void {
+    this.assertLive();
     this._sort = [...sort];
     this.notify();
   }
@@ -191,17 +274,20 @@ export class Query extends Observable {
    * the next `app.execute()` runs it with them. Never rejects, as `app.execute()` doesn't.
    */
   execute (options: ExecuteOptions = {}): Promise<ExecuteSummary> {
+    this.assertLive();
     return this.app.executeQuery(this, options);
   }
 
   /** Stops the in-flight request for this query. The pending `execute()` resolves without it. */
   abort (): void {
+    this.assertLive();
     this.controller?.abort();
   }
 
   /** Fetches the next page and appends it. Rejects rather than swallowing, unlike `execute()`. */
   async fetchMore (): Promise<void> {
     try {
+      this.assertLive();
       if (this.pageSize === undefined) {
         throw new ValidationError(`Query '${this.name}' declares no pageSize, so it has no more pages.`, this.name);
       }
@@ -224,6 +310,7 @@ export class Query extends Observable {
    * browser's menu) is prevented, and when none would (no plugin offers one), nothing happens.
    */
   menu (event: Event, rows: Row | readonly Row[], options: { fields?: readonly string[], measure?: string } = {}): boolean {
+    this.assertLive();
     return this.app.menu(this, event, Array.isArray(rows) ? rows : [rows as Row], options.fields, options.measure);
   }
 
@@ -238,6 +325,7 @@ export class Query extends Observable {
    * returned. A measure or an adhoc column never takes part, whether or not it is named here.
    */
   select (rows: Row | readonly Row[], options: { fields?: readonly string[] } = {}): void {
+    this.assertLive();
     this.app.select(this, Array.isArray(rows) ? rows : [rows as Row], options.fields);
   }
 
@@ -269,6 +357,7 @@ export class Query extends Observable {
 
   /** @internal */
   markExecuting (): void {
+    if (this.removed) return;
     this._state = 'executing';
     this._error = undefined;
     this.notify();
@@ -281,6 +370,7 @@ export class Query extends Observable {
 
   /** @internal */
   markSuccess (result: QueryResult, signature: string, append: boolean, ranInput?: QueryInput): void {
+    if (this.removed) return;
     this._state = 'success';
     if (!append) this._ranInput = ranInput;
     this._error = undefined;
@@ -300,6 +390,7 @@ export class Query extends Observable {
 
   /** @internal `page` when it is a `fetchMore` that failed, not a run. */
   markError (error: DataAppError, page = false): void {
+    if (this.removed) return;
     if (!page) this.runFailed = true;
     this._state = 'error';
     this._error = error;
@@ -318,7 +409,7 @@ export class Query extends Observable {
   }
 
   toJSON (): QueryDeclaration {
-    return this.declaration;
+    return this._declaration;
   }
 }
 

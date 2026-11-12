@@ -42,8 +42,16 @@ export type FrameMenuItem = FrameMenuItemBase & (
   | { entries: (target: MenuTarget) => readonly FrameMenuEntry[], label?: never, run?: never }
 );
 
+/** The query a modal or popover is about: it closes when the query is removed. */
+export interface QueryAbout {
+  app: number;
+  query: string;
+}
+
 export interface ModalInput {
   title: string;
+  /** The query it shows something of, if any: removing the query closes it. */
+  about?: QueryAbout;
   size?: 'sm' | 'md' | 'lg' | 'full';
   /** Draw the content into its own shadow root, on the host's `--anfra-*` tokens; what it returns runs on close. */
   mount: (root: ShadowRoot) => void | (() => void);
@@ -51,6 +59,8 @@ export interface ModalInput {
 }
 
 export interface PopoverInput {
+  /** The query it shows something of, if any: removing the query closes it. */
+  about?: QueryAbout;
   /** A node (a target's, kept in view as the page scrolls), or a point in the viewport. */
   anchor: NodeTarget | { x: number, y: number };
   /** The side of the anchor it opens on: `right` unless given; another when that one has no room. */
@@ -106,6 +116,8 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
   let hostKinds = new Set<MenuTargetKind>();
   let listening = false;
   let current: (() => void) | undefined;
+  /** The query what is open is about, if any. */
+  let currentAbout: QueryAbout | undefined;
 
   const ui = () => kernel.body<UiBody>();
   const root = () => layerRoot(doc, 'anfra-ui');
@@ -113,6 +125,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
   const closeCurrent = () => {
     const close = current;
     current = undefined;
+    currentAbout = undefined;
     close?.();
   };
 
@@ -185,7 +198,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
   }
 
   /** Open the menu on these targets (the rows first, then their node), for the event. */
-  function open (event: Event, targets: MenuTarget[]): boolean {
+  function open (event: Event, targets: MenuTarget[], about?: QueryAbout): boolean {
     // The browser's menu is kept unless something may show: a frame item that applies, or the host's
     // commands for the kind (whose own conditions are only known once it answers).
     const relevant = targets.map((target) => ({ target, own: frameEntries(target) }))
@@ -214,6 +227,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
         onClose: () => { if (current === close) current = undefined; },
       });
       current = close;
+      currentAbout = about;
     })().catch((err: unknown) => {
       (win as Window & typeof globalThis).console?.error('anfra: the menu failed to open:', err);
       reportError('plugin.uncaught', err);
@@ -239,8 +253,13 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     const element = blockOf(event.target);
     const node = element ? nodeTarget(element) : undefined;
     const rows: RowsTarget = node ? { ...target, node } : target;
-    return open(event, node ? [rows, node] : [rows]);
+    return open(event, node ? [rows, node] : [rows], { app: target.app, query: target.query });
   };
+
+  // A menu or a modal about a query the app removed shows what is gone: it closes.
+  kernel.onApp((app) => app.onRemoved((entity) => {
+    if (entity.kind === 'query' && currentAbout?.app === app.index && currentAbout.query === entity.name) closeCurrent();
+  }));
 
   kernel.on('menu', (payload: unknown) => {
     const kinds = (payload as { kinds?: unknown } | null)?.kinds;
@@ -261,7 +280,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     }
   };
 
-  async function show<T extends { onClose?: () => void }> (input: T, draw: (body: UiBody, onClose: () => void) => () => void): Promise<Opened> {
+  async function show<T extends { onClose?: () => void, about?: QueryAbout }> (input: T, draw: (body: UiBody, onClose: () => void) => () => void): Promise<Opened> {
     const body = await ui();
     closeCurrent();
     let close: () => void = () => {};
@@ -271,6 +290,7 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     };
     close = draw(body, onClose);
     current = close;
+    currentAbout = input.about ? { app: input.about.app, query: input.about.query } : undefined;
     return { close };
   }
 

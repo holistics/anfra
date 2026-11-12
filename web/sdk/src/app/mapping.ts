@@ -1,8 +1,21 @@
 /* eslint-disable max-classes-per-file -- Mapping and CrossFilter are the two kinds of one thing,
    a directed edge in the app's entity graph; splitting the file would hide that. */
+import { ValidationError } from '../common/errors';
 import type { ControlMappingJson, CrossFilterJson, FilterAggregation } from '../common/types';
 import type { Control } from './controls';
 import type { Query } from './query';
+
+/** What an edge needs of its app: a way to take it out. */
+export interface EdgeOwner {
+  removeEdge (edge: Edge): void;
+}
+
+/** Throws for an edge already taken out of its app. */
+function assertLive (edge: Edge, removed: boolean): void {
+  if (removed) {
+    throw new ValidationError(`Edge '${edge.id}' was removed from its app; map again to have it back.`, edge.from.name);
+  }
+}
 
 /**
  * A directed edge from an interactive control to one field of one query.
@@ -22,11 +35,30 @@ export class Mapping {
 
   readonly aggregation?: FilterAggregation;
 
-  constructor (from: Control, to: Query, field: string, aggregation?: FilterAggregation) {
+  private readonly owner?: EdgeOwner;
+
+  private removed = false;
+
+  constructor (from: Control, to: Query, field: string, aggregation?: FilterAggregation, owner?: EdgeOwner) {
     this.from = from;
     this.to = to;
     this.field = field;
     this.aggregation = aggregation;
+    this.owner = owner;
+  }
+
+  /**
+   * Takes this mapping out of its app: its query reruns without the control's condition at the
+   * next `app.execute()`. An edge never changes: to change one, remove it and map again.
+   */
+  remove (): void {
+    assertLive(this, this.removed);
+    this.owner?.removeEdge(this);
+  }
+
+  /** @internal */
+  markRemoved (): void {
+    this.removed = true;
   }
 
   /**
@@ -65,9 +97,28 @@ export class CrossFilter {
 
   readonly to: Query;
 
-  constructor (from: Query, to: Query) {
+  private readonly owner?: EdgeOwner;
+
+  private removed = false;
+
+  constructor (from: Query, to: Query, owner?: EdgeOwner) {
     this.from = from;
     this.to = to;
+    this.owner = owner;
+  }
+
+  /**
+   * Takes this cross-filter out of its app: a selection in `from` stops reaching `to`, which
+   * reruns without it at the next `app.execute()`. To change one, remove it and map again.
+   */
+  remove (): void {
+    assertLive(this, this.removed);
+    this.owner?.removeEdge(this);
+  }
+
+  /** @internal */
+  markRemoved (): void {
+    this.removed = true;
   }
 
   /** No field to disambiguate, and one pair may only be declared once, so the pair is the id. */
