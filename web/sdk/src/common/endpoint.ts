@@ -24,6 +24,7 @@ export function copyStamp (stamp: QueryStamp): QueryStamp {
   return {
     app: stamp.app,
     query: stamp.query,
+    ...(stamp.id !== undefined && { id: stamp.id }),
     ...(stamp.variant !== undefined && { variant: stamp.variant }),
   };
 }

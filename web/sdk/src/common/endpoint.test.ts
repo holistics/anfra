@@ -105,10 +105,12 @@ describe('a call\'s stamp', () => {
 
     void frame.call('core.submitQuery', {}, undefined, { app: 0, query: 'revenue' });
     void frame.call('core.submitQuery', {}, undefined, { app: 0, query: 'revenue', variant: 'underlying', extra: 1 } as never);
+    void frame.call('core.submitQuery', {}, undefined, { app: 0, query: 'revenue', id: 3 });
 
     expect(posted.map((m) => (m as { stamp?: unknown }).stamp)).toEqual([
       { app: 0, query: 'revenue' },
       { app: 0, query: 'revenue', variant: 'underlying' },
+      { app: 0, query: 'revenue', id: 3 },
     ]);
   });
 });

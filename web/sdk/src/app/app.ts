@@ -90,6 +90,7 @@ function inspectError (error: DataAppError): InspectedError {
 function inspectQuery (query: Query): InspectedQuery {
   const { result } = query;
   return {
+    id: query.id,
     state: query.state,
     isDirty: query.isDirty,
     page: query.page,
@@ -194,6 +195,9 @@ export class App extends Observable implements AppContext {
    */
   private selectionCommitted = false;
 
+  /** The id the next query created gets. */
+  private nextQueryId = 1;
+
   constructor (
     declaration: AppDeclaration,
     datasets: Record<string, DatasetIndex>,
@@ -233,7 +237,7 @@ export class App extends Observable implements AppContext {
 
   createQuery (name: string, declaration: QueryDeclaration): Query {
     this.assertNameFree(name, 'query');
-    const query = applyExtensions(new Query(name, this, declaration), this.extensions?.query);
+    const query = applyExtensions(new Query(name, this, declaration, this.nextQueryId++), this.extensions?.query);
     this._queries.set(name, query);
     // Declaring is a change too: a host inspecting the app sees the new entity at once, and a
     // dynamic app's render runs once more, which it already handles for an entity with no result.
@@ -928,7 +932,7 @@ export class App extends Observable implements AppContext {
 
   /** What a query's calls are stamped with, so the host can show each under its query. */
   private stampOf (query: Query): QueryStamp {
-    return { app: this.index, query: query.name };
+    return { app: this.index, query: query.name, id: query.id };
   }
 
   private assertNameFree (name: string, kind: string): void {

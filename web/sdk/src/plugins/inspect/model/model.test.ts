@@ -93,8 +93,27 @@ describe('request attribution', () => {
 
   it('keeps a removed query\'s requests under its name, marked removed', () => {
     const { byQuery, removed } = attributeRequests([stamped(1, REVENUE_AQL, 'gone'), stamped(2, REVENUE_AQL, 'revenue')], [salesApp()]);
-    expect(byQuery.get('0/gone')?.map((item) => item.entry.id)).toEqual([1]);
-    expect(removed).toEqual([{ app: 0, name: 'gone' }]);
+    expect(byQuery.get('0/gone')).toBeUndefined();
+    expect(removed.map(({ app, name, requests }) => ({ app, name, ids: requests.map((item) => item.entry.id) })))
+      .toEqual([{ app: 0, name: 'gone', ids: [1] }]);
+  });
+
+  it('starts a query created again by its name afresh: the earlier one\'s requests go under removed', () => {
+    const app = salesApp();
+    app.queries.revenue = { ...app.queries.revenue!, id: 2 };
+    const withId = (id: number, query: number) => entry(id, REVENUE_AQL, { stamp: { app: 0, query: 'revenue', id: query } });
+    const { byQuery, removed } = attributeRequests([withId(1, 1), withId(2, 1), withId(3, 2)], [app]);
+    expect(byQuery.get('0/revenue')?.map((item) => item.entry.id)).toEqual([3]);
+    expect(removed.map(({ name, requests }) => [name, requests.map((item) => item.entry.id)])).toEqual([['revenue', [2, 1]]]);
+  });
+
+  it('falls back to the name when the stamp or the snapshot has no id', () => {
+    const app = salesApp();
+    app.queries.revenue = { ...app.queries.revenue!, id: 2 };
+    const { byQuery, removed } = attributeRequests([stamped(1, REVENUE_AQL, 'revenue'), entry(2, REVENUE_AQL, { stamp: { app: 0, query: 'orders', id: 9 } })], [app]);
+    expect(byQuery.get('0/revenue')?.map((item) => item.entry.id)).toEqual([1]);
+    expect(byQuery.get('0/orders')?.map((item) => item.entry.id)).toEqual([2]);
+    expect(removed).toEqual([]);
   });
 });
 
