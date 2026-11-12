@@ -11,6 +11,7 @@ import type {
   Condition,
   DateGrain,
   ExportOptions,
+  QueryInput,
   QueryRequest,
   QueryResult,
   SelectionCondition,
@@ -139,25 +140,41 @@ export function buildQuery (
       conditions,
       sorts: query.sort.map((sort) => ({ field: sort.field, direction: sort.direction ?? 'asc' })),
       dateDrills,
+      // Omitted entirely when the app declares none, so the backend applies its own default rather
+      // than the SDK guessing the browser's.
+      ...(context.timezone ? { timezone: context.timezone } : {}),
     },
-    // Omitted entirely when the app declares none, so the backend applies its own default rather
-    // than the SDK guessing the browser's.
-    ...(context.timezone ? { timezone: context.timezone } : {}),
   };
 }
 
+/** A fresh run of the query: built from the app's state, from its first page, with no seeds, so as of now. */
 export function buildRequest (
   query: Query,
   mappings: Mapping[],
   selection: SelectionInput,
   context: SubmitContext,
 ): BackendQueryRequest {
+  const { input, ...rest } = buildQuery(query, mappings, selection, context);
   return {
-    ...buildQuery(query, mappings, selection, context),
-    // Omitted for a query that declares no page size, so the backend returns every row.
-    ...(query.pageSize !== undefined ? { page: query.page, pageSize: query.pageSize } : {}),
+    ...rest,
+    input: withPage(input, query),
     ...(context.bustCache ? { bustCache: true } : {}),
   };
+}
+
+/**
+ * A later page of the query's run: the input the run came back with, replayed with the query's
+ * page, so it continues that run (its seeds among it) rather than starting one as of now.
+ */
+export function pageRequest (query: Query, ran: QueryInput): BackendQueryRequest {
+  return { dataset: query.dataset.descriptor.name, aql: query.declaration.aql, input: withPage(ran, query) };
+}
+
+// The input with the query's page: omitted for a query that declares no page size, so the backend
+// returns every row.
+function withPage (input: QueryInput, query: Query): QueryInput {
+  const { pagination: _, ...rest } = input;
+  return query.pageSize !== undefined ? { ...rest, pagination: { page: query.page, pageSize: query.pageSize } } : rest;
 }
 
 /**
@@ -170,7 +187,9 @@ export function defaultExportFilename (query: Query, title: string | undefined):
 }
 
 /**
- * An export of the query: the run's query with no page, every row, and the file's format and name.
+ * An export of the query: the input its run came back with, so the file holds the result on screen
+ * (as of that run), with no page, every row; or, before any run, the query as the app has it now.
+ * And the file's format and name.
  * A CSV starts with a byte-order mark unless the author says otherwise, since a person opens it;
  * a format other than CSV gets no default it might not take.
  */
@@ -178,27 +197,31 @@ export function buildExportRequest (
   query: Query,
   mappings: Mapping[],
   selection: SelectionInput,
-  context: SubmitContext & { title?: string },
+  context: Pick<SubmitContext, 'timezone'> & { title?: string },
   options: ExportOptions,
+  ran?: QueryInput,
 ): BackendExportRequest {
   const format = options.format ?? 'csv';
   const formatOptions = format === 'csv' ? { bom: true, ...options.formatOptions } : options.formatOptions;
+  const built = buildQuery(query, mappings, selection, context);
+  const { pagination: _, ...input } = ran ?? built.input;
   return {
-    ...buildQuery(query, mappings, selection, context),
+    ...built,
+    input,
     format,
     ...(formatOptions ? { formatOptions } : {}),
     filename: options.filename?.trim() || defaultExportFilename(query, context.title),
   };
 }
 
+/** Runs a request of the query: its result, and the input it ran with, for its next page and its export. */
 export async function runQuery (
   query: Query,
-  mappings: Mapping[],
-  selection: SelectionInput,
-  context: SubmitContext,
+  request: BackendQueryRequest,
+  backend: Backend,
   signal: AbortSignal,
-): Promise<QueryResult> {
-  const request = buildRequest(query, mappings, selection, context);
-  const data = await context.backend.submitQuery(request, signal);
-  return toResult(query, data);
+): Promise<{ result: QueryResult, input: QueryInput }> {
+  const data = await backend.submitQuery(request, signal);
+  // As the backend ran it, or, from one that doesn't say, as it was sent.
+  return { result: toResult(query, data), input: data.input ?? request.input };
 }

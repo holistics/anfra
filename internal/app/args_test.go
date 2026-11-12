@@ -64,21 +64,21 @@ func TestQueryInputs(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		cmd   string
-		in    query.QueryInput
+		in    query.QueryDefinition
 		cc    command.CommandContext
 		field string
 		code  string
 	}{
-		{"AQL with no dataset", "query", query.QueryInput{Query: "q", Lang: "aql"}, cc, "dataset", "required"},
-		{"AQL against a data source, for now", "query", query.QueryInput{Query: "q", Lang: "aql", DataSource: "demo"}, cc, "data_source", "unsupported"},
-		{"AQL against both", "query.compile", query.QueryInput{Query: "q", Lang: "aql", Dataset: "d", DataSource: "demo"}, cc, "data_source", "unsupported"},
-		{"SQL with no data source", "query", query.QueryInput{Query: "q", Lang: "sql"}, cc, "data_source", "required"},
-		{"SQL with a blank data source", "query", query.QueryInput{Query: "q", Lang: "sql", DataSource: " "}, cc, "data_source", "required"},
-		{"SQL against a dataset", "query", query.QueryInput{Query: "q", Lang: "sql", Dataset: "ecommerce"}, cc, "dataset", "invalid"},
-		{"SQL against both", "query.compile", query.QueryInput{Query: "q", Lang: "sql", Dataset: "ecommerce", DataSource: "demo"}, cc, "dataset", "invalid"},
-		{"SQL against an unknown data source", "query.compile", query.QueryInput{Query: "q", Lang: "sql", DataSource: "nosuch"}, cc, "data_source", "invalid"},
-		{"validating SQL, for now", "query.validate", query.QueryInput{Query: "q", Lang: "sql", DataSource: "demo"}, cc, "lang", "unsupported"},
-		{"validating SQL, before its target", "query.validate", query.QueryInput{Query: "q", Lang: "sql"}, cc, "lang", "unsupported"},
+		{"AQL with no dataset", "query", query.QueryDefinition{Query: "q", Lang: "aql"}, cc, "dataset", "required"},
+		{"AQL against a data source, for now", "query", query.QueryDefinition{Query: "q", Lang: "aql", DataSource: "demo"}, cc, "data_source", "unsupported"},
+		{"AQL against both", "query.compile", query.QueryDefinition{Query: "q", Lang: "aql", Dataset: "d", DataSource: "demo"}, cc, "data_source", "unsupported"},
+		{"SQL with no data source", "query", query.QueryDefinition{Query: "q", Lang: "sql"}, cc, "data_source", "required"},
+		{"SQL with a blank data source", "query", query.QueryDefinition{Query: "q", Lang: "sql", DataSource: " "}, cc, "data_source", "required"},
+		{"SQL against a dataset", "query", query.QueryDefinition{Query: "q", Lang: "sql", Dataset: "ecommerce"}, cc, "dataset", "invalid"},
+		{"SQL against both", "query.compile", query.QueryDefinition{Query: "q", Lang: "sql", Dataset: "ecommerce", DataSource: "demo"}, cc, "dataset", "invalid"},
+		{"SQL against an unknown data source", "query.compile", query.QueryDefinition{Query: "q", Lang: "sql", DataSource: "nosuch"}, cc, "data_source", "invalid"},
+		{"validating SQL, for now", "query.validate", query.QueryDefinition{Query: "q", Lang: "sql", DataSource: "demo"}, cc, "lang", "unsupported"},
+		{"validating SQL, before its target", "query.validate", query.QueryDefinition{Query: "q", Lang: "sql"}, cc, "lang", "unsupported"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := run(t, tc.cmd, tc.cc, tc.in)
@@ -94,13 +94,13 @@ func TestQueryInputs(t *testing.T) {
 	governed := cc
 	governed.DataPerms = dataperm.Governed(nil)
 	for _, cmd := range []string{"query", "query.compile"} {
-		if _, err := run(t, cmd, governed, query.QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"}); !errors.Is(err, errcode.DataPermsUnenforceable) {
+		if _, err := run(t, cmd, governed, query.QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "demo"}); !errors.Is(err, errcode.DataPermsUnenforceable) {
 			t.Errorf("%s: a governed caller's SQL got %v, want data_perms_unenforceable", cmd, err)
 		}
 	}
 
 	// Compiling SQL returns it as it is, and needs no sidecar.
-	res, err := run(t, "query.compile", cc, query.QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"})
+	res, err := run(t, "query.compile", cc, query.QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "demo"})
 	if err != nil || !reflect.DeepEqual(res.Data, query.CompiledQuery{SQL: "select 1"}) {
 		t.Errorf("compiling SQL: %+v, %v", res, err)
 	}
@@ -119,7 +119,7 @@ func TestQueryInputs(t *testing.T) {
 }
 
 // run dispatches cmd with in, as a host would.
-func run(t *testing.T, cmd string, cc command.CommandContext, in query.QueryInput) (Response, error) {
+func run(t *testing.T, cmd string, cc command.CommandContext, in query.QueryDefinition) (Response, error) {
 	t.Helper()
 	args := map[string]any{"query": in.Query, "lang": in.Lang}
 	if in.Dataset != "" {

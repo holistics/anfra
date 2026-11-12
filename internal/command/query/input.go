@@ -18,10 +18,10 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// QueryInput is a query: its text, the language it is written in, and the
+// QueryDefinition is a query: its text, the language it is written in, and the
 // target it runs against. Which target a language runs against is target's to
 // say: AQL against a dataset, and SQL against a data source.
-type QueryInput struct {
+type QueryDefinition struct {
 	Query      string `json:"query" cli:"positional,stdin" doc:"the query"`
 	Lang       string `json:"lang,omitempty" short:"l" enum:"aql,sql" default:"aql" doc:"the language the query is written in"`
 	Dataset    string `json:"dataset,omitempty" short:"d" doc:"the dataset an AQL query runs against"`
@@ -31,15 +31,15 @@ type QueryInput struct {
 // TransformSchema publishes the required query (command.ArgsSchema). The target is not
 // a group in the schema: which one is required depends on lang, which a group
 // cannot say, so target checks it.
-func (QueryInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
-	return command.ArgsSchema[QueryInput](s)
+func (QueryDefinition) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return command.ArgsSchema[QueryDefinition](s)
 }
 
-// RunInput is a query's input: everything a caller chooses about running a
+// QueryInput is a query's input: everything a caller chooses about running a
 // query, other than its text. Kept in one object, in camelCase, so a caller
 // runs the query again (another page, an export, a replay) by sending the
 // input its answer returned (docs/designs/query-input.md).
-type RunInput struct {
+type QueryInput struct {
 	anfranode.QueryTransforms
 	Pagination *Pagination `json:"pagination,omitempty" doc:"which rows to return: pageSize rows, from the 1-based page. Without it, every row."`
 	Timezone   string      `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default."`
@@ -58,12 +58,12 @@ type Pagination struct {
 }
 
 // IsZero reports an input that changes nothing about a query.
-func (in RunInput) IsZero() bool {
+func (in QueryInput) IsZero() bool {
 	return in.QueryTransforms.IsZero() && in.Pagination == nil && in.Timezone == "" && in.Seeds == nil
 }
 
 // pageSize is the page's size, 0 without one.
-func (in RunInput) pageSize() int {
+func (in QueryInput) pageSize() int {
 	if in.Pagination == nil {
 		return 0
 	}
@@ -75,7 +75,7 @@ const defaultTimezone = "Etc/UTC"
 
 // ran is the input as the query ran: every default filled in, and the seeds
 // it compiled with, when anfra-node returned them.
-func (in RunInput) ran(seeds *anfranode.Seeds) *RunInput {
+func (in QueryInput) ran(seeds *anfranode.Seeds) *QueryInput {
 	out := in
 	if in.Pagination != nil {
 		p := *in.Pagination
@@ -91,12 +91,12 @@ func (in RunInput) ran(seeds *anfranode.Seeds) *RunInput {
 	return &out
 }
 
-// QueryRunInput is what query and query.compile take: a query, and its input.
-// query.validate takes the query alone (QueryInput), since none of the input
-// applies to checking one.
-type QueryRunInput struct {
-	QueryInput
-	Input RunInput `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."`
+// QueryRequestParams is what query and query.compile take: a query, and its
+// input. query.validate takes the query alone (QueryDefinition), since none of
+// the input applies to checking one.
+type QueryRequestParams struct {
+	QueryDefinition
+	Input QueryInput `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."`
 
 	// These three moved into input, and are kept until they're removed. A
 	// request that sets one both ways takes input's.
@@ -109,15 +109,17 @@ type QueryRunInput struct {
 	paginationArg, timezoneArg string
 }
 
-func (in QueryRunInput) paginationName() string { return cmp.Or(in.paginationArg, "input.pagination") }
-func (in QueryRunInput) timezoneName() string   { return cmp.Or(in.timezoneArg, "input.timezone") }
+func (in QueryRequestParams) paginationName() string {
+	return cmp.Or(in.paginationArg, "input.pagination")
+}
+func (in QueryRequestParams) timezoneName() string { return cmp.Or(in.timezoneArg, "input.timezone") }
 
-func (QueryRunInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
-	return command.ArgsSchema[QueryRunInput](s)
+func (QueryRequestParams) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return command.ArgsSchema[QueryRequestParams](s)
 }
 
 // normalize moves the deprecated inputs into input, unless input sets them.
-func (in QueryRunInput) normalize() QueryRunInput {
+func (in QueryRequestParams) normalize() QueryRequestParams {
 	if in.Input.Pagination == nil && (in.Page != 0 || in.PageSize != 0) {
 		in.Input.Pagination = &Pagination{Page: in.Page, PageSize: in.PageSize}
 		in.paginationArg = "page_size"
@@ -133,7 +135,7 @@ func (in QueryRunInput) normalize() QueryRunInput {
 // check refuses what the run cannot do: the target check, plus what applies to
 // AQL alone, a page without its size, paging beside a limit: directive, and a
 // time zone that is not one.
-func (in QueryRunInput) check() error {
+func (in QueryRequestParams) check() error {
 	if err := in.target(); err != nil {
 		return err
 	}
@@ -178,7 +180,7 @@ func (in QueryRunInput) check() error {
 
 // run is what shapes the query's run, as anfra-node takes it. A page without
 // its number is the first; the Query Input is passed through as it is.
-func (in QueryRunInput) run() query.Run {
+func (in QueryRequestParams) run() query.Run {
 	r := query.Run{Timezone: in.Input.Timezone}
 	if s := in.Input.Seeds; s != nil {
 		r.Seeds = &anfranode.Seeds{ReferenceTime: s.ReferenceTime}
@@ -195,7 +197,7 @@ func (in QueryRunInput) run() query.Run {
 // target refuses a query without the target its language runs against, or
 // with the other one. AQL against a data source (an ad-hoc dataset declared
 // inline) is refused as unsupported until the engine runs it.
-func (in QueryInput) target() error {
+func (in QueryDefinition) target() error {
 	if in.Lang == "sql" {
 		switch {
 		case in.Dataset != "":
@@ -218,7 +220,7 @@ func (in QueryInput) target() error {
 //
 // The AQL engine doesn't support `limit:`, so it is stripped here (see
 // query.ExtractLimit) and applied at execution time as canal's truncate_rows.
-func (in QueryInput) aql() (aql string, limit int, err error) {
+func (in QueryDefinition) aql() (aql string, limit int, err error) {
 	aql, limit, err = query.ExtractLimit(in.Query)
 	if err != nil {
 		return "", 0, apperr.EncapsulateWith(err, apperr.ValidationFailed, err.Error(),
@@ -230,7 +232,7 @@ func (in QueryInput) aql() (aql string, limit int, err error) {
 // ungoverned is a SQL query, as written, on the data source it names,
 // connection included: only that one is asked for, and only for an ungoverned
 // caller.
-func (in QueryInput) ungoverned(ctx context.Context, cc command.CommandContext) (query.UngovernedSQL, error) {
+func (in QueryDefinition) ungoverned(ctx context.Context, cc command.CommandContext) (query.UngovernedSQL, error) {
 	sources, err := in.sqlSources(cc)
 	if err != nil {
 		return query.UngovernedSQL{}, err
@@ -244,7 +246,7 @@ func (in QueryInput) ungoverned(ctx context.Context, cc command.CommandContext) 
 
 // checkDataSource checks a SQL query names a data source of the repo, without
 // asking for its connection: compiling SQL is returning it as it is.
-func (in QueryInput) checkDataSource(ctx context.Context, cc command.CommandContext) error {
+func (in QueryDefinition) checkDataSource(ctx context.Context, cc command.CommandContext) error {
 	sources, err := in.sqlSources(cc)
 	if err != nil {
 		return err
@@ -262,13 +264,13 @@ func (in QueryInput) checkDataSource(ctx context.Context, cc command.CommandCont
 // sqlSources is the repo's data sources, for a SQL query. Nothing governs SQL,
 // so it is answered only when the host stated the caller is ungoverned (it
 // authorizes the caller on the data source itself).
-func (in QueryInput) sqlSources(cc command.CommandContext) (datasource.DataSources, error) {
+func (in QueryDefinition) sqlSources(cc command.CommandContext) (datasource.DataSources, error) {
 	if err := query.CheckUngoverned(cc.DataPerms); err != nil {
 		return nil, err
 	}
 	return cc.ResolveDataSources()
 }
 
-func (in QueryInput) unknownDataSource() error {
+func (in QueryDefinition) unknownDataSource() error {
 	return command.InvalidArg("data_source", "invalid", fmt.Sprintf("data source %q is not defined in this repo", in.DataSource))
 }

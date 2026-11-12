@@ -9,6 +9,7 @@ import type {
   ExecuteSummary,
   QueryDeclaration,
   QueryResult,
+  QueryInput,
   QuerySort,
   QueryState,
   Row,
@@ -34,6 +35,8 @@ export class Query extends Observable {
   private _error?: DataAppError;
 
   private _page = 1;
+  // The input the result's run came back with: its next page and its export replay it.
+  private _ranInput: QueryInput | undefined;
 
   /**
    * A sort applied to the result, independent of the query's own AQL — the same mechanism a click
@@ -271,9 +274,15 @@ export class Query extends Observable {
     this.notify();
   }
 
+  /** @internal The input the result's run came back with, for its next page and its export. */
+  get ranInput (): QueryInput | undefined {
+    return this._ranInput;
+  }
+
   /** @internal */
-  markSuccess (result: QueryResult, signature: string, append: boolean): void {
+  markSuccess (result: QueryResult, signature: string, append: boolean, ranInput?: QueryInput): void {
     this._state = 'success';
+    if (!append) this._ranInput = ranInput;
     this._error = undefined;
     if (!append) this.runFailed = false;
     this.lastRunSignature = signature;

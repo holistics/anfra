@@ -103,8 +103,8 @@ describe('plan', () => {
       conditions: [{ expr: 'orders.amount > 0' }],
       sorts: [{ field: 'revenue', direction: 'desc' }],
       dateDrills: [{ field: 'orders.created_at', grain: 'month' }],
+      timezone: 'Asia/Singapore',
     },
-    timezone: 'Asia/Singapore',
   };
 
   it('is the base model\'s visible dimensions, where the point and the query\'s inputs hold, its value in the title', () => {
@@ -142,8 +142,8 @@ describe('plan', () => {
             { field: 'amount', direction: 'asc' },
           ],
           dateDrills: [],
+          timezone: 'Asia/Singapore',
         },
-        timezone: 'Asia/Singapore',
       },
     });
   });

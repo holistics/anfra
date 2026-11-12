@@ -8,9 +8,9 @@ import type { components } from './schema';
 import { toSdkError, type ApiErrorBody } from './errors';
 import { readEvents } from './stream';
 
-type QueryRunInput = components['schemas']['QueryRunInput'];
+type QueryRequestParams = components['schemas']['QueryRequestParams'];
 type Column = components['schemas']['Column'];
-type ExportInput = components['schemas']['ExportInput'];
+type QueryExportRequestParams = components['schemas']['QueryExportRequestParams'];
 type QueryResult = components['schemas']['QueryResult'];
 type QueryEvent = components['schemas']['QueryCompiled'] | components['schemas']['QueryWarehouse'] | components['schemas']['QueryHeader']
   | components['schemas']['QueryRecords'] | components['schemas']['QuerySummary']
@@ -31,27 +31,19 @@ function isAbort (err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError';
 }
 
-/** The core.query input a Backend request is: the AQL, its Query Input, its paging and timezone. */
-export function toQueryInput (request: BackendQueryRequest): QueryRunInput {
-  return {
-    query: request.aql,
-    dataset: request.dataset,
-    // The Query Input passes through in the names amql and this SDK share.
-    input: request.input as QueryRunInput['input'],
-    ...(request.pageSize !== undefined ? { page: request.page ?? 1, page_size: request.pageSize } : {}),
-    ...(request.timezone ? { timezone: request.timezone } : {}),
-  };
+/** The core.query request params a Backend request is: the AQL, its dataset and its input. */
+export function toQueryRequestParams (request: BackendQueryRequest): QueryRequestParams {
+  return { query: request.aql, dataset: request.dataset, input: request.input };
 }
 
-/** The core.query.export input an export request is: the query as a run sends it, and the file. */
-export function toExportInput (request: BackendExportRequest): ExportInput {
+/** The core.query.export request params an export request is: the query as a run sends it, every row, and the file. */
+export function toExportRequestParams (request: BackendExportRequest): QueryExportRequestParams {
   return {
     query: request.aql,
     dataset: request.dataset,
-    input: request.input as ExportInput['input'],
-    ...(request.timezone ? { timezone: request.timezone } : {}),
+    input: request.input,
     // The server names its formats; one it does not know it refuses, with a message the author sees.
-    ...(request.format ? { format: request.format as ExportInput['format'] } : {}),
+    ...(request.format ? { format: request.format as QueryExportRequestParams['format'] } : {}),
     ...(request.formatOptions ? { format_options: request.formatOptions } : {}),
     ...(request.filename ? { filename: request.filename } : {}),
   };
@@ -94,10 +86,10 @@ async function callCoreAPI<T> (call: () => Promise<{ data?: T, error?: unknown, 
 
 /**
  * A query, streamed (`Accept: application/x-ndjson`), gathered as it arrives into the page's
- * shape: the page with `page_size`, and every row without — which one JSON answer, a page, cannot
+ * shape: the page with `input.pagination`, and every row without — which one JSON answer, a page, cannot
  * carry. Every query goes this way, so there is one path; the server holds one batch at a time.
  */
-async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal): Promise<QueryResult> {
+async function runQuery (client: CoreClient, body: QueryRequestParams, signal: AbortSignal): Promise<QueryResult> {
   const stream = await callCoreAPI(() => client.POST('/core.query', {
     body, signal, parseAs: 'stream', headers: { Accept: 'application/x-ndjson' },
   }));
@@ -109,6 +101,7 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
         case 'compiled':
           result.sql = event.sql;
           if (event.aql) result.aql = event.aql;
+          if (event.input) result.input = event.input;
           break;
         case 'header':
           result.columns = event.columns;
@@ -140,13 +133,14 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
 
   return {
     async submitQuery (request: BackendQueryRequest, signal: AbortSignal): Promise<BackendQueryResult> {
-      const data = await runQuery(client, toQueryInput(request), signal);
+      const data = await runQuery(client, toQueryRequestParams(request), signal);
       const values = data.result.records;
+      const { pagination } = request.input;
       return {
         columns: toColumns(data.columns),
         values,
         meta: {
-          ...(request.pageSize !== undefined ? { page: request.page ?? 1, pageSize: request.pageSize, hasMore: data.has_more } : {}),
+          ...(pagination ? { page: pagination.page, pageSize: pagination.pageSize, hasMore: data.has_more } : {}),
           numRows: values.length,
         },
         debug: {
@@ -159,6 +153,9 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
           },
           executedAt: new Date(),
         },
+        // The input as it ran: the one sent, with the seeds the server generated for it. The rest
+        // the server answers with is what was sent, or its defaults, which a replay needn't send.
+        ...(data.input?.seeds ? { input: { ...request.input, seeds: data.input.seeds } } : {}),
       };
     },
 
@@ -181,9 +178,8 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         input: {
           filters: q && field.type === 'text' ? [{ field: ref, operator: 'contains', values: [q] }] : [],
           sorts: [{ field: 'value', direction: 'asc' }],
+          pagination: { page: 1, pageSize: SUGGESTION_LIMIT },
         },
-        page: 1,
-        page_size: SUGGESTION_LIMIT,
       }, signal);
       return data.result.records
         .map((row) => row[0])
@@ -192,7 +188,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
 
     /** An export as `core.query.export`: the server runs the query to completion, then answers its link. */
     async exportQuery (request: BackendExportRequest, signal: AbortSignal): Promise<ExportResult> {
-      const link = await callCoreAPI(() => client.POST('/core.query.export', { body: toExportInput(request), signal }));
+      const link = await callCoreAPI(() => client.POST('/core.query.export', { body: toExportRequestParams(request), signal }));
       return {
         url: link.url,
         filename: link.filename,

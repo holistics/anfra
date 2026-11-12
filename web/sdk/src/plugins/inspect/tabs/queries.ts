@@ -14,7 +14,7 @@ import {
   blockNodeKey, dedent, entityAttribute, entityKey, entityNodeKey, formatAgo, formatCondition, formatTime, plural, usageOf,
 } from '../model/format';
 import {
-  controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryInput,
+  controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryFilterSource,
 } from '../model/inputs';
 import { queryCounts } from '../model/problems';
 import { attributeRequests, type RequestEntry } from '../model/requests';
@@ -34,7 +34,7 @@ type Attributed = { entry: RequestEntry, shared?: boolean };
 const FIRST = 5;
 const FILTERS: readonly QueriesFilter[] = ['all', 'errors', 'dirty'];
 /** Where a filter comes from, as an icon: a control, a cross-filter, or the query's own AQL. */
-const SOURCE_ICONS: Record<QueryInput['kind'], IconName> = { control: 'control', crossFilter: 'filter', declared: 'code' };
+const SOURCE_ICONS: Record<QueryFilterSource['kind'], IconName> = { control: 'control', crossFilter: 'filter', declared: 'code' };
 
 /** The last reveal each mount's Queries handled, so a remount of the tab doesn't flash it again. */
 const handled = new WeakMap<InspectState, number>();
@@ -99,16 +99,16 @@ function summaryOf (entry: RequestEntry): string {
   }
   return [
     entry.fromCache === undefined ? undefined : entry.fromCache ? 'cache' : 'database',
-    entry.page && entry.page > 1 ? `page ${entry.page}` : undefined,
+    (entry.input?.pagination?.page ?? 1) > 1 ? `page ${entry.input?.pagination?.page}` : undefined,
     entry.status === 'ok' ? plural(entry.numRows ?? 0, 'row') : ended,
   ].filter(Boolean).join(' · ');
 }
 
 /** What a request asked, as JSON: its input with the call's other fields merged in, the declared AQL left out. */
 function inputOf (entry: RequestEntry): string | undefined {
-  const { input, page, pageSize, timezone, bustCache, dataset, aql, field, q, format, formatOptions, filename, targets, request } = entry;
-  const shown = entry.call === 'core.submitQuery' ? { dataset, page, pageSize, timezone, bustCache, ...input }
-    : entry.call === 'export.query' ? { dataset, timezone, format, formatOptions, filename, ...input }
+  const { input, bustCache, dataset, aql, field, q, format, formatOptions, filename, targets, request } = entry;
+  const shown = entry.call === 'core.submitQuery' ? { dataset, bustCache, ...input }
+    : entry.call === 'export.query' ? { dataset, format, formatOptions, filename, ...input }
       : entry.call === 'core.fieldSuggestions' ? { dataset, field, q }
         : entry.call === 'lineage.trace' ? { targets }
           : entry.call === 'render.save' ? { filename }
@@ -124,7 +124,7 @@ function rowCount (shown: number, total?: number): string {
 }
 
 /** Where a filter comes from, in a sentence. */
-function filterSource (input: QueryInput): string {
+function filterSource (input: QueryFilterSource): string {
   if (input.kind === 'declared') return "Declared in this query's AQL filters block";
   if (input.kind === 'control') return `Applied from the control "${input.source}"`;
   return input.self ? "Cross-filter from selecting rows in this query's own result" : `Cross-filter from selecting rows in "${input.source}"`;
@@ -295,7 +295,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   }
 
   /** Every input that filters a query, its active ones first: each one's source, field and value. */
-  function filterList (key: string, app: number, filters: QueryInput[], active: QueryInput[]): Children {
+  function filterList (key: string, app: number, filters: QueryFilterSource[], active: QueryFilterSource[]): Children {
     if (filters.length === 0) return null;
     const all = allFilters.has(key);
     const shown = all ? filters : active;

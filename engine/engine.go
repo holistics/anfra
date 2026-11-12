@@ -309,13 +309,24 @@ const (
 // them: decoded, then prepared — defaults applied, normalized and checked — so
 // a host derives its permissions from the input the op runs on.
 type (
-	// QueryInput is core.query.validate's input, and the query and its
-	// target, in the others'.
+	// QueryDefinition is a query: its text, its language, and what it runs
+	// against. core.query.validate's input, and part of the others'.
+	QueryDefinition = querycmd.QueryDefinition
+	// QueryInput is a query's input: everything a caller chooses about running
+	// it other than its text (its Query Input, page, time zone and seeds), the
+	// input field of core.query's, core.query.compile's and core.query.export's.
 	QueryInput = querycmd.QueryInput
-	// QueryRunInput is core.query's and core.query.compile's input.
-	QueryRunInput = querycmd.QueryRunInput
-	// QueryExportInput is core.query.export's input.
-	QueryExportInput = querycmd.ExportInput
+	// QueryRequestParams is core.query's and core.query.compile's input: a
+	// query and its input.
+	QueryRequestParams = querycmd.QueryRequestParams
+	// QueryExportRequestParams is core.query.export's input.
+	QueryExportRequestParams = querycmd.QueryExportRequestParams
+
+	// Deprecated: QueryRunInput is QueryRequestParams, its former name.
+	QueryRunInput = QueryRequestParams
+	// Deprecated: QueryExportInput is QueryExportRequestParams, its former name.
+	QueryExportInput = QueryExportRequestParams
+
 	// ShowInput is core.show's input.
 	ShowInput = show.ShowInput
 )
@@ -324,10 +335,10 @@ type (
 // mounts them by (apikit.Mount), so that a derivation for another type does
 // not compile.
 var (
-	QueryOp         = apikit.OpRef[QueryRunInput]{Name: "core.query"}
-	QueryCompileOp  = apikit.OpRef[QueryRunInput]{Name: "core.query.compile"}
-	QueryValidateOp = apikit.OpRef[QueryInput]{Name: "core.query.validate"}
-	QueryExportOp   = apikit.OpRef[QueryExportInput]{Name: "core.query.export"}
+	QueryOp         = apikit.OpRef[QueryRequestParams]{Name: "core.query"}
+	QueryCompileOp  = apikit.OpRef[QueryRequestParams]{Name: "core.query.compile"}
+	QueryValidateOp = apikit.OpRef[QueryDefinition]{Name: "core.query.validate"}
+	QueryExportOp   = apikit.OpRef[QueryExportRequestParams]{Name: "core.query.export"}
 	ShowOp          = apikit.OpRef[ShowInput]{Name: "core.show"}
 )
 

@@ -9,7 +9,7 @@ import {
   assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
 } from './validation';
 import {
-  buildExportRequest, buildQuery, runQuery, type SubmitContext,
+  buildExportRequest, buildQuery, buildRequest, pageRequest, runQuery, type SubmitContext,
 } from './execution/submitQuery';
 import { withSuggestion } from './suggest';
 import { deriveSelection } from './selection';
@@ -631,7 +631,7 @@ export class App extends Observable implements AppContext {
     query.markExecuting();
 
     try {
-      const result = await runQuery(
+      const request = buildRequest(
         query,
         this.mappingsTo(query.name),
         {
@@ -639,10 +639,10 @@ export class App extends Observable implements AppContext {
           expression: this.selectionExpressionFor(query.name, 'applied'),
         },
         context,
-        controller.signal,
       );
+      const { result, input } = await runQuery(query, request, context.backend, controller.signal);
       if (superseded(query, controller)) return undefined;
-      query.markSuccess(result, signature, false);
+      query.markSuccess(result, signature, false, input);
       return 'succeeded';
     } catch (err) {
       if (superseded(query, controller)) return undefined;
@@ -676,19 +676,15 @@ export class App extends Observable implements AppContext {
     query.markExecuting();
 
     try {
-      const result = await runQuery(
-        query,
-        this.mappingsTo(query.name),
-        {
+      // The run's input replayed with the next page: a page fetched after midnight continues the
+      // same last 7 days. Before any run came back with one, the query as the app has it applied.
+      const request = query.ranInput
+        ? pageRequest(query, query.ranInput)
+        : buildRequest(query, this.mappingsTo(query.name), {
           conditions: this.selectionConditionsFor(query.name, 'applied'),
           expression: this.selectionExpressionFor(query.name, 'applied'),
-        },
-        {
-          backend: this.backend,
-          timezone: this._timezone,
-        },
-        controller.signal,
-      );
+        }, { backend: this.backend, timezone: this._timezone });
+      const { result } = await runQuery(query, request, this.backend, controller.signal);
       query.markSuccess(result, signature, true);
     } catch (err) {
       query.rewindPage();
@@ -718,8 +714,10 @@ export class App extends Observable implements AppContext {
         conditions: this.selectionConditionsFor(query.name, 'applied'),
         expression: this.selectionExpressionFor(query.name, 'applied'),
       },
-      { backend: this.backend, timezone: this._timezone, title: this.title },
+      { timezone: this._timezone, title: this.title },
       options,
+      // As the result on screen ran, so the file holds what the reader sees.
+      query.ranInput,
     );
     try {
       return await send(request, options.signal ?? new AbortController().signal);

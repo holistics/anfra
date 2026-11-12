@@ -275,7 +275,7 @@ export interface components {
             /** @description what each column of an explore query's result will be, with its semantic type. Absent for other queries. */
             columns?: components["schemas"]["Column"][];
             /** @description the query's input as it compiled, every default filled in, its seeds included. Send it back with the same query to compile it the same way again. Absent for a SQL query. */
-            input?: components["schemas"]["RunInput"];
+            input?: components["schemas"]["QueryInput"];
             sql: string;
         };
         ContextEntry: {
@@ -507,37 +507,6 @@ export interface components {
              */
             header?: "labels" | "names" | "none";
         };
-        ExportInput: {
-            /** @description the data source a SQL query runs against */
-            data_source?: string;
-            /** @description the dataset an AQL query runs against */
-            dataset?: string;
-            /** @description the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name */
-            filename?: string;
-            /**
-             * @description the file's format
-             * @default csv
-             * @enum {string}
-             */
-            format?: "csv";
-            /** @description the format's options */
-            format_options?: components["schemas"]["ExportFormatOptions"];
-            /** @description the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row. */
-            input?: components["schemas"]["RunInput"];
-            /**
-             * @description the language the query is written in
-             * @default aql
-             * @enum {string}
-             */
-            lang?: "aql" | "sql";
-            /** @description the query */
-            query: string;
-            /**
-             * @deprecated
-             * @description deprecated: use input.timezone. Ignored when input.timezone is set.
-             */
-            timezone?: string;
-        };
         ExportLink: {
             /**
              * Format: date-time
@@ -614,7 +583,7 @@ export interface components {
             /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
             aql?: string;
             /** @description the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query. */
-            input?: components["schemas"]["RunInput"];
+            input?: components["schemas"]["QueryInput"];
             sql: string;
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -631,6 +600,51 @@ export interface components {
             field: string;
             /** @description the grain, such as month */
             grain: string;
+        };
+        QueryDefinition: {
+            /** @description the data source a SQL query runs against */
+            data_source?: string;
+            /** @description the dataset an AQL query runs against */
+            dataset?: string;
+            /**
+             * @description the language the query is written in
+             * @default aql
+             * @enum {string}
+             */
+            lang?: "aql" | "sql";
+            /** @description the query */
+            query: string;
+        };
+        QueryExportRequestParams: {
+            /** @description the data source a SQL query runs against */
+            data_source?: string;
+            /** @description the dataset an AQL query runs against */
+            dataset?: string;
+            /** @description the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name */
+            filename?: string;
+            /**
+             * @description the file's format
+             * @default csv
+             * @enum {string}
+             */
+            format?: "csv";
+            /** @description the format's options */
+            format_options?: components["schemas"]["ExportFormatOptions"];
+            /** @description the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row. */
+            input?: components["schemas"]["QueryInput"];
+            /**
+             * @description the language the query is written in
+             * @default aql
+             * @enum {string}
+             */
+            lang?: "aql" | "sql";
+            /** @description the query */
+            query: string;
+            /**
+             * @deprecated
+             * @description deprecated: use input.timezone. Ignored when input.timezone is set.
+             */
+            timezone?: string;
         };
         QueryFilter: {
             /** @description the aggregation to apply to the field before filtering, such as sum */
@@ -655,18 +669,20 @@ export interface components {
             type: "header";
         };
         QueryInput: {
-            /** @description the data source a SQL query runs against */
-            data_source?: string;
-            /** @description the dataset an AQL query runs against */
-            dataset?: string;
-            /**
-             * @description the language the query is written in
-             * @default aql
-             * @enum {string}
-             */
-            lang?: "aql" | "sql";
-            /** @description the query */
-            query: string;
+            /** @description AQL conditions ANDed with the query's own filters */
+            conditions?: components["schemas"]["QueryCondition"][];
+            /** @description grain changes on date fields. The fields keep their column names. */
+            dateDrills?: components["schemas"]["QueryDateDrill"][];
+            /** @description conditions on fields, ANDed with the query's own filters */
+            filters?: components["schemas"]["QueryFilter"][];
+            /** @description which rows to return: pageSize rows, from the 1-based page. Without it, every row. */
+            pagination?: components["schemas"]["Pagination"];
+            /** @description values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time. */
+            seeds?: components["schemas"]["Seeds"];
+            /** @description sorts by result column, replacing the query's own */
+            sorts?: components["schemas"]["QuerySort"][];
+            /** @description the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default. */
+            timezone?: string;
         };
         QueryRecords: {
             /** @description one array per row, its values in fields' order, written as a page's records are */
@@ -677,32 +693,13 @@ export interface components {
              */
             type: "rows";
         };
-        QueryResult: {
-            /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
-            aql?: string;
-            /** @description one per field of result, in order */
-            columns: components["schemas"]["Column"][];
-            /** @description whether there may be rows after this page. To get them, ask for the next page, or export the query. */
-            has_more: boolean;
-            /** @description the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query. */
-            input?: components["schemas"]["RunInput"];
-            result: components["schemas"]["QueryRows"];
-            sql: string;
-            /** @description the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps. */
-            timings: components["schemas"]["Timings"];
-        };
-        QueryRows: {
-            fields: string[];
-            /** @description one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are "NaN", "Infinity", and "-Infinity". The same holds at any depth of a list, map, or struct. A database NULL is null. */
-            records: unknown[][];
-        };
-        QueryRunInput: {
+        QueryRequestParams: {
             /** @description the data source a SQL query runs against */
             data_source?: string;
             /** @description the dataset an AQL query runs against */
             dataset?: string;
             /** @description the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again. */
-            input?: components["schemas"]["RunInput"];
+            input?: components["schemas"]["QueryInput"];
             /**
              * @description the language the query is written in
              * @default aql
@@ -728,6 +725,25 @@ export interface components {
              * @description deprecated: use input.timezone. Ignored when input.timezone is set.
              */
             timezone?: string;
+        };
+        QueryResult: {
+            /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
+            aql?: string;
+            /** @description one per field of result, in order */
+            columns: components["schemas"]["Column"][];
+            /** @description whether there may be rows after this page. To get them, ask for the next page, or export the query. */
+            has_more: boolean;
+            /** @description the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query. */
+            input?: components["schemas"]["QueryInput"];
+            result: components["schemas"]["QueryRows"];
+            sql: string;
+            /** @description the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps. */
+            timings: components["schemas"]["Timings"];
+        };
+        QueryRows: {
+            fields: string[];
+            /** @description one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are "NaN", "Infinity", and "-Infinity". The same holds at any depth of a list, map, or struct. A database NULL is null. */
+            records: unknown[][];
         };
         QuerySort: {
             /**
@@ -807,22 +823,6 @@ export interface components {
             max_bytes?: number;
             /** Format: int64 */
             max_rows?: number;
-        };
-        RunInput: {
-            /** @description AQL conditions ANDed with the query's own filters */
-            conditions?: components["schemas"]["QueryCondition"][];
-            /** @description grain changes on date fields. The fields keep their column names. */
-            dateDrills?: components["schemas"]["QueryDateDrill"][];
-            /** @description conditions on fields, ANDed with the query's own filters */
-            filters?: components["schemas"]["QueryFilter"][];
-            /** @description which rows to return: pageSize rows, from the 1-based page. Without it, every row. */
-            pagination?: components["schemas"]["Pagination"];
-            /** @description values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time. */
-            seeds?: components["schemas"]["Seeds"];
-            /** @description sorts by result column, replacing the query's own */
-            sorts?: components["schemas"]["QuerySort"][];
-            /** @description the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default. */
-            timezone?: string;
         };
         SearchInput: {
             /**
@@ -1185,7 +1185,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["QueryRunInput"];
+                "application/json": components["schemas"]["QueryRequestParams"];
             };
         };
         responses: {
@@ -1254,7 +1254,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["QueryRunInput"];
+                "application/json": components["schemas"]["QueryRequestParams"];
             };
         };
         responses: {
@@ -1322,7 +1322,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ExportInput"];
+                "application/json": components["schemas"]["QueryExportRequestParams"];
             };
         };
         responses: {
@@ -1401,7 +1401,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["QueryInput"];
+                "application/json": components["schemas"]["QueryDefinition"];
             };
         };
         responses: {

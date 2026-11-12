@@ -252,12 +252,12 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
       dataset: base.dataset,
       aql,
       input: {
+        ...base.input,
         filters: [...base.input.filters, ...pointFilters],
         conditions: [...base.input.conditions, ...pointConditions],
         sorts,
         dateDrills: [],
       },
-      ...(base.timezone ? { timezone: base.timezone } : {}),
     },
   };
 }

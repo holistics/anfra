@@ -636,12 +636,41 @@ export interface BackendDateDrill {
   grain: DateGrain;
 }
 
-/** The structured additions a query carries on this run, applied on top of its AQL. */
+/**
+ * A query's input: everything a run chooses about the query other than its AQL, in one object, as
+ * the core API takes it (`input`). A query's next page and its export send the input its run came
+ * back with, so they continue the result on screen.
+ */
 export interface QueryInput {
+  /** What reaches the query: mapped controls and the selection, ANDed on top of its AQL. */
   filters: BackendFilter[];
   conditions: BackendCondition[];
+  /** The reader's sort, replacing the AQL's own. */
   sorts: BackendSort[];
   dateDrills: BackendDateDrill[];
+  /** One page of rows. Absent for an unpaged query: the backend returns every row. */
+  pagination?: QueryPagination;
+  /** Absent when the app declares none, leaving the backend's default. */
+  timezone?: string;
+  /** Absent for a fresh run, which runs as of now. */
+  seeds?: QuerySeeds;
+}
+
+/** One page of a query's rows. */
+export interface QueryPagination {
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * A query's seeds: values a backend generates for each run when they're unset, so a run sent
+ * again with them compiles the same way: a page fetched after midnight continues the same last 7
+ * days.
+ */
+export interface QuerySeeds {
+  /** The time the query runs as of: relative dates, such as last 7 days, are counted from it. */
+  referenceTime?: string;
 }
 
 export interface BackendQueryRequest {
@@ -650,22 +679,16 @@ export interface BackendQueryRequest {
   /** The query's AQL, verbatim. */
   aql: string;
   input: QueryInput;
-  /** 1-based. Sent together with `pageSize`, and only for a query that declares one. */
-  page?: number;
-  /** Absent for an unpaged query: the backend returns every row. */
-  pageSize?: number;
-  /** Absent when the app declares none, leaving the backend's default. */
-  timezone?: string;
   /** Present on `refresh()`: skip any result cache. */
   bustCache?: boolean;
 }
 
 /**
- * What a query runs with now, apart from its page: its dataset, its AQL, what reaches it (mapped
- * controls, the selection, the reader's sort, date drills) and the timezone. A run and an export
- * are both built on it.
+ * What a query runs with now, apart from its page and seeds: its dataset, its AQL, and its input
+ * (what reaches it: mapped controls, the selection, the reader's sort, date drills; and the
+ * timezone). A run and an export are both built on it.
  */
-export type QueryRequest = Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input' | 'timezone'>;
+export type QueryRequest = Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input'>;
 
 /** One page of a query's rows. `values` is positional: each row lines up with `columns`. */
 export interface BackendQueryResult {
@@ -679,6 +702,8 @@ export interface BackendQueryResult {
     hasMore?: boolean;
   };
   debug?: QueryDebug;
+  /** The input as the query ran, its seeds filled in: for its next page and its export. Omit it when not known. */
+  input?: QueryInput;
 }
 
 /** A file format an export can be written in. CSV is the only one yet; a server may add more. */
@@ -724,9 +749,8 @@ export interface BackendExportRequest {
   dataset: string;
   /** The query's AQL, verbatim. */
   aql: string;
+  /** With `pagination`, the file holds that page; without, every row. */
   input: QueryInput;
-  /** Absent when the app declares none, leaving the backend's default. */
-  timezone?: string;
   format?: ExportFormat;
   formatOptions?: ExportFormatOptions;
   filename?: string;

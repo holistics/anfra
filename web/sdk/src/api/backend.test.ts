@@ -27,10 +27,10 @@ const ok = (body: unknown): Answer => ({ status: 200, body });
 const streamed = (...events: unknown[]): Answer => ({ events: events.map((e) => JSON.stringify(e) + '\n').join('') });
 
 /** A query's page, streamed as the server streams it: its SQL, its header, its rows, its summary. */
-function asStream (page: { sql: string, aql?: string, columns: unknown[], result: { fields: string[], records: unknown[][] } }, hasMore = false): Answer {
+function asStream (page: { sql: string, aql?: string, input?: unknown, columns: unknown[], result: { fields: string[], records: unknown[][] } }, hasMore = false): Answer {
   return streamed(
     { type: 'start' },
-    { type: 'compiled', sql: page.sql, ...(page.aql ? { aql: page.aql } : {}) },
+    { type: 'compiled', sql: page.sql, ...(page.aql ? { aql: page.aql } : {}), ...(page.input ? { input: page.input } : {}) },
     { type: 'header', columns: page.columns, fields: page.result.fields },
     ...(page.result.records.length ? [{ type: 'rows', records: page.result.records }] : []),
     { type: 'summary', row_count: page.result.records.length, has_more: hasMore, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }, { step: 'executing_query', start_ms: 40 }], end_ms: 95 } },
@@ -42,10 +42,14 @@ const fail = (status: number, error: Record<string, unknown>): Answer => ({ stat
 const request: BackendQueryRequest = {
   dataset: 'sales',
   aql: 'explore { dimensions { status: orders.status } }',
-  input: { filters: [{ field: 'orders.status', operator: 'is', values: ['paid'] }], conditions: [], sorts: [], dateDrills: [{ field: 'orders.created_at', grain: 'month' }] },
-  page: 2,
-  pageSize: 10,
-  timezone: 'Asia/Ho_Chi_Minh',
+  input: {
+    filters: [{ field: 'orders.status', operator: 'is', values: ['paid'] }],
+    conditions: [],
+    sorts: [],
+    dateDrills: [{ field: 'orders.created_at', grain: 'month' }],
+    pagination: { page: 2, pageSize: 10 },
+    timezone: 'Asia/Ho_Chi_Minh',
+  },
 };
 const signal = new AbortController().signal;
 
@@ -76,7 +80,11 @@ describe('coreApiBackend', () => {
     const result = await coreApiBackend(client).submitQuery(request, signal);
     expect(sent).toEqual([{
       url: 'http://host/api/core.query',
-      body: { query: request.aql, dataset: 'sales', input: request.input, page: 2, page_size: 10, timezone: 'Asia/Ho_Chi_Minh' },
+      body: {
+        query: request.aql,
+        dataset: 'sales',
+        input: request.input,
+      },
       accept: 'application/x-ndjson',
     }]);
     expect(result).toMatchObject({
@@ -88,6 +96,15 @@ describe('coreApiBackend', () => {
         timings: { steps: [{ step: 'compiling_query', startMs: 0 }, { step: 'executing_query', startMs: 40 }], endMs: 95 },
       },
     });
+  });
+
+  // The input it ran with is the one sent, with the seeds the server generated: for the query's
+  // next page and its export.
+  it('answers the input the query ran with: the one sent, with the seeds the server generated', async () => {
+    const seeds = { referenceTime: '2026-11-12T09:41:27.123Z' };
+    const { client } = api(asStream({ ...answered, input: { ...request.input, timezone: 'Asia/Ho_Chi_Minh', seeds } }));
+    const result = await coreApiBackend(client).submitQuery(request, signal);
+    expect(result.input).toEqual({ ...request.input, seeds });
   });
 
   it("fails a query whose columns come without their types, which a Data App decides by", async () => {
@@ -102,7 +119,8 @@ describe('coreApiBackend', () => {
   });
 
   describe('an unpaged query', () => {
-    const { page, pageSize, ...unpaged } = request;
+    const { pagination: _, ...unpagedInput } = request.input;
+    const unpaged = { ...request, input: unpagedInput };
     const events = [
       { type: 'start' },
       { type: 'status', phase: 'compiling' },
@@ -118,7 +136,7 @@ describe('coreApiBackend', () => {
     it('is sent unpaged, and gathered into every row', async () => {
       const { client, sent } = api(streamed(...events, { type: 'end', status: 'succeeded' }));
       const result = await coreApiBackend(client).submitQuery(unpaged, signal);
-      expect(sent[0].body).not.toHaveProperty('page_size');
+      expect((sent[0].body as { input: object }).input).not.toHaveProperty('pagination');
       expect(sent[0].accept).toBe('application/x-ndjson');
       expect(result).toMatchObject({
         columns: answered.columns,
@@ -234,9 +252,11 @@ describe('coreApiBackend', () => {
       expect(sent[0].body).toEqual({
         query: 'explore { dimensions { value: orders.status } }',
         dataset: 'sales',
-        input: { filters: [{ field: 'orders.status', operator: 'contains', values: ['pa'] }], sorts: [{ field: 'value', direction: 'asc' }] },
-        page: 1,
-        page_size: SUGGESTION_LIMIT,
+        input: {
+          filters: [{ field: 'orders.status', operator: 'contains', values: ['pa'] }],
+          sorts: [{ field: 'value', direction: 'asc' }],
+          pagination: { page: 1, pageSize: SUGGESTION_LIMIT },
+        },
       });
       expect(values).toEqual(['paid', 3, true]);
     });
@@ -259,8 +279,7 @@ describe('coreApiBackend', () => {
     const exportRequest = {
       dataset: 'sales',
       aql: request.aql,
-      input: request.input,
-      timezone: 'Asia/Ho_Chi_Minh',
+      input: { ...request.input, pagination: undefined, seeds: { referenceTime: '2026-11-12T09:41:27.123Z' } },
       format: 'csv',
       formatOptions: { bom: true, header: 'names' as const },
       filename: 'Sales - revenue',
@@ -280,8 +299,7 @@ describe('coreApiBackend', () => {
         body: {
           query: request.aql,
           dataset: 'sales',
-          input: request.input,
-          timezone: 'Asia/Ho_Chi_Minh',
+          input: exportRequest.input,
           format: 'csv',
           format_options: { bom: true, header: 'names' },
           filename: 'Sales - revenue',
