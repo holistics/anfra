@@ -6,7 +6,7 @@
 #
 # Runs on a `v*` tag push: normally the one tag_and_release.yml pushes with its
 # deploy key, or a tag pushed by hand. The manifest.yml at that commit pins the sidecar
-# releases to embed and the version baked into the binary. Also runs on
+# releases to embed, the version baked into the binary, and the cloud servers login offers. Also runs on
 # workflow_dispatch: on a tag it releases that tag, on a branch it's a test build
 # (artifacts only, no release).
 #
@@ -35,7 +35,6 @@ jobs:
     env:
       TAG: ${{ github.ref_name }}
       IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
-      ANFRA_CLOUD_URL: ${{ vars.ANFRA_CLOUD_URL }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0; on a tag push this is the tag's commit (manifest pinned there)
 
@@ -45,9 +44,10 @@ jobs:
       - name: the Go the release builds with (go.mod's toolchain line)
         run: go version
 
-      - name: Validate the optional default cloud URL
+      - name: Validate the cloud servers manifest.yml lists
         run: |
-          cloud_url="$(go run ./scripts/cloud-url)"
+          servers="$(yq '.cloud_servers // [] | join(";")' manifest.yml)"
+          cloud_url="$(ANFRA_CLOUD_URL="$servers" go run ./scripts/cloud-url)"
           echo "ANFRA_CLOUD_URL=$cloud_url" >> "$GITHUB_ENV"
 
       # The Data Apps frontend, which every target embeds (internal/appserve/dist): built once,
@@ -117,7 +117,7 @@ jobs:
             cp "sidecars/canal-query-$t" internal/sidecar/canalquery/assets/canal-query
             # -s -w strips the host's symbol table + DWARF (Phase 0).
             GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
-              -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION -X main.defaultCloudURL=$ANFRA_CLOUD_URL" \
+              -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION -X 'main.defaultCloudURL=$ANFRA_CLOUD_URL'" \
               -o "release/anfra-$t" ./cmd/anfra
             # The image packages the Linux binaries as they are, laid out by platform
             # (<os>/<arch>/anfra) for the Dockerfile.

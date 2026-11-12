@@ -101,17 +101,35 @@ The Docker image is built from release binaries; the `Dockerfile`'s header says 
 
 ### Cloud login URL
 
-Optionally set `ANFRA_CLOUD_URL` when running `make build` or `make build-dev` to embed a
-default cloud URL. Release CI uses the optional repository Actions variable of the same
-name. Builds validate supplied values, but do not require one.
+Optionally set `ANFRA_CLOUD_URL` when running `make build` or `make build-dev` to embed the
+cloud servers bare `anfra auth login` offers. Builds validate supplied values, but do not
+require one. A release embeds the servers `manifest.yml` lists under `cloud_servers`, joined
+with `;`. `make build` doesn't read that list, so a local build offers the production servers
+only if you set them.
 
-At runtime, `ANFRA_CLOUD_URL` overrides the built-in default. An explicitly empty value
-disables it. Bare `anfra auth login` shows the effective URL alongside organization URL
+The value is one server's URL, or a list of servers separated by `;`. Each entry in a list is
+`Label=URL`, or a label alone for a server that isn't available yet:
+
+```sh
+ANFRA_CLOUD_URL="United States=https://us.anfra.ai;Europe;Asia Pacific;Middle East"
+```
+
+Login shows a server without a URL as upcoming, and the cursor skips it. Labels can't contain
+`'`, because the build passes the value to the linker in single quotes. In `.env.local`, write
+the value without quotes, because make keeps them as part of it. Pass the value on make's
+command line (`make build ANFRA_CLOUD_URL=...`) to override `.env.local`'s.
+
+Under the build's servers, login shows "Need another region? Send us an email at
+support@holistics.io." It hides that note when a runtime `ANFRA_CLOUD_URL` replaces the build's
+servers.
+
+At runtime, `ANFRA_CLOUD_URL` overrides the built-in list, in the same format. An explicitly
+empty value disables it. Bare `anfra auth login` shows the servers alongside organization URL
 entry; with neither setting, it goes straight to URL entry. The binary does not load
 `.env.local`; set the runtime override in the shell or process environment.
 Without terminal stdin and stderr, supply an explicit organization URL.
 
-The value must be an absolute HTTPS origin, or HTTP on literal `127.0.0.1` or `[::1]` for
+Each URL must be an absolute HTTPS origin, or HTTP on literal `127.0.0.1` or `[::1]` for
 local testing, without userinfo, query, fragment or a path other than `/`. Login lowercases
 the scheme and hostname and removes the default port and final slash.
 
