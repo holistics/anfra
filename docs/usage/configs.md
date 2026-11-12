@@ -117,7 +117,7 @@ stored credentials. The repo's publish destination is `org.url` in `.anfra/confi
 
 | Variable | Effect |
 |---|---|
-| `ANFRA_CLOUD_URL` | Overrides the build's default cloud URL for `anfra auth login`. An explicitly empty value disables that default. An HTTPS origin, or HTTP on literal `127.0.0.1` or `[::1]` for local testing. See [DEVELOPMENT.md](../../DEVELOPMENT.md#cloud-login-url) for build-time configuration and URL requirements. |
+| `ANFRA_CLOUD_URL` | Overrides the cloud servers the build offers for `anfra auth login`. An explicitly empty value disables them. One server's URL, or a `;`-separated list of `Label=URL` entries, such as `United States=https://us.example.com;Europe`, where a label alone is a server that isn't available yet. Each URL is an HTTPS origin, or HTTP on literal `127.0.0.1` or `[::1]` for local testing. See [DEVELOPMENT.md](../../DEVELOPMENT.md#cloud-login-url) for build-time configuration and URL requirements. |
 
 ### Data Apps
 

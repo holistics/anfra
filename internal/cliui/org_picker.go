@@ -17,6 +17,19 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 )
 
+// CloudChoices are the cloud servers login offers besides organization URL entry, and
+// the address to email for another region, which login shows under them, linked.
+type CloudChoices struct {
+	Servers      []cloudapi.CloudServer
+	SupportEmail string
+}
+
+// supportNote tells whom to email for another region, the address a mailto: link.
+func supportNote(styles TerminalStyles, email string) string {
+	return styles.Muted.Render("Need another region? Send us an email at ") +
+		styles.LinkTo(email, "mailto:"+email) + styles.Muted.Render(".")
+}
+
 // OrgChoice is a stored organization's display name and canonical URL, never credentials.
 type OrgChoice struct {
 	Name string
@@ -27,6 +40,10 @@ type orgItem struct {
 	name, url string
 	index     int
 	input     bool
+	// origin is a cloud server's, which choosing it returns as the address.
+	origin string
+	// upcoming is a cloud server that isn't available yet: shown, but not selectable.
+	upcoming bool
 }
 
 func (i orgItem) FilterValue() string { return i.name }
@@ -59,6 +76,9 @@ func (d orgDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 
 func orgItemText(item orgItem, width int, styles TerminalStyles, selected bool) string {
 	name := item.name
+	if item.upcoming {
+		return styles.Muted.Render(ansi.Wrap(name+"  (upcoming)", width, ""))
+	}
 	if selected {
 		name = styles.Selection.Render(name)
 	}
@@ -80,15 +100,21 @@ type orgPicker struct {
 	editing, selected, finished bool
 	index                       int
 	address, validation         string
+	supportEmail                string
 	styles                      TerminalStyles
 }
 
-// PickOrg returns the original stored index, len(orgs) for hosted, or -1 plus a canonical URL.
-// Esc or Ctrl-C returns context.Canceled. Callers own interaction policy and pass stderr as out.
+// PickOrg returns the original stored index, or -1 plus a canonical URL: a cloud server's
+// origin, or the URL entered. With allowURL, it offers cloud's servers after orgs, showing
+// those without an origin as upcoming, and cloud's support email under the list. Esc or
+// Ctrl-C returns context.Canceled. Callers own interaction policy and pass stderr as out.
 //
 //nolint:revive // Keep the shared picker API explicit about cloud selection and URL entry.
-func PickOrg(ctx context.Context, in io.Reader, out io.Writer, title string, orgs []OrgChoice, cloudURL string, allowURL bool) (int, string, error) {
-	items := make([]list.Item, 0, len(orgs)+2)
+func PickOrg(ctx context.Context, in io.Reader, out io.Writer, title string, orgs []OrgChoice, cloud *CloudChoices, allowURL bool) (int, string, error) {
+	if cloud == nil || !allowURL {
+		cloud = &CloudChoices{}
+	}
+	items := make([]list.Item, 0, len(orgs)+len(cloud.Servers)+1)
 	for index, org := range orgs {
 		name := SafeText(org.Name)
 		if name == "" {
@@ -113,10 +139,14 @@ func PickOrg(ctx context.Context, in io.Reader, out io.Writer, title string, org
 		}
 		return a.name < b.name
 	})
-	if cloudURL != "" && allowURL {
-		items = append(items, orgItem{name: SafeText(cloudURL), index: len(orgs)})
-	}
 	if allowURL {
+		for _, server := range cloud.Servers {
+			item := orgItem{name: SafeText(server.Label), url: SafeText(server.Origin), index: -1, origin: server.Origin, upcoming: server.Origin == ""}
+			if item.name == "" {
+				item.name, item.url = item.url, ""
+			}
+			items = append(items, item)
+		}
 		items = append(items, orgItem{name: "Enter your organization URL", index: -1, input: true})
 	}
 	if len(items) == 0 {
@@ -140,7 +170,8 @@ func PickOrg(ctx context.Context, in io.Reader, out io.Writer, title string, org
 	for i := range titleLines {
 		titleLines[i] = SafeText(titleLines[i])
 	}
-	m := &orgPicker{choices: l, input: t, title: strings.Join(titleLines, "\n"), width: 80, height: 20, index: -1, editing: len(items) == 1 && items[0].(orgItem).input, styles: styles}
+	m := &orgPicker{choices: l, input: t, title: strings.Join(titleLines, "\n"), width: 80, height: 20, index: -1, editing: len(items) == 1 && items[0].(orgItem).input, supportEmail: SafeText(cloud.SupportEmail), styles: styles}
+	m.skipUpcoming(0, 1)
 	m.resize()
 	opts, finishOutput := terminalOptions(in, out)
 	opts = append(opts, tea.WithContext(ctx))
@@ -174,6 +205,9 @@ func (m *orgPicker) resize() {
 	}
 	m.choices.SetDelegate(orgDelegate{height: height, styles: m.styles})
 	reserved := lipgloss.Height(ansi.Wrap(m.title, max(1, m.width), "")) + 4
+	if m.supportEmail != "" {
+		reserved += lipgloss.Height(ansi.Wrap(supportNote(TerminalStyles{}, m.supportEmail), max(1, m.width), "")) + 1
+	}
 	contentHeight := len(m.choices.Items()) * (height + 1)
 	m.choices.SetSize(max(1, m.width), max(height, min(contentHeight, min(12, m.height-reserved))))
 	m.input.SetWidth(max(1, m.width-4))
@@ -216,7 +250,7 @@ func (m *orgPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.editing = true
 					return m, m.input.Focus()
 				}
-				m.index = i.index
+				m.index, m.address = i.index, i.origin
 			}
 			m.selected, m.finished = true, true
 			return m, tea.Quit
@@ -226,16 +260,42 @@ func (m *orgPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.editing {
 		m.input, cmd = m.input.Update(msg)
 	} else {
+		before := m.choices.Index()
 		m.choices, cmd = m.choices.Update(msg)
+		if after := m.choices.Index(); after != before {
+			m.skipUpcoming(before, after-before)
+		}
 	}
 	return m, cmd
+}
+
+// skipUpcoming moves the cursor on from an upcoming server, which can't be chosen,
+// in the direction it moved (step's sign). With none to land on that way, it goes back to from.
+func (m *orgPicker) skipUpcoming(from, step int) {
+	if step > 0 {
+		step = 1
+	} else {
+		step = -1
+	}
+	items := m.choices.Items()
+	for i := m.choices.Index(); i >= 0 && i < len(items); i += step {
+		if !items[i].(orgItem).upcoming {
+			m.choices.Select(i)
+			return
+		}
+	}
+	m.choices.Select(from)
 }
 
 func (m *orgPicker) View() tea.View {
 	if m.finished {
 		return tea.NewView("")
 	}
-	body := m.choices.View() + "\n" + m.styles.Muted.Render("Up/down: move  Enter: select  Esc: cancel")
+	body := m.choices.View() + "\n"
+	if m.supportEmail != "" {
+		body += supportNote(m.styles, m.supportEmail) + "\n\n"
+	}
+	body += m.styles.Muted.Render("Up/down: move  Enter: select  Esc: cancel")
 	if m.editing {
 		body = m.styles.Heading.Render("Organization URL") + "\n" + m.input.View()
 		if m.validation != "" {

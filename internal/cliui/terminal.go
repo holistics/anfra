@@ -33,6 +33,18 @@ func isTerminal(stream any) bool {
 // TerminalStyles gives auth views a shared hierarchy; its zero value renders plain text.
 type TerminalStyles struct {
 	Heading, Muted, Accent, Selection, Success, Warning, Error, Link, Code, Key lipgloss.Style
+	// hyperlinks is whether LinkTo makes text clickable: when the styles are on.
+	hyperlinks bool
+}
+
+// LinkTo renders text in the Link style as a hyperlink to url (OSC 8), which a
+// terminal that supports them makes clickable and others show as the text.
+// Plain text when the styles are off.
+func (s TerminalStyles) LinkTo(text, url string) string {
+	if !s.hyperlinks {
+		return text
+	}
+	return s.Link.Hyperlink(url).Render(text)
 }
 
 // violet is anfra's accent, the design package's primary
@@ -67,16 +79,17 @@ func NewTerminalStyles(out io.Writer) TerminalStyles {
 		code = lipgloss.NewStyle().Foreground(profile.Convert(codeText)).Background(profile.Convert(codeFill)).Padding(0, 1)
 	}
 	return TerminalStyles{
-		Heading:   lipgloss.NewStyle().Bold(true),
-		Muted:     lipgloss.NewStyle().Faint(true),
-		Accent:    lipgloss.NewStyle().Foreground(accent),
-		Selection: lipgloss.NewStyle().Bold(true).Foreground(accent),
-		Success:   lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(2)),
-		Warning:   lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3)),
-		Error:     lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)),
-		Link:      lipgloss.NewStyle().Underline(true).Foreground(accent),
-		Code:      code,
-		Key:       lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(12)), // bright: blue reads poorly on dark backgrounds
+		Heading:    lipgloss.NewStyle().Bold(true),
+		Muted:      lipgloss.NewStyle().Faint(true),
+		Accent:     lipgloss.NewStyle().Foreground(accent),
+		Selection:  lipgloss.NewStyle().Bold(true).Foreground(accent),
+		Success:    lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(2)),
+		Warning:    lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3)),
+		Error:      lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)),
+		Link:       lipgloss.NewStyle().Underline(true).Foreground(accent),
+		Code:       code,
+		Key:        lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(12)), // bright: blue reads poorly on dark backgrounds
+		hyperlinks: true,
 	}
 }
 

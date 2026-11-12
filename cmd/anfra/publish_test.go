@@ -271,8 +271,8 @@ func TestCloudURLDefaultAndOverride(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, err := configuredCloudOrigin()
-			if err != nil || got != tc.want {
+			servers, err := configuredCloudServers()
+			if got := cloudapi.FormatCloudServers(servers); err != nil || got != tc.want {
 				t.Fatalf("cloud URL = %q, %v; want %q", got, err, tc.want)
 			}
 		})
@@ -287,6 +287,8 @@ func TestLoginServerRuntimeCloudURL(t *testing.T) {
 		{name: "canonical", value: "HTTPS://Cloud.Example.COM:443/", want: "https://cloud.example.com"},
 		{name: "local", value: "http://127.0.0.1:5173", want: "http://127.0.0.1:5173"},
 		{name: "invalid", value: "https://example.com/path", wantError: "ANFRA_CLOUD_URL"},
+		{name: "one available server", value: "United States=https://us.example.com;Europe", want: "https://us.example.com"},
+		{name: "several available servers", value: "United States=https://us.example.com;Europe=https://eu.example.com", wantError: "more than one server"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("ANFRA_CLOUD_URL", tc.value)
@@ -309,7 +311,7 @@ func TestLoginOffersOnlyCloudAndURLEntry(t *testing.T) {
 	for _, tc := range []struct {
 		name, cloudURL, keys, want string
 	}{
-		{name: "cloud", cloudURL: "https://cloud.example.com", keys: "\r"},
+		{name: "cloud", cloudURL: "https://cloud.example.com", keys: "\r", want: "https://cloud.example.com"},
 		{name: "organization URL", cloudURL: "https://cloud.example.com", keys: "\x1b[B\rhttps://other.example.com/o/another\r", want: "https://other.example.com/o/another"},
 		{name: "no cloud", keys: "https://other.example.com/o/another\r", want: "https://other.example.com/o/another"},
 	} {
@@ -326,6 +328,37 @@ func TestLoginOffersOnlyCloudAndURLEntry(t *testing.T) {
 			}
 			if strings.Contains(output.String(), "https://bi.example.com/o/stored") {
 				t.Fatal("login displayed a saved authentication")
+			}
+		})
+	}
+}
+
+func TestLoginNotesSupportOnlyForTheBuildsServers(t *testing.T) {
+	previous := defaultCloudURL
+	t.Cleanup(func() { defaultCloudURL = previous })
+	defaultCloudURL = "United States=https://us.example.com;Europe"
+	for _, tc := range []struct {
+		name, runtime string
+		runtimeSet    bool
+		want          bool
+	}{
+		{name: "the build's servers", want: true},
+		{name: "runtime servers instead", runtimeSet: true, runtime: "https://other.example.com"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ANFRA_CLOUD_URL", tc.runtime)
+			if !tc.runtimeSet {
+				if err := os.Unsetenv("ANFRA_CLOUD_URL"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, output := drawnScreen(t, "Up/down: move")
+			terminal := newAuthTerminal(strings.NewReader("\x1b[8;24;100t"), output)
+			terminal.interactive = true
+			_, err := terminal.loginAddress(ctx, "Authenticate with an organization")
+			output.ended(t, err)
+			if got := strings.Contains(output.String(), "Need another region?"); got != tc.want {
+				t.Fatalf("note shown = %v, want %v, in %q", got, tc.want, output.String())
 			}
 		})
 	}

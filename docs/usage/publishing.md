@@ -21,18 +21,20 @@ approval until you cancel or the ten-minute login timeout expires. Treat this UR
 private; it contains login state. It is not included in JSON output or diagnostic logs.
 With `--json`, a browser-launch failure still exits with an error instead of waiting.
 
-Bare `anfra auth login` offers the build's optional default cloud URL alongside
-`Enter your organization URL`. Runtime `ANFRA_CLOUD_URL` overrides that default;
-an explicitly empty value disables it. With neither a build default nor a runtime value,
+Bare `anfra auth login` offers the build's optional cloud servers, such as one per region,
+alongside `Enter your organization URL`. A server that isn't available yet shows as upcoming
+and can't be chosen. Under the build's servers, login says whom to email for another
+region. Runtime `ANFRA_CLOUD_URL` overrides the build's servers, and
+an explicitly empty value disables them. With neither a build default nor a runtime value,
 login goes straight to URL entry.
-The cloud choice uses the configured origin without an organization hint. In the browser,
+Choosing a server uses its origin without an organization hint. In the browser,
 consent preselects your last used eligible organization; you can change it before approving.
 Entering an organization URL sends its slug as a hint. Login always starts fresh browser
 approval; it does not reuse credentials or switch the repo.
 Use up/down and Enter, Esc to go back/cancel, and Ctrl-C to cancel anywhere.
 Interaction requires terminal stdin and stderr, outside CI and `TERM=dumb`; stdout may be
-redirected. Otherwise supply an explicit URL. `ANFRA_CLOUD_URL` must be an HTTPS origin,
-or HTTP on literal `127.0.0.1` or `[::1]` for local testing; see
+redirected. Otherwise supply an explicit URL. Each URL in `ANFRA_CLOUD_URL` must be an HTTPS
+origin, or HTTP on literal `127.0.0.1` or `[::1]` for local testing; see
 [DEVELOPMENT.md](../../DEVELOPMENT.md#cloud-login-url).
 
 ## Stored credentials and logout
