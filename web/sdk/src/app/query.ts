@@ -5,6 +5,8 @@ import type { DatasetIndex } from './validation';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
 import type {
+  ExecuteOptions,
+  ExecuteSummary,
   QueryDeclaration,
   QueryResult,
   QuerySort,
@@ -124,14 +126,15 @@ export class Query extends Observable {
    * Everything that changes the rows: the declaration, the conditions reaching this query through
    * mappings, the conditions reaching it from the selection, the sort override, the app's timezone,
    * and the page. Compared against the last successful run to decide whether re-running would
-   * produce anything new.
+   * produce anything new. `pending` reads the controls and selection as the reader has them,
+   * `applied` as the app last applied them; they differ only between a change and `app.execute()`.
    */
-  signature (): string {
+  signature (phase: 'pending' | 'applied' = 'pending'): string {
     const conditions = this.app.mappingsTo(this.name)
       .map((mapping) => ({
         field: mapping.field,
         aggregation: mapping.aggregation,
-        condition: mapping.from.condition,
+        condition: phase === 'pending' ? mapping.from.condition : mapping.from.appliedCondition,
       }))
       // Field alone is not a stable key: one query may take two conditions on the same field from
       // different controls, and their order must not flip between two otherwise identical runs.
@@ -140,11 +143,11 @@ export class Query extends Observable {
     return JSON.stringify({
       declaration: this.declaration,
       conditions,
-      selection: this.app.selectionConditionsFor(this.name, 'pending'),
+      selection: this.app.selectionConditionsFor(this.name, phase),
       // Separate from `selection`, and not optional: a selection sent as one expression leaves
       // `conditions` empty, so without this every such selection has the same signature as the
       // next one and the query is never re-run.
-      selectionExpression: this.app.selectionExpressionFor(this.name, 'pending'),
+      selectionExpression: this.app.selectionExpressionFor(this.name, phase),
       sort: this._sort,
       timezone: this.app.timezone,
       page: this._page,
@@ -166,6 +169,26 @@ export class Query extends Observable {
    */
   shouldRun (force = false): boolean {
     return force || this.runFailed || this.lastRunSignature === undefined || this.isDirty;
+  }
+
+  /**
+   * @internal For `query.execute()`: like `shouldRun`, but against what is applied, since applying
+   * the reader's pending changes is the app's, for every query at once. Its own sort and the
+   * timezone count; a control or selection the reader changed and the app has not applied does not.
+   */
+  shouldRunAlone (force = false): boolean {
+    return force || this.runFailed || this.lastRunSignature === undefined
+      || this.signature('applied') !== this.lastRunSignature;
+  }
+
+  /**
+   * Runs this query alone, with the inputs the app last applied, if that would produce something
+   * new; with `force`, whatever its inputs (a paged query starts over at its first page). Applies
+   * none of the reader's pending changes: that is `app.execute()`'s, so the query stays dirty and
+   * the next `app.execute()` runs it with them. Never rejects, as `app.execute()` doesn't.
+   */
+  execute (options: ExecuteOptions = {}): Promise<ExecuteSummary> {
+    return this.app.executeQuery(this, options);
   }
 
   /** Stops the in-flight request for this query. The pending `execute()` resolves without it. */

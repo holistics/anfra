@@ -593,42 +593,69 @@ export class App extends Observable implements AppContext {
 
     const succeeded: string[] = [];
     const failed: string[] = [];
-
     await Promise.all(targets.map(async (query) => {
-      const controller = new AbortController();
-      query.controller = controller;
-      const signature = query.signature();
-      query.markExecuting();
-
-      try {
-        const result = await runQuery(
-          query,
-          this.mappingsTo(query.name),
-          {
-            conditions: this.selectionConditionsFor(query.name, 'applied'),
-            expression: this.selectionExpressionFor(query.name, 'applied'),
-          },
-          context,
-          controller.signal,
-        );
-        if (superseded(query, controller)) return;
-        query.markSuccess(result, signature, false);
-        succeeded.push(query.name);
-      } catch (err) {
-        if (superseded(query, controller)) return;
-        if (isAbort(err)) return;
-        const error = toDataAppError(err, query.name);
-        query.markError(error);
-        // A failed run is the app's to show, and its host's to know of. A failed `fetchMore` is not
-        // reported here: it rejects, so the app handles it, or it is an unhandled rejection.
-        reportError('call.query', error);
-        failed.push(query.name);
-      } finally {
-        if (query.controller === controller) query.controller = undefined;
-      }
+      const outcome = await this.run(query, query.signature(), context);
+      if (outcome === 'succeeded') succeeded.push(query.name);
+      else if (outcome === 'failed') failed.push(query.name);
     }));
 
     return { succeeded, failed };
+  }
+
+  /**
+   * @internal Backs `query.execute()`: that query alone, with what is applied, committing nothing.
+   * Its signature is the applied one, so a query the reader has pending changes for stays dirty.
+   */
+  async executeQuery (query: Query, options: ExecuteOptions = {}): Promise<ExecuteSummary> {
+    if (!query.shouldRunAlone(options.force)) return { succeeded: [], failed: [] };
+    query.controller?.abort();
+    query.resetPage();
+    const outcome = await this.run(query, query.signature('applied'), {
+      backend: this.backend,
+      timezone: this._timezone,
+      bustCache: options.bustCache,
+    });
+    return {
+      succeeded: outcome === 'succeeded' ? [query.name] : [],
+      failed: outcome === 'failed' ? [query.name] : [],
+    };
+  }
+
+  /**
+   * One query's run from its first page, with the applied inputs, recorded under `signature`.
+   * Undefined when a newer run took the query over, or it was aborted.
+   */
+  private async run (query: Query, signature: string, context: SubmitContext): Promise<'succeeded' | 'failed' | undefined> {
+    const controller = new AbortController();
+    query.controller = controller;
+    query.markExecuting();
+
+    try {
+      const result = await runQuery(
+        query,
+        this.mappingsTo(query.name),
+        {
+          conditions: this.selectionConditionsFor(query.name, 'applied'),
+          expression: this.selectionExpressionFor(query.name, 'applied'),
+        },
+        context,
+        controller.signal,
+      );
+      if (superseded(query, controller)) return undefined;
+      query.markSuccess(result, signature, false);
+      return 'succeeded';
+    } catch (err) {
+      if (superseded(query, controller)) return undefined;
+      if (isAbort(err)) return undefined;
+      const error = toDataAppError(err, query.name);
+      query.markError(error);
+      // A failed run is the app's to show, and its host's to know of. A failed `fetchMore` is not
+      // reported here: it rejects, so the app handles it, or it is an unhandled rejection.
+      reportError('call.query', error);
+      return 'failed';
+    } finally {
+      if (query.controller === controller) query.controller = undefined;
+    }
   }
 
   /** Re-runs everything and asks the server to skip its result cache. */

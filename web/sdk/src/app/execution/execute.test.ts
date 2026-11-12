@@ -359,6 +359,73 @@ describe('execute', () => {
   });
 });
 
+describe('query.execute', () => {
+  function twoQueries () {
+    const { stub, sdk } = build(twoRows);
+    const app = sdk.createApp();
+    const revenue = revenueBy(app);
+    const other = app.createQuery('other', { dataset: 'sales', aql: REVENUE_AQL });
+    const region = app.createFilter('region', { field: 'users.region' });
+    app.mapControl(region, revenue, { field: 'users.region' });
+    return { stub, app, revenue, other, region };
+  }
+
+  it('runs that query alone, only when that would produce something new, or on force', async () => {
+    const { stub, app, revenue } = twoQueries();
+    await app.execute();
+
+    expect(await revenue.execute()).toEqual({ succeeded: [], failed: [] });
+    expect(stub.calls).toHaveLength(2);
+
+    expect(await revenue.execute({ force: true })).toEqual({ succeeded: ['revenue'], failed: [] });
+    expect(stub.calls).toHaveLength(3);
+    expect(stub.queries[2]).not.toHaveProperty('bustCache');
+
+    await revenue.execute({ force: true, bustCache: true });
+    expect(stub.queries[3].bustCache).toBe(true);
+
+    revenue.setSort([{ field: 'total', direction: 'desc' }]);
+    await revenue.execute();
+    expect(stub.calls).toHaveLength(5);
+    expect(stub.queries[4].input.sorts).toEqual([{ field: 'total', direction: 'desc' }]);
+  });
+
+  it('runs with what is applied and applies nothing, so the next app.execute still runs it', async () => {
+    const { stub, app, revenue, region } = twoQueries();
+    await app.execute();
+
+    region.setCondition({ operator: 'is', values: ['APAC'] });
+    await revenue.execute();
+    expect(stub.calls).toHaveLength(2);
+
+    await revenue.execute({ force: true });
+    expect(stub.queries[2].input.filters).toEqual([]);
+    expect(app.hasChanges).toBe(true);
+    expect(revenue.isDirty).toBe(true);
+
+    await app.execute();
+    expect(stub.calls).toHaveLength(4);
+    expect(stub.queries[3].input.filters).not.toEqual([]);
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('retries a failed run, and starts a paged query over at its first page', async () => {
+    let fail = true;
+    const { stub, sdk } = build((request) => (fail ? new Error('boom') : { ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
+    const app = sdk.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
+
+    expect(await app.execute()).toEqual({ succeeded: [], failed: ['revenue'] });
+    fail = false;
+    expect(await query.execute()).toEqual({ succeeded: ['revenue'], failed: [] });
+
+    await query.fetchMore();
+    await query.execute({ force: true });
+    expect(stub.queries.map((request) => request.page)).toEqual([1, 1, 2, 1]);
+    expect(query.result?.rows).toHaveLength(2);
+  });
+});
+
 describe('paging', () => {
   it('appends the next page rather than replacing the rows', async () => {
     const page2: BackendQueryResult = {
