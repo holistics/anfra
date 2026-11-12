@@ -118,8 +118,10 @@ describe('core', () => {
   it('offers Refresh, disabled while a refresh runs and not while the frame runs its queries', async () => {
     const host = createHost({ plugins: [corePlugin(backend())], frameScript: 'x' });
     expect(host.commands).toEqual([expect.objectContaining({
-      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary', shortcut: 'Alt+Shift+R', run: { call: 'core.refresh', request: { bustCache: true } },
+      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary', run: { call: 'core.refresh', request: { bustCache: true } },
     })]);
+    // A button and a palette entry only: a key forwarded from the frame could not run a host-only call.
+    expect(host.commands[0]!.shortcut).toBeUndefined();
     const app = mount();
     const states: unknown[] = [];
     app.onCommandsChange(() => states.push(app.commandState('core.refresh')));
