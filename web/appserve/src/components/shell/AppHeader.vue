@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LayoutDashboard, PanelLeft, RefreshCw } from '@lucide/vue';
+import { LayoutDashboard, PanelLeft } from '@lucide/vue';
 import type { Command, CommandState } from '@holistics/anfra-sdk/host';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +11,7 @@ import { IS_MAC, keyLabels } from '@/lib/shortcut';
 import LoadingBar from './LoadingBar.vue';
 import RepoProblems from './RepoProblems.vue';
 
-defineProps<{
+const props = defineProps<{
   sidebarOpen: boolean;
   hasApp: boolean;
   title: string;
@@ -23,10 +23,17 @@ defineProps<{
   commandState: (command: Command) => CommandState;
 }>();
 
+/** A button's tooltip: why it can't run, or its name and shortcut, then what more it says (`detail`). */
+function commandTitle (command: Command): string {
+  const { disabled, detail } = props.commandState(command);
+  if (disabled) return disabled;
+  const name = command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title;
+  return detail ? `${name}\n${detail}` : name;
+}
+
 const emit = defineEmits<{
   toggleSidebar: [];
   revealFolder: [path: string];
-  reload: [];
   run: [command: Command];
 }>();
 </script>
@@ -63,23 +70,12 @@ const emit = defineEmits<{
     <div class="ml-auto flex items-center gap-1">
       <RepoProblems v-if="problems.length" :problems="problems" />
       <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Reload Data App"
-        title="Reload Data App"
-        data-testid="reload"
-        :disabled="!hasApp"
-        @click="emit('reload')"
-      >
-        <RefreshCw />
-      </Button>
-      <Button
         v-for="command in commands"
         :key="command.id"
         variant="ghost"
         size="icon-sm"
         :aria-label="command.title"
-        :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title)"
+        :title="commandTitle(command)"
         :data-testid="`command-${command.id}`"
         :aria-pressed="commandState(command).pressed ?? false"
         :disabled="!hasApp || !!commandState(command).disabled"

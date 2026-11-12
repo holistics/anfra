@@ -3,7 +3,7 @@ import {
   computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch,
 } from 'vue';
 import {
-  LayoutDashboard, Moon, PanelLeft, RefreshCw, Sun,
+  LayoutDashboard, Moon, PanelLeft, Sun,
 } from '@lucide/vue';
 import CommandPalette, { type PaletteEntry } from '@/components/apps/CommandPalette.vue';
 import DataAppFrame from '@/components/apps/DataAppFrame.vue';
@@ -15,7 +15,9 @@ import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { designTheme } from '@holistics/anfra-sdk/common';
-import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
+import type {
+  Command, CommandState, Host, MountedDataApp,
+} from '@holistics/anfra-sdk/host';
 import {
   allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from '@/lib/catalog';
@@ -151,7 +153,7 @@ function toggleTheme (): void {
 }
 
 // The host runtime and the open Data App's mount, for the plugins' commands and its panel. The
-// panel belongs to one Data App: it closes when another is picked, and survives Reload.
+// panel belongs to one Data App: it closes when another is picked, and survives a live reload.
 const runtime = shallowRef<Host>();
 const app = shallowRef<MountedDataApp>();
 // Bumped on each change to the panel or the commands' state, which live in the SDK.
@@ -171,7 +173,7 @@ function onAppMounted (host: Host, mounted: MountedDataApp): void {
   if (keptPanel) mounted.panel.show(keptPanel.tab);
   panelVersion.value += 1;
 }
-// The Data App went (Reload, another one picked): nothing runs on its mount until the next one is.
+// The Data App went (a live reload, another one picked): nothing runs on its mount until the next one is.
 function onAppUnmounted (mounted: MountedDataApp): void {
   if (app.value !== mounted) return;
   stopWatching?.();
@@ -186,7 +188,7 @@ const chromeCommands = computed(() => runtime.value?.commands.filter((command) =
 const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow' && command.placement !== 'panel'));
 const panelCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'panel'));
 const menus = computed(() => overflowMenus(chromeCommands.value));
-function commandState (command: Command): { pressed?: boolean, disabled?: string } {
+function commandState (command: Command): CommandState {
   void panelVersion.value;
   return app.value ? app.value.commandState(command.id) : { disabled: 'No Data App is open' };
 }
@@ -272,10 +274,6 @@ function select (path: string): void {
   if (narrow.value) sidebarOpen.value = false;
 }
 
-function reload (): void {
-  revision.value += 1;
-}
-
 // Breadcrumb folders: open the sidebar, expand the folder and bring it into view.
 async function revealFolder (path: string): Promise<void> {
   sidebarOpen.value = true;
@@ -308,12 +306,11 @@ const paletteEntries = computed<PaletteEntry[]>(() => {
   const plugins = chromeCommands.value.map((command): PaletteEntry => {
     const state = commandState(command);
     return {
-      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
+      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed, detail: state.detail,
     };
   });
   return [
     ...plugins,
-    { id: 'reload', title: 'Reload Data App', group: 'Data App', icon: RefreshCw, disabled: noApp },
     { id: 'sidebar', title: sidebarOpen.value ? 'Hide sidebar' : 'Show sidebar', group: 'View', icon: PanelLeft },
     { id: 'theme', title: theme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', group: 'View', icon: theme.value === 'dark' ? Sun : Moon },
     ...allApps(entries.value).map((entry): PaletteEntry => ({
@@ -327,8 +324,6 @@ function runPaletteEntry (id: string): void {
     if (command) void runCommand(command);
   } else if (id.startsWith('app:')) {
     select(id.slice('app:'.length));
-  } else if (id === 'reload') {
-    reload();
   } else if (id === 'sidebar') {
     sidebarOpen.value = !sidebarOpen.value;
   } else if (id === 'theme') {
@@ -449,7 +444,6 @@ onBeforeUnmount(() => {
         :command-state="commandState"
         @toggle-sidebar="sidebarOpen = !sidebarOpen"
         @reveal-folder="revealFolder"
-        @reload="reload"
         @run="runCommand"
       />
       <div
