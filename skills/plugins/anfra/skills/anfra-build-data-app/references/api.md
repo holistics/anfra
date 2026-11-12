@@ -78,7 +78,7 @@ is almost always right.
 | `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. |
 | `app.mapCrossFilter(fromQuery, toQuery)` | Rows selected in `fromQuery` filter `toQuery`. |
 | `await app.execute()` | Runs every query whose inputs changed, and every query whose last run failed: it is also the retry. Resolves `{ succeeded, failed }`, never rejects. |
-| `await app.refresh({ bustCache? })` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page. It asks a server that caches results to skip its cache; `{ bustCache: false }` lets the cache answer. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
+| `await app.refresh()` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
 | `app.hasChanges` | A control or the selection changed since the last execute: use for an "Apply" button. |
 | `app.selection` / `app.clearSelection()` | The current cross-filter selection. |
