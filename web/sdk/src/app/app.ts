@@ -15,6 +15,7 @@ import { withSuggestion } from './suggest';
 import { deriveSelection } from './selection';
 import { openRowsMenu } from './menu';
 import { applyExtensions, type EntityExtensions } from './extensions';
+import { withChanges } from './changes';
 import { markersFor } from './structure';
 import { overlayFor, scrollTo } from './overlay';
 import { reportError } from './reporting';
@@ -381,13 +382,7 @@ export class App extends Observable implements AppContext {
   /** @internal Backs `query.update`: checks the change against the app, then swaps it in. */
   updateQuery (query: Query, changes: QueryUpdate): void {
     const previous = query.declaration;
-    const declaration: QueryDeclaration = { ...previous };
-    (['dataset', 'aql', 'pageSize'] as const).forEach((key) => {
-      if (!(key in changes)) return;
-      const value = changes[key];
-      if (value === undefined) delete declaration[key];
-      else (declaration as unknown as Record<string, unknown>)[key] = value;
-    });
+    const declaration = withChanges<QueryDeclaration>(previous, changes, ['dataset', 'aql', 'pageSize']);
     assertDeclaration(query.name, declaration);
     const dataset = this.datasetIndex(declaration.dataset, query.name);
 

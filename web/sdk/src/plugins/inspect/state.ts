@@ -7,6 +7,7 @@ import type { Panel } from '../../host/panel';
 import type { AppConsoleEvent, AppErrorEvent } from '../../common/runtimeErrors';
 import type { InspectedApp } from '../../common/types';
 import { createRequestLog, type RequestLog, type RequestRecorder } from './model/requests';
+import { entityGone, hasEntity } from './model/entities';
 import {
   DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type QueriesFilter, type RevealTarget,
 } from './model/types';
@@ -144,22 +145,17 @@ function createState (): InspectState {
       });
     },
     prune (apps) {
-      const has = (kind: 'query' | 'control', app: number, name: string) => Object.hasOwn(
-        (kind === 'query' ? apps[app]?.queries : apps[app]?.controls) ?? {},
-        name,
-      );
-      // `query:<app>/<name>`, `control:<app>/<name>`, and Data's `<app>/<name>`.
-      const entity = /^(query|control):(\d+)\/(.+)$/;
+      // Queries' `query:<app>/<name>` and `control:<app>/<name>`.
       for (const key of state.queries.open) {
-        const match = entity.exec(key);
-        if (match && !has(match[1] as 'query' | 'control', Number(match[2]), match[3]!)) state.queries.open.delete(key);
+        if (entityGone(key, apps)) state.queries.open.delete(key);
       }
+      // Data's `<app>/<name>`.
       for (const key of state.data.open) {
         const slash = key.indexOf('/');
-        if (!has('query', Number(key.slice(0, slash)), key.slice(slash + 1))) state.data.open.delete(key);
+        if (!hasEntity(apps, 'query', Number(key.slice(0, slash)), key.slice(slash + 1))) state.data.open.delete(key);
       }
       const target = state.revealed?.target;
-      if (target && 'entity' in target && !has(target.entity, target.app, target.name)) {
+      if (target && 'entity' in target && !hasEntity(apps, target.entity, target.app, target.name)) {
         (state as { revealed: InspectState['revealed'] }).revealed = undefined;
       }
     },
