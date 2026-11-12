@@ -9,7 +9,7 @@ import { createEndpoint, type Endpoint } from '../common/endpoint';
 import {
   checkConsoleEvent, checkErrorEvent, createBudget, describeError, type AppErrorEvent,
 } from '../common/runtimeErrors';
-import type { DatasetDescriptor, User } from '../common/types';
+import type { DatasetDescriptor, QueryStamp, User } from '../common/types';
 import type {
   CallContext, CallDefinition, Caller, CallOptions, EventCheck, HandlerCallOptions, HandlerContext, Middleware, MountContext, Plugin,
 } from './plugin';
@@ -184,6 +184,15 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
   return answers;
 }
 
+/** A frame's stamp, if it is one: an app's index and a query's name. The frame is untrusted. */
+function checkStamp (stamp: unknown): QueryStamp | undefined {
+  if (typeof stamp !== 'object' || stamp === null) return undefined;
+  const { app, query } = stamp as { app?: unknown, query?: unknown };
+  if (typeof app !== 'number' || !Number.isInteger(app) || app < 0) return undefined;
+  if (typeof query !== 'string' || !query || query.length > 512) return undefined;
+  return { app, query };
+}
+
 export function createHost (options: HostOptions): Host {
   const plugins = [...options.plugins];
   const answers = install(plugins);
@@ -266,7 +275,7 @@ export function createHost (options: HostOptions): Host {
    * Run a call through the middleware that match it, then its handler. Resolves to the answer;
    * `undefined` for a name no host half answers, which the caller decides about.
    */
-  function dispatch (name: string, request: unknown, callers: readonly Caller[], mount: MountContext | undefined, signal: AbortSignal, asOrigin = false): Promise<unknown> {
+  function dispatch (name: string, request: unknown, callers: readonly Caller[], mount: MountContext | undefined, signal: AbortSignal, asOrigin = false, stamp?: QueryStamp): Promise<unknown> {
     const answer = answers.get(name);
     if (!answer) return Promise.reject(invalidRequest(`Nothing on this host answers '${name}'.`));
     const caller = callers[callers.length - 1];
@@ -278,7 +287,7 @@ export function createHost (options: HostOptions): Host {
     const chain = middleware.filter((m) => (typeof m.match === 'string' ? [m.match] : m.match).some((p) => matches(p, name)));
     const trace: string[] = [];
     const context: CallContext = {
-      name, caller, chain: callers, origin, signal, mount, trace,
+      name, caller, chain: callers, origin, signal, mount, trace, ...(stamp ? { stamp } : {}),
     };
     const run = (index: number, current: unknown): Promise<unknown> => {
       if (signal.aborted) return Promise.reject(signal.reason ?? new Error('Aborted'));
@@ -382,7 +391,7 @@ export function createHost (options: HostOptions): Host {
         try { listener(event); } catch { /* one listener must not stop the others */ }
       });
       endpoint = createEndpoint(post, {
-        answer: (name, request, signal) => dispatch(name, request, [{ kind: 'frame' }], context, signal),
+        answer: (name, request, signal, stamp) => dispatch(name, request, [{ kind: 'frame' }], context, signal, false, checkStamp(stamp)),
         hidden: (name, err) => {
           const { message, stack, at } = describeError('host.internal', err);
           reportError({

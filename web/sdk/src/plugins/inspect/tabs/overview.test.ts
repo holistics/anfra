@@ -4,7 +4,7 @@ import {
 import type { StructureNode } from '../../../common/types';
 import { PLUGIN_VERSION } from '../../version';
 import {
-  byTestId, inspect, REVENUE_AQL, salesApp, salesSnapshot, type Harness,
+  byTestId, inspect, REVENUE_AQL, REVENUE_STAMP, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
 
 let harness: Harness | undefined;
@@ -81,7 +81,7 @@ describe('Overview', () => {
 
   it('shows the last request, which opens its query', async () => {
     const root = await overview();
-    await harness!.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} });
+    await harness!.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} }, REVENUE_STAMP);
     const card = byTestId<HTMLButtonElement>(root, 'stat-last-request')!;
     expect(card.querySelector('.stat-value')?.textContent).toBe('< 1m ago');
     expect(card.querySelector('.stat-detail')?.textContent).toBe('revenue');
@@ -176,7 +176,7 @@ describe('Overview', () => {
 
   it('shows the environment, warning of a timezone unlike the reader\'s', async () => {
     const root = await overview({ snapshot: salesSnapshot([salesApp({ timezone: 'Europe/Paris' })]) });
-    await harness!.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} });
+    await harness!.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} }, REVENUE_STAMP);
     const details = await open(root, 'environment');
     const text = [...byTestId(details, 'environment')!.querySelectorAll('dt')].map((dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`);
     expect(text).toEqual([

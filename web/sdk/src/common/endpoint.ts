@@ -7,6 +7,7 @@ import {
   DataAppError, ValidationError, callFailed, contextOf, isDataAppError, toScope,
 } from './errors';
 import type { BridgeError, BridgeMessage } from './bridge';
+import type { QueryStamp } from './types';
 
 export function abortError (): Error {
   const err = new Error('Aborted');
@@ -65,8 +66,11 @@ export function fromBridgeError (error: BridgeError | undefined): DataAppError {
 }
 
 export interface EndpointHandlers {
-  /** Answer one of the other side's calls; `signal` aborts when it cancels. */
-  answer: (name: string, request: unknown, signal: AbortSignal) => Promise<unknown>;
+  /**
+   * Answer one of the other side's calls; `signal` aborts when it cancels. `stamp` is the query the
+   * other side says the call is for, unchecked.
+   */
+  answer: (name: string, request: unknown, signal: AbortSignal, stamp?: unknown) => Promise<unknown>;
   /** One of the other side's events. */
   event: (name: string, payload: unknown) => void;
   /**
@@ -77,7 +81,8 @@ export interface EndpointHandlers {
 }
 
 export interface Endpoint {
-  call: <T = unknown>(name: string, request: unknown, signal?: AbortSignal) => Promise<T>;
+  /** `stamp`: the query the call is for, which the other side may show it under. */
+  call: <T = unknown>(name: string, request: unknown, signal?: AbortSignal, stamp?: QueryStamp) => Promise<T>;
   emit: (name: string, payload: unknown) => void;
   /** A message from the other side. False when it is not one of the bridge's. */
   receive: (message: BridgeMessage) => boolean;
@@ -90,11 +95,11 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
   const inFlight = new Map<number, AbortController>();
   let nextId = 1;
 
-  const answer = (id: number, name: string, request: unknown) => {
+  const answer = (id: number, name: string, request: unknown, stamp: unknown) => {
     const controller = new AbortController();
     inFlight.set(id, controller);
     Promise.resolve()
-      .then(() => handlers.answer(name, request, controller.signal))
+      .then(() => handlers.answer(name, request, controller.signal, stamp))
       .then((result) => {
         if (!controller.signal.aborted) post({ type: 'anfra:result', id, ok: true, result });
       })
@@ -119,7 +124,7 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
   };
 
   return {
-    call (name, request, signal) {
+    call (name, request, signal, stamp) {
       return new Promise((resolve, reject) => {
         if (signal?.aborted) {
           reject(abortError());
@@ -132,7 +137,9 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
           post({ type: 'anfra:cancel', id });
           reject(abortError());
         }, { once: true });
-        post({ type: 'anfra:call', id, name, request });
+        post({
+          type: 'anfra:call', id, name, request, ...(stamp ? { stamp: { app: stamp.app, query: stamp.query } } : {}),
+        });
       });
     },
     emit (name, payload) {
@@ -141,7 +148,7 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
     receive (message) {
       switch (message?.type) {
         case 'anfra:call':
-          answer(message.id, message.name, message.request);
+          answer(message.id, message.name, message.request, message.stamp);
           return true;
         case 'anfra:result': {
           const call = pending.get(message.id);

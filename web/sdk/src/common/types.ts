@@ -808,8 +808,19 @@ export type LineageCard = Schemas['DiagramCard'];
  * using the generic codes where they apply; `fromHttpStatus` maps an HTTP status) to choose the
  * error an author sees; anything else surfaces as `call_failed`.
  */
+/**
+ * The query a call is for, as the frame stamps it: a query's run or page (`core.submitQuery`), or its
+ * export (`export.query`). The app's index among the frame's apps and the query's name. The frame's
+ * word: for showing a call under its query, never for deciding what the call may do.
+ */
+export interface QueryStamp {
+  app: number;
+  query: string;
+}
+
 export interface Backend {
-  submitQuery (request: BackendQueryRequest, signal: AbortSignal): Promise<BackendQueryResult>;
+  /** `stamp`: the query the request is for, when a Data App's query sends it. */
+  submitQuery (request: BackendQueryRequest, signal: AbortSignal, stamp?: QueryStamp): Promise<BackendQueryResult>;
   fieldSuggestions (request: FieldSuggestionsRequest, signal: AbortSignal): Promise<ConditionValue[]>;
   /**
    * Export a query's whole result as a file, and answer its link once the file is ready. Optional:

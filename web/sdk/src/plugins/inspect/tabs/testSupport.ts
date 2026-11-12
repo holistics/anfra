@@ -4,7 +4,7 @@
  */
 import { expect, vi } from 'vitest';
 import type { BridgeMessage } from '../../../common/bridge';
-import type { BackendQueryResult, ColumnMeta, InspectedApp, User } from '../../../common/types';
+import type { BackendQueryResult, ColumnMeta, InspectedApp, QueryStamp, User } from '../../../common/types';
 import { salesDataset, testUser } from '../../../app/testSupport';
 import { createHost, type Host, type MountedDataApp } from '../../../host/runtime';
 import type { MountContext, Plugin } from '../../../host/plugin';
@@ -115,13 +115,15 @@ export interface Harness {
   mounted: MountedDataApp;
   /** `inspect`'s state for the mount: its request log, and what the tabs keep. */
   state: InspectState;
+  /** The mount, as a plugin's host half sees it. */
+  mount: MountContext;
   posted: BridgeMessage[];
   /** Post a snapshot from the frame. */
   post: (snapshot: Snapshot) => void;
   /** Send an event from the frame, by full name. */
   event: (name: string, payload: unknown) => void;
   /** Make a call as the frame does, through the pipeline, so `inspect` logs it. */
-  frameCall: (name: string, request: unknown) => Promise<unknown>;
+  frameCall: (name: string, request: unknown, stamp?: QueryStamp) => Promise<unknown>;
   /** Draw a tab, by full id, once its code has loaded. */
   tab: (id: string) => Promise<{ root: ShadowRoot, unmount: () => void }>;
   unmount: () => void;
@@ -151,9 +153,14 @@ export async function inspect (options: { snapshot?: Snapshot, tab?: string, sub
   if (options.tab) mounted.panel.show(options.tab);
   post(options.snapshot ?? salesSnapshot());
   let nextId = 1;
-  const frameCall = async (name: string, request: unknown) => {
+  const frameCall = async (name: string, request: unknown, stamp?: QueryStamp) => {
     const id = nextId++;
-    window.dispatchEvent(new MessageEvent('message', { data: { type: 'anfra:call', id, name, request }, source: mounted.frame.contentWindow }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'anfra:call', id, name, request, ...(stamp ? { stamp } : {}),
+      },
+      source: mounted.frame.contentWindow,
+    }));
     const answer = await vi.waitFor(() => {
       const found = posted.find((message) => message.type === 'anfra:result' && message.id === id);
       if (!found) throw new Error('no answer yet');
@@ -170,8 +177,11 @@ export async function inspect (options: { snapshot?: Snapshot, tab?: string, sub
     await vi.waitFor(() => expect(element.shadowRoot?.querySelector('.pane')).not.toBeNull());
     return { root: element.shadowRoot!, unmount };
   };
-  return { host, mounted, state: stateOf(mount!), posted, post, event, frameCall, tab, unmount: () => mounted.unmount() };
+  return { host, mounted, state: stateOf(mount!), mount: mount!, posted, post, event, frameCall, tab, unmount: () => mounted.unmount() };
 }
 
 /** The element with `data-testid="<id>"` under `root`. */
 export const byTestId = <T extends HTMLElement = HTMLElement>(root: ParentNode, id: string) => root.querySelector<T>(`[data-testid="${id}"]`);
+
+/** What the frame stamps `revenue`'s calls with. */
+export const REVENUE_STAMP = { app: 0, query: 'revenue' } as const;

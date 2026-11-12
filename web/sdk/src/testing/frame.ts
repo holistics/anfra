@@ -39,7 +39,7 @@ export interface TestFrame {
   /** `Anfra`, with whatever the plugins added. */
   anfra: Sdk & Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   /** The frame's calls, in order. */
-  calls: { name: string, request: unknown }[];
+  calls: { name: string, request: unknown, stamp?: unknown }[];
   /** The frame's events, in order. */
   events: { name: string, payload: unknown }[];
   /** How often the frame said it was ready. */
@@ -79,8 +79,8 @@ export function testFrame (options: TestFrameOptions = {}): TestFrame {
     queueMicrotask(() => frameListeners.forEach((listener) => listener({ source: parent, data: message } as unknown as MessageEvent)));
   };
   const host = createEndpoint(toFrame, {
-    answer: async (name, request, signal) => {
-      calls.push({ name, request });
+    answer: async (name, request, signal, stamp) => {
+      calls.push({ name, request, ...(stamp !== undefined ? { stamp } : {}) });
       if (name === 'anfra.body') {
         const plugin = (request as { plugin: string }).plugin;
         if (!options.bodies || !(plugin in options.bodies)) throw new Error(`No body for '${plugin}'.`);

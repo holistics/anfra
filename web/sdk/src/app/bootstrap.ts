@@ -64,7 +64,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
 
   // The app model's Backend: `core`'s calls, which every host answers.
   const backend: Backend = {
-    submitQuery: (request, signal) => endpoint.call<BackendQueryResult>('core.submitQuery', request, signal).then((result) => {
+    submitQuery: (request, signal, stamp) => endpoint.call<BackendQueryResult>('core.submitQuery', request, signal, stamp).then((result) => {
       // Dates don't survive JSON; provenance's `executedAt` is one.
       if (result.debug?.executedAt) result.debug.executedAt = new Date(result.debug.executedAt);
       return result;

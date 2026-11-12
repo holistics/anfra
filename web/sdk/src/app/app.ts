@@ -31,6 +31,7 @@ import type {
   ExportResult,
   FilterAggregation,
   QueryRequest,
+  QueryStamp,
   ConditionValue,
   FilterDeclaration,
   InspectedApp,
@@ -741,7 +742,7 @@ export class App extends Observable implements AppContext {
         },
         context,
       );
-      const { result, input } = await runQuery(query, request, context.backend, controller.signal);
+      const { result, input } = await runQuery(query, request, context.backend, controller.signal, this.stampOf(query));
       if (superseded(query, controller) || query.isRemoved) return undefined;
       query.markSuccess(result, signature, false, input);
       return 'succeeded';
@@ -785,7 +786,7 @@ export class App extends Observable implements AppContext {
           conditions: this.selectionConditionsFor(query.name, 'applied'),
           expression: this.selectionExpressionFor(query.name, 'applied'),
         }, { backend: this.backend, timezone: this._timezone });
-      const { result } = await runQuery(query, request, this.backend, controller.signal);
+      const { result } = await runQuery(query, request, this.backend, controller.signal, this.stampOf(query));
       if (query.isRemoved) return;
       query.markSuccess(result, signature, true);
     } catch (err) {
@@ -807,7 +808,7 @@ export class App extends Observable implements AppContext {
   async exportQuery (
     query: Query,
     options: ExportOptions,
-    send: (request: BackendExportRequest, signal: AbortSignal) => Promise<ExportResult>,
+    send: (request: BackendExportRequest, signal: AbortSignal, stamp: QueryStamp) => Promise<ExportResult>,
   ): Promise<ExportResult> {
     const request = buildExportRequest(
       query,
@@ -822,7 +823,7 @@ export class App extends Observable implements AppContext {
       query.ranInput,
     );
     try {
-      return await send(request, options.signal ?? new AbortController().signal);
+      return await send(request, options.signal ?? new AbortController().signal, this.stampOf(query));
     } catch (err) {
       if (isAbort(err)) throw err;
       throw toDataAppError(err, query.name, 'The export failed.');
@@ -912,6 +913,11 @@ export class App extends Observable implements AppContext {
   /* ----------------------------------------------------------------
   Internals
   ---------------------------------------------------------------- */
+
+  /** What a query's calls are stamped with, so the host can show each under its query. */
+  private stampOf (query: Query): QueryStamp {
+    return { app: this.index, query: query.name };
+  }
 
   private assertNameFree (name: string, kind: string): void {
     assertUniqueName([...this._queries.keys(), ...this._controls.keys()], name, kind);

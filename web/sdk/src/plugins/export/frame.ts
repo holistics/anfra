@@ -10,7 +10,7 @@ export default function setup (kernel: FrameKernel): void {
   kernel.provideOnQuery((query: Query) => (options: ExportOptions = {}): Promise<ExportResult> => {
     const app = kernel.sdk.apps.find((candidate) => candidate.queries[query.name] === query);
     if (!app) return Promise.reject(kernel.errors.invalidRequest(`Query '${query.name}' belongs to no app.`, query.name));
-    return app.exportQuery(query, options, (request, signal) => kernel.call<ExportResult>('export.query', request, signal)
+    return app.exportQuery(query, options, (request, signal, stamp) => kernel.call<ExportResult>('export.query', request, signal, stamp)
       .then((result) => {
         // Dates don't survive the bridge.
         result.expiresAt = new Date(result.expiresAt);
