@@ -569,3 +569,78 @@ describe('removing', () => {
     expect(() => app.mapControl(filter, target, { field: 'users.region' })).not.toThrow();
   });
 });
+
+describe('app.hasChanges', () => {
+  it('is true after a query is edited, and false again once it reran', async () => {
+    const { app } = build();
+    const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+
+    query.update({ aql: AQL.byStatus });
+    expect(app.hasChanges).toBe(true);
+
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('is true after a query, a control or an edge is removed and leaves a target dirty', async () => {
+    const { app } = build();
+    const source = app.createQuery('source', { dataset: 'sales', aql: AQL.byRegion });
+    const target = app.createQuery('target', { dataset: 'sales', aql: AQL.byStatus });
+    const filter = app.createFilter('region', { field: 'users.region', dataset: 'sales' });
+    const status = app.createFilter('status', { field: 'orders.status', dataset: 'sales' });
+    app.mapControl(filter, target, { field: 'users.region' });
+    const mapping = app.mapControl(status, target, { field: 'orders.status' });
+    app.mapCrossFilter(source, target);
+    filter.setCondition({ operator: 'is', values: ['EMEA'] });
+    status.setCondition({ operator: 'is', values: ['pending'] });
+    await app.execute();
+    source.select({ region: 'APAC', total: 100 });
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+
+    mapping.remove();
+    expect(app.hasChanges).toBe(true);
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+
+    filter.remove();
+    expect(app.hasChanges).toBe(true);
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+
+    source.remove();
+    expect(app.hasChanges).toBe(true);
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('is true for a query created after the first execute, until it runs; not before the first', async () => {
+    const { app } = build();
+    app.createQuery('first', { dataset: 'sales', aql: AQL.byRegion });
+    expect(app.hasChanges).toBe(false);
+    await app.execute();
+
+    app.createQuery('second', { dataset: 'sales', aql: AQL.byStatus });
+    expect(app.hasChanges).toBe(true);
+
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('does not count a run that failed after one that succeeded', async () => {
+    let fail = false;
+    const { app } = build((request) => {
+      if (fail) throw new Error('down');
+      return shape(request);
+    });
+    app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+    fail = true;
+    await app.refresh();
+
+    expect(app.queries.chart.state).toBe('error');
+    expect(app.hasChanges).toBe(false);
+  });
+});

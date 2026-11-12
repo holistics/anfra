@@ -188,8 +188,9 @@ export class App extends Observable implements AppContext {
   private _appliedSelection?: Selection;
 
   /**
-   * Whether a run has ever committed the selection. Needed because `undefined` is a real applied
-   * value — "nothing selected" — unlike a control's condition, which is always present.
+   * Whether a run has ever committed the selection, that is whether `execute()` has ever run. Needed
+   * because `undefined` is a real applied value — "nothing selected" — unlike a control's condition,
+   * which is always present.
    */
   private selectionCommitted = false;
 
@@ -653,9 +654,16 @@ export class App extends Observable implements AppContext {
   Execution
   ---------------------------------------------------------------- */
 
-  /** True when a control or the selection has changed since the queries reading it last ran. */
+  /**
+   * True when the next `execute()` would apply something: a control or the selection changed since
+   * the queries reading them last ran, a query changed since its last run (edited, or an edge or a
+   * control taken from it), or, once the app has run, a query was created and no run of it has
+   * succeeded yet. A failed run is not a change in itself: retrying it is `execute()`'s, unasked.
+   */
   get hasChanges (): boolean {
-    return [...this._controls.values()].some((control) => control.isDirty) || this.isSelectionDirty;
+    return [...this._controls.values()].some((control) => control.isDirty)
+      || this.isSelectionDirty
+      || [...this._queries.values()].some((query) => query.isDirty || (this.selectionCommitted && !query.hasRun));
   }
 
   /**

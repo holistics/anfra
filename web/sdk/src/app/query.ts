@@ -260,6 +260,11 @@ export class Query extends Observable {
     return this.lastRunSignature !== undefined && this.signature() !== this.lastRunSignature;
   }
 
+  /** @internal Whether a run of it has ever succeeded. */
+  get hasRun (): boolean {
+    return this.lastRunSignature !== undefined;
+  }
+
   /**
    * @internal Also when its last run failed, whatever its inputs: so `execute()` is the retry, of
    * the failed queries only, even after a forced run (`refresh()`) failed with unchanged inputs. Not
