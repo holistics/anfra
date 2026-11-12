@@ -2,6 +2,7 @@
    separating them would hide that they differ only in the operators they produce. */
 import { Observable } from './observable';
 import { ValidationError } from '../common/errors';
+import { abortError } from '../common/endpoint';
 import { tagCall } from '../common/runtimeErrors';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
@@ -64,7 +65,10 @@ export abstract class Control extends Observable {
 
   private applied?: Condition;
 
-  private readonly initial: Condition;
+  private initial: Condition;
+
+  /** Set once `remove()` took it out of its app; every method then throws. */
+  private removed = false;
 
   protected constructor (name: string, app: AppContext & Observable, initial: Condition) {
     // Parented to the app so one `app.subscribe` sees every entity's changes.
@@ -80,7 +84,48 @@ export abstract class Control extends Observable {
    * none is on the page yet; never throws.
    */
   locate (): boolean {
+    this.assertLive();
     return this.app.locate('control', this.name);
+  }
+
+  /** False once `remove()` took it out of its app. */
+  get isRemoved (): boolean {
+    return this.removed;
+  }
+
+  /**
+   * Takes this control out of its app, with its mappings: the queries it was mapped to rerun
+   * without its condition at the next `app.execute()`. Its name is free again, and every method
+   * of it throws from then on.
+   */
+  remove (): void {
+    this.assertLive();
+    this.app.removeEntity(this);
+  }
+
+  /** @internal Throws once the control was removed. */
+  assertLive (): void {
+    if (this.removed) {
+      throw new ValidationError(`Control '${this.name}' was removed from its app; it can't be used any more.`, this.name);
+    }
+  }
+
+  /** @internal The app's half of `remove`: stop what is in flight. */
+  markRemoved (): void {
+    this.removed = true;
+    this.dropInFlight();
+  }
+
+  /** @internal Drops work in flight that the control's current declaration no longer wants. */
+  protected dropInFlight (): void {}
+
+  /**
+   * @internal A new declaration's default: `reset()` goes back to it. `restart` also sets the
+   * reader's condition to it, for a control that now filters something else.
+   */
+  protected redefault (initial: Condition, restart: boolean): void {
+    this.initial = initial;
+    if (restart) this.pending = initial;
   }
 
   /** The reader's current value, which `execute()` will commit. */
@@ -102,11 +147,13 @@ export abstract class Control extends Observable {
   }
 
   setCondition (condition: Condition): void {
+    this.assertLive();
     this.pending = condition;
     this.notify();
   }
 
   reset (): void {
+    this.assertLive();
     this.setCondition(this.initial);
   }
 
@@ -118,20 +165,29 @@ export abstract class Control extends Observable {
   abstract toJSON (): unknown;
 }
 
+/** What `filter.update` may change. Left out, each keeps its value; `undefined` clears it. */
+export type FilterUpdate = Partial<FilterDeclaration & { dataset: string }>;
+
+/** A filter's declaration, resolved: what it filters and how its values are typed. */
+interface ResolvedFilter {
+  type: FilterValueType;
+  resolved?: ResolvedField;
+  datasetName?: string;
+}
+
 export class Filter extends Control {
   readonly kind = 'filter' as const;
 
-  readonly declaration: FilterDeclaration;
+  private _declaration: FilterDeclaration;
 
-  readonly type: FilterValueType;
-
-  private readonly resolved?: ResolvedField;
-
-  private readonly datasetName?: string;
+  private resolution: ResolvedFilter;
 
   private readonly backend?: Backend;
 
   private loadedOptions?: ConditionValue[];
+
+  /** The `loadOptions` calls in flight, so a removal or a new field can drop them. */
+  private readonly loading = new Set<AbortController>();
 
   constructor (
     name: string,
@@ -141,9 +197,14 @@ export class Filter extends Control {
     backend?: Backend,
   ) {
     super(name, app, declaration.default ?? { operator: 'is', values: [] });
-    this.declaration = declaration;
     this.backend = backend;
+    this.resolution = Filter.resolve(name, declaration, dataset);
+    this._declaration = declaration;
+    this.assertValues(this.condition.values ?? []);
+    this.assertValues(declaration.options ?? []);
+  }
 
+  private static resolve (name: string, declaration: FilterDeclaration, dataset?: DatasetIndex): ResolvedFilter {
     if (declaration.field) {
       if (!dataset) {
         throw new ValidationError(
@@ -151,25 +212,70 @@ export class Filter extends Control {
           name,
         );
       }
-      this.resolved = dataset.resolve(declaration.field, name);
-      this.datasetName = dataset.descriptor.name;
-      this.type = declaration.type ?? inferType(this.resolved.type);
-    } else {
-      if (!declaration.type) {
-        throw new ValidationError(
-          `Filter '${name}' is a manual filter, so it needs a \`type\`.`,
-          name,
-        );
-      }
-      this.type = declaration.type;
+      const resolved = dataset.resolve(declaration.field, name);
+      return { resolved, datasetName: dataset.descriptor.name, type: declaration.type ?? inferType(resolved.type) };
     }
-    this.assertValues(this.condition.values ?? []);
-    this.assertValues(declaration.options ?? []);
+    if (!declaration.type) {
+      throw new ValidationError(
+        `Filter '${name}' is a manual filter, so it needs a \`type\`.`,
+        name,
+      );
+    }
+    return { type: declaration.type };
+  }
+
+  /** What it was declared with, or last updated to. */
+  get declaration (): FilterDeclaration {
+    return this._declaration;
+  }
+
+  get type (): FilterValueType {
+    return this.resolution.type;
   }
 
   setCondition (condition: Condition): void {
+    this.assertLive();
     this.assertValues(condition.values ?? []);
     super.setCondition(condition);
+  }
+
+  /**
+   * Edits this filter in place. A new label, options or default keep the reader's condition, and
+   * `reset()` goes to the new default. A new field, dataset or type is checked as `createFilter`
+   * checks it, and the condition goes back to the new default: the old values filtered something
+   * else. Its mappings stay as they are: each mapping's own field decides what its condition applies to.
+   */
+  update (changes: FilterUpdate): void {
+    this.assertLive();
+    const declaration: FilterDeclaration & { dataset?: string } = { ...this._declaration };
+    (Object.keys(changes) as (keyof FilterUpdate)[]).forEach((key) => {
+      if (changes[key] === undefined) delete declaration[key];
+      else (declaration as Record<string, unknown>)[key] = changes[key];
+    });
+    const previous = this._declaration as FilterDeclaration & { dataset?: string };
+    const redefined = (['field', 'dataset', 'type'] as const).some((key) => declaration[key] !== previous[key]);
+    const resolution = redefined
+      ? Filter.resolve(this.name, declaration, this.app.filterDataset(this.name, declaration))
+      : this.resolution;
+    const initial = declaration.default ?? { operator: 'is', values: [] };
+    const values = (condition: Condition) => condition.values ?? [];
+    this.assertValuesOf(resolution.type, values(initial));
+    this.assertValuesOf(resolution.type, declaration.options ?? []);
+    if (!redefined) this.assertValuesOf(resolution.type, values(this.condition));
+
+    this._declaration = declaration;
+    this.resolution = resolution;
+    this.redefault(initial, redefined);
+    if (redefined) {
+      this.loadedOptions = undefined;
+      this.dropInFlight();
+    }
+    this.notify();
+  }
+
+  protected dropInFlight (): void {
+    this.loading.forEach((controller) => controller.abort());
+    this.loading.clear();
   }
 
   /**
@@ -178,7 +284,11 @@ export class Filter extends Control {
    * can tell, so the core API refuses one; this says so where the app hands it over.
    */
   private assertValues (values: readonly unknown[]): void {
-    if (this.type !== 'number') return;
+    this.assertValuesOf(this.type, values);
+  }
+
+  private assertValuesOf (type: FilterValueType, values: readonly unknown[]): void {
+    if (type !== 'number') return;
     const number = values.find((value) => typeof value === 'number');
     if (number === undefined) return;
     throw new ValidationError(
@@ -190,12 +300,12 @@ export class Filter extends Control {
 
   /** True for a field-backed filter, false for a manual one. The two are separate axes from `type`. */
   get isFieldBacked (): boolean {
-    return this.resolved !== undefined;
+    return this.resolution.resolved !== undefined;
   }
 
   /** A manual filter's static list, or whatever the last `loadOptions()` returned. */
   get options (): ConditionValue[] {
-    return this.loadedOptions ?? this.declaration.options ?? [];
+    return this.loadedOptions ?? this._declaration.options ?? [];
   }
 
   /**
@@ -203,52 +313,88 @@ export class Filter extends Control {
    *
    * Lazy rather than fetched up front: building a distinct-values query for every filter is slow,
    * and readers often touch none of them. The backend decides which values this reader may see.
+   * Rejects with an `AbortError` when the filter is removed, or its field changes, before the list
+   * arrives: the list is dropped.
    */
   async loadOptions (search?: string, signal: AbortSignal = new AbortController().signal): Promise<ConditionValue[]> {
+    this.assertLive();
     // A metric has no column of values to suggest from.
-    const model = this.resolved?.modelName;
-    if (!this.resolved || !model || !this.backend || !this.datasetName) return this.options;
+    const { resolved, datasetName } = this.resolution;
+    const model = resolved?.modelName;
+    if (!resolved || !model || !this.backend || !datasetName) return this.options;
 
-    const options = await this.backend.fieldSuggestions(
-      {
-        dataset: this.datasetName,
-        model,
-        field: this.resolved.fieldName,
-        q: search ?? '',
-      },
-      signal,
-    ).catch((err: unknown) => {
-      // Left unhandled, it is reported as `call.load_options`.
-      tagCall(err, 'load_options');
-      throw err;
-    });
+    const controller = new AbortController();
+    const follow = () => controller.abort();
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', follow, { once: true });
+    this.loading.add(controller);
+    try {
+      const options = await this.backend.fieldSuggestions(
+        {
+          dataset: datasetName,
+          model,
+          field: resolved.fieldName,
+          q: search ?? '',
+        },
+        controller.signal,
+      ).catch((err: unknown) => {
+        // Left unhandled, it is reported as `call.load_options`.
+        tagCall(err, 'load_options');
+        throw err;
+      });
+      // Removed, or now about another field: this list is not its own.
+      if (controller.signal.aborted && !this.loading.has(controller)) throw abortError();
 
-    this.loadedOptions = [...(options ?? [])];
-    this.notify();
-    return this.loadedOptions;
+      this.loadedOptions = [...(options ?? [])];
+      this.notify();
+      return this.loadedOptions;
+    } finally {
+      this.loading.delete(controller);
+      signal.removeEventListener('abort', follow);
+    }
   }
 
   toJSON (): FilterDeclaration {
-    return this.declaration;
+    return this._declaration;
   }
 }
 
 export class DateDrillControl extends Control {
   readonly kind = 'dateDrill' as const;
 
-  readonly declaration: DateDrillDeclaration;
+  private _declaration: DateDrillDeclaration;
 
   constructor (name: string, app: AppContext & Observable, declaration: DateDrillDeclaration = {}) {
     super(name, app, drillCondition(name, declaration.default));
-    this.declaration = declaration;
+    this._declaration = declaration;
+  }
+
+  /** What it was declared with, or last updated to. */
+  get declaration (): DateDrillDeclaration {
+    return this._declaration;
+  }
+
+  /** Edits its label or default. The reader's grain stays; `reset()` goes to the new default. */
+  update (changes: DateDrillDeclaration): void {
+    this.assertLive();
+    const declaration: DateDrillDeclaration = { ...this._declaration };
+    (Object.keys(changes) as (keyof DateDrillDeclaration)[]).forEach((key) => {
+      if (changes[key] === undefined) delete declaration[key];
+      else (declaration as Record<string, unknown>)[key] = changes[key];
+    });
+    const initial = drillCondition(this.name, declaration.default);
+    this._declaration = declaration;
+    this.redefault(initial, false);
+    this.notify();
   }
 
   setGrain (grain: DateGrain): void {
+    this.assertLive();
     this.setCondition(drillCondition(this.name, grain));
   }
 
   toJSON (): DateDrillDeclaration {
-    return this.declaration;
+    return this._declaration;
   }
 }
 

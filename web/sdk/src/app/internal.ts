@@ -1,5 +1,6 @@
+import type { Control } from './controls';
 import type { Mapping } from './mapping';
-import type { Query } from './query';
+import type { Query, QueryUpdate } from './query';
 import type { DatasetIndex } from './validation';
 import type {
   ExecuteOptions, ExecuteSummary, LocateKind, Row, SdkFeatures, Selection, SelectionCondition,
@@ -16,6 +17,12 @@ export interface AppContext {
   /** The live selection, if any. App-scoped: at most one query is the source at a time. */
   readonly selection?: Selection;
   datasetIndex (uname: string, entity: string): DatasetIndex;
+  /** The dataset a field-backed filter resolves in: the one it names, or the app's only one. */
+  filterDataset (entity: string, declaration: { dataset?: string, field?: string }): DatasetIndex | undefined;
+  /** Backs `query.update`: checks the change against the app, then swaps the declaration. */
+  updateQuery (query: Query, changes: QueryUpdate): void;
+  /** Backs `remove()` on a query or a control: takes it out, with its edges. */
+  removeEntity (entity: Query | Control): void;
   /** Control edges only — cross-filter edges reach a query through the selection instead. */
   mappingsTo (queryName: string): Mapping[];
   /**

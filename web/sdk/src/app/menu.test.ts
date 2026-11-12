@@ -122,6 +122,40 @@ describe('the menu on a query\'s rows', () => {
     }));
   });
 
+  it('closes the menu on a query\'s rows when the query is removed, and leaves it open for another', async () => {
+    const f = frame((kernel) => kernel.menuItem({ id: 'underlying', label: 'View underlying data', target: 'rows', run: () => {} }));
+    const app = f.anfra.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    const other = app.createQuery('other', { dataset: 'sales', aql: 'explore {}' });
+    const open = () => {
+      document.getElementById('inside')!.addEventListener('contextmenu', (e) => { query.menu(e, { region: 'APAC' }); }, { once: true });
+      rightClick('inside');
+    };
+    open();
+    await settle();
+    other.remove();
+    expect(entries()).toHaveLength(1);
+
+    query.remove();
+    expect(entries()).toEqual([]);
+  });
+
+  it('closes a modal about a query when the query is removed', async () => {
+    let kernel!: FrameKernel;
+    const f = frame((k) => { kernel = k; });
+    const app = f.anfra.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    const onClose = vi.fn();
+    await kernel.modal({
+      title: 'Rows', about: { app: app.index, query: 'revenue' }, mount: () => {}, onClose,
+    });
+
+    query.remove();
+
+    expect(onClose).toHaveBeenCalled();
+    expect(menuRoot()!.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it('passes the measure the point shows, and refuses one the result has no measure of', async () => {
     const run = vi.fn();
     const f = frame((kernel) => kernel.menuItem({ id: 'underlying', label: 'View underlying data', target: 'rows', run }), {

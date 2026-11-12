@@ -38,6 +38,8 @@ export default function setup (kernel: FrameKernel): void {
     await kernel.modal({
       title: planned.title,
       size: 'lg',
+      // Removing the query closes it: the rows it shows belong to a query that is gone.
+      about: { app: target.app, query: target.query },
       mount: (root) => body.view(root, {
         plan: planned,
         fetchPage: (page, signal) => kernel.call<BackendQueryResult>('core.submitQuery', { ...planned.request, input: { ...planned.request.input, pagination: { page, pageSize: PAGE_SIZE } } }, signal),

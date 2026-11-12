@@ -1,5 +1,5 @@
 import { Observable } from './observable';
-import { Query } from './query';
+import { Query, assertDeclaration, type QueryUpdate } from './query';
 import {
   Control, DateDrillControl, Filter,
 } from './controls';
@@ -241,9 +241,7 @@ export class App extends Observable implements AppContext {
 
   createFilter (name: string, declaration: FilterDeclaration & { dataset?: string }): Filter {
     this.assertNameFree(name, 'filter');
-    const dataset = declaration.dataset
-      ? this.datasetIndex(declaration.dataset, name)
-      : this.soleDataset(name, declaration.field);
+    const dataset = this.filterDataset(name, declaration);
     const filter = applyExtensions(new Filter(name, this, declaration, dataset, this.backend), this.extensions?.control);
     this._controls.set(name, filter);
     this.notify();
@@ -273,7 +271,7 @@ export class App extends Observable implements AppContext {
    * because "the control happens to name a field this query also has" is exactly the coupling that
    * breaks silently when someone renames a dimension.
    *
-   * There is no `unmap`: a mapping you do not want is one you do not declare.
+   * Edges never change: to change one, `remove()` it and map again.
    */
   mapControl (
     from: Control,
@@ -286,6 +284,8 @@ export class App extends Observable implements AppContext {
         + 'app.mapCrossFilter(from, to) — a cross-filter edge names no field.',
       );
     }
+    from.assertLive();
+    to.assertLive();
     if (this._controls.get(from.name) !== from) {
       throw new ValidationError(`Control '${from.name}' belongs to a different app.`, from.name);
     }
@@ -302,7 +302,7 @@ export class App extends Observable implements AppContext {
       assertValidFilterAggregation(options.aggregation, from.name);
     }
 
-    const mapping = new Mapping(from, to, options.field, options.aggregation);
+    const mapping = new Mapping(from, to, options.field, options.aggregation, this);
     if (this._mappings.some((existing) => existing.id === mapping.id)) {
       throw new ValidationError(`Mapping '${mapping.id}' is already declared.`, from.name);
     }
@@ -334,6 +334,8 @@ export class App extends Observable implements AppContext {
         + 'app.mapControl(from, to, { field }).',
       );
     }
+    from.assertLive();
+    to.assertLive();
     if (this._queries.get(from.name) !== from) {
       throw new ValidationError(`Query '${from.name}' belongs to a different app.`, from.name);
     }
@@ -360,7 +362,7 @@ export class App extends Observable implements AppContext {
     // all adhoc or all measures simply produces no selection when its rows are picked — see
     // `deriveSelection` in selection.ts. See docs/adr/0001.
 
-    const edge = new CrossFilter(from, to);
+    const edge = new CrossFilter(from, to, this);
     if (this._crossFilters.some((existing) => existing.id === edge.id)) {
       throw new ValidationError(`Cross-filter '${edge.id}' is already declared.`, from.name);
     }
@@ -368,6 +370,99 @@ export class App extends Observable implements AppContext {
     this._crossFilters.push(edge);
     this.notify();
     return edge;
+  }
+
+  /** @internal Backs `query.update`: checks the change against the app, then swaps it in. */
+  updateQuery (query: Query, changes: QueryUpdate): void {
+    const previous = query.declaration;
+    const declaration: QueryDeclaration = { ...previous };
+    (['dataset', 'aql', 'pageSize'] as const).forEach((key) => {
+      if (!(key in changes)) return;
+      const value = changes[key];
+      if (value === undefined) delete declaration[key];
+      else (declaration as unknown as Record<string, unknown>)[key] = value;
+    });
+    assertDeclaration(query.name, declaration);
+    const dataset = this.datasetIndex(declaration.dataset, query.name);
+
+    if (declaration.dataset !== previous.dataset) {
+      const spanning = this._crossFilters.filter((edge) => {
+        if (edge.from === query) return edge.to.declaration.dataset !== declaration.dataset;
+        if (edge.to === query) return edge.from.declaration.dataset !== declaration.dataset;
+        return false;
+      });
+      if (spanning.length) {
+        throw new ValidationError(
+          `Query '${query.name}' can't move to dataset '${declaration.dataset}': its cross-filters `
+          + `${spanning.map((edge) => `'${edge.id}'`).join(', ')} would span two datasets. Remove them first.`,
+          query.name,
+        );
+      }
+    }
+
+    // A new AQL or dataset makes new columns: a sort or a selection named the old ones.
+    const reshaped = declaration.aql !== previous.aql || declaration.dataset !== previous.dataset;
+    const sort = changes.sort ?? (reshaped ? [] : query.sort);
+    if (reshaped) this.dropSelectionFrom(query.name);
+    query.replaceDeclaration(declaration, dataset, sort);
+  }
+
+  /** @internal Backs `remove()` on a query or a control: takes it out, with its edges. */
+  removeEntity (entity: Query | Control): void {
+    if (entity instanceof Query) {
+      if (this._queries.get(entity.name) !== entity) {
+        throw new ValidationError(`Query '${entity.name}' belongs to a different app.`, entity.name);
+      }
+      this._queries.delete(entity.name);
+      this.dropEdges((edge) => edge.to === entity || edge.from === entity);
+      this.dropSelectionFrom(entity.name);
+    } else {
+      if (this._controls.get(entity.name) !== entity) {
+        throw new ValidationError(`Control '${entity.name}' belongs to a different app.`, entity.name);
+      }
+      this._controls.delete(entity.name);
+      this.dropEdges((edge) => edge.from === entity);
+    }
+    entity.markRemoved();
+    this.removedListeners.forEach((listener) => {
+      try { listener(entity); } catch { /* one listener must not stop the others */ }
+    });
+    this.notify();
+  }
+
+  /** @internal Backs `remove()` on an edge. */
+  removeEdge (edge: Edge): void {
+    if (!this.dropEdges((candidate) => candidate === edge)) {
+      throw new ValidationError(`Edge '${edge.id}' belongs to a different app.`, edge.from.name);
+    }
+    this.notify();
+  }
+
+  private readonly removedListeners = new Set<(entity: Query | Control) => void>();
+
+  /** @internal Each query or control removed from this app, for what the kernel shows about one. */
+  onRemoved (listener: (entity: Query | Control) => void): () => void {
+    this.removedListeners.add(listener);
+    return () => { this.removedListeners.delete(listener); };
+  }
+
+  /** Takes out the edges that match; whether any did. */
+  private dropEdges (matches: (edge: Edge) => boolean): boolean {
+    const gone = this.mappings.filter(matches);
+    gone.forEach((edge) => edge.markRemoved());
+    const keep = <T extends Edge>(list: T[]) => {
+      const kept = list.filter((edge) => !gone.includes(edge));
+      list.splice(0, list.length, ...kept);
+    };
+    keep(this._mappings);
+    keep(this._crossFilters);
+    return gone.length > 0;
+  }
+
+  /** Clears the selection, the reader's and the applied one, when it was made in this query. */
+  private dropSelectionFrom (name: string): void {
+    if (this._selection?.source === name) this._selection = undefined;
+    if (this._appliedSelection?.source === name) this._appliedSelection = undefined;
   }
 
   /* ----------------------------------------------------------------
@@ -412,6 +507,12 @@ export class App extends Observable implements AppContext {
 
   datasetIndex (uname: string, entity: string): DatasetIndex {
     return resolveDataset(this.datasets, uname, entity);
+  }
+
+  filterDataset (entity: string, declaration: { dataset?: string, field?: string }): DatasetIndex | undefined {
+    return declaration.dataset
+      ? this.datasetIndex(declaration.dataset, entity)
+      : this.soleDataset(entity, declaration.field);
   }
 
   mappingsTo (queryName: string): Mapping[] {
@@ -641,11 +742,11 @@ export class App extends Observable implements AppContext {
         context,
       );
       const { result, input } = await runQuery(query, request, context.backend, controller.signal);
-      if (superseded(query, controller)) return undefined;
+      if (superseded(query, controller) || query.isRemoved) return undefined;
       query.markSuccess(result, signature, false, input);
       return 'succeeded';
     } catch (err) {
-      if (superseded(query, controller)) return undefined;
+      if (superseded(query, controller) || query.isRemoved) return undefined;
       if (isAbort(err)) return undefined;
       const error = toDataAppError(err, query.name);
       query.markError(error);
@@ -685,10 +786,11 @@ export class App extends Observable implements AppContext {
           expression: this.selectionExpressionFor(query.name, 'applied'),
         }, { backend: this.backend, timezone: this._timezone });
       const { result } = await runQuery(query, request, this.backend, controller.signal);
+      if (query.isRemoved) return;
       query.markSuccess(result, signature, true);
     } catch (err) {
       query.rewindPage();
-      if (isAbort(err)) return;
+      if (isAbort(err) || query.isRemoved) return;
       const error = toDataAppError(err, query.name);
       query.markError(error, true);
       throw error;

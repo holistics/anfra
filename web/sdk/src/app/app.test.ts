@@ -367,14 +367,20 @@ describe('loadOptions', () => {
   });
 
   it('passes the caller\'s signal, so a stale lookup can be cancelled', async () => {
-    const stub = stubBackend({ fieldSuggestions: ['APAC'] });
+    const stub = stubBackend({
+      fieldSuggestions: (_request, signal) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })));
+      }),
+    });
     const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: stub.backend }).createApp();
     const region = app.createFilter('region', { field: 'users.region' });
     const controller = new AbortController();
 
-    await region.loadOptions('A', controller.signal);
+    const loading = region.loadOptions('A', controller.signal);
+    controller.abort();
 
-    expect(stub.calls[0].signal).toBe(controller.signal);
+    await expect(loading).rejects.toMatchObject({ name: 'AbortError' });
+    expect(stub.calls[0].signal.aborted).toBe(true);
   });
 
   it('asks nothing for a filter on a metric, which has no values to suggest', async () => {
