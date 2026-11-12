@@ -47,6 +47,11 @@ app.subscribe(() => render(byRegion.result));
 await app.execute();
 ```
 
+An app may change what it declared while it runs, as a chart or dashboard builder does: `update`
+a query or a control in place (`byRegion.update({ aql })`), `remove()` one with its edges, or
+`remove()` one edge (`mapControl` and `mapCrossFilter` return it). A name is an entity's identity
+and never changes. Changes run at the next `app.execute()`, so several go out as one run.
+
 Everything beyond queries comes from a **plugin** the host installed, which adds its API under its
 own name (`query.export`, `Anfra.render`, `Anfra.lineage`). Where the host didn't install it, the
 member isn't there: check `Anfra.plugins.has(name)` before using an optional one.
