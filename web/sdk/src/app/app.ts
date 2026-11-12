@@ -656,13 +656,14 @@ export class App extends Observable implements AppContext {
   /**
    * True when the next `execute()` would apply something: a control or the selection changed since
    * the queries reading them last ran, a query changed since its last run (edited, or an edge or a
-   * control taken from it), or, once the app has run, a query was created and no run of it has
-   * succeeded yet. A failed run is not a change in itself: retrying it is `execute()`'s, unasked.
+   * control taken from it), or, once the app has run, a query was created and never run. A run in
+   * flight with the current inputs is not a change, and nor is a failed run: retrying it is
+   * `execute()`'s, unasked.
    */
   get hasChanges (): boolean {
     return [...this._controls.values()].some((control) => control.isDirty)
       || this.isSelectionDirty
-      || [...this._queries.values()].some((query) => query.isDirty || (this.selectionCommitted && !query.hasRun));
+      || [...this._queries.values()].some((query) => query.hasUnappliedChange(this.selectionCommitted));
   }
 
   /**
@@ -737,6 +738,7 @@ export class App extends Observable implements AppContext {
   private async run (query: Query, signature: string, context: SubmitContext): Promise<'succeeded' | 'failed' | undefined> {
     const controller = new AbortController();
     query.controller = controller;
+    query.runningSignature = signature;
     query.markExecuting();
 
     try {
@@ -758,13 +760,16 @@ export class App extends Observable implements AppContext {
       if (superseded(query, controller)) return undefined;
       if (isAbort(err)) return undefined;
       const error = toDataAppError(err, query.name);
-      query.markError(error);
+      query.markError(error, false, signature);
       // A failed run is the app's to show, and its host's to know of. A failed `fetchMore` is not
       // reported here: it rejects, so the app handles it, or it is an unhandled rejection.
       reportError('call.query', error);
       return 'failed';
     } finally {
-      if (query.controller === controller) query.controller = undefined;
+      if (query.controller === controller) {
+        query.controller = undefined;
+        query.runningSignature = undefined;
+      }
     }
   }
 
@@ -780,9 +785,10 @@ export class App extends Observable implements AppContext {
   /** @internal Backs `query.fetchMore()`. Rejects, so an explicit page request reports its failure. */
   async fetchPage (query: Query): Promise<void> {
     const controller = new AbortController();
-    query.controller = controller;
     // The applied one, as the page runs with: a change the reader has not applied keeps it dirty.
     const signature = query.signature('applied');
+    query.controller = controller;
+    query.runningSignature = signature;
     query.markExecuting();
 
     try {
@@ -807,7 +813,10 @@ export class App extends Observable implements AppContext {
       query.markError(error, true);
       throw error;
     } finally {
-      if (query.controller === controller) query.controller = undefined;
+      if (query.controller === controller) {
+        query.controller = undefined;
+        query.runningSignature = undefined;
+      }
     }
   }
 

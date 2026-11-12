@@ -645,6 +645,86 @@ describe('app.hasChanges', () => {
     expect(app.hasChanges).toBe(false);
   });
 
+  it('does not count a query whose first run failed', async () => {
+    const { app } = build(() => new Error('down'));
+    app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+
+    expect(app.queries.chart.state).toBe('error');
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('is false while execute runs with the current inputs, as soon as it starts', async () => {
+    let hold: ReturnType<typeof deferred<BackendQueryResult>> | undefined;
+    const { app } = build((request) => {
+      if (request.input.filters?.length) {
+        hold = deferred<BackendQueryResult>();
+        return hold.promise;
+      }
+      return shape(request);
+    });
+    const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    const filter = app.createFilter('region', { field: 'users.region', dataset: 'sales' });
+    app.mapControl(filter, query, { field: 'users.region' });
+    await app.execute();
+
+    filter.setCondition({ operator: 'is', values: ['APAC'] });
+    expect(app.hasChanges).toBe(true);
+    const running = app.execute();
+    expect(query.state).toBe('executing');
+    expect(app.hasChanges).toBe(false);
+
+    hold!.resolve(shape({ aql: AQL.byRegion } as BackendQueryRequest));
+    await running;
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('is true when an edit supersedes the run in flight', async () => {
+    let hold: ReturnType<typeof deferred<BackendQueryResult>> | undefined;
+    const { app } = build((request) => {
+      if (hold === undefined && request.input.filters?.length) {
+        hold = deferred<BackendQueryResult>();
+        return hold.promise;
+      }
+      return shape(request);
+    });
+    const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    const filter = app.createFilter('region', { field: 'users.region', dataset: 'sales' });
+    app.mapControl(filter, query, { field: 'users.region' });
+    await app.execute();
+    filter.setCondition({ operator: 'is', values: ['APAC'] });
+    const running = app.execute();
+    expect(app.hasChanges).toBe(false);
+
+    query.update({ aql: AQL.byStatus });
+    expect(app.hasChanges).toBe(true);
+    hold!.resolve(shape({ aql: AQL.byRegion } as BackendQueryRequest));
+    await running;
+    expect(app.hasChanges).toBe(true);
+
+    await app.execute();
+    expect(app.hasChanges).toBe(false);
+  });
+
+  it('is false while a page is fetched', async () => {
+    let hold: ReturnType<typeof deferred<BackendQueryResult>> | undefined;
+    const { app } = build((request) => {
+      if (request.input.pagination?.page === 2) {
+        hold = deferred<BackendQueryResult>();
+        return hold.promise;
+      }
+      return { ...shape(request), meta: { hasMore: true } };
+    });
+    const query = app.createQuery('table', { dataset: 'sales', aql: AQL.byRegion, pageSize: 2 });
+    await app.execute();
+    const more = query.fetchMore();
+    expect(app.hasChanges).toBe(false);
+
+    hold!.resolve(shape({ aql: AQL.byRegion } as BackendQueryRequest));
+    await more;
+    expect(app.hasChanges).toBe(false);
+  });
+
   it('does not count a run that failed after one that succeeded', async () => {
     let fail = false;
     const { app } = build((request) => {
