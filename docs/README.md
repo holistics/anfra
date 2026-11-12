@@ -55,6 +55,7 @@ Plans for work being built: the steps, their order, and where each stands.
 | [`--json` on every CLI command](implementations/cli-json.md) | Every command's answer, warnings and error as JSON instead of YAML: the shared rendering first, then the CLI-only commands one at a time. |
 | [`anfra console`](implementations/console.md) | The console's steps: one process running many commands, the skeleton, output for a person, modes and AQL, a warm server. |
 | [revamp query result data types](implementations/revamp-query-result-data-types.md) | Encoded values (every number a string) and each column's semantic, Arrow and database types, across canal-query, amql, the core and the SDK. |
+| [a query's input](implementations/query-input.md) | `input` holding the page, time zone and seeds, across anfra-node, the core API, the CLI, the engine's types and the SDK: what changed shape on each surface, who it affects, and the release order. |
 
 ## Todos
 
