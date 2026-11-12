@@ -128,6 +128,8 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		}
 		defer canal.Close(ctx)
 
+		checkQueryCache(ctx, h)
+
 		info := command.ServerInfo{URL: "http://" + ln.Addr().String(), InstanceID: newInstanceID(), Version: meta.Version}
 		cc := h.commandContext(command.Clients{Node: node.Client(), CanalQuery: canal.Client()})
 		cc.Server = &info
@@ -548,4 +550,24 @@ func appLogger(logger *slog.Logger) *slog.Logger {
 		return nil
 	}
 	return logger
+}
+
+// checkQueryCache opens the repo's query cache's store at startup, creating it
+// or bringing it up to date, unless the cache is disabled: a failure is a
+// warning before the server serves, rather than found later in the log. The
+// server runs either way, its queries uncached until the store opens.
+func checkQueryCache(ctx context.Context, h hostContext) {
+	c := h.queryCache
+	if _, off := c.Disabled(); off {
+		return
+	}
+	_, notices, err := c.Open(ctx)
+	if err != nil {
+		problem, hint := c.Explain(err)
+		h.cfg.Logger.Warn("Query cache unavailable", logkit.EventKey, eventServeQueryCacheUnavailable, "store", c.StorePath(), "error", err, "hint", problem+" "+hint)
+		return
+	}
+	for _, n := range notices {
+		h.cfg.Logger.Warn("Query cache folder holds orphaned files", logkit.EventKey, eventQueryCacheOrphanedFiles, "dir", c.LakeDir(), "hint", n.Message)
+	}
 }

@@ -231,6 +231,10 @@ export interface components {
             message: string;
             severity: string;
         };
+        CacheStatus: {
+            /** @description the query cache, which keeps queries' results */
+            query: components["schemas"]["Summary"];
+        };
         Column: {
             /** @description a query-local expression, not a field the dataset defines */
             adhoc: boolean;
@@ -933,6 +937,8 @@ export interface components {
             version?: string;
         };
         StatusResult: {
+            /** @description the repo's caches, read without changing them. Absent when the server keeps none. */
+            cache?: components["schemas"]["CacheStatus"];
             /** @description what to do next, if any */
             hints?: string[];
             repo: components["schemas"]["RepoStatus"];
@@ -976,6 +982,19 @@ export interface components {
              * @enum {string}
              */
             type: "status";
+        };
+        Summary: {
+            /** @description what's wrong with the cache, when it is incompatible or unavailable */
+            problem?: string;
+            /** @description what turns the cache off, when it is disabled */
+            reason?: string;
+            /**
+             * @description "ready": the cache can be used, and needs nothing. "incompatible": a newer anfra changed the cache's store in a way this anfra can't read. "unavailable": the cache's store can't be used, as "problem" says. "disabled": the query cache is turned off, as "reason" says. Queries run without the cache unless it's "ready".
+             * @enum {string}
+             */
+            state: "ready" | "incompatible" | "unavailable" | "disabled";
+            /** @description the query cache's store, a file. Absent when the cache is disabled, or the server keeps its store elsewhere. */
+            store?: string;
         };
         TimedStep: {
             /**

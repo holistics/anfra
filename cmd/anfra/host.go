@@ -14,7 +14,9 @@ import (
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/logging"
+	localquerycache "github.com/holistics/anfra/internal/querycache/local"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar"
 
 	"github.com/holistics/anfra/shared/logkit"
@@ -29,11 +31,12 @@ import (
 // tenant, LocalTenant, for the same reason.
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
 	cc := command.CommandContext{
-		Clients:   clients,
-		Exports:   exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
-		Repo:      h.repo.Repo(),
-		TenantID:  LocalTenant,
-		DataPerms: dataperm.Ungoverned(),
+		Clients:    clients,
+		Exports:    exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
+		Repo:       h.repo.Repo(),
+		QueryCache: h.queryCache,
+		TenantID:   LocalTenant,
+		DataPerms:  dataperm.Ungoverned(),
 		// anfra core serves the directory it was pointed at: the local repo is the
 		// point, not a mistake.
 		AllowLocalRepo: true,
@@ -61,6 +64,8 @@ type hostContext struct {
 	// appLogger is where the repo's Data Apps' reports from the browser go: anfra.log, as
 	// "service":"app".
 	appLogger *slog.Logger
+	// queryCache is the repo's query cache, its store opened at first use.
+	queryCache *localquerycache.Cache
 }
 
 // withRepo resolves the repo and sets up host-aggregated logging, then runs fn
@@ -85,10 +90,14 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 		lg.Logger.Warn("Telemetry failed", logkit.EventKey, eventTelemetryFailed, "error", err)
 	}))
 
+	queryCache := localquerycache.New(filepath.Join(repo.CacheDir(), "query"), queryCacheDisabled(repo.Dir, lg.Logger))
+	defer queryCache.Close()
+
 	return fn(ctx, hostContext{
 		repo:        repo,
 		exportFiles: exports.New(exportLinkLife),
 		appLogger:   lg.App,
+		queryCache:  queryCache,
 		cfg: sidecar.Config{
 			RepoID:           repo.ID,
 			CompileCachePath: filepath.Join(repo.CacheDir(), "compile-cache"),
@@ -104,4 +113,27 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 			WrapTransport: traceSidecar,
 		},
 	})
+}
+
+// queryCacheDisabled says what turns the repo's query cache off, if anything:
+// ANFRA_CACHE_QUERY_ENABLED, whatever the repo sets, or the repo's
+// cache.query.enabled. A settings file that can't be read or parsed leaves the
+// cache on, its default, and is logged.
+func queryCacheDisabled(repoDir string, logger *slog.Logger) string {
+	if os.Getenv(envflag.CacheQueryEnabled) != "" {
+		if envflag.On(envflag.CacheQueryEnabled) {
+			return ""
+		}
+		return envflag.CacheQueryEnabled + "=0 turns the query cache off for this process."
+	}
+	c, err := repoconfig.Read(repoDir)
+	if err != nil {
+		logger.Warn("Query cache settings unknown", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repoDir), "error", err,
+			"hint", "the query cache stays on, its default, until anfra can read its settings from the file")
+		return ""
+	}
+	if !c.QueryCacheEnabled() {
+		return repo.ConfigDirName + "/" + repoconfig.FileName + " turns the query cache off (cache.query.enabled: false)."
+	}
+	return ""
 }

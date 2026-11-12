@@ -50,6 +50,7 @@ import (
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
@@ -174,7 +175,45 @@ type (
 	Timings = command.Timings
 	// TimedStep is when one step of a run started.
 	TimedStep = command.TimedStep
+
+	// QueryCacheSummarizer reports the query cache's state for status, set on
+	// an Invocation as QueryCache; nil when the host keeps no query cache. See
+	// docs/designs/query-cache.md.
+	QueryCacheSummarizer = querycache.Summarizer
+	// QueryCacheSummary is the query cache's state, as status reports it.
+	QueryCacheSummary = querycache.Summary
+	// QueryCacheState is one of the query cache's states (QueryCacheReady, …).
+	QueryCacheState = querycache.State
+
+	// QueryCacheStore keeps the query cache's metadata. A host may implement
+	// it on its own database; engine/querycachetest is what it must pass.
+	QueryCacheStore = querycache.Store
+	// QueryCacheEntry is one write of a query's result: a physical entry.
+	QueryCacheEntry = querycache.Entry
+	// QueryCacheEntryID identifies a QueryCacheEntry, and orders writes.
+	QueryCacheEntryID = querycache.EntryID
+	// QueryCacheKey is a query's key in the cache.
+	QueryCacheKey = querycache.Key
+	// QueryCacheTag is what a clean selects entries by.
+	QueryCacheTag = querycache.Tag
+	// QueryCacheTagKind is what a QueryCacheTag selects by.
+	QueryCacheTagKind = querycache.TagKind
+	// QueryCacheExpired is what a clean expired.
+	QueryCacheExpired = querycache.Expired
 )
+
+// The query cache's states, and a store's refusal of a write that isn't
+// pending.
+const (
+	QueryCacheReady        = querycache.StateReady
+	QueryCacheIncompatible = querycache.StateIncompatible
+	QueryCacheUnavailable  = querycache.StateUnavailable
+	QueryCacheDisabled     = querycache.StateDisabled
+)
+
+// ErrQueryCacheNotPending is a QueryCacheStore's refusal to commit or abandon
+// a write that isn't pending.
+var ErrQueryCacheNotPending = querycache.ErrNotPending
 
 const (
 	// StatusOK reports a command that ran and produced a valid result.

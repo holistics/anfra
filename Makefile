@@ -100,10 +100,11 @@ test-sidecars: ## Run the Go tests, those against real sidecars too (needs the d
 
 # The SDK's type declarations, which the frontend's typecheck reads (web/sdk/dist), are the one
 # thing make check builds.
-check: ## Lint and type-check everything, and check the API contract is fresh, as CI does
+check: ## Lint and type-check everything, and check the API contract and generated SQL code are fresh, as CI does
 	go mod tidy --diff
 	$(TOOL) golangci-lint run ./...
 	scripts/openapi.sh diff
+	scripts/sqlc.sh diff
 	pnpm --filter @holistics/anfra-sdk generate >/dev/null
 	@git diff --exit-code --quiet -- web/sdk/src/api/schema.d.ts \
 		|| { echo "web/sdk/src/api/schema.d.ts was stale: it is regenerated now, commit it"; exit 1; }

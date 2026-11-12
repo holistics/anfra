@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
@@ -48,6 +49,26 @@ func TestStatusState(t *testing.T) {
 	}
 	if valid, _ := Status.Valid(StatusResult{Server: ServerStatus{State: StateHealthy}}); !valid {
 		t.Error("healthy is invalid")
+	}
+}
+
+// summarizer is a host's query cache, such as a platform's over its own store.
+type summarizer querycache.Summary
+
+func (s summarizer) Summarize(context.Context) querycache.Summary { return querycache.Summary(s) }
+
+// The cache's state is whatever the host's summarizer says, its hint added to
+// status's; a host with no query cache reports none.
+func TestCacheStatus(t *testing.T) {
+	ctx := context.Background()
+	if got, hints := cacheStatus(ctx, nil, []string{"a"}); got != nil || len(hints) != 1 {
+		t.Errorf("no query cache: %+v, %v", got, hints)
+	}
+	down := summarizer{State: querycache.StateUnavailable, Problem: "The database is down.", Hint: "Try again later."}
+	got, hints := cacheStatus(ctx, down, []string{"a"})
+	if got == nil || got.Query.State != querycache.StateUnavailable || got.Query.Store != "" ||
+		len(hints) != 2 || hints[1] != "Try again later." {
+		t.Errorf("a platform's cache: %+v, %v", got, hints)
 	}
 }
 

@@ -23,6 +23,16 @@ var (
 	eventServeUpdateAvailable = logkit.DefineEvent("serve.update_available",
 		"A newer anfra release is out.",
 		"latest", "current", "notice")
+	eventServeQueryCacheUnavailable = logkit.DefineEvent("serve.query_cache_unavailable",
+		"anfra serve couldn't open the query cache's store at startup, so queries run without the cache.",
+		"store", "error", "hint")
+
+	eventQueryCacheOrphanedFiles = logkit.DefineEvent("query_cache.orphaned_files",
+		"A new query cache store's folder already holds files from an earlier cache, which no entry names (orphans).",
+		"dir", "hint")
+	eventQueryCacheSettingsUnknown = logkit.DefineEvent("query_cache.settings_unknown",
+		"The repo's settings file couldn't be read or parsed, so the query cache's settings are unknown, and it keeps its defaults.",
+		"path", "error", "hint")
 
 	eventPprofListening = logkit.DefineEvent("pprof.listening",
 		"The profiler (ANFRA_PPROF_ADDR) is listening.",

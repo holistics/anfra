@@ -101,6 +101,9 @@ jobs:
       - run: go mod download
       - name: go.mod is tidy
         run: go mod tidy --diff
+      # sqlc at the version tools/go.mod pins: the committed gen/ code is what the queries generate.
+      - name: the generated SQL code is fresh
+        run: scripts/sqlc.sh diff
       - run: go build -v ./...
       - run: go vet ./...
       - run: go test -race -count=1 ./...

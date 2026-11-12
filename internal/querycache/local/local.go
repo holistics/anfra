@@ -1,0 +1,192 @@
+// Package local is a local repo's query cache, as anfra's own process holds
+// it: the repo's store, opened at first use, and the cache's state as anfra
+// status reports it (a querycache.Summarizer). A platform serving managed repos
+// supplies its own store and canal-lake instead. The cache's algorithm and
+// contract are internal/querycache; anfra's store is store/sqlite.
+//
+// Import it as localquerycache, so a call site says what is local:
+//
+//	import localquerycache "github.com/holistics/anfra/internal/querycache/local"
+//
+//	cache := localquerycache.New(dir, disabled)
+//
+// See docs/designs/query-cache.md.
+package local
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/holistics/anfra/internal/querycache"
+	sqlitestore "github.com/holistics/anfra/internal/querycache/store/sqlite"
+)
+
+// Cache is a repo's query cache in this process: its folder, whether it is
+// on, and its store once opened. A process makes one, and closes it as it ends.
+type Cache struct {
+	dir string
+	// disabled says why the cache is off; empty when it is on.
+	disabled string
+
+	mu    sync.Mutex
+	store *sqlitestore.Store
+}
+
+// New is the query cache in dir, the repo's folder for it. disabled says why
+// the cache is off, as anfra status reports it; empty, it is on.
+func New(dir, disabled string) *Cache {
+	return &Cache{dir: dir, disabled: disabled}
+}
+
+// StorePath is the store's file.
+func (c *Cache) StorePath() string { return filepath.Join(c.dir, "cache.sqlite") }
+
+// LakeDir is canal-lake's storage: its files, and DuckDB's temporary ones.
+func (c *Cache) LakeDir() string { return filepath.Join(c.dir, "lake") }
+
+// Disabled says why the cache is off, and whether it is.
+func (c *Cache) Disabled() (string, bool) { return c.disabled, c.disabled != "" }
+
+// Notice is something to tell the person running anfra that doesn't stop the
+// cache, with its code.
+type Notice struct {
+	Code    string
+	Message string
+}
+
+// NoticeOrphanedFiles is a new store's lake folder already holding files, which
+// no entry names.
+const NoticeOrphanedFiles = "query_cache_orphaned_files"
+
+// ErrDisabled is Open's refusal when the cache is off.
+var ErrDisabled = errors.New("the query cache is disabled")
+
+// Open is the store, opened (and created or brought up to date) the first time,
+// and the same store after. A failure leaves it unopened, so the next Open
+// tries again. Creating a store reports the files its lake folder already
+// holds, which no entry names: anfra never deletes them itself
+// (docs/designs/query-cache.md#file-names).
+func (c *Cache) Open(ctx context.Context) (*sqlitestore.Store, []Notice, error) {
+	if c.disabled != "" {
+		return nil, nil, ErrDisabled
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.store != nil {
+		return c.store, nil, nil
+	}
+	if err := os.MkdirAll(c.dir, 0o700); err != nil {
+		return nil, nil, fmt.Errorf("create the query cache's folder: %w", err)
+	}
+	// The lake's files are measured as the store is created, under its write
+	// lock: no other process can have written an entry of this store yet, so
+	// no entry names them.
+	var orphaned int64
+	s, err := sqlitestore.Open(ctx, c.StorePath(), sqlitestore.Options{OnCreate: func() { orphaned = dirSize(c.LakeDir()) }})
+	if err != nil {
+		return nil, nil, err
+	}
+	c.store = s
+	var notices []Notice
+	if orphaned > 0 {
+		notices = append(notices, Notice{Code: NoticeOrphanedFiles, Message: fmt.Sprintf(
+			"The query cache's folder holds %s of files that the new cache doesn't use, probably left by an earlier one. To reclaim the space, delete %s while no anfra is running for this repo.",
+			humanBytes(orphaned), c.LakeDir())})
+	}
+	return s, notices, nil
+}
+
+// Close closes the store, if it was opened.
+func (c *Cache) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.store == nil {
+		return nil
+	}
+	err := c.store.Close()
+	c.store = nil
+	return err
+}
+
+var _ querycache.Summarizer = (*Cache)(nil)
+
+// Summarize reads the cache's state: only the store's header, so it never
+// creates, changes or migrates the store.
+func (c *Cache) Summarize(ctx context.Context) querycache.Summary {
+	if c.disabled != "" {
+		return querycache.Summary{State: querycache.StateDisabled, Reason: c.disabled}
+	}
+	s := querycache.Summary{State: querycache.StateReady, Store: c.StorePath()}
+	v, err := sqlitestore.Peek(ctx, c.StorePath())
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return s
+	case err == nil && v.Compatible():
+		return s
+	case err == nil:
+		err = &sqlitestore.VersionError{Versions: v}
+	}
+	return c.explain(s, err)
+}
+
+// Explain is what a failure to open the store means to the person running
+// anfra: a problem, and what to do about it.
+func (c *Cache) Explain(err error) (problem, hint string) {
+	s := c.explain(querycache.Summary{}, err)
+	return s.Problem, s.Hint
+}
+
+func (c *Cache) explain(s querycache.Summary, err error) querycache.Summary {
+	var ve *sqlitestore.VersionError
+	switch {
+	case errors.As(err, &ve):
+		s.State = querycache.StateIncompatible
+		s.Problem = fmt.Sprintf("The query cache's store is from a newer anfra, which changed it in a way this anfra can't read "+
+			"(the store's schema is at version %d, and requires schema version %d or later, but this anfra's is version %d). Queries run without the cache.",
+			ve.Installed, ve.RequiredByInstalled, sqlitestore.CurrentVersion)
+		s.Hint = "Run `anfra update` to use the query cache again."
+	case errors.Is(err, sqlitestore.ErrNotStore):
+		s.State = querycache.StateUnavailable
+		s.Problem = "The query cache's store isn't a file anfra made. Queries run without the cache."
+		s.Hint = fmt.Sprintf("Move or delete %s. anfra makes a new store at the next cached query.", c.StorePath())
+	default:
+		s.State = querycache.StateUnavailable
+		s.Problem = fmt.Sprintf("anfra can't read the query cache's store: %v. Queries run without the cache.", err)
+		s.Hint = "The repo's log file says more, and anfra tries the store again at the next cached query."
+	}
+	return s
+}
+
+// dirSize is the size of the files under dir: zero when there is none.
+func dirSize(dir string) int64 {
+	var size int64
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil //nolint:nilerr // a file we can't read is left out of the size
+		}
+		if info, err := d.Info(); err == nil {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
+}
+
+// humanBytes is n as a person reads a size: 1.2 GB.
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}

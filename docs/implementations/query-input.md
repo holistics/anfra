@@ -21,7 +21,7 @@ Access is never in `input`: user attributes and data restrictions come from who 
 
 | Piece | Where | State |
 |---|---|---|
-| anfra-node takes and returns `seeds`, and returns `cacheKey` | holistics-core, `apps/anfra-node` | Done, on its branch; not released |
+| anfra-node takes and returns `seeds`, and returns `cacheKey` | holistics-core, `apps/anfra-node` | Done: anfra-node 0.14.0 |
 | `input` holds the page, the time zone and the seeds; the inputs beside it deprecated; answers return `input` | anfra, `internal/command/query` | Done |
 | The CLI's flags for nested fields, and its name matching | anfra, `internal/command/args.go`, `cmd/anfra` | Done |
 | The renamed types: `QueryDefinition`, `QueryInput`, `QueryRequestParams`, `QueryExportRequestParams` | anfra, `internal/command/query`, `engine` | Done |

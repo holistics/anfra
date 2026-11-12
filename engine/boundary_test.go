@@ -29,14 +29,18 @@ import (
 // top-level package fails this test by default.
 func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	allowed := map[string]bool{
-		"engine":            true,
-		"shared/apperr":     true,
-		"shared/appstep":    true,
-		"shared/apptracing": true,
-		"shared/apikit":     true,
-		"shared/httpkit":    true,
-		"shared/jsonkit":    true,
-		"shared/requestid":  true,
+		"engine": true,
+		// The query cache store's conformance suite, which a platform's own store
+		// must pass (docs/designs/query-cache.md#the-store). Its types are
+		// engine's aliases.
+		"engine/querycachetest": true,
+		"shared/apperr":         true,
+		"shared/appstep":        true,
+		"shared/apptracing":     true,
+		"shared/apikit":         true,
+		"shared/httpkit":        true,
+		"shared/jsonkit":        true,
+		"shared/requestid":      true,
 		// What a log record names: the events shared/'s packages log, and a
 		// platform defines its own beside (docs/designs/logs.md).
 		"shared/logkit": true,
@@ -94,7 +98,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoformat,requestid,routine,textmerge,treemerge} are meant to be. Move it under internal/, "+
+				"only engine, engine/querycachetest and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoformat,requestid,routine,textmerge,treemerge} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}

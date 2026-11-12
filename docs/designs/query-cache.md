@@ -22,18 +22,19 @@ The cache changes how fresh an answer may be, never its shape: a query answers t
 
 ### Turning it on
 
-In the repo's settings, `.anfra/config.yml`:
+The query cache is on in every repo, and a query uses it when it asks to, with its own `cache.duration`, or when the repo sets a default for every query. In the repo's settings, `.anfra/config.yml`:
 
 ```yaml
 cache:
   query:
+    enabled: true    # the default. false: the query cache is off for this repo
     default:
       duration: 1h   # how old a cached result a query accepts, unless it says otherwise
 ```
 
-Without it, a query is cached only if it asks to be (its own `cache.duration`). A repo whose queries never ask costs nothing: no process starts and no file is written.
-
-`ANFRA_QUERY_CACHE=off` turns the cache off for a whole process, whatever the repo says: for a run that must see live data, or to rule the cache out while debugging.
+- **Off for a repo** (`cache.query.enabled: false`): no store, no canal-lake, no checks and no warnings, ever. A query that asks for the cache anyway runs without it, and its answer says so (`cache.warning`, `cache_disabled`). `cache.cached_only` and `cache.clean` fail with `cache_disabled`, scope `user`: the repo's own setting refuses them.
+- **Off for a process** (`ANFRA_CACHE_QUERY_ENABLED=0`, the setting's path as a variable, `1` or `0` as anfra's other switches): whatever the repo says, and `1` turns it on over a repo's `false`. For a run that must see live data, such as CI, or to rule the cache out while debugging.
+- **What it costs a repo whose queries never ask:** one small file, the store, which `anfra serve` creates at startup to check the cache works ([When the cache isn't working](#when-the-cache-isnt-working)). canal-lake, a process, starts only when a query is cached.
 
 ### A query's input
 
@@ -95,7 +96,23 @@ input:
     referenceTime: 2026-11-10T10:42:05Z    # generated: the request left it unset
 ```
 
-On a miss whose result was cached, `hit` is `false` and `cached_at` is when this query ran. A query the cache did not apply to (`cache.duration: 0s`, the cache off) has no `cache`. In a stream, it is in the summary.
+On a miss whose result was cached, `hit` is `false` and `cached_at` is when this query ran. When nothing was cached (`cache.read_only`, or the cache couldn't be used), `cached_at` and `expires_at` are absent. A query the cache doesn't apply to (no `cache.duration` of its own or the repo's, or `0s`) has no `cache`. In a stream, it is in the summary.
+
+When a query would be cached but the cache isn't working, or the repo turned it off, the query still runs, on the warehouse, and its `cache` says why, as a `warning`: a code and a message, nested under the part it concerns, as anfra reports a problem that doesn't fail a request ([errors](errors.md)):
+
+```yaml
+cache:
+  key: 9f1c4e...
+  hit: false
+  warning:
+    code: cache_unavailable
+    message: The query ran without the cache, because the cache isn't working. The server's log says why.
+```
+
+| Code | Means |
+|---|---|
+| `cache_unavailable` | The cache isn't working: its store or canal-lake failed. The cause is in the log, for whoever runs anfra, not in the answer |
+| `cache_disabled` | The repo turned the query cache off (`cache.query.enabled: false`) |
 
 ### Which commands
 
@@ -125,7 +142,9 @@ query:                  # the query cache's entries to remove. Empty: all of the
   model: orders         # every entry read from the model: after its data was fixed
 ```
 
-It selects entries by their [tags](#tags), the fields combined with AND, and returns how many entries it removed, and their size. `query` leaves room for anfra's other caches (anfra-node's compile cache) under the same op. At the CLI, the fields are flags: `anfra cache clean --query.data-source warehouse --query.model orders`.
+It selects entries by their [tags](#tags), the fields combined with AND, and returns how many entries it removed, and their size.
+
+**After a clean, no result read before it is answered from the cache.** That is the clean's goal: someone cleaning after fixing a table's data must be able to trust that what the cache answers from then on was read after the fix. So a clean reaches queries already running too: a write it selects, still in progress, ends as if abandoned, and its result is never used, though the query's own caller still gets its rows. Most caches' purges leave such writes to land, and a purge can be undone by a request that began before it; anfra's doesn't ([the lease](#a-writes-lease)). `query` leaves room for anfra's other caches (anfra-node's compile cache) under the same op. At the CLI, the fields are flags: `anfra cache clean --query.data-source warehouse --query.model orders`.
 
 ## How it works
 
@@ -134,7 +153,7 @@ It selects entries by their [tags](#tags), the fields combined with AND, and ret
 | Piece | Does |
 |---|---|
 | **anfra-node** | Compiles the query, and its **cache key**: a hash of the query's structure ([Keys](#keys)). |
-| **The cache manager** (`shared/querycache`) | The algorithm: looks a key up, begins, commits and abandons writes, applies the age rule, plans sweeps. |
+| **The cache manager** (`internal/querycache`) | The algorithm: looks a key up, begins, commits and abandons writes, applies the age rule, plans sweeps. |
 | **The store** | Where the manager keeps the cache's metadata: SQLite for anfra, a platform's own for a platform ([The store](#the-store)). |
 | **canal-query and canal-lake** | Executors only. canal-query runs a query on the warehouse, and writes its result to canal-lake as it streams it back. canal-lake stores each result as a Parquet file under a key, and reads it back. Neither knows what a key means, nor any expiry. |
 
@@ -148,17 +167,37 @@ anfra answers a query only from an entry of exactly that query. Its key is compu
 - **Whatever doesn't change the result is left out:** comments, labels, descriptions, tags, and the order filters and conditions are written in.
 - **The time reaches it only through the seeds:** relative dates resolve against the reference time, `last 7 days` to two timestamps. So a `last 7 days` query keeps its key for a day, and gets a new one with the next, and a query compiled again with the seeds its response returned gets the same key. A key is a function of what the query was sent and what it read, and of nothing else.
 
-anfra adds what the compiler doesn't see, and hashes the two together:
+anfra adds what the compiler doesn't see, and hashes the two together, on the same principle: **what shapes what runs and what it answers is in the key, and whatever doesn't change the result is left out.** Leaving out what doesn't matter is not tidiness: a key holding more than it needs costs misses, and a miss fails nothing, so no one notices the cache hitting less.
 
-- **The tenant** (the invocation's `TenantID`), so tenants never share an entry, as they never share a warehouse connection.
-- **The data source's identity**: its type and connection settings, credentials included, hashed. A changed password or project is another key, so an entry never outlives the access it was read with. Credentials are only in the hash, never stored.
-- **What bounds the result**: its row truncation and byte limit, since canal-query stores the rows it streamed.
+What the key promises comes in two strengths, as a missed input costs differently:
 
-A query written in SQL (`--lang sql`) has no structure to hash, so its key holds its text in place of the structure.
+| Left out of the key | Costs | So the key is |
+|---|---|---|
+| Something that decides **access** | Another caller's rows: a leak | **A guarantee.** When in doubt, it is in; tested |
+| Something that changes **the rows**, the access the same | Rows other than a run now would give, for as long as the query's `cache.duration` accepts the entry | **Best effort.** What anfra knows changes the rows is in; it starts small |
+| Something that changes **neither** | Nothing: it is left out | |
 
-So each page is its own entry, run on the warehouse with its sort and limit. A change to a model, a dataset or the query is a new key, and needs no invalidation. There is one key implementation, in anfra-node, so every path in a deployment finds the entries the others wrote.
+**Access, guaranteed.** An entry answers only a query with:
 
-**What decides access is always in the key.** Data restrictions and user attributes are resolved into the query's structure, and the tenant and the data source's connection are added by anfra. A restriction that is neither, if one is ever added, must become one of them before it ships. A test holds it: another restriction, user attribute or credential is another key.
+- **The same compiled query:** anfra-node's key, with data restrictions and user attributes resolved into the structure it hashes.
+- **The same tenant** (the invocation's `TenantID`), so tenants never share an entry, as they never share a warehouse connection. A platform's store keeps tenants apart too ([The store](#the-store)); the key holds even if a store were bound wrongly.
+- **The same data source identity:** who the warehouse sees. The host gives it with the data source's connection (`DataSource.Identity`), and must change it whenever access changes: another warehouse user, role, project, or the viewer under OAuth passthrough. anfra's own, for a local repo, gives none, and the identity is the connection hashed, credentials included: a changed password or project is another key. Credentials are only in the hash, never stored. A platform gives one stable across what doesn't change access, such as a rotated secret or a refreshed token, which hashing the connection would turn into a new key each time.
+
+A restriction that is none of these, if one is ever added, must become one of them before it ships. A test holds it: another restriction, user attribute, tenant or identity is another key.
+
+**The rows, best effort.** The key also holds what anfra knows changes the rows under the same access:
+
+- **The data source's type**, the SQL dialect.
+- **anfra-node's version**, as a compiler change changes what runs. An upgrade starts the keys afresh: one miss for each query.
+- **The row truncation**, since canal-query stores the rows it streamed.
+
+Nothing promises a hit equals running the query now: the warehouse's data, a view redefined, or a setting on the warehouse, change rows without changing any key. An entry is never older than its query's `cache.duration` accepts, and `cache.clean` and skipping the cache are the remedies; that bound, not the key, is what keeps data fresh. A data source's own settings are left out to start, though a few change rows: MySQL's `sql_modes` and `collation`, Databricks' native complex types. They are the first to add, should stale rows from them matter.
+
+**Left out:** the query's comments and labels (anfra-node's key leaves them out already; the SQL text is never hashed, so a comment a platform adds for its warehouse's logs can't split the cache), timeouts, SSL, pooling, and the result's maximums. A maximum, in rows or bytes, fails a query rather than changes its rows, so a hit checks it instead: an entry over the reader's maximum answers the same error a miss would.
+
+A query written in SQL (`--lang sql`) has no structure to hash, so its key holds its text in place of anfra-node's key and version. A comment changes it: SQL can't be normalized safely, and a miss is the right failure.
+
+So each page is its own entry, run on the warehouse with its sort and limit. A change to a model, a dataset or the query is a new key, and needs no invalidation. There is one implementation of each part, anfra-node's and anfra's, so every path in a deployment finds the entries the others wrote.
 
 ### Tags
 
@@ -170,7 +209,7 @@ An entry's **tags** are what a clean, and later attribution, select it by: each 
 | `model` | anfra, from the compile: every model the query read | Yes |
 | `app`, `block`, an origin (`cli`, `agent`, `mcp`) | The caller, later ([Implementation plan](#implementation-plan)) | No: a label the caller asserts |
 
-Tags are not the key's dependencies. A key is a function of everything that changes its result, the query's text and seeds and the caller's user attributes among them ([Keys](#keys)); tags are a few of those, and labels besides, kept only to select entries by. Two rules keep them apart:
+Tags are not the key's dependencies. A key is a function of what decides access and what anfra knows changes the result, the query's structure and seeds and the caller's user attributes among them ([Keys](#keys)); tags are a few of those, and labels besides, kept only to select entries by. Two rules keep them apart:
 
 - **No lookup or access decision reads a tag.** The key alone finds an entry.
 - **A tag the caller asserts only narrows a clean** the caller is already allowed: cleaning by block removes no entry the caller couldn't remove by cleaning everything.
@@ -197,15 +236,15 @@ Two rules hold this up:
 ### A miss
 
 1. **Look up** the key: no entry the [age rule](#which-entry-a-query-accepts) accepts, or `cache.refresh`.
-2. **Begin a write.** The store records a pending physical entry, with a canal-lake key of its own (`<tenant hash>/<key>/<write id>`) and when it started. Every write has its own canal-lake key, since canal-lake can't write one key twice safely ([Concurrency](#concurrency-and-failure)).
+2. **Begin a write.** The store records a pending physical entry, with a canal-lake key of its own (`<namespace><entry id>`, [file names](#file-names)) and when it started. Every write has its own canal-lake key, since canal-lake can't write one key twice safely ([Concurrency](#concurrency-and-failure)).
 3. **Run** the query on canal-query with that canal-lake key: it streams the result back as today, and writes it to canal-lake as it goes.
-4. **Commit** once canal-query's trailer says the write finished, in one transaction: the physical entry gets its row count, size, columns, `cached_at` and `expires_at` (`cached_at` plus the query's `cache.duration`); the key's logical entry points at it, unless a newer write has committed (the greater id wins); the key's other physical entries expire. A failed or cancelled query commits nothing: canal-lake removes its half-written file, and the pending entry is swept.
+4. **Commit** once canal-query's trailer says the write finished, in one transaction: the physical entry gets its row count, size, columns, `cached_at` and `expires_at` (`cached_at` plus the query's `cache.duration`). `cached_at` is when the write began, since the warehouse reads a query's rows as it starts: an entry never claims to be fresher than its data. If the write's lease hasn't ended, the key's logical entry points at it, unless a newer write has committed (the greater id wins); the key's other physical entries expire. A failed or cancelled query commits nothing: canal-lake removes its half-written file, and the pending entry is swept.
 
 The caller gets its rows as they stream, as without a cache: caching adds nothing to the time to first row.
 
 ### A hit
 
-1. **Look up** the key: the logical entry's physical entry, if the age rule accepts it.
+1. **Look up** the key: the logical entry's physical entry, if the age rule accepts it. An entry over the reader's maximums, in rows or bytes, answers the error a miss over them would; the maximums are not in the key ([Keys](#keys)).
 2. **Read** it whole: canal-query reads the entry from canal-lake and streams it in the format of a warehouse result. One implementation encodes every result, cached or not, with the same streaming, limits, progress and cancellation, so a hit cannot answer differently from a miss.
 
 anfra reaches canal through an executor: run a query on the warehouse, into a canal-lake key; read an entry. A query run over an entry by a platform names the entry for the executor to resolve, never its file's path, so the read path can change without changing any stored entry.
@@ -215,10 +254,23 @@ anfra reaches canal through an executor: run a query on the warehouse, into a ca
 An entry expires at its `expires_at`, or when a newer one replaces it. Expired, no lookup returns it, and a sweep removes it:
 
 - **Expired entries**, once expired for longer than the longest read: a read that started before expiry finishes first.
-- **Pending entries**, once older than the longest a cached query can run (`query export`'s timeout, 30 minutes) plus a margin, so a write still running is never removed. The cutoff is derived from the timeout, and a test holds it above it.
-- **Over the size limit** (after the first version): the oldest entries first, while the repo's cache is over `ANFRA_QUERY_CACHE_MAX_BYTES`.
+- **Pending entries**, once their lease has run out ([below](#a-writes-lease)): a write still running is never removed.
+- **Over the size limit** (after the first version): the oldest entries first, while the repo's cache is over `cache.query.max_bytes` (or `ANFRA_CACHE_QUERY_MAX_BYTES`).
 
 A sweep drops an entry's file from canal-lake, then its rows from the store. In that order, a store row may name a file already gone, but no file is left that no row names.
+
+#### A write's lease
+
+A pending entry's `expires_at` is its lease: the latest its write may commit and be used. It is set when the write begins, from the run's own deadline (its command's timeout, 30 minutes for `query export`) plus a margin, so a write can't outlive it. Committing checks it, and ending it early is how a write is stopped from ever being used:
+
+| Case | The lease | When the write commits |
+|---|---|---|
+| The write finishes | Still running | The entry becomes current, unless a newer one is |
+| The query fails or is cancelled (abandoned) | Ended at that moment | Its entry, if it commits at all, is expired at once |
+| A clean selects its key | Ended at the clean | Expired at once: what was read before the clean is never used |
+| anfra crashes | Runs out on its own | Never commits; swept like any expired entry |
+
+So one check, at commit, covers each case: a write is used only if its lease hasn't ended.
 
 The sweep is a [background routine](background-routines.md): in `anfra serve`, every ten minutes; at the CLI, when a command first writes to the cache, as export files are swept ([export stores](export-store.md)).
 
@@ -231,20 +283,51 @@ The cache manager makes the cache safe under concurrency, not canal-lake. canal-
 | Two callers miss on the same key at once | Both run the query, each writing its own canal-lake key. The newer write's entry wins, whichever commits first. |
 | A write fails or is cancelled | canal-lake removes the file; the pending entry is swept. Nothing was committed. |
 | anfra or canal-lake crashes mid-write | A partial file may remain. Its pending entry is swept after the cutoff, and drops it. |
-| canal-lake can't start or isn't reachable | The query runs uncached, and the failure is logged and traced. A cache problem never fails a query. |
-| The store fails | As above: uncached, logged. |
+| canal-lake can't start or isn't reachable | The query runs uncached, and says so ([When the cache isn't working](#when-the-cache-isnt-working)). |
+| The store fails | As above. |
+
+#### When the cache isn't working
+
+**When the cache isn't working, a request that doesn't require it is answered without it, and one that does fails. Either way, the failure is reported where the people concerned look: the answer's `warning`, the CLI's and `anfra serve`'s output, and the log.**
+
+- **Not required:** a query cached because of its own `cache.duration` or the repo's default. Caching is a side effect of answering it, and the data is on the warehouse, so a cache failure doesn't fail it: refusing the query because its copy can't be kept would turn a cache problem into an outage. It runs uncached, with a warning.
+- **RequiredByInstalled:** `cache.cached_only`, which asks for a cached result or nothing, and `cache.clean`. Without the cache there is nothing to do, so a cache failure fails them, with `cache_unavailable`, scope `server`, or `cache_disabled`, scope `user`, when the repo turned it off. A `cached_only` query that finds no entry fails with `cache_miss`, scope `user`.
+
+A failure that doesn't fail the request is still reported, because a cache that silently stops working keeps someone paying the warehouse for every query, believing they're cached.
+
+| Who | What they get |
+|---|---|
+| **The caller** | On its answer, `cache.warning`, `cache_unavailable` ([A query's answer](#a-querys-answer)): its rows weren't cached, and the log says why |
+| **A person at the CLI** | A `warning` document on stderr, with the cause, as the CLI reports other problems that don't stop a command |
+| **The person running `anfra serve`** | **At startup**, unless the repo turned the cache off, the server opens the store, creating or migrating it, and a failure is a warning in its startup output, before it serves. While it runs, a failure is in the log, with each query it affected |
+| **Whoever investigates** | The log and the trace, at error level, as every server-scope failure |
+
+**`anfra status`** reports the cache as one of four states, one for each thing to do about it. It only reads the store's header, so it never creates or changes the store.
+
+| `state` | Means | What to do |
+|---|---|---|
+| `ready` | The store can be used: at this anfra's version, older (brought up to date when next opened), newer but compatible, or not made yet (made at the first cached query, or when `anfra serve` starts) | Nothing |
+| `incompatible` | A newer anfra changed the store in a way this one can't read. Its `problem` gives the versions | `anfra update` |
+| `unavailable` | The store isn't a file anfra made, or can't be read | Move the file aside, or read the error |
+| `disabled` | The repo's settings, or `ANFRA_CACHE_QUERY_ENABLED`, turn the cache off. `reason` says which | Nothing, or turn it on |
+
+How a store's version is kept is the cache's own affair: no state, command or message mentions migrating.
+
+> Consideration: backing off after a failure. Without it, while the store can't open or canal-lake can't start, each query that would be cached tries again, and fails again, before running uncached. A failure to open or start is quick, so that costs little; if it proves costly, the cache can wait before trying again, and say so on the answer.
 
 > Open: running the same query once for concurrent callers (single flight). Not in a first version: identical queries at the same moment are rare on one repo, and a stream's first rows shouldn't wait on another caller.
 
 ### Where it lives
 
-Under the repo's folder in anfra's home, never in the repo:
+Under the repo's folder in anfra's home, never in the repo, beside its compile cache:
 
 ```
-<ANFRA_HOME>/repos/<repo id>/query-cache/
+<ANFRA_HOME>/repos/<repo id>/cache/query/
   cache.sqlite   the store
   lake/          canal-lake's storage: the Parquet files, and DuckDB's temporary files
 ```
+
+anfra's host sets the path, as it does the compile cache's (`repo.CacheDir()`, then `query`), and opens the store and starts canal-lake there. A platform embedding the engine supplies its own store and canal-lake instead.
 
 ### canal-lake as a sidecar
 
@@ -258,9 +341,10 @@ anfra runs canal-lake as it runs canal-query: from anfra-canal (`anfra-canal lak
 
 | Package | Holds |
 |---|---|
-| `shared/querycache` | The data structures (logical and physical entries, `CacheMetadata`), the manager (lookup with the age rule, begin, commit, abandon, sweep planning), and the `Store`, `Lake`, `Planner` and `Recorder` interfaces. In `shared/` because a platform embedding the engine imports it, as it does `shared/routine`. |
-| `shared/querycache/storetest` | The conformance suite every store must pass: the commit rules, concurrent commits, the age rule, pending and expired sweeps. |
-| `internal/querycache/sqlite` | anfra's store, on SQLite (`modernc.org/sqlite`, pure Go, as anfra builds without cgo). |
+| `internal/querycache` | The data structures (logical and physical entries, `CacheMetadata`), the manager (lookup with the age rule, begin, commit, abandon, sweep planning), the cache's state as status reports it, and the `Store`, `Lake`, `Summarizer`, `Planner` and `Recorder` interfaces. A platform reaches what it implements through `engine`'s aliases (`engine.QueryCacheStore`, …), as it does `engine.ExportStore`: the cache is an extension point of the engine, not a framework a platform builds its own on, so it isn't in `shared/`. |
+| `engine/querycachetest` | The conformance suite every store must pass: the commit rules, concurrent commits, the age rule, pending and expired sweeps. Public, so a platform runs it on its own store, as `net/http/httptest` is public beside `net/http`. |
+| `internal/querycache/local` | A local repo's query cache, as anfra's process holds it, imported as `localquerycache`: the repo's folder, the store opened at first use, and the cache's state for status. A platform serving managed repos supplies its own store and canal-lake instead. |
+| `internal/querycache/store/sqlite` | anfra's store, on SQLite (`modernc.org/sqlite`, pure Go, as anfra builds without cgo). Its queries are generated by sqlc from `queries.sql`, checked against its migrations; sqlc's SQLite engine is Beta, so a query it can't handle is written by hand beside them. Imported as `sqlitestore`, so a call site says it is the store. |
 
 `Lake` is the little the manager needs of canal-lake besides reading and writing, which go through the executor: dropping files, which canal-query relays (`POST /do_lake_action`).
 
@@ -270,17 +354,20 @@ The engine takes a `Store` on each invocation, as it takes an `ExportStore`, and
 
 The `Store` interface is defined on the data structures, not on tables: each method is one step of the algorithm, and the transaction it needs is the store's to keep.
 
+**A store is one cache, and names no tenant.** anfra's is one per repo, which is already its tenant. A platform serving several tenants binds its store to one tenant for each invocation, as it binds the engine's other stores: it keeps the tenant in its own rows and reads only that tenant's, and a user, if it attributes entries to one, the same way. So the interface, the manager and `querycachetest` have no tenant, and a platform's isolation is its own to test: two stores bound to two tenants over one database never see each other's entries.
+
 | Method | Does |
 |---|---|
-| `Lookup(tenant, key, now)` | The key's committed physical entry, unexpired, or none. The manager applies the age rule. |
-| `Get(id)` | A physical entry by id, as `Lookup` would return it: for a platform's planner, which finds its entry by other means. |
-| `Begin(entry)` | Records a pending physical entry. |
-| `Commit(entry)` | In one transaction: fills the physical entry, points the logical entry at it unless a newer one is there, expires the key's others. |
-| `Abandon(entry)` | Expires a pending entry. |
-| `Sweepable(now, cutoffs, limit)` | Entries a sweep may remove: expired past the read cutoff, pending past the write cutoff. |
-| `Delete(entries)` | Removes entries, and logical entries that point at them. |
-| `Tag(tenant, key, tags)` | Adds tags to a key. |
-| `Expire(tenant, tags)` | Expires every entry with all the given tags, or every entry when none are given: `cache.clean`. Returns what it expired. |
+| `Lookup(key, now)` | The key's current physical entry, unexpired, or none. The manager applies the age rule. |
+| `Get(id, now)` | A physical entry by id, as `Lookup` would return it: for a platform's planner, which finds its entry by other means. |
+| `Begin(entry, tags)` | Records a pending physical entry, with its namespace and its lease, and its key's tags. |
+| `Commit(entry, now)` | In one transaction: fills the physical entry; if its lease hasn't ended by now, makes it current unless a newer one is, and expires the key's others; otherwise commits it expired. |
+| `Abandon(id, now)` | Ends a pending entry's lease. |
+| `Sweepable(cutoff, limit)` | Entries a sweep may remove: expired before the cutoff, which is the longest read ago. |
+| `Delete(ids)` | Removes entries; a key's logical entry and tags with its last. |
+| `Expire(tags, now)` | Expires every entry of the keys with all the given tags, or of every key when none are given, and ends their writes' leases: `cache.clean`. Returns the committed entries it expired. |
+
+The interface is `internal/querycache`, which a platform reaches as `engine.QueryCacheStore`, and its suite is `engine/querycachetest`; anfra's store is `internal/querycache/store/sqlite`.
 
 An entry carries the query's structure, as anfra-node compiled it, as data. anfra's store doesn't keep it. A platform's store may, for its own use.
 
@@ -288,37 +375,84 @@ An entry carries the query's structure, as anfra-node compiled it, as data. anfr
 
 ```sql
 query_cache_logical_entries (
-  tenant_id    text, key text,
-  physical_id  integer,                  -- its current physical entry
-  primary key (tenant_id, key)
+  key          text primary key,
+  physical_id  integer                   -- its current physical entry
 )
 query_cache_physical_entries (
   id           integer primary key,      -- increasing: the greater id is the newer write
-  tenant_id    text, key text,           -- the logical entry it is for
-  lake_key     text unique,              -- its file in canal-lake
-  status       text,                     -- pending | committed
-  started_at   timestamp,
-  cached_at    timestamp, expires_at timestamp,
+  namespace    text,                     -- its file's prefix in canal-lake: empty in anfra
+  key          text,                     -- the logical entry it is for
+  cached_at    timestamp,                -- when its write began: its rows' time. Null while pending
+  expires_at   timestamp,                -- while pending, its write's lease
   row_count    integer, size_bytes integer,
   columns      json,                     -- names, database and Arrow types: the result's header
   aql          text,                     -- the query that ran, as AQL
   sql          text                      -- and as SQL
 )
 query_cache_tags (
-  tenant_id    text, key text,           -- the logical entry it tags
+  key          text,                     -- the logical entry it tags
   kind         text,                     -- data_source | dataset | model, and later app | block | origin
   value        text,                     -- such as orders
-  primary key (tenant_id, key, kind, value)
+  primary key (key, kind, value)
 )
--- indexes: query_cache_physical_entries (tenant_id, key), (expires_at), (status, started_at);
---          query_cache_tags (tenant_id, kind, value)
+query_cache_meta (
+  min_store_version integer             -- one row: the schema version an anfra must be at, at least, to use it
+)
+-- indexes: query_cache_physical_entries (key), (expires_at);
+--          query_cache_tags (kind, value)
 ```
 
-The tables are the query cache's alone, named for it. A generic cache, one store for results of every kind, would push the query's columns into an untyped one, and tell kinds apart by a key's prefix, as Holistics' does, with the over-matching that brings. A second kind of cached result, if one comes, can generalize it then: anfra's store is disposable, and a platform's migrates.
+The tables are the query cache's alone, named for it. A generic cache, one store for results of every kind, would push the query's columns into an untyped one, and tell kinds apart by a key's prefix, with the over-matching that brings. A second kind of cached result, if one comes, can generalize it then: anfra's store is disposable, and a platform's migrates.
 
-The schema is a reference, not a contract: a store may lay its tables out as it likes. **The contract is `storetest`**, which pins down what each method does whatever the tables are.
+The schema is a reference, not a contract: a store may lay its tables out as it likes. **The contract is `querycachetest`**, which pins down what each method does whatever the tables are.
 
-anfra's cache is disposable: a store whose schema version (SQLite's `user_version`) is not the one anfra expects is deleted with its canal-lake files, and started again. A platform's store migrates as its database does.
+#### File names
+
+An entry's file in canal-lake is named by its namespace and its id: `<namespace><entry id>`. anfra's namespace is empty, since its canal-lake is the repo's, so its files are named `1234`. A platform sharing one canal-lake between tenants gives each its own namespace, such as `3f9a1c0e/`, so a tenant's files are grouped, as `3f9a1c0e/1234`. The ids are the store's, increasing, so they also order writes, the newer winning.
+
+The namespace is set by whoever makes the manager, for each invocation as its store is (`Config.Namespace`), and is stored on each physical entry from its write's start. So every row names its file, pending or not: a write killed before it commits leaves a row whose lease runs out, and its sweep drops the file. A sweep covers every namespace, as each row names its own file, and a file leads back to its row by its id. The name is derived (`Entry.LakeKey()`), and never stored whole: should the naming ever change, it is a migration.
+
+Ids rewind only when a store is lost, replaced (an older anfra's newer store, [below](#its-schema-migrations)) or, in Cloud, restored from a backup. Then a new write may reuse the name of a file no row names any more. Overwriting it is harmless, since no lookup could find it. In Cloud, a restore during writes in flight could put two writes on one file: the result is a file that fails to read, which reads as a miss.
+
+What a rewind does cost is disk: the files no new write reuses stay, named by no row, so no sweep removes them (orphans). **anfra never deletes them on its own.** When it creates a store and canal-lake's folder isn't empty, it warns with their size and the folder to delete, as it reports other cache problems ([When the cache isn't working](#when-the-cache-isnt-working)): "The query cache's folder holds 1.2 GB of files that the new cache doesn't use, probably left by an earlier one. To reclaim the space, delete `<folder>` while no anfra is running for this repo." The folder is measured inside the transaction that creates the store, under its write lock: another process opening the store waits for it, so none has written an entry, and no entry names a file found then. Where the files came from is a guess, hence "probably": most often a store lost or deleted while its files stayed. Deleting a folder's contents is the most destructive thing the cache could do: done on its own, a wrong path would delete files that aren't the cache's, and a process still using the old store would lose its files mid-use. The person decides, and the space is all it costs until they do.
+
+Orphans have other causes too, all outside the cache's own flows (a file left by hand, canal-lake dropping less than it reported), so a later sweep removes files no row names ([Implementation plan](#implementation-plan)).
+
+#### Its schema: migrations
+
+anfra's store migrates as its schema changes, so an upgrade keeps the cache. Its schema is a folder of numbered SQL migrations, embedded in anfra, and a store is created by applying them all, so the schema can't drift from them; sqlc reads them as the schema it checks the queries against.
+
+Three schema versions decide whether an anfra can use a store:
+
+- **The anfra's current version** is the number of its last migration (`CurrentVersion`).
+- **The store's installed version** is the number of the last migration applied to it. SQLite keeps it in the file's header, as `user_version`.
+- **The store's required version** is the lowest current version an anfra must have to use the store. The store keeps it in `query_cache_meta`, as `min_store_version`.
+
+An anfra uses a store when its current version is at least the store's required version. Only a breaking migration changes the required version. A migration is breaking when it drops or renames, or empties the tables because existing rows can't follow it, and it says so on its first line (`-- breaking`).
+
+| Applied | Installed | Required | Which anfra can use the store |
+|---|---|---|---|
+| Migrations 1 and 2, neither breaking | 2 | 1 | One at version 1 or later |
+| Migration 3, which adds a column | 3 | 1 | Still one at version 1 or later: an older anfra doesn't read the new column |
+| Migration 4, which drops a column | 4 | 4 | Only one at version 4 or later: an older anfra would query the dropped column |
+
+**When:** a process migrates a store when it opens it: at its first use of the cache, or for `anfra serve`, at startup. Every migration it needs runs in one write transaction, which reads the version first, so two processes opening at once migrate it once.
+
+| The store is | At open |
+|---|---|
+| Missing, or unreadable | Create it from every migration. If canal-lake's folder holds files, warn with their size ([File names](#file-names)) |
+| Older than this anfra | Migrate it to this anfra's last version |
+| This anfra's version | Use it |
+| Newer, but its required version is at most this anfra's current version | Use it as it is. A store is never migrated down |
+| Newer, and not compatible | The cache is off for this process, with a warning naming the versions. A store this anfra doesn't understand is never emptied or replaced: a newer anfra may be using it |
+
+**Several processes, several versions.** An `anfra serve` started last week and a CLI upgraded today share the repo's store, and nothing tells one process the other runs, so a migration can't wait for the others to stop. Instead, every store call reads the store's version first (the database header, microseconds). An older process meeting a newer, still compatible version carries on, as SQLite prepares its statements again for the changed schema; meeting an incompatible one, it stops using the cache at once and says so. A read that races the migration in the instant between the check and its query fails like any store error, and runs uncached; a write checks inside its transaction, after its lock, so it can't race at all.
+
+**When a migration fails** (a full disk, a lock held too long, a crash), the transaction rolls back and the store is as it was: the query runs uncached and reports it, and the next query that would be cached opens the store again, so migrates again. A migration that can't apply at all, a bug, is prevented, not handled: a test applies the migrations from every earlier version, with rows, and runs `querycachetest` on the result. anfra never deletes a store because a migration failed.
+
+**In the code:** `sqlitestore.Open` creates or migrates a store, and refuses one it can't use with `ErrOtherVersion` (a `*VersionError`, naming the versions) or `ErrNotStore`; every call after checks the version as above. `sqlitestore.Peek` reads a store's versions without creating or changing it, which is all `anfra status` needs: a status never migrates. The cache's state, as `anfra status` reports it, is the engine's contract (`engine.QueryCacheSummarizer`, `QueryCacheSummary` and its four states), so a platform reports its own cache's state through the same op. anfra's `internal/querycache/local` implements it: it holds the process's store, opened at first use and tried again after a failure, and turns the store's versions into a state (`Summarize`, and `Explain` for a warning). Only anfra's host imports it. Later, `anfra cache status --query` opens the store read-only for its details: entries, size, the oldest and newest.
+
+A platform's store migrates as its database does.
 
 ## Extension points
 
@@ -366,7 +500,7 @@ A check holds a hit to a miss: a test runs a set of queries (every type [result 
 1. **anfra-node:** the structural cache key, and the seeds.
 2. **canal:** decimals kept, pprof's address, canal-query reading an entry from canal-lake; the parity test.
 3. **The canal-lake sidecar:** its supervisor, started on demand, with its storage under the repo's folder.
-4. **The cache:** `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `shared/querycache` with `storetest`, the SQLite store, the miss and hit paths in `query` and `query export`, the `cache` input, with `cache_miss`, and the answer's `cache` (a change to the core API's contract: the OpenAPI document and the SDK's types), uncached when canal-lake fails, the sweep for expired and pending entries, the tags anfra derives, `cache.clean`.
+4. **The cache:** `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `internal/querycache` with `engine/querycachetest`, the SQLite store with its migrations and their compatibility rule, `cache.query.enabled`, reporting the cache's failures (`cache.warning`, the CLI's warning, `anfra serve`'s startup check), anfra's key (anfra-node's key and version, the tenant, the data source's type and identity, the row truncation) with its access test, the miss and hit paths in `query` and `query export`, the maximums checked on a hit, the `cache` input, with `cache_miss`, and the answer's `cache` (a change to the core API's contract: the OpenAPI document and the SDK's types), uncached when canal-lake fails, the sweep for expired and pending entries, the tags anfra derives, `cache.clean`.
 5. **The SDK:** a query's result keeps the `input` it ran with, and replays it for the next page and an export; `refresh` leaves the seeds out. `inspect` showing the answer's `cache`, the `refresh` plugin.
-6. **The engine:** the `Store`, `Planner` and `Recorder` on each invocation, with core's implementations.
-7. **After:** the caller's tags (`app`, `block`, an origin, through a `cache.origin` input) and attribution by tag (hits, misses and size per tag, for a `cache.stats` op and `inspect`); the size limit; canal-query streaming on when its canal-lake write fails.
+6. **The engine:** the `Store`, `Planner` and `Recorder` on each invocation, with core's implementations; `DataSource.Identity`, which anfra Cloud sets for each data source, and for each viewer under OAuth passthrough.
+7. **After:** removing orphaned files (in canal-lake with no row); a command to throw a repo's cache away by hand (`anfra cache clean --query --reset`); the caller's tags (`app`, `block`, an origin, through a `cache.origin` input) and attribution by tag (hits, misses and size per tag, for a `cache.stats` op and `inspect`); the size limit; canal-query streaming on when its canal-lake write fails; the data source settings that change rows, in the key.

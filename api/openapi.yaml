@@ -17,6 +17,15 @@ components:
         - message
         - severity
       type: object
+    CacheStatus:
+      additionalProperties: false
+      properties:
+        query:
+          $ref: "#/components/schemas/Summary"
+          description: the query cache, which keeps queries' results
+      required:
+        - query
+      type: object
     Column:
       additionalProperties: false
       properties:
@@ -1403,6 +1412,9 @@ components:
     StatusResult:
       additionalProperties: false
       properties:
+        cache:
+          $ref: "#/components/schemas/CacheStatus"
+          description: the repo's caches, read without changing them. Absent when the server keeps none.
         hints:
           description: what to do next, if any
           items:
@@ -1473,6 +1485,29 @@ components:
       required:
         - type
         - phase
+      type: object
+    Summary:
+      additionalProperties: false
+      properties:
+        problem:
+          description: what's wrong with the cache, when it is incompatible or unavailable
+          type: string
+        reason:
+          description: what turns the cache off, when it is disabled
+          type: string
+        state:
+          description: "\"ready\": the cache can be used, and needs nothing. \"incompatible\": a newer anfra changed the cache's store in a way this anfra can't read. \"unavailable\": the cache's store can't be used, as \"problem\" says. \"disabled\": the query cache is turned off, as \"reason\" says. Queries run without the cache unless it's \"ready\"."
+          enum:
+            - ready
+            - incompatible
+            - unavailable
+            - disabled
+          type: string
+        store:
+          description: the query cache's store, a file. Absent when the cache is disabled, or the server keeps its store elsewhere.
+          type: string
+      required:
+        - state
       type: object
     TimedStep:
       additionalProperties: false

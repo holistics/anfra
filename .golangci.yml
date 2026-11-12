@@ -10,6 +10,7 @@ linters:
     - dupl
     - gocritic
     - gosec
+    - importas
     - misspell
     - reassign
     - revive
@@ -18,6 +19,17 @@ linters:
     - unconvert
     - wastedassign
   settings:
+    importas:
+      no-unaliased: true
+      alias:
+        # The query cache's SQLite store: a call site names it as the store,
+        # not the query cache (internal/querycache/store/sqlite).
+        - pkg: github.com/holistics/anfra/internal/querycache/store/sqlite
+          alias: sqlitestore
+        # A local repo's query cache: a call site names it as the query cache,
+        # not as anything local (internal/querycache/local).
+        - pkg: github.com/holistics/anfra/internal/querycache/local
+          alias: localquerycache
     sloglint:
       # A record is a sentence plus attributes, its `event` among them
       # (docs/designs/logs.md).
