@@ -73,6 +73,9 @@ func parseCloudServer(entry string) (CloudServer, error) {
 	if hasAddress && label == "" {
 		return CloudServer{}, errors.New("the label before \"=\" is empty. Write it as Label=https://server.example.com")
 	}
+	if hasAddress && strings.TrimSpace(address) == "" {
+		return CloudServer{}, fmt.Errorf("%q has no address after \"=\". Add one, such as %s=https://server.example.com, or remove the \"=\" if the server isn't available yet", label, label)
+	}
 	if !hasAddress {
 		return CloudServer{Label: label}, nil
 	}
