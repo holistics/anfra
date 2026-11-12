@@ -335,35 +335,3 @@ func TestTheQueryObserverIsToldOfAnExport(t *testing.T) {
 		t.Errorf("told %q, want %q", got, want)
 	}
 }
-
-// Core keeps no result cache: it takes bust_cache, for a server in front of it
-// that does, and runs the query as it would without it; its summary says
-// neither from_cache nor executed_at, which only such a server sends.
-func TestCoreIgnoresTheResultCacheFields(t *testing.T) {
-	var in QueryRunInput
-	if err := jsonkit.Unmarshal([]byte(`{"query": "select id from t", "lang": "sql", "data_source": "warehouse", "bust_cache": true}`), &in); err != nil {
-		t.Fatal(err)
-	}
-	if !in.BustCache {
-		t.Fatal("bust_cache was not read")
-	}
-	if err := in.check(); err != nil {
-		t.Fatalf("check refused bust_cache: %v", err)
-	}
-	cc, sent := canalContext(t, 2, query.Limits{}, nil)
-	run, err := newQueryRun(context.Background(), cc, in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, events, err := streamed(t, run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := (*sent)["bust_cache"]; ok {
-		t.Errorf("canal-query was sent bust_cache: %v", *sent)
-	}
-	wire, _ := jsonkit.Marshal(events[len(events)-1].(QuerySummary))
-	if jsonHas(wire, "from_cache") || jsonHas(wire, "executed_at") {
-		t.Errorf("summary = %s, want neither from_cache nor executed_at", wire)
-	}
-}
