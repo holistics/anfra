@@ -80,7 +80,7 @@ is almost always right.
 | `await app.execute()` | Runs every query whose inputs changed, and every query whose last run failed: it is also the retry. Resolves `{ succeeded, failed }`, never rejects. |
 | `await app.refresh()` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
-| `app.hasChanges` | A control or the selection changed since the last execute: use for an "Apply" button. |
+| `app.hasChanges` | The next execute has something to apply: a control or the selection changed, a query was edited or lost an edge, or a query created after the first execute has not run yet. Use it for an "Apply" button. |
 | `app.selection` / `app.clearSelection()` | The current cross-filter selection. |
 | `app.abort()` | Cancels in-flight queries. |
 
@@ -110,7 +110,8 @@ your own markup and state, so renaming a widget changes no query.
 
 - Is checked as `createQuery` is (AQL present, `pageSize` a whole number of at least 1, the dataset
   one the reader can see), and throws a `ValidationError` changing nothing.
-- Keeps the last `result` until the rerun replaces it, and goes back to page 1.
+- Keeps the last `result` until the rerun replaces it, and goes back to page 1. A run or page in
+  flight is dropped, and `fetchMore()` does nothing until the rerun.
 - A new `aql` or `dataset` clears the query's sort (unless you pass `sort`) and a selection made in
   it, since its columns may differ. `pageSize` alone keeps both. `pageSize: undefined` drops paging.
 - Moving to another dataset throws, naming the edges, when a cross-filter to or from the query
