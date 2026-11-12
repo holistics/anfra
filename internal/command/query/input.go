@@ -43,10 +43,6 @@ type QueryRunInput struct {
 	Page     int                       `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size."`
 	PageSize int                       `json:"page_size,omitempty" minimum:"1" maximum:"10000" doc:"how many rows a page has, for AQL only"`
 	Timezone string                    `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"`
-	// BustCache is for a server in front of core that keeps a result cache.
-	// Core keeps none, so it takes the field and runs the query as it would
-	// without it. query.compile shares the input, and ignores it too.
-	BustCache bool `json:"bust_cache,omitempty" doc:"run the query again instead of returning a result a server in front of anfra cached earlier. anfra keeps no result cache, so it ignores this."`
 }
 
 func (QueryRunInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {

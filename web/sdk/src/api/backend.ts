@@ -12,8 +12,6 @@ type QueryRunInput = components['schemas']['QueryRunInput'];
 type Column = components['schemas']['Column'];
 type ExportInput = components['schemas']['ExportInput'];
 type QueryResult = components['schemas']['QueryResult'];
-/** A query's page, with what a server that caches results says of it (core says nothing). */
-type QueryRun = QueryResult & { from_cache?: boolean, executed_at?: string };
 type QueryEvent = components['schemas']['QueryCompiled'] | components['schemas']['QueryWarehouse'] | components['schemas']['QueryHeader']
   | components['schemas']['QueryRecords'] | components['schemas']['QuerySummary']
   | components['schemas']['StreamStart'] | components['schemas']['StreamStatus'];
@@ -42,8 +40,6 @@ export function toQueryInput (request: BackendQueryRequest): QueryRunInput {
     input: request.input as QueryRunInput['input'],
     ...(request.pageSize !== undefined ? { page: request.page ?? 1, page_size: request.pageSize } : {}),
     ...(request.timezone ? { timezone: request.timezone } : {}),
-    // Core ignores it; a server in front of core that caches results reads it.
-    ...(request.bustCache ? { bust_cache: true } : {}),
   };
 }
 
@@ -82,12 +78,6 @@ function toColumns (columns: Column[]): ColumnMeta[] {
   });
 }
 
-/** A summary's `executed_at`, or now for a result without one (or with one that is no time). */
-function executedAt (value: string | undefined): Date {
-  const at = value ? new Date(value) : undefined;
-  return at && !Number.isNaN(at.getTime()) ? at : new Date();
-}
-
 /** A call's answer, or the SDK error its failure is. */
 async function callCoreAPI<T> (call: () => Promise<{ data?: T, error?: unknown, response: Response }>): Promise<T> {
   let result;
@@ -107,12 +97,12 @@ async function callCoreAPI<T> (call: () => Promise<{ data?: T, error?: unknown, 
  * shape: the page with `page_size`, and every row without — which one JSON answer, a page, cannot
  * carry. Every query goes this way, so there is one path; the server holds one batch at a time.
  */
-async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal): Promise<QueryRun> {
+async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortSignal): Promise<QueryResult> {
   const stream = await callCoreAPI(() => client.POST('/core.query', {
     body, signal, parseAs: 'stream', headers: { Accept: 'application/x-ndjson' },
   }));
   if (!stream) throw connectionFailed('The server answered the query with no body.');
-  const result: QueryRun = { sql: '', columns: [], result: { fields: [], records: [] }, has_more: false, timings: { steps: [], end_ms: 0 } };
+  const result: QueryResult = { sql: '', columns: [], result: { fields: [], records: [] }, has_more: false, timings: { steps: [], end_ms: 0 } };
   try {
     await readEvents<QueryEvent>(stream, (event) => {
       switch (event.type) {
@@ -130,8 +120,6 @@ async function runQuery (client: CoreClient, body: QueryRunInput, signal: AbortS
         case 'summary':
           result.has_more = event.has_more;
           result.timings = event.timings;
-          if (event.from_cache) result.from_cache = true;
-          if (event.executed_at) result.executed_at = event.executed_at;
           break;
       }
     });
@@ -164,13 +152,12 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         debug: {
           ...(data.aql ? { executedAql: data.aql } : {}),
           executedSql: data.sql,
-          fromCache: data.from_cache === true,
+          fromCache: false,
           timings: {
             steps: data.timings.steps.map((s) => ({ step: s.step, startMs: s.start_ms })),
             endMs: data.timings.end_ms,
           },
-          // When the run happened: now, unless a cache says it was earlier.
-          executedAt: executedAt(data.executed_at),
+          executedAt: new Date(),
         },
       };
     },

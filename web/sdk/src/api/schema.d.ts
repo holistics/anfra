@@ -676,8 +676,6 @@ export interface components {
             records: unknown[][];
         };
         QueryRunInput: {
-            /** @description run the query again instead of returning a result a server in front of anfra cached earlier. anfra keeps no result cache, so it ignores this. */
-            bust_cache?: boolean;
             /** @description the data source a SQL query runs against */
             data_source?: string;
             /** @description the dataset an AQL query runs against */
@@ -720,13 +718,6 @@ export interface components {
              * @description the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)
              */
             bytes_scanned?: number;
-            /**
-             * Format: date-time
-             * @description when the run that made this result happened, which for a cached result may be long before this request. anfra never sends this; a server that caches results does.
-             */
-            executed_at?: string;
-            /** @description true when a server in front of anfra returned this result from its cache instead of running the query. anfra keeps no result cache and never sends this. */
-            from_cache?: boolean;
             /** @description whether there may be rows after this page. Without page_size, every row was sent, and this is false. */
             has_more: boolean;
             /** Format: int64 */
