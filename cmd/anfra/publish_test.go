@@ -334,9 +334,9 @@ func TestLoginOffersOnlyCloudAndURLEntry(t *testing.T) {
 }
 
 func TestLoginNotesSupportOnlyForTheBuildsServers(t *testing.T) {
-	previous := defaultCloudURL
-	t.Cleanup(func() { defaultCloudURL = previous })
-	defaultCloudURL = "United States=https://us.example.com;Europe"
+	previousURL, previousEmail := defaultCloudURL, defaultCloudSupportEmail
+	t.Cleanup(func() { defaultCloudURL, defaultCloudSupportEmail = previousURL, previousEmail })
+	defaultCloudURL, defaultCloudSupportEmail = "United States=https://us.example.com;Europe", "support@example.com"
 	for _, tc := range []struct {
 		name, runtime string
 		runtimeSet    bool

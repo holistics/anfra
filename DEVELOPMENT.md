@@ -103,9 +103,10 @@ The Docker image is built from release binaries; the `Dockerfile`'s header says 
 
 Optionally set `ANFRA_CLOUD_URL` when running `make build` or `make build-dev` to embed the
 cloud servers bare `anfra auth login` offers. Builds validate supplied values, but do not
-require one. A release embeds the servers `manifest.yml` lists under `cloud_servers`, joined
-with `;`. `make build` doesn't read that list, so a local build offers the production servers
-only if you set them.
+require one. A release embeds the servers `manifest.yml` lists under `cloud_servers`, each an
+`id`, a `label`, and a `url` unless it's upcoming. `scripts/cloud-url -manifest manifest.yml`
+checks them, and turns them into this format. `make build` doesn't read the manifest, so a
+local build offers the production servers only if you set them.
 
 The value is one server's URL, or a list of servers separated by `;`. Each entry in a list is
 `Label=URL`, or a label alone for a server that isn't available yet:
@@ -119,9 +120,10 @@ Login shows a server without a URL as upcoming, and the cursor skips it. Labels 
 the value without quotes, because make keeps them as part of it. Pass the value on make's
 command line (`make build ANFRA_CLOUD_URL=...`) to override `.env.local`'s.
 
-Under the build's servers, login shows "Need another region? Send us an email at
-support@holistics.io." It hides that note when a runtime `ANFRA_CLOUD_URL` replaces the build's
-servers.
+Set `ANFRA_CLOUD_SUPPORT_EMAIL` too, a bare address, and login shows "Need another region? Send
+us an email at <address>." under the build's servers, the address a `mailto:` link. A release
+embeds `manifest.yml`'s `cloud_support_email`. Login hides the note when a runtime
+`ANFRA_CLOUD_URL` replaces the build's servers, since that address is for the build's.
 
 At runtime, `ANFRA_CLOUD_URL` overrides the built-in list, in the same format. An explicitly
 empty value disables it. Bare `anfra auth login` shows the servers alongside organization URL

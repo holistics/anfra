@@ -146,17 +146,19 @@ func newAuthCmd() *cobra.Command {
 // reads them.
 var defaultCloudURL string
 
-// cloudSupportEmail is whom login tells users of the build's servers to email
-// for another region.
-const cloudSupportEmail = "support@holistics.io"
+// defaultCloudSupportEmail is optionally set by the build with
+// -X main.defaultCloudSupportEmail: whom login tells users of the build's
+// servers to email for another region.
+var defaultCloudSupportEmail string
 
-// loginSupportEmail is cloudSupportEmail when login offers the build's servers.
-// A runtime ANFRA_CLOUD_URL replaces them, and that support doesn't cover those.
+// loginSupportEmail is defaultCloudSupportEmail when login offers the build's
+// servers. A runtime ANFRA_CLOUD_URL replaces them, and the build's support
+// doesn't cover those.
 func loginSupportEmail() string {
 	if _, set := os.LookupEnv("ANFRA_CLOUD_URL"); set || defaultCloudURL == "" {
 		return ""
 	}
-	return cloudSupportEmail
+	return defaultCloudSupportEmail
 }
 
 // configuredCloudServers are the servers bare `anfra auth login` offers: the

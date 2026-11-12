@@ -8,11 +8,18 @@ version: 0.20.0
 sidecars:
   anfra_node: anfra-node-v0.13.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
   canal_query: query-v2.24.0 # holistics/canal release tag (build_and_release_binaries.yml)
-# The cloud servers a release's bare `anfra auth login` offers, in this order. Each is
-# `Label=URL`, or a label alone for one that isn't available yet, which login shows as
-# upcoming. See DEVELOPMENT.md (Cloud login URL). Changing them alone cuts no release.
+# The cloud servers a release's bare `anfra auth login` offers, in this order, and whom it
+# tells their users to email for another region. A server's id is a stable key, lowercase;
+# leave out its url while it isn't available, and login shows it as upcoming. See
+# DEVELOPMENT.md (Cloud login URL). Changing these alone cuts no release.
 cloud_servers:
-  - United States=https://us.anfra.ai
-  - Europe
-  - Asia Pacific
-  - Middle East
+  - id: us
+    label: United States
+    url: https://us.anfra.ai
+  - id: eu
+    label: Europe
+  - id: ap
+    label: Asia Pacific
+  - id: me
+    label: Middle East
+cloud_support_email: support@holistics.io

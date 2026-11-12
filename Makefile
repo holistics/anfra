@@ -18,7 +18,7 @@ TOOL := go tool -modfile=tools/go.mod
 # <this>+<commit>[.dirty] (internal/meta). Exported, like every variable here, so air's build
 # (make dev) injects it too.
 ANFRA_BASE_VERSION := $(shell sed -n 's/^version: *//p' manifest.yml)
-BUILD_FLAGS = -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION) -X 'main.defaultCloudURL=$$cloud_url'"
+BUILD_FLAGS = -ldflags "-X github.com/holistics/anfra/internal/meta.base=$(ANFRA_BASE_VERSION) -X 'main.defaultCloudURL=$$cloud_url' -X 'main.defaultCloudSupportEmail=$$ANFRA_CLOUD_SUPPORT_EMAIL'"
 
 # The JavaScript dependencies, brought up to date before make dev starts its processes: after a
 # branch switch or a lockfile change, they are what goes stale. Not --frozen-lockfile, as CI's is:

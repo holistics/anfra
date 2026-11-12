@@ -22,6 +22,7 @@ func TestParseCloudServers(t *testing.T) {
 		{name: "invalid address", raw: "United States=https://us.example.com/path", wantError: "server 1: the server's address can't have"},
 		{name: "an = in a URL alone's query", raw: "https://us.example.com/?next=http://127.0.0.1:1", wantError: "server 1: the server's address can't have"},
 		{name: "in quotes", raw: `"United States=https://us.example.com"`, wantError: "the value is in quotes"},
+		{name: "empty address", raw: "Europe=", wantError: `"Europe" has no address after "="`},
 		{name: "empty label", raw: "=https://us.example.com", wantError: "label before"},
 		{name: "repeated label", raw: "Europe=https://eu.example.com;europe", wantError: `"europe" is used twice`},
 		{name: "repeated server", raw: "US=https://us.example.com;Also US=https://US.example.com", wantError: "https://us.example.com is listed twice"},

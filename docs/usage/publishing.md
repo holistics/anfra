@@ -23,8 +23,8 @@ With `--json`, a browser-launch failure still exits with an error instead of wai
 
 Bare `anfra auth login` offers the build's optional cloud servers, such as one per region,
 alongside `Enter your organization URL`. A server that isn't available yet shows as upcoming
-and can't be chosen. Under the build's servers, login says whom to email for another
-region. Runtime `ANFRA_CLOUD_URL` overrides the build's servers, and
+and can't be chosen. If the build names a support address, login shows it under the build's
+servers, for asking about another region. Runtime `ANFRA_CLOUD_URL` overrides the build's servers, and
 an explicitly empty value disables them. With neither a build default nor a runtime value,
 login goes straight to URL entry.
 Choosing a server uses its origin without an organization hint. In the browser,
