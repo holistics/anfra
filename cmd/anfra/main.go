@@ -104,14 +104,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runO
 }
 
 // runError is a failed run's err as the CLI tells it: a run the user
-// interrupted (Ctrl-C) as interrupted, whatever failed as it stopped; an
-// unknown command, cobra's, as unknown_command.
+// interrupted (Ctrl-C) as interrupted, whatever failed as it stopped; one
+// canceled at a question (Esc, or its Cancel) as interrupted too; an unknown
+// command, cobra's, as unknown_command.
 func runError(ctx context.Context, err error) error {
 	switch code := apperr.From(err).Code; {
 	case code == clierr.Interrupted.Code():
 		return err
 	case ctx.Err() != nil:
 		return apperr.Encapsulate(err, clierr.Interrupted, "Interrupted.")
+	case errors.Is(err, context.Canceled):
+		return apperr.Encapsulate(err, clierr.Interrupted, "Canceled.")
 	case code == apperr.InternalServerError.Code() && strings.HasPrefix(err.Error(), "unknown command "):
 		return apperr.Encapsulate(err, errcode.UnknownCommand, strings.TrimSpace(err.Error()))
 	}
