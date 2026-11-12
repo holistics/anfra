@@ -168,6 +168,17 @@ describe('Queries', () => {
     expect(byTestId(root, 'section-other')).toBeNull();
   });
 
+  it('lists a plugin\'s variant of a query under it, labelled, and never times it as the last run', async () => {
+    harness = await inspect({ tab: QUERIES });
+    const { root } = await harness.tab(QUERIES);
+    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: 'explore orders {}', input: {} }, { ...REVENUE_STAMP, variant: 'underlying' });
+    const row = await open(byTestId(root, 'query-0/revenue'));
+    expect(byTestId(row, 'general')?.textContent).not.toMatch(/\d+ ms/);
+    const requests = await open(byTestId(row, 'requests'));
+    const request = requests.querySelector<HTMLElement>('[data-testid^="request-"]')!;
+    expect(request.querySelector('summary')?.textContent).toContain('underlying · database · 2 rows');
+  });
+
   it('keeps a removed query\'s requests under its name, marked removed', async () => {
     harness = await inspect({ tab: QUERIES });
     const { root } = await harness.tab(QUERIES);

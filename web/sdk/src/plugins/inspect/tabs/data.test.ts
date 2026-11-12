@@ -84,6 +84,13 @@ describe('Data', () => {
     expect(byTestId(await open(cardOf(root, 'revenue')), 'table-gone')).toBeNull();
   });
 
+  it('skips a plugin\'s variant of the query, such as the rows behind a point', async () => {
+    harness = await inspect({ tab: DATA_TAB });
+    await harness.frameCall('core.submitQuery', { ...REVENUE, aql: 'explore orders {}' }, { ...REVENUE_STAMP, variant: 'underlying' });
+    const { root } = await harness.tab(DATA_TAB);
+    expect(byTestId(await open(cardOf(root, 'revenue')), 'table-gone')).not.toBeNull();
+  });
+
   it('skips a later page', async () => {
     harness = await inspect({ tab: DATA_TAB });
     await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);

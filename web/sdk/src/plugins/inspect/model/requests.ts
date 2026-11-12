@@ -17,6 +17,7 @@ import type {
   QueryInput,
   QueryStamp,
 } from '../../../common/types';
+import { copyStamp } from '../../../common/endpoint';
 import type { CallContext } from '../../../host/plugin';
 
 /** The calls the log knows the shape of; any other is logged by its name, with its request as is. */
@@ -26,7 +27,7 @@ export interface RequestEntry {
   id: number;
   /** The call's full name, `<plugin>.<name>`: `core.submitQuery` for a query. */
   call: KnownCall | (string & {});
-  /** The query the frame stamped it with: a query's run, page or export. */
+  /** The query the frame stamped it with: a query's run, page or export, or a plugin's variant of it. */
   stamp?: QueryStamp;
   /** Who made it: `frame`, or `plugin <name>` for a plugin's call made for the frame. */
   caller: string;
@@ -197,7 +198,7 @@ export function createRequestLog ({ limit = 200, previewRows = 20 }: RecordOptio
         ...details,
         id,
         call: context.name,
-        ...(context.stamp && { stamp: { app: context.stamp.app, query: context.stamp.query } }),
+        ...(context.stamp && { stamp: copyStamp(context.stamp) }),
         caller: callerOf(context),
         // A copy: the host keeps adding the middleware after this one.
         ...(context.trace.length > 1 && { trace: context.trace.slice(0, -1) }),

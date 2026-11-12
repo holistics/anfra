@@ -97,3 +97,18 @@ describe('a call that fails on the answering side', () => {
     error.mockRestore();
   });
 });
+
+describe('a call\'s stamp', () => {
+  it('crosses with its own fields, the variant among them, and nothing else', async () => {
+    const posted: BridgeMessage[] = [];
+    const frame = createEndpoint((m: BridgeMessage) => { posted.push(m); }, { answer: async () => undefined, event: () => {} });
+
+    void frame.call('core.submitQuery', {}, undefined, { app: 0, query: 'revenue' });
+    void frame.call('core.submitQuery', {}, undefined, { app: 0, query: 'revenue', variant: 'underlying', extra: 1 } as never);
+
+    expect(posted.map((m) => (m as { stamp?: unknown }).stamp)).toEqual([
+      { app: 0, query: 'revenue' },
+      { app: 0, query: 'revenue', variant: 'underlying' },
+    ]);
+  });
+});

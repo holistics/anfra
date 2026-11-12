@@ -106,6 +106,8 @@ describe('the request log', () => {
     } as const;
     await record({ dataset: 'sales', aql: REVENUE_AQL }, context, async () => ({ columns: [], values: [] }));
     expect(log.entries()[0]?.stamp).toEqual({ app: 0, query: 'revenue' });
+    await record({ dataset: 'sales', aql: REVENUE_AQL }, { ...context, stamp: { app: 0, query: 'revenue', variant: 'underlying' } }, async () => ({ columns: [], values: [] }));
+    expect(log.entries()[1]?.stamp).toEqual({ app: 0, query: 'revenue', variant: 'underlying' });
   });
 });
 
