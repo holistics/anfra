@@ -66,28 +66,21 @@ describe('core', () => {
   /** The frame's `core.execute` calls, as the host made them. */
   const executes = () => replies.filter((message) => message.type === 'anfra:call' && message.name === 'core.execute') as { id: number, request: unknown }[];
   const answer = (id: number, result: unknown) => fromFrame({ type: 'anfra:result', id, ok: true, result });
-  const results = (payload: unknown) => fromFrame({ type: 'anfra:event', name: 'core.results', payload });
 
-  it('refreshes the frame: every query again, busting the cache unless told not to, answering its summary', async () => {
+  it('refreshes the frame through its core.execute, answering its summary', async () => {
     const app = mount();
-    const busting = app.call('core.refresh');
+    const refresh = app.call('core.refresh');
     await answered(1);
-    expect(executes()[0].request).toEqual({ force: true, bustCache: true });
-    answer(executes()[0].id, { succeeded: ['revenue'], failed: [] });
-    await expect(busting).resolves.toEqual({ succeeded: ['revenue'], failed: [] });
-
-    const keeping = app.call('core.refresh', { bustCache: false });
-    await answered(2);
-    expect(executes()[1].request).toEqual({ force: true, bustCache: false });
-    answer(executes()[1].id, { succeeded: [], failed: ['orders'] });
-    await expect(keeping).resolves.toEqual({ succeeded: [], failed: ['orders'] });
+    expect(executes()[0].request).toBeNull();
+    answer(executes()[0].id, { succeeded: ['revenue'], failed: ['orders'] });
+    await expect(refresh).resolves.toEqual({ succeeded: ['revenue'], failed: ['orders'] });
   });
 
-  it('runs one refresh at a time, whatever it busts, and clears it once one ends however it ends', async () => {
+  it('runs one refresh at a time, and clears it once one ends however it ends', async () => {
     const app = mount();
     const first = app.call('core.refresh');
     await answered(1);
-    await expect(app.call('core.refresh', { bustCache: false })).rejects.toThrow('A refresh is running already.');
+    await expect(app.call('core.refresh')).rejects.toThrow('A refresh is running already.');
     fromFrame({ type: 'anfra:result', id: executes()[0].id, ok: false, error: { name: 'DataAppError', code: 'call_failed', scope: 'server', message: 'gone' } });
     await expect(first).rejects.toThrow('gone');
 
@@ -118,7 +111,7 @@ describe('core', () => {
   it('offers Refresh, disabled while a refresh runs and not while the frame runs its queries', async () => {
     const host = createHost({ plugins: [corePlugin(backend())], frameScript: 'x' });
     expect(host.commands).toEqual([expect.objectContaining({
-      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary', run: { call: 'core.refresh', request: { bustCache: true } },
+      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary', run: { call: 'core.refresh' },
     })]);
     // A button and a palette entry only: a key forwarded from the frame could not run a host-only call.
     expect(host.commands[0]!.shortcut).toBeUndefined();
@@ -136,56 +129,6 @@ describe('core', () => {
     answer(executes()[0].id, { succeeded: [], failed: [] });
     await run;
     expect(states).toEqual([{ disabled: 'Refreshing…' }, {}]);
-  });
-
-  it('says how old the figures are while a cached result shows, each minute, and nothing once none does', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
-    try {
-      vi.setSystemTime(new Date('2026-11-12T09:00:00Z'));
-      const app = mount();
-      let changes = 0;
-      app.onCommandsChange(() => { changes += 1; });
-
-      results({ cached: false });
-      expect(app.commandState('core.refresh')).toEqual({});
-      results({ cached: true, cachedSince: '2026-11-12T08:55:00Z' });
-      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from 5 minutes ago' });
-      expect(changes).toBe(1);
-
-      vi.advanceTimersByTime(60_000);
-      expect(changes).toBe(2);
-      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from 6 minutes ago' });
-
-      results({ cached: false });
-      expect(app.commandState('core.refresh')).toEqual({});
-      vi.advanceTimersByTime(180_000);
-      expect(changes).toBe(3);
-
-      // What isn't a status is dropped.
-      results({ cached: 'yes' });
-      results({ cached: true, cachedSince: 'yesterday' });
-      expect(app.commandState('core.refresh')).toEqual({});
-      // A cache that doesn't say when it ran.
-      results({ cached: true });
-      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from a cache' });
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('says it is refreshing, not how old the figures are, while a refresh runs', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    try {
-      vi.setSystemTime(new Date('2026-11-12T09:00:00Z'));
-      const app = mount();
-      results({ cached: true, cachedSince: '2026-11-12T07:00:00Z' });
-      expect(app.commandState('core.refresh')).toEqual({ detail: 'Data from 2 hours ago' });
-      app.call('core.refresh').catch(() => {});
-      await vi.waitFor(() => { expect(executes()).toHaveLength(1); });
-      expect(app.commandState('core.refresh')).toEqual({ disabled: 'Refreshing…' });
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 

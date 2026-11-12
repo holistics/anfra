@@ -99,7 +99,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   // Before any plugin or the definition runs, so none of their errors is missed.
   installReporting(own, win, provision.captureConsole === true);
   installInspection(own);
-  // `core`'s frame side: the host's refresh, and whether a result on screen came from a cache.
+  // `core`'s frame side: the host's refresh.
   installCore(createKernel('core', shared, { Query, Control }));
   shared.contentUi = installContentUi(own);
   own.on('theme', (theme: unknown) => {

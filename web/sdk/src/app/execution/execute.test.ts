@@ -322,18 +322,6 @@ describe('execute', () => {
     expect(stub.queries[1].bustCache).toBe(true);
   });
 
-  it('re-runs everything on refresh without busting the cache when told not to', async () => {
-    const { stub, sdk } = build(twoRows);
-    const app = sdk.createApp();
-    revenueBy(app);
-
-    await app.execute();
-    await app.refresh({ bustCache: false });
-
-    expect(stub.calls).toHaveLength(2);
-    expect(stub.queries[1]).not.toHaveProperty('bustCache');
-  });
-
   it('starts a paged query over at its first page on refresh, dropping the pages fetched since', async () => {
     const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
     const app = sdk.createApp();
