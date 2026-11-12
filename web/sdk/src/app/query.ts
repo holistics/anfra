@@ -95,6 +95,15 @@ export class Query extends Observable {
   /** @internal Set by the executor so `abort()` can reach the in-flight request. */
   controller?: AbortController;
 
+  /**
+   * @internal The signature the run or page in flight was sent with; set and cleared with
+   * `controller`, so a run the reader is waiting on is not counted as a change.
+   */
+  runningSignature?: string;
+
+  /** The signature of its last run, when that run failed. */
+  private failedSignature?: string;
+
   constructor (name: string, app: AppContext & Observable, declaration: QueryDeclaration, id: number) {
     // Parented to the app so one `app.subscribe` sees every entity's changes.
     super(app);
@@ -157,6 +166,7 @@ export class Query extends Observable {
     // A run or page in flight is for the old declaration: its answer must not land.
     this.controller?.abort();
     this.controller = undefined;
+    this.runningSignature = undefined;
     if (this._state === 'executing') this._state = this._result ? 'success' : 'idle';
     this.resultSuperseded = true;
     this._declaration = declaration;
@@ -174,6 +184,7 @@ export class Query extends Observable {
     this.removed = true;
     this.controller?.abort();
     this.controller = undefined;
+    this.runningSignature = undefined;
   }
 
   /**
@@ -267,9 +278,18 @@ export class Query extends Observable {
     return this.lastRunSignature !== undefined && this.signature() !== this.lastRunSignature;
   }
 
-  /** @internal Whether a run of it has ever succeeded. */
-  get hasRun (): boolean {
-    return this.lastRunSignature !== undefined;
+  /**
+   * @internal For `app.hasChanges`: whether the next `app.execute()` would run it with inputs no run
+   * of it has had. Not when its pending inputs are those of its run in flight, its last successful
+   * run or, when it last failed, its failed run: a failure is not a change. Never attempted, only
+   * once `executed` (the app has run): before that, nothing has been applied to differ from.
+   */
+  hasUnappliedChange (executed: boolean): boolean {
+    const pending = this.signature();
+    if (pending === this.runningSignature) return false;
+    if (this.runFailed) return pending !== this.failedSignature;
+    if (this.lastRunSignature === undefined) return executed && this.runningSignature === undefined;
+    return pending !== this.lastRunSignature;
   }
 
   /**
@@ -415,10 +435,16 @@ export class Query extends Observable {
     this.notify();
   }
 
-  /** @internal `page` when it is a `fetchMore` that failed, not a run. */
-  markError (error: DataAppError, page = false): void {
+  /**
+   * @internal `page` when it is a `fetchMore` that failed, not a run; `signature`, a failed run's
+   * inputs.
+   */
+  markError (error: DataAppError, page = false, signature?: string): void {
     if (this.removed) return;
-    if (!page) this.runFailed = true;
+    if (!page) {
+      this.runFailed = true;
+      this.failedSignature = signature;
+    }
     this._state = 'error';
     this._error = error;
     this.notify();
