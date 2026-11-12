@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -212,6 +213,16 @@ func TestInterruptedRun(t *testing.T) {
 	cancel()
 	if got := apperr.From(runError(ctx, errors.New("read: connection reset"))).Code; got != clierr.Interrupted.Code() {
 		t.Errorf("code %v, want interrupted", got)
+	}
+}
+
+// A run canceled at a question, without Ctrl-C, is interrupted too: Esc at a
+// picker returns context.Canceled while the command's context lives on.
+func TestCanceledRun(t *testing.T) {
+	var out bytes.Buffer
+	printError(&out, runError(context.Background(), fmt.Errorf("pick org: %w", context.Canceled)), "")
+	if !strings.HasPrefix(out.String(), "---\nerror:\n  code: interrupted\n  scope: user\n  message: Canceled.\n") {
+		t.Errorf("got\n%s", out.String())
 	}
 }
 
