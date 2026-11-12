@@ -184,13 +184,18 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
   return answers;
 }
 
-/** A frame's stamp, if it is one: an app's index and a query's name. The frame is untrusted. */
+/**
+ * A frame's stamp, if it is one: an app's index, a query's name, and maybe the variant of the query
+ * it is. The frame is untrusted.
+ */
 function checkStamp (stamp: unknown): QueryStamp | undefined {
   if (typeof stamp !== 'object' || stamp === null) return undefined;
-  const { app, query } = stamp as { app?: unknown, query?: unknown };
+  const { app, query, variant } = stamp as { app?: unknown, query?: unknown, variant?: unknown };
   if (typeof app !== 'number' || !Number.isInteger(app) || app < 0) return undefined;
   if (typeof query !== 'string' || !query || query.length > 512) return undefined;
-  return { app, query };
+  if (variant === undefined) return { app, query };
+  if (typeof variant !== 'string' || !variant || variant.length > 64) return undefined;
+  return { app, query, variant };
 }
 
 export function createHost (options: HostOptions): Host {

@@ -68,10 +68,11 @@ function rowCount (shown: number, total: number | undefined): string {
 
 /**
  * The request whose rows a table shows: the newest that succeeded and kept rows, on the first page
- * (a later page isn't the start of the table).
+ * (a later page isn't the start of the table), of the query itself (not a plugin's variant of it).
  */
 export function latestRows (requests: readonly { entry: RequestEntry }[] | undefined): RequestEntry | undefined {
-  return requests?.find(({ entry }) => entry.status === 'ok' && entry.preview && entry.columns && (entry.input?.pagination?.page ?? 1) === 1)?.entry;
+  return requests?.find(({ entry }) => entry.status === 'ok' && entry.preview && entry.columns && !entry.stamp?.variant
+    && (entry.input?.pagination?.page ?? 1) === 1)?.entry;
 }
 
 /** Which reveal each mount's Data tab has brought into view, so a tab switched back to doesn't flash it again. */

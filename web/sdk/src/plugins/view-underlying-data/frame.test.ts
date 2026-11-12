@@ -157,7 +157,7 @@ describe('the modal', () => {
     expect(more.hidden).toBe(true);
   });
 
-  it('stamps its pages and its download with the app and the query, for the host\'s request log', async () => {
+  it('stamps its pages and its download with the app, the query and its variant, for the host\'s request log', async () => {
     const { app, query, frame } = setup();
     await app.execute();
     rightClick(query, { region: 'APAC', total: '1500', n: '3' }, 'total');
@@ -170,8 +170,8 @@ describe('the modal', () => {
     const stamped = frame.calls.filter((call) => call.name !== 'anfra.body').map((call) => [call.name, call.stamp]);
     expect(stamped).toEqual([
       ['core.submitQuery', { app: 0, query: 'revenue' }],
-      ['core.submitQuery', { app: 0, query: 'revenue' }],
-      ['export.query', { app: 0, query: 'revenue' }],
+      ['core.submitQuery', { app: 0, query: 'revenue', variant: 'underlying' }],
+      ['export.query', { app: 0, query: 'revenue', variant: 'underlying' }],
     ]);
   });
 

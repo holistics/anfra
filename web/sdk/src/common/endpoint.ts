@@ -19,6 +19,15 @@ export function isAbortError (err: unknown): boolean {
   return (err as Error | undefined)?.name === 'AbortError';
 }
 
+/** A stamp's own fields and nothing else, so what crosses or is kept is the stamp alone. */
+export function copyStamp (stamp: QueryStamp): QueryStamp {
+  return {
+    app: stamp.app,
+    query: stamp.query,
+    ...(stamp.variant !== undefined && { variant: stamp.variant }),
+  };
+}
+
 /**
  * The codes whose `details` cross: those the SDK knows the type of, which hold facts for an author
  * (a query's diagnostics, the fields at fault, a limit). Any other code's details stay on this side.
@@ -138,7 +147,7 @@ export function createEndpoint (post: (message: BridgeMessage) => void, handlers
           reject(abortError());
         }, { once: true });
         post({
-          type: 'anfra:call', id, name, request, ...(stamp ? { stamp: { app: stamp.app, query: stamp.query } } : {}),
+          type: 'anfra:call', id, name, request, ...(stamp ? { stamp: copyStamp(stamp) } : {}),
         });
       });
     },

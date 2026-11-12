@@ -35,13 +35,15 @@ export default function setup (kernel: FrameKernel): void {
     const body = await kernel.body<Body>();
     const canExport = kernel.sdk.plugins.has('export');
     const filename = `${defaultExportFilename(query, app.title)} - underlying data`;
-    // The rows behind a point are the query's own requests, so inspect lists them under it.
-    const stamp = { app: target.app, query: target.query };
+    // The rows behind a point are a variant of the query: inspect lists them under it, and never as
+    // its result.
+    const about = { app: target.app, query: target.query };
+    const stamp = { ...about, variant: 'underlying' };
     await kernel.modal({
       title: planned.title,
       size: 'lg',
       // Removing the query closes it: the rows it shows belong to a query that is gone.
-      about: stamp,
+      about,
       mount: (root) => body.view(root, {
         plan: planned,
         fetchPage: (page, signal) => kernel.call<BackendQueryResult>('core.submitQuery', { ...planned.request, input: { ...planned.request.input, pagination: { page, pageSize: PAGE_SIZE } } }, signal, stamp),

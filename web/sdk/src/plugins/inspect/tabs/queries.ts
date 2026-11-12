@@ -85,8 +85,13 @@ const labelOf = (entry: RequestEntry) => CALL_LABELS[entry.call] ?? entry.call;
 /** A request's title: the field it suggests for, the dataset it queries, or what it is. */
 const titleOf = (entry: RequestEntry) => (entry.call === 'core.fieldSuggestions' && entry.field ? entry.field : entry.dataset || labelOf(entry));
 
-/** What a request's line says: where its rows came from, the page, and the rows or how it ended. */
+/** What a request's line says: the plugin's variant of the query it is, if any, then `describeCall`. */
 function summaryOf (entry: RequestEntry): string {
+  return [entry.stamp?.variant, describeCall(entry)].filter(Boolean).join(' · ');
+}
+
+/** Where a request's rows came from, the page, and the rows or how it ended. */
+function describeCall (entry: RequestEntry): string {
   const ended = entry.status !== 'ok' && entry.status !== 'pending' ? entry.status : undefined;
   if (entry.call === 'core.fieldSuggestions') {
     return `suggestions for ${entry.field}${entry.q ? ` "${entry.q}"` : ''}${entry.numRows === undefined ? '' : ` · ${entry.numRows}`}`;
@@ -340,8 +345,8 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       query.error && h(doc, 'span', { class: 'error-text', role: 'alert', 'data-testid': 'query-error' }, errorText(query.error)));
 
     return entityRow(key, summary, () => {
-      // The newest run that ended.
-      const latest = requests.find(({ entry }) => entry.call === 'core.submitQuery' && entry.status !== 'pending')?.entry;
+      // The newest run of the query itself that ended: not a plugin's variant of it.
+      const latest = requests.find(({ entry }) => entry.call === 'core.submitQuery' && !entry.stamp?.variant && entry.status !== 'pending')?.entry;
       const notRun = query.state === 'success' || query.state === 'error' ? 'Not returned.' : 'Not run yet.';
       const lastRun = [
         query.debug && (query.debug.fromCache ? 'cache' : 'database'),

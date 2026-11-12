@@ -816,6 +816,11 @@ export type LineageCard = Schemas['DiagramCard'];
 export interface QueryStamp {
   app: number;
   query: string;
+  /**
+   * A short name for a variant of the query a plugin sends, such as `underlying` for the rows behind
+   * a point: shown under the query, never taken for the query's own result or run.
+   */
+  variant?: string;
 }
 
 export interface Backend {
