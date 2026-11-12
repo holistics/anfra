@@ -1,0 +1,19 @@
+# sqlc generates the store's queries (gen/) from queries.sql, type-checked against
+# the schema its migrations make (migrations/): run scripts/sqlc.sh generate after
+# changing either, and commit what it writes. CI runs scripts/sqlc.sh diff.
+#
+# sqlc's SQLite engine is Beta (docs.sqlc.dev, "Database and language support").
+# Every query here generates cleanly; a function's result or parameter is typed by
+# an explicit CAST, as sqlc can't infer through one. A future query sqlc can't
+# parse or types wrong is written by hand in sqlite.go, beside the generated ones,
+# with a comment naming the sqlc issue, rather than bent to fit the tool.
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "migrations"
+    queries: "queries.sql"
+    gen:
+      go:
+        package: "gen"
+        out: "gen"
+        emit_pointers_for_null_types: true

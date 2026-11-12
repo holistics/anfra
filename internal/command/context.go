@@ -8,6 +8,7 @@ import (
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -81,6 +82,10 @@ type CommandContext struct {
 	// version to compare the skills in use with: nil when the host does not
 	// check, and a nil result when it knows none yet.
 	Skills func() *SkillsInfo
+	// QueryCache reports the repo's query cache's state, for status: anfra's
+	// host's over the repo's store, or a platform's over its own. Nil: the host
+	// keeps no query cache, and status says nothing of one.
+	QueryCache querycache.Summarizer
 }
 
 // SkillsInfo is the latest anfra skills version the host knows of, and when it

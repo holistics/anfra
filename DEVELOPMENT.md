@@ -91,6 +91,16 @@ pnpm --filter @holistics/anfra-sdk generate       # the SDK's types (web/sdk/src
 
 Commit both. CI refuses a stale one, and a breaking change that no commit declares (`feat!:`, or a `BREAKING CHANGE:` footer). See [commands and API](docs/designs/commands-and-api.md).
 
+### When a store's SQL changes
+
+A store's SQL is generated into Go: sqlc, at the version `tools/go.mod` pins, turns its `queries.sql` into typed code in `gen/`, checked against its schema, the migrations in `migrations/` (the query cache's store, `internal/querycache/store/sqlite`). After changing either, or adding a migration:
+
+```sh
+scripts/sqlc.sh generate    # each store's gen/, from its queries.sql and migrations
+```
+
+Commit it. CI refuses stale code (`scripts/sqlc.sh diff`).
+
 ## Commits and releases
 
 Commit messages are checked by commitlint, in a git hook and in CI: the rules, types and scopes are in `commitlint.config.mjs`. `pnpm commit` writes one interactively.
