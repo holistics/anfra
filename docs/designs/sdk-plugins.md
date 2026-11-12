@@ -72,7 +72,7 @@ Every call that crosses the bridge is a plugin's, including running a query. anf
 
 | Plugin | Calls | Events from the frame | Adds for the author |
 |---|---|---|---|
-| `core` | `core.submitQuery`, `core.fieldSuggestions` (frame may call) | | nothing: the app model is its frame side. Required. |
+| `core` | `core.submitQuery`, `core.fieldSuggestions` (frame may call); `core.execute` (answered in the frame, for the host): runs every app's queries; `core.refresh` (host only): `core.execute` with `force`, busting any result cache unless `{ bustCache: false }`, one at a time | `core.results`: whether a result on screen came from a result cache, and the oldest such run, each time the results settle | nothing: the app model is its frame side, and `app.refresh()` is the definition's own. Command: Refresh (`primary`, `Alt+Shift+R`), disabled while it runs, with the cached figures' age as its `detail`. Required. |
 | `export` | `export.query` (frame may call): makes the file, saves it from the host page | | `query.export()` |
 | `lineage` | `lineage.trace` (frame may call); the panel's Lineage tab, a canvas of where the page's numbers come from, which pins the card a selection holds | | `Anfra.lineage()` |
 | `render` | `render.save` (frame may call): checks the bytes, rate-limited; `render.draw` (answered in the frame, for the host); `render.download` (host only): `render.draw`, one at a time, its commands disabled meanwhile | | `Anfra.render()`. The renderer is its body. Commands: Download as PNG, as PDF (`overflow`). |
@@ -225,7 +225,7 @@ A plugin's UI about the host goes in the host's own chrome, as **contributions**
 
 | Contribution | What it is | The host |
 |---|---|---|
-| Command | `{ id, title, icon?, placement?, shortcut?, run, state? }`: runs a call, opens the panel at a tab, or runs one of the panel's verbs (`run: { panel: 'pick' }`). | Lists `host.commands` in its action bar or palette (`placement: 'panel'` ones in the panel's strip, before the tabs), shows `mounted.commandState(id)` (pressed, or disabled with a reason), and calls `mounted.run(id)`. |
+| Command | `{ id, title, icon?, placement?, shortcut?, run, state? }`: runs a call, opens the panel at a tab, or runs one of the panel's verbs (`run: { panel: 'pick' }`). | Lists `host.commands` in its action bar or palette (`placement: 'panel'` ones in the panel's strip, before the tabs), shows `mounted.commandState(id)` (pressed, or disabled with a reason, or a `detail` to show beside an enabled one, such as a tooltip), and calls `mounted.run(id)`. |
 | Tab | `{ id, title, icon?, order?, selection?, mount(root, context) }`: a view in the panel; `selection` says it shows the node selected, `'pick'` that a pick lands there. | Lists `host.tabs` in its panel's tab strip and calls `mounted.panel.mountTab(id, element)` for the open one. |
 
 A plugin's contributions are named under it (`inspect.toggle`); the host's own (`createHost({ commands, tabs })`) keep the id they are given. The SDK adds one of its own, first: `panel.pick` (`placement: 'panel'`, pressed while picking), while some tab kept shows the selection, since with none a pick selects what nothing shows. `panel` is reserved for it, so it is named after the method it runs; `anfra.*` stays the frame events'. `createHost({ contributions })` is a filter: what it refuses is left out everywhere, while the plugin's calls stay, so a host can build its own UI on them instead.

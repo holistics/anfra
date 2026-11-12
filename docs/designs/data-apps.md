@@ -88,7 +88,7 @@ The frame is `sandbox="allow-scripts"` with its document as `srcdoc`, so it has 
 
 The bridge (`common/bridge.ts`, `common/endpoint.ts`; each side runs one endpoint) is a small postMessage protocol, the same both ways, carrying the plugins' calls and events ([sdk-plugins.md](sdk-plugins.md)):
 
-- `anfra:call` with a plugin's call name (`core.submitQuery`) and an id, answered by `anfra:result`, ok or with an error by its SDK class name; `anfra:cancel` aborts one. Either side calls: the frame `core.submitQuery`, the host `render.draw`.
+- `anfra:call` with a plugin's call name (`core.submitQuery`) and an id, answered by `anfra:result`, ok or with an error by its SDK class name; `anfra:cancel` aborts one. Either side calls: the frame `core.submitQuery`, the host `render.draw` and `core.execute`.
 - `anfra:event`, a plugin's notice nobody answers: the host's `inspect.watch` and `inspect.highlight`, the frame's `inspect.snapshot` and `inspect.picked`.
 - `anfra:ready`, from the frame each time its document loads.
 - **The frame reaches only the calls a plugin lets it make** (`core.submitQuery`, `core.fieldSuggestions`, `export.query`, `lineage.trace`, `render.save`); every other call is the host's, refused before any middleware or handler runs. Nothing else of the API is reachable from a frame, whatever the host's credentials.
