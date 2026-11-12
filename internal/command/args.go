@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/shared/apikit"
@@ -74,8 +75,44 @@ type Arg struct {
 	field []int // the field's index path in In
 }
 
-// Flag is the arg's CLI flag name: its name with _ as -.
-func (a Arg) Flag() string { return strings.ReplaceAll(a.Name, "_", "-") }
+// Flag is the arg's CLI flag name (FlagName).
+func (a Arg) Flag() string { return FlagName(a.Name) }
+
+// FlagName is a field's CLI name: its name, snake_case or camelCase, in
+// lowercase with hyphens, each level of a dotted path on its own:
+// input.pagination.pageSize is input.pagination.page-size
+// (docs/designs/commands-and-api.md#one-name-per-field).
+func FlagName(name string) string {
+	var b strings.Builder
+	prev := rune(0)
+	for _, r := range name {
+		switch {
+		case r == '_':
+			b.WriteRune('-')
+		case unicode.IsUpper(r):
+			if unicode.IsLower(prev) || unicode.IsDigit(prev) {
+				b.WriteRune('-')
+			}
+			b.WriteRune(unicode.ToLower(r))
+		default:
+			b.WriteRune(r)
+		}
+		prev = r
+	}
+	return b.String()
+}
+
+// FlagKey is how the CLI matches a flag's name: ignoring case, _ and -. Two
+// fields in one place whose keys are equal are refused, so a flag typed any of
+// those ways reaches one field.
+func FlagKey(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '_' || r == '-' {
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, name)
+}
 
 func cloneArgs(args []Arg) []Arg {
 	out := slices.Clone(args)
@@ -96,7 +133,7 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 		return nil, fmt.Errorf("In must be a struct, not %s", t)
 	}
 	var args []Arg
-	names := map[string]bool{"help": true} // help is every command's
+	names := map[string]bool{"help": true} // by FlagKey; help is every command's
 	shorts := map[string]bool{}
 	groups := map[string]int{}
 	positional := 0
@@ -174,10 +211,10 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 			return nil, fmt.Errorf("arg %s: shorthand %q is not one free letter", name, a.Shorthand)
 		}
 		for _, n := range append([]string{name}, a.Aliases...) {
-			if names[n] {
-				return nil, fmt.Errorf("arg %s: the name %q is taken", name, n)
+			if names[FlagKey(n)] {
+				return nil, fmt.Errorf("arg %s: the name %q is taken, or differs from one taken only by case, _ or -", name, n)
 			}
-			names[n] = true
+			names[FlagKey(n)] = true
 		}
 		if a.Shorthand != "" {
 			shorts[a.Shorthand] = true
@@ -199,26 +236,46 @@ func parseArgs(t reflect.Type) ([]Arg, error) {
 }
 
 // objectFields are the fields of an object arg's struct the CLI sets one by one:
-// its string, bool, int and []string fields. Others (an object, a list of
-// objects) are left to the arg's JSON.
+// its string, bool, int and []string fields, and an object's, at any depth (an
+// object field holds its own Fields). A list of objects is left to the arg's
+// JSON.
 func objectFields(t reflect.Type) ([]Arg, error) {
 	var fields []Arg
+	keys := map[string]string{}
 	for _, f := range reflect.VisibleFields(t) {
 		tag, ok := f.Tag.Lookup("json")
 		if f.Anonymous || !ok || tag == "-" {
 			continue
 		}
 		name, _, _ := strings.Cut(tag, ",")
+		if other, taken := keys[FlagKey(name)]; taken {
+			return nil, fmt.Errorf("fields %s and %s differ only by case, _ or -, so a flag can't tell them apart", other, name)
+		}
+		keys[FlagKey(name)] = name
 		a := Arg{Name: name, Usage: f.Tag.Get("doc"), field: f.Index}
-		switch f.Type {
-		case reflect.TypeFor[string]():
+		switch obj := f.Type; {
+		case obj == reflect.TypeFor[string]():
 			a.Type = ArgString
-		case reflect.TypeFor[bool]():
+		case obj == reflect.TypeFor[bool]():
 			a.Type = ArgBool
-		case reflect.TypeFor[[]string]():
+		case obj == reflect.TypeFor[[]string]():
 			a.Type = ArgStringArray
-		case reflect.TypeFor[int]():
+		case obj == reflect.TypeFor[int]():
 			a.Type = ArgInt
+		case obj.Kind() == reflect.Struct || obj.Kind() == reflect.Pointer && obj.Elem().Kind() == reflect.Struct:
+			if obj.Kind() == reflect.Pointer {
+				obj = obj.Elem()
+			}
+			nested, err := objectFields(obj)
+			if err != nil {
+				return nil, fmt.Errorf("field %s: %w", name, err)
+			}
+			if len(nested) == 0 {
+				continue
+			}
+			a.Type, a.Fields = ArgObject, nested
+			fields = append(fields, a)
+			continue
 		default:
 			continue
 		}

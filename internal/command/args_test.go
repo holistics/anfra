@@ -101,3 +101,23 @@ func TestObjectArgFields(t *testing.T) {
 		t.Errorf("header's enum = %v", e)
 	}
 }
+
+// The CLI matches a flag ignoring case, _ and -, so two fields in one place
+// that differ only so are refused: at an arg's level, and an object's.
+func TestFlagKeyClashes(t *testing.T) {
+	type args struct {
+		PageSize  int `json:"pageSize,omitempty" doc:"a"`
+		PageSize2 int `json:"page_size,omitempty" doc:"b"`
+	}
+	type inObject struct {
+		A struct {
+			PageSize  int `json:"pageSize" doc:"a"`
+			PageSize2 int `json:"page-size" doc:"b"`
+		} `json:"a,omitempty" doc:"an object"`
+	}
+	for name, typ := range map[string]reflect.Type{"args": reflect.TypeFor[args](), "an object's fields": reflect.TypeFor[inObject]()} {
+		if _, err := parseArgs(typ); err == nil || !strings.Contains(err.Error(), "differ") {
+			t.Errorf("%s: %v, want refused", name, err)
+		}
+	}
+}

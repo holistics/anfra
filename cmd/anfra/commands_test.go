@@ -22,6 +22,7 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/jsonkit"
+	"github.com/spf13/pflag"
 )
 
 func registered(t *testing.T, name string) command.Command {
@@ -139,10 +140,15 @@ func TestObjectArrayFlag(t *testing.T) {
 }
 
 type dottedOptions struct {
-	Header string   `json:"header,omitempty" enum:"labels,names,none" doc:"the header row"`
-	Rows   int      `json:"rows,omitempty" doc:"rows to write"`
-	BOM    bool     `json:"bom,omitempty" doc:"start with a byte-order mark"`
-	Tags   []string `json:"tags,omitempty" doc:"tags"`
+	Header string        `json:"header,omitempty" enum:"labels,names,none" doc:"the header row"`
+	Rows   int           `json:"rows,omitempty" doc:"rows to write"`
+	BOM    bool          `json:"bom,omitempty" doc:"start with a byte-order mark"`
+	Tags   []string      `json:"tags,omitempty" doc:"tags"`
+	Paging *dottedPaging `json:"paging,omitempty" doc:"a page"`
+}
+
+type dottedPaging struct {
+	PageSize int `json:"pageSize" doc:"rows in a page"`
 }
 
 type dottedInput struct {
@@ -162,13 +168,24 @@ var dotted = command.Define(command.Def[dottedInput, struct{}]{
 func dottedValues(t *testing.T, argv ...string) (map[string]any, error) {
 	t.Helper()
 	cmd := buildCobraCommand(dotted)
+	cmd.SetGlobalNormalizationFunc(func(fs *pflag.FlagSet, name string) pflag.NormalizedName {
+		return pflag.NormalizedName(flagNamed(fs, name))
+	})
 	if err := cmd.ParseFlags(argv); err != nil {
 		t.Fatal(err)
 	}
 	flagArg := map[string]string{"format-options": "format_options"}
-	for _, f := range dotted.Args()[0].Fields {
-		flagArg["format-options."+f.Flag()] = "format_options." + f.Name
+	var walk func(fields []command.Arg, flag, key string)
+	walk = func(fields []command.Arg, flag, key string) {
+		for _, f := range fields {
+			if f.Type == command.ArgObject {
+				walk(f.Fields, flag+"."+f.Flag(), key+"."+f.Name)
+				continue
+			}
+			flagArg[flag+"."+f.Flag()] = key + "." + f.Name
+		}
 	}
+	walk(dotted.Args()[0].Fields, "format-options", "format_options")
 	return flagValues(cmd.Flags(), dotted.Args(), flagArg)
 }
 
@@ -196,10 +213,28 @@ func TestDottedFlags(t *testing.T) {
 		t.Errorf("both forms: %v, want refused", err)
 	}
 
+	// An object's object: its fields are flags too, a level deeper, a camelCase
+	// name in hyphens; and a flag typed in another case, or with _, reaches it.
+	for _, typed := range []string{"--format-options.paging.page-size", "--format-options.paging.pageSize", "--format_options.paging.page_size"} {
+		values, err := dottedValues(t, typed, "50")
+		if got, _ := jsonkit.Marshal(values); err != nil || string(got) != `{"format_options":{"paging":{"pageSize":50}}}` {
+			t.Errorf("%s 50 = %s %v", typed, got, err)
+		}
+	}
+
 	help := buildCobraCommand(dotted).Flags().FlagUsages()
-	for _, want := range []string{"--format-options.header string", "(one of: labels, names, none)", "or set its fields with --format-options.<field>"} {
+	for _, want := range []string{"--format-options.header string", "(one of: labels, names, none)", "or set its fields with --format-options.<field>", "--format-options.paging.page-size int"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help does not say %q:\n%s", want, help)
+		}
+	}
+}
+
+// A field's flag is its name in hyphens.
+func TestFlagNames(t *testing.T) {
+	for name, want := range map[string]string{"page_size": "page-size", "pageSize": "page-size", "input.pagination.pageSize": "input.pagination.page-size", "referenceTime": "reference-time", "dbType2": "db-type2", "header": "header"} {
+		if got := command.FlagName(name); got != want {
+			t.Errorf("FlagName(%q) = %q, want %q", name, got, want)
 		}
 	}
 }

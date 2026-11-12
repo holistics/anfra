@@ -199,13 +199,11 @@ func addOutputFlags(root *cobra.Command, core []*cobra.Command) {
 	pf.StringVar(&output.jq, "jq", "", "filter the answer with a jq expression, writing what it gives as YAML, or JSON with --json")
 	pf.BoolVar(&output.schema, "schema", false, "write the command's input and output, as JSON Schema, instead of running it: each input field is a flag, --<field>, unless its x-cli says it's positional")
 	pf.BoolVar(&output.nonInteractive, "non-interactive", false, "ask no questions and print no notices: refuse what would need an answer")
-	root.SetGlobalNormalizationFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
-		// A flag by its field's name works too: --data_source, as --schema names it.
-		name = strings.ReplaceAll(name, "_", "-")
+	root.SetGlobalNormalizationFunc(func(fs *pflag.FlagSet, name string) pflag.NormalizedName {
 		if name == "no-interactive" {
-			name = "non-interactive"
+			return "non-interactive"
 		}
-		return pflag.NormalizedName(name)
+		return pflag.NormalizedName(flagNamed(fs, name))
 	})
 	// cobra's own commands, added now rather than when it runs, to be marked.
 	root.InitDefaultHelpCmd()

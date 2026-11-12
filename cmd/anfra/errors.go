@@ -402,13 +402,19 @@ func setKey(m *yaml.Node, key, value string) {
 }
 
 // argName is how the user passes the arg a violation is on: its flag, or the
-// positional's name. A field no arg has (an unknown one) is shown as it is.
+// positional's name. A field within an object arg (input.pagination) is named
+// as its flags are, under the arg's (--input.pagination). A field no arg has
+// (an unknown one) is shown as it is.
 func argName(args []command.Arg, field string) string {
 	a, ok := argOf(args, field)
-	switch {
-	case !ok:
+	if !ok {
+		top, _, nested := strings.Cut(field, ".")
+		if a, ok := argOf(args, top); nested && ok && a.Type == command.ArgObject {
+			return "--" + command.FlagName(field)
+		}
 		return field
-	case a.Positional:
+	}
+	if a.Positional {
 		return a.Name
 	}
 	return "--" + a.Flag()

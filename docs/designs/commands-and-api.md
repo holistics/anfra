@@ -106,6 +106,17 @@ The reason is that a command is an API, and is held to what an API's operation i
 
 Precedents: Terraform's `plan` and `apply`, Git's `status` and `commit`. The counter-pattern, a flag that swaps the output (`cargo package --list`, `npm pack --dry-run`), is common in single-purpose tools, but leaves the command with two results to document and type.
 
+### One name per field
+
+A field has one name, derived from its path, the same on every surface: `input.pagination.pageSize` in the API, `--input.pagination.page-size` at the CLI. The CLI's name is the API's with `.` between levels, and each level's camelCase or snake_case written with hyphens. That is a rule, not a list, so a reader who knows one name can write the other, and an agent can map them mechanically.
+
+- **The CLI matches a flag ignoring case, `_` and `-`.** `--input.pagination.pageSize` and `--input.pagination.page_size` reach `--input.pagination.page-size`, by pflag's normalize function, but only the hyphenated name is ever shown: in `--help`, the docs and errors. Agents often write a flag as they read the API's field, and this makes that work without adding a name anyone has to learn. For it to stay unambiguous, no two fields in one place may differ only by case, `_` or `-`; the framework refuses such a pair when it builds a command's flags.
+- **The API is strict:** one name per field, as the schema says, which generated clients rely on. A refused name says which one was meant ([a query's input](query-input.md#moving-to-it)).
+- **A former name is kept only as a deprecation**, on the same schedule on every surface, and removed with its field: today's `--page-size` is `page_size`'s flag, deprecated with it.
+- **No other aliases.** An alias for convenience is a second name to learn, and each one makes the next harder to refuse. Two exceptions, neither a second name:
+  - **`short`'s one-letter flags** (`-d`, `-l`, `-s`), for the few args nearly every invocation sets: abbreviations.
+  - **A CLI-only flag may take a spelling of its own name that other CLIs commonly use,** never shown: `--no-interactive` for `--non-interactive`. With no API field behind it, there is no other surface for its names to differ from; and it is the same word spelled another way, as the matching above forgives case and `_`. A different word is never taken.
+
 ### Secrets never in arguments
 
 A command never takes a secret, a password, a token, a key, as a flag or a positional argument. One it needs comes on stdin (`--password-stdin`, as `docker login` takes it, or `gh auth login --with-token`), or from a file it reads (the repo's `.anfra/data_sources.yml`), or through a browser (`anfra auth login`'s OAuth).
