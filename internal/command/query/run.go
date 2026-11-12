@@ -66,8 +66,12 @@ type QuerySummary struct {
 	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without page_size, every row was sent, and this is false."`
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
-	BytesScanned *int64  `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
-	Timings      Timings `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
+	BytesScanned *int64 `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
+	// FromCache and ExecutedAt are a result cache's (BustCache): core never
+	// sets them, but a server in front of it that answers from a cache does.
+	FromCache  bool      `json:"from_cache,omitzero" doc:"true when a server in front of anfra returned this result from its cache instead of running the query. anfra keeps no result cache and never sends this."`
+	ExecutedAt time.Time `json:"executed_at,omitzero" doc:"when the run that made this result happened, which for a cached result may be long before this request. anfra never sends this; a server that caches results does."`
+	Timings    Timings   `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 }
 
 func (QueryCompiled) queryEvent()  {}
