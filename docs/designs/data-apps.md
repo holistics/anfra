@@ -102,7 +102,7 @@ The host never sees the frame's DOM. What it knows of the page is the **structur
 
 Step 5, in detail: what crosses the bridge and reaches `core.query` for each query.
 
-A query's AQL is fixed when it is declared. What the reader changes (filter values, a cross-filter selection, a sort, a date grain, the page) travels beside it, as the **Query Input**, and `core.query` applies it before compiling (`internal/command/query/input.go`; `app/execution/submitQuery.ts` builds it):
+A query's AQL is fixed when it is declared. What the reader changes (filter values, a cross-filter selection, a sort, a date grain, the page) travels beside it, in the query's `input`, and `core.query` applies it before compiling (`internal/command/query/input.go`; `app/execution/submitQuery.ts` builds it). The SDK's `Backend` request carries the same `input`, in the core API's shape ([a query's input](query-input.md)):
 
 | The reader's state | Becomes |
 |---|---|
@@ -110,7 +110,8 @@ A query's AQL is fixed when it is declared. What the reader changes (filter valu
 | A cross-filter selection | entries in `input.filters`, or one generated condition in `input.conditions` when the selection can't be expressed as ANDed filters |
 | `query.setSort` | `input.sorts` |
 | A date drill | `input.dateDrills`, on the field the drilled dimensions are built on |
-| Paging, the app's time zone | `page`, `page_size`, `timezone` |
+| Paging, the app's time zone | `input.pagination`, `input.timezone` |
+| The run being continued (a next page, an export) | `input.seeds`: the next page and an export send the input the query's run came back with, so they continue that run |
 
 So reader input is never spliced into AQL text, and the executed AQL comes back with the result, which is what the inspect panel shows. anfra-node applies the Query Input to the query's `explore { }`, which is why a Data App's queries are explores: controls, cross-filters, sorts and date drills have nothing to apply to in another shape. The Query Input and result columns keep amql's own field names (camelCase), which the SDK speaks too, rather than being converted in core and back in the SDK. All of a query's `input` is camelCase for the same reason ([a query's input](query-input.md#its-case)). A column's types are the core's own, not amql's, so they are in the API's case: `semantic_type`, `arrow_type`, `db_type` ([result-values.md](result-values.md#the-shape)). A column mixes the two cases, and each key's case says whose it is.
 

@@ -15,7 +15,7 @@ import (
 
 // Query runs a query: its rows, and the SQL that produced them — as one page,
 // or streamed as it runs (QueryRun).
-var Query = command.Define(command.Def[QueryRunInput, QueryRun]{
+var Query = command.Define(command.Def[QueryRequestParams, QueryRun]{
 	Name:  "query",
 	Short: "Run a query, and return its rows and the SQL that produced them",
 	Long: `Run a query, and return a page of its rows and the SQL that produced them.
@@ -25,27 +25,27 @@ A page is input.pagination.pageSize rows, or the first 10000 without it, and has
 Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without input.pagination, that's every row, up to the server's maximum.`,
 	ReadOnly: true,
 	Timeout:  10 * time.Minute,
-	Needs: func(in QueryRunInput) command.Sidecars {
+	Needs: func(in QueryRequestParams) command.Sidecars {
 		return command.Sidecars{Node: in.Lang != "sql", CanalQuery: true} // SQL is not compiled
 	},
-	Normalize: QueryRunInput.normalize,
-	Check:     QueryRunInput.check,
+	Normalize: QueryRequestParams.normalize,
+	Check:     QueryRequestParams.check,
 	Errors:    []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge},
 	Events:    queryEvents,
 	Run:       newQueryRun,
 })
 
 // Compile compiles a query to SQL, without running it.
-var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
+var Compile = command.Define(command.Def[QueryRequestParams, CompiledQuery]{
 	Name:      "query.compile",
 	Short:     "Compile a query to SQL, without running it",
 	ReadOnly:  true,
 	Timeout:   2 * time.Minute,
-	Needs:     func(in QueryRunInput) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
-	Normalize: QueryRunInput.normalize,
-	Check:     QueryRunInput.check,
+	Needs:     func(in QueryRequestParams) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
+	Normalize: QueryRequestParams.normalize,
+	Check:     QueryRequestParams.check,
 	Errors:    []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable},
-	Run: func(ctx context.Context, cc command.CommandContext, in QueryRunInput) (CompiledQuery, error) {
+	Run: func(ctx context.Context, cc command.CommandContext, in QueryRequestParams) (CompiledQuery, error) {
 		if in.Lang == "sql" {
 			// Already the SQL that would run.
 			if err := in.checkDataSource(ctx, cc); err != nil {
@@ -73,13 +73,13 @@ var Compile = command.Define(command.Def[QueryRunInput, CompiledQuery]{
 })
 
 // Validate checks a query: its diagnostics, without running it.
-var Validate = command.Define(command.Def[QueryInput, query.QueryValidation]{
+var Validate = command.Define(command.Def[QueryDefinition, query.QueryValidation]{
 	Name:     "query.validate",
 	Short:    "Validate a query without running it, and return its diagnostics",
 	ReadOnly: true,
 	Timeout:  2 * time.Minute,
-	Needs:    func(QueryInput) command.Sidecars { return command.Sidecars{Node: true} },
-	Check: func(in QueryInput) error {
+	Needs:    func(QueryDefinition) command.Sidecars { return command.Sidecars{Node: true} },
+	Check: func(in QueryDefinition) error {
 		if in.Lang == "sql" {
 			// The intent is a dry run on the data source; not every dialect has
 			// one through canal-query, and its errors carry no positions yet.
@@ -87,7 +87,7 @@ var Validate = command.Define(command.Def[QueryInput, query.QueryValidation]{
 		}
 		return in.target()
 	},
-	Run: func(ctx context.Context, cc command.CommandContext, in QueryInput) (query.QueryValidation, error) {
+	Run: func(ctx context.Context, cc command.CommandContext, in QueryDefinition) (query.QueryValidation, error) {
 		aql, _, err := in.aql()
 		if err != nil {
 			return query.QueryValidation{}, err

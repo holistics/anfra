@@ -32,10 +32,10 @@ type QueryEvent interface{ queryEvent() }
 
 // QueryCompiled is the SQL the query runs, as soon as it is known.
 type QueryCompiled struct {
-	Type  string    `json:"type" enum:"compiled"`
-	SQL   string    `json:"sql"`
-	AQL   string    `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
-	Input *RunInput `json:"input,omitempty" doc:"the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
+	Type  string      `json:"type" enum:"compiled"`
+	SQL   string      `json:"sql"`
+	AQL   string      `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Input *QueryInput `json:"input,omitempty" doc:"the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
 }
 
 // QueryWarehouse is the query's id on the warehouse, as soon as it has one: to
@@ -91,7 +91,7 @@ const (
 // work, which runs when the run is read.
 type queryRun struct {
 	cc command.CommandContext
-	in QueryRunInput
+	in QueryRequestParams
 	// sql is a SQL query, on its data source; src and aql an AQL query's, its
 	// limit: directive taken out into limit.
 	sql   query.UngovernedSQL
@@ -103,7 +103,7 @@ type queryRun struct {
 // newQueryRun accepts a query: what it refuses — a missing sidecar, an unknown
 // data source, a malformed limit: — it refuses here, before any work, as an
 // ordinary error rather than in a stream.
-func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRunInput) (QueryRun, error) {
+func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequestParams) (QueryRun, error) {
 	q := queryRun{cc: cc, in: in, limit: query.NoLimit}
 	if in.Lang == "sql" {
 		sql, err := in.ungoverned(ctx, cc)
@@ -134,7 +134,7 @@ func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRunInpu
 // sink receives a run's result as it is produced.
 type sink struct {
 	status    func(phase string) error
-	compiled  func(sql, aql string, input *RunInput) error
+	compiled  func(sql, aql string, input *QueryInput) error
 	warehouse func(id string) error
 	scanned   func(bytes int64)
 	header    func(columns []Column, fields []string) error
@@ -335,7 +335,7 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 		status:    func(string) error { return nil },
 		warehouse: func(string) error { return nil },
 		scanned:   func(int64) {},
-		compiled: func(sql, aql string, input *RunInput) error {
+		compiled: func(sql, aql string, input *QueryInput) error {
 			r.SQL, r.AQL, r.Input = sql, aql, input
 			return nil
 		},
@@ -381,7 +381,7 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 	}
 	timings, err := q.execute(ctx, q.limit, sink{
 		status: events.Status,
-		compiled: func(sql, aql string, input *RunInput) error {
+		compiled: func(sql, aql string, input *QueryInput) error {
 			return events.Emit(QueryCompiled{Type: "compiled", SQL: sql, AQL: aql, Input: input})
 		},
 		warehouse: func(id string) error {

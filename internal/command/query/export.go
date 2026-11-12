@@ -23,35 +23,35 @@ import (
 
 // Export runs a query and answers its whole result as a file: a link to
 // download it. See docs/designs/exports.md.
-var Export = command.Define(command.Def[ExportInput, command.ExportLink]{
+var Export = command.Define(command.Def[QueryExportRequestParams, command.ExportLink]{
 	Name:  "query.export",
 	Short: "Export a query's whole result as a file to download",
 	Long:  "Export a query's whole result as a file, and return a link to download it once the file is ready.",
 	// It changes something (a file, a link), but only adds it.
 	NonDestructive: true,
 	Timeout:        30 * time.Minute,
-	Needs: func(in ExportInput) command.Sidecars {
+	Needs: func(in QueryExportRequestParams) command.Sidecars {
 		return command.Sidecars{Node: in.Lang != "sql", CanalQuery: true}
 	},
-	Check:  ExportInput.check,
+	Check:  QueryExportRequestParams.check,
 	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, errcode.ExportsUnavailable},
 	Run:    runExport,
 })
 
-// ExportInput is what query.export takes: a query and its input, as query
-// takes them (a page among it, which exports that page); and the file's
-// format.
-type ExportInput struct {
-	QueryInput
-	Input         RunInput            `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."`
+// QueryExportRequestParams is what query.export takes: a query and its input,
+// as query takes them (a page among it, which exports that page); and the
+// file's format.
+type QueryExportRequestParams struct {
+	QueryDefinition
+	Input         QueryInput          `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."`
 	Timezone      string              `json:"timezone,omitempty" deprecated:"true" doc:"deprecated: use input.timezone. Ignored when input.timezone is set."`
 	Format        string              `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
 	FormatOptions ExportFormatOptions `json:"format_options,omitempty" doc:"the format's options"`
 	Filename      string              `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
 }
 
-func (ExportInput) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
-	return command.ArgsSchema[ExportInput](s)
+func (QueryExportRequestParams) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return command.ArgsSchema[QueryExportRequestParams](s)
 }
 
 // ExportFormatOptions are a format's options. Each applies to the formats it names;
@@ -64,7 +64,7 @@ type ExportFormatOptions struct {
 // check refuses what query refuses of the same query, a file name that cannot
 // be one, and an option that does not belong to the format. CSV is the only
 // format yet, so every option does.
-func (in ExportInput) check() error {
+func (in QueryExportRequestParams) check() error {
 	if err := in.runInput().check(); err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func (in ExportInput) check() error {
 // filename is the file's name: the one asked for, its surrounding spaces
 // dropped (check refused a bad one), or, when none is or it is blank, one made
 // from what it exports; with the format's extension.
-func (in ExportInput) filename(exported, ext string) string {
+func (in QueryExportRequestParams) filename(exported, ext string) string {
 	name := strings.TrimSpace(in.Filename)
 	if name == "" {
 		name = safeFilename(exported)
@@ -91,11 +91,11 @@ func (in ExportInput) filename(exported, ext string) string {
 }
 
 // runInput is the export's query as query takes it: no page.
-func (in ExportInput) runInput() QueryRunInput {
-	return QueryRunInput{QueryInput: in.QueryInput, Input: in.Input, Timezone: in.Timezone}.normalize()
+func (in QueryExportRequestParams) runInput() QueryRequestParams {
+	return QueryRequestParams{QueryDefinition: in.QueryDefinition, Input: in.Input, Timezone: in.Timezone}.normalize()
 }
 
-func (in ExportInput) options() ExportFormatOptions { return in.FormatOptions }
+func (in QueryExportRequestParams) options() ExportFormatOptions { return in.FormatOptions }
 
 // streamFunc runs the query, handing its result to h as it arrives: its header,
 // then each row.
@@ -104,7 +104,7 @@ type streamFunc func(h canalquery.Handler) error
 // runExport decides what runs before any file exists, so a query that is
 // refused, or does not compile, fails as it would in query; then writes the
 // rows as they arrive.
-func runExport(ctx context.Context, cc command.CommandContext, in ExportInput) (_ command.ExportLink, err error) {
+func runExport(ctx context.Context, cc command.CommandContext, in QueryExportRequestParams) (_ command.ExportLink, err error) {
 	var (
 		name      string
 		described []anfranode.ExploreColumn

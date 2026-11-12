@@ -40,7 +40,7 @@ export default function setup (kernel: FrameKernel): void {
       size: 'lg',
       mount: (root) => body.view(root, {
         plan: planned,
-        fetchPage: (page, signal) => kernel.call<BackendQueryResult>('core.submitQuery', { ...planned.request, page, pageSize: PAGE_SIZE }, signal),
+        fetchPage: (page, signal) => kernel.call<BackendQueryResult>('core.submitQuery', { ...planned.request, input: { ...planned.request.input, pagination: { page, pageSize: PAGE_SIZE } } }, signal),
         ...(canExport
           ? {
             download: (signal: AbortSignal) => {

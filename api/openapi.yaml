@@ -103,7 +103,7 @@ components:
             $ref: "#/components/schemas/Column"
           type: array
         input:
-          $ref: "#/components/schemas/RunInput"
+          $ref: "#/components/schemas/QueryInput"
           description: the query's input as it compiled, every default filled in, its seeds included. Send it back with the same query to compile it the same way again. Absent for a SQL query.
         sql:
           type: string
@@ -606,48 +606,6 @@ components:
             - none
           type: string
       type: object
-    ExportInput:
-      additionalProperties: false
-      properties:
-        data_source:
-          description: the data source a SQL query runs against
-          type: string
-        dataset:
-          description: the dataset an AQL query runs against
-          type: string
-        filename:
-          description: the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name
-          type: string
-        format:
-          default: csv
-          description: the file's format
-          enum:
-            - csv
-          type: string
-        format_options:
-          $ref: "#/components/schemas/ExportFormatOptions"
-          description: the format's options
-        input:
-          $ref: "#/components/schemas/RunInput"
-          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."
-        lang:
-          default: aql
-          description: the language the query is written in
-          enum:
-            - aql
-            - sql
-          type: string
-        query:
-          description: the query
-          minLength: 1
-          type: string
-        timezone:
-          deprecated: true
-          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
-          type: string
-      required:
-        - query
-      type: object
     ExportLink:
       additionalProperties: false
       properties:
@@ -781,7 +739,7 @@ components:
           description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
         input:
-          $ref: "#/components/schemas/RunInput"
+          $ref: "#/components/schemas/QueryInput"
           description: the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
         sql:
           type: string
@@ -814,6 +772,71 @@ components:
       required:
         - field
         - grain
+      type: object
+    QueryDefinition:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+      required:
+        - query
+      type: object
+    QueryExportRequestParams:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        filename:
+          description: the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name
+          type: string
+        format:
+          default: csv
+          description: the file's format
+          enum:
+            - csv
+          type: string
+        format_options:
+          $ref: "#/components/schemas/ExportFormatOptions"
+          description: the format's options
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          deprecated: true
+          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
+          type: string
+      required:
+        - query
       type: object
     QueryFilter:
       additionalProperties: false
@@ -863,25 +886,35 @@ components:
     QueryInput:
       additionalProperties: false
       properties:
-        data_source:
-          description: the data source a SQL query runs against
+        conditions:
+          description: AQL conditions ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryCondition"
+          type: array
+        dateDrills:
+          description: grain changes on date fields. The fields keep their column names.
+          items:
+            $ref: "#/components/schemas/QueryDateDrill"
+          type: array
+        filters:
+          description: conditions on fields, ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryFilter"
+          type: array
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+          description: "which rows to return: pageSize rows, from the 1-based page. Without it, every row."
+        seeds:
+          $ref: "#/components/schemas/Seeds"
+          description: values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time.
+        sorts:
+          description: sorts by result column, replacing the query's own
+          items:
+            $ref: "#/components/schemas/QuerySort"
+          type: array
+        timezone:
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default.
           type: string
-        dataset:
-          description: the dataset an AQL query runs against
-          type: string
-        lang:
-          default: aql
-          description: the language the query is written in
-          enum:
-            - aql
-            - sql
-          type: string
-        query:
-          description: the query
-          minLength: 1
-          type: string
-      required:
-        - query
       type: object
     QueryRecords:
       additionalProperties: false
@@ -900,55 +933,7 @@ components:
         - type
         - records
       type: object
-    QueryResult:
-      additionalProperties: false
-      properties:
-        aql:
-          description: the final AQL (with the Query Input applied). Absent for a SQL query.
-          type: string
-        columns:
-          description: one per field of result, in order
-          items:
-            $ref: "#/components/schemas/Column"
-          type: array
-        has_more:
-          description: whether there may be rows after this page. To get them, ask for the next page, or export the query.
-          type: boolean
-        input:
-          $ref: "#/components/schemas/RunInput"
-          description: the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
-        result:
-          $ref: "#/components/schemas/QueryRows"
-        sql:
-          type: string
-        timings:
-          $ref: "#/components/schemas/Timings"
-          description: the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps.
-      required:
-        - sql
-        - columns
-        - result
-        - has_more
-        - timings
-      type: object
-    QueryRows:
-      additionalProperties: false
-      properties:
-        fields:
-          items:
-            type: string
-          type: array
-        records:
-          description: one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are "NaN", "Infinity", and "-Infinity". The same holds at any depth of a list, map, or struct. A database NULL is null.
-          items:
-            items: {}
-            type: array
-          type: array
-      required:
-        - fields
-        - records
-      type: object
-    QueryRunInput:
+    QueryRequestParams:
       additionalProperties: false
       properties:
         data_source:
@@ -958,7 +943,7 @@ components:
           description: the dataset an AQL query runs against
           type: string
         input:
-          $ref: "#/components/schemas/RunInput"
+          $ref: "#/components/schemas/QueryInput"
           description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."
         lang:
           default: aql
@@ -990,6 +975,54 @@ components:
           type: string
       required:
         - query
+      type: object
+    QueryResult:
+      additionalProperties: false
+      properties:
+        aql:
+          description: the final AQL (with the Query Input applied). Absent for a SQL query.
+          type: string
+        columns:
+          description: one per field of result, in order
+          items:
+            $ref: "#/components/schemas/Column"
+          type: array
+        has_more:
+          description: whether there may be rows after this page. To get them, ask for the next page, or export the query.
+          type: boolean
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
+        result:
+          $ref: "#/components/schemas/QueryRows"
+        sql:
+          type: string
+        timings:
+          $ref: "#/components/schemas/Timings"
+          description: the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps.
+      required:
+        - sql
+        - columns
+        - result
+        - has_more
+        - timings
+      type: object
+    QueryRows:
+      additionalProperties: false
+      properties:
+        fields:
+          items:
+            type: string
+          type: array
+        records:
+          description: one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are "NaN", "Infinity", and "-Infinity". The same holds at any depth of a list, map, or struct. A database NULL is null.
+          items:
+            items: {}
+            type: array
+          type: array
+      required:
+        - fields
+        - records
       type: object
     QuerySort:
       additionalProperties: false
@@ -1151,39 +1184,6 @@ components:
         max_rows:
           format: int64
           type: integer
-      type: object
-    RunInput:
-      additionalProperties: false
-      properties:
-        conditions:
-          description: AQL conditions ANDed with the query's own filters
-          items:
-            $ref: "#/components/schemas/QueryCondition"
-          type: array
-        dateDrills:
-          description: grain changes on date fields. The fields keep their column names.
-          items:
-            $ref: "#/components/schemas/QueryDateDrill"
-          type: array
-        filters:
-          description: conditions on fields, ANDed with the query's own filters
-          items:
-            $ref: "#/components/schemas/QueryFilter"
-          type: array
-        pagination:
-          $ref: "#/components/schemas/Pagination"
-          description: "which rows to return: pageSize rows, from the 1-based page. Without it, every row."
-        seeds:
-          $ref: "#/components/schemas/Seeds"
-          description: values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time.
-        sorts:
-          description: sorts by result column, replacing the query's own
-          items:
-            $ref: "#/components/schemas/QuerySort"
-          type: array
-        timezone:
-          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default.
-          type: string
       type: object
     SearchInput:
       additionalProperties: false
@@ -1747,7 +1747,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryRunInput"
+              $ref: "#/components/schemas/QueryRequestParams"
         required: true
       responses:
         "200":
@@ -1840,7 +1840,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryRunInput"
+              $ref: "#/components/schemas/QueryRequestParams"
         required: true
       responses:
         "200":
@@ -1907,7 +1907,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ExportInput"
+              $ref: "#/components/schemas/QueryExportRequestParams"
         required: true
       responses:
         "200":
@@ -1985,7 +1985,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryInput"
+              $ref: "#/components/schemas/QueryDefinition"
         required: true
       responses:
         "200":

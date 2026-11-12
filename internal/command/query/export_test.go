@@ -120,11 +120,11 @@ func TestExportFailingQueryAbortsTheFile(t *testing.T) {
 // An export is refused as query refuses the same query; and without a store,
 // before it runs.
 func TestExportRefusals(t *testing.T) {
-	sql := ExportInput{QueryInput: QueryInput{Query: "select 1", Lang: "sql", DataSource: "demo"}, Timezone: "Asia/Ho_Chi_Minh"}
+	sql := QueryExportRequestParams{QueryDefinition: QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "demo"}, Timezone: "Asia/Ho_Chi_Minh"}
 	if err := sql.check(); field(err) != "timezone" {
 		t.Errorf("a time zone on SQL: %v, want refused on timezone", err)
 	}
-	if err := (ExportInput{QueryInput: QueryInput{Query: "q"}}).check(); field(err) != "dataset" {
+	if err := (QueryExportRequestParams{QueryDefinition: QueryDefinition{Query: "q"}}).check(); field(err) != "dataset" {
 		t.Errorf("no dataset: %v, want refused on dataset", err)
 	}
 	if err := command.RequireExports(command.CommandContext{}); !errors.Is(err, errcode.ExportsUnavailable) {
@@ -156,12 +156,12 @@ func TestExportFilename(t *testing.T) {
 		{"orders.CSV", "sales", "orders.CSV"},
 		{"orders.tsv", "sales", "orders.tsv.csv"},
 	} {
-		if got := (ExportInput{Filename: tc.asked}).filename(tc.exported, "csv"); got != tc.want {
+		if got := (QueryExportRequestParams{Filename: tc.asked}).filename(tc.exported, "csv"); got != tc.want {
 			t.Errorf("filename %q for %q = %q, want %q", tc.asked, tc.exported, got, tc.want)
 		}
 	}
 
-	in := ExportInput{QueryInput: QueryInput{Query: "q", Dataset: "d"}}
+	in := QueryExportRequestParams{QueryDefinition: QueryDefinition{Query: "q", Dataset: "d"}}
 	for _, bad := range []string{"..", "a/b", `a\b`, "tab\there", strings.Repeat("x", 256)} {
 		in.Filename = bad
 		if err := in.check(); field(err) != "filename" {

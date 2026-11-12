@@ -36,14 +36,10 @@ export interface RequestEntry {
   status: 'pending' | 'ok' | 'error' | 'aborted';
   /** The dataset it queried; absent for a call that queries none. */
   dataset?: string;
-  /** The query's declared AQL; filters, sorts and drills are in `input`. */
+  /** The query's declared AQL; filters, sorts, drills, its page and timezone are in `input`. */
   aql?: string;
   input?: QueryInput;
-  page?: number;
-  pageSize?: number;
   bustCache?: boolean;
-  /** The timezone it ran in; absent when the app declares none, leaving the backend's default. */
-  timezone?: string;
   /** For an export: the file format asked for, its options and the file's name. */
   format?: string;
   formatOptions?: ExportFormatOptions;
@@ -102,9 +98,6 @@ function describe (call: string, request: unknown): Partial<RequestEntry> {
         dataset: r.dataset,
         aql: r.aql,
         input: r.input,
-        page: r.page,
-        pageSize: r.pageSize,
-        timezone: r.timezone,
         bustCache: r.bustCache,
       };
     }
@@ -118,7 +111,6 @@ function describe (call: string, request: unknown): Partial<RequestEntry> {
         dataset: r.dataset,
         aql: r.aql,
         input: r.input,
-        timezone: r.timezone,
         format: r.format,
         formatOptions: r.formatOptions,
         filename: r.filename,

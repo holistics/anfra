@@ -7,7 +7,7 @@ import type { ColumnMeta, InspectedQuery } from '../../common/types';
 import type { TabContext } from '../../host/contributions';
 import type { Panel } from '../../host/panel';
 import { LINEAGE_TAB } from './model/types';
-import type { QueryInput } from './model/inputs';
+import type { QueryFilterSource } from './model/inputs';
 import { tokenize, type Lang } from './model/highlight';
 import { plural } from './model/format';
 import { LEVELS, TRUST_LEVELS, type Trust } from './model/trust';
@@ -390,7 +390,7 @@ export function stateDot (doc: Document, state: InspectedQuery['state']): HTMLEl
 }
 
 /** How many filters narrow a query now, each listed in the tooltip; an empty slot with none, so the icons after it stay in line. */
-export function filterIndicator (doc: Document, active: readonly QueryInput[]): HTMLElement {
+export function filterIndicator (doc: Document, active: readonly QueryFilterSource[]): HTMLElement {
   if (active.length === 0) return h(doc, 'span', { class: 'indicator filters', 'aria-hidden': 'true' });
   const lines = active.map((input) => {
     const source = input.kind === 'declared' ? 'query' : input.self ? 'itself' : input.source;

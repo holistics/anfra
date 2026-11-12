@@ -68,7 +68,7 @@ describe('request', () => {
 
     await app.execute();
 
-    expect(stub.queries[0]).toMatchObject({ page: 1, pageSize: 50 });
+    expect(stub.queries[0].input.pagination).toEqual({ page: 1, pageSize: 50 });
   });
 
   it('sends the aggregation on a mapped filter, the same key regardless of what it targets', async () => {
@@ -123,7 +123,7 @@ describe('request', () => {
 
     await app.execute();
 
-    expect(stub.queries[0].timezone).toBe('Asia/Singapore');
+    expect(stub.queries[0].input.timezone).toBe('Asia/Singapore');
   });
 
   it('ANDs conditions arriving through two mapped controls', async () => {
@@ -323,7 +323,7 @@ describe('execute', () => {
   });
 
   it('starts a paged query over at its first page on refresh, dropping the pages fetched since', async () => {
-    const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
+    const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.input.pagination?.page, pageSize: 2, numRows: 2 } }));
     const app = sdk.createApp();
     const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
 
@@ -332,7 +332,7 @@ describe('execute', () => {
     expect(query.result?.rows).toHaveLength(4);
     await app.refresh();
 
-    expect(stub.queries.map((request) => request.page)).toEqual([1, 2, 1]);
+    expect(stub.queries.map((request) => request.input.pagination?.page)).toEqual([1, 2, 1]);
     expect(query.page).toBe(1);
     expect(query.result?.rows).toHaveLength(2);
   });
@@ -411,7 +411,7 @@ describe('query.execute', () => {
 
   it('retries a failed run, and starts a paged query over at its first page', async () => {
     let fail = true;
-    const { stub, sdk } = build((request) => (fail ? new Error('boom') : { ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
+    const { stub, sdk } = build((request) => (fail ? new Error('boom') : { ...twoRows, meta: { page: request.input.pagination?.page, pageSize: 2, numRows: 2 } }));
     const app = sdk.createApp();
     const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
 
@@ -421,14 +421,14 @@ describe('query.execute', () => {
 
     await query.fetchMore();
     await query.execute({ force: true });
-    expect(stub.queries.map((request) => request.page)).toEqual([1, 1, 2, 1]);
+    expect(stub.queries.map((request) => request.input.pagination?.page)).toEqual([1, 1, 2, 1]);
     expect(query.result?.rows).toHaveLength(2);
   });
 });
 
 describe('paging', () => {
   it('keeps a query dirty when a page is fetched before the reader\'s change is applied', async () => {
-    const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
+    const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.input.pagination?.page, pageSize: 2, numRows: 2 } }));
     const app = sdk.createApp();
     const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
     const region = app.createFilter('region', { field: 'users.region' });
@@ -464,7 +464,7 @@ describe('paging', () => {
 
     await query.fetchMore();
 
-    expect(stub.queries.map((request) => [request.page, request.pageSize])).toEqual([[1, 2], [2, 2]]);
+    expect(stub.queries.map((request) => [request.input.pagination?.page, request.input.pagination?.pageSize])).toEqual([[1, 2], [2, 2]]);
     expect(query.result?.rows).toHaveLength(3);
     expect(query.result?.meta.numRows).toBe(3);
     expect(query.page).toBe(2);

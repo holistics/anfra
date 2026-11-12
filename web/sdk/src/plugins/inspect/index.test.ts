@@ -23,13 +23,13 @@ describe('inspect', () => {
 
   it("logs the frame's calls with what they asked and a few rows, and not the host page's", async () => {
     harness = await inspect();
-    const request = { dataset: 'sales', aql: 'explore sales {}', input: { filters: [] }, page: 1 };
+    const request = { dataset: 'sales', aql: 'explore sales {}', input: { filters: [], pagination: { page: 1, pageSize: 10 } } };
     await harness.frameCall('core.submitQuery', request);
     await harness.mounted.call('core.submitQuery', request);
     const entries = harness.state.requests.entries();
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
-      call: 'core.submitQuery', caller: 'frame', status: 'ok', dataset: 'sales', aql: 'explore sales {}', page: 1,
+      call: 'core.submitQuery', caller: 'frame', status: 'ok', dataset: 'sales', aql: 'explore sales {}', input: request.input,
       numRows: 2, columns: ['region', 'revenue'], preview: revenueResult.values,
     });
   });

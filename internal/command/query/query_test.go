@@ -19,7 +19,7 @@ import (
 // A run reaches anfra-node as the caller sent it, in the names they share: a
 // page size alone is the first page.
 func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
-	var in QueryRunInput
+	var in QueryRequestParams
 	if err := jsonkit.Unmarshal([]byte(`{
 		"query": "q", "dataset": "d",
 		"input": {
@@ -57,7 +57,7 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 	}
 
 	// Nothing set: nothing sent.
-	if got := (QueryRunInput{QueryInput: QueryInput{Query: "q", Dataset: "d"}}).run(); !reflect.DeepEqual(got, query.Run{}) {
+	if got := (QueryRequestParams{QueryDefinition: QueryDefinition{Query: "q", Dataset: "d"}}).run(); !reflect.DeepEqual(got, query.Run{}) {
 		t.Errorf("an unshaped run = %+v, want none", got)
 	}
 }
@@ -65,18 +65,18 @@ func TestQueryRunAsAnfraNodeTakesIt(t *testing.T) {
 // The inputs beside input, deprecated, move into it, unless input sets them:
 // input is what a caller replaying an answer means.
 func TestDeprecatedInputsMoveIntoInput(t *testing.T) {
-	q := QueryInput{Query: "q", Dataset: "d"}
+	q := QueryDefinition{Query: "q", Dataset: "d"}
 	for _, tc := range []struct {
 		name string
-		in   QueryRunInput
-		want RunInput
+		in   QueryRequestParams
+		want QueryInput
 	}{
-		{"beside input", QueryRunInput{QueryInput: q, Page: 2, PageSize: 20, Timezone: "Asia/Ho_Chi_Minh"},
-			RunInput{Pagination: &Pagination{Page: 2, PageSize: 20}, Timezone: "Asia/Ho_Chi_Minh"}},
-		{"both ways: input's", QueryRunInput{QueryInput: q, Page: 2, PageSize: 20, Timezone: "Asia/Ho_Chi_Minh",
-			Input: RunInput{Pagination: &Pagination{Page: 3, PageSize: 50}, Timezone: "Europe/Paris"}},
-			RunInput{Pagination: &Pagination{Page: 3, PageSize: 50}, Timezone: "Europe/Paris"}},
-		{"neither", QueryRunInput{QueryInput: q}, RunInput{}},
+		{"beside input", QueryRequestParams{QueryDefinition: q, Page: 2, PageSize: 20, Timezone: "Asia/Ho_Chi_Minh"},
+			QueryInput{Pagination: &Pagination{Page: 2, PageSize: 20}, Timezone: "Asia/Ho_Chi_Minh"}},
+		{"both ways: input's", QueryRequestParams{QueryDefinition: q, Page: 2, PageSize: 20, Timezone: "Asia/Ho_Chi_Minh",
+			Input: QueryInput{Pagination: &Pagination{Page: 3, PageSize: 50}, Timezone: "Europe/Paris"}},
+			QueryInput{Pagination: &Pagination{Page: 3, PageSize: 50}, Timezone: "Europe/Paris"}},
+		{"neither", QueryRequestParams{QueryDefinition: q}, QueryInput{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.in.normalize()
@@ -90,20 +90,20 @@ func TestDeprecatedInputsMoveIntoInput(t *testing.T) {
 // A refusal names what the caller sent: input's field, or the deprecated one
 // it came from.
 func TestRunInputRefusals(t *testing.T) {
-	aql := QueryInput{Query: "q", Dataset: "d"}
-	sql := QueryInput{Query: "select 1", Lang: "sql", DataSource: "s"}
+	aql := QueryDefinition{Query: "q", Dataset: "d"}
+	sql := QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "s"}
 	for _, tc := range []struct {
 		name  string
-		in    QueryRunInput
+		in    QueryRequestParams
 		field string
 	}{
-		{"a page without its size", QueryRunInput{QueryInput: aql, Input: RunInput{Pagination: &Pagination{Page: 2}}}, "input.pagination"},
-		{"a page without its size, the old way", QueryRunInput{QueryInput: aql, Page: 2}, "page_size"},
-		{"not a time zone", QueryRunInput{QueryInput: aql, Input: RunInput{Timezone: "Mars/Olympus"}}, "input.timezone"},
-		{"not a time zone, the old way", QueryRunInput{QueryInput: aql, Timezone: "Mars/Olympus"}, "timezone"},
-		{"not a reference time", QueryRunInput{QueryInput: aql, Input: RunInput{Seeds: &Seeds{ReferenceTime: "yesterday"}}}, "input.seeds.referenceTime"},
-		{"a page for SQL", QueryRunInput{QueryInput: sql, Input: RunInput{Pagination: &Pagination{PageSize: 10}}}, "input.pagination"},
-		{"seeds for SQL", QueryRunInput{QueryInput: sql, Input: RunInput{Seeds: &Seeds{}}}, "input.seeds"},
+		{"a page without its size", QueryRequestParams{QueryDefinition: aql, Input: QueryInput{Pagination: &Pagination{Page: 2}}}, "input.pagination"},
+		{"a page without its size, the old way", QueryRequestParams{QueryDefinition: aql, Page: 2}, "page_size"},
+		{"not a time zone", QueryRequestParams{QueryDefinition: aql, Input: QueryInput{Timezone: "Mars/Olympus"}}, "input.timezone"},
+		{"not a time zone, the old way", QueryRequestParams{QueryDefinition: aql, Timezone: "Mars/Olympus"}, "timezone"},
+		{"not a reference time", QueryRequestParams{QueryDefinition: aql, Input: QueryInput{Seeds: &Seeds{ReferenceTime: "yesterday"}}}, "input.seeds.referenceTime"},
+		{"a page for SQL", QueryRequestParams{QueryDefinition: sql, Input: QueryInput{Pagination: &Pagination{PageSize: 10}}}, "input.pagination"},
+		{"seeds for SQL", QueryRequestParams{QueryDefinition: sql, Input: QueryInput{Seeds: &Seeds{}}}, "input.seeds"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.in.normalize().check()
@@ -118,9 +118,9 @@ func TestRunInputRefusals(t *testing.T) {
 // An answer's input is the input as the query ran: the first page made
 // explicit, the default time zone, and anfra-node's seeds.
 func TestInputAsItRan(t *testing.T) {
-	in := RunInput{Pagination: &Pagination{PageSize: 20}}
+	in := QueryInput{Pagination: &Pagination{PageSize: 20}}
 	got := in.ran(&anfranode.Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"})
-	want := &RunInput{Pagination: &Pagination{Page: 1, PageSize: 20}, Timezone: "Etc/UTC", Seeds: &Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"}}
+	want := &QueryInput{Pagination: &Pagination{Page: 1, PageSize: 20}, Timezone: "Etc/UTC", Seeds: &Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ran = %+v, want %+v", got, want)
 	}
@@ -128,7 +128,7 @@ func TestInputAsItRan(t *testing.T) {
 		t.Error("ran changed the input it was given")
 	}
 	// An anfra-node that returns no seeds: the ones sent, if any.
-	if got := (RunInput{Seeds: &Seeds{ReferenceTime: "2026-01-01T00:00:00Z"}}).ran(nil); got.Seeds.ReferenceTime != "2026-01-01T00:00:00Z" {
+	if got := (QueryInput{Seeds: &Seeds{ReferenceTime: "2026-01-01T00:00:00Z"}}).ran(nil); got.Seeds.ReferenceTime != "2026-01-01T00:00:00Z" {
 		t.Errorf("seeds = %+v, want the ones sent", got.Seeds)
 	}
 }
@@ -268,7 +268,7 @@ func TestCompiledColumns(t *testing.T) {
 
 // A `limit:` directive is taken out of the AQL, and becomes the run's row limit.
 func TestAQLTakesTheLimitOut(t *testing.T) {
-	if aql, limit, err := (QueryInput{Query: "explore { products } limit: 5", Lang: "aql", Dataset: "d"}).aql(); err != nil || limit != 5 || strings.Contains(aql, "limit") {
+	if aql, limit, err := (QueryDefinition{Query: "explore { products } limit: 5", Lang: "aql", Dataset: "d"}).aql(); err != nil || limit != 5 || strings.Contains(aql, "limit") {
 		t.Errorf("AQL against a dataset: %q, %d, %v", aql, limit, err)
 	}
 }

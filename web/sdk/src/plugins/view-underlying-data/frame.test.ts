@@ -136,10 +136,9 @@ describe('the modal', () => {
       aql: expect.stringContaining('amount: orders.amount'),
       input: {
         filters: [{ field: 'users.region', operator: 'is', values: ['APAC'] }], conditions: [], sorts: expect.arrayContaining([{ field: 'created_at', direction: 'desc' }]), dateDrills: [],
+        timezone: 'Asia/Singapore',
+        pagination: { page: 1, pageSize: PAGE_SIZE },
       },
-      timezone: 'Asia/Singapore',
-      page: 1,
-      pageSize: PAGE_SIZE,
     });
     const rows = () => [...root.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((td) => td.textContent));
     expect(rows()).toEqual([
@@ -152,7 +151,7 @@ describe('the modal', () => {
     expect(more.hidden).toBe(false);
     more.click();
     await settle();
-    expect(underlying[1].page).toBe(2);
+    expect(underlying[1].input.pagination?.page).toBe(2);
     expect(root.querySelectorAll('tbody tr')).toHaveLength(3);
     expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('All 3 rows');
     expect(more.hidden).toBe(true);

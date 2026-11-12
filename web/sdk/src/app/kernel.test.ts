@@ -34,8 +34,8 @@ describe('kernel.queryRequest', () => {
         conditions: [],
         sorts: [{ field: 'region', direction: 'desc' }],
         dateDrills: [],
+        timezone: 'Asia/Singapore',
       },
-      timezone: 'Asia/Singapore',
     });
   });
 

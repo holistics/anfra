@@ -48,7 +48,7 @@ func sqlRun(t *testing.T, rows int, limits query.Limits, failure ...string) (Que
 func sqlRunObserved(t *testing.T, rows int, limits query.Limits, obs command.QueryObserver, failure ...string) (QueryRun, *map[string]any) {
 	t.Helper()
 	cc, sent := canalContext(t, rows, limits, obs, failure...)
-	run, err := newQueryRun(context.Background(), cc, QueryRunInput{QueryInput: QueryInput{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}})
+	run, err := newQueryRun(context.Background(), cc, QueryRequestParams{QueryDefinition: QueryDefinition{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestADataSourceFailureIsQueryFailed(t *testing.T) {
 // What the query cannot run on is refused when the run is made, before any work.
 func TestARunRefusesBeforeItWorks(t *testing.T) {
 	cc := command.CommandContext{DataSources: datasource.Set{}}
-	_, err := newQueryRun(context.Background(), cc, QueryRunInput{QueryInput: QueryInput{Query: "select 1", Lang: "sql", DataSource: "nope"}})
+	_, err := newQueryRun(context.Background(), cc, QueryRequestParams{QueryDefinition: QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "nope"}})
 	if field(err) != "data_source" {
 		t.Errorf("err = %v, want data_source refused", err)
 	}
@@ -327,7 +327,7 @@ func TestTheQueryObserverIsToldOfAnExport(t *testing.T) {
 	obs := &told{}
 	cc, _ := canalContext(t, 3, query.Limits{}, obs)
 	cc.Exports = &memStore{}
-	if _, err := runExport(context.Background(), cc, ExportInput{QueryInput: QueryInput{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}}); err != nil {
+	if _, err := runExport(context.Background(), cc, QueryExportRequestParams{QueryDefinition: QueryDefinition{Query: "select id from t", Lang: "sql", DataSource: "warehouse"}}); err != nil {
 		t.Fatal(err)
 	}
 	want := "compiled true on warehouse: select id from t|on the warehouse true as job_42|finished true: 3 rows, 2048 bytes, 8 steps, "

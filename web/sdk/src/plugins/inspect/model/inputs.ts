@@ -7,7 +7,7 @@ import { controlMappings, crossFilters } from './checks';
 import { formatCondition } from './format';
 
 /** One thing that filters a query: its own `filters` block, a control mapped to it, or a query cross-filtering it. */
-export interface QueryInput {
+export interface QueryFilterSource {
   kind: 'declared' | 'control' | 'crossFilter';
   /** The control or query it comes from; the query itself for a self cross-filter. */
   source: string;
@@ -60,8 +60,8 @@ const selectionText = (selection: Selection | undefined) =>
       `${selection.rowCount} rows`
     : 'no selection';
 
-export function queryInputs (app: InspectedApp, query: string): QueryInput[] {
-  const controls: QueryInput[] = controlMappings(app)
+export function queryInputs (app: InspectedApp, query: string): QueryFilterSource[] {
+  const controls: QueryFilterSource[] = controlMappings(app)
     .filter((m) => m.to.name === query)
     .map((m) => {
       const control = app.controls[m.from.name];
@@ -80,7 +80,7 @@ export function queryInputs (app: InspectedApp, query: string): QueryInput[] {
         pending: control?.isDirty && current !== value ? current : undefined,
       };
     });
-  const crosses: QueryInput[] = crossFilters(app)
+  const crosses: QueryFilterSource[] = crossFilters(app)
     .filter((c) => c.to.name === query)
     .map((c) => {
       const from = (selection: Selection | undefined) =>
@@ -199,7 +199,7 @@ const CONDITION = /^(.*?)\s+(==|!=|>=|<=|>|<|not in|in|is not|is|like|not like|m
  * it filters and the condition on it. An entry that isn't `field operator value` keeps its whole
  * text as the field.
  */
-export function declaredFilters (source: string | undefined): QueryInput[] {
+export function declaredFilters (source: string | undefined): QueryFilterSource[] {
   const aql = source && withoutComments(source);
   const at = aql?.search(/\bfilters\s*\{/);
   if (!aql || at === undefined || at < 0) return [];
@@ -221,5 +221,5 @@ export function declaredFilters (source: string | undefined): QueryInput[] {
 }
 
 /** Whether a filter narrows the query now: a declared one always does, an input only once it has a value. */
-export const isActive = (input: QueryInput) =>
+export const isActive = (input: QueryFilterSource) =>
   input.kind === 'declared' || (input.value !== 'not set' && input.value !== 'no selection');

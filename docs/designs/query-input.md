@@ -1,6 +1,6 @@
 # A query's input
 
-> Status: 2026-11-12. Partly built: `input` holds the page, the time zone and the seeds, the deprecated inputs beside it move into it, and answers return it. The CLI sets each of `input`'s fields by a flag of its own (`--input.pagination.page-size`), and matches flags ignoring case, `_` and `-`. Not yet: the SDK sending and replaying `input`, and suggesting the name meant when one is refused. Built for the [query cache](query-cache.md).
+> Status: 2026-11-12. Partly built: `input` holds the page, the time zone and the seeds, the deprecated inputs beside it move into it, and answers return it. The CLI sets each of `input`'s fields by a flag of its own (`--input.pagination.page-size`), and matches flags ignoring case, `_` and `-`. The SDK sends a query's input in `input`, keeps the seeds a run returned, and sends them with its next page and its export; a run of its own sends none. Not yet: suggesting the name meant when one is refused. Built for the [query cache](query-cache.md).
 
 A query has two parts: its text (AQL, or SQL), and everything else a caller chooses about running it. The second part is one input, `input`, and this doc says what goes in it, and why it is kept together.
 

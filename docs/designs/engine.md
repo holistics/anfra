@@ -17,7 +17,7 @@ The public packages are `engine` and `shared/*` (`apperr`, `appstep`, `apptracin
 | `Governed(attrs)`, `Ungoverned()` | state how the caller's queries may read the data |
 | `Dispatch(ctx, inv, req)` | run one command |
 | `Ops()` | every command as an `apikit` op (`core.<command>`), to serve as it is |
-| `QueryOp`, `ShowOp`, … | refs to the ops a platform authorizes on, with their input types (`QueryRunInput`, …), to mount them by |
+| `QueryOp`, `ShowOp`, … | refs to the ops a platform authorizes on, with their input types (`QueryRequestParams`, …), to mount them by |
 | `Describe()`, `Commands()`, `ErrorCodes()` | what there is, for a platform to publish and to test against |
 
 The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are aliases of the internal ones, not wrappers: nothing converts between them, so nothing can drift.

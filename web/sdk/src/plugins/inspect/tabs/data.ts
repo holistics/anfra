@@ -71,7 +71,7 @@ function rowCount (shown: number, total: number | undefined): string {
  * (a later page isn't the start of the table), and not shared with another query, which may have made it.
  */
 export function latestRows (requests: readonly { entry: RequestEntry, shared: boolean }[] | undefined): RequestEntry | undefined {
-  return requests?.find(({ entry, shared }) => !shared && entry.status === 'ok' && entry.preview && entry.columns && !(entry.page && entry.page > 1))?.entry;
+  return requests?.find(({ entry, shared }) => !shared && entry.status === 'ok' && entry.preview && entry.columns && (entry.input?.pagination?.page ?? 1) === 1)?.entry;
 }
 
 /** Which reveal each mount's Data tab has brought into view, so a tab switched back to doesn't flash it again. */

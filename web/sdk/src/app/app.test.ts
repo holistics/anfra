@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSdk } from './sdk';
 import { ValidationError } from '../common/errors';
 import { numberTypes, salesDataset, stubBackend, testUser, textTypes } from './testSupport';
-import type { Backend } from '../common/types';
+import type { Backend, BackendExportRequest, BackendQueryRequest } from '../common/types';
 import type { App } from './app';
 
 function sdk () {
@@ -519,6 +519,37 @@ describe('retry', () => {
     submitQuery.mockClear();
     await app.execute();
     expect(submitQuery).not.toHaveBeenCalled();
+  });
+
+  // A run's seeds (the time it ran as of) come back with its result. Its next page and its export
+  // send them, so they continue the result on screen; a run of its own sends none, so it is as of now.
+  it('continues a result as of its run: the next page and an export send its seeds, a new run none', async () => {
+    let run = 0;
+    const submitQuery = vi.fn(async (request: BackendQueryRequest) => {
+      const page = request.input.pagination?.page;
+      if (page === 1) run += 1;
+      return {
+        values: [['1'], ['2']],
+        columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }],
+        meta: { page, pageSize: 2, numRows: 2 },
+        // As the query ran: its seeds filled in, the first page's kept by the next.
+        input: { ...request.input, seeds: request.input.seeds ?? { referenceTime: `run ${run}` } },
+      };
+    });
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: { submitQuery, fieldSuggestions: async () => [] } as Backend }).createApp();
+    const revenue = app.createQuery('revenue', { dataset: 'sales', aql: 'explore { measures { total: orders | sum(orders.amount) } }', pageSize: 2 });
+
+    await app.execute();
+    await revenue.fetchMore();
+    const send = vi.fn(async (_request: BackendExportRequest) => ({ url: 'u', filename: 'f', format: 'csv', rowCount: 4, expiresAt: new Date() }));
+    await app.exportQuery(revenue, {}, send);
+    await app.refresh();
+
+    const sent = submitQuery.mock.calls.map(([request]) => [request.input.pagination?.page, request.input.seeds]);
+    expect(sent).toEqual([[1, undefined], [2, { referenceTime: 'run 1' }], [1, undefined]]);
+    expect(send.mock.calls[0][0].input).toMatchObject({ seeds: { referenceTime: 'run 1' } });
+    expect(send.mock.calls[0][0].input).not.toHaveProperty('pagination');
+    expect(revenue.ranInput?.seeds).toEqual({ referenceTime: 'run 2' });
   });
 
   it('keeps the loaded pages when a fetchMore failed: execute() does not rerun it', async () => {
