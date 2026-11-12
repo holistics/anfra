@@ -43,6 +43,12 @@ export class Query extends Observable {
 
   readonly name: string;
 
+  /**
+   * @internal Which query of its name: its app numbers them as they are created, so one removed and
+   * created again by its name is told apart from the first, in the stamp on its calls.
+   */
+  readonly id: number;
+
   private _declaration: QueryDeclaration;
 
   private _dataset: DatasetIndex;
@@ -89,11 +95,12 @@ export class Query extends Observable {
   /** @internal Set by the executor so `abort()` can reach the in-flight request. */
   controller?: AbortController;
 
-  constructor (name: string, app: AppContext & Observable, declaration: QueryDeclaration) {
+  constructor (name: string, app: AppContext & Observable, declaration: QueryDeclaration, id: number) {
     // Parented to the app so one `app.subscribe` sees every entity's changes.
     super(app);
     assertDeclaration(name, declaration);
     this.name = name;
+    this.id = id;
     this.app = app;
     this._declaration = declaration;
     this._dataset = app.datasetIndex(declaration.dataset, name);

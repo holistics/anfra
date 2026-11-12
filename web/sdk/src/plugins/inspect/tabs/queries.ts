@@ -17,7 +17,7 @@ import {
   controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryFilterSource,
 } from '../model/inputs';
 import { queryCounts } from '../model/problems';
-import { attributeRequests, type QueryRef, type RequestEntry } from '../model/requests';
+import { attributeRequests, type RemovedQuery, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
 import type { QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
@@ -446,7 +446,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     return entityRow(key, summary, () => requestList(key, requests, false));
   }
 
-  function appSection (app: InspectedApp, index: number, several: boolean, byQuery: Map<string, Attributed[]>, removed: readonly QueryRef[], structure: InspectedStructure | undefined): HTMLElement {
+  function appSection (app: InspectedApp, index: number, several: boolean, byQuery: Map<string, Attributed[]>, removed: readonly RemovedQuery[], structure: InspectedStructure | undefined): HTMLElement {
     const gone = removed.filter((ref) => ref.app === index);
     const search = view.search.trim();
     const filtering = search !== '' || view.filter !== 'all';
@@ -470,7 +470,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         () => selections.map(([label, selection]) => selectionCard(label, selection!))),
       // Not filtered: what a removed query asked is history, kept until the log drops it.
       view.filter === 'all' && gone.length > 0 && section('removed', index, 'Removed queries', gone.length, undefined, 'None.',
-        () => gone.map((ref) => removedRow(index, ref.name, byQuery.get(`${index}/${ref.name}`) ?? []))));
+        () => gone.map((query) => removedRow(index, query.name, query.requests))));
   }
 
   // The head stays as it is, so typing keeps its focus: a redraw sets its value and counts.

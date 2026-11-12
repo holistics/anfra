@@ -240,22 +240,46 @@ export function createRequestLog ({ limit = 200, previewRows = 20 }: RecordOptio
 export interface QueryRef {
   app: number;
   name: string;
+  /** Which query of that name; absent from an older frame's stamp. */
+  id?: number;
 }
 
 /** The query a request was stamped with, if any. */
 export function queryOf (entry: Pick<RequestEntry, 'stamp'>): QueryRef | undefined {
-  return entry.stamp ? { app: entry.stamp.app, name: entry.stamp.query } : undefined;
+  if (!entry.stamp) return undefined;
+  const { app, query, id } = entry.stamp;
+  return { app, name: query, ...(id !== undefined && { id }) };
 }
 
 /**
- * Each query's requests, newest first, keyed `<app>/<name>`; the requests no query claims; and the
- * queries that have requests but are no longer in their app (removed), in the order first seen.
- * By the query the frame stamped each with, so a query's history survives edits of its AQL.
+ * Whether the query a request was stamped with is still in its app: its name is there, and, when
+ * both sides say, with the same id. A query removed and created again by its name is another one.
+ */
+export function isCurrent (ref: QueryRef, apps: readonly InspectedApp[]): boolean {
+  const queries = apps[ref.app]?.queries ?? {};
+  if (!Object.hasOwn(queries, ref.name)) return false;
+  const { id } = queries[ref.name]!;
+  return ref.id === undefined || id === undefined || ref.id === id;
+}
+
+/** A query its app removed, and the requests it made, newest first. */
+export interface RemovedQuery {
+  app: number;
+  name: string;
+  requests: { entry: RequestEntry }[];
+}
+
+/**
+ * Each current query's requests, newest first, keyed `<app>/<name>`; the requests no query claims;
+ * and the queries that have requests but are no longer in their app (removed), in the order first
+ * seen, each name once. By the query the frame stamped each with, so a query's history survives
+ * edits of its AQL, and a query created again by its name starts with none.
  */
 export function attributeRequests (entries: readonly RequestEntry[], apps: readonly InspectedApp[]) {
   const byQuery = new Map<string, { entry: RequestEntry }[]>();
   const other: RequestEntry[] = [];
-  const removed: QueryRef[] = [];
+  const removed: RemovedQuery[] = [];
+  const removedByKey = new Map<string, RemovedQuery>();
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i] as RequestEntry;
     const ref = queryOf(entry);
@@ -264,13 +288,18 @@ export function attributeRequests (entries: readonly RequestEntry[], apps: reado
       continue;
     }
     const key = `${ref.app}/${ref.name}`;
-    const list = byQuery.get(key);
-    if (list) {
-      list.push({ entry });
+    if (isCurrent(ref, apps)) {
+      byQuery.set(key, [...(byQuery.get(key) ?? []), { entry }]);
       continue;
     }
-    byQuery.set(key, [{ entry }]);
-    if (!Object.hasOwn(apps[ref.app]?.queries ?? {}, ref.name)) removed.push(ref);
+    const gone = removedByKey.get(key);
+    if (gone) {
+      gone.requests.push({ entry });
+      continue;
+    }
+    const query: RemovedQuery = { app: ref.app, name: ref.name, requests: [{ entry }] };
+    removedByKey.set(key, query);
+    removed.push(query);
   }
   return { byQuery, other, removed };
 }

@@ -11,7 +11,7 @@ import { changesOf } from '../model/changes';
 import { formatAgo, formatTime, plural, usageOf } from '../model/format';
 import { controlTargets } from '../model/inputs';
 import { type Problem, problemsOf, queryCounts } from '../model/problems';
-import { queryOf, type RequestEntry } from '../model/requests';
+import { isCurrent, queryOf, type RequestEntry } from '../model/requests';
 import {
   appTrust, LEVELS, TRUST_LEVELS, type Trust,
 } from '../model/trust';
@@ -169,7 +169,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     const last = requests.findLast((entry) => entry.call === 'core.submitQuery' && entry.status !== 'pending');
     const stamped = last && queryOf(last);
     // Linked only while the app still has it.
-    const lastQuery = stamped && Object.hasOwn(apps[stamped.app]?.queries ?? {}, stamped.name) ? stamped : undefined;
+    const lastQuery = stamped && isCurrent(stamped, apps) ? stamped : undefined;
     const first = problems[0];
     const queries = [
       `${counts.success} ok`,

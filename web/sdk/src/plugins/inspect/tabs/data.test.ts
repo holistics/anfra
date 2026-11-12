@@ -91,6 +91,15 @@ describe('Data', () => {
     expect(byTestId(await open(cardOf(root, 'revenue')), 'table-gone')).not.toBeNull();
   });
 
+  it('shows none of the rows of an earlier query of the same name', async () => {
+    const app = salesApp();
+    app.queries.revenue = { ...app.queries.revenue!, id: 2 };
+    harness = await inspect({ tab: DATA_TAB, snapshot: salesSnapshot([app]) });
+    await harness.frameCall('core.submitQuery', REVENUE, { ...REVENUE_STAMP, id: 1 });
+    const { root } = await harness.tab(DATA_TAB);
+    expect(byTestId(await open(cardOf(root, 'revenue')), 'table-gone')).not.toBeNull();
+  });
+
   it('skips a later page', async () => {
     harness = await inspect({ tab: DATA_TAB });
     await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);

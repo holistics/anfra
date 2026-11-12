@@ -193,6 +193,19 @@ describe('Queries', () => {
     expect(byTestId(root, 'section-other')).toBeNull();
   });
 
+  it('starts a query created again by its name with no requests, the earlier one\'s under removed', async () => {
+    const app = salesApp();
+    app.queries.revenue = { ...app.queries.revenue!, id: 2 };
+    harness = await inspect({ tab: QUERIES, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(QUERIES);
+    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} }, { ...REVENUE_STAMP, id: 1 });
+    const row = await open(byTestId(root, 'query-0/revenue'));
+    expect(byTestId(row, 'requests')).toBeNull();
+    expect(byTestId(row, 'general')?.textContent).not.toMatch(/\d+ ms/);
+    const removed = byTestId(root, 'section-removed-0')!;
+    expect(byTestId(removed, 'removed-0/revenue')?.querySelector('summary')?.textContent).toContain('1 request');
+  });
+
   it('lists requests no query claims under Other requests', async () => {
     harness = await inspect({ tab: QUERIES });
     const { root } = await harness.tab(QUERIES);

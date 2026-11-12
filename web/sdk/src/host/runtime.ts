@@ -184,18 +184,24 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
   return answers;
 }
 
+const isIndex = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
+
 /**
- * A frame's stamp, if it is one: an app's index, a query's name, and maybe the variant of the query
- * it is. The frame is untrusted.
+ * A frame's stamp, if it is one: an app's index, a query's name, and maybe the query's id and the
+ * variant of the query it is. The frame is untrusted.
  */
 function checkStamp (stamp: unknown): QueryStamp | undefined {
   if (typeof stamp !== 'object' || stamp === null) return undefined;
-  const { app, query, variant } = stamp as { app?: unknown, query?: unknown, variant?: unknown };
-  if (typeof app !== 'number' || !Number.isInteger(app) || app < 0) return undefined;
+  const {
+    app, query, id, variant,
+  } = stamp as { app?: unknown, query?: unknown, id?: unknown, variant?: unknown };
+  if (!isIndex(app)) return undefined;
   if (typeof query !== 'string' || !query || query.length > 512) return undefined;
-  if (variant === undefined) return { app, query };
-  if (typeof variant !== 'string' || !variant || variant.length > 64) return undefined;
-  return { app, query, variant };
+  if (id !== undefined && !isIndex(id)) return undefined;
+  if (variant !== undefined && (typeof variant !== 'string' || !variant || variant.length > 64)) return undefined;
+  return {
+    app, query, ...(id !== undefined && { id }), ...(variant !== undefined && { variant }),
+  };
 }
 
 export function createHost (options: HostOptions): Host {

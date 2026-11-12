@@ -44,14 +44,14 @@ function setup (options: StubOptions = { exportQuery: link }, title?: string) {
 }
 
 describe('query.export', () => {
-  it('stamps its run, its pages and its export with the app and the query, for the host\'s request log', async () => {
+  it('stamps its run, its pages and its export with the app, the query and its id, for the host\'s request log', async () => {
     const { app, query, frame } = setup();
     await app.execute();
     await query.export();
 
     expect(frame.calls.map((call) => [call.name, call.stamp])).toEqual([
-      ['core.submitQuery', { app: 0, query: 'revenue' }],
-      ['export.query', { app: 0, query: 'revenue' }],
+      ['core.submitQuery', { app: 0, query: 'revenue', id: 1 }],
+      ['export.query', { app: 0, query: 'revenue', id: 1 }],
     ]);
   });
 

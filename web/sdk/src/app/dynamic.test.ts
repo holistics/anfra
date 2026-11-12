@@ -454,6 +454,22 @@ describe('removing', () => {
     expect(() => app.createFilter('region', { type: 'string' })).not.toThrow();
   });
 
+  it('gives a query created again by its name a new id, in its stamp and its snapshot', async () => {
+    const { stub, app } = build();
+    const submit = vi.spyOn(stub.backend, 'submitQuery');
+    const first = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+    first.remove();
+    const again = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+
+    expect(again.id).not.toBe(first.id);
+    expect(submit.mock.calls.map((call) => call[2])).toEqual([
+      { app: 0, query: 'chart', id: first.id }, { app: 0, query: 'chart', id: again.id },
+    ]);
+    expect(app.toInspectJSON().queries.chart?.id).toBe(again.id);
+  });
+
   it('aborts a query\'s run in flight and drops its late result without notifying', async () => {
     const pending = deferred<BackendQueryResult>();
     let seen: AbortSignal | undefined;

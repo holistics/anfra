@@ -69,7 +69,7 @@ The handler's second argument, `call`, is the call's context:
 | `caller` | Who made the call: `{ kind: 'frame' }`, `{ kind: 'host' }` or `{ kind: 'plugin', plugin }`. |
 | `origin`, `chain` | Who started it, and every hop since. A call your plugin makes for the frame has your plugin as `caller` and the frame as `origin`. |
 | `mount` | The frame it's about: its `document` (the host page's), `call`, `emit`, `on`, `onReady`. |
-| `stamp` | The query the frame says the call is for, `{ app, query, variant? }` (the app's index and the query's name): set on a query's run, page and export. A plugin that sends its own variant of a query adds `variant`, a short name such as `underlying` for the rows behind a point. Show such a call under the query, but don't take it for the query's own result or run. The stamp is the frame's word, checked only for its shape: show a call under it, never decide by it. |
+| `stamp` | The query the frame says the call is for, `{ app, query, id?, variant? }`: the app's index, the query's name, and the query's id, which tells a query apart from an earlier one its app removed under the same name. Set on a query's run, page and export. A plugin that sends its own variant of a query adds `variant`, a short name such as `underlying` for the rows behind a point. Show such a call under the query, but don't take it for the query's own result or run. The stamp is the frame's word, checked only for its shape: show a call under it, never decide by it. |
 | `call(name, request?, { signal?, asOrigin? })` | Make another plugin's call through the pipeline, as your plugin. With `asOrigin: true`, it is refused if the call's origin (the frame) couldn't make it itself: use it when you forward a name or request the frame chose. |
 
 ### Errors
@@ -151,7 +151,7 @@ What the kernel gives a setup:
 |---|---|
 | `provide(api)` | Adds `Anfra.<plugin>`. Once. |
 | `provideOnQuery(factory)`, `provideOnControl(factory)` | Adds `query.<plugin>` / `control.<plugin>` to every one, made the first time it is read. |
-| `call(name, request?, signal?, stamp?)` | Makes a call by its full name (`notes.list`, `core.submitQuery`): any call the frame may make. `stamp` (`{ app, query, variant? }`) names the query the call is for, so the host shows it under that query. Give `variant` a short name when the call is your plugin's variant of the query rather than the query itself, so the host doesn't show it as the query's result. |
+| `call(name, request?, signal?, stamp?)` | Makes a call by its full name (`notes.list`, `core.submitQuery`): any call the frame may make. `stamp` (`{ app, query, id?, variant? }`) names the query the call is for, so the host shows it under that query. Take `id` from the query (`query.id`), so the call isn't shown under a later query of the same name. Give `variant` a short name when the call is your plugin's variant of the query rather than the query itself, so the host doesn't show it as the query's result. |
 | `queryRequest(query)` | What a query runs with now: its dataset, AQL, input (mapped controls, the selection, the reader's sort, date drills) and timezone, as its own run is built. Change what you need and send it as `core.submitQuery` to run a variant of the query through the pipeline. |
 | `emit(name, payload?)` | Sends the host one of this plugin's events, by its short name. |
 | `handle(name, handler)` | Answers a call the host makes into the frame (`mounted.call('notes.focus')`). |

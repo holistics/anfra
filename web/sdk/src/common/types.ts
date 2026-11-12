@@ -558,6 +558,8 @@ export type LocateTarget =
   | { app: number, kind: LocateKind, name: string };
 
 export interface InspectedQuery {
+  /** Which query of its name, as its calls are stamped; absent from an older frame. */
+  id?: number;
   state: QueryState;
   /** True when re-running would produce something new. */
   isDirty: boolean;
@@ -816,6 +818,11 @@ export type LineageCard = Schemas['DiagramCard'];
 export interface QueryStamp {
   app: number;
   query: string;
+  /**
+   * Which query of that name: a query removed and created again under its name has a new id. Absent
+   * from an older frame's stamp, which is then the name's alone.
+   */
+  id?: number;
   /**
    * A short name for a variant of the query a plugin sends, such as `underlying` for the rows behind
    * a point: shown under the query, never taken for the query's own result or run.

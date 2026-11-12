@@ -196,9 +196,12 @@ describe('the frame\'s calls', () => {
     call(3, 'spy.look');
     fromFrame({ type: 'anfra:call', id: 4, name: 'spy.look', request: null, stamp: { app: 0, query: 'revenue', variant: 'underlying', extra: 1 } as never });
     fromFrame({ type: 'anfra:call', id: 5, name: 'spy.look', request: null, stamp: { app: 0, query: 'revenue', variant: 3 } as never });
+    fromFrame({ type: 'anfra:call', id: 6, name: 'spy.look', request: null, stamp: { app: 0, query: 'revenue', id: 4 } });
+    fromFrame({ type: 'anfra:call', id: 7, name: 'spy.look', request: null, stamp: { app: 0, query: 'revenue', id: 1.5 } });
     await settle();
     expect(seen.map((context) => context?.stamp)).toEqual([
       { app: 0, query: 'revenue' }, undefined, undefined, { app: 0, query: 'revenue', variant: 'underlying' }, undefined,
+      { app: 0, query: 'revenue', id: 4 }, undefined,
     ]);
   });
 
