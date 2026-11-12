@@ -803,14 +803,6 @@ export type LineageNode = Schemas['DiagramNode'];
 export type LineageCard = Schemas['DiagramCard'];
 
 /**
- * What the SDK sends queries to, supplied by the provisioner. Each call either resolves or
- * rejects; how the backend gets there (synchronously, as polled jobs, over a bridge) is its own
- * business. A call whose `signal` aborts may reject with an `AbortError`, and its result is
- * ignored either way. Reject with a `DataAppError` in the API's shape (`code`, `scope`, `message`,
- * using the generic codes where they apply; `fromHttpStatus` maps an HTTP status) to choose the
- * error an author sees; anything else surfaces as `call_failed`.
- */
-/**
  * The query a call is for, as the frame stamps it: a query's run or page (`core.submitQuery`), or its
  * export (`export.query`). The app's index among the frame's apps and the query's name. The frame's
  * word: for showing a call under its query, never for deciding what the call may do.
@@ -830,6 +822,14 @@ export interface QueryStamp {
   variant?: string;
 }
 
+/**
+ * What the SDK sends queries to, supplied by the provisioner. Each call either resolves or
+ * rejects; how the backend gets there (synchronously, as polled jobs, over a bridge) is its own
+ * business. A call whose `signal` aborts may reject with an `AbortError`, and its result is
+ * ignored either way. Reject with a `DataAppError` in the API's shape (`code`, `scope`, `message`,
+ * using the generic codes where they apply; `fromHttpStatus` maps an HTTP status) to choose the
+ * error an author sees; anything else surfaces as `call_failed`.
+ */
 export interface Backend {
   /** `stamp`: the query the request is for, when a Data App's query sends it. */
   submitQuery (request: BackendQueryRequest, signal: AbortSignal, stamp?: QueryStamp): Promise<BackendQueryResult>;

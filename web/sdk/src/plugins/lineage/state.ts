@@ -6,6 +6,7 @@ import type { InspectedApp, LineageResult, LineageTarget } from '../../common/ty
 import type { MountContext } from '../../host/plugin';
 import type { Panel } from '../../host/panel';
 import { targetKey, type LineageKind, type Traced } from './model';
+import { entityGone } from '../inspect/model/entities';
 
 /** What the catalog answered for the fields asked (`key`): a trace outlives the tab that started it. */
 export interface LineageTrace {
@@ -73,14 +74,6 @@ function createState (): LineageState {
   });
   let trace: LineageTrace | undefined;
   let following = false;
-  // A query's or a control's card: `query:<app>/<name>`, `control:<app>/<name>`.
-  const entity = /^(query|control):(\d+)\/(.+)$/;
-  const gone = (id: string | undefined, apps: readonly InspectedApp[]) => {
-    const match = id ? entity.exec(id) : null;
-    if (!match) return false;
-    const app = apps[Number(match[2])];
-    return !Object.hasOwn((match[1] === 'query' ? app?.queries : app?.controls) ?? {}, match[3]!);
-  };
   const state: LineageState = {
     get trace () { return trace; },
     view: { hidden: new Set(), crossFilters: false },
@@ -115,8 +108,9 @@ function createState (): LineageState {
       });
     },
     prune (apps) {
-      if (gone(state.view.focus, apps)) state.view.focus = undefined;
-      if (gone(state.view.selected, apps)) state.view.selected = undefined;
+      // A query's or a control's card: `query:<app>/<name>`, `control:<app>/<name>`.
+      if (entityGone(state.view.focus, apps)) state.view.focus = undefined;
+      if (entityGone(state.view.selected, apps)) state.view.selected = undefined;
     },
     subscribe (listener) {
       listeners.add(listener);

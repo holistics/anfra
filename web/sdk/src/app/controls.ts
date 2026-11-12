@@ -4,6 +4,7 @@ import { Observable } from './observable';
 import { ValidationError } from '../common/errors';
 import { abortError } from '../common/endpoint';
 import { tagCall } from '../common/runtimeErrors';
+import { withChanges } from './changes';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
 import type { DatasetIndex, ResolvedField } from './validation';
@@ -247,11 +248,7 @@ export class Filter extends Control {
    */
   update (changes: FilterUpdate): void {
     this.assertLive();
-    const declaration: FilterDeclaration & { dataset?: string } = { ...this._declaration };
-    (Object.keys(changes) as (keyof FilterUpdate)[]).forEach((key) => {
-      if (changes[key] === undefined) delete declaration[key];
-      else (declaration as Record<string, unknown>)[key] = changes[key];
-    });
+    const declaration = withChanges<FilterDeclaration & { dataset?: string }>(this._declaration, changes);
     const previous = this._declaration as FilterDeclaration & { dataset?: string };
     const redefined = (['field', 'dataset', 'type'] as const).some((key) => declaration[key] !== previous[key]);
     const resolution = redefined
@@ -377,11 +374,7 @@ export class DateDrillControl extends Control {
   /** Edits its label or default. The reader's grain stays; `reset()` goes to the new default. */
   update (changes: DateDrillDeclaration): void {
     this.assertLive();
-    const declaration: DateDrillDeclaration = { ...this._declaration };
-    (Object.keys(changes) as (keyof DateDrillDeclaration)[]).forEach((key) => {
-      if (changes[key] === undefined) delete declaration[key];
-      else (declaration as Record<string, unknown>)[key] = changes[key];
-    });
+    const declaration = withChanges(this._declaration, changes);
     const initial = drillCondition(this.name, declaration.default);
     this._declaration = declaration;
     this.redefault(initial, false);
