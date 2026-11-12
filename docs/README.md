@@ -24,7 +24,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [result values](designs/result-values.md) | What a query's answer holds: values encoded (every number a string), and each column's semantic, Arrow and database types. |
 | [numbers in the SDK](designs/sdk-numbers.md) | What a Data App gets for a number: the API's string and its column's type, which say what it is; helpers come later. |
 | [a query's input](designs/query-input.md) | What a caller chooses about a query, kept together in `input` so a query can be run again (paged, exported, replayed, requeried) by sending it back; seeds (proposal). |
-| [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, appserve. |
+| [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, editing and removing entities while an app runs, appserve. |
 | [SDK plugins](designs/sdk-plugins.md) | Everything a Data App reaches is a plugin the host installs: how host, frame and plugins talk, middleware, the plugin layer. |
 | [security](designs/security.md) | The trust model: what `anfra serve` protects, what it leaves to the operator. |
 | [background routines](designs/background-routines.md) | Work a server runs beside its requests: its kinds, the rules, panics, and the `shared/routine` helper. |

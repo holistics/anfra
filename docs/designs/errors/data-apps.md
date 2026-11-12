@@ -77,7 +77,9 @@ Every failure of a call is a `DataAppError` (`common/errors.ts`), the document t
 | `status`, `details`, `context`, `requestId` | where the backend has them | As in the API's envelope ([errors.md](../errors.md#what-an-error-carries-and-who-reads-it)). |
 | `entity` | where known | The query or control it concerns (the SDK's own). |
 
-The one other class is `ValidationError`, for what the definition declares wrong: thrown synchronously at the line that declared it, never from a backend, with the same shape (`declaration_invalid`, scope `client`), so code that reads `scope` and `code` treats every error alike.
+The one other class is `ValidationError`, for what the definition declares or changes wrong. It is thrown synchronously, never from a backend, at the call that did it: a `create…` or `map…`, a `query.update` or `filter.update`, a `remove()`, or any call on an entity already removed. It has the same shape (`declaration_invalid`, scope `client`), so code that reads `scope` and `code` treats every error alike. An `update` checks the whole change before it applies any of it, so one that throws leaves the entity as it was.
+
+A `ValidationError` covers only what the SDK can check alone: a query with no AQL, a filter's field that its dataset doesn't have, a page size that isn't a whole number. An AQL the SDK accepts can still be wrong, such as one naming a field its dataset lacks after `query.update`. It fails at the next run, as the query's stored error, not a throw.
 
 A query's error is stored on the query, never thrown: one failed query must not blank the rest.
 

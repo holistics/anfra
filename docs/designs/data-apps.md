@@ -102,7 +102,7 @@ The host never sees the frame's DOM. What it knows of the page is the **structur
 
 Step 5, in detail: what crosses the bridge and reaches `core.query` for each query.
 
-A query's AQL is fixed when it is declared. What the reader changes (filter values, a cross-filter selection, a sort, a date grain, the page) travels beside it, in the query's `input`, and `core.query` applies it before compiling (`internal/command/query/input.go`; `app/execution/submitQuery.ts` builds it). The SDK's `Backend` request carries the same `input`, in the core API's shape ([a query's input](query-input.md)):
+A query's AQL is the author's: it is set when the query is declared, or by `query.update` ([below](#declared-edited-removed-an-entitys-lifecycle)), never by the reader. What the reader changes (filter values, a cross-filter selection, a sort, a date grain, the page) travels beside it, in the query's `input`, and `core.query` applies it before compiling (`internal/command/query/input.go`; `app/execution/submitQuery.ts` builds it). The SDK's `Backend` request carries the same `input`, in the core API's shape ([a query's input](query-input.md)):
 
 | The reader's state | Becomes |
 |---|---|
@@ -120,6 +120,26 @@ So reader input is never spliced into AQL text, and the executed AQL comes back 
 **Exports** (`query.export()`) carry the same query and Query Input, built by the same code, from the state the result on screen was last run with: a control the reader changed but has not applied is not in it. No page: an export is every row ([exports.md](exports.md)). The `export` plugin's host half calls the Backend's `exportQuery` (`core.query.export`), saves the file from the host's page by following its link with `<a download>`, since the frame has no `allow-downloads`, and answers the frame with the link and its row count. An export changes nothing on its query: a failed one is the author's to show, from `query.export()`'s rejection. A host without the plugin can't export: `query.export` isn't there.
 
 **Field suggestions** (a filter control's values) are one `core.query` too: a distinct-values explore on the field, sorted and capped, narrowed for a text field by what the reader typed, as a Query Input filter, never spliced. The field must be one of the provisioned dataset's, since it is placed into AQL. It's a formal op used as intended, so a platform authorises it as a query.
+
+## Declared, edited, removed: an entity's lifecycle
+
+Most definitions declare their queries, controls and edges once, as the page loads. An app can also change them while it runs, as a chart or dashboard builder does when a reader adds, edits or deletes a widget. This section says why the lifecycle works as it does. The API is in the author reference ([changing the app while it runs](../../skills/plugins/anfra/skills/anfra-build-data-app/references/api.md#changing-the-app-while-it-runs)).
+
+**A name is an entity's identity.** An edge's id, the selection's source, the frame's stamp on a query's calls, and inspect's request log and open sections all name a query or control by its name. So a name never changes, and there is no rename: a new name is `remove()`, then `create…`. Renaming would have to rewrite every one of those, for nothing a stable name doesn't give. A builder names its entities with stable ids (`widget-7f3a`) and keeps the titles a reader sees in its own markup.
+
+**An edit keeps the entity.** `query.update`, `filter.update` and `dateDrill.update` change the declaration in place. The object, its name, its edges and what plugins added to it stay, so a builder whose reader changes a widget's AQL doesn't have to map its filters and cross-filters again. An edit runs nothing. The declaration is part of the query's signature, so the edited query is dirty, and it reruns at the next `app.execute()`. Several edits then go out as one run. Until that run, the last result stays, so the page doesn't go blank. The edit resets only what it makes wrong:
+
+- An edited query goes back to its first page.
+- The input its last run came back with (`input.seeds`) belonged to the old declaration, so it is dropped: until the next run, a page or an export builds its input from what the app has applied.
+- A new AQL or dataset gives the query new columns. So its sort is cleared, unless the edit passes one, and so is a selection made in its rows (the reader's and the applied one). A new page size alone keeps both.
+- A filter given a new field, dataset or type goes back to its new default, and drops the options it loaded and any `loadOptions` in flight, because the old values filtered something else. A new label, options or default keeps the reader's condition, and `reset()` then goes to the new default.
+- No mapping changes. Each mapping names its own field, which decides what the control's condition applies to.
+
+**A removal takes the entity's edges with it.** `remove()` on a query or a control also removes every mapping and cross-filter to or from it, so nothing is left pointing at it. The queries that lose an edge are dirty, and rerun without its condition at the next `app.execute()`. A run, a page or an option list in flight is aborted, and a late answer is dropped. A selection made in a removed query is cleared, and its name is free again. Any method of the removed object throws a `ValidationError`, so a builder's stale reference fails where it is used instead of quietly doing nothing. A menu, modal or popover about a removed query closes ([plugin UI](sdk-plugins.md#plugin-ui)).
+
+**Edges never change.** A mapping has a control, a query and a field, and a cross-filter has two queries. Changing any of them makes a different edge, so an edge is removed with its own `remove()` and mapped again, never edited. Since an edit keeps the entities, an edge survives edits of either end.
+
+**Nothing changes when a call throws.** `update` checks the new declaration as `create…` does, and throws before it applies any of it. A query moved to another dataset must not leave a cross-filter spanning two datasets, so that update throws, naming the edges to remove first. What only the server can check, such as an AQL that names a field its dataset lacks, fails at the next run as the query's error ([errors/data-apps.md](errors/data-apps.md#the-errors-shape)).
 
 ## Renderings: a picture of what the reader sees
 
