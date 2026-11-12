@@ -6,7 +6,7 @@
 # already exists and no new release is cut.
 version: 0.20.0
 sidecars:
-  anfra_node: anfra-node-v0.13.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
+  anfra_node: anfra-node-v0.14.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
   canal_query: query-v2.24.0 # holistics/canal release tag (build_and_release_binaries.yml)
 # The cloud servers a release's bare `anfra auth login` offers, in this order, and whom it
 # tells their users to email for another region. A server's id is a stable key, lowercase;
