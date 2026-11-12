@@ -671,7 +671,8 @@ export class App extends Observable implements AppContext {
   async fetchPage (query: Query): Promise<void> {
     const controller = new AbortController();
     query.controller = controller;
-    const signature = query.signature();
+    // The applied one, as the page runs with: a change the reader has not applied keeps it dirty.
+    const signature = query.signature('applied');
     query.markExecuting();
 
     try {
