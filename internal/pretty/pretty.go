@@ -234,8 +234,18 @@ func prettyFields(v, root reflect.Value) []prettyField {
 // taken out, the rest its body.
 func buildPrettyDoc(v reflect.Value) prettyDoc {
 	var doc prettyDoc
+	root := indirect(v)
+	if !root.IsValid() {
+		return doc
+	}
+	if root.Kind() != reflect.Struct && root.Kind() != reflect.Map {
+		// A result that isn't an object, ingest's "ingest complete", is
+		// its outcome alone: the message line.
+		doc.message = fmt.Sprint(root.Interface())
+		return doc
+	}
 	var body []prettyField
-	for _, f := range prettyFields(indirect(v), indirect(v)) {
+	for _, f := range prettyFields(root, root) {
 		switch f.name {
 		case "message":
 			doc.message = f.value.String()

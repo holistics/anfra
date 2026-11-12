@@ -69,6 +69,26 @@ Hints:
 	}
 }
 
+// A result that isn't an object, as ingest's string is, is its message
+// alone; a nil one is nothing. Neither panics.
+func TestBareResult(t *testing.T) {
+	for _, tc := range []struct {
+		v    any
+		want string
+	}{
+		{"ingest complete", "ingest complete\n"},
+		{(*result)(nil), ""},
+	} {
+		var out bytes.Buffer
+		if err := Render(&out, tc.v, 0); err != nil {
+			t.Fatal(err)
+		}
+		if out.String() != tc.want {
+			t.Errorf("Render(%#v) = %q, want %q", tc.v, out.String(), tc.want)
+		}
+	}
+}
+
 // A list joined in a cell is a CSV record, quoted only where CSV needs it.
 func TestCSVField(t *testing.T) {
 	for in, want := range map[string]string{
