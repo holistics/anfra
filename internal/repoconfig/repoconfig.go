@@ -34,6 +34,18 @@ type Config struct {
 		// holds its own list (AllowedOrigins checks them).
 		AllowOrigins []string `yaml:"allow_origins"`
 	} `yaml:"apps"`
+	Cache struct {
+		Query struct {
+			// Enabled turns the query cache off for the repo when false: no
+			// store, no canal-lake. Unset is on.
+			Enabled *bool `yaml:"enabled"`
+		} `yaml:"query"`
+	} `yaml:"cache"`
+}
+
+// QueryCacheEnabled is cache.query.enabled: on unless the repo sets false.
+func (c Config) QueryCacheEnabled() bool {
+	return c.Cache.Query.Enabled == nil || *c.Cache.Query.Enabled
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content

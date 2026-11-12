@@ -29,6 +29,12 @@ scripts/openapi.sh generate
 pnpm --filter @holistics/anfra-sdk generate
 ```
 
+If you changed a store's SQL (`queries.sql`, or a migration in `migrations/`), regenerate its Go code with sqlc, and commit it:
+
+```sh
+scripts/sqlc.sh generate
+```
+
 ## Commit messages
 
 commitlint checks every commit, in a git hook and in CI. One bad commit fails CI, and fixing it means rewriting history, so get each message right when you commit.

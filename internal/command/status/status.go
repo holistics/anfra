@@ -14,6 +14,7 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/logging"
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/repo"
 )
 
@@ -117,6 +118,7 @@ var Status = command.Define(command.Def[command.NoInput, StatusResult]{
 		if s := cc.Server; s != nil {
 			r.Server.URL, r.Server.InstanceID, r.Server.Version = s.URL, s.InstanceID, s.Version
 		}
+		r.Cache, r.Hints = cacheStatus(ctx, cc.QueryCache, r.Hints)
 		return r, nil
 	},
 	Valid: func(r StatusResult) bool { return r.Server.State == StateHealthy },
@@ -163,9 +165,29 @@ type SkillsResult struct {
 type StatusResult struct {
 	Repo   RepoStatus   `json:"repo"`
 	Server ServerStatus `json:"server"`
+	// Cache is the repo's caches; absent when the host keeps none.
+	Cache *CacheStatus `json:"cache,omitempty" doc:"the repo's caches, read without changing them. Absent when the server keeps none."`
 	// Hints are left to the host: the CLI adds its own, such as where to see
 	// the repo's publishing.
 	Hints []string `json:"hints,omitempty" doc:"what to do next, if any"`
+}
+
+// CacheStatus is the repo's caches.
+type CacheStatus struct {
+	Query querycache.Summary `json:"query" doc:"the query cache, which keeps queries' results"`
+}
+
+// cacheStatus is the host's caches, and hints with what to do about them added:
+// none when the host keeps no query cache.
+func cacheStatus(ctx context.Context, q querycache.Summarizer, hints []string) (*CacheStatus, []string) {
+	if q == nil {
+		return nil, hints
+	}
+	s := q.Summarize(ctx)
+	if s.Hint != "" {
+		hints = append(hints, s.Hint)
+	}
+	return &CacheStatus{Query: s}, hints
 }
 
 // RepoStatus is the repo the command runs on.
