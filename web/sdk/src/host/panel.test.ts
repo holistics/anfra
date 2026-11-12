@@ -21,9 +21,7 @@ afterEach(() => {
 
 function mount () {
   const backend = { submitQuery: vi.fn(), fieldSuggestions: vi.fn() };
-  // Without core's Refresh, whose shortcut a ready frame is told of.
-  const core = corePlugin(backend);
-  const host = createHost({ plugins: [{ ...core, host: { ...core.host, commands: [] } }], frameScript: 'x' });
+  const host = createHost({ plugins: [corePlugin(backend)], frameScript: 'x' });
   mounted = host.mount({
     container: document.body, definition: '', datasets: { sales: salesDataset }, user: testUser,
   });

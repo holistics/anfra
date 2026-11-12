@@ -18,8 +18,6 @@ export interface PaletteEntry {
   disabled?: string;
   /** On now, such as an open panel. */
   pressed?: boolean;
-  /** More about it, shown as its tooltip: Refresh's age of cached figures. */
-  detail?: string;
 }
 
 const open = defineModel<boolean>('open', { required: true });
@@ -58,7 +56,7 @@ function choose (entry: PaletteEntry): void {
           :value="entry.id"
           :filter-value="`${entry.title} ${entry.group}`"
           :disabled="!!entry.disabled"
-          :title="entry.disabled ?? entry.detail"
+          :title="entry.disabled"
           :data-testid="`palette-${entry.id}`"
           @select="choose(entry)"
         >

@@ -31,14 +31,13 @@ describe('inspection, the frame\'s side of the panel', () => {
     await flush();
     const app = f.anfra.createApp();
     await wait();
-    const snapshots = () => f.events.filter((event) => event.name === 'anfra.snapshot');
-    expect(snapshots()).toHaveLength(2);
+    expect(f.events).toHaveLength(2);
 
     f.emit('anfra.watch', false);
     await flush();
     app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
     await wait();
-    expect(snapshots()).toHaveLength(2);
+    expect(f.events).toHaveLength(2);
   });
 
   it('highlights a node in the plugin layer, never in the page', async () => {

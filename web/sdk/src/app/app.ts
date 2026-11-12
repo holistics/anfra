@@ -40,7 +40,6 @@ import type {
   InspectedSelection,
   LocateKind,
   QueryDeclaration,
-  RefreshOptions,
   Row,
   SdkFeatures,
   Selection,
@@ -632,13 +631,9 @@ export class App extends Observable implements AppContext {
     return { succeeded, failed };
   }
 
-  /**
-   * Re-runs every query with its current inputs, whether or not they changed, and asks the server
-   * to skip any result cache it keeps (`{ bustCache: false }` lets it answer from one). A paged
-   * query starts over at its first page. The host's Refresh command does the same for every app.
-   */
-  async refresh (options: RefreshOptions = {}): Promise<ExecuteSummary> {
-    return this.execute({ force: true, bustCache: options.bustCache ?? true });
+  /** Re-runs everything and asks the server to skip its result cache. */
+  async refresh (): Promise<ExecuteSummary> {
+    return this.execute({ force: true, bustCache: true });
   }
 
   abort (): void {

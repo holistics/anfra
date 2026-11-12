@@ -30,11 +30,6 @@ export interface CommandState {
   pressed?: boolean;
   /** Shown as off, with this reason (a tooltip): a command that can't run always says why. */
   disabled?: string;
-  /**
-   * More about an enabled command, for the host to show with it (a tooltip, a second line): Refresh
-   * says how old cached figures are. A host may ignore it.
-   */
-  detail?: string;
 }
 
 /** What a command's `state` gets: the mount it is about, and its panel. */

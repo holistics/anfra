@@ -169,17 +169,17 @@ describe('AppHeader', () => {
     expect(host.querySelector<HTMLButtonElement>('[data-testid="command-inspect.toggle"]')!.disabled).toBe(true);
   });
 
-  it('has no Reload: Refresh is a command like any other, saying how old the figures are', async () => {
+  it('has no Reload: Refresh is a command like any other', async () => {
     const refresh = {
       id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary' as const, run: { call: 'core.refresh' },
     };
     const { host } = await mount(AppHeader, {
-      ...props, commands: [refresh, inspect], commandState: (command: { id: string }) => (command.id === 'core.refresh' ? { detail: 'Data from 5 minutes ago' } : {}),
+      ...props, commands: [refresh, inspect], commandState: () => ({}),
     });
     expect(host.querySelector('[data-testid="reload"]')).toBeNull();
     const button = host.querySelector<HTMLButtonElement>('[data-testid="command-core.refresh"]')!;
     expect(button.disabled).toBe(false);
-    expect(button.title).toBe('Refresh\nData from 5 minutes ago');
+    expect(button.title).toBe('Refresh');
     expect(button.querySelector('svg')!.getAttribute('class')).toContain('refresh-cw');
   });
 });

@@ -15,9 +15,7 @@ import type {
   DatasetDescriptor, Rendering, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { designTheme } from '@holistics/anfra-sdk/common';
-import type {
-  Command, CommandState, Host, MountedDataApp,
-} from '@holistics/anfra-sdk/host';
+import type { Command, Host, MountedDataApp } from '@holistics/anfra-sdk/host';
 import {
   allApps, findApp, folderPaths, pathFromLocation, urlFor, type CatalogEntry,
 } from '@/lib/catalog';
@@ -188,7 +186,7 @@ const chromeCommands = computed(() => runtime.value?.commands.filter((command) =
 const toolbarCommands = computed(() => chromeCommands.value.filter((command) => command.placement !== 'overflow' && command.placement !== 'panel'));
 const panelCommands = computed(() => chromeCommands.value.filter((command) => command.placement === 'panel'));
 const menus = computed(() => overflowMenus(chromeCommands.value));
-function commandState (command: Command): CommandState {
+function commandState (command: Command): { pressed?: boolean, disabled?: string } {
   void panelVersion.value;
   return app.value ? app.value.commandState(command.id) : { disabled: 'No Data App is open' };
 }
@@ -306,7 +304,7 @@ const paletteEntries = computed<PaletteEntry[]>(() => {
   const plugins = chromeCommands.value.map((command): PaletteEntry => {
     const state = commandState(command);
     return {
-      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed, detail: state.detail,
+      id: `command:${command.id}`, title: command.title, group: 'Data App', icon: commandIcon(command), shortcut: command.shortcut, disabled: noApp ?? state.disabled, pressed: state.pressed,
     };
   });
   return [
