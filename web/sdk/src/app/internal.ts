@@ -2,7 +2,7 @@ import type { Mapping } from './mapping';
 import type { Query } from './query';
 import type { DatasetIndex } from './validation';
 import type {
-  LocateKind, Row, SdkFeatures, Selection, SelectionCondition,
+  ExecuteOptions, ExecuteSummary, LocateKind, Row, SdkFeatures, Selection, SelectionCondition,
 } from '../common/types';
 
 /**
@@ -30,6 +30,8 @@ export interface AppContext {
   selectionExpressionFor (queryName: string, phase: 'pending' | 'applied'): string | undefined;
   /** Replaces the app's selection with these rows of this query. */
   select (query: Query, rows: readonly Row[], fields?: readonly string[]): void;
+  /** Runs this query alone, with what is applied, unless that would produce nothing new or `force`. */
+  executeQuery (query: Query, options: ExecuteOptions): Promise<ExecuteSummary>;
   /** Runs one more page for a query that already has a result. */
   fetchPage (query: Query): Promise<void>;
   /** Brings an entity's marked elements into view; false when none is on the page. */
