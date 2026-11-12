@@ -23,7 +23,7 @@ const commandIcons: Record<string, Component> = {
   download: Download,
   table: Table,
   copy: Copy,
-  reload: RefreshCw,
+  refresh: RefreshCw,
 };
 const known = (icons: Record<string, Component>, name?: string) => (name && Object.hasOwn(icons, name) ? icons[name] : undefined);
 
