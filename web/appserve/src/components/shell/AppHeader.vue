@@ -11,7 +11,7 @@ import { IS_MAC, keyLabels } from '@/lib/shortcut';
 import LoadingBar from './LoadingBar.vue';
 import RepoProblems from './RepoProblems.vue';
 
-const props = defineProps<{
+defineProps<{
   sidebarOpen: boolean;
   hasApp: boolean;
   title: string;
@@ -22,14 +22,6 @@ const props = defineProps<{
   menus: readonly CommandMenu[];
   commandState: (command: Command) => CommandState;
 }>();
-
-/** A button's tooltip: why it can't run, or its name and shortcut, then what more it says (`detail`). */
-function commandTitle (command: Command): string {
-  const { disabled, detail } = props.commandState(command);
-  if (disabled) return disabled;
-  const name = command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title;
-  return detail ? `${name}\n${detail}` : name;
-}
 
 const emit = defineEmits<{
   toggleSidebar: [];
@@ -75,7 +67,7 @@ const emit = defineEmits<{
         variant="ghost"
         size="icon-sm"
         :aria-label="command.title"
-        :title="commandTitle(command)"
+        :title="commandState(command).disabled ?? (command.shortcut ? `${command.title} (${keyLabels(command.shortcut).join(IS_MAC ? '' : '+')})` : command.title)"
         :data-testid="`command-${command.id}`"
         :aria-pressed="commandState(command).pressed ?? false"
         :disabled="!hasApp || !!commandState(command).disabled"

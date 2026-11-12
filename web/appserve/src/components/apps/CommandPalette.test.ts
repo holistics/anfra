@@ -12,7 +12,6 @@ afterEach(unmountAll);
 const entries: PaletteEntry[] = [
   { id: 'command:render.png', title: 'Download PNG', group: 'Data App', icon: Download, shortcut: 'Alt+Shift+P' },
   { id: 'command:core.refresh', title: 'Refresh', group: 'Data App', disabled: 'Open a Data App first' },
-  { id: 'command:inspect.toggle', title: 'Inspect', group: 'Data App', detail: 'Opens the panel' },
   { id: 'app:sales', title: 'Sales', group: 'Open a Data App' },
 ];
 
@@ -25,7 +24,6 @@ it('lists the entries by group, with what keeps one from running', async () => {
   expect(item('command:core.refresh')!.hasAttribute('data-disabled')).toBe(true);
   expect(item('command:core.refresh')!.className).toContain('data-disabled:text-disabled');
   expect(item('command:core.refresh')!.textContent).toContain('Open a Data App first');
-  expect(item('command:inspect.toggle')!.title).toBe('Opens the panel');
   expect(item('command:render.png')!.querySelectorAll('[data-slot="kbd"]')).toHaveLength(3);
 });
 
