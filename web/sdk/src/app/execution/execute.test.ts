@@ -427,6 +427,24 @@ describe('query.execute', () => {
 });
 
 describe('paging', () => {
+  it('keeps a query dirty when a page is fetched before the reader\'s change is applied', async () => {
+    const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
+    const app = sdk.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
+    const region = app.createFilter('region', { field: 'users.region' });
+    app.mapControl(region, query, { field: 'users.region' });
+
+    await app.execute();
+    region.setCondition({ operator: 'is', values: ['APAC'] });
+    await query.fetchMore();
+    expect(stub.queries[1].input.filters).toEqual([]);
+    expect(query.isDirty).toBe(true);
+
+    await app.execute();
+    expect(stub.calls).toHaveLength(3);
+    expect(stub.queries[2].input.filters).not.toEqual([]);
+  });
+
   it('appends the next page rather than replacing the rows', async () => {
     const page2: BackendQueryResult = {
       values: [['LATAM', '12']],
