@@ -111,7 +111,6 @@ export function corePlugin (backend: CoreBackend): Plugin {
         title: 'Refresh',
         icon: 'refresh',
         placement: 'primary',
-        shortcut: 'Alt+Shift+R',
         run: { call: 'core.refresh', request: { bustCache: true } },
         state: ({ mount }): CommandState => {
           const state = states.get(mount);

@@ -171,7 +171,7 @@ describe('AppHeader', () => {
 
   it('has no Reload: Refresh is a command like any other, saying how old the figures are', async () => {
     const refresh = {
-      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary' as const, shortcut: 'Alt+Shift+R', run: { call: 'core.refresh' },
+      id: 'core.refresh', title: 'Refresh', icon: 'refresh', placement: 'primary' as const, run: { call: 'core.refresh' },
     };
     const { host } = await mount(AppHeader, {
       ...props, commands: [refresh, inspect], commandState: (command: { id: string }) => (command.id === 'core.refresh' ? { detail: 'Data from 5 minutes ago' } : {}),
@@ -179,7 +179,7 @@ describe('AppHeader', () => {
     expect(host.querySelector('[data-testid="reload"]')).toBeNull();
     const button = host.querySelector<HTMLButtonElement>('[data-testid="command-core.refresh"]')!;
     expect(button.disabled).toBe(false);
-    expect(button.title).toMatch(/^Refresh \(.+R\)\nData from 5 minutes ago$/);
+    expect(button.title).toBe('Refresh\nData from 5 minutes ago');
     expect(button.querySelector('svg')!.getAttribute('class')).toContain('refresh-cw');
   });
 });
