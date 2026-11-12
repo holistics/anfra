@@ -5,6 +5,7 @@
 import type { MountContext } from '../../host/plugin';
 import type { Panel } from '../../host/panel';
 import type { AppConsoleEvent, AppErrorEvent } from '../../common/runtimeErrors';
+import type { InspectedApp } from '../../common/types';
 import { createRequestLog, type RequestLog, type RequestRecorder } from './model/requests';
 import {
   DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type QueriesFilter, type RevealTarget,
@@ -43,6 +44,14 @@ export interface InspectState {
   readonly revealed: { target: RevealTarget, nonce: number } | undefined;
   /** Follow a link: open its tab, set what the tab shows, and say what to bring into view. */
   reveal: (panel: Panel, target: RevealTarget) => void;
+  /**
+   * Keep what the tabs hold in step with the panel's snapshots: what they kept of a query or a
+   * control the app removed is forgotten, so one made again by its name starts afresh. Once per
+   * mount; the tabs call it when they mount.
+   */
+  follow: (panel: Panel) => void;
+  /** Forget what the tabs keep of the queries and controls not in `apps`. */
+  prune: (apps: readonly InspectedApp[]) => void;
   /** Each change to the log or a reveal. Returns the function that stops listening. */
   subscribe: (listener: () => void) => () => void;
 }
@@ -71,6 +80,7 @@ function createState (): InspectState {
     try { listener(); } catch { /* one listener must not stop the others */ }
   });
   let nonce = 0;
+  let following = false;
   const errors: RuntimeEntry[] = [];
   const lines: AppConsoleEvent[] = [];
   const state: InspectState = {
@@ -125,6 +135,33 @@ function createState (): InspectState {
         panel.show(target.tab);
       }
       changed();
+    },
+    follow (panel) {
+      if (following) return;
+      following = true;
+      panel.subscribe(() => {
+        if (panel.snapshot) state.prune(panel.snapshot.apps);
+      });
+    },
+    prune (apps) {
+      const has = (kind: 'query' | 'control', app: number, name: string) => Object.hasOwn(
+        (kind === 'query' ? apps[app]?.queries : apps[app]?.controls) ?? {},
+        name,
+      );
+      // `query:<app>/<name>`, `control:<app>/<name>`, and Data's `<app>/<name>`.
+      const entity = /^(query|control):(\d+)\/(.+)$/;
+      for (const key of state.queries.open) {
+        const match = entity.exec(key);
+        if (match && !has(match[1] as 'query' | 'control', Number(match[2]), match[3]!)) state.queries.open.delete(key);
+      }
+      for (const key of state.data.open) {
+        const slash = key.indexOf('/');
+        if (!has('query', Number(key.slice(0, slash)), key.slice(slash + 1))) state.data.open.delete(key);
+      }
+      const target = state.revealed?.target;
+      if (target && 'entity' in target && !has(target.entity, target.app, target.name)) {
+        (state as { revealed: InspectState['revealed'] }).revealed = undefined;
+      }
     },
     subscribe (listener) {
       listeners.add(listener);

@@ -2,7 +2,7 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import {
-  byTestId, inspect, REVENUE_AQL, salesApp, salesSnapshot, type Harness,
+  byTestId, inspect, REVENUE_AQL, REVENUE_STAMP, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
 import { lineagePlugin } from '../../lineage';
 
@@ -89,6 +89,25 @@ describe('Queries', () => {
     expect(byTestId<HTMLDetailsElement>(root, 'query-0/revenue')?.open).toBe(true);
   });
 
+  it('forgets what it kept of a query the app removed, so one made again by its name starts closed', async () => {
+    harness = await inspect({ tab: QUERIES });
+    const { root } = await harness.tab(QUERIES);
+    await open(byTestId(root, 'query-0/revenue'));
+    harness.state.data.open.add('0/revenue');
+    harness.state.reveal(harness.mounted.panel, { entity: 'query', app: 0, name: 'revenue' });
+    const app = salesApp();
+    delete app.queries.revenue;
+    delete app.declaration.queries.revenue;
+
+    harness.post(salesSnapshot([app]));
+
+    expect(harness.state.queries.open.has('query:0/revenue')).toBe(false);
+    expect(harness.state.data.open.has('0/revenue')).toBe(false);
+    expect(harness.state.revealed).toBeUndefined();
+    harness.post(salesSnapshot());
+    expect(byTestId<HTMLDetailsElement>(root, 'query-0/revenue')?.open).toBe(false);
+  });
+
   it('shows the code a query declared and ran, a tab at a time', async () => {
     harness = await inspect({ tab: QUERIES });
     const { root } = await harness.tab(QUERIES);
@@ -137,7 +156,7 @@ describe('Queries', () => {
   it('lists the requests made for a query, opened to their rows', async () => {
     harness = await inspect({ tab: QUERIES });
     const { root } = await harness.tab(QUERIES);
-    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} });
+    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} }, REVENUE_STAMP);
     const row = await open(byTestId(root, 'query-0/revenue'));
     expect(byTestId(row, 'general')?.textContent).toMatch(/database · \d+ ms/);
     const requests = await open(byTestId(row, 'requests'));
@@ -146,6 +165,20 @@ describe('Queries', () => {
     expect(request.querySelector('summary')?.textContent).toContain('database · 2 rows');
     await open(request);
     expect(byTestId(request, 'request-preview')?.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(byTestId(root, 'section-other')).toBeNull();
+  });
+
+  it('keeps a removed query\'s requests under its name, marked removed', async () => {
+    harness = await inspect({ tab: QUERIES });
+    const { root } = await harness.tab(QUERIES);
+    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} }, { app: 0, query: 'gone' });
+    const removed = byTestId(root, 'section-removed-0')!;
+    expect(count(removed)).toBe('1');
+    const row = byTestId(removed, 'removed-0/gone')!;
+    expect(row.querySelector('summary')?.textContent).toContain('gone');
+    expect(row.querySelector('summary')?.textContent).toContain('removed');
+    await open(row);
+    expect(row.querySelectorAll('[data-testid^="request-"]')).toHaveLength(1);
     expect(byTestId(root, 'section-other')).toBeNull();
   });
 

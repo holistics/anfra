@@ -7,7 +7,7 @@ import {
   DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest, isDataAppError,
 } from '../common/errors';
 import type { Endpoint } from '../common/endpoint';
-import type { QueryRequest } from '../common/types';
+import type { QueryRequest, QueryStamp } from '../common/types';
 import type { App } from './app';
 import type { Control } from './controls';
 import type { Query } from './query';
@@ -49,8 +49,11 @@ export interface FrameKernel {
    * needs and sends it as `core.submitQuery`, through the pipeline like any query.
    */
   queryRequest: (query: Query) => QueryRequest;
-  /** Make a host half's call, by its full name (`core.submitQuery`). */
-  call: <T = unknown>(name: string, request?: unknown, signal?: AbortSignal) => Promise<T>;
+  /**
+   * Make a host half's call, by its full name (`core.submitQuery`). `stamp` names the query the call
+   * is for, so the host shows it under that query (its request log).
+   */
+  call: <T = unknown>(name: string, request?: unknown, signal?: AbortSignal, stamp?: QueryStamp) => Promise<T>;
   /** Send the host one of this plugin's events, by its name under the plugin. */
   emit: (name: string, payload?: unknown) => void;
   /** Answer one of this plugin's calls made by the host, by its name under the plugin. */
@@ -150,7 +153,7 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
       if (!app) throw new ValidationError(`Query '${String(query?.name)}' belongs to no app.`, query?.name);
       return app.requestFor(query);
     },
-    call: (name, request, signal) => endpoint.call(name, request ?? null, signal),
+    call: (name, request, signal, stamp) => endpoint.call(name, request ?? null, signal, stamp),
     emit: (name, payload) => endpoint.emit(`${plugin}.${name}`, payload ?? null),
     handle (name, handler) {
       shared.handlers.set(`${plugin}.${name}`, handler);

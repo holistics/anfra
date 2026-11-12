@@ -6,7 +6,7 @@ import { changesOf } from './changes';
 import { dedent } from './format';
 import { declaredFilters, isActive, queryInputs } from './inputs';
 import { problemsOf, queryCounts, runtimeProblem } from './problems';
-import { attributeRequests, type RequestEntry } from './requests';
+import { attributeRequests, createRequestLog, type RequestEntry } from './requests';
 import { appTrust, queryTrust } from './trust';
 
 const entry = (id: number, aql: string, extra: Partial<RequestEntry> = {}): RequestEntry => ({
@@ -72,18 +72,40 @@ describe('problems', () => {
 });
 
 describe('request attribution', () => {
-  it("gives each query its requests, newest first, and keeps the rest apart", () => {
-    const { byQuery, other } = attributeRequests([entry(1, REVENUE_AQL), entry(2, 'explore sales {}'), entry(3, REVENUE_AQL)], [salesApp()]);
-    expect(byQuery.get('0/revenue')?.map((item) => [item.entry.id, item.shared])).toEqual([[3, false], [1, false]]);
+  const stamped = (id: number, aql: string, query: string, app = 0) => entry(id, aql, { stamp: { app, query } });
+
+  it('gives each query the requests stamped with its name, newest first, and keeps the rest apart', () => {
+    const { byQuery, other } = attributeRequests(
+      [stamped(1, REVENUE_AQL, 'revenue'), entry(2, REVENUE_AQL), stamped(3, REVENUE_AQL, 'revenue')],
+      [salesApp()],
+    );
+    expect(byQuery.get('0/revenue')?.map((item) => item.entry.id)).toEqual([3, 1]);
     expect(other.map((item) => item.id)).toEqual([2]);
   });
 
-  it('tags a request two queries declare alike as shared', () => {
+  it('keeps a query\'s history across edits of its AQL, and apart from a query declared alike', () => {
     const app = salesApp();
     app.declaration.queries.copy = { dataset: 'sales', aql: REVENUE_AQL };
-    const { byQuery } = attributeRequests([entry(1, REVENUE_AQL)], [app]);
-    expect(byQuery.get('0/copy')?.[0]?.shared).toBe(true);
-    expect(byQuery.get('0/revenue')?.[0]?.shared).toBe(true);
+    const { byQuery } = attributeRequests([stamped(1, 'explore old {}', 'revenue'), stamped(2, REVENUE_AQL, 'revenue')], [app]);
+    expect(byQuery.get('0/revenue')?.map((item) => item.entry.id)).toEqual([2, 1]);
+    expect(byQuery.get('0/copy')).toBeUndefined();
+  });
+
+  it('keeps a removed query\'s requests under its name, marked removed', () => {
+    const { byQuery, removed } = attributeRequests([stamped(1, REVENUE_AQL, 'gone'), stamped(2, REVENUE_AQL, 'revenue')], [salesApp()]);
+    expect(byQuery.get('0/gone')?.map((item) => item.entry.id)).toEqual([1]);
+    expect(removed).toEqual([{ app: 0, name: 'gone' }]);
+  });
+});
+
+describe('the request log', () => {
+  it('keeps the query a frame\'s call was stamped with', async () => {
+    const { log, record } = createRequestLog();
+    const context = {
+      name: 'core.submitQuery', caller: { kind: 'frame' }, chain: [{ kind: 'frame' }], origin: { kind: 'frame' }, signal: new AbortController().signal, trace: ['inspect'], stamp: { app: 0, query: 'revenue' },
+    } as const;
+    await record({ dataset: 'sales', aql: REVENUE_AQL }, context, async () => ({ columns: [], values: [] }));
+    expect(log.entries()[0]?.stamp).toEqual({ app: 0, query: 'revenue' });
   });
 });
 

@@ -1,4 +1,4 @@
-import type { DatasetDescriptor, User } from '../common/types';
+import type { DatasetDescriptor, QueryStamp, User } from '../common/types';
 import type { CommandContribution, TabContribution } from './contributions';
 
 /**
@@ -38,6 +38,11 @@ export interface CallContext {
   readonly mount?: MountContext;
   /** The middleware the call has passed through so far, by name, outermost first. */
   readonly trace: readonly string[];
+  /**
+   * The query the frame says the call is for: a query's run or page, or its export. The frame's
+   * word, checked only for its shape: show a call under it, never decide by it.
+   */
+  readonly stamp?: QueryStamp;
 }
 
 export interface HandlerCallOptions extends CallOptions {

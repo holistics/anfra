@@ -15,6 +15,7 @@ import type {
   InspectedApp,
   LineageResult,
   QueryInput,
+  QueryStamp,
 } from '../../../common/types';
 import type { CallContext } from '../../../host/plugin';
 
@@ -25,6 +26,8 @@ export interface RequestEntry {
   id: number;
   /** The call's full name, `<plugin>.<name>`: `core.submitQuery` for a query. */
   call: KnownCall | (string & {});
+  /** The query the frame stamped it with: a query's run, page or export. */
+  stamp?: QueryStamp;
   /** Who made it: `frame`, or `plugin <name>` for a plugin's call made for the frame. */
   caller: string;
   /** The middleware it passed through before this log, by name, outermost first. */
@@ -194,6 +197,7 @@ export function createRequestLog ({ limit = 200, previewRows = 20 }: RecordOptio
         ...details,
         id,
         call: context.name,
+        ...(context.stamp && { stamp: { app: context.stamp.app, query: context.stamp.query } }),
         caller: callerOf(context),
         // A copy: the host keeps adding the middleware after this one.
         ...(context.trace.length > 1 && { trace: context.trace.slice(0, -1) }),
@@ -237,40 +241,37 @@ export interface QueryRef {
   name: string;
 }
 
-/**
- * The queries a request may belong to: those that declare its dataset and AQL. A request carries
- * the declared AQL, not the executed one, so this is exact unless two queries declare the same.
- */
-export function queriesOf (
-  entry: Pick<BackendQueryRequest, 'dataset' | 'aql'> & { call: RequestEntry['call'] },
-  apps: InspectedApp[],
-): QueryRef[] {
-  if (entry.call !== 'core.submitQuery' && entry.call !== 'export.query') return [];
-  return apps.flatMap((app, index) =>
-    Object.entries(app.declaration.queries)
-      .filter(([, q]) => q.dataset === entry.dataset && q.aql === entry.aql)
-      .map(([name]) => ({ app: index, name })),
-  );
+/** The query a request was stamped with, if any. */
+export function queryOf (entry: Pick<RequestEntry, 'stamp'>): QueryRef | undefined {
+  return entry.stamp ? { app: entry.stamp.app, name: entry.stamp.query } : undefined;
 }
 
-/** Each query's requests, newest first, keyed `<app>/<name>`; and the requests no query claims. */
-export function attributeRequests (entries: readonly RequestEntry[], apps: InspectedApp[]) {
-  const byQuery = new Map<string, { entry: RequestEntry; shared: boolean }[]>();
+/**
+ * Each query's requests, newest first, keyed `<app>/<name>`; the requests no query claims; and the
+ * queries that have requests but are no longer in their app (removed), in the order first seen.
+ * By the query the frame stamped each with, so a query's history survives edits of its AQL.
+ */
+export function attributeRequests (entries: readonly RequestEntry[], apps: readonly InspectedApp[]) {
+  const byQuery = new Map<string, { entry: RequestEntry }[]>();
   const other: RequestEntry[] = [];
+  const removed: QueryRef[] = [];
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i] as RequestEntry;
-    const refs =
-      entry.aql && entry.dataset ? queriesOf({ ...entry, dataset: entry.dataset, aql: entry.aql }, apps) : [];
-    if (refs.length === 0) other.push(entry);
-    for (const ref of refs) {
-      const key = `${ref.app}/${ref.name}`;
-      const item = { entry, shared: refs.length > 1 };
-      const list = byQuery.get(key);
-      if (list) list.push(item);
-      else byQuery.set(key, [item]);
+    const ref = queryOf(entry);
+    if (!ref) {
+      other.push(entry);
+      continue;
     }
+    const key = `${ref.app}/${ref.name}`;
+    const list = byQuery.get(key);
+    if (list) {
+      list.push({ entry });
+      continue;
+    }
+    byQuery.set(key, [{ entry }]);
+    if (!Object.hasOwn(apps[ref.app]?.queries ?? {}, ref.name)) removed.push(ref);
   }
-  return { byQuery, other };
+  return { byQuery, other, removed };
 }
 
 /** A failed call, as the request log shows it: an SDK error by its code, any other by its name. */

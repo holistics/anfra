@@ -14,6 +14,7 @@ import type {
   QueryInput,
   QueryRequest,
   QueryResult,
+  QueryStamp,
   SelectionCondition,
 } from '../../common/types';
 
@@ -220,8 +221,9 @@ export async function runQuery (
   request: BackendQueryRequest,
   backend: Backend,
   signal: AbortSignal,
+  stamp?: QueryStamp,
 ): Promise<{ result: QueryResult, input: QueryInput }> {
-  const data = await backend.submitQuery(request, signal);
+  const data = await backend.submitQuery(request, signal, stamp);
   // As the backend ran it, or, from one that doesn't say, as it was sent.
   return { result: toResult(query, data), input: data.input ?? request.input };
 }

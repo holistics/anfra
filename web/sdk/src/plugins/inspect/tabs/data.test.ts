@@ -5,7 +5,7 @@ import { testUser } from '../../../app/testSupport';
 import { DATA_TAB } from '../model/types';
 import { toCsv } from './data';
 import {
-  byTestId, inspect, REVENUE_AQL, salesApp, salesSnapshot, type Harness,
+  byTestId, inspect, REVENUE_AQL, REVENUE_STAMP, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
 import { lineagePlugin } from '../../lineage';
 
@@ -40,7 +40,7 @@ describe('Data', () => {
 
   it("shows the rows of the query's latest request, with the labels as headers", async () => {
     harness = await inspect({ tab: DATA_TAB });
-    await harness.frameCall('core.submitQuery', REVENUE);
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
     const { root } = await harness.tab(DATA_TAB);
     const card = await open(cardOf(root, 'revenue'));
     const rows = byTestId(card, 'table-rows')!;
@@ -66,27 +66,28 @@ describe('Data', () => {
 
   it('says when the result is empty', async () => {
     harness = await inspect({ tab: DATA_TAB, submitQuery: () => ({ columns: [], values: [], meta: { numRows: 0 } }) });
-    await harness.frameCall('core.submitQuery', REVENUE);
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
     const { root } = await harness.tab(DATA_TAB);
     const card = await open(cardOf(root, 'revenue'));
     expect(byTestId(card, 'table-rows')).toBeNull();
     expect(byTestId(card, 'table-count')?.textContent).toContain('No rows.');
   });
 
-  it("doesn't show a request another query may have made", async () => {
+  it('tells two queries declared alike apart by the query each request was stamped with', async () => {
     const app = salesApp();
     app.declaration.queries.copy = { dataset: 'sales', aql: REVENUE_AQL };
     app.queries.copy = { ...app.queries.revenue! };
     harness = await inspect({ tab: DATA_TAB, snapshot: salesSnapshot([app]) });
-    await harness.frameCall('core.submitQuery', REVENUE);
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
     const { root } = await harness.tab(DATA_TAB);
-    expect(byTestId(await open(cardOf(root, 'revenue')), 'table-gone')).not.toBeNull();
+    expect(byTestId(await open(cardOf(root, 'copy')), 'table-gone')).not.toBeNull();
+    expect(byTestId(await open(cardOf(root, 'revenue')), 'table-gone')).toBeNull();
   });
 
   it('skips a later page', async () => {
     harness = await inspect({ tab: DATA_TAB });
-    await harness.frameCall('core.submitQuery', REVENUE);
-    await harness.frameCall('core.submitQuery', { ...REVENUE, page: 2 });
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
+    await harness.frameCall('core.submitQuery', { ...REVENUE, page: 2 }, REVENUE_STAMP);
     const { root } = await harness.tab(DATA_TAB);
     expect(byTestId(await open(cardOf(root, 'revenue')), 'table-rows')).not.toBeNull();
   });
@@ -111,7 +112,7 @@ describe('Data', () => {
 
   it('keeps the open cards across a switch of tab', async () => {
     harness = await inspect({ tab: DATA_TAB });
-    await harness.frameCall('core.submitQuery', REVENUE);
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
     const first = await harness.tab(DATA_TAB);
     await open(cardOf(first.root, 'revenue'));
     expect(harness.state.data.open.has('0/revenue')).toBe(true);
@@ -149,7 +150,7 @@ describe('Data', () => {
 
   it('offers no download when the reader may not export', async () => {
     harness = await inspect({ tab: DATA_TAB, user: { ...testUser, permissions: { ...testUser.permissions, canExportData: false } } });
-    await harness.frameCall('core.submitQuery', REVENUE);
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
     const { root } = await harness.tab(DATA_TAB);
     const card = await open(cardOf(root, 'revenue'));
     expect(byTestId(card, 'table-rows')).not.toBeNull();
@@ -158,7 +159,7 @@ describe('Data', () => {
 
   it('offers no download for part of a table', async () => {
     harness = await inspect({ tab: DATA_TAB, submitQuery: () => ({ columns: [], values: [['EU', 1]], meta: { numRows: 40 } }) });
-    await harness.frameCall('core.submitQuery', REVENUE);
+    await harness.frameCall('core.submitQuery', REVENUE, REVENUE_STAMP);
     const { root } = await harness.tab(DATA_TAB);
     const card = await open(cardOf(root, 'revenue'));
     expect(byTestId(card, 'table-count')?.textContent).toContain('First 1 of 40 rows');

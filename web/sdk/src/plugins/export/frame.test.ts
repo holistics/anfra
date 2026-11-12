@@ -44,6 +44,17 @@ function setup (options: StubOptions = { exportQuery: link }, title?: string) {
 }
 
 describe('query.export', () => {
+  it('stamps its run, its pages and its export with the app and the query, for the host\'s request log', async () => {
+    const { app, query, frame } = setup();
+    await app.execute();
+    await query.export();
+
+    expect(frame.calls.map((call) => [call.name, call.stamp])).toEqual([
+      ['core.submitQuery', { app: 0, query: 'revenue' }],
+      ['export.query', { app: 0, query: 'revenue' }],
+    ]);
+  });
+
   it('sends what the query was last run with, every row, and answers the link', async () => {
     const { stub, app, query } = setup();
     const region = app.createFilter('region', { field: 'users.region' });

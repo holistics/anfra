@@ -68,10 +68,10 @@ function rowCount (shown: number, total: number | undefined): string {
 
 /**
  * The request whose rows a table shows: the newest that succeeded and kept rows, on the first page
- * (a later page isn't the start of the table), and not shared with another query, which may have made it.
+ * (a later page isn't the start of the table).
  */
-export function latestRows (requests: readonly { entry: RequestEntry, shared: boolean }[] | undefined): RequestEntry | undefined {
-  return requests?.find(({ entry, shared }) => !shared && entry.status === 'ok' && entry.preview && entry.columns && (entry.input?.pagination?.page ?? 1) === 1)?.entry;
+export function latestRows (requests: readonly { entry: RequestEntry }[] | undefined): RequestEntry | undefined {
+  return requests?.find(({ entry }) => entry.status === 'ok' && entry.preview && entry.columns && (entry.input?.pagination?.page ?? 1) === 1)?.entry;
 }
 
 /** Which reveal each mount's Data tab has brought into view, so a tab switched back to doesn't flash it again. */

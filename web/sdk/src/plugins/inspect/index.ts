@@ -11,7 +11,15 @@ import { OVERVIEW_TAB } from './model/types';
 import { dropState, stateOf } from './state';
 
 const tab = (id: string, title: string, icon: string, order: number, load: () => Promise<{ default: TabContribution['mount'] }>, selection?: TabContribution['selection']): TabContribution => ({
-  id, title, icon, order, selection, mount: async (root, context) => (await load()).default(root, context),
+  id,
+  title,
+  icon,
+  order,
+  selection,
+  mount: async (root, context) => {
+    stateOf(context.mount).follow(context.panel);
+    return (await load()).default(root, context);
+  },
 });
 
 export function inspectPlugin (): Plugin {

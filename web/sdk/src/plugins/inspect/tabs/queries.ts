@@ -17,7 +17,7 @@ import {
   controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryFilterSource,
 } from '../model/inputs';
 import { queryCounts } from '../model/problems';
-import { attributeRequests, type RequestEntry } from '../model/requests';
+import { attributeRequests, type QueryRef, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
 import type { QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
@@ -27,8 +27,8 @@ import {
 } from '../view';
 
 type CodeTab = 'declared' | 'aql' | 'sql' | 'signature';
-type Section = 'queries' | 'controls' | 'selection' | 'other';
-type Attributed = { entry: RequestEntry, shared?: boolean };
+type Section = 'queries' | 'controls' | 'selection' | 'removed' | 'other';
+type Attributed = { entry: RequestEntry };
 
 /** How many requests show before "Show all". */
 const FIRST = 5;
@@ -236,7 +236,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   }
 
   /** One request: in a query, its time, how it ended and how long it took; on its own, a card like a query's row. */
-  function requestRow (scope: string, { entry, shared }: Attributed, card: boolean): HTMLElement {
+  function requestRow (scope: string, { entry }: Attributed, card: boolean): HTMLElement {
     const dot = h(doc, 'span', { class: `dot ${entry.status}`, role: 'img', 'aria-label': `Status: ${entry.status}`, 'data-tip': entry.status });
     const summary = card
       ? h(doc, 'span', { class: 'entry' },
@@ -249,7 +249,6 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         dot,
         h(doc, 'span', { class: 'time' }, formatTime(entry.at)),
         h(doc, 'span', { class: 'condition' }, summaryOf(entry)),
-        shared && h(doc, 'span', { ...badge(), 'data-tip': 'Another query declares the same dataset and AQL' }, 'shared'),
         h(doc, 'span', { class: 'spacer' }),
         h(doc, 'span', { class: 'rows' }, entry.durationMs === undefined ? '…' : `${entry.durationMs} ms`));
     const details = collapsible(doc, `${scope}:request:${entry.id}`, summary, () => [
@@ -341,8 +340,8 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       query.error && h(doc, 'span', { class: 'error-text', role: 'alert', 'data-testid': 'query-error' }, errorText(query.error)));
 
     return entityRow(key, summary, () => {
-      // The newest run that ended; one another query may have made isn't this one's.
-      const latest = requests.find(({ entry, shared }) => !shared && entry.call === 'core.submitQuery' && entry.status !== 'pending')?.entry;
+      // The newest run that ended.
+      const latest = requests.find(({ entry }) => entry.call === 'core.submitQuery' && entry.status !== 'pending')?.entry;
       const notRun = query.state === 'success' || query.state === 'error' ? 'Not returned.' : 'Not run yet.';
       const lastRun = [
         query.debug && (query.debug.fromCache ? 'cache' : 'database'),
@@ -431,7 +430,19 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       ]));
   }
 
-  function appSection (app: InspectedApp, index: number, several: boolean, byQuery: Map<string, Attributed[]>, structure: InspectedStructure | undefined): HTMLElement {
+  /** A query the app removed, with the requests it made while it was there. */
+  function removedRow (index: number, name: string, requests: readonly Attributed[]): HTMLElement {
+    const key = `removed:${index}/${name}`;
+    const summary = h(doc, 'span', { class: 'line' },
+      h(doc, 'span', { class: 'name' }, name),
+      h(doc, 'span', { ...badge(), 'data-tip': 'The app removed this query; these are the requests it made' }, 'removed'),
+      h(doc, 'span', { class: 'spacer' }),
+      h(doc, 'span', { class: 'rows' }, plural(requests.length, 'request')));
+    return entityRow(key, summary, () => requestList(key, requests, false));
+  }
+
+  function appSection (app: InspectedApp, index: number, several: boolean, byQuery: Map<string, Attributed[]>, removed: readonly QueryRef[], structure: InspectedStructure | undefined): HTMLElement {
+    const gone = removed.filter((ref) => ref.app === index);
     const search = view.search.trim();
     const filtering = search !== '' || view.filter !== 'all';
     const queries = Object.entries(app.queries);
@@ -451,7 +462,10 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         view.filter === 'errors' ? 'Controls have no error state.' : filtering ? none('controls') : 'This app declares no controls.',
         () => shownControls.map(([name, control]) => controlRow(app, index, name, control, structure))),
       selections.length > 0 && section('selection', index, 'Selection', selections.length, undefined, 'None.',
-        () => selections.map(([label, selection]) => selectionCard(label, selection!))));
+        () => selections.map(([label, selection]) => selectionCard(label, selection!))),
+      // Not filtered: what a removed query asked is history, kept until the log drops it.
+      view.filter === 'all' && gone.length > 0 && section('removed', index, 'Removed queries', gone.length, undefined, 'None.',
+        () => gone.map((ref) => removedRow(index, ref.name, byQuery.get(`${index}/${ref.name}`) ?? []))));
   }
 
   // The head stays as it is, so typing keeps its focus: a redraw sets its value and counts.
@@ -495,9 +509,9 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     });
     if (!snapshot) return note(doc, 'Waiting for the Data App…', { 'data-testid': 'inspect-waiting' });
     if (!snapshot.apps.length) return note(doc, "This Data App hasn't created an SDK app.", { 'data-testid': 'queries-no-app' });
-    const { byQuery, other } = attributeRequests(state.requests.entries(), snapshot.apps);
+    const { byQuery, other, removed } = attributeRequests(state.requests.entries(), snapshot.apps);
     return [
-      snapshot.apps.map((app, index) => appSection(app, index, snapshot.apps.length > 1, byQuery, snapshot.structure)),
+      snapshot.apps.map((app, index) => appSection(app, index, snapshot.apps.length > 1, byQuery, removed, snapshot.structure)),
       // At the end, so nothing the frame asked is hidden.
       other.length > 0 && section('other', undefined, 'Other requests', other.length, undefined, 'None.',
         () => requestList('other', other.map((entry) => ({ entry })), true)),

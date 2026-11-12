@@ -6,7 +6,7 @@
  * Both sides speak the same messages. A call is answered by its `id`, which each side counts on
  * its own: a result answers a call the other side made.
  */
-import type { DatasetDescriptor, User } from './types';
+import type { DatasetDescriptor, QueryStamp, User } from './types';
 
 /** A plugin a host installed, as a frame sees it (`Anfra.plugins`). */
 export interface PluginInfo {
@@ -48,7 +48,7 @@ export type BridgeMessage =
   /** Frame → host: the frame's kernel is running (once per load of its document). */
   | { type: 'anfra:ready' }
   /** A plugin call, `<plugin>.<name>`, answered by an `anfra:result` with the same id. */
-  | { type: 'anfra:call', id: number, name: string, request: unknown }
+  | { type: 'anfra:call', id: number, name: string, request: unknown, stamp?: QueryStamp }
   | { type: 'anfra:result', id: number, ok: true, result: unknown }
   | { type: 'anfra:result', id: number, ok: false, error: BridgeError }
   /** The caller gave up on its call: stop it. Nothing answers. */

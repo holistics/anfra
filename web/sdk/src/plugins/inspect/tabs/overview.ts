@@ -11,7 +11,7 @@ import { changesOf } from '../model/changes';
 import { formatAgo, formatTime, plural, usageOf } from '../model/format';
 import { controlTargets } from '../model/inputs';
 import { type Problem, problemsOf, queryCounts } from '../model/problems';
-import { queriesOf, type RequestEntry } from '../model/requests';
+import { queryOf, type RequestEntry } from '../model/requests';
 import {
   appTrust, LEVELS, TRUST_LEVELS, type Trust,
 } from '../model/trust';
@@ -167,7 +167,9 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     const controls = apps.reduce((n, app) => n + Object.keys(app.controls).length, 0);
     const unapplied = counts.dirtyControls;
     const last = requests.findLast((entry) => entry.call === 'core.submitQuery' && entry.status !== 'pending');
-    const lastQuery = last?.aql && last.dataset ? queriesOf({ ...last, dataset: last.dataset, aql: last.aql }, apps)[0] : undefined;
+    const stamped = last && queryOf(last);
+    // Linked only while the app still has it.
+    const lastQuery = stamped && Object.hasOwn(apps[stamped.app]?.queries ?? {}, stamped.name) ? stamped : undefined;
     const first = problems[0];
     const queries = [
       `${counts.success} ok`,
@@ -185,7 +187,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
         stat('controls', 'Controls', String(controls), unapplied ? `${unapplied} unapplied` : 'All applied', () => showQueries('all'), unapplied ? 'warn' : undefined)),
       h(doc, 'div', { class: 'stats two' },
         stat('last-request', 'Last request', last ? h(doc, 'span', { 'data-tip': formatTime(last.at) }, formatAgo(last.at)) : '—',
-          last ? (lastQuery?.name ?? 'no query') : 'Nothing has run yet',
+          last ? (lastQuery?.name ?? (stamped ? `${stamped.name} (removed)` : 'no query')) : 'Nothing has run yet',
           lastQuery && (() => reveal({ entity: 'query', ...lastQuery })),
           last?.status === 'error' ? 'error' : undefined),
         stat('last-duration', 'Last run duration', last?.durationMs !== undefined ? `${last.durationMs} ms` : '—',

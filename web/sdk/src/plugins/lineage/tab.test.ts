@@ -2,7 +2,10 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import type { BackendLineageRequest, LineageResult } from '../../common/types';
-import { byTestId, inspect, salesSnapshot, type Harness } from '../inspect/tabs/testSupport';
+import {
+  byTestId, inspect, salesApp, salesSnapshot, type Harness,
+} from '../inspect/tabs/testSupport';
+import { stateOf } from './state';
 import { lineagePlugin } from '.';
 
 const TAB = 'lineage.lineage';
@@ -162,6 +165,23 @@ describe('Lineage', () => {
     byTestId(root, 'lineage-close')!.click();
     expect(large.open).toBe(false);
     expect(card(root, 'query:0/revenue')?.classList.contains('selected')).toBe(true);
+  });
+
+  it('forgets its focus and pin on a query the app removed', async () => {
+    const { harness } = await lineage();
+    const view = stateOf(harness.mount).view;
+    view.focus = 'query:0/revenue';
+    view.selected = 'control:0/region';
+    const app = salesApp();
+    delete app.queries.revenue;
+    delete app.declaration.queries.revenue;
+    delete app.controls.region;
+    delete app.declaration.filters.region;
+
+    harness.post(salesSnapshot([app]));
+
+    expect(view.focus).toBeUndefined();
+    expect(view.selected).toBeUndefined();
   });
 
   it('waits for the frame', async () => {

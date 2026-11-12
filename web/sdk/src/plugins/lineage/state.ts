@@ -2,8 +2,9 @@
  * What the Lineage tab keeps per mount, beyond the panel: the last trace, and what the reader
  * chose to see. A tab is taken down when another is shown; this outlives it. A remount starts afresh.
  */
-import type { LineageResult, LineageTarget } from '../../common/types';
+import type { InspectedApp, LineageResult, LineageTarget } from '../../common/types';
 import type { MountContext } from '../../host/plugin';
+import type { Panel } from '../../host/panel';
 import { targetKey, type LineageKind, type Traced } from './model';
 
 /** What the catalog answered for the fields asked (`key`): a trace outlives the tab that started it. */
@@ -34,6 +35,13 @@ export interface LineageState {
   traceFor: (targets: readonly LineageTarget[], run: (targets: LineageTarget[]) => Promise<LineageResult>, retry: boolean) => void;
   /** Tell the tabs the state changed. */
   changed: () => void;
+  /**
+   * Keep the view in step with the panel's snapshots: a focus or a pin on a query or a control the
+   * app removed is dropped, so one made again by its name starts afresh. Once per mount.
+   */
+  follow: (panel: Panel) => void;
+  /** Drop a focus or a pin on a query or a control not in `apps`. */
+  prune: (apps: readonly InspectedApp[]) => void;
   /** Each change. Returns the function that stops listening. */
   subscribe: (listener: () => void) => () => void;
 }
@@ -64,6 +72,15 @@ function createState (): LineageState {
     try { listener(); } catch { /* one listener must not stop the others */ }
   });
   let trace: LineageTrace | undefined;
+  let following = false;
+  // A query's or a control's card: `query:<app>/<name>`, `control:<app>/<name>`.
+  const entity = /^(query|control):(\d+)\/(.+)$/;
+  const gone = (id: string | undefined, apps: readonly InspectedApp[]) => {
+    const match = id ? entity.exec(id) : null;
+    if (!match) return false;
+    const app = apps[Number(match[2])];
+    return !Object.hasOwn((match[1] === 'query' ? app?.queries : app?.controls) ?? {}, match[3]!);
+  };
   const state: LineageState = {
     get trace () { return trace; },
     view: { hidden: new Set(), crossFilters: false },
@@ -90,6 +107,17 @@ function createState (): LineageState {
       );
     },
     changed,
+    follow (panel) {
+      if (following) return;
+      following = true;
+      panel.subscribe(() => {
+        if (panel.snapshot) state.prune(panel.snapshot.apps);
+      });
+    },
+    prune (apps) {
+      if (gone(state.view.focus, apps)) state.view.focus = undefined;
+      if (gone(state.view.selected, apps)) state.view.selected = undefined;
+    },
     subscribe (listener) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

@@ -185,6 +185,19 @@ describe('the frame\'s calls', () => {
     expect(seen).toMatchObject({ name: 'spy.look', caller: { kind: 'frame' }, mount: { frame: mounted!.frame } });
   });
 
+  it('carry the query the frame stamped them with, and nothing it stamped wrong', async () => {
+    const seen: (CallContext | undefined)[] = [];
+    const spy = definePlugin({
+      name: 'spy', version: '1', host: { calls: { look: { frame: true, handler: (_r, context) => { seen.push(context); return null; } } } },
+    });
+    mount([corePlugin(backend()), spy]);
+    fromFrame({ type: 'anfra:call', id: 1, name: 'spy.look', request: null, stamp: { app: 0, query: 'revenue' } });
+    fromFrame({ type: 'anfra:call', id: 2, name: 'spy.look', request: null, stamp: { app: -1, query: 7 } as never });
+    call(3, 'spy.look');
+    await settle();
+    expect(seen.map((context) => context?.stamp)).toEqual([{ app: 0, query: 'revenue' }, undefined, undefined]);
+  });
+
   it('send the frame only the SDK\'s errors\' messages, anything else as a plain failure', async () => {
     const leaky = definePlugin({
       name: 'leaky',
