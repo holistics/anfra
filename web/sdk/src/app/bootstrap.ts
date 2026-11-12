@@ -11,6 +11,7 @@ import { invalidRequest } from '../common/errors';
 import type { Backend, BackendQueryResult } from '../common/types';
 import type { App } from './app';
 import { Control } from './controls';
+import { installCore } from './core';
 import { installInspection } from './inspection';
 import { installContentUi } from './menu';
 import { themeLayer } from './layer';
@@ -98,6 +99,8 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   // Before any plugin or the definition runs, so none of their errors is missed.
   installReporting(own, win, provision.captureConsole === true);
   installInspection(own);
+  // `core`'s frame side: the host's refresh, and whether a result on screen came from a cache.
+  installCore(createKernel('core', shared, { Query, Control }));
   shared.contentUi = installContentUi(own);
   own.on('theme', (theme: unknown) => {
     const resolved = resolveTheme(theme);

@@ -376,6 +376,11 @@ export interface ExecuteOptions {
   bustCache?: boolean;
 }
 
+export interface RefreshOptions {
+  /** Ask the server to skip any result cache it keeps. True unless given. */
+  bustCache?: boolean;
+}
+
 export type Unsubscribe = () => void;
 export type Listener = () => void;
 

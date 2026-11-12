@@ -322,6 +322,33 @@ describe('execute', () => {
     expect(stub.queries[1].bustCache).toBe(true);
   });
 
+  it('re-runs everything on refresh without busting the cache when told not to', async () => {
+    const { stub, sdk } = build(twoRows);
+    const app = sdk.createApp();
+    revenueBy(app);
+
+    await app.execute();
+    await app.refresh({ bustCache: false });
+
+    expect(stub.calls).toHaveLength(2);
+    expect(stub.queries[1]).not.toHaveProperty('bustCache');
+  });
+
+  it('starts a paged query over at its first page on refresh, dropping the pages fetched since', async () => {
+    const { stub, sdk } = build((request) => ({ ...twoRows, meta: { page: request.page, pageSize: 2, numRows: 2 } }));
+    const app = sdk.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: REVENUE_AQL, pageSize: 2 });
+
+    await app.execute();
+    await query.fetchMore();
+    expect(query.result?.rows).toHaveLength(4);
+    await app.refresh();
+
+    expect(stub.queries.map((request) => request.page)).toEqual([1, 2, 1]);
+    expect(query.page).toBe(1);
+    expect(query.result?.rows).toHaveLength(2);
+  });
+
   it('notifies subscribers of any entity through one app subscription', async () => {
     const { sdk } = build(twoRows);
     const app = sdk.createApp();
