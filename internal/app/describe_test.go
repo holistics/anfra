@@ -51,6 +51,7 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size."},
 		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "how many rows a page has, for AQL only"},
 		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only"},
+		ArgSpec{Name: "bust_cache", Type: command.ArgBool, Usage: "run the query again instead of returning a result a server in front of anfra cached earlier. anfra keeps no result cache, so it ignores this."},
 	)
 	for _, name := range []string{"query", "query.compile"} {
 		if args := byName[name].Args; !reflect.DeepEqual(args, want) {

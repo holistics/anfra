@@ -90,6 +90,24 @@ describe('coreApiBackend', () => {
     });
   });
 
+  it('asks a server that caches results to skip its cache, and reads whether it answered from one', async () => {
+    const page = asStream(answered) as { events: string };
+    const cached = { events: page.events.replace('"type":"summary",', '"type":"summary","from_cache":true,"executed_at":"2026-11-12T08:30:00Z",') };
+    const { client, sent } = api(cached);
+    const result = await coreApiBackend(client).submitQuery({ ...request, bustCache: true }, signal);
+    expect(sent[0].body).toMatchObject({ bust_cache: true });
+    expect(result.debug).toMatchObject({ fromCache: true, executedAt: new Date('2026-11-12T08:30:00Z') });
+  });
+
+  it("sends no bust_cache unless asked, and takes a result without cache fields as just run", async () => {
+    const before = Date.now();
+    const { client, sent } = api(asStream(answered));
+    const result = await coreApiBackend(client).submitQuery(request, signal);
+    expect(sent[0].body).not.toHaveProperty('bust_cache');
+    expect(result.debug?.fromCache).toBe(false);
+    expect(result.debug?.executedAt?.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
   it("fails a query whose columns come without their types, which a Data App decides by", async () => {
     const { semantic_type: _, ...untyped } = answered.columns[0];
     const { client } = api(asStream({ ...answered, columns: [untyped] }));
