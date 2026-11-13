@@ -1,5 +1,6 @@
 // Package canalquery is the canal-query sidecar, the SQL execution engine: its
-// supervisor, which spawns one or connects to an external one, and its client.
+// supervisor, which spawns one (anfra-canal's query service, see anfracanal)
+// or connects to an external one, and its client.
 package canalquery
 
 import (
@@ -7,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/anfracanal"
 	"github.com/holistics/anfra/shared/logkit"
 )
 
@@ -49,7 +51,7 @@ func (c *Sidecar) Start(ctx context.Context) error {
 		return nil
 	}
 
-	binPath, err := sidecar.Binary(Name, "ANFRA_CANAL_QUERY_BIN", embedded)
+	cmd, err := anfracanal.Query.Command()
 	if err != nil {
 		return fmt.Errorf("resolve canal-query binary: %w", err)
 	}
@@ -60,7 +62,8 @@ func (c *Sidecar) Start(ctx context.Context) error {
 
 	proc, err := sidecar.StartProcess(ctx, sidecar.ProcSpec{
 		Name: Name,
-		Path: binPath,
+		Path: cmd.Path,
+		Args: cmd.Args,
 		ExtraEnv: []string{
 			"SOCKET=" + c.socketPath,
 			"SKIP_HOLISTICS_DB=1",       // standalone: no monolith DB / job ops

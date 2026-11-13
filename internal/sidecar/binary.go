@@ -24,6 +24,13 @@ func Binary(name, env string, embedded []byte) (string, error) {
 	return "", fmt.Errorf("this build of anfra doesn't include %[1]s. Set %[2]s to the path of %[1]s's binary", name, env)
 }
 
+// Unpack writes the embedded binary name to anfra's folder, as Binary does, and
+// returns its path: for a sidecar whose binary Binary's one variable can't
+// choose.
+func Unpack(name string, embedded []byte) (string, error) {
+	return extractRuntime(name, embedded)
+}
+
 // extractRuntime writes an embedded sidecar binary to anfra's folder, keyed by
 // content hash (<home>/sidecars/<name>-<hash>), writing only when missing so
 // concurrent runs converge on the same file.

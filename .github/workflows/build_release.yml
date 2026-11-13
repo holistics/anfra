@@ -68,7 +68,7 @@ jobs:
           {
             echo "version=$(yq '.version' manifest.yml)"
             echo "node_tag=$(yq '.sidecars.anfra_node' manifest.yml)"
-            echo "canal_tag=$(yq '.sidecars.canal_query' manifest.yml)"
+            echo "canal_tag=$(yq '.sidecars.anfra_canal' manifest.yml)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify tag matches manifest, so does the SDK, and the changelog has its notes
@@ -100,7 +100,7 @@ jobs:
           node_assets=()
           for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do node_assets+=(-p "anfra-node-$t"); done
           gh release download -R holistics/holistics-core "$NODE_TAG"  -D sidecars "${node_assets[@]}"
-          gh release download -R holistics/canal          "$CANAL_TAG" -D sidecars -p 'canal-query-*'
+          gh release download -R holistics/canal          "$CANAL_TAG" -D sidecars -p 'anfra-canal-*'
           ls -la sidecars
 
       - name: Cross-build every target
@@ -109,10 +109,10 @@ jobs:
         run: |
           declare -A OS=([linux-x64]=linux [linux-arm64]=linux [darwin-x64]=darwin [darwin-arm64]=darwin)
           declare -A ARCH=([linux-x64]=amd64 [linux-arm64]=arm64 [darwin-x64]=amd64 [darwin-arm64]=arm64)
-          mkdir -p release internal/sidecar/anfranode/assets internal/sidecar/canalquery/assets
+          mkdir -p release internal/sidecar/anfranode/assets internal/sidecar/anfracanal/assets
           for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
             cp "sidecars/anfra-node-$t"  internal/sidecar/anfranode/assets/anfra-node
-            cp "sidecars/canal-query-$t" internal/sidecar/canalquery/assets/canal-query
+            cp "sidecars/anfra-canal-$t" internal/sidecar/anfracanal/assets/anfra-canal
             # -s -w strips the host's symbol table + DWARF (Phase 0).
             GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
               -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION -X 'main.defaultCloudURL=$ANFRA_CLOUD_URL' -X 'main.defaultCloudSupportEmail=$ANFRA_CLOUD_SUPPORT_EMAIL'" \
