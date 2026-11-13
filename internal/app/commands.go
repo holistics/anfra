@@ -26,6 +26,7 @@ var Commands = []command.Command{
 	catalog.Lineage,
 	show.Show,
 	validate.Validate,
+	cache.Status,
 	cache.Clean,
 }
 

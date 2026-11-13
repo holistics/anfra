@@ -30,7 +30,10 @@ type standInCache struct {
 func (c *standInCache) Summarize(context.Context) querycache.Summary { return querycache.Summary{} }
 func (c *standInCache) Settings() command.QueryCacheSettings         { return c.settings }
 func (c *standInCache) StartLake(context.Context) error              { return c.lakeErr }
-func (c *standInCache) Report(_ context.Context, err error)          { c.reported = append(c.reported, err) }
+func (c *standInCache) Contents(context.Context) (command.QueryCacheContents, error) {
+	return command.QueryCacheContents{}, nil
+}
+func (c *standInCache) Report(_ context.Context, err error) { c.reported = append(c.reported, err) }
 func (c *standInCache) Manager(context.Context) (*querycache.Manager, error) {
 	if c.managerErr != nil {
 		return nil, c.managerErr
