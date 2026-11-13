@@ -36,10 +36,23 @@ type cachedRun struct {
 
 // keyInput is what the query's cache key is made of, besides the tenant and
 // what the prepared statement gives: anfra-node's key for AQL, the text for
-// SQL, and the rows the run asks canal-query for.
+// SQL, and the rows the run asks canal-query for; and the dataset an AQL
+// query ran against, for its tags.
 type keyInput struct {
 	compilerKey, sql string
 	truncate         int
+	dataset          string
+}
+
+// tags are what a clean selects the query's entries by: its data source, and
+// its dataset (docs/designs/query-cache.md#tags). The models it read come
+// when anfra-node says which they are.
+func (k keyInput) tags(p query.Prepared) []querycache.Tag {
+	tags := []querycache.Tag{{Kind: querycache.TagDataSource, Value: p.DataSource()}}
+	if k.dataset != "" {
+		tags = append(tags, querycache.Tag{Kind: querycache.TagDataset, Value: k.dataset})
+	}
+	return tags
 }
 
 // startCache is how the cache answers q, whose statement is prepared, before
@@ -80,7 +93,10 @@ func (q queryRun) startCache(ctx context.Context, p query.Prepared, k keyInput, 
 	if err != nil {
 		return c.unavailable(ctx, err)
 	}
-	c.write, err = m.Begin(ctx, key, nil, aql, sql)
+	if err := qc.StartLake(ctx); err != nil {
+		return c.unavailable(ctx, fmt.Errorf("start canal-lake: %w", err))
+	}
+	c.write, err = m.Begin(ctx, key, k.tags(p), aql, sql)
 	if err != nil {
 		return c.unavailable(ctx, fmt.Errorf("begin the query's cache write: %w", err))
 	}

@@ -17,6 +17,22 @@ components:
         - message
         - severity
       type: object
+    CacheCleanRequestParams:
+      additionalProperties: false
+      properties:
+        query:
+          $ref: "#/components/schemas/QueryCacheSelector"
+          description: the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the repo is removed.
+      type: object
+    CacheCleanResult:
+      additionalProperties: false
+      properties:
+        query:
+          $ref: "#/components/schemas/QueryCacheCleaned"
+          description: what was removed from the query cache
+      required:
+        - query
+      type: object
     CacheOptions:
       additionalProperties: false
       properties:
@@ -392,6 +408,62 @@ components:
       required:
         - type
         - nodes
+      type: object
+    ErrorBodyCacheDisabled:
+      additionalProperties: false
+      description: The query cache is turned off.
+      properties:
+        code:
+          const: cache_disabled
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyCacheUnavailable:
+      additionalProperties: false
+      description: The query cache isn't working.
+      properties:
+        code:
+          const: cache_unavailable
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
       type: object
     ErrorBodyExportsUnavailable:
       additionalProperties: false
@@ -794,6 +866,31 @@ components:
           type: integer
       required:
         - pageSize
+      type: object
+    QueryCacheCleaned:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size, in bytes. Their files are deleted by the next sweep.
+          format: int64
+          type: integer
+        entries:
+          description: how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran.
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
+      type: object
+    QueryCacheSelector:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: entries of queries run on this data source
+          type: string
+        dataset:
+          description: entries of queries run against this dataset
+          type: string
       type: object
     QueryCompileRequestParams:
       additionalProperties: false
@@ -1749,6 +1846,66 @@ info:
   version: "0"
 openapi: 3.1.0
 paths:
+  /core.cache.clean:
+    post:
+      description: |-
+        Remove results from the repo's query cache, so that queries run on the warehouse again.
+
+        Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every result of the repo is removed.
+      operationId: core.cache.clean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CacheCleanRequestParams"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheCleanResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyCacheDisabled"
+                      - $ref: "#/components/schemas/ErrorBodyCacheUnavailable"
+                required:
+                  - error
+                type: object
+          description: internal_server_error, cache_disabled, cache_unavailable
+      summary: Remove results from the repo's query cache, so that queries run on the warehouse again
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
   /core.ingest:
     post:
       operationId: core.ingest
