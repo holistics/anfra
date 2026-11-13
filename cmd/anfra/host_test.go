@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/internal/envflag"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/sidecar"
 )
 
 // The repo's cache.query.enabled turns the query cache off, and
@@ -37,6 +39,37 @@ func TestQueryCacheDisabled(t *testing.T) {
 			got := queryCacheDisabled(tc.repo, logger)
 			if (got == "") != (tc.off == "") || !strings.Contains(got, tc.off) {
 				t.Errorf("reason %q, want one naming %q", got, tc.off)
+			}
+		})
+	}
+}
+
+// canal-query is given a canal-lake socket only when anfra runs canal-lake:
+// with the cache on, and canal-query its own. A deployment's canal-query
+// reaches the deployment's canal-lake, so starting it is left to them.
+func TestNewQueryCache(t *testing.T) {
+	t.Setenv("ANFRA_HOME", t.TempDir())
+	logger := slog.New(slog.DiscardHandler)
+	r := repo.Resolve(t.TempDir())
+	for _, tc := range []struct {
+		name, enabled, url string
+		socket             bool
+	}{
+		{"on", "1", "", true},
+		{"off", "0", "", false},
+		{"a deployment's canal-query", "1", "http://canal-query:1323", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(envflag.CacheQueryEnabled, tc.enabled)
+			c := newQueryCache(r, sidecar.Config{Logger: logger, CanalQueryURL: tc.url})
+			defer c.Close(t.Context())
+			if (c.lakeSocket != "") != tc.socket {
+				t.Errorf("canal-lake's socket %q, want one: %v", c.lakeSocket, tc.socket)
+			}
+			if tc.url != "" {
+				if err := c.StartLake(t.Context()); err != nil {
+					t.Errorf("StartLake with a deployment's canal-lake: %v", err)
+				}
 			}
 		})
 	}

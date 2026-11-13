@@ -36,6 +36,11 @@ type Config struct {
 	NodeURL       string
 	CanalQueryURL string
 
+	// CanalLakeSocket is where canal-lake listens, for a spawned canal-query to
+	// reach it (CANAL_LAKE_SOCKET); empty, when the query cache is off. canal-lake
+	// may start later: canal-query connects for each query.
+	CanalLakeSocket string
+
 	// WrapTransport, if set, wraps each sidecar client's transport once the
 	// sidecar is ready — e.g. with otelhttp, so a host traces the calls and
 	// propagates its trace into the sidecar. It receives the client's own

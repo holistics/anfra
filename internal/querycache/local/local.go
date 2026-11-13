@@ -1,6 +1,7 @@
 // Package local is a local repo's query cache, as anfra's own process holds
-// it: the repo's store, opened at first use, and the cache's state as anfra
-// status reports it (a querycache.Summarizer). A platform serving managed repos
+// it: the repo's store, opened at first use, its canal-lake, started at first
+// use, and the cache's state as anfra status reports it (a
+// querycache.Summarizer). A platform serving managed repos
 // supplies its own store and canal-lake instead. The cache's algorithm and
 // contract are internal/querycache; anfra's store is store/sqlite.
 //
@@ -8,7 +9,7 @@
 //
 //	import localquerycache "github.com/holistics/anfra/internal/querycache/local"
 //
-//	cache := localquerycache.New(dir, disabled)
+//	cache := localquerycache.New(dir, localquerycache.Options{Lake: lake})
 //
 // See docs/designs/query-cache.md.
 package local
@@ -20,6 +21,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/holistics/anfra/internal/querycache"
@@ -27,27 +29,75 @@ import (
 )
 
 // Cache is a repo's query cache in this process: its folder, whether it is
-// on, and its store once opened. A process makes one, and closes it as it ends.
+// on, its store once opened, and its canal-lake. A process makes one, and
+// closes it as it ends.
 type Cache struct {
 	dir string
 	// disabled says why the cache is off; empty when it is on.
-	disabled string
+	disabled  string
+	lake      Lake
+	namespace string
+	// unusable is why the cache can't be used though it is on: its settings
+	// are wrong. nil when they're right.
+	unusable error
 
 	mu    sync.Mutex
 	store *sqlitestore.Store
 }
 
-// New is the query cache in dir, the repo's folder for it. disabled says why
-// the cache is off, as anfra status reports it; empty, it is on.
-func New(dir, disabled string) *Cache {
-	return &Cache{dir: dir, disabled: disabled}
+// Lake is canal-lake as the cache runs it: started when first needed, and
+// again if it exited (canallake.Sidecar).
+type Lake interface {
+	Start(ctx context.Context) error
+	Close(ctx context.Context)
 }
 
+// Options are how a process runs the repo's query cache.
+type Options struct {
+	// Disabled says why the cache is off, as anfra status reports it; empty,
+	// it is on.
+	Disabled string
+	// Lake is its canal-lake; nil when the cache is off.
+	Lake Lake
+	// Namespace is the subfolder of canal-lake's storage its files go in, as
+	// the person running anfra gives it: word segments joined by "/", such as
+	// prod or prod/eu; empty for the storage's top level
+	// (docs/designs/query-cache.md#file-names).
+	Namespace string
+}
+
+// NamespaceEnv sets Options.Namespace.
+const NamespaceEnv = "ANFRA_CACHE_QUERY_NAMESPACE"
+
+// New is the query cache in dir, the repo's folder for it. A namespace
+// canal-lake can't take leaves the cache unusable, which Open and Summarize
+// report, rather than failing here: a cache problem never fails a command.
+func New(dir string, o Options) *Cache {
+	c := &Cache{dir: dir, disabled: o.Disabled, lake: o.Lake}
+	if o.Namespace != "" {
+		c.namespace = strings.TrimSuffix(o.Namespace, "/") + "/"
+		if !querycache.ValidNamespace(c.namespace) {
+			c.unusable = fmt.Errorf("%w: %s is %q", errBadNamespace, NamespaceEnv, o.Namespace)
+		}
+	}
+	return c
+}
+
+var errBadNamespace = errors.New("the query cache's namespace isn't one canal-lake can take")
+
+// Namespace prefixes the names of the cache's files in canal-lake: empty, or
+// segments each ending in "/" (querycache.Config.Namespace).
+func (c *Cache) Namespace() string { return c.namespace }
+
 // StorePath is the store's file.
-func (c *Cache) StorePath() string { return filepath.Join(c.dir, "cache.sqlite") }
+func (c *Cache) StorePath() string { return filepath.Join(c.dir, "store.sqlite") }
 
 // LakeDir is canal-lake's storage: its files, and DuckDB's temporary ones.
-func (c *Cache) LakeDir() string { return filepath.Join(c.dir, "lake") }
+func (c *Cache) LakeDir() string { return LakeDir(c.dir) }
+
+// LakeDir is canal-lake's storage for the query cache in dir, for starting
+// the canal-lake the cache is then made with (New).
+func LakeDir(dir string) string { return filepath.Join(dir, "lake") }
 
 // Disabled says why the cache is off, and whether it is.
 func (c *Cache) Disabled() (string, bool) { return c.disabled, c.disabled != "" }
@@ -75,6 +125,9 @@ func (c *Cache) Open(ctx context.Context) (*sqlitestore.Store, []Notice, error) 
 	if c.disabled != "" {
 		return nil, nil, ErrDisabled
 	}
+	if c.unusable != nil {
+		return nil, nil, c.unusable
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.store != nil {
@@ -101,8 +154,28 @@ func (c *Cache) Open(ctx context.Context) (*sqlitestore.Store, []Notice, error) 
 	return s, notices, nil
 }
 
-// Close closes the store, if it was opened.
-func (c *Cache) Close() error {
+// StartLake starts canal-lake unless it runs already, for canal-query to write
+// results to and read them from.
+func (c *Cache) StartLake(ctx context.Context) error {
+	if c.disabled != "" {
+		return ErrDisabled
+	}
+	if c.unusable != nil {
+		return c.unusable
+	}
+	if c.lake == nil {
+		return errors.New("the query cache has no canal-lake")
+	}
+	return c.lake.Start(ctx)
+}
+
+// Close stops canal-lake and closes the store, those that were started.
+//
+// ctx carries the trace its log records join; it is not for cancellation.
+func (c *Cache) Close(ctx context.Context) error {
+	if c.lake != nil {
+		c.lake.Close(ctx)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.store == nil {
@@ -122,6 +195,9 @@ func (c *Cache) Summarize(ctx context.Context) querycache.Summary {
 		return querycache.Summary{State: querycache.StateDisabled, Reason: c.disabled}
 	}
 	s := querycache.Summary{State: querycache.StateReady, Store: c.StorePath()}
+	if c.unusable != nil {
+		return c.explain(s, c.unusable)
+	}
 	v, err := sqlitestore.Peek(ctx, c.StorePath())
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -150,6 +226,10 @@ func (c *Cache) explain(s querycache.Summary, err error) querycache.Summary {
 			"(the store's schema is at version %d, and requires schema version %d or later, but this anfra's is version %d). Queries run without the cache.",
 			ve.Installed, ve.RequiredByInstalled, sqlitestore.CurrentVersion)
 		s.Hint = "Run `anfra update` to use the query cache again."
+	case errors.Is(err, errBadNamespace):
+		s.State = querycache.StateUnavailable
+		s.Problem = fmt.Sprintf("%s isn't a namespace anfra can use. Queries run without the cache.", NamespaceEnv)
+		s.Hint = fmt.Sprintf("Set %s to letters, digits and _ only, or several such names joined by /, such as prod or prod/eu.", NamespaceEnv)
 	case errors.Is(err, sqlitestore.ErrNotStore):
 		s.State = querycache.StateUnavailable
 		s.Problem = "The query cache's store isn't a file anfra made. Queries run without the cache."

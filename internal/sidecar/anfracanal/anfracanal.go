@@ -31,6 +31,9 @@ type Service struct {
 // Query is canal-query, the SQL execution engine.
 var Query = Service{Mode: "query", Name: "canal-query", BinEnv: "ANFRA_CANAL_QUERY_BIN"}
 
+// Lake is canal-lake, which stores query results as Parquet files.
+var Lake = Service{Mode: "lake", Name: "canal-lake", BinEnv: "ANFRA_CANAL_LAKE_BIN"}
+
 // Command is what runs a service: a binary, and its arguments.
 type Command struct {
 	Path string
