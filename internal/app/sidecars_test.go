@@ -33,14 +33,14 @@ import (
 // It needs the sidecars' binaries and the dev warehouse:
 //
 //	docker compose -f docker-compose.dev.yml up -d postgres
-//	ANFRA_NODE_BIN=… ANFRA_CANAL_QUERY_BIN=… go test ./internal/app -run TestCommandsAgainstRealSidecars
+//	ANFRA_NODE_BIN=… ANFRA_CANAL_BIN=… go test ./internal/app -run TestCommandsAgainstRealSidecars
 //
 // or make test-sidecars, against the sidecars manifest.yml pins.
 //
 // Without the binaries it is skipped.
 func TestCommandsAgainstRealSidecars(t *testing.T) {
-	if os.Getenv("ANFRA_NODE_BIN") == "" || os.Getenv("ANFRA_CANAL_QUERY_BIN") == "" {
-		t.Skip("set ANFRA_NODE_BIN and ANFRA_CANAL_QUERY_BIN to run commands against real sidecars")
+	if os.Getenv("ANFRA_NODE_BIN") == "" || os.Getenv("ANFRA_CANAL_BIN") == "" && os.Getenv("ANFRA_CANAL_QUERY_BIN") == "" {
+		t.Skip("set ANFRA_NODE_BIN and ANFRA_CANAL_BIN to run commands against real sidecars")
 	}
 	t.Setenv("HOME", t.TempDir()) // the repo's state, the catalog among it, goes under HOME
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

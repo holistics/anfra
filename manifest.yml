@@ -7,7 +7,13 @@
 version: 0.20.0
 sidecars:
   anfra_node: anfra-node-v0.14.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
-  canal_query: query-v2.24.0 # holistics/canal release tag (build_and_release_binaries.yml)
+  anfra_canal: anfra-canal-v1.0.0 # holistics/canal release tag (build_and_release_binaries.yml)
+  # The services anfra_canal runs, as the releases it contains, for deployments that run each as
+  # a service of its own (anfra-cloud's scripts/bump-anfra.sh). scripts/sidecars.sh check holds
+  # them to what the binary reports.
+  anfra_canal_services:
+    canal_query: query-v2.24.0
+    canal_lake: lake-v2.8.0
 # The cloud servers a release's bare `anfra auth login` offers, in this order, and whom it
 # tells their users to email for another region. A server's id is a stable key, lowercase;
 # leave out its url while it isn't available, and login shows it as upcoming. See

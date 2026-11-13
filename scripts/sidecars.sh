@@ -11,8 +11,10 @@
 #
 # Your own sidecar is one ANFRA_<NAME>_BIN names, other than .sidecars/<name>: check holds it to
 # the pin too, and fetch leaves it alone. One ANFRA_<NAME>_URL names is already running, so
-# neither touches it. ANFRA_SIDECAR_SKIP_VERSION_CHECK=1 skips the version check, to run a build
-# whose version is not the pin on purpose.
+# neither touches it. anfra-canal runs canal's services: check also holds the services it says
+# it contains to anfra_canal_services, and a service you build alone (ANFRA_CANAL_QUERY_BIN) to
+# its own pin there. ANFRA_SIDECAR_SKIP_VERSION_CHECK=1 skips the version checks, to run a
+# build whose version is not the pin on purpose.
 #
 # Downloads with gh, from holistics-core's and canal's releases, which are private: `gh auth
 # login` as an account that can read both.
@@ -21,11 +23,18 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 dir="$PWD/.sidecars"
 
-# name, manifest key, GitHub repo, environment variables' infix, the suffix of the release asset
-# to prefer (- for none)
+# name, manifest key, GitHub repo, the variables naming your own binary and a running one (- for
+# none), the suffix of the release asset to prefer (- for none). anfra-canal has no URL: a
+# running canal-query (ANFRA_CANAL_QUERY_URL) is only one of its services.
 sidecars=(
-  "anfra-node anfra_node holistics/holistics-core NODE -unminified"
-  "canal-query canal_query holistics/canal CANAL_QUERY -"
+  "anfra-node anfra_node holistics/holistics-core ANFRA_NODE_BIN ANFRA_NODE_URL -unminified"
+  "anfra-canal anfra_canal holistics/canal ANFRA_CANAL_BIN - -"
+)
+
+# anfra-canal's services: name, its key in anfra_canal_services, the variable naming your own
+# build of it alone.
+services=(
+  "canal-query canal_query ANFRA_CANAL_QUERY_BIN"
 )
 
 usage() { sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//;p;}' "$0" >&2; exit 2; }
@@ -38,9 +47,9 @@ pin() {
   echo "$tag"
 }
 
-# What a binary says its version is, or nothing. A release from before --version ignores the
-# flag, and canal-query then starts a server, so it gets a few seconds and is killed.
-version_of() {
+# What a binary says with --version. A release from before --version ignores the flag, and
+# canal-query then starts a server, so it gets a few seconds and is killed.
+version_output() {
   local out pid i
   out=$(mktemp)
   "$1" --version >"$out" 2>/dev/null </dev/null &
@@ -51,9 +60,15 @@ version_of() {
   done
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
-  head -n 1 "$out" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || true
+  cat "$out"
   rm -f "$out"
 }
+
+# What a binary says its version is, or nothing: --version's first line.
+version_of() { version_output "$1" | head -n 1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || true; }
+
+# The version of service an anfra-canal binary says it contains, or nothing: canal-query 2.24.0.
+service_version_of() { version_output "$1" | sed -n "s/^$2 \([0-9][^ ]*\)$/\1/p"; }
 
 target() {
   local os arch
@@ -98,9 +113,9 @@ case "$mode" in fetch | check) ;; *) usage ;; esac
 
 failed=()
 for s in "${sidecars[@]}"; do
-  read -r name key repo env variant <<<"$s"
-  bin_var="ANFRA_${env}_BIN" url_var="ANFRA_${env}_URL"
-  bin=${!bin_var:-} url=${!url_var:-}
+  read -r name key repo bin_var url_var variant <<<"$s"
+  bin=${!bin_var:-} url=
+  [ "$url_var" = - ] || url=${!url_var:-}
   [ -z "$url" ] || { echo "$name: $url_var is set, so anfra dials it: left alone"; continue; }
   # A relative path is the repo root's (where make runs this), made absolute so that one naming
   # .sidecars/<name> is not taken for your own. Its folder may not exist yet: left as it is.
@@ -126,14 +141,31 @@ for s in "${sidecars[@]}"; do
     download "$name" "$repo" "$tag" "$variant"
   fi
   [ "${ANFRA_SIDECAR_SKIP_VERSION_CHECK:-}" != 1 ] || continue
+  if [ -n "$own" ]; then shown=$bin fix="Rebuild it, or unset $bin_var for the pinned release"
+  else shown=.sidecars/$name fix="Run \`make sidecars\` to replace it"; fi
   have=$(version_of "$bin")
-  [ "$have" != "$want" ] || continue
-  if [ -n "$own" ]; then
-    failed+=("$name: $bin is ${have:-a version from before --version}, not $want. Rebuild it, or unset $bin_var for the pinned release")
-  else
-    failed+=("$name: .sidecars/$name is ${have:-a version from before --version}, not $want. Run \`make sidecars\` to replace it")
-  fi
+  [ "$have" = "$want" ] || failed+=("$name: $shown is ${have:-a version from before --version}, not $want. $fix")
+  [ "$name" = anfra-canal ] || continue
+  for svc in "${services[@]}"; do
+    read -r svc_name svc_key _ <<<"$svc"
+    svc_want=$(pin "$svc_key") svc_want=${svc_want##*-v}
+    svc_have=$(service_version_of "$bin" "$svc_name")
+    [ "$svc_have" = "$svc_want" ] || failed+=("$name: $shown contains $svc_name ${svc_have:-of no version}, not $svc_want (anfra_canal_services). $fix")
+  done
 done
+
+# A service you build alone is held to its pin in anfra_canal_services.
+if [ "$mode" = check ] && [ "${ANFRA_SIDECAR_SKIP_VERSION_CHECK:-}" != 1 ]; then
+  for svc in "${services[@]}"; do
+    read -r svc_name svc_key bin_var <<<"$svc"
+    bin=${!bin_var:-}
+    [ -n "$bin" ] || continue
+    [ -e "$bin" ] || { failed+=("$svc_name: $bin_var names $bin, which does not exist"); continue; }
+    want=$(pin "$svc_key") want=${want##*-v}
+    have=$(version_of "$bin")
+    [ "$have" = "$want" ] || failed+=("$svc_name: $bin is ${have:-a version from before --version}, not $want. Rebuild it, or unset $bin_var for anfra-canal's")
+  done
+fi
 
 if [ ${#failed[@]} -gt 0 ]; then
   echo "The sidecars are not the ones manifest.yml pins:" >&2
