@@ -33,6 +33,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 		// The query cache store's conformance suite, which a platform's own store
 		// must pass (docs/designs/query-cache.md#the-store). Its types are
 		// engine's aliases.
+		"engine/querycache":     true,
 		"engine/querycachetest": true,
 		"shared/apperr":         true,
 		"shared/appstep":        true,
@@ -98,7 +99,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine, engine/querycachetest and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoformat,requestid,routine,textmerge,treemerge} are meant to be. Move it under internal/, "+
+				"only engine, engine/querycache, engine/querycachetest and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoformat,requestid,routine,textmerge,treemerge} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}
