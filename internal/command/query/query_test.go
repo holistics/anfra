@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
@@ -112,6 +113,56 @@ func TestRunInputRefusals(t *testing.T) {
 				t.Errorf("refused %v, want a violation on %s", err, tc.field)
 			}
 		})
+	}
+}
+
+// Cache options anfra can't take, or that could never do what they ask, are
+// refused on the field at fault; those it can, for query and query.export
+// alike, are not.
+func TestCacheOptionsRefusals(t *testing.T) {
+	aql := QueryDefinition{Query: "q", Dataset: "d"}
+	for _, tc := range []struct {
+		name  string
+		cache CacheOptions
+		field string // empty: accepted
+	}{
+		{"a duration", CacheOptions{Duration: "1h"}, ""},
+		{"0s", CacheOptions{Duration: "0s"}, ""},
+		{"7 days", CacheOptions{Duration: "168h"}, ""},
+		{"cached only, until a hit can be read", CacheOptions{CachedOnly: true}, "cache.cached_only"},
+		{"not a duration", CacheOptions{Duration: "1 hour"}, "cache.duration"},
+		{"a day unit, which Go has none of", CacheOptions{Duration: "1d"}, "cache.duration"},
+		{"negative", CacheOptions{Duration: "-1m"}, "cache.duration"},
+		{"over 7 days", CacheOptions{Duration: "169h"}, "cache.duration"},
+		{"refresh and cached only", CacheOptions{Refresh: true, CachedOnly: true}, "cache.cached_only"},
+		{"cached only for 0s", CacheOptions{CachedOnly: true, Duration: "0s"}, "cache.cached_only"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for op, err := range map[string]error{
+				"query":        QueryRequestParams{QueryDefinition: aql, Cache: tc.cache}.normalize().check(),
+				"query.export": QueryExportRequestParams{QueryDefinition: aql, Cache: tc.cache}.check(),
+			} {
+				if got := field(err); got != tc.field || (tc.field == "") != (err == nil) {
+					t.Errorf("%s: %v, want a violation on %q", op, err, tc.field)
+				}
+			}
+		})
+	}
+	if d, set := (CacheOptions{Duration: "90m"}).duration(); !set || d != 90*time.Minute {
+		t.Errorf("duration() = %v, %v", d, set)
+	}
+}
+
+// query.compile checks a query as query does, and compiles it as query would.
+func TestCompileTakesQuerysParams(t *testing.T) {
+	in := QueryCompileRequestParams{QueryDefinition: QueryDefinition{Query: "q", Dataset: "d"}, Page: 2, PageSize: 5}
+	p := in.queryParams()
+	if p.Input.Pagination == nil || p.Input.Pagination.Page != 2 || p.Input.Pagination.PageSize != 5 || p.Page != 0 {
+		t.Errorf("the deprecated page didn't move into input: %+v", p)
+	}
+	in.PageSize = 0
+	if err := in.queryParams().check(); field(err) != "page_size" {
+		t.Errorf("a page without its size: %v", err)
 	}
 }
 

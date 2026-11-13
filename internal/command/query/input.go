@@ -14,6 +14,7 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -91,9 +92,10 @@ func (in QueryInput) ran(seeds *anfranode.Seeds) *QueryInput {
 	return &out
 }
 
-// QueryRequestParams is what query and query.compile take: a query, and its
-// input. query.validate takes the query alone (QueryDefinition), since none of
-// the input applies to checking one.
+// QueryRequestParams is what query takes: a query, its input, and how the
+// query cache answers it. query.compile takes the same but the cache
+// (QueryCompileRequestParams), and query.validate the query alone
+// (QueryDefinition), since none of the input applies to checking one.
 type QueryRequestParams struct {
 	QueryDefinition
 	Input QueryInput `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."`
@@ -104,9 +106,82 @@ type QueryRequestParams struct {
 	PageSize int    `json:"page_size,omitempty" minimum:"1" maximum:"10000" deprecated:"true" doc:"deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."`
 	Timezone string `json:"timezone,omitempty" deprecated:"true" doc:"deprecated: use input.timezone. Ignored when input.timezone is set."`
 
+	Cache CacheOptions `json:"cache,omitempty" doc:"how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."`
+
 	// The names the page and the time zone were set by, for a refusal to name
 	// what the caller sent: a deprecated input's, or "" for input's.
 	paginationArg, timezoneArg string
+}
+
+// QueryCompileRequestParams is what query.compile takes: a query and its
+// input, as query takes them, without the cache, since compiling runs
+// nothing.
+type QueryCompileRequestParams struct {
+	QueryDefinition
+	Input QueryInput `json:"input,omitempty" doc:"the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query compiled: send it back with the same query to get the same SQL again."`
+
+	// These three moved into input, and are kept until they're removed. A
+	// request that sets one both ways takes input's.
+	Page     int    `json:"page,omitempty" minimum:"1" deprecated:"true" doc:"deprecated: use input.pagination.page. Ignored when input.pagination is set."`
+	PageSize int    `json:"page_size,omitempty" minimum:"1" maximum:"10000" deprecated:"true" doc:"deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."`
+	Timezone string `json:"timezone,omitempty" deprecated:"true" doc:"deprecated: use input.timezone. Ignored when input.timezone is set."`
+}
+
+func (QueryCompileRequestParams) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
+	return command.ArgsSchema[QueryCompileRequestParams](s)
+}
+
+// queryParams is the query as query takes it, so that query.compile checks and
+// compiles it as query does.
+func (in QueryCompileRequestParams) queryParams() QueryRequestParams {
+	return QueryRequestParams{QueryDefinition: in.QueryDefinition, Input: in.Input, Page: in.Page, PageSize: in.PageSize, Timezone: in.Timezone}.normalize()
+}
+
+// CacheOptions are how the query cache answers a request
+// (docs/designs/query-cache.md#a-querys-input).
+type CacheOptions struct {
+	Duration   string `json:"duration,omitempty" doc:"how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's cache.query.default.duration by default."`
+	Refresh    bool   `json:"refresh,omitempty" doc:"true runs the query on the warehouse whatever is cached, and caches its result."`
+	ReadOnly   bool   `json:"read_only,omitempty" doc:"true answers from a cached result if there is one, and otherwise runs the query without caching its result."`
+	CachedOnly bool   `json:"cached_only,omitempty" doc:"true answers from a cached result, or fails with cache_miss without running the query."`
+}
+
+// duration is cache.duration, and whether the request sets it. check refused
+// one that isn't a duration.
+func (c CacheOptions) duration() (time.Duration, bool) {
+	if c.Duration == "" {
+		return 0, false
+	}
+	d, _ := time.ParseDuration(c.Duration)
+	return d, true
+}
+
+// check refuses cache options that aren't a duration anfra takes, or that
+// could never do what they ask.
+func (c CacheOptions) check() error {
+	if c.Duration != "" {
+		d, err := time.ParseDuration(c.Duration)
+		switch {
+		case err != nil:
+			return command.InvalidArg("cache.duration", "invalid", fmt.Sprintf("%q isn't a duration, such as 30s, 10m or 2h.", c.Duration))
+		case d < 0:
+			return command.InvalidArg("cache.duration", "invalid", "cache.duration can't be negative. Use 0s to run the query without the cache.")
+		case d > querycache.MaxDuration:
+			return command.InvalidArg("cache.duration", "invalid", "cache.duration can be at most 168h (7 days).")
+		}
+	}
+	if c.CachedOnly && !c.Refresh {
+		// Until a hit can be read: canal-query can't read an entry from
+		// canal-lake yet (docs/designs/query-cache.md#implementation-plan).
+		return command.InvalidArg("cache.cached_only", "unsupported", "cache.cached_only isn't supported yet, because anfra can't answer a query from the cache yet.")
+	}
+	if c.CachedOnly && c.Refresh {
+		return command.InvalidArg("cache.cached_only", "invalid", "cache.cached_only can't be used with cache.refresh, because refresh never answers from a cached result.")
+	}
+	if d, set := c.duration(); c.CachedOnly && set && d == 0 {
+		return command.InvalidArg("cache.cached_only", "invalid", "cache.cached_only needs a cache.duration above 0s, because no cached result is younger than 0s.")
+	}
+	return nil
 }
 
 func (in QueryRequestParams) paginationName() string {
@@ -137,6 +212,9 @@ func (in QueryRequestParams) normalize() QueryRequestParams {
 // time zone that is not one.
 func (in QueryRequestParams) check() error {
 	if err := in.target(); err != nil {
+		return err
+	}
+	if err := in.Cache.check(); err != nil {
 		return err
 	}
 	// Each said by what it is, not its field's name, which each surface writes

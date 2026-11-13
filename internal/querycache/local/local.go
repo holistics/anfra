@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/querycache"
 	sqlitestore "github.com/holistics/anfra/internal/querycache/store/sqlite"
 )
@@ -40,6 +41,9 @@ type Cache struct {
 	// unusable is why the cache can't be used though it is on: its settings
 	// are wrong. nil when they're right.
 	unusable error
+	settings command.QueryCacheSettings
+	report   func(ctx context.Context, err error)
+	notice   func(ctx context.Context, n Notice)
 
 	mu    sync.Mutex
 	store *sqlitestore.Store
@@ -64,6 +68,14 @@ type Options struct {
 	// prod or prod/eu; empty for the storage's top level
 	// (docs/designs/query-cache.md#file-names).
 	Namespace string
+	// Default is the repo's cache.query.default: the cache options of a query
+	// that sets none.
+	Default command.QueryCacheDefaults
+	// Report and Notice are how whoever runs anfra is told why a query ran
+	// without the cache, and of what doesn't stop it (Open's notices). Nil
+	// tells no one.
+	Report func(ctx context.Context, err error)
+	Notice func(ctx context.Context, n Notice)
 }
 
 // NamespaceEnv sets Options.Namespace.
@@ -73,7 +85,8 @@ const NamespaceEnv = "ANFRA_CACHE_QUERY_NAMESPACE"
 // canal-lake can't take leaves the cache unusable, which Open and Summarize
 // report, rather than failing here: a cache problem never fails a command.
 func New(dir string, o Options) *Cache {
-	c := &Cache{dir: dir, disabled: o.Disabled, lake: o.Lake}
+	c := &Cache{dir: dir, disabled: o.Disabled, lake: o.Lake, report: o.Report, notice: o.Notice,
+		settings: command.QueryCacheSettings{Disabled: o.Disabled, Default: o.Default}}
 	if o.Namespace != "" {
 		c.namespace = strings.TrimSuffix(o.Namespace, "/") + "/"
 		if !querycache.ValidNamespace(c.namespace) {
@@ -186,7 +199,38 @@ func (c *Cache) Close(ctx context.Context) error {
 	return err
 }
 
-var _ querycache.Summarizer = (*Cache)(nil)
+var _ command.QueryCache = (*Cache)(nil)
+
+// Settings are the repo's cache settings, as a query uses them.
+func (c *Cache) Settings() command.QueryCacheSettings { return c.settings }
+
+// Manager is the cache ready for a query: the store open, created and its
+// notices told the first time, and canal-lake started. An error is why it
+// can't be used now; the next query tries again.
+func (c *Cache) Manager(ctx context.Context) (*querycache.Manager, error) {
+	store, notices, err := c.Open(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range notices {
+		if c.notice != nil {
+			c.notice(ctx, n)
+		}
+	}
+	if err := c.StartLake(ctx); err != nil {
+		return nil, fmt.Errorf("start canal-lake: %w", err)
+	}
+	// No Lake for the manager yet: only a sweep drops files, through
+	// canal-query, which comes with the sweep.
+	return querycache.NewManager(querycache.Config{Store: store, Namespace: c.namespace})
+}
+
+// Report tells whoever runs anfra why a query ran without the cache.
+func (c *Cache) Report(ctx context.Context, err error) {
+	if c.report != nil {
+		c.report(ctx, err)
+	}
+}
 
 // Summarize reads the cache's state: only the store's header, so it never
 // creates, changes or migrates the store.
