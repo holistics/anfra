@@ -1,9 +1,9 @@
 // Package querycachetest is the conformance suite of the query cache's store
-// (engine.QueryCacheStore): what each of its methods must do, whatever a
+// (engine/querycache's Store): what each of its methods must do, whatever a
 // store's tables. Every store runs it, anfra's and a platform's alike:
 //
 //	func TestStore(t *testing.T) {
-//		querycachetest.Run(t, func(t *testing.T) engine.QueryCacheStore { return openEmptyStore(t) })
+//		querycachetest.Run(t, func(t *testing.T) querycache.Store { return openEmptyStore(t) })
 //	}
 package querycachetest
 
