@@ -114,7 +114,10 @@ func terminalOptions(in io.Reader, out io.Writer) ([]tea.ProgramOption, func() e
 	if file, ok := out.(terminalOutputFile); ok {
 		writer = terminalQueryFileWriter{terminalQueryWriter: filtered, file: file}
 	}
-	opts := []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(writer)}
+	// Output that isn't a terminal has no size to read, and bubbletea would start it
+	// at 0x0, which draws nothing and can land after a size report read from in.
+	// A terminal's own size replaces this one.
+	opts := []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(writer), tea.WithWindowSize(80, 24)}
 	if _, present := os.LookupEnv("NO_COLOR"); present {
 		opts = append(opts, tea.WithColorProfile(colorprofile.ASCII))
 	}
