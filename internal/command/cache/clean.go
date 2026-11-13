@@ -6,12 +6,14 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/querycache"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -24,9 +26,14 @@ var Clean = command.Define(command.Def[CacheCleanRequestParams, CacheCleanResult
 Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every cache of the repo is cleaned: today, every result of its query cache.`,
 	Idempotent: true,
 	Timeout:    time.Minute,
-	Errors:     []apperr.AnyCode{errcode.CacheDisabled, errcode.CacheUnavailable},
-	Run:        clean,
+	// Its files are deleted through canal-query, which reaches canal-lake.
+	Needs:  func(CacheCleanRequestParams) command.Sidecars { return command.Sidecars{CanalQuery: true} },
+	Errors: []apperr.AnyCode{errcode.CacheDisabled, errcode.CacheUnavailable},
+	Run:    clean,
 })
+
+// sweepBatch is how many entries a sweep removes at a time.
+const sweepBatch = 500
 
 // CacheCleanRequestParams is what cache.clean takes: which of each cache's
 // entries to remove.
@@ -68,8 +75,15 @@ type CacheCleanResult struct {
 
 // QueryCacheCleaned is what a clean removed from the query cache.
 type QueryCacheCleaned struct {
-	Entries int   `json:"entries" doc:"how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran."`
-	Bytes   int64 `json:"bytes" doc:"their size, in bytes. Their files are deleted by the next sweep."`
+	Entries int         `json:"entries" doc:"how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran."`
+	Bytes   int64       `json:"bytes" doc:"their size, in bytes. Their files are deleted by a sweep once they've been expired for 35 minutes, so that a read that began before the clean can finish. anfra serve sweeps every few minutes, and so does the next clean."`
+	Freed   *QueryFreed `json:"freed,omitempty" doc:"the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted: anfra's log says why, and the next sweep tries again."`
+}
+
+// QueryFreed is what a clean's sweep deleted.
+type QueryFreed struct {
+	Entries int   `json:"entries" doc:"how many results' files were deleted"`
+	Bytes   int64 `json:"bytes" doc:"their size, in bytes"`
 }
 
 func clean(ctx context.Context, cc command.CommandContext, in CacheCleanRequestParams) (CacheCleanResult, error) {
@@ -95,5 +109,47 @@ func clean(ctx context.Context, cc command.CommandContext, in CacheCleanRequestP
 		return CacheCleanResult{}, apperr.Encapsulate(err, errcode.CacheUnavailable,
 			"The query cache isn't working, so it couldn't be cleaned. anfra's log says why, and anfra status shows the cache's state.")
 	}
-	return CacheCleanResult{Query: &QueryCacheCleaned{Entries: expired.Entries, Bytes: expired.Bytes}}, nil
+	out := &QueryCacheCleaned{Entries: expired.Entries, Bytes: expired.Bytes}
+	if canal := cc.Clients.CanalQuery; canal != nil {
+		freed, err := Sweep(ctx, m, LakeOf(qc, canal))
+		if err != nil {
+			qc.Report(ctx, fmt.Errorf("sweep the query cache after a clean: %w", err))
+		} else {
+			out.Freed = &QueryFreed{Entries: freed.Entries, Bytes: freed.Bytes}
+		}
+	}
+	return CacheCleanResult{Query: out}, nil
+}
+
+// LakeOf is the canal-lake qc's files are in, reached through canal: started
+// before it drops anything, so a sweep with nothing to remove starts none.
+func LakeOf(qc command.QueryCache, canal *canalquery.Client) querycache.Lake {
+	return startingLake{qc: qc, lake: canal.Lake()}
+}
+
+type startingLake struct {
+	qc   command.QueryCache
+	lake querycache.Lake
+}
+
+func (l startingLake) Drop(ctx context.Context, keys []string) error {
+	if err := l.qc.StartLake(ctx); err != nil {
+		return fmt.Errorf("start canal-lake: %w", err)
+	}
+	return l.lake.Drop(ctx, keys)
+}
+
+// Sweep removes every entry expired for longer than the read grace, a batch at
+// a time, until none is left or ctx is done: what anfra serve runs, and a
+// clean after it. What it removed before a failure is in its answer.
+func Sweep(ctx context.Context, m *querycache.Manager, lake querycache.Lake) (querycache.Swept, error) {
+	var total querycache.Swept
+	for {
+		swept, err := m.Sweep(ctx, lake, sweepBatch)
+		total.Entries += swept.Entries
+		total.Bytes += swept.Bytes
+		if err != nil || swept.Entries < sweepBatch {
+			return total, err
+		}
+	}
 }

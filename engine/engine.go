@@ -228,6 +228,13 @@ var (
 	// LocalRepoNotAllowed: an Invocation on a local repo (OpenRepo) without
 	// AllowLocalRepo. A host mistake, never declared by an op.
 	LocalRepoNotAllowed = errcode.LocalRepoNotAllowed
+
+	// CacheDisabled: an operation on the query cache (core.cache.clean) when
+	// the invocation has none, or it is turned off.
+	CacheDisabled = errcode.CacheDisabled
+	// CacheUnavailable: an operation on the query cache when its store can't
+	// be used. The cause went to the cache's Report.
+	CacheUnavailable = errcode.CacheUnavailable
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.
