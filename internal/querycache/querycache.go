@@ -68,6 +68,10 @@ var namespacePattern = regexp.MustCompile(`^(\w+/)*$`)
 // empty, or word segments each ending in "/".
 func ValidNamespace(ns string) bool { return namespacePattern.MatchString(ns) }
 
+// MaxDuration is the longest a query may ask the cache to keep its result,
+// and accept a cached one for: its cache.duration, or the repo's default.
+const MaxDuration = 7 * 24 * time.Hour
+
 // TagKind is what a tag selects entries by.
 type TagKind string
 

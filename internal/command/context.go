@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -82,10 +83,43 @@ type CommandContext struct {
 	// version to compare the skills in use with: nil when the host does not
 	// check, and a nil result when it knows none yet.
 	Skills func() *SkillsInfo
-	// QueryCache reports the repo's query cache's state, for status: anfra's
-	// host's over the repo's store, or a platform's over its own. Nil: the host
-	// keeps no query cache, and status says nothing of one.
-	QueryCache querycache.Summarizer
+	// QueryCache is the repo's query cache: its state, for status, and its
+	// use, for a query. anfra's host's is over the repo's store, a platform's
+	// over its own. Nil: the host keeps no query cache, every query runs
+	// uncached, and status says nothing of one.
+	QueryCache QueryCache
+}
+
+// QueryCache is the invocation's query cache, as commands use it.
+type QueryCache interface {
+	querycache.Summarizer
+	// Settings are how the cache answers a query that doesn't say otherwise.
+	Settings() QueryCacheSettings
+	// Manager is the cache ready for a query: its store open and its
+	// canal-lake started, its files under its namespace. An error is why the
+	// cache can't be used now: the query runs without it.
+	Manager(ctx context.Context) (*querycache.Manager, error)
+	// Report tells whoever runs anfra why a query ran without the cache: an
+	// error of Manager's, of a write, or a key that couldn't be made. The
+	// query's answer only says that it did.
+	Report(ctx context.Context, err error)
+}
+
+// QueryCacheSettings are a repo's query cache settings, as a query uses them
+// (cache.query in .anfra/config.yml).
+type QueryCacheSettings struct {
+	// Disabled says why the cache is off for the repo; empty, it is on.
+	Disabled string
+	// Default is cache.query.default.
+	Default QueryCacheDefaults
+}
+
+// QueryCacheDefaults are the cache options of a query that sets none
+// (cache.query.default): its cache.duration, for now.
+type QueryCacheDefaults struct {
+	// Duration is a query's cache.duration when it sets none; zero, such a
+	// query doesn't use the cache.
+	Duration time.Duration
 }
 
 // SkillsInfo is the latest anfra skills version the host knows of, and when it

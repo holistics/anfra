@@ -30,6 +30,9 @@ var (
 	eventQueryCacheOrphanedFiles = logkit.DefineEvent("query_cache.orphaned_files",
 		"A new query cache store's folder already holds files from an earlier cache, which no entry names (orphans).",
 		"dir", "hint")
+	eventQueryCacheUnavailable = logkit.DefineEvent("query_cache.unavailable",
+		"A query ran without the query cache, because the cache failed: its store, its canal-lake, or a write.",
+		"error", "hint")
 	eventQueryCacheSettingsUnknown = logkit.DefineEvent("query_cache.settings_unknown",
 		"The repo's settings file couldn't be read or parsed, so the query cache's settings are unknown, and it keeps its defaults.",
 		"path", "error", "hint")

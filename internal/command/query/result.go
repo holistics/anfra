@@ -2,6 +2,7 @@ package query
 
 import (
 	"slices"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
@@ -16,13 +17,31 @@ import (
 // column's label, then has_more and how long each step took; the SQL, the AQL
 // and what each column is are for --yaml.
 type QueryResult struct {
-	SQL     string      `json:"sql" pretty:"-"`
-	AQL     string      `json:"aql,omitempty" pretty:"-" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
-	Input   *QueryInput `json:"input,omitempty" pretty:"-" doc:"the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
-	Columns []Column    `json:"columns" pretty:"-" doc:"one per field of result, in order"`
-	Result  QueryRows   `json:"result" pretty:",inline"`
-	HasMore bool        `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
-	Timings Timings     `json:"timings" pretty:",view=timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
+	SQL     string       `json:"sql" pretty:"-"`
+	AQL     string       `json:"aql,omitempty" pretty:"-" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
+	Input   *QueryInput  `json:"input,omitempty" pretty:"-" doc:"the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
+	Columns []Column     `json:"columns" pretty:"-" doc:"one per field of result, in order"`
+	Result  QueryRows    `json:"result" pretty:",inline"`
+	HasMore bool         `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
+	Timings Timings      `json:"timings" pretty:",view=timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
+	Cache   *CacheResult `json:"cache,omitempty" pretty:"-" doc:"what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
+}
+
+// CacheResult is what the query cache did for a query
+// (docs/designs/query-cache.md#a-querys-answer).
+type CacheResult struct {
+	Key       string        `json:"key,omitempty" doc:"the query's key in the cache. Absent when the cache couldn't make one."`
+	Hit       bool          `json:"hit" doc:"whether the rows came from the cache. false: they came from the warehouse."`
+	CachedAt  *time.Time    `json:"cached_at,omitempty" doc:"when the cached rows were read from the warehouse. Absent when the result wasn't cached."`
+	ExpiresAt *time.Time    `json:"expires_at,omitempty" doc:"when the cached result stops being used. Absent when the result wasn't cached."`
+	Warning   *CacheWarning `json:"warning,omitempty" doc:"why the query ran without the cache, though it asked for it"`
+}
+
+// CacheWarning is why a query that asked for the cache ran without it. It
+// doesn't fail the query.
+type CacheWarning struct {
+	Code    string `json:"code" enum:"cache_unavailable,cache_disabled" doc:"cache_unavailable: the cache isn't working. cache_disabled: the repo, or whoever runs anfra, turned it off."`
+	Message string `json:"message"`
 }
 
 type QueryRows struct {

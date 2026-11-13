@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.opentelemetry.io/otel"
 
@@ -133,8 +134,18 @@ type queryCache struct {
 // runs its canal-lake too: anfra starts none.
 func newQueryCache(repo repo.Local, cfg sidecar.Config) queryCache {
 	dir := filepath.Join(repo.CacheDir(), "query")
-	disabled := queryCacheDisabled(repo.Dir, cfg.Logger)
-	o := localquerycache.Options{Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv)}
+	disabled, defaultDuration := queryCacheSettings(repo.Dir, cfg.Logger)
+	o := localquerycache.Options{
+		Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv), Default: command.QueryCacheDefaults{Duration: defaultDuration},
+		Report: func(ctx context.Context, err error) {
+			cfg.Logger.WarnContext(ctx, "Query ran without the cache", logkit.EventKey, eventQueryCacheUnavailable, "error", err,
+				"hint", "the query cache failed, so the query ran on the warehouse, uncached; anfra status shows the cache's state")
+		},
+		Notice: func(ctx context.Context, n localquerycache.Notice) {
+			cfg.Logger.WarnContext(ctx, "Query cache folder holds orphaned files", logkit.EventKey, eventQueryCacheOrphanedFiles,
+				"dir", localquerycache.LakeDir(dir), "hint", n.Message)
+		},
+	}
 	switch {
 	case disabled != "":
 		return queryCache{Cache: localquerycache.New(dir, o)}
@@ -164,25 +175,30 @@ type failedLake struct{ err error }
 func (l failedLake) Start(context.Context) error { return l.err }
 func (failedLake) Close(context.Context)         {}
 
-// queryCacheDisabled says what turns the repo's query cache off, if anything:
-// ANFRA_CACHE_QUERY_ENABLED, whatever the repo sets, or the repo's
-// cache.query.enabled. A settings file that can't be read or parsed leaves the
-// cache on, its default, and is logged.
-func queryCacheDisabled(repoDir string, logger *slog.Logger) string {
-	if os.Getenv(envflag.CacheQueryEnabled) != "" {
-		if envflag.On(envflag.CacheQueryEnabled) {
-			return ""
-		}
-		return envflag.CacheQueryEnabled + "=0 turns the query cache off for this process."
-	}
-	c, err := repoconfig.Read(repoDir)
-	if err != nil {
+// queryCacheSettings are the repo's query cache settings: what turns the
+// cache off, if anything (ANFRA_CACHE_QUERY_ENABLED, whatever the repo sets,
+// or the repo's cache.query.enabled), and the default duration of a query
+// that sets none (cache.query.default.duration). A settings file that can't be
+// read or parsed, or a default duration anfra doesn't take, leaves the
+// defaults (the cache on, no default duration), and is logged.
+func queryCacheSettings(repoDir string, logger *slog.Logger) (disabled string, defaultDuration time.Duration) {
+	c, readErr := repoconfig.Read(repoDir)
+	if readErr != nil {
+		logger.Warn("Query cache settings unknown", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repoDir), "error", readErr,
+			"hint", "the query cache keeps its defaults until anfra can read its settings from the file")
+	} else if d, err := c.QueryCacheDefaultDuration(); err != nil {
 		logger.Warn("Query cache settings unknown", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repoDir), "error", err,
-			"hint", "the query cache stays on, its default, until anfra can read its settings from the file")
-		return ""
+			"hint", "queries that set no cache.duration run without the cache until the setting is fixed")
+	} else {
+		defaultDuration = d
 	}
-	if !c.QueryCacheEnabled() {
-		return repo.ConfigDirName + "/" + repoconfig.FileName + " turns the query cache off (cache.query.enabled: false)."
+	switch {
+	case os.Getenv(envflag.CacheQueryEnabled) != "":
+		if !envflag.On(envflag.CacheQueryEnabled) {
+			disabled = envflag.CacheQueryEnabled + "=0 turns the query cache off for this process."
+		}
+	case readErr == nil && !c.QueryCacheEnabled():
+		disabled = repo.ConfigDirName + "/" + repoconfig.FileName + " turns the query cache off (cache.query.enabled: false)."
 	}
-	return ""
+	return disabled, defaultDuration
 }

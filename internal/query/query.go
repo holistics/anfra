@@ -243,11 +243,49 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 // compile failure (a query problem) from an execution failure (a data-source/DB
 // problem).
 func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, bounds ResultBounds, h canalquery.Handler) error {
-	ds, err := dataSourceOf(ctx, sources, compiled)
+	p, err := Prepare(ctx, sources, compiled)
 	if err != nil {
 		return err
 	}
-	return stream(ctx, canal, ds, canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType}, bounds, h)
+	return p.Stream(ctx, canal, bounds, h)
+}
+
+// Prepared is a statement ready to run: on its data source, connection
+// included, from the engine's one call of DataSources.Connection for it. What
+// the query cache's key needs of the data source is read from it, so the key
+// describes the connection the statement runs on.
+type Prepared struct {
+	ds datasource.DataSource
+	st canalquery.Statement
+}
+
+// Prepare is compiled ready to run on the data source its dataset targets.
+func Prepare(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (Prepared, error) {
+	ds, err := dataSourceOf(ctx, sources, compiled)
+	if err != nil {
+		return Prepared{}, err
+	}
+	return Prepared{ds: ds, st: canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType}}, nil
+}
+
+// Identity is the data source's identity: who the warehouse sees
+// (datasource.DataSource.Identity).
+func (p Prepared) Identity() string { return p.ds.Identity }
+
+// DBType is the data source's type.
+func (p Prepared) DBType() string { return p.ds.DBType }
+
+// Caching is p also writing its result to canal-lake under lakeKey, as it
+// streams it (canalquery.Statement.LakeKey).
+func (p Prepared) Caching(lakeKey string) Prepared {
+	p.st.LakeKey = lakeKey
+	return p
+}
+
+// Stream runs p, handing its rows within bounds to h as they arrive, as the
+// package's Stream does.
+func (p Prepared) Stream(ctx context.Context, canal *canalquery.Client, bounds ResultBounds, h canalquery.Handler) error {
+	return stream(ctx, canal, p.ds, p.st, bounds, h)
 }
 
 // dataSourceOf is the data source a compiled query runs on, connection included:

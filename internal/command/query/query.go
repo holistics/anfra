@@ -36,16 +36,16 @@ Over HTTP, a request that accepts application/x-ndjson gets the result as the qu
 })
 
 // Compile compiles a query to SQL, without running it.
-var Compile = command.Define(command.Def[QueryRequestParams, CompiledQuery]{
-	Name:      "query.compile",
-	Short:     "Compile a query to SQL, without running it",
-	ReadOnly:  true,
-	Timeout:   2 * time.Minute,
-	Needs:     func(in QueryRequestParams) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
-	Normalize: QueryRequestParams.normalize,
-	Check:     QueryRequestParams.check,
-	Errors:    []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable},
-	Run: func(ctx context.Context, cc command.CommandContext, in QueryRequestParams) (CompiledQuery, error) {
+var Compile = command.Define(command.Def[QueryCompileRequestParams, CompiledQuery]{
+	Name:     "query.compile",
+	Short:    "Compile a query to SQL, without running it",
+	ReadOnly: true,
+	Timeout:  2 * time.Minute,
+	Needs:    func(in QueryCompileRequestParams) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
+	Check:    func(in QueryCompileRequestParams) error { return in.queryParams().check() },
+	Errors:   []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable},
+	Run: func(ctx context.Context, cc command.CommandContext, raw QueryCompileRequestParams) (CompiledQuery, error) {
+		in := raw.queryParams()
 		if in.Lang == "sql" {
 			// Already the SQL that would run.
 			if err := in.checkDataSource(ctx, cc); err != nil {

@@ -46,15 +46,23 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	if v := byName["query.validate"].Args; !reflect.DeepEqual(v, want) {
 		t.Errorf("query.validate's args =\n  %+v\nwant\n  %+v", v, want)
 	}
-	want = append(want,
-		ArgSpec{Name: "input", Type: command.ArgObject, Usage: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."},
-		ArgSpec{Name: "page", Type: command.ArgInt, Usage: "deprecated: use input.pagination.page. Ignored when input.pagination is set."},
-		ArgSpec{Name: "page_size", Type: command.ArgInt, Usage: "deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."},
-		ArgSpec{Name: "timezone", Type: command.ArgString, Usage: "deprecated: use input.timezone. Ignored when input.timezone is set."},
-	)
-	for _, name := range []string{"query", "query.compile"} {
-		if args := byName[name].Args; !reflect.DeepEqual(args, want) {
-			t.Errorf("%s's args =\n  %+v\nwant\n  %+v", name, args, want)
+	deprecated := []ArgSpec{
+		{Name: "page", Type: command.ArgInt, Usage: "deprecated: use input.pagination.page. Ignored when input.pagination is set."},
+		{Name: "page_size", Type: command.ArgInt, Usage: "deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."},
+		{Name: "timezone", Type: command.ArgString, Usage: "deprecated: use input.timezone. Ignored when input.timezone is set."},
+	}
+	input := func(answer string) ArgSpec {
+		return ArgSpec{Name: "input", Type: command.ArgObject, Usage: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. " + answer}
+	}
+	// query also takes how the cache answers it; query.compile, which runs
+	// nothing, doesn't.
+	for name, args := range map[string][]ArgSpec{
+		"query": slices.Concat(want, []ArgSpec{input("The answer returns it as the query ran: send it back with the same query to get the same answer again.")}, deprecated,
+			[]ArgSpec{{Name: "cache", Type: command.ArgObject, Usage: "how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."}}),
+		"query.compile": slices.Concat(want, []ArgSpec{input("The answer returns it as the query compiled: send it back with the same query to get the same SQL again.")}, deprecated),
+	} {
+		if got := byName[name].Args; !reflect.DeepEqual(got, args) {
+			t.Errorf("%s's args =\n  %+v\nwant\n  %+v", name, got, args)
 		}
 	}
 	// Which target is required depends on lang, which a group cannot say.

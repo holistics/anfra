@@ -10,10 +10,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/repoformat"
 )
@@ -39,6 +41,12 @@ type Config struct {
 			// Enabled turns the query cache off for the repo when false: no
 			// store, no canal-lake. Unset is on.
 			Enabled *bool `yaml:"enabled"`
+			Default struct {
+				// Duration is the cache.duration of a query that sets none:
+				// how old a cached result it accepts, and how long the result
+				// it caches is kept. Unset, such a query doesn't use the cache.
+				Duration string `yaml:"duration"`
+			} `yaml:"default"`
 		} `yaml:"query"`
 	} `yaml:"cache"`
 }
@@ -46,6 +54,23 @@ type Config struct {
 // QueryCacheEnabled is cache.query.enabled: on unless the repo sets false.
 func (c Config) QueryCacheEnabled() bool {
 	return c.Cache.Query.Enabled == nil || *c.Cache.Query.Enabled
+}
+
+// QueryCacheDefaultDuration is cache.query.default.duration: zero when unset,
+// or an error naming the setting when it isn't a duration anfra takes.
+func (c Config) QueryCacheDefaultDuration() (time.Duration, error) {
+	s := c.Cache.Query.Default.Duration
+	if s == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(s)
+	switch {
+	case err != nil:
+		return 0, fmt.Errorf("cache.query.default.duration in %s/%s: %q isn't a duration, such as 30s, 10m or 2h", repo.ConfigDirName, FileName, s)
+	case d < 0 || d > querycache.MaxDuration:
+		return 0, fmt.Errorf("cache.query.default.duration in %s/%s: %s is outside 0s to 168h (7 days)", repo.ConfigDirName, FileName, s)
+	}
+	return d, nil
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/repo"
@@ -36,11 +37,37 @@ func TestQueryCacheDisabled(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(envflag.CacheQueryEnabled, tc.env)
-			got := queryCacheDisabled(tc.repo, logger)
+			got, _ := queryCacheSettings(tc.repo, logger)
 			if (got == "") != (tc.off == "") || !strings.Contains(got, tc.off) {
 				t.Errorf("reason %q, want one naming %q", got, tc.off)
 			}
 		})
+	}
+}
+
+// cache.query.default.duration is read whatever turns the cache off; one anfra
+// doesn't take leaves none, and doesn't hide cache.query.enabled.
+func TestQueryCacheDefaultDuration(t *testing.T) {
+	logger := slog.New(slog.DiscardHandler)
+	write := func(yml string) string {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".anfra", "config.yml"), []byte(yml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	t.Setenv(envflag.CacheQueryEnabled, "")
+	if _, d := queryCacheSettings(write("cache:\n  query:\n    default:\n      duration: 90m\n"), logger); d != 90*time.Minute {
+		t.Errorf("default duration %v, want 90m", d)
+	}
+	for _, bad := range []string{"1d", "200h", "-1m"} {
+		off, d := queryCacheSettings(write("cache:\n  query:\n    enabled: false\n    default:\n      duration: "+bad+"\n"), logger)
+		if d != 0 || off == "" {
+			t.Errorf("%s: default %v, disabled %q; want none, and the cache still off", bad, d, off)
+		}
 	}
 }
 

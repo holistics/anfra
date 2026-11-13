@@ -231,9 +231,45 @@ export interface components {
             message: string;
             severity: string;
         };
+        CacheOptions: {
+            /** @description true answers from a cached result, or fails with cache_miss without running the query. */
+            cached_only?: boolean;
+            /** @description how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's cache.query.default.duration by default. */
+            duration?: string;
+            /** @description true answers from a cached result if there is one, and otherwise runs the query without caching its result. */
+            read_only?: boolean;
+            /** @description true runs the query on the warehouse whatever is cached, and caches its result. */
+            refresh?: boolean;
+        };
+        CacheResult: {
+            /**
+             * Format: date-time
+             * @description when the cached rows were read from the warehouse. Absent when the result wasn't cached.
+             */
+            cached_at?: string;
+            /**
+             * Format: date-time
+             * @description when the cached result stops being used. Absent when the result wasn't cached.
+             */
+            expires_at?: string;
+            /** @description whether the rows came from the cache. false: they came from the warehouse. */
+            hit: boolean;
+            /** @description the query's key in the cache. Absent when the cache couldn't make one. */
+            key?: string;
+            /** @description why the query ran without the cache, though it asked for it */
+            warning?: components["schemas"]["CacheWarning"];
+        };
         CacheStatus: {
             /** @description the query cache, which keeps queries' results */
             query: components["schemas"]["Summary"];
+        };
+        CacheWarning: {
+            /**
+             * @description cache_unavailable: the cache isn't working. cache_disabled: the repo, or whoever runs anfra, turned it off.
+             * @enum {string}
+             */
+            code: "cache_unavailable" | "cache_disabled";
+            message: string;
         };
         Column: {
             /** @description a query-local expression, not a field the dataset defines */
@@ -583,6 +619,39 @@ export interface components {
              */
             pageSize: number;
         };
+        QueryCompileRequestParams: {
+            /** @description the data source a SQL query runs against */
+            data_source?: string;
+            /** @description the dataset an AQL query runs against */
+            dataset?: string;
+            /** @description the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query compiled: send it back with the same query to get the same SQL again. */
+            input?: components["schemas"]["QueryInput"];
+            /**
+             * @description the language the query is written in
+             * @default aql
+             * @enum {string}
+             */
+            lang?: "aql" | "sql";
+            /**
+             * Format: int64
+             * @deprecated
+             * @description deprecated: use input.pagination.page. Ignored when input.pagination is set.
+             */
+            page?: number;
+            /**
+             * Format: int64
+             * @deprecated
+             * @description deprecated: use input.pagination.pageSize. Ignored when input.pagination is set.
+             */
+            page_size?: number;
+            /** @description the query */
+            query: string;
+            /**
+             * @deprecated
+             * @description deprecated: use input.timezone. Ignored when input.timezone is set.
+             */
+            timezone?: string;
+        };
         QueryCompiled: {
             /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
             aql?: string;
@@ -620,6 +689,8 @@ export interface components {
             query: string;
         };
         QueryExportRequestParams: {
+            /** @description how to use the query cache for this export. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached. */
+            cache?: components["schemas"]["CacheOptions"];
             /** @description the data source a SQL query runs against */
             data_source?: string;
             /** @description the dataset an AQL query runs against */
@@ -698,6 +769,8 @@ export interface components {
             type: "rows";
         };
         QueryRequestParams: {
+            /** @description how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached. */
+            cache?: components["schemas"]["CacheOptions"];
             /** @description the data source a SQL query runs against */
             data_source?: string;
             /** @description the dataset an AQL query runs against */
@@ -733,6 +806,8 @@ export interface components {
         QueryResult: {
             /** @description the final AQL (with the Query Input applied). Absent for a SQL query. */
             aql?: string;
+            /** @description what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s. */
+            cache?: components["schemas"]["CacheResult"];
             /** @description one per field of result, in order */
             columns: components["schemas"]["Column"][];
             /** @description whether there may be rows after this page. To get them, ask for the next page, or export the query. */
@@ -764,6 +839,8 @@ export interface components {
              * @description the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)
              */
             bytes_scanned?: number;
+            /** @description what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s. */
+            cache?: components["schemas"]["CacheResult"];
             /** @description whether there may be rows after this page. Without input.pagination, every row was sent, and this is false. */
             has_more: boolean;
             /** Format: int64 */
@@ -1273,7 +1350,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["QueryRequestParams"];
+                "application/json": components["schemas"]["QueryCompileRequestParams"];
             };
         };
         responses: {

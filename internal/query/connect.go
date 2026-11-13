@@ -35,10 +35,7 @@ func CheckUngoverned(perms dataperm.Set) error {
 
 // UngovernedSQL is SQL as written, with the data source it runs on, connection
 // included. Only ConnectUngoverned makes one.
-type UngovernedSQL struct {
-	ds  datasource.DataSource
-	sql string
-}
+type UngovernedSQL struct{ Prepared }
 
 // ConnectUngoverned is sql, as written, on the data source named name: refused
 // for a governed caller (CheckUngoverned), and connected in the ungoverned mode.
@@ -51,13 +48,8 @@ func ConnectUngoverned(ctx context.Context, perms dataperm.Set, sources datasour
 	if err != nil {
 		return UngovernedSQL{}, err
 	}
-	return UngovernedSQL{ds: ds, sql: sql}, nil
-}
-
-// Stream runs s as it is: written in its data source's dialect, with its own
-// LIMIT. bounds are as for the package's Stream.
-func (s UngovernedSQL) Stream(ctx context.Context, canal *canalquery.Client, bounds ResultBounds, h canalquery.Handler) error {
-	return stream(ctx, canal, s.ds, canalquery.Statement{SQL: s.sql, DBType: s.ds.DBType}, bounds, h)
+	// It runs as it is: written in its data source's dialect, with its own LIMIT.
+	return UngovernedSQL{Prepared{ds: ds, st: canalquery.Statement{SQL: sql, DBType: ds.DBType}}}, nil
 }
 
 // connect is the data source named name, connection included, asked for in the

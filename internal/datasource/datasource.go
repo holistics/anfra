@@ -6,6 +6,8 @@ package datasource
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +16,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // FileName is the data source manifest, inside the repo's config dir
@@ -34,6 +38,32 @@ type DataSource struct {
 	Connection map[string]any `json:"-"`
 	Settings   map[string]any `json:"-"`
 	Unpooled   bool           `json:"-"`
+	// Identity is who the warehouse sees when a query runs on it, as the query
+	// cache's key holds it (docs/designs/query-cache.md#keys). Whoever loads
+	// the data sources sets it, and changes it whenever access changes:
+	// another warehouse user, role, project, or the viewer under OAuth
+	// passthrough. It never holds a credential. Load sets ConnectionIdentity's.
+	// A platform sets one stable across what doesn't change access, such as a
+	// rotated secret. Empty, a query on it runs uncached.
+	//
+	// It is a field, not a method, because only whoever returns the connection
+	// knows who it connects as: DataSources.Connection, in the same call, for
+	// the caller in its ctx. A method could only hash the fields here, and a
+	// separate call could disagree with the connection it describes.
+	Identity string `json:"-"`
+}
+
+// ConnectionIdentity is an identity for a data source whose access is all in
+// its connection: the connection hashed, credentials included, so that
+// another user, password, host or project is another identity. Only the hash
+// is kept. The map's key order doesn't change it.
+func ConnectionIdentity(connection map[string]any) (string, error) {
+	b, err := jsonkit.Marshal(connection)
+	if err != nil {
+		return "", fmt.Errorf("hash the connection: %w", err)
+	}
+	sum := sha256.Sum256(b)
+	return "conn1:" + hex.EncodeToString(sum[:]), nil
 }
 
 // first-cut schema (connection keys map straight to canal's dbconfig):
@@ -160,7 +190,11 @@ func Load(configDir string) (Set, error) {
 		if ds.Type == "" {
 			return nil, fmt.Errorf("data source %q in %s is missing `type`", name, path)
 		}
-		out[name] = DataSource{Name: name, DBType: ds.Type, Connection: ds.Connection, Settings: ds.Settings}
+		identity, err := ConnectionIdentity(ds.Connection)
+		if err != nil {
+			return nil, fmt.Errorf("data source %q in %s: %w", name, path, err)
+		}
+		out[name] = DataSource{Name: name, DBType: ds.Type, Connection: ds.Connection, Settings: ds.Settings, Identity: identity}
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("%s has no data sources", path)
