@@ -80,7 +80,7 @@ is almost always right.
 | `await app.execute()` | Runs every query whose inputs changed, and every query whose last run failed: it is also the retry. Resolves `{ succeeded, failed }`, never rejects. |
 | `await app.refresh()` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
-| `app.hasChanges` | The next execute has something to apply: a control or the selection changed, a query was edited or lost an edge, or a query created after the first execute has not run yet. Use it for an "Apply" button. |
+| `app.hasChanges` | The next `execute()` has something to apply (a changed control or selection, an edited, new or unlinked query). Use it for an "Apply" button. |
 | `app.selection` / `app.clearSelection()` | The current cross-filter selection. |
 | `app.abort()` | Cancels in-flight queries. |
 
@@ -99,37 +99,20 @@ edits and deletes widgets) can change what it declared at any time, including af
   `mapping.remove()` and `edge.remove()` take one edge. An edge never changes: to change one,
   remove it and map again.
 
-Nothing runs until the next `app.execute()`, so several edits go out as one run: edit, then call
-`execute()` once.
+Nothing runs until the next `app.execute()`, so edit, then call `execute()` once.
 
-A name is an entity's identity, and is never renamed: a new name is `remove()` then `create…`.
-Name what a reader builds with a stable id (`widget-7f3a`) and keep the title the reader sees in
-your own markup and state, so renaming a widget changes no query.
+A name is an entity's identity and never changes: name what a reader builds with a stable id
+(`widget-7f3a`), and keep the title the reader sees in your own markup.
 
-`query.update`:
+What to handle:
 
-- Is checked as `createQuery` is (AQL present, `pageSize` a whole number of at least 1, the dataset
-  one the reader can see), and throws a `ValidationError` changing nothing.
-- Keeps the last `result` until the rerun replaces it, and goes back to page 1. A run or page in
-  flight is dropped, and `fetchMore()` does nothing until the rerun.
-- A new `aql` or `dataset` clears the query's sort (unless you pass `sort`) and a selection made in
-  it, since its columns may differ. `pageSize` alone keeps both. `pageSize: undefined` drops paging.
-- Moving to another dataset throws, naming the edges, when a cross-filter to or from the query
-  would span two datasets: remove those first. A mapped control's field the new dataset lacks fails
-  the query when it runs, as its `error`.
-
-`filter.update` keeps the reader's condition when only `label`, `options` or `default` change
-(`reset()` then goes to the new default). A new `field`, `dataset` or `type` is checked as
-`createFilter` checks it, the condition goes back to the new default, and loaded options are
-dropped: call `loadOptions()` again. Mappings stay as they are: each mapping's own `field` is what
-the condition applies to, so remap when the filter now filters another field.
-
-`remove()` aborts the entity's request in flight (`execute`, `fetchMore`, `loadOptions`, whose
-promise rejects with an `AbortError`), clears a selection made in the removed query, frees the
-name, and closes the menu or the "View underlying data" modal open on its rows. The queries it
-filtered rerun without it at the next `execute()`. A removed object is dead: calling any of its
-methods throws a `ValidationError`, so drop your references to it (and its `subscribe`) along with
-its markup.
+- `update` is checked as `create…` is, and throws a `ValidationError` without changing anything.
+  Moving a query to another dataset throws while a cross-filter would span two datasets: remove
+  those edges first.
+- A new `aql` or `dataset` clears the query's sort: pass `sort` to keep one.
+- A filter's new `field`, `dataset` or `type` resets its condition and drops loaded options: call
+  `loadOptions()` again, and remap it if its queries should filter another field.
+- A removed object throws on any call: drop it, its `subscribe` and its markup together.
 
 ### Mappings are explicit
 
@@ -304,9 +287,6 @@ app.mapControl(grain, trend, { field: 'orders.created_at' });
 grain.setGrain('week'); // 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute'
 ```
 
-`grain.update({ label?, default? })` keeps the reader's grain; `grain.remove()` takes it out with
-its mappings.
-
 anfra finds every dimension of the query built directly on that exact field and redraws it at the
 grain, so:
 
@@ -356,7 +336,6 @@ chart.on('click', (p) => {
   replays the chart's entry animation each time the reader clicks. Rebuild only when `result`
   changed.
 - Both queries must use the same dataset. No self-edges.
-- `edge.remove()` stops the selection reaching the target, which reruns at the next `execute()`.
 - Clear with `app.clearSelection(); app.execute();`.
 
 ## The menu on the page
