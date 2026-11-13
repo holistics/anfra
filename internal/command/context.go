@@ -95,10 +95,13 @@ type QueryCache interface {
 	querycache.Summarizer
 	// Settings are how the cache answers a query that doesn't say otherwise.
 	Settings() QueryCacheSettings
-	// Manager is the cache ready for a query: its store open and its
-	// canal-lake started, its files under its namespace. An error is why the
-	// cache can't be used now: the query runs without it.
+	// Manager is the cache's manager: its store open, its files under its
+	// namespace. An error is why the cache can't be used now: a query runs
+	// without it.
 	Manager(ctx context.Context) (*querycache.Manager, error)
+	// StartLake starts the canal-lake a write needs, unless it runs already
+	// or something else runs it.
+	StartLake(ctx context.Context) error
 	// Report tells whoever runs anfra why a query ran without the cache: an
 	// error of Manager's, of a write, or a key that couldn't be made. The
 	// query's answer only says that it did.

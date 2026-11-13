@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/command/cache"
 	"github.com/holistics/anfra/internal/command/catalog"
 	"github.com/holistics/anfra/internal/command/query"
 	"github.com/holistics/anfra/internal/command/show"
@@ -25,6 +26,7 @@ var Commands = []command.Command{
 	catalog.Lineage,
 	show.Show,
 	validate.Validate,
+	cache.Clean,
 }
 
 // Find returns the registered command by name.

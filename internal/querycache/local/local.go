@@ -204,9 +204,9 @@ var _ command.QueryCache = (*Cache)(nil)
 // Settings are the repo's cache settings, as a query uses them.
 func (c *Cache) Settings() command.QueryCacheSettings { return c.settings }
 
-// Manager is the cache ready for a query: the store open, created and its
-// notices told the first time, and canal-lake started. An error is why it
-// can't be used now; the next query tries again.
+// Manager is the cache's manager: the store open, created and its notices
+// told the first time. An error is why it can't be used now; the next query
+// tries again.
 func (c *Cache) Manager(ctx context.Context) (*querycache.Manager, error) {
 	store, notices, err := c.Open(ctx)
 	if err != nil {
@@ -216,9 +216,6 @@ func (c *Cache) Manager(ctx context.Context) (*querycache.Manager, error) {
 		if c.notice != nil {
 			c.notice(ctx, n)
 		}
-	}
-	if err := c.StartLake(ctx); err != nil {
-		return nil, fmt.Errorf("start canal-lake: %w", err)
 	}
 	// No Lake for the manager yet: only a sweep drops files, through
 	// canal-query, which comes with the sweep.

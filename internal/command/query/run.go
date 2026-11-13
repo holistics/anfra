@@ -255,7 +255,7 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 	if err != nil {
 		return Timings{}, asQueryFailed(err)
 	}
-	if err := run(p, keyInput{compilerKey: compiled.CacheKey, truncate: truncate}, compiled.AQL, compiled.SQL, compiled.Columns); err != nil {
+	if err := run(p, keyInput{compilerKey: compiled.CacheKey, truncate: truncate, dataset: q.in.Dataset}, compiled.AQL, compiled.SQL, compiled.Columns); err != nil {
 		return Timings{}, err
 	}
 	return t.timings(), nil

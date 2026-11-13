@@ -268,6 +268,9 @@ func Prepare(ctx context.Context, sources datasource.DataSources, compiled anfra
 	return Prepared{ds: ds, st: canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType}}, nil
 }
 
+// DataSource is the name of the data source p runs on.
+func (p Prepared) DataSource() string { return p.ds.Name }
+
 // Identity is the data source's identity: who the warehouse sees
 // (datasource.DataSource.Identity).
 func (p Prepared) Identity() string { return p.ds.Identity }

@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/core.cache.clean": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove results from the repo's query cache, so that queries run on the warehouse again
+         * @description Remove results from the repo's query cache, so that queries run on the warehouse again.
+         *
+         *     Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every result of the repo is removed.
+         */
+        post: operations["core.cache.clean"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core.ingest": {
         parameters: {
             query?: never;
@@ -231,6 +253,14 @@ export interface components {
             message: string;
             severity: string;
         };
+        CacheCleanRequestParams: {
+            /** @description the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the repo is removed. */
+            query?: components["schemas"]["QueryCacheSelector"];
+        };
+        CacheCleanResult: {
+            /** @description what was removed from the query cache */
+            query: components["schemas"]["QueryCacheCleaned"];
+        };
         CacheOptions: {
             /** @description true answers from a cached result, or fails with cache_miss without running the query. */
             cached_only?: boolean;
@@ -425,6 +455,30 @@ export interface components {
             nodes: components["schemas"]["DiagramNode"][];
             type: string;
         };
+        /** @description The query cache is turned off. */
+        ErrorBodyCacheDisabled: {
+            /** @constant */
+            code: "cache_disabled";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "user";
+            /** @constant */
+            status: 500;
+        };
+        /** @description The query cache isn't working. */
+        ErrorBodyCacheUnavailable: {
+            /** @constant */
+            code: "cache_unavailable";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "server";
+            /** @constant */
+            status: 500;
+        };
         /** @description This server cannot make exports. */
         ErrorBodyExportsUnavailable: {
             /** @constant */
@@ -618,6 +672,24 @@ export interface components {
              * @description how many rows a page has
              */
             pageSize: number;
+        };
+        QueryCacheCleaned: {
+            /**
+             * Format: int64
+             * @description their size, in bytes. Their files are deleted by the next sweep.
+             */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran.
+             */
+            entries: number;
+        };
+        QueryCacheSelector: {
+            /** @description entries of queries run on this data source */
+            data_source?: string;
+            /** @description entries of queries run against this dataset */
+            dataset?: string;
         };
         QueryCompileRequestParams: {
             /** @description the data source a SQL query runs against */
@@ -1136,6 +1208,63 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "core.cache.clean": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CacheCleanRequestParams"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheCleanResult"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error, cache_disabled, cache_unavailable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyCacheDisabled"] | components["schemas"]["ErrorBodyCacheUnavailable"];
+                    };
+                };
+            };
+        };
+    };
     "core.ingest": {
         parameters: {
             query?: never;

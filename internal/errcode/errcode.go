@@ -44,4 +44,10 @@ var (
 	// DataPermsMissing is: a platform serving managed repos never builds a local
 	// one, and one that serves a directory says so.
 	LocalRepoNotAllowed = apperr.DefinePublicCode(NS, "local_repo_not_allowed", apperr.Client, "This host does not allow local repos.")
+	// CacheDisabled: the repo, or whoever runs anfra, turned the query cache
+	// off, so an operation on it has nothing to act on.
+	CacheDisabled = apperr.DefinePublicCode(NS, "cache_disabled", apperr.User, "The query cache is turned off.")
+	// CacheUnavailable: the query cache isn't working (its store can't be
+	// opened). Its cause is in the log, for whoever runs anfra.
+	CacheUnavailable = apperr.DefinePublicCode(NS, "cache_unavailable", apperr.Server, "The query cache isn't working.")
 )
