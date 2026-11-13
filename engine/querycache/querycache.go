@@ -32,7 +32,7 @@ type (
 	// Manager is the cache's algorithm over a Store: lookups, writes,
 	// cleaning and sweeping. Cache.Manager gives one, made by NewManager.
 	Manager = cache.Manager
-	// Config is a Manager's store, lake, namespace and timings.
+	// Config is a Manager's store, namespace and timings.
 	Config = cache.Config
 	// Lake is what a Manager needs of canal-lake besides reading and writing
 	// entries: dropping their files.

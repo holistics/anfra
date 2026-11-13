@@ -899,13 +899,16 @@ components:
       additionalProperties: false
       properties:
         bytes:
-          description: their size, in bytes. Their files are deleted by the next sweep.
+          description: their size, in bytes. Their files are deleted by a sweep once they've been expired for 35 minutes, so that a read that began before the clean can finish. anfra serve sweeps every few minutes, and so does the next clean.
           format: int64
           type: integer
         entries:
           description: how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran.
           format: int64
           type: integer
+        freed:
+          $ref: "#/components/schemas/QueryFreed"
+          description: "the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted: anfra's log says why, and the next sweep tries again."
       required:
         - entries
         - bytes
@@ -1166,6 +1169,21 @@ components:
         - field
         - operator
         - values
+      type: object
+    QueryFreed:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size, in bytes
+          format: int64
+          type: integer
+        entries:
+          description: how many results' files were deleted
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
       type: object
     QueryHeader:
       additionalProperties: false
@@ -2001,6 +2019,17 @@ paths:
                   - error
                 type: object
           description: internal_server_error, cache_disabled, cache_unavailable
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
       summary: Remove results from the repo's query cache, so that queries run on the warehouse again
       x-destructive: true
       x-idempotent: true

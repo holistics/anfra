@@ -7,6 +7,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -532,3 +533,41 @@ func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
 	}
 	return nil
 }
+
+// DropLakeKeys removes the files of these canal-lake keys, through canal-query
+// (POST /do_lake_action, a "drop"): canal-query reaches canal-lake, anfra
+// doesn't. A key with no file is no error.
+func (c *Client) DropLakeKeys(ctx context.Context, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	body, err := jsonkit.Marshal(map[string]any{"type": "drop", "body": map[string]any{"cache_keys": keys}})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/do_lake_action", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("content-type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return sidecar.Unreachable(ctx, Name, fmt.Errorf("canal-query lake action: %w", err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return fmt.Errorf("drop the query cache's files in canal-lake (status %d): %s", resp.StatusCode, bytes.TrimSpace(answer))
+}
+
+// Lake is canal-lake as the query cache's sweeps reach it, through canal-query
+// (querycache.Lake).
+type Lake struct{ c *Client }
+
+// Lake is the canal-lake c reaches.
+func (c *Client) Lake() Lake { return Lake{c} }
+
+// Drop removes the files of these canal-lake keys (DropLakeKeys).
+func (l Lake) Drop(ctx context.Context, keys []string) error { return l.c.DropLakeKeys(ctx, keys) }

@@ -21,6 +21,7 @@ import (
 	"github.com/holistics/anfra/internal/appserve"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/command"
+	cachecmd "github.com/holistics/anfra/internal/command/cache"
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/exports"
@@ -196,6 +197,9 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		}
 		if !updateNotifyDisabled() {
 			routines.Every("serve.update_check", time.Hour, checkUpdates(h.cfg.Logger), routine.Immediately())
+		}
+		if _, off := h.queryCache.Disabled(); !off {
+			routines.Every("serve.query_cache_sweep", queryCacheSweepEvery, sweepQueryCache(h, canal.Client()))
 		}
 		routines.Start(ctx)
 		defer func() {
@@ -556,6 +560,34 @@ func appLogger(logger *slog.Logger) *slog.Logger {
 // or bringing it up to date, unless the cache is disabled: a failure is a
 // warning before the server serves, rather than found later in the log. The
 // server runs either way, its queries uncached until the store opens.
+// queryCacheSweepEvery is how often anfra serve sweeps the query cache.
+const queryCacheSweepEvery = 5 * time.Minute
+
+// sweepQueryCache removes the query cache's entries expired for longer than
+// the read grace, and their files through canal-query: what the server owns,
+// its sweep runs. It logs what it freed, and a failure, which the next run
+// tries again; a cache that isn't working is left to the startup check's
+// report and anfra status.
+func sweepQueryCache(h hostContext, canal *canalquery.Client) func(context.Context) error {
+	return func(ctx context.Context) error {
+		m, err := h.queryCache.Manager(ctx)
+		if err != nil {
+			return nil //nolint:nilerr // reported by the startup check and anfra status, not every five minutes
+		}
+		start := time.Now()
+		swept, err := cachecmd.Sweep(ctx, m, cachecmd.LakeOf(h.queryCache, canal))
+		if swept.Entries > 0 {
+			h.cfg.Logger.InfoContext(ctx, "Query cache swept", logkit.EventKey, eventQueryCacheSwept,
+				"entries", swept.Entries, "bytes", swept.Bytes, "took", time.Since(start).Round(time.Millisecond).String())
+		}
+		if err != nil && ctx.Err() == nil {
+			h.cfg.Logger.WarnContext(ctx, "Query cache sweep failed", logkit.EventKey, eventQueryCacheSweepFailed, "error", err,
+				"hint", "the expired results' files stay until the next sweep, in five minutes, deletes them")
+		}
+		return nil
+	}
+}
+
 func checkQueryCache(ctx context.Context, h hostContext) {
 	c := h.queryCache
 	if _, off := c.Disabled(); off {
