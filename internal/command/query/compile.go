@@ -10,13 +10,18 @@ import (
 )
 
 // sourceOf is what the invocation's queries compile against and run on: its
-// repo, with the repo's data sources (command.CommandContext.ResolveDataSources).
+// repo, with the repo's data sources (command.CommandContext.ResolveDataSources)
+// and the AQL compiler it picks (command.CommandContext.UseV2Compiler).
 func sourceOf(cc command.CommandContext) (query.Source, error) {
 	sources, err := cc.ResolveDataSources()
 	if err != nil {
 		return query.Source{}, err
 	}
-	return query.Source{Repo: cc.Repo, DataSources: sources}, nil
+	v2, err := cc.UseV2Compiler()
+	if err != nil {
+		return query.Source{}, err
+	}
+	return query.Source{Repo: cc.Repo, DataSources: sources, UseV2Compiler: v2}, nil
 }
 
 // compileAQL compiles a query (see query.Compile) against src, with anfra-node's

@@ -76,3 +76,43 @@ func TestSetConfigStringRefusesSafely(t *testing.T) {
 		t.Errorf("err = %v, want the held lock refused", err)
 	}
 }
+
+// aql.compiler.version picks the AQL compiler: v1 when unset, and any value but
+// v1 or v2 is refused rather than read as one of them.
+func TestUseV2Compiler(t *testing.T) {
+	for name, tc := range map[string]struct {
+		file    string
+		want    bool
+		wantErr bool
+	}{
+		"no file":  {"", false, false},
+		"unset":    {"org:\n  url: https://bi.example.com/o/acme\n", false, false},
+		"v1":       {"aql:\n  compiler:\n    version: v1\n", false, false},
+		"v2":       {"aql:\n  compiler:\n    version: v2\n", true, false},
+		"mistyped": {"aql:\n  compiler:\n    version: V2\n", false, true},
+	} {
+		dir := t.TempDir()
+		if tc.file != "" {
+			if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(Path(dir), []byte(tc.file), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		conf, err := Read(dir)
+		if err != nil {
+			t.Fatalf("%s: read: %v", name, err)
+		}
+		got, err := conf.UseV2Compiler()
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("%s: err = %v, want error %v", name, err, tc.wantErr)
+		}
+		if err != nil && !strings.Contains(err.Error(), "aql.compiler.version") {
+			t.Errorf("%s: error %q does not name aql.compiler.version", name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s: UseV2Compiler = %v, want %v", name, got, tc.want)
+		}
+	}
+}

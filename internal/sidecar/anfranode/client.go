@@ -458,7 +458,15 @@ func (c *Client) CompileToSQL(ctx context.Context, req CompileToSQLRequest) (Com
 // No data sources are involved — this type-checks AML.
 type ValidateAMLRequest struct {
 	RepoRef
-	Paths []string `json:"paths,omitempty"`
+	Paths   []string            `json:"paths,omitempty"`
+	Options *ValidateAMLOptions `json:"options,omitempty"`
+}
+
+// ValidateAMLOptions are the aml.validate options anfra sets. UseV2Compiler
+// type-checks the repo's AQL with the AQL v2 compiler; anfra-node defaults it to
+// false, and one that predates it ignores it.
+type ValidateAMLOptions struct {
+	UseV2Compiler bool `json:"useV2Compiler"`
 }
 
 // CompileError is an AML file that failed to compile (interpret). Row/Col are
