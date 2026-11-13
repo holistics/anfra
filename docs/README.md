@@ -36,6 +36,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [init sample](designs/init-sample.md) | `anfra init --example`: the e-commerce sample from its own public repo, asked in a terminal and offered to agents. |
 | [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
+| [skills in step](designs/skills-in-step.md) | Keeping the skills correct as the code changes: the rule, the checks that enforce it, and why the skills don't read the code. |
 | [readable prose](designs/readable-prose.md) | How to write error messages, notices, help and docs that a person or an agent can read and act on. |
 
 ## Research
