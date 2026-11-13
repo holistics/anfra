@@ -355,9 +355,15 @@ type (
 	// it other than its text (its Query Input, page, time zone and seeds), the
 	// input field of core.query's, core.query.compile's and core.query.export's.
 	QueryInput = querycmd.QueryInput
-	// QueryRequestParams is core.query's and core.query.compile's input: a
-	// query and its input.
+	// QueryRequestParams is core.query's input: a query, its input, and how
+	// the query cache answers it.
 	QueryRequestParams = querycmd.QueryRequestParams
+	// QueryCompileRequestParams is core.query.compile's input: a query and
+	// its input, as core.query takes them, without the cache.
+	QueryCompileRequestParams = querycmd.QueryCompileRequestParams
+	// CacheOptions are how the query cache answers a core.query or
+	// core.query.export request.
+	CacheOptions = querycmd.CacheOptions
 	// QueryExportRequestParams is core.query.export's input.
 	QueryExportRequestParams = querycmd.QueryExportRequestParams
 
@@ -375,7 +381,7 @@ type (
 // not compile.
 var (
 	QueryOp         = apikit.OpRef[QueryRequestParams]{Name: "core.query"}
-	QueryCompileOp  = apikit.OpRef[QueryRequestParams]{Name: "core.query.compile"}
+	QueryCompileOp  = apikit.OpRef[QueryCompileRequestParams]{Name: "core.query.compile"}
 	QueryValidateOp = apikit.OpRef[QueryDefinition]{Name: "core.query.validate"}
 	QueryExportOp   = apikit.OpRef[QueryExportRequestParams]{Name: "core.query.export"}
 	ShowOp          = apikit.OpRef[ShowInput]{Name: "core.show"}

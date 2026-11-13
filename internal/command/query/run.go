@@ -67,8 +67,9 @@ type QuerySummary struct {
 	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without input.pagination, every row was sent, and this is false."`
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
-	BytesScanned *int64  `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
-	Timings      Timings `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
+	BytesScanned *int64       `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
+	Cache        *CacheResult `json:"cache,omitempty" doc:"what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
+	Timings      Timings      `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 }
 
 func (QueryCompiled) queryEvent()  {}
@@ -139,6 +140,7 @@ type sink struct {
 	scanned   func(bytes int64)
 	header    func(columns []Column, fields []string) error
 	row       func(canalquery.Row) error
+	cache     func(*CacheResult) // once the run has ended well
 }
 
 // Timings and TimedStep are a run's timeline, command's (CommandContext's
@@ -216,14 +218,25 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 			Row:    s.row,
 		})
 	}
+	// run streams p, through the query cache.
+	run := func(p query.Prepared, k keyInput, aql, sql string, columns []anfranode.ExploreColumn) error {
+		c := q.startCache(ctx, p, k, aql, sql)
+		t.requested()
+		err := c.prepared(p).Stream(ctx, canal, bounds, c.handler(handler(columns)))
+		c.finish(ctx, err)
+		if err != nil {
+			return asQueryFailed(err)
+		}
+		s.cache(c.result)
+		return nil
+	}
 	if q.in.Lang == "sql" {
 		if err := s.compiled(q.in.Query, "", nil); err != nil {
 			return Timings{}, err
 		}
 		o.compiled(ctx, q.in.DataSource, "", "", q.in.Query)
-		t.requested()
-		if err := q.sql.Stream(ctx, canal, bounds, handler(nil)); err != nil {
-			return Timings{}, asQueryFailed(err)
+		if err := run(q.sql.Prepared, keyInput{sql: q.in.Query, truncate: truncate}, "", q.in.Query, nil); err != nil {
+			return Timings{}, err
 		}
 		return t.timings(), nil
 	}
@@ -238,9 +251,12 @@ func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings,
 		return Timings{}, err
 	}
 	o.compiled(ctx, compiled.DataSource.Name, q.in.Dataset, compiled.AQL, compiled.SQL)
-	t.requested()
-	if err := query.Stream(ctx, canal, q.src.DataSources, compiled, bounds, handler(compiled.Columns)); err != nil {
+	p, err := query.Prepare(ctx, q.src.DataSources, compiled)
+	if err != nil {
 		return Timings{}, asQueryFailed(err)
+	}
+	if err := run(p, keyInput{compilerKey: compiled.CacheKey, truncate: truncate}, compiled.AQL, compiled.SQL, compiled.Columns); err != nil {
+		return Timings{}, err
 	}
 	return t.timings(), nil
 }
@@ -343,6 +359,7 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 			r.Columns, r.Result.Fields = columns, fields
 			return nil
 		},
+		cache: func(c *CacheResult) { r.Cache = c },
 		row: func(row canalquery.Row) error {
 			if len(r.Result.Records) == keep {
 				r.HasMore = true // the row past the page
@@ -371,6 +388,7 @@ func (q queryRun) page(ctx context.Context) (QueryResult, error) {
 func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) error {
 	batch, size, count := []canalquery.Row{}, 0, 0
 	var scanned *int64
+	var cache *CacheResult
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
@@ -388,6 +406,7 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 			return events.Emit(QueryWarehouse{Type: "warehouse_query", ID: id})
 		},
 		scanned: func(bytes int64) { scanned = &bytes },
+		cache:   func(c *CacheResult) { cache = c },
 		header: func(columns []Column, fields []string) error {
 			return events.Emit(QueryHeader{Type: "header", Columns: columns, Fields: fields})
 		},
@@ -406,5 +425,5 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 		return err
 	}
 	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: q.in.Input.pageSize() > 0 && count == q.in.Input.pageSize(),
-		BytesScanned: scanned, Timings: timings})
+		BytesScanned: scanned, Cache: cache, Timings: timings})
 }
