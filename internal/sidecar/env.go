@@ -20,7 +20,7 @@ import (
 //
 // stripped lists only names that collide this way. Anything else is passed on.
 var stripped = map[string]bool{
-	"PPROF_ADDR":               true, // canal-query's pprof server
+	"PPROF_ADDR":               true, // canal-query's and canal-lake's pprof servers
 	"OTEL_SERVICE_NAME":        true, // each process names its own traces
 	"OTEL_RESOURCE_ATTRIBUTES": true,
 	"GOMEMLIMIT":               true, // the Go runtime's, per process

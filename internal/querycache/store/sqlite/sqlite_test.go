@@ -29,7 +29,7 @@ func open(t *testing.T, path string) *Store {
 
 func TestStore(t *testing.T) {
 	querycachetest.Run(t, func(t *testing.T) querycache.Store {
-		return open(t, filepath.Join(t.TempDir(), "cache.sqlite"))
+		return open(t, filepath.Join(t.TempDir(), "store.sqlite"))
 	})
 }
 
@@ -51,7 +51,7 @@ func exec(t *testing.T, path string, stmts ...string) {
 // A store at this anfra's schema version opens as it was left; a newer one opens when
 // compatible, and is refused, unchanged, when not.
 func TestOpenVersions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "cache.sqlite")
+	path := filepath.Join(t.TempDir(), "store.sqlite")
 	open(t, path).Close()
 	open(t, path).Close() // again, as it was left
 
@@ -95,7 +95,7 @@ func TestOpenNotStore(t *testing.T) {
 // A process meeting a store a newer anfra made incompatible since it opened it
 // stops using it at once, reading or writing; a compatible change, it uses.
 func TestCheckEachCall(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "cache.sqlite")
+	path := filepath.Join(t.TempDir(), "store.sqlite")
 	s := open(t, path)
 	now := time.Now()
 
@@ -121,7 +121,7 @@ func TestMigrateFromEveryVersion(t *testing.T) {
 	for from := 0; from < CurrentVersion; from++ {
 		t.Run(fmt.Sprintf("from %d", from), func(t *testing.T) {
 			querycachetest.Run(t, func(t *testing.T) querycache.Store {
-				path := filepath.Join(t.TempDir(), "cache.sqlite")
+				path := filepath.Join(t.TempDir(), "store.sqlite")
 				stmts := []string{}
 				for _, m := range migrations[:from] {
 					stmts = append(stmts, m.sql)
@@ -150,7 +150,7 @@ func TestBreakingMigration(t *testing.T) {
 	more[fmt.Sprintf("migrations/%04d_add.sql", n+1)] = &fstest.MapFile{Data: []byte("CREATE TABLE added (x);")}
 	more[fmt.Sprintf("migrations/%04d_drop.sql", n+2)] = &fstest.MapFile{Data: []byte("-- breaking\nDROP TABLE added;")}
 
-	path := filepath.Join(t.TempDir(), "cache.sqlite")
+	path := filepath.Join(t.TempDir(), "store.sqlite")
 	open(t, path).Close() // at this anfra's version
 
 	var err error
@@ -190,7 +190,7 @@ func TestLoadMigrations(t *testing.T) {
 
 // OnCreate runs once, when the store is created, and not when it is opened again.
 func TestOnCreate(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "cache.sqlite")
+	path := filepath.Join(t.TempDir(), "store.sqlite")
 	created := 0
 	o := Options{OnCreate: func() { created++ }}
 	for range 2 {
@@ -207,7 +207,7 @@ func TestOnCreate(t *testing.T) {
 
 // Peek reads a store's versions without making or changing one.
 func TestPeek(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "cache.sqlite")
+	path := filepath.Join(t.TempDir(), "store.sqlite")
 	if _, err := Peek(ctx, path); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("no store: %v, want os.ErrNotExist", err)
 	}

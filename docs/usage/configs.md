@@ -10,9 +10,28 @@ A repo's config is its `.anfra/` folder, committed with it (`anfra init` creates
 |---|---|
 | `data_sources.yml` | The data sources the repo's models query, by name: a `type`, a `connection` passed to the database driver unchanged, and optional `settings` for the query engine (timeouts such as `statement_timeout_ms`, `require_ssl` and the like; see [sidecars](../designs/sidecars.md#what-canal-query-is-given)). It holds credentials, so it is git-ignored; `anfra init` also creates `data_sources.yml.example`, the same without them, to commit. Each type's connection keys are listed in the anfra skills' [data source reference](https://github.com/holistics/anfra-skills/blob/main/plugins/anfra/skills/setup-repo/references/data-sources.md). |
 | `context_sources.yml` | What `anfra ingest` reads into the local catalog that `anfra search` searches and `anfra lineage` traces through; by default, the repo's own semantic layer. |
-| `config.yml` | The repo's settings, written by hand. `org.url`: the org `anfra publish` publishes the repo to, by its address on its server (`https://bi.example.com/o/acme`), committed so everyone publishes to the same org. `anfra publish --set-org` sets it, changing nothing else in the file. `apps.allow_origins`: origins the repo's Data Apps may load scripts, styles and fonts from, and send requests to, beyond the SDK's own CDNs, as `anfra serve` runs them, each `https://<host>[:<port>]` (`[https://cdn.acme.com]`); never published, since an org keeps its own list, and `anfra publish` says which of them the org does not allow. It never holds a credential. |
+| `config.yml` | The repo's settings, written by hand and committed ([below](#configyml)). |
 
 anfra reads them on every command, so an edit needs no restart.
+
+### `config.yml`
+
+The repo's settings, written by hand and committed. It never holds a credential.
+
+| Setting | Effect |
+|---|---|
+| `org.url` | The org `anfra publish` publishes the repo to, by its address on its server (`https://bi.example.com/o/acme`), so everyone publishes to the same org. `anfra publish --set-org` sets it, changing nothing else in the file. |
+| `apps.allow_origins` | Origins the repo's Data Apps may load scripts, styles and fonts from, and send requests to, beyond the SDK's own CDNs, as `anfra serve` runs them, each `https://<host>[:<port>]`. It's never published, since an org keeps its own list, and `anfra publish` says which of them the org doesn't allow. |
+
+For example:
+
+```yaml
+org:
+  url: https://bi.example.com/o/acme
+apps:
+  allow_origins:
+    - https://cdn.acme.com
+```
 
 ## `anfra serve`
 
@@ -35,7 +54,7 @@ anfra's on/off switches take `1` (on) or `0` (off); unset means off. Any other v
 
 | Variable | Effect |
 |---|---|
-| `ANFRA_HOME` | anfra's own folder: the installed binary, the unpacked sidecars, each repo's logs and caches (`internal/home`). A path. Default: `~/.anfra`. The installer honours it too. |
+| `ANFRA_HOME` | anfra's own folder: the installed binary, the unpacked sidecars, each repo's logs and caches (`internal/home`). A repo's query cache is in `repos/<repo id>/cache/query/`: its store, `store.sqlite`, and the results of the canal-lake anfra starts, `lake/`. In a container, put it on a lasting volume to keep the cache across restarts. A path. Default: `~/.anfra`. The installer honours it too. |
 
 ### Sidecars
 
@@ -44,8 +63,8 @@ See [designs/sidecars.md](../designs/sidecars.md).
 | Variable | Effect |
 |---|---|
 | `ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL` | Use sidecars something else runs (a compose or Kubernetes deployment) instead of spawning them: their base URLs, e.g. `http://anfra-node:8080`. Default: unset, and anfra spawns its own. |
-| `ANFRA_NODE_BIN`, `ANFRA_CANAL_BIN` | The sidecar binaries, as absolute paths, for a build that embeds none (`go build`, `make dev`): anfra-node, and anfra-canal, which runs canal-query. `ANFRA_CANAL_QUERY_BIN` names a canal-query built alone, run in place of anfra-canal's. Releases and `make build` embed them, and ignore these. |
-| `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_NODE_ENV_<NAME>` | Set `<NAME>` in the canal-query or anfra-node that anfra spawns, and in no other process: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061` serves canal-query's pprof there. The sidecars inherit anfra's environment otherwise, except anfra's own `ANFRA_*` and the settings each process has its own of, which they get only this way: `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` ([designs/sidecars.md](../designs/sidecars.md#environment)). Values anfra sets for a sidecar, such as canal-query's `SOCKET`, cannot be changed, except anfra-node's `ANFRA_PROGRAM_MEMORY_SIZE` (below). |
+| `ANFRA_NODE_BIN`, `ANFRA_CANAL_BIN` | The sidecar binaries, as absolute paths, for a build that embeds none (`go build`, `make dev`): anfra-node, and anfra-canal, which runs canal-query and canal-lake. `ANFRA_CANAL_QUERY_BIN` and `ANFRA_CANAL_LAKE_BIN` name a canal-query or canal-lake built alone, run in place of anfra-canal's. Releases and `make build` embed them, and ignore these. |
+| `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_CANAL_LAKE_ENV_<NAME>`, `ANFRA_NODE_ENV_<NAME>` | Set `<NAME>` in the canal-query, canal-lake or anfra-node that anfra spawns, and in no other process: `ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061` serves canal-query's pprof there. The sidecars inherit anfra's environment otherwise, except anfra's own `ANFRA_*` and the settings each process has its own of, which they get only this way: `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` ([designs/sidecars.md](../designs/sidecars.md#environment)). Values anfra sets for a sidecar, such as canal-query's `SOCKET`, cannot be changed, except anfra-node's `ANFRA_PROGRAM_MEMORY_SIZE` (below). |
 
 #### Running anfra-node (the sidecar, not anfra) yourself
 
@@ -58,6 +77,22 @@ A platform that runs **anfra-node** as a service, rather than letting anfra spaw
 | `ANFRA_COMPILE_CACHE_PATH` | Where compiled programs are cached on disk. Default: `~/.anfra/compile-cache`. anfra sets it per repo for the anfra-node it spawns. |
 | `ANFRA_PROGRAM_MEMORY_SIZE` | How many repos' compiled programs to keep in memory between requests: a whole number. Default: `0`, none. Size it to the repos one process serves and the memory it has; anfra sets `1` for the anfra-node it spawns, which serves one repo; `ANFRA_NODE_ENV_ANFRA_PROGRAM_MEMORY_SIZE=0` turns that off. |
 | `LOG_LEVEL` | As below. |
+
+#### Running canal-query and canal-lake yourself
+
+A platform that runs **canal-query** as a service (`ANFRA_CANAL_QUERY_URL`) also runs its **canal-lake**, which keeps the query cache's results. anfra then starts no canal-lake, and never calls one. canal-query writes results to canal-lake, and reads and drops them, at the address its settings give. Run both from anfra-canal (`anfra-canal query`, `anfra-canal lake`), or from canal's own images at the releases `manifest.yml` records in `anfra_canal_services`. Configure them with the settings below. canal-query and canal-lake read these, not anfra, and anfra sets the same ones for the canal-query and canal-lake it spawns.
+
+| Setting | On | Effect |
+|---|---|---|
+| `SOCKET`, or `PORT` | both | Where it listens: a Unix socket's path, or a port. Default: port 1323 for canal-query, 1324 for canal-lake. |
+| `SKIP_HOLISTICS_DB=1` | canal-query | Runs canal-query without the Holistics app's database, which anfra doesn't have. |
+| `ENABLE_DUCKDB_CONNECTOR=1` | canal-query | Lets it query DuckDB data sources. |
+| `EXPOSE_ERROR_CAUSES=1` | canal-query | Sends anfra the cause of each failure, apart from its message, so anfra can log it ([errors](../designs/errors.md#sidecar-failures)). |
+| `CANAL_LAKE_SOCKET`, or `CANAL_LAKE_HOST` and `CANAL_LAKE_PORT` | canal-query | Where its canal-lake listens. Default: `localhost:1324`. |
+| `STORAGE_ROOT` | canal-lake | The folder canal-lake keeps its result files in, such as `/data/canal-lake/`. End the path with `/`, because canal-lake appends `duckdb.tmp/` to it for DuckDB's temporary files. Default: `/tmp/canal_lake/`. |
+| `SHUTDOWN_GRACE_SECONDS` | canal-lake | How long canal-lake waits for its calls to finish when stopped. Default: 1200 (20 minutes). anfra sets 2 for the canal-lake it spawns. |
+
+If several anfras write to one canal-lake storage, replicas included, give each its own namespace with `ANFRA_CACHE_QUERY_NAMESPACE`, such as `prod` or `prod/eu`. A namespace is letters, digits and `_`, with `/` between names. anfra then writes its files in that subfolder of the storage. Without a namespace, anfra writes them at the storage's top level, named by the entry numbers in its own store (`1234.parquet`), so two anfras writing there overwrite each other's results. anfra keeps the store, which lists the results, in its own folder, at `<ANFRA_HOME>/repos/<repo id>/cache/query/store.sqlite`, wherever canal-lake keeps the results. Keep the storage for as long as the store, by putting both on lasting volumes, or by deleting them together. If anfra creates a new store while the storage still holds files, it warns with their size, and leaves deleting them to you ([query-cache.md](../designs/query-cache.md#file-names)).
 
 ### `anfra serve`
 
