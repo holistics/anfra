@@ -5,14 +5,16 @@ anfra is a Go program with two helper processes, its sidecars. anfra owns the CL
 | Sidecar | What it is | Talks over |
 |---|---|---|
 | anfra-node | anfra's core Node.js functions: today, compiling and validating AML and AQL, showing a repo's objects, and ingesting, searching and tracing lineage through the catalog. Built from `holistics-core/apps/anfra-node`. | A Unix socket (JSON-RPC over HTTP) |
-| canal-query | The query engine: runs SQL against the warehouse, with a connector per database type. Built from `holistics/canal` (`app/query`). | A Unix socket (HTTP) |
+| canal-query | The query engine: runs SQL against the warehouse, with a connector per database type. Built from `holistics/canal` (`app/query`), and run from anfra-canal. | A Unix socket (HTTP) |
+
+anfra-canal is canal's services in one binary, from `holistics/canal` (`app/anfra-canal`): `anfra-canal query` is canal-query. One binary, rather than one per service, keeps a release's download small, since the services share most of their code (canal's [design](https://github.com/holistics/canal/blob/master/docs/design/merged_binary.md)). anfra embeds and unpacks it once (`internal/sidecar/anfracanal`), and each service's package runs it.
 
 Each has its own package under `internal/sidecar/` (its supervisor, client and wire types), on the shared framework in `internal/sidecar/` itself: the `Config` they are given, the lifecycle of a spawned one (`process.go`), how its binary is found (`binary.go`), and how one that does not answer is classified (`unreachable.go`). See [architecture.md](architecture.md) for where they sit in a command's path.
 
 ## Where the binaries come from
 
 - **Releases embed them.** A build with the `embed_sidecar` tag embeds the binaries dropped in `internal/sidecar/<sidecar>/assets/` (`embed_release.go`); the release workflow puts the pinned ones there for each target ([release.md](release.md)). At startup, anfra writes each one to `<ANFRA_HOME>/sidecars/<name>-<hash>` (`internal/sidecar/binary.go`, `internal/home`), keyed by content hash: written only when missing, so concurrent runs converge on one file, and older versions of the same sidecar are pruned.
-- **Builds from source embed nothing** (`embed_dev.go`), and take paths from `ANFRA_NODE_BIN` and `ANFRA_CANAL_QUERY_BIN`. `make build` is the exception: it embeds them as a release does, so `bin/anfra` runs on its own. `make dev` and `make build` default them to the pinned releases, downloaded into `.sidecars/` (`scripts/sidecars.sh`): anfra-node's unminified build, which each anfra-node release publishes beside the minified one releases embed, so a trace names the source's functions.
+- **Builds from source embed nothing** (`embed_dev.go`), and take paths from `ANFRA_NODE_BIN` and `ANFRA_CANAL_BIN`, or `ANFRA_CANAL_QUERY_BIN` for a canal-query built alone. `make build` is the exception: it embeds them as a release does, so `bin/anfra` runs on its own. `make dev` and `make build` default them to the pinned releases, downloaded into `.sidecars/` (`scripts/sidecars.sh`): anfra-node's unminified build, which each anfra-node release publishes beside the minified one releases embed, so a trace names the source's functions.
 - **Or none is spawned:** `ANFRA_NODE_URL` and `ANFRA_CANAL_QUERY_URL` point anfra at sidecars something else runs (a compose or Kubernetes deployment, or a long-lived one while developing). anfra then only dials them, and never stops them.
 
 Which sidecar releases a release embeds is pinned in `manifest.yml`, alongside anfra's own version. The sidecars' wire contracts are therefore versioned with anfra: a change to one is a pin bump here.

@@ -331,11 +331,15 @@ anfra's host sets the path, as it does the compile cache's (`repo.CacheDir()`, t
 
 ### canal-lake as a sidecar
 
-anfra runs canal-lake as it runs canal-query: from anfra-canal (`anfra-canal lake`), `ANFRA_CANAL_LAKE_BIN` for a standalone build, or `ANFRA_CANAL_LAKE_URL` for one something else runs ([sidecars](sidecars.md)). Differences:
+anfra runs canal-lake as it runs canal-query: from anfra-canal (`anfra-canal lake`), or, in a build from source, `ANFRA_CANAL_LAKE_BIN` for a standalone canal-lake ([sidecars](sidecars.md)). Its own supervisor, `internal/sidecar/canallake`, gives it a socket in a folder of its own (`SOCKET`). Differences:
 
-- **It starts only when a cached query needs it**, so a repo that caches nothing never runs it. anfra gives canal-query canal-lake's socket path (`CANAL_LAKE_SOCKET`) when it starts canal-query, whether canal-lake runs yet or not: canal-query connects for each query.
-- **Its storage is the repo's** (`STORAGE_ROOT`), not canal-lake's default, `/tmp/canal_lake/`.
-- **Its settings prefix is `ANFRA_CANAL_LAKE_ENV_`**, as canal-query's is.
+- **It starts only when a cached query needs it**, so a repo that caches nothing never runs it. When the cache is on, anfra picks canal-lake's socket path before it starts canal-query, and gives canal-query that path (`CANAL_LAKE_SOCKET`) whether canal-lake runs yet or not: canal-query connects for each query.
+- **Its storage is the repo's** (`STORAGE_ROOT`, the `lake/` folder, ending in `/`: canal-lake appends `duckdb.tmp/` to it for DuckDB's temporary files), not canal-lake's default, `/tmp/canal_lake/`.
+- **It runs in that folder.** canal-lake loads a `.env` from its working directory, which would otherwise be anfra's, usually the repo's.
+- **It stops quickly.** anfra sets `SHUTDOWN_GRACE_SECONDS` low: canal-lake's default waits 20 minutes for its calls to finish, and anfra kills a sidecar that hasn't stopped after 3 seconds anyway.
+- **It is ready when its socket accepts a connection.** canal-lake answers gRPC, health included, but anfra never calls it itself: canal-query relays writes, reads and drops. A dial avoids a gRPC client for one health check.
+- **Its settings prefix is `ANFRA_CANAL_LAKE_ENV_`**, as canal-query's is. anfra sets no `PPROF_ADDR`, so it serves no pprof unless asked to.
+- **No `ANFRA_CANAL_LAKE_URL` yet**, for a canal-lake something else runs: canal-query reaches canal-lake by socket, or by host and port (`CANAL_LAKE_HOST`, `CANAL_LAKE_PORT`), not by URL, and nothing needs one yet.
 
 ## The code
 
@@ -479,7 +483,8 @@ A `Recorder` lets a platform keep what a later `Planner` needs, such as each ent
 |---|---|---|
 | anfra-node | Compile returns the query's cache key, computed from its query structure by the rules above, and takes and returns the query's seeds. | A key from the structure, not the SQL, that a query compiled again with its seeds reproduces. |
 | canal-lake | Keeps decimals as decimals when asked. Its reads cast decimal columns to strings today. | A cached decimal column must keep its Arrow type, or a hit's header differs from a miss's. |
-| canal-lake | Its pprof address is a setting (`PPROF_ADDR`, as canal-query's). It always listens on `localhost:6060` today. | Two repos' servers each run a canal-lake: the second can't take the port. |
+| canal | anfra-canal: canal-query and canal-lake in one binary, released as a line of its own (canal's [design](https://github.com/holistics/canal/blob/master/docs/design/merged_binary.md)). Done, not released yet. | Embedding canal-lake beside canal-query as a binary of its own would double the sidecars' share of anfra's download. |
+| canal-lake | Its pprof address is a setting (`PPROF_ADDR`, as canal-query's), off when unset. Done (canal 3a65a44), not released yet. | Two repos' servers each run a canal-lake: with a fixed address, the second can't take the port. |
 | canal-query | Reads an entry from canal-lake, and streams it as a warehouse result. | The hit path. canal-query only writes to canal-lake today. |
 | canal-lake | A read's limit (one minute today) becomes a setting. | A `query export` read from the cache can take longer. |
 | canal-query | Streams on when its canal-lake write fails, and reports the failure in its trailer, instead of failing the query. | A cache problem should never fail a query. Today a write that fails mid-query fails it. Later. |
@@ -497,10 +502,16 @@ A check holds a hit to a miss: a test runs a set of queries (every type [result 
 
 ## Implementation plan
 
-1. **anfra-node:** the structural cache key, and the seeds.
-2. **canal:** decimals kept, pprof's address, canal-query reading an entry from canal-lake; the parity test.
-3. **The canal-lake sidecar:** its supervisor, started on demand, with its storage under the repo's folder.
-4. **The cache:** `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `internal/querycache` with `engine/querycachetest`, the SQLite store with its migrations and their compatibility rule, `cache.query.enabled`, reporting the cache's failures (`cache.warning`, the CLI's warning, `anfra serve`'s startup check), anfra's key (anfra-node's key and version, the tenant, the data source's type and identity, the row truncation) with its access test, the miss and hit paths in `query` and `query export`, the maximums checked on a hit, the `cache` input, with `cache_miss`, and the answer's `cache` (a change to the core API's contract: the OpenAPI document and the SDK's types), uncached when canal-lake fails, the sweep for expired and pending entries, the tags anfra derives, `cache.clean`.
+Status as of 2026-11-13, on the `cache/query-cache` branch.
+
+1. **anfra-node:** the structural cache key, and the seeds. Done: anfra-node 0.14.0.
+2. **canal:** anfra-canal and pprof's address, done but not released (`anfra-canal-v1.0.0`, which anfra's manifest already pins). To do: decimals kept, canal-query reading an entry from canal-lake, a read's limit as a setting; the parity test.
+3. **The canal-lake sidecar.**
+   1. canal-query run from anfra-canal (`internal/sidecar/anfracanal`, the manifest's `anfra_canal` and `anfra_canal_services`, `scripts/sidecars.sh`, `make build`, the release workflow, `anfra publish` recognising anfra-canal, anfra-cloud's `scripts/bump-anfra.sh`). Done.
+   2. canal-lake's supervisor ([canal-lake as a sidecar](#canal-lake-as-a-sidecar)), started on demand; `scripts/sidecars.sh` checking canal-lake's version too. Proved by a test against the real binary: a DuckDB query with a canal-lake key writes its Parquet file under the repo's `lake/`. To do.
+4. **The cache.**
+   - Done: `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `internal/querycache` with `engine/querycachetest`; the SQLite store with its migrations and their compatibility rule; `cache.query.enabled`; where it lives; its state in `anfra status`, and `anfra serve`'s startup check.
+   - To do: anfra's key (anfra-node's key and version, the tenant, the data source's type and identity, the row truncation) with its access test; the miss and hit paths in `query` and `query export`, the maximums checked on a hit; the `cache` input, with `cache_miss`, and the answer's `cache` (a change to the core API's contract: the OpenAPI document and the SDK's types); reporting the cache's failures on a query (`cache.warning`, the CLI's warning); uncached when canal-lake fails; the sweep for expired and pending entries; the tags anfra derives; `cache.clean`.
 5. **The SDK:** a query's result keeps the `input` it ran with, and replays it for the next page and an export; `refresh` leaves the seeds out. `inspect` showing the answer's `cache`, the `refresh` plugin.
 6. **The engine:** the `Store`, `Planner` and `Recorder` on each invocation, with core's implementations; `DataSource.Identity`, which anfra Cloud sets for each data source, and for each viewer under OAuth passthrough.
-7. **After:** removing orphaned files (in canal-lake with no row); a command to throw a repo's cache away by hand (`anfra cache clean --query --reset`); the caller's tags (`app`, `block`, an origin, through a `cache.origin` input) and attribution by tag (hits, misses and size per tag, for a `cache.stats` op and `inspect`); the size limit; canal-query streaming on when its canal-lake write fails; the data source settings that change rows, in the key.
+7. **After:** removing orphaned files (in canal-lake with no row); a command to throw a repo's cache away by hand (`anfra cache clean --query --reset`); the caller's tags (`app`, `block`, an origin, through a `cache.origin` input) and attribution by tag (hits, misses and size per tag, for a `cache.stats` op and `inspect`); the size limit; canal-query streaming on when its canal-lake write fails; the data source settings that change rows, in the key; canal-lake in `anfra status`; `ANFRA_CANAL_LAKE_URL`.

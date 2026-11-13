@@ -387,7 +387,7 @@ func (m *mdCopy) upload(ctx context.Context, f duckdbFile) (name string, ok bool
 	p.Step("Uploading %s to MotherDuck as database %s… (a large file takes a while)", f.shown, name)
 	err = m.md.CreateDatabaseFrom(ctx, name, f.path)
 	if holder, pid, locked := motherduck.LockedBy(err); locked {
-		if !strings.HasPrefix(filepath.Base(holder), "canal-query") {
+		if base := filepath.Base(holder); !strings.HasPrefix(base, "canal-query") && !strings.HasPrefix(base, "anfra-canal") {
 			p.Fail("%s is open in another program (%s, PID %d), so it can't be read right now.", f.shown, holder, pid)
 			p.Note("Close it, then publish again to upload the file.")
 			return "", false, nil
