@@ -12,8 +12,8 @@
 # Your own sidecar is one ANFRA_<NAME>_BIN names, other than .sidecars/<name>: check holds it to
 # the pin too, and fetch leaves it alone. One ANFRA_<NAME>_URL names is already running, so
 # neither touches it. anfra-canal runs canal's services: check also holds the services it says
-# it contains to anfra_canal_services, and a service you build alone (ANFRA_CANAL_QUERY_BIN) to
-# its own pin there. ANFRA_SIDECAR_SKIP_VERSION_CHECK=1 skips the version checks, to run a
+# it contains to anfra_canal_services, and a service you build alone (ANFRA_CANAL_QUERY_BIN,
+# ANFRA_CANAL_LAKE_BIN) to its own pin there. ANFRA_SIDECAR_SKIP_VERSION_CHECK=1 skips the version checks, to run a
 # build whose version is not the pin on purpose.
 #
 # Downloads with gh, from holistics-core's and canal's releases, which are private: `gh auth
@@ -35,6 +35,7 @@ sidecars=(
 # build of it alone.
 services=(
   "canal-query canal_query ANFRA_CANAL_QUERY_BIN"
+  "canal-lake canal_lake ANFRA_CANAL_LAKE_BIN"
 )
 
 usage() { sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//;p;}' "$0" >&2; exit 2; }

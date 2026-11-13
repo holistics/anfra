@@ -72,6 +72,8 @@ func (c *Sidecar) Start(ctx context.Context) error {
 			// Its failures' causes, for anfra to log, and to show its clients
 			// unless ANFRA_HIDE_ERROR_CAUSES. Never in their message.
 			"EXPOSE_ERROR_CAUSES=1",
+			// canal-lake's socket, read for each query; empty, it has none.
+			"CANAL_LAKE_SOCKET=" + c.cfg.CanalLakeSocket,
 		},
 		EnvPrefix: EnvPrefix,
 		Stdout:    c.cfg.StdoutWriter,

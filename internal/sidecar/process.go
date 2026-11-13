@@ -28,7 +28,8 @@ var (
 type Process struct {
 	name   string
 	cmd    *exec.Cmd
-	stdin  *os.File // held open; closing on host exit trips a stdin-EOF watchdog if the child has one
+	done   chan struct{} // closed once the process has exited
+	stdin  *os.File      // held open; closing on host exit trips a stdin-EOF watchdog if the child has one
 	logger *slog.Logger
 }
 
@@ -37,6 +38,8 @@ type ProcSpec struct {
 	Name string
 	Path string
 	Args []string
+	// Dir is the folder it runs in; empty, anfra's own.
+	Dir string
 	// ExtraEnv is what the supervisor sets, over anything inherited or
 	// forwarded (childEnv).
 	ExtraEnv []string
@@ -75,6 +78,7 @@ func StartProcess(ctx context.Context, spec ProcSpec) (*Process, error) {
 	}
 
 	cmd := exec.Command(spec.Path, spec.Args...) //nolint:gosec // G204: spawns our own bundled/configured sidecar, not untrusted input
+	cmd.Dir = spec.Dir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.Env = childEnv(os.Environ(), spec.EnvPrefix, spec.DefaultEnv, spec.ExtraEnv)
@@ -99,8 +103,13 @@ func StartProcess(ctx context.Context, spec ProcSpec) (*Process, error) {
 		return nil, fmt.Errorf("run %s's binary: %w", spec.Name, err)
 	}
 	logger.InfoContext(ctx, "Sidecar started", logkit.EventKey, eventSpawned, "name", spec.Name, "child_pid", cmd.Process.Pid)
-	return &Process{name: spec.Name, cmd: cmd, stdin: stdin, logger: logger}, nil
+	p := &Process{name: spec.Name, cmd: cmd, done: make(chan struct{}), stdin: stdin, logger: logger}
+	go func() { _ = cmd.Wait(); close(p.done) }()
+	return p, nil
 }
+
+// Done is closed once the sidecar has exited, stopped by Close or not.
+func (p *Process) Done() <-chan struct{} { return p.done }
 
 // Logger is the supervisor's logger (defaulted in StartProcess), so supervisors
 // can log their own events without re-defaulting.
@@ -118,10 +127,8 @@ func (p *Process) Close(ctx context.Context) {
 	p.logger.InfoContext(ctx, "Closing sidecar", logkit.EventKey, eventClosing, "name", p.name, "child_pid", p.cmd.Process.Pid)
 	_ = p.cmd.Process.Signal(syscall.SIGTERM)
 
-	done := make(chan struct{})
-	go func() { _ = p.cmd.Wait(); close(done) }()
 	select {
-	case <-done:
+	case <-p.done:
 	case <-time.After(3 * time.Second):
 		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 	}

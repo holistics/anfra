@@ -15,6 +15,8 @@ Text that anfra's users read, people or agents, has to be clear enough to act on
 
 ## Checks
 
+While you work, run Go checks on the packages you changed, one command at a time. Don't chain `go test` with lint, and don't raise `-p` or `--concurrency`: a Go build, test or lint uses every core by default, and several at once can exhaust a laptop's memory. To limit Go on your machine, set `GOMAXPROCS` and `GOFLAGS=-p=<n>` in your agent's environment (Claude Code: `env` in `.claude/settings.local.json`).
+
 Run what CI runs before you finish:
 
 ```sh

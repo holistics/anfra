@@ -154,6 +154,10 @@ type Statement struct {
 	// Unpooled runs st on a connection of its own, closed after it, whatever
 	// the client's pooling.
 	Unpooled bool
+	// LakeKey, when set, also writes the result to canal-lake under this key,
+	// as it streams: its file is <key>.parquet in canal-lake's storage. A key
+	// is written once: canal-lake can't write one twice safely.
+	LakeKey string
 }
 
 // TypeResultTooLarge is the Error.Type of a result past its MaxResultBytes.
@@ -297,9 +301,10 @@ func (c *Client) ForTenant(tenant string) *Client {
 	return &t
 }
 
-// queryRequest mirrors canal-query's POST /query params. We use skip_cache +
-// stream_result + a header with Arrow types: a header object, then every row as
-// a JSON array, one per line, then a trailer object — no cache/lake involved.
+// queryRequest mirrors canal-query's POST /query params. We use stream_result +
+// a header with Arrow types: a header object, then every row as a JSON array,
+// one per line, then a trailer object. skip_cache, unless the statement has a
+// LakeKey (cache_key), which canal-query also writes the result to.
 type queryRequest struct {
 	SQL                   string                `json:"sql"`
 	Dbtype                string                `json:"dbtype"`
@@ -309,6 +314,7 @@ type queryRequest struct {
 	TenantID              string                `json:"tenant_id"`
 	Job                   queryJob              `json:"job"`
 	SkipCache             bool                  `json:"skip_cache"`
+	CacheKey              string                `json:"cache_key,omitempty"`
 	StreamResult          bool                  `json:"stream_result"`
 	StreamResultOptions   streamResultOptions   `json:"stream_result_options"`
 	JSONOutputDataOptions jsonOutputDataOptions `json:"json_output_data_options"`
@@ -435,7 +441,8 @@ func (c *Client) Stream(ctx context.Context, st Statement, h Handler) error {
 		PoolOptions:           c.poolFor(st),
 		TenantID:              c.tenant,
 		Job:                   queryJob{ID: -1, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
-		SkipCache:             true,
+		SkipCache:             st.LakeKey == "",
+		CacheKey:              st.LakeKey,
 		StreamResult:          true,
 		StreamResultOptions:   streamResultOptions{Header: true, HeaderArrowTypes: true, Progress: true},
 		JSONOutputDataOptions: jsonOutputDataOptions{IntegersAsStrings: true},

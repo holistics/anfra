@@ -18,8 +18,8 @@ var ctx = context.Background()
 
 func newCache(t *testing.T) *Cache {
 	t.Helper()
-	c := New(filepath.Join(t.TempDir(), "query"), "")
-	t.Cleanup(func() { c.Close() })
+	c := New(filepath.Join(t.TempDir(), "query"), Options{})
+	t.Cleanup(func() { c.Close(ctx) })
 	return c
 }
 
@@ -83,7 +83,7 @@ func TestSummarize(t *testing.T) {
 		}
 	})
 	t.Run("disabled", func(t *testing.T) {
-		c := New(t.TempDir(), "turned off")
+		c := New(t.TempDir(), Options{Disabled: "turned off"})
 		if s := c.Summarize(ctx); s.State != querycache.StateDisabled || s.Reason != "turned off" || s.Store != "" {
 			t.Errorf("%+v", s)
 		}
@@ -114,7 +114,7 @@ func TestOpenReportsOldFiles(t *testing.T) {
 		t.Errorf("the old file is gone: %v", err)
 	}
 
-	c.Close()
+	c.Close(ctx)
 	if _, notices, _ := c.Open(ctx); len(notices) != 0 {
 		t.Errorf("an existing store's folder reported: %+v", notices)
 	}
@@ -134,5 +134,28 @@ func TestOpenRetries(t *testing.T) {
 	}
 	if _, _, err := c.Open(ctx); err != nil {
 		t.Errorf("the next Open: %v", err)
+	}
+}
+
+// A namespace becomes the cache's file prefix, ending in /. One canal-lake
+// can't take leaves the cache unavailable, saying how to fix it, rather than
+// failing.
+func TestNamespace(t *testing.T) {
+	for given, want := range map[string]string{"": "", "prod": "prod/", "prod/eu/": "prod/eu/"} {
+		if got := New(t.TempDir(), Options{Namespace: given}).Namespace(); got != want {
+			t.Errorf("namespace %q: %q, want %q", given, got, want)
+		}
+	}
+	for _, bad := range []string{"my-prod", "../x", "/prod", "a//b"} {
+		c := New(t.TempDir(), Options{Namespace: bad})
+		if s := c.Summarize(ctx); s.State != querycache.StateUnavailable || !strings.Contains(s.Problem, NamespaceEnv) || !strings.Contains(s.Hint, "letters, digits and _") {
+			t.Errorf("%q: %+v", bad, s)
+		}
+		if _, _, err := c.Open(ctx); !errors.Is(err, errBadNamespace) || !strings.Contains(err.Error(), bad) {
+			t.Errorf("%q: Open %v", bad, err)
+		}
+		if err := c.StartLake(ctx); !errors.Is(err, errBadNamespace) {
+			t.Errorf("%q: StartLake %v", bad, err)
+		}
 	}
 }

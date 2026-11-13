@@ -1,13 +1,14 @@
 # Sidecars
 
-anfra is a Go program with two helper processes, its sidecars. anfra owns the CLI, the server, the repo's config and credentials; the sidecars do what is best done in another runtime.
+anfra is a Go program with three helper processes, its sidecars. anfra owns the CLI, the server, the repo's config and credentials; the sidecars do what is best done in another runtime.
 
 | Sidecar | What it is | Talks over |
 |---|---|---|
 | anfra-node | anfra's core Node.js functions: today, compiling and validating AML and AQL, showing a repo's objects, and ingesting, searching and tracing lineage through the catalog. Built from `holistics-core/apps/anfra-node`. | A Unix socket (JSON-RPC over HTTP) |
 | canal-query | The query engine: runs SQL against the warehouse, with a connector per database type. Built from `holistics/canal` (`app/query`), and run from anfra-canal. | A Unix socket (HTTP) |
+| canal-lake | The query cache's storage: keeps results as Parquet files, which canal-query writes and reads. Built from `holistics/canal` (`app/lake`), and run from anfra-canal. Only when the query cache is on, and only once a query needs it ([query-cache.md](query-cache.md#canal-lake-as-a-sidecar)). | A Unix socket (gRPC), which only canal-query calls |
 
-anfra-canal is canal's services in one binary, from `holistics/canal` (`app/anfra-canal`): `anfra-canal query` is canal-query. One binary, rather than one per service, keeps a release's download small, since the services share most of their code (canal's [design](https://github.com/holistics/canal/blob/master/docs/design/merged_binary.md)). anfra embeds and unpacks it once (`internal/sidecar/anfracanal`), and each service's package runs it.
+anfra-canal is canal's services in one binary, from `holistics/canal` (`app/anfra-canal`): `anfra-canal query` is canal-query, `anfra-canal lake` canal-lake. One binary, rather than one per service, keeps a release's download small, since the services share most of their code (canal's [design](https://github.com/holistics/canal/blob/master/docs/design/merged_binary.md)). anfra embeds and unpacks it once (`internal/sidecar/anfracanal`), and each service's package runs it.
 
 Each has its own package under `internal/sidecar/` (its supervisor, client and wire types), on the shared framework in `internal/sidecar/` itself: the `Config` they are given, the lifecycle of a spawned one (`process.go`), how its binary is found (`binary.go`), and how one that does not answer is classified (`unreachable.go`). See [architecture.md](architecture.md) for where they sit in a command's path.
 
@@ -38,7 +39,7 @@ A spawned sidecar runs with anfra's environment, less the names anfra owns, plus
 | Kind | Examples | How it gets them |
 |---|---|---|
 | **What it needs to run** on the machine | `HOME`, `PATH`, `TMPDIR`, the dynamic loader's (`LD_LIBRARY_PATH`, `NIX_LD`) | Inherited. |
-| **Its own settings,** which a runner sets for one process | `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` | Not inherited: from the sidecar's prefix, `ANFRA_CANAL_QUERY_ENV_<NAME>` or `ANFRA_NODE_ENV_<NAME>`, as `<NAME>`. |
+| **Its own settings,** which a runner sets for one process | `PPROF_ADDR`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `GOMEMLIMIT`, `GOMAXPROCS`, `GOGC`, `NODE_OPTIONS` | Not inherited: from the sidecar's prefix, `ANFRA_CANAL_QUERY_ENV_<NAME>`, `ANFRA_CANAL_LAKE_ENV_<NAME>` or `ANFRA_NODE_ENV_<NAME>`, as `<NAME>`. |
 | **Shared with anfra** | `OTEL_EXPORTER_OTLP_*`, `LOG_LEVEL`, `TZ`, `LANG`, proxies, `SSL_CERT_FILE` | Inherited. |
 | **A driver's conveniences,** not anfra's to support | `AWS_*`, `GOOGLE_APPLICATION_CREDENTIALS`, `KRB5_CONFIG`, `DATABRICKS_*` | Inherited, until a data source's settings or a setting of the second kind replaces them. |
 
@@ -52,7 +53,7 @@ A sidecar anfra does not spawn (`ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL`) gets 
 
 ## Sockets and ports
 
-A spawned sidecar listens on a Unix socket, `<name>.sock`, in a directory of its own that its supervisor makes in the temp dir and removes when it stops (`sidecar.SocketPath`, `internal/sidecar/socket.go`). In the temp dir, because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. A directory of its own, with a random name and open to this user only, because the temp dir is shared with every user on the host: a path another user could guess, they could take first, and the sidecar would fail to start, or anfra would send its requests, and the credentials in them, to that user's process. A new directory per sidecar also keeps several anfra processes' sidecars apart. Neither sidecar listens on a port, so neither is reachable from another machine.
+A spawned sidecar listens on a Unix socket, `<name>.sock`, in a directory of its own that its supervisor makes in the temp dir and removes when it stops (`sidecar.SocketPath`, `internal/sidecar/socket.go`). In the temp dir, because a Unix socket path is limited to about a hundred bytes, which a deep home folder can exceed. A directory of its own, with a random name and open to this user only, because the temp dir is shared with every user on the host: a path another user could guess, they could take first, and the sidecar would fail to start, or anfra would send its requests, and the credentials in them, to that user's process. A new directory per sidecar also keeps several anfra processes' sidecars apart. No sidecar listens on a port, so none is reachable from another machine. canal-lake's socket is chosen before canal-query starts, and given to it (`CANAL_LAKE_SOCKET`), so canal-query can reach a canal-lake started later.
 
 ## One-shot and warm
 

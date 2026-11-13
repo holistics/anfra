@@ -18,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/canallake"
 
 	"github.com/holistics/anfra/shared/logkit"
 )
@@ -90,30 +91,78 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 		lg.Logger.Warn("Telemetry failed", logkit.EventKey, eventTelemetryFailed, "error", err)
 	}))
 
-	queryCache := localquerycache.New(filepath.Join(repo.CacheDir(), "query"), queryCacheDisabled(repo.Dir, lg.Logger))
-	defer queryCache.Close()
+	cfg := sidecar.Config{
+		RepoID:           repo.ID,
+		CompileCachePath: filepath.Join(repo.CacheDir(), "compile-cache"),
+		StderrWriter:     lg.StderrWriter, // sidecar stderr -> the log stream (anfra.log)
+		StdoutWriter:     lg.StdoutWriter, // sidecar stdout -> discarded / host stdout
+		Logger:           lg.Logger,
+		// Point the CLI at sidecars it does not own. Unset (the normal case)
+		// means spawn them; set means a compose/k8s deployment already runs
+		// them, and this process only dials. Useful for development against
+		// `docker compose up` without rebuilding an embedded binary.
+		NodeURL:       os.Getenv("ANFRA_NODE_URL"),
+		CanalQueryURL: os.Getenv("ANFRA_CANAL_QUERY_URL"),
+		WrapTransport: traceSidecar,
+	}
+	queryCache := newQueryCache(repo, cfg)
+	// canal-query reaches canal-lake at its socket, chosen before either runs.
+	cfg.CanalLakeSocket = queryCache.lakeSocket
+	defer queryCache.Close(context.WithoutCancel(ctx))
 
 	return fn(ctx, hostContext{
 		repo:        repo,
 		exportFiles: exports.New(exportLinkLife),
 		appLogger:   lg.App,
-		queryCache:  queryCache,
-		cfg: sidecar.Config{
-			RepoID:           repo.ID,
-			CompileCachePath: filepath.Join(repo.CacheDir(), "compile-cache"),
-			StderrWriter:     lg.StderrWriter, // sidecar stderr -> the log stream (anfra.log)
-			StdoutWriter:     lg.StdoutWriter, // sidecar stdout -> discarded / host stdout
-			Logger:           lg.Logger,
-			// Point the CLI at sidecars it does not own. Unset (the normal case)
-			// means spawn them; set means a compose/k8s deployment already runs
-			// them, and this process only dials. Useful for development against
-			// `docker compose up` without rebuilding an embedded binary.
-			NodeURL:       os.Getenv("ANFRA_NODE_URL"),
-			CanalQueryURL: os.Getenv("ANFRA_CANAL_QUERY_URL"),
-			WrapTransport: traceSidecar,
-		},
+		queryCache:  queryCache.Cache,
+		cfg:         cfg,
 	})
 }
+
+// queryCache is the repo's query cache, and its canal-lake's socket: empty
+// when the cache is off, which runs no canal-lake.
+type queryCache struct {
+	*localquerycache.Cache
+	lakeSocket string
+}
+
+// newQueryCache is the repo's query cache, under its folder in anfra's home.
+// Its canal-lake is chosen a socket now, and started when first needed. One
+// whose socket can't be chosen fails when started, so a command that never
+// caches isn't failed by it. A canal-query at a URL is a deployment's, which
+// runs its canal-lake too: anfra starts none.
+func newQueryCache(repo repo.Local, cfg sidecar.Config) queryCache {
+	dir := filepath.Join(repo.CacheDir(), "query")
+	disabled := queryCacheDisabled(repo.Dir, cfg.Logger)
+	o := localquerycache.Options{Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv)}
+	switch {
+	case disabled != "":
+		return queryCache{Cache: localquerycache.New(dir, o)}
+	case cfg.CanalQueryURL != "":
+		o.Lake = deployedLake{}
+		return queryCache{Cache: localquerycache.New(dir, o)}
+	}
+	lake, err := canallake.New(cfg, localquerycache.LakeDir(dir))
+	if err != nil {
+		o.Lake = failedLake{err}
+		return queryCache{Cache: localquerycache.New(dir, o)}
+	}
+	o.Lake = lake
+	return queryCache{Cache: localquerycache.New(dir, o), lakeSocket: lake.SocketPath()}
+}
+
+// deployedLake is the canal-lake a deployment runs beside its canal-query:
+// anfra neither starts nor stops it.
+type deployedLake struct{}
+
+func (deployedLake) Start(context.Context) error { return nil }
+func (deployedLake) Close(context.Context)       {}
+
+// failedLake is a canal-lake that couldn't be set up: starting it fails.
+type failedLake struct{ err error }
+
+func (l failedLake) Start(context.Context) error { return l.err }
+func (failedLake) Close(context.Context)         {}
 
 // queryCacheDisabled says what turns the repo's query cache off, if anything:
 // ANFRA_CACHE_QUERY_ENABLED, whatever the repo sets, or the repo's
