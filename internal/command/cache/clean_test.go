@@ -3,6 +3,8 @@ package cache
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -11,7 +13,9 @@ import (
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/querycache"
 	localquerycache "github.com/holistics/anfra/internal/querycache/local"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // write commits an entry of key with tags, kept for an hour.
@@ -84,3 +88,68 @@ func TestCleanRefusals(t *testing.T) {
 		}
 	}
 }
+
+// A clean then sweeps: results expired for longer than the read grace have
+// their files dropped through canal-query, and those it just cleaned wait. A
+// failed drop leaves the clean done, without freed, and is reported.
+func TestCleanSweeps(t *testing.T) {
+	ctx := context.Background()
+	var dropped []string
+	fail := false
+	canal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fail {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		var body struct {
+			Body struct {
+				CacheKeys []string `json:"cache_keys"`
+			} `json:"body"`
+		}
+		_ = jsonkit.UnmarshalRead(r.Body, &body)
+		dropped = append(dropped, body.Body.CacheKeys...)
+	}))
+	defer canal.Close()
+
+	var reported []error
+	qc := localquerycache.New(filepath.Join(t.TempDir(), "query"), localquerycache.Options{
+		Lake:   runningLake{},
+		Report: func(_ context.Context, err error) { reported = append(reported, err) },
+	})
+	t.Cleanup(func() { qc.Close(ctx) })
+	m, err := qc.Manager(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := m.Begin(ctx, "old", nil, "", "select 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Commit(ctx, 1, 100, nil, -time.Hour); err != nil { // expired an hour ago
+		t.Fatal(err)
+	}
+	write(ctx, t, m, "fresh")
+
+	cc := command.CommandContext{QueryCache: qc, Clients: command.Clients{CanalQuery: canalquery.NewClient(canal.URL, false)}}
+	got, err := clean(ctx, cc, CacheCleanRequestParams{})
+	if err != nil || got.Query.Entries != 1 || got.Query.Freed == nil || got.Query.Freed.Entries != 1 || got.Query.Freed.Bytes != 100 {
+		t.Fatalf("%+v, %v", got.Query, err)
+	}
+	if len(dropped) != 1 || dropped[0] != old.LakeKey() {
+		t.Errorf("dropped %v, want the old result's file only", dropped)
+	}
+
+	fail = true
+	old, _ = m.Begin(ctx, "old2", nil, "", "select 1")
+	_, _ = old.Commit(ctx, 1, 100, nil, -time.Hour)
+	if got, err = clean(ctx, cc, CacheCleanRequestParams{}); err != nil || got.Query.Freed != nil || len(reported) != 1 {
+		t.Errorf("a failed drop: %+v, %v, reported %v", got.Query, err, reported)
+	}
+}
+
+// runningLake is a canal-lake that something else runs: starting it does
+// nothing.
+type runningLake struct{}
+
+func (runningLake) Start(context.Context) error { return nil }
+func (runningLake) Close(context.Context)       {}

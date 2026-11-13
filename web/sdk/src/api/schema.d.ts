@@ -717,7 +717,7 @@ export interface components {
         QueryCacheCleaned: {
             /**
              * Format: int64
-             * @description their size, in bytes. Their files are deleted by the next sweep.
+             * @description their size, in bytes. Their files are deleted by a sweep once they've been expired for 35 minutes, so that a read that began before the clean can finish. anfra serve sweeps every few minutes, and so does the next clean.
              */
             bytes: number;
             /**
@@ -725,6 +725,8 @@ export interface components {
              * @description how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran.
              */
             entries: number;
+            /** @description the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted: anfra's log says why, and the next sweep tries again. */
+            freed?: components["schemas"]["QueryFreed"];
         };
         QueryCacheContents: {
             /**
@@ -897,6 +899,18 @@ export interface components {
             operator: string;
             /** @description the operator's values, empty for an operator that takes none. Write a number as a string, such as "9007199254740993", because a JSON number may have lost digits and is refused. Write a date or text as a string too, and a truefalse value as true or false. */
             values: unknown[];
+        };
+        QueryFreed: {
+            /**
+             * Format: int64
+             * @description their size, in bytes
+             */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description how many results' files were deleted
+             */
+            entries: number;
         };
         QueryHeader: {
             /** @description one per field, in order */
@@ -1353,6 +1367,17 @@ export interface operations {
                 content: {
                     "application/json": {
                         error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyCacheDisabled"] | components["schemas"]["ErrorBodyCacheUnavailable"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
                     };
                 };
             };

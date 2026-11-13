@@ -218,8 +218,6 @@ func (c *Cache) Manager(ctx context.Context) (*querycache.Manager, error) {
 			c.notice(ctx, n)
 		}
 	}
-	// No Lake for the manager yet: only a sweep drops files, through
-	// canal-query, which comes with the sweep.
 	return querycache.NewManager(querycache.Config{Store: store, Namespace: c.namespace})
 }
 

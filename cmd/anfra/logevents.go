@@ -30,6 +30,12 @@ var (
 	eventQueryCacheOrphanedFiles = logkit.DefineEvent("query_cache.orphaned_files",
 		"A new query cache store's folder already holds files from an earlier cache, which no entry names (orphans).",
 		"dir", "hint")
+	eventQueryCacheSwept = logkit.DefineEvent("query_cache.swept",
+		"anfra serve's sweep removed the query cache's expired entries, and their files.",
+		"entries", "bytes", "took")
+	eventQueryCacheSweepFailed = logkit.DefineEvent("query_cache.sweep_failed",
+		"anfra serve's sweep of the query cache failed; the next one tries again.",
+		"error", "hint")
 	eventQueryCacheUnavailable = logkit.DefineEvent("query_cache.unavailable",
 		"A query ran without the query cache, because the cache failed: its store, its canal-lake, or a write.",
 		"error", "hint")

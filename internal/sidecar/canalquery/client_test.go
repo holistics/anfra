@@ -377,3 +377,35 @@ func TestWaitReadyNamesTheLastFailure(t *testing.T) {
 		t.Errorf("spawned: %v, want it didn't start", err)
 	}
 }
+
+// A drop is relayed to canal-lake as its "drop" action, with the keys; an
+// answer other than 200 is an error saying so; no keys, no request.
+func TestDropLakeKeys(t *testing.T) {
+	var got []byte
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/do_lake_action" {
+			t.Errorf("path %s", r.URL.Path)
+		}
+		got, _ = io.ReadAll(r.Body)
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"error":{"message":"lake down"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(srv.URL, false)
+
+	if err := c.Lake().Drop(context.Background(), []string{"1", "prod/2"}); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != `{"body":{"cache_keys":["1","prod/2"]},"type":"drop"}` {
+		t.Errorf("body %s", got)
+	}
+	status = http.StatusInternalServerError
+	if err := c.DropLakeKeys(context.Background(), []string{"1"}); err == nil || !strings.Contains(err.Error(), "lake down") {
+		t.Errorf("a failed drop: %v", err)
+	}
+	got = nil
+	if err := c.DropLakeKeys(context.Background(), nil); err != nil || got != nil {
+		t.Errorf("no keys: %v, sent %s", err, got)
+	}
+}

@@ -81,7 +81,7 @@ func (l *lake) Drop(_ context.Context, keys []string) error {
 
 func manager(t *testing.T, s *store, l *lake, now *time.Time, namespace string) *querycache.Manager {
 	t.Helper()
-	m, err := querycache.NewManager(querycache.Config{Store: s, Lake: l, Namespace: namespace, Now: func() time.Time { return *now }})
+	m, err := querycache.NewManager(querycache.Config{Store: s, Namespace: namespace, Now: func() time.Time { return *now }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestSweep(t *testing.T) {
 	l := &lake{s: s}
 	m := manager(t, s, l, &now, "")
 
-	swept, err := m.Sweep(context.Background(), 100)
+	swept, err := m.Sweep(context.Background(), l, 100)
 	if err != nil || swept != (querycache.Swept{Entries: 2, Bytes: 15}) {
 		t.Fatalf("swept %+v (%v)", swept, err)
 	}
@@ -218,7 +218,7 @@ func TestSweep(t *testing.T) {
 	}
 
 	s.calls, l.err = nil, errors.New("canal-lake down")
-	if _, err := m.Sweep(context.Background(), 100); err == nil {
+	if _, err := m.Sweep(context.Background(), l, 100); err == nil {
 		t.Error("a failed drop: no error")
 	}
 	if len(s.calls) != 1 {

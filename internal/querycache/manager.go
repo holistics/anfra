@@ -27,11 +27,10 @@ const (
 	DefaultLease = 35 * time.Minute
 )
 
-// Config is a Manager's store, lake, namespace and timings. Zero timings take
+// Config is a Manager's store, namespace and timings. Zero timings take
 // the defaults.
 type Config struct {
 	Store Store
-	Lake  Lake
 	// Namespace prefixes the names of the files its writes put in canal-lake:
 	// empty for anfra, whose canal-lake is its repo's; a platform sharing one
 	// canal-lake between tenants sets one per tenant. See ValidNamespace.
@@ -47,12 +46,11 @@ type Config struct {
 	Now func() time.Time
 }
 
-// Manager is the query cache's algorithm, over a Store and a Lake: which entry
+// Manager is the query cache's algorithm, over a Store, sweeping through a Lake: which entry
 // a query accepts, a write's lease and commit, cleaning, and sweeping. It holds
 // no state of its own: it is as cheap to make as its store, for each invocation.
 type Manager struct {
 	store        Store
-	lake         Lake
 	namespace    string
 	readGrace    time.Duration
 	leaseMargin  time.Duration
@@ -66,7 +64,7 @@ func NewManager(c Config) (*Manager, error) {
 		return nil, fmt.Errorf("query cache namespace %q: want word segments, each ending in /", c.Namespace)
 	}
 	m := &Manager{
-		store: c.Store, lake: c.Lake, namespace: c.Namespace,
+		store: c.Store, namespace: c.Namespace,
 		readGrace: c.ReadGrace, leaseMargin: c.LeaseMargin, defaultLease: c.DefaultLease, now: c.Now,
 	}
 	if m.readGrace <= 0 {
@@ -181,10 +179,10 @@ type Swept struct {
 
 // Sweep removes up to limit entries expired for longer than the read grace,
 // whatever their namespace, as each names its own file: their files from
-// canal-lake first, then their rows. In that
-// order a row may name a file already gone, but no file is left that no row
-// names. Pending writes are among them once their lease has run out.
-func (m *Manager) Sweep(ctx context.Context, limit int) (Swept, error) {
+// canal-lake first, through lake, then their rows. In that order a row may
+// name a file already gone, but no file is left that no row names. Pending
+// writes are among them once their lease has run out.
+func (m *Manager) Sweep(ctx context.Context, lake Lake, limit int) (Swept, error) {
 	entries, err := m.store.Sweepable(ctx, m.now().Add(-m.readGrace), limit)
 	if err != nil || len(entries) == 0 {
 		return Swept{}, err
@@ -196,7 +194,7 @@ func (m *Manager) Sweep(ctx context.Context, limit int) (Swept, error) {
 		keys[i], ids[i] = e.LakeKey(), e.ID
 		swept.Bytes += e.SizeBytes
 	}
-	if err := m.lake.Drop(ctx, keys); err != nil {
+	if err := lake.Drop(ctx, keys); err != nil {
 		return Swept{}, fmt.Errorf("drop swept query cache entries' files: %w", err)
 	}
 	if err := m.store.Delete(ctx, ids); err != nil {

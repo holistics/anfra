@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,8 +13,10 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/envflag"
+	localquerycache "github.com/holistics/anfra/internal/querycache/local"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
+	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
 // The repo's cache.query.enabled turns the query cache off, and
@@ -99,5 +105,52 @@ func TestNewQueryCache(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// anfra serve's sweep removes the query cache's results expired past the read
+// grace, their files through canal-query, and logs what it freed; a failed
+// drop is logged, not returned, so the next run tries again.
+func TestSweepQueryCache(t *testing.T) {
+	ctx := context.Background()
+	fail := false
+	canal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if fail {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer canal.Close()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	qc := localquerycache.New(filepath.Join(t.TempDir(), "query"), localquerycache.Options{Lake: deployedLake{}})
+	t.Cleanup(func() { qc.Close(ctx) })
+	h := hostContext{queryCache: qc, cfg: sidecar.Config{Logger: logger}}
+	m, err := qc.Manager(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredLongAgo := func() {
+		w, err := m.Begin(ctx, "k", nil, "", "select 1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Commit(ctx, 1, 7, nil, -time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sweep := sweepQueryCache(h, canalquery.NewClient(canal.URL, false))
+
+	expiredLongAgo()
+	if err := sweep(ctx); err != nil || !strings.Contains(logs.String(), `"event":"query_cache.swept"`) || !strings.Contains(logs.String(), `"bytes":7`) {
+		t.Errorf("a sweep: %v, logged %s", err, logs.String())
+	}
+	logs.Reset()
+	if err := sweep(ctx); err != nil || logs.Len() != 0 {
+		t.Errorf("nothing to sweep: %v, logged %s", err, logs.String())
+	}
+	fail = true
+	expiredLongAgo()
+	if err := sweep(ctx); err != nil || !strings.Contains(logs.String(), `"event":"query_cache.sweep_failed"`) {
+		t.Errorf("a failed drop: %v, logged %s", err, logs.String())
 	}
 }
