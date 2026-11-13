@@ -57,11 +57,22 @@ func appCommands() []*cobra.Command {
 		}
 		parent, ok := byName[c.Name()[:i]]
 		if !ok {
-			panic("command " + c.Name() + " has no registered group " + c.Name()[:i])
+			short, isGroup := groups[c.Name()[:i]]
+			if !isGroup {
+				panic("command " + c.Name() + " has no registered group " + c.Name()[:i])
+			}
+			parent = &cobra.Command{Use: c.Name()[:i], Short: short, Args: cobra.NoArgs}
+			byName[c.Name()[:i]], top = parent, append(top, parent)
 		}
 		parent.AddCommand(cc)
 	}
 	return top
+}
+
+// groups are the CLI's groups that are no command of their own, only their
+// subcommands': their one-line help.
+var groups = map[string]string{
+	"cache": "Manage the repo's caches",
 }
 
 func buildCobraCommand(c command.Command) *cobra.Command {

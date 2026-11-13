@@ -23,11 +23,13 @@ type standInCache struct {
 	settings   command.QueryCacheSettings
 	store      *sqlitestore.Store
 	managerErr error
+	lakeErr    error
 	reported   []error
 }
 
 func (c *standInCache) Summarize(context.Context) querycache.Summary { return querycache.Summary{} }
 func (c *standInCache) Settings() command.QueryCacheSettings         { return c.settings }
+func (c *standInCache) StartLake(context.Context) error              { return c.lakeErr }
 func (c *standInCache) Report(_ context.Context, err error)          { c.reported = append(c.reported, err) }
 func (c *standInCache) Manager(context.Context) (*querycache.Manager, error) {
 	if c.managerErr != nil {
@@ -136,6 +138,24 @@ func TestStartCache(t *testing.T) {
 		e, ok, err := qc.store.Lookup(ctx, querycache.Key(c.result.Key), time.Now())
 		if err != nil || !ok || e.RowCount != 1 || e.SizeBytes != 5 || !strings.Contains(string(e.Columns), `"a"`) || e.SQL != "select 1" {
 			t.Errorf("the entry: %+v, %v, %v", e, ok, err)
+		}
+	})
+
+	t.Run("a write is tagged with its data source, and an AQL query's dataset", func(t *testing.T) {
+		qc := newStandIn(ctx, t)
+		aql := keyInput{compilerKey: "v1:abc", truncate: 10, dataset: "sales"}
+		c := run(qc, CacheOptions{Duration: "1h"}).startCache(ctx, prepared(ctx, t, "id1"), aql, "q", "select 1")
+		c.finish(ctx, nil)
+		m, _ := qc.Manager(ctx)
+		for _, tag := range []querycache.Tag{{Kind: querycache.TagDataSource, Value: "w"}, {Kind: querycache.TagDataset, Value: "sales"}} {
+			if ex, err := m.Clean(ctx, []querycache.Tag{tag, {Kind: querycache.TagDataSource, Value: "w"}}); err != nil || ex.Entries != 1 {
+				t.Errorf("clean by %v: %+v, %v", tag, ex, err)
+			}
+			c = run(qc, CacheOptions{Duration: "1h"}).startCache(ctx, prepared(ctx, t, "id1"), aql, "q", "select 1")
+			c.finish(ctx, nil)
+		}
+		if tags := k.tags(prepared(ctx, t, "id1")); len(tags) != 1 {
+			t.Errorf("a SQL query's tags: %v, want its data source only", tags)
 		}
 	})
 
