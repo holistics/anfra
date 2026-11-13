@@ -1,20 +1,17 @@
 <!doctype html>
 <!--
-  A complete Data App: a region multi-select, a date range, a date grain switch, a bar chart that
-  cross-filters a trend line. Dataset `ecommerce` and the `orders` / `users` fields are placeholders:
-  replace them with names from `anfra show`.
-
-  Two layers, change one without the other:
-  - Design layer: the Basecoat links, the <style> block (anfra tokens from DESIGN.md mapped onto
-    Basecoat's variables), the markup classes, and chartTheme().
-  - SDK wiring: everything in the last <script> that touches `app`, a query, a filter or a drill.
-  This is the default look. Only replace it if the user asked for another design.
+  A complete Data App in the default look. Dataset `ecommerce` and its fields are placeholders:
+  replace them with names from `anfra show`, the definitions with the AML descriptions, and the
+  formatters' locale and currency with the dataset's. The design layer (links, <style>, markup,
+  chartTheme(), formatters) and the SDK wiring (the last <script>) change independently.
 -->
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sales Overview</title>
+  <title>Sales</title>
+  <meta name="color-scheme" content="light dark">
+  <script>document.documentElement.classList.toggle('dark', matchMedia('(prefers-color-scheme: dark)').matches);</script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.2.5/index.css"
     integrity="sha384-ZTIcl2CmY0wyM9ANOhomBco7rEUIlWztf6lGcLKCocKUrIgGCsfisuZyE+hadW8K" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat.cdn.min.css"
@@ -24,8 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"
     integrity="sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD" crossorigin="anonymous"></script>
   <style>
-    /* anfra tokens (DESIGN.md) on Basecoat's variables. Light is from DESIGN.md; the dark values
-       are derived from it, since DESIGN.md only lists the light theme. */
+    /* anfra's tokens on Basecoat's variables; dark is derived from light. */
     :root {
       --background: oklch(0.955 0.007 88.6);          /* paper: the page */
       --foreground: oklch(0.201 0.022 301.1);         /* ink */
@@ -38,18 +34,35 @@
       --secondary: oklch(0.973 0.005 95.1);           /* sunken paper */
       --secondary-foreground: oklch(0.392 0.021 304.3);
       --muted: oklch(0.973 0.005 95.1);
-      --muted-foreground: oklch(0.485 0.022 306.3);
+      --muted-foreground: oklch(0.485 0.022 306.3);   /* muted ink: captions, axis labels */
       --accent: oklch(0.946 0.027 304.8);             /* violet wash: hover, selected */
       --accent-foreground: oklch(0.201 0.022 301.1);
       --border: oklch(0.201 0.022 301.1 / 0.12);
       --input: oklch(0.201 0.022 301.1 / 0.22);
       --ring: oklch(0.565 0.194 300.3);
       --radius: 0.625rem;
-      /* ECharts cannot parse oklch, so chart colors are hex. Violet first, fixed order. */
-      --chart-text: #5b5560;
-      --chart-grid: #e7e4e0;
+      --weak: oklch(0.392 0.021 304.3);               /* weak ink: secondary text */
+      --success-text: oklch(0.479 0.1 151.8);
+      --success-container: oklch(0.972 0.021 152.2);
+      --error-text: oklch(0.501 0.17 27.2);
+      --error-container: oklch(0.971 0.014 22.8);
+      --sunken: oklch(0.935 0.008 88.6);              /* segmented control track */
+      /* Depth instead of borders: e1 rests (cards, controls), e2 floats (menus, popovers). */
+      --shadow-e1: 0 0 0 1px oklch(0.201 0.022 301.1 / 0.08), 0 1px 3px oklch(0.201 0.022 301.1 / 0.05),
+                   0 4px 10px -4px oklch(0.201 0.022 301.1 / 0.05);
+      --shadow-e2: 0 0 0 1px oklch(0.201 0.022 301.1 / 0.1), 0 2px 4px oklch(0.201 0.022 301.1 / 0.06),
+                   0 12px 24px -6px oklch(0.201 0.022 301.1 / 0.14);
+      --hairline: 1px;                                /* dividers and table rules */
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      /* Chart colors are hex: ECharts can't parse oklch. Violet first; -strong twins for lines
+         where a slot is under 3:1; context gray for the series that isn't the message. */
+      --chart-text: #6b6570;
+      --chart-grid: #ebe8e4;
       --chart-cat-1: #7c4dce; --chart-cat-2: #1f9aa6; --chart-cat-3: #d9972b; --chart-cat-4: #d4527a;
       --chart-cat-5: #3d7bd9; --chart-cat-6: #3f9d6b; --chart-cat-7: #dd7a3c; --chart-cat-8: #7d7785;
+      --chart-cat-3-strong: #b97e2f; --chart-cat-7-strong: #c4682f;
+      --chart-context: #8f8994;                      /* 3.4:1 on white: a mark still meets 3:1 */
+      --chart-tooltip-bg: #ffffff; --chart-tooltip-text: #18141f; --chart-tooltip-border: #e3e3e4;
     }
     .dark {
       --background: oklch(0.17 0.015 301);
@@ -69,122 +82,272 @@
       --border: oklch(1 0 0 / 0.1);
       --input: oklch(1 0 0 / 0.16);
       --ring: oklch(0.7 0.16 300);
-      --chart-text: #b4aebb;
-      --chart-grid: #38333d;
+      --weak: oklch(0.86 0.01 304);
+      --success-text: oklch(0.78 0.12 152);
+      --success-container: oklch(0.3 0.05 152);
+      --error-text: oklch(0.75 0.14 27);
+      --error-container: oklch(0.3 0.06 27);
+      --sunken: oklch(0.13 0.012 301);
+      /* Shadows don't show on dark: each depth is one white ring. */
+      --shadow-e1: 0 0 0 1px oklch(1 0 0 / 0.09);
+      --shadow-e2: 0 0 0 1px oklch(1 0 0 / 0.14);
+      --chart-text: #a8a2ae;
+      --chart-grid: #2f2b34;
       --chart-cat-1: #a98af0; --chart-cat-2: #4cc3cf; --chart-cat-3: #f0b252; --chart-cat-4: #f07ea0;
       --chart-cat-5: #7aa8f2; --chart-cat-6: #6cc496; --chart-cat-7: #f59a63; --chart-cat-8: #a39dab;
+      --chart-cat-3-strong: #f0b252; --chart-cat-7-strong: #f59a63;
+      --chart-context: #7a7480;
+      --chart-tooltip-bg: #221f28; --chart-tooltip-text: #f3f1f6; --chart-tooltip-border: #413e46;
     }
 
-    /* Three sizes only (20, 14, 12px), one control height (32px), tabular numerals. */
+    html, body { background: var(--background); }
+    html { font-synthesis: none; } /* Inter is loaded upright only: never fake an italic */
     body {
       font: 14px/20px "Inter Variable", Inter, system-ui, sans-serif;
-      font-variant-numeric: tabular-nums;
-      background: var(--background); color: var(--foreground);
-      margin: 0; padding: 24px; max-width: 1280px; margin-inline: auto;
+      color: var(--foreground);
+      margin: 0;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
-    h1 { font-size: 20px; line-height: 28px; font-weight: 600; margin: 0; text-wrap: balance; }
-    .caption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
-    .header { margin-bottom: 16px; }
-    .btn, .input { height: 32px; font-size: 14px; }
-    .card { border-radius: 14px; box-shadow: none; position: relative; }
-    .card > header { padding-bottom: 0; }
-    .card h2 { font-size: 14px; line-height: 20px; font-weight: 600; }
+    b, strong { font-weight: 600; }
+    .page { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
+    h1 { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+    .caption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); margin: 0; }
+    .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* Every control is 32px, set on every kind together: Basecoat's default is 36px. */
+    .btn, .input, .combobox > input[role="combobox"], .select > button { height: 32px; border-radius: 10px; }
+    .input, .combobox > input[role="combobox"], .select > button, .btn[data-variant="outline"] {
+      background-color: var(--card); border-color: transparent; box-shadow: var(--shadow-e1);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      :is(.select > button, .btn[data-variant="outline"]):hover { background-color: var(--muted); }
+    }
 
-    /* Filter bar: one row, wraps on narrow screens. */
-    /* Basecoat's .card is a clipped column: make the bar a row and let combobox dropdowns overflow. */
-    .card.filters { flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-end;
-                    justify-content: flex-start; padding: 12px 16px; margin-bottom: 16px;
-                    overflow: visible; }
-    .field-group { display: flex; flex-direction: column; gap: 8px; }
-    .field-group > label { font-weight: 500; }
-    .date-range { display: flex; align-items: center; gap: 8px; }
-    .date-range .input { width: 9.5rem; }
-    .presets { display: flex; gap: 4px; }
-    .spacer { flex: 1; }
+    :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; --tw-ring-shadow: 0 0 #0000; }
 
-    .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
-    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .btn, .select > button, .segmented button, .chip-remove, .chip-more {
+      transition-property: color, background-color, border-color, box-shadow;
+      transition-duration: 160ms;
+      transition-timing-function: var(--ease-out);
+    }
+    :is(.btn, .select > button):active { translate: none; } /* Basecoat nudges .btn 1px on press */
+    [data-popover] { transition-property: opacity, scale, visibility; transition-duration: 150ms;
+                     transition-timing-function: var(--ease-out); transform-origin: top; }
+    [data-popover][aria-hidden="true"] { scale: 0.97; translate: none; }
+    .segmented, .control-label, .chips, .card > header button { user-select: none; }
+    /* A multi-select stays one 32px line: the chips that fit, then "+N". The chips sit over the
+       field, not in its button (a button can't hold buttons). */
+    .multi-select { position: relative; width: 240px; }
+    .multi-select > .select { width: 100%; } /* Basecoat sizes the select to its text */
+    .select > button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+    .multi-select[data-picked] .select-value { color: transparent; } /* still read by screen readers */
+    .chips { position: absolute; inset: 0 32px 0 5px; display: flex; align-items: center; gap: 4px; overflow: hidden; pointer-events: none; }
+    .chip, .chip-more { flex: none; height: 22px; border-radius: 6px; background: var(--muted);
+                        font: 500 12px/22px "Inter Variable", Inter, system-ui, sans-serif; color: var(--foreground); }
+    .chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 0 2px 0 6px; box-sizing: border-box; }
+    .chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip-remove, .chip-more { pointer-events: auto; border: 0; cursor: pointer; }
+    .chip-remove { position: relative; flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0;
+                   border-radius: 4px; background: transparent; color: var(--muted-foreground); }
+    .chip-remove::before { content: ""; position: absolute; inset: -4px; } /* a 26px hit area around the 18px mark */
+    .chip-more { padding: 0 6px; color: var(--weak); }
+    @media (hover: hover) and (pointer: fine) {
+      .chip-remove:hover { background: var(--accent); color: var(--foreground); }
+      .chip-more:hover { color: var(--foreground); }
+    }
+    .chip-remove:focus-visible, .chip-more:focus-visible { outline-offset: 1px; } /* inside the clipped chip row */
+    .picks-panel { position: absolute; top: calc(100% + 4px); right: 0; z-index: 50; width: 240px; box-sizing: border-box;
+                   display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; border-radius: 10px; background: var(--popover);
+                   box-shadow: var(--shadow-e2); }
+    .picks-panel[hidden] { display: none; }
+
+    .page-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+                   gap: 16px 24px; }
+    .title-block { display: grid; gap: 4px; }
+    .page-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+    .control { position: relative; display: grid; gap: 8px; }
+    .control-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-foreground); }
+
+    .segmented { display: inline-flex; gap: 2px; padding: 2px; height: 32px; box-sizing: border-box;
+                 border-radius: 10px; background: var(--sunken); }
+    .segmented button { height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent;
+                        font: inherit; font-weight: 500; color: var(--weak); cursor: pointer; }
+    .segmented button[aria-pressed="true"] { background: var(--card); color: var(--foreground);
+                                             box-shadow: var(--shadow-e1); }
+    @media (hover: hover) and (pointer: fine) { .segmented button[aria-pressed="false"]:hover { color: var(--foreground); } }
+
+    @media (min-resolution: 2dppx) { :root { --hairline: 0.5px; } }
+
+    .card { border-radius: 14px; box-shadow: var(--shadow-e1); position: relative; }
+    [data-popover] { border-radius: 10px; box-shadow: var(--shadow-e2); }
+    /* The title's line box is trimmed to its capitals, so the space above them matches the
+       16px side padding. */
+    .card > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card > header h2 { font-size: 14px; line-height: 20px; font-weight: 600; margin: 0;
+                        text-box: trim-both cap alphabetic; }
+    /* When one header in a row holds a control, every header takes its 32px: titles share a line. */
+    .row:has(> .card > header :is(.segmented, .select, .btn:not([hidden]))) > .card > header { min-height: 32px; }
+
+    .row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+    /* Spans work only inside a .row: a `span 12` straight in the one-column page adds 11 columns
+       and lines every section up side by side. */
+    .row > .span-3 { grid-column: span 3; }
+    .row > .span-4 { grid-column: span 4; }
+    .row > .span-6 { grid-column: span 6; }
+    .row > .span-8 { grid-column: span 8; }
+    .row > .span-9 { grid-column: span 9; }
+    .row > .span-12 { grid-column: span 12; }
+
+    .kpi { display: grid; gap: 4px; padding: 16px; min-height: 96px; box-sizing: border-box; align-content: start; }
+    .kpi-label { font-weight: 500; color: var(--weak); text-box: trim-start cap alphabetic; } /* optical top inset */
+    .kpi-value { font-size: 20px; line-height: 28px; font-weight: 600; }
+    .kpi-delta { display: flex; min-height: 20px; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+    .delta-pill { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 6px; border-radius: 9999px;
+                  font-weight: 500; background: var(--muted); color: var(--weak); }
+    .delta-pill[data-tone="good"] { background: var(--success-container); color: var(--success-text); }
+    .delta-pill[data-tone="bad"] { background: var(--error-container); color: var(--error-text); }
+    /* Basecoat paints .skeleton near-white on a white card: use the sunken tone so loading shows. */
+    .card .skeleton { background-color: var(--sunken); }
+    .kpi .skeleton { height: 28px; width: 60%; border-radius: 6px; }
+    .kpis { position: relative; }
+    .kpis > .status { border-radius: 14px; box-shadow: var(--shadow-e1); }
+
+    .chart-body { position: relative; }
+    .chart, .kpi { transition: opacity 160ms var(--ease-out); }
     .chart { height: 320px; }
-    .status { position: absolute; inset: 56px 16px 16px; display: none; align-items: center;
-              justify-content: center; background: color-mix(in oklab, var(--card) 85%, transparent); }
+    /* Dim only a wait the reader would notice: after 150ms, undim at once. */
+    .chart-body.is-updating .chart, .kpi.is-updating { opacity: 0.6; transition-delay: 150ms; }
+    .status { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+              background: var(--card); padding: 0 16px; }
     .status.visible { display: flex; }
-    .status > * { width: 100%; }
-    .status .skeleton { height: 100%; border-radius: 10px; }
-    .status .empty { text-align: center; color: var(--muted-foreground); }
+    .status .skeleton { width: 100%; height: 100%; border-radius: 10px; }
+    .status .message { max-width: 40ch; text-align: center; display: grid; gap: 4px; }
+    .status .message .caption { overflow-wrap: anywhere; }
+
+    .tt { display: grid; gap: 4px; min-width: 160px; }
+    .tt-title { font-weight: 500; }
+    .tt-row { display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 8px; }
+    .tt-swatch { width: 8px; height: 8px; border-radius: 2px; }
+    .tt-value { font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+    .tt-hint { color: var(--muted-foreground); }
+
+    .definitions { padding-top: 16px; border-top: var(--hairline) solid var(--border); row-gap: 12px; }
+    .definition { margin: 0; padding: 0 16px; display: grid; gap: 2px; align-content: start; }
+    .definition dt { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--weak); }
+    .definition dd { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); max-width: 48ch; text-wrap: pretty; }
+    .definitions .basis { grid-column: 1 / -1; padding: 0 16px; }
+
+    @media (max-width: 900px) { .row.charts > * { grid-column: span 12; } }
+    @media (max-width: 720px) { .row.kpis > *, .row.definitions > .definition { grid-column: span 6; } }
+    @media (prefers-reduced-motion: reduce) {
+      .skeleton { animation: none; } /* a still skeleton still holds the shape */
+      [data-popover][aria-hidden="true"] { scale: none; }
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Sales overview</h1>
-    <div class="caption" id="user"></div>
-  </div>
-
-  <div class="card filters" data-anfra-container="controls" data-anfra-label="Controls">
-    <div class="field-group" data-anfra-block="region-picker" data-anfra-label="Region" data-anfra-control="region">
-      <label for="region-input">Region</label>
-      <!-- Basecoat multi-select combobox: options are added once loadOptions() resolves -->
-      <div id="region-combobox" class="combobox" style="width: 260px" data-auto-highlight="true">
-        <input id="region-input" type="text" role="combobox" placeholder="All regions" autocomplete="off"
-               autocorrect="off" spellcheck="false" aria-autocomplete="list" aria-expanded="false"
-               aria-controls="region-listbox">
-        <div id="region-popover" data-popover aria-hidden="true">
-          <div role="listbox" id="region-listbox" aria-orientation="vertical" aria-multiselectable="true"
-               data-empty="No regions found."></div>
+  <main class="page" data-anfra-container="page" data-anfra-label="Sales">
+    <header class="page-header" data-anfra-container="header" data-anfra-label="Header">
+      <div class="title-block">
+        <h1>Sales</h1>
+        <p class="caption" id="scope" aria-live="polite">Last 12 months, all regions, compared with the same dates a year earlier</p>
+      </div>
+      <div class="page-controls">
+        <div class="control" data-anfra-block="period-picker" data-anfra-label="Period" data-anfra-control="period">
+          <span class="control-label" id="period-label">Period</span>
+          <div class="segmented" role="group" aria-labelledby="period-label">
+            <button type="button" data-period="last 3 months" data-label="Last 3 months" aria-pressed="false">3M</button>
+            <button type="button" data-period="last 12 months" data-label="Last 12 months" aria-pressed="true">12M</button>
+            <!-- "year to date" stops today; "this year" would run to Dec 31 and compare with all of last year -->
+            <button type="button" data-period="year to date" data-label="Year to date" aria-pressed="false">YTD</button>
+          </div>
         </div>
-        <input type="hidden" name="region" value="[]">
+        <div class="control" data-anfra-block="region-picker" data-anfra-label="Region" data-anfra-control="region">
+          <span class="control-label" id="region-label">Region</span>
+          <!-- Basecoat select, multiple, with a row of removable chips over its field, so the field
+               stays 32px however many regions are picked. Options are added once loadOptions()
+               resolves. -->
+          <div class="multi-select">
+            <div id="region-select" class="select" data-placeholder="All regions">
+              <button type="button" id="region-trigger" aria-haspopup="listbox" aria-expanded="false"
+                      aria-controls="region-listbox" aria-labelledby="region-label region-trigger">
+                <span class="select-value">All regions</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div id="region-popover" data-popover aria-hidden="true">
+                <div role="listbox" id="region-listbox" aria-orientation="vertical" aria-multiselectable="true"
+                     aria-labelledby="region-label"></div>
+              </div>
+              <input type="hidden" name="region" value="[]">
+            </div>
+            <div id="region-chips" class="chips"></div>
+          </div>
+          <!-- Every pick, opened from the "+N" button; the rest of the field opens the menu -->
+          <div id="region-picks" class="picks-panel" role="group" aria-label="Picked regions" hidden></div>
+        </div>
       </div>
-    </div>
+    </header>
 
-    <div class="field-group" data-anfra-block="date-picker" data-anfra-label="Order date" data-anfra-control="dates">
-      <label for="date-from">Order date</label>
-      <div class="date-range">
-        <input id="date-from" class="input" type="date" aria-label="From">
-        <span class="caption">to</span>
-        <input id="date-to" class="input" type="date" aria-label="To">
+    <section class="row kpis" data-anfra-container="kpis" data-anfra-label="Headline figures" aria-live="polite">
+      <div id="kpis-status" class="status"></div>
+      <div class="card kpi span-4" data-anfra-block="kpi-revenue" data-anfra-label="Revenue" data-anfra-query="kpis">
+        <span class="kpi-label">Revenue</span>
+        <span class="kpi-value num" id="kpi-revenue"></span>
+        <span class="kpi-delta num" id="kpi-revenue-delta"></span>
       </div>
-    </div>
-
-    <div class="field-group">
-      <span class="caption">Quick range</span>
-      <div class="presets">
-        <button class="btn" data-variant="outline" type="button" data-days="30">30d</button>
-        <button class="btn" data-variant="outline" type="button" data-days="90">90d</button>
-        <button class="btn" data-variant="outline" type="button" data-days="ytd">YTD</button>
-        <button class="btn" data-variant="ghost" type="button" data-days="all">All</button>
+      <div class="card kpi span-4" data-anfra-block="kpi-orders" data-anfra-label="Orders" data-anfra-query="kpis">
+        <span class="kpi-label">Orders</span>
+        <span class="kpi-value num" id="kpi-orders"></span>
+        <span class="kpi-delta num" id="kpi-orders-delta"></span>
       </div>
-    </div>
-
-    <div class="field-group" data-anfra-block="grain-picker" data-anfra-label="Grain" data-anfra-control="grain">
-      <span class="caption">Grain</span>
-      <div class="button-group" id="grain-group" role="group" aria-label="Date grain">
-        <button class="btn" data-variant="outline" type="button" data-grain="week">Week</button>
-        <button class="btn" data-variant="secondary" type="button" data-grain="month" aria-pressed="true">Month</button>
-        <button class="btn" data-variant="outline" type="button" data-grain="quarter">Quarter</button>
+      <div class="card kpi span-4" data-anfra-block="kpi-aov" data-anfra-label="Average order value" data-anfra-query="kpis">
+        <span class="kpi-label">Average order value</span>
+        <span class="kpi-value num" id="kpi-aov"></span>
+        <span class="kpi-delta num" id="kpi-aov-delta"></span>
       </div>
-    </div>
-
-    <div class="spacer"></div>
-    <button id="clear-selection" class="btn" data-variant="ghost" type="button">Clear selection</button>
-  </div>
-
-  <div class="grid" data-anfra-container="charts" data-anfra-label="Charts">
-    <section class="card" data-anfra-block="by-region" data-anfra-label="Revenue by region">
-      <header><h2>Revenue by region</h2></header>
-      <section><div id="by-region" class="chart" data-anfra-query="byRegion"></div></section>
-      <div id="by-region-status" class="status"></div>
     </section>
-    <section class="card" data-anfra-block="trend" data-anfra-label="Revenue over time">
-      <header><h2>Revenue over time</h2></header>
-      <section><div id="trend" class="chart" data-anfra-query="trend"></div></section>
-      <div id="trend-status" class="status"></div>
+
+    <section class="row charts" data-anfra-container="charts" data-anfra-label="Charts">
+      <section class="card span-8" data-size="sm" data-anfra-block="trend" data-anfra-label="Revenue over time">
+        <header>
+          <h2 id="trend-heading">Revenue by month, vs last year</h2>
+          <div class="segmented" role="group" aria-label="Grain" data-anfra-control="grain">
+            <button type="button" data-grain="week" aria-pressed="false">Week</button>
+            <button type="button" data-grain="month" aria-pressed="true">Month</button>
+            <button type="button" data-grain="quarter" aria-pressed="false">Quarter</button>
+          </div>
+        </header>
+        <section class="chart-body" id="trend-body">
+          <div id="trend" class="chart" data-anfra-query="trend"></div>
+          <div id="trend-status" class="status"></div>
+        </section>
+      </section>
+      <section class="card span-4" data-size="sm" data-anfra-block="by-region" data-anfra-label="Revenue by region">
+        <header>
+          <h2>Revenue by region</h2>
+          <!-- Shown only while a region is selected (a click on a bar filters the rest of the page) -->
+          <button id="clear-selection" class="btn" data-variant="ghost" type="button" hidden>Clear selection</button>
+        </header>
+        <section class="chart-body" id="by-region-body">
+          <div id="by-region" class="chart" data-anfra-query="byRegion"></div>
+          <div id="by-region-status" class="status"></div>
+        </section>
+      </section>
     </section>
-  </div>
+
+    <footer class="row definitions" data-anfra-block="definitions" data-anfra-label="Definitions">
+      <dl class="definition span-4"><dt>Revenue</dt><dd>Order amount before refunds, by order date</dd></dl>
+      <dl class="definition span-4"><dt>Orders</dt><dd>Orders placed, by order date</dd></dl>
+      <dl class="definition span-4"><dt>Average order value</dt><dd>Revenue divided by orders</dd></dl>
+      <p class="caption basis">Last year is the same dates one year earlier. <span id="as-of"></span></p>
+    </footer>
+  </main>
 
   <script>
     // ---- Design layer: follow the OS light/dark setting (no storage: the frame is sandboxed). ----
     const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const applyTheme = () => document.documentElement.classList.toggle('dark', darkQuery.matches);
-    applyTheme();
 
     function chartTheme () {
       const css = getComputedStyle(document.documentElement);
@@ -192,12 +355,101 @@
       return {
         text: get('--chart-text'),
         grid: get('--chart-grid'),
+        context: get('--chart-context'),
         cat: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => get(`--chart-cat-${n}`)),
+        tooltip: { bg: get('--chart-tooltip-bg'), text: get('--chart-tooltip-text'), border: get('--chart-tooltip-border') },
       };
     }
 
+    // ECharts' tooltip is a white box: theme it, and confine it, since a card clips overflow.
+    const tooltipStyle = (theme) => ({
+      confine: true, transitionDuration: 0,
+      backgroundColor: theme.tooltip.bg, borderColor: theme.tooltip.border, borderWidth: 1, padding: [6, 8],
+      textStyle: { color: theme.tooltip.text, fontSize: 12, fontFamily: 'Inter Variable, Inter, system-ui, sans-serif' },
+      extraCssText: 'border-radius: 6px; box-shadow: var(--shadow-e2);',
+    });
+
+    function tooltipHtml (title, rows, hint) {
+      const esc = echarts.format.encodeHTML;
+      return `<div class="tt"><div class="tt-title">${esc(title)}</div>`
+        + rows.map((row) => `<div class="tt-row"><span class="tt-swatch" style="background:${row.color}"></span>`
+          + `<span>${esc(row.name)}</span><span class="tt-value">${esc(row.value)}</span></div>`).join('')
+        + (hint ? `<div class="tt-hint">${esc(hint)}</div>` : '') + '</div>';
+    }
+
+    // One formatter per kind of number. Values arrive as strings.
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const moneyShort = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
+    const count = new Intl.NumberFormat('en-US');
+    const change = new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero' });
+    const minus = (text) => text.replace('-', '−'); // true minus sign
+    const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const dayLabel = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    const fullDate = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+    function periodLabel (iso, grain) {
+      const date = new Date(iso);
+      if (grain === 'week') return `Week of ${dayLabel.format(date)}`;
+      if (grain === 'quarter') return `Q${Math.floor(date.getUTCMonth() / 3) + 1} ${date.getUTCFullYear()}`;
+      return monthLabel.format(date);
+    }
+
+    // A period the data hasn't finished gets "to date" on its label.
+    function isPartial (iso, grain, latest) {
+      if (!latest) return false;
+      const start = new Date(iso);
+      const months = { month: 1, quarter: 3 }[grain];
+      const end = months
+        ? new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, 1))
+        : new Date(start.getTime() + 7 * 86400000);
+      return new Date(latest).getTime() < end.getTime() - 86400000;
+    }
+
+    // The change vs last year, rounded before the sign is chosen.
+    function delta (current, previous) {
+      if (current == null) return { note: 'Nothing to compare' };
+      if (previous == null || Number(previous) === 0) return { note: 'No figure for last year' };
+      const ratio = Math.round((Number(current) / Number(previous) - 1) * 1000) / 1000;
+      if (ratio === 0) return { note: 'No change vs last year' };
+      return { value: minus(change.format(ratio)), direction: ratio > 0 ? 'up' : 'down' };
+    }
+    const arrows = { up: '↑', down: '↓' };
+
     // ---- SDK wiring ----
-    const app = Anfra.createApp({ title: 'Sales Overview' });
+    const app = Anfra.createApp({ title: 'Sales' });
+
+    // Each figure and the same figure one year earlier. relative_period shifts the period filter.
+    // No alias is named after a model (orders), because it would hide the model from the others.
+    const kpis = app.createQuery('kpis', {
+      dataset: 'ecommerce',
+      aql: `
+        explore {
+          measures {
+            revenue: orders | sum(orders.amount),
+            revenue_ly: orders | sum(orders.amount) | relative_period(orders.created_at, interval(-1 year)),
+            order_count: orders | count(orders.id),
+            order_count_ly: orders | count(orders.id) | relative_period(orders.created_at, interval(-1 year)),
+            aov: safe_divide(orders | sum(orders.amount), orders | count(orders.id)),
+            aov_ly: safe_divide(orders | sum(orders.amount), orders | count(orders.id)) | relative_period(orders.created_at, interval(-1 year)),
+            latest: orders | max(orders.created_at)
+          }
+        }
+      `,
+    });
+
+    const trend = app.createQuery('trend', {
+      dataset: 'ecommerce',
+      aql: `
+        explore {
+          dimensions { period: orders.created_at | month() }
+          measures {
+            revenue: orders | sum(orders.amount),
+            revenue_ly: orders | sum(orders.amount) | relative_period(orders.created_at, interval(-1 year))
+          }
+          sorts { period asc }
+        }
+      `,
+    });
 
     const byRegion = app.createQuery('byRegion', {
       dataset: 'ecommerce',
@@ -210,70 +462,72 @@
       `,
     });
 
-    const trend = app.createQuery('trend', {
-      dataset: 'ecommerce',
-      aql: `
-        explore {
-          dimensions { period: orders.created_at }
-          measures { revenue: orders | sum(orders.amount) }
-          sorts { period asc }
-        }
-      `,
+    // The page opens on the last 12 months: a comparison needs a period, and "all time" has none.
+    const period = app.createFilter('period', {
+      dataset: 'ecommerce', field: 'orders.created_at',
+      default: { operator: 'matches', values: ['last 12 months'] },
     });
-
     const region = app.createFilter('region', { dataset: 'ecommerce', field: 'users.region' });
-    const dates = app.createFilter('dates', { dataset: 'ecommerce', field: 'orders.created_at' });
     const grain = app.createDateDrill('grain', { default: 'month' });
 
-    app.mapControl(region, byRegion, { field: 'users.region' });
-    app.mapControl(region, trend, { field: 'users.region' });
-    app.mapControl(dates, byRegion, { field: 'orders.created_at' });
-    app.mapControl(dates, trend, { field: 'orders.created_at' });
+    for (const query of [kpis, trend, byRegion]) {
+      app.mapControl(period, query, { field: 'orders.created_at' });
+      app.mapControl(region, query, { field: 'users.region' });
+    }
     app.mapControl(grain, trend, { field: 'orders.created_at' });
+    app.mapCrossFilter(byRegion, kpis);
     app.mapCrossFilter(byRegion, trend);
 
-    document.getElementById('user').textContent = `Signed in as ${Anfra.user.name}`;
-
-    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-    const moneyShort = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
-    const byRegionChart = echarts.init(document.getElementById('by-region'));
     const trendChart = echarts.init(document.getElementById('trend'));
+    const byRegionChart = echarts.init(document.getElementById('by-region'));
     const logged = new Set();
+    let currentGrain = 'month';
+    let currentPeriod = 'Last 12 months';
+    let pickedRegions = [];
 
-    // The four states of a query: loading, error, no rows, success (status stays hidden).
-    function renderStatus (query, elementId) {
-      const el = document.getElementById(elementId);
+    // Loading: a skeleton. Updating: dim the result. Error and empty: a message, in the block.
+    function renderStatus (query, bodyId, statusId, emptyText, errorTitle) {
+      const body = document.getElementById(bodyId);
+      const el = document.getElementById(statusId);
       el.replaceChildren();
-      if (query.state === 'executing') {
+      body.classList.toggle('is-updating', query.state === 'executing' && Boolean(query.result));
+      if (query.state === 'executing' && !query.result) {
         el.append(Object.assign(document.createElement('div'), { className: 'skeleton' }));
       } else if (query.state === 'error') {
-        // By who must act: the reader's access, the reader's input, or the server (retry).
-        const { code, scope, message } = query.error;
-        const alert = Object.assign(document.createElement('div'), { className: 'alert' });
-        alert.dataset.variant = 'destructive';
-        const title = document.createElement('h2');
-        const detail = document.createElement('section');
-        if (code === 'forbidden') {
-          title.textContent = "You don't have access to this chart";
-        } else if (code === 'unauthenticated') {
-          title.textContent = 'Sign in again to see this chart';
-        } else if (scope === 'server') {
-          title.textContent = "Couldn't load this chart";
-          // execute() reruns only the queries that failed.
-          const retry = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: 'Retry' });
-          retry.dataset.variant = 'outline';
-          retry.addEventListener('click', () => app.execute());
-          detail.append(retry);
-        } else {
-          title.textContent = "Couldn't load this chart";
-          detail.textContent = message;
-        }
-        alert.append(title, detail);
-        el.append(alert);
+        el.append(failure(query, errorTitle));
       } else if (query.state === 'success' && query.result.rows.length === 0) {
-        el.append(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'No sales for these filters' }));
+        el.append(message(emptyText));
       }
       el.classList.toggle('visible', el.childElementCount > 0);
+    }
+
+    function message (title, detail) {
+      const box = Object.assign(document.createElement('div'), { className: 'message' });
+      box.append(Object.assign(document.createElement('span'), { textContent: title }));
+      if (detail) box.append(Object.assign(document.createElement('span'), { className: 'caption', textContent: detail }));
+      return box;
+    }
+
+    // An error reads by who must act (api.md, Errors): the reader's access, their input, or the
+    // server, which gets a Retry. execute() reruns only the queries that failed.
+    function failure (query, title) {
+      const { code, scope } = query.error;
+      if (code === 'forbidden') return message('You don’t have access to this data');
+      if (code === 'unauthenticated') return message('Sign in again to see this data');
+      if (scope === 'server') {
+        const box = message(title);
+        const retry = Object.assign(document.createElement('button'), { type: 'button', className: 'btn', textContent: 'Retry' });
+        retry.dataset.variant = 'outline';
+        // Ignore clicks while the retry runs: a second click would send the same queries again.
+        retry.addEventListener('click', () => {
+          if (retry.getAttribute('aria-busy') === 'true') return;
+          retry.setAttribute('aria-busy', 'true');
+          app.execute();
+        });
+        box.append(retry);
+        return box;
+      }
+      return message(title, query.error.message);
     }
 
     function logFirstResult (query) {
@@ -283,78 +537,203 @@
         'executed AQL', query.result.debug?.executedAql);
     }
 
+    // goodWhen: 'up' or 'down' when the direction is good or bad for this measure; null when neither.
+    function setKpi (id, value, format, previous, goodWhen) {
+      const valueEl = document.getElementById(id);
+      const deltaEl = document.getElementById(`${id}-delta`);
+      const d = delta(value, previous);
+      valueEl.textContent = value == null ? 'No data' : format(value);
+      if (d.note) {
+        deltaEl.textContent = d.note;
+        return;
+      }
+      const pill = Object.assign(document.createElement('span'), { className: 'delta-pill', textContent: `${arrows[d.direction]} ${d.value}` });
+      pill.dataset.tone = goodWhen == null ? '' : (d.direction === goodWhen ? 'good' : 'bad');
+      deltaEl.replaceChildren(pill, 'vs last year');
+    }
+
+    function renderKpis () {
+      const ids = ['kpi-revenue', 'kpi-orders', 'kpi-aov'];
+      const tiles = document.querySelectorAll('.kpi');
+      const status = document.getElementById('kpis-status');
+      status.replaceChildren();
+      status.classList.toggle('visible', kpis.state === 'error');
+      if (kpis.state === 'error') {
+        tiles.forEach((tile) => tile.classList.remove('is-updating'));
+        status.append(failure(kpis, 'Couldn’t load the headline figures'));
+        return;
+      }
+      if (!kpis.result) {
+        ids.forEach((id) => {
+          document.getElementById(id).replaceChildren(Object.assign(document.createElement('div'), { className: 'skeleton' }));
+        });
+        return;
+      }
+      tiles.forEach((tile) => tile.classList.toggle('is-updating', kpis.state === 'executing'));
+      const row = kpis.result.rows[0] ?? {};
+      setKpi('kpi-revenue', row.revenue, (v) => moneyShort.format(v), row.revenue_ly, 'up');
+      setKpi('kpi-orders', row.order_count, (v) => count.format(v), row.order_count_ly, 'up');
+      setKpi('kpi-aov', row.aov, (v) => money.format(v), row.aov_ly, 'up');
+      document.getElementById('as-of').textContent = row.latest ? `Latest order in this view: ${fullDate.format(new Date(row.latest))}.` : '';
+    }
+
+    function renderScope () {
+      const selected = byRegion.selectedRows.map((row) => row.region);
+      const regions = selected.length ? selected : pickedRegions;
+      const regionText = regions.length === 0 ? 'all regions'
+        : regions.length <= 2 ? regions.join(' and ') : `${regions.length} regions`;
+      document.getElementById('scope').textContent =
+        `${currentPeriod}, ${regionText}, compared with the same dates a year earlier`;
+      document.getElementById('clear-selection').hidden = !app.selection;
+    }
+
     function axisStyle (theme) {
       return {
-        axisLabel: { color: theme.text },
+        axisLabel: { color: theme.text, fontSize: 12 },
         axisLine: { lineStyle: { color: theme.grid } },
-        splitLine: { lineStyle: { color: theme.grid } },
+        axisTick: { show: false },
+        splitLine: { show: false },
       };
     }
 
-    function render () {
-      renderStatus(byRegion, 'by-region-status');
-      renderStatus(trend, 'trend-status');
-      logFirstResult(byRegion);
-      logFirstResult(trend);
-      const theme = chartTheme();
+    function renderTrend (theme) {
+      if (!trend.result) return;
+      const rows = trend.result.rows;
+      // No rows: the empty state shows over the block, so drop the last result's lines under it.
+      if (rows.length === 0) {
+        trendChart.clear();
+        return;
+      }
+      const latest = kpis.result?.rows[0]?.latest;
+      const labels = rows.map((row, i) => {
+        const label = periodLabel(row.period, currentGrain);
+        return i === rows.length - 1 && isPartial(row.period, currentGrain, latest) ? `${label} to date` : label;
+      });
+      const valueAxis = { type: 'value', splitNumber: 4, axisLabel: { color: theme.text, fontSize: 12, formatter: (v) => moneyShort.format(v) },
+        axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: theme.grid } } };
+      trendChart.setOption({
+        animation: false,
+        textStyle: { fontFamily: 'Inter Variable, Inter, system-ui, sans-serif' },
+        grid: { left: 8, right: 72, top: 16, bottom: 8, containLabel: true },
+        aria: { enabled: true }, // a generated description, read by screen readers
+        tooltip: { ...tooltipStyle(theme), trigger: 'axis', formatter: (params) => tooltipHtml(params[0].axisValueLabel,
+          params.slice().reverse().map((p) => ({ name: p.seriesName, color: p.color, value: p.value == null ? 'No data' : money.format(p.value) }))) },
+        xAxis: { type: 'category', boundaryGap: false, data: labels, ...axisStyle(theme),
+          axisLabel: { color: theme.text, fontSize: 12, showMinLabel: true, showMaxLabel: true } },
+        yAxis: valueAxis,
+        series: [
+          // labelLayout moves an end label off its neighbor where the two lines meet.
+          { name: 'Last year', type: 'line', showSymbol: false, labelLayout: { moveOverlap: 'shiftY' }, lineStyle: { color: theme.context, width: 2 }, itemStyle: { color: theme.context },
+            endLabel: { show: true, formatter: 'Last year', color: theme.text, fontSize: 12 },
+            data: rows.map((row) => (row.revenue_ly == null ? null : Number(row.revenue_ly))) },
+          { name: 'This year', type: 'line', showSymbol: false, labelLayout: { moveOverlap: 'shiftY' }, lineStyle: { color: theme.cat[0], width: 2 }, itemStyle: { color: theme.cat[0] },
+            areaStyle: { color: theme.cat[0], opacity: 0.1 },
+            endLabel: { show: true, formatter: 'This year', color: theme.cat[0], fontSize: 12, fontWeight: 500 },
+            data: rows.map((row) => (row.revenue == null ? null : Number(row.revenue))) },
+        ],
+      });
+    }
 
-      if (byRegion.result) {
-        const rows = byRegion.result.rows;
-        const selected = new Set(byRegion.selectedRows.map((row) => row.region));
+    function renderByRegion (theme) {
+      if (!byRegion.result) return;
+      const rows = byRegion.result.rows;
+      // No rows: clear, since the axis max below would be Math.max() of nothing, -Infinity.
+      if (rows.length === 0) {
+        byRegionChart.clear();
+        return;
+      }
+      const selected = new Set(byRegion.selectedRows.map((row) => row.region));
+      const max = Math.max(0, ...rows.filter((row) => row.revenue != null).map((row) => Number(row.revenue)));
         // A plain setOption merges into the series the chart has: a click only restyles the bars.
-        // Rebuilding the series (replaceMerge) would replay the entry animation on every click.
-        byRegionChart.setOption({
-          textStyle: { color: theme.text },
-          grid: { left: 8, right: 8, top: 16, bottom: 8, containLabel: true },
-          tooltip: { valueFormatter: (v) => money.format(v) },
-          xAxis: { type: 'category', data: rows.map((row) => row.region), ...axisStyle(theme) },
-          yAxis: { type: 'value', axisLabel: { color: theme.text, formatter: (v) => moneyShort.format(v) }, splitLine: axisStyle(theme).splitLine },
-          series: [{
-            type: 'bar',
-            itemStyle: { color: theme.cat[0], borderRadius: [4, 4, 0, 0] },
+      byRegionChart.setOption({
+        animation: false,
+        aria: { enabled: true },
+        textStyle: { fontFamily: 'Inter Variable, Inter, system-ui, sans-serif' },
+        grid: { left: 8, right: 56, top: 0, bottom: 0, containLabel: true },
+        tooltip: { ...tooltipStyle(theme), formatter: (p) => tooltipHtml(p.name,
+          [{ name: 'Revenue', color: theme.cat[0], value: rows[p.dataIndex].revenue == null ? 'No data' : money.format(rows[p.dataIndex].revenue) }], 'Click to filter the page') },
+        xAxis: { type: 'value', show: false, max },
+        // triggerEvent: a click on a region's name selects it too. Long names truncate, never squeeze the bars.
+        yAxis: { type: 'category', inverse: true, triggerEvent: true, data: rows.map((row) => row.region ?? 'No region'), ...axisStyle(theme),
+          axisLine: { show: false }, axisLabel: { color: theme.text, fontSize: 12, width: 140, overflow: 'truncate', ellipsis: '…' } },
+        series: [
+          // A transparent full-length bar behind each real one, so a bar near zero is still a full row to click.
+          { type: 'bar', barMaxWidth: 20, z: 1, cursor: 'pointer', itemStyle: { color: 'transparent' },
+            emphasis: { disabled: true }, label: { show: false }, data: rows.map(() => max) },
+          { name: 'Revenue', type: 'bar', barMaxWidth: 20, barGap: '-100%', z: 2, cursor: 'pointer',
+            emphasis: { itemStyle: { borderColor: theme.text, borderWidth: 1 } },
+            label: { show: true, position: 'right', color: theme.text, fontSize: 12, formatter: (p) => (p.value == null ? 'No data' : moneyShort.format(p.value)) },
             data: rows.map((row) => ({
-              value: Number(row.revenue), // numbers arrive as strings; a chart needs numbers
-              itemStyle: { opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
-            })),
-          }],
-        });
-      }
+              value: row.revenue == null ? null : Number(row.revenue),
+              itemStyle: { color: theme.cat[0], borderRadius: [0, 4, 4, 0],
+                opacity: selected.size === 0 || selected.has(row.region) ? 1 : 0.3 },
+            })) },
+        ],
+      });
+    }
 
-      if (trend.result) {
-        const rows = trend.result.rows;
-        trendChart.setOption({
-          textStyle: { color: theme.text },
-          grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
-          tooltip: { trigger: 'axis', valueFormatter: (v) => money.format(v) },
-          xAxis: { type: 'category', data: rows.map((row) => String(row.period).slice(0, 10)), ...axisStyle(theme) },
-          yAxis: { type: 'value', axisLabel: { color: theme.text, formatter: (v) => moneyShort.format(v) }, splitLine: axisStyle(theme).splitLine },
-          series: [{
-            type: 'line', smooth: true, showSymbol: false,
-            lineStyle: { color: theme.cat[0], width: 2 },
-            itemStyle: { color: theme.cat[0] },
-            areaStyle: { color: theme.cat[0], opacity: 0.08 },
-            data: rows.map((row) => row.revenue),
-          }],
-        });
-      }
+    function render () {
+      renderStatus(trend, 'trend-body', 'trend-status', 'No orders in this period. Choose a longer period or another region.', 'Couldn’t load revenue over time');
+      renderStatus(byRegion, 'by-region-body', 'by-region-status', 'No orders in this period. Choose a longer period.', 'Couldn’t load revenue by region');
+      [kpis, trend, byRegion].forEach(logFirstResult);
+      const theme = chartTheme();
+      renderKpis();
+      renderTrend(theme);
+      renderByRegion(theme);
+      renderScope();
     }
 
     app.subscribe(render);
     darkQuery.addEventListener('change', () => { applyTheme(); render(); });
+    // ECharts paints labels on a canvas in whatever font has loaded by then: draw again once Inter has.
+    document.fonts.ready.then(render);
 
     byRegionChart.on('click', (params) => {
-      byRegion.select([byRegion.result.rows[params.dataIndex]]);
+      const rows = byRegion.result.rows;
+      const row = params.componentType === 'yAxis'
+        ? rows.find((r) => (r.region ?? 'No region') === params.value)
+        : rows[params.dataIndex];
+      if (!row) return;
+      const selected = byRegion.selectedRows;
+      byRegion.select(selected.includes(row) ? selected.filter((picked) => picked !== row) : [...selected, row]);
+      app.execute();
+    });
+    document.getElementById('clear-selection').addEventListener('click', () => {
+      app.clearSelection();
       app.execute();
     });
 
-    // Region multi-select. The combobox element is its own instance: refresh(), clear(), setValue().
-    // Basecoat's deferred script initializes it on DOMContentLoaded, so wait for that before refresh().
-    const regionBox = document.getElementById('region-combobox');
+    function pressOnly (buttons, pressed) {
+      buttons.forEach((button) => button.setAttribute('aria-pressed', String(button === pressed)));
+    }
+    const periodButtons = document.querySelectorAll('[data-period]');
+    periodButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        pressOnly(periodButtons, button);
+        currentPeriod = button.dataset.label;
+        period.setCondition({ operator: 'matches', values: [button.dataset.period] });
+        app.execute();
+      });
+    });
+    const grainButtons = document.querySelectorAll('[data-grain]');
+    grainButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        pressOnly(grainButtons, button);
+        currentGrain = button.dataset.grain;
+        document.getElementById('trend-heading').textContent = `Revenue by ${currentGrain}, vs last year`;
+        grain.setGrain(currentGrain);
+        app.execute();
+      });
+    });
+
+    // Region multi-select. Basecoat's deferred script sets the select up after this script's own
+    // DOMContentLoaded listeners, and only then adds refresh(), so wait for its signal.
+    const regionSelect = document.getElementById('region-select');
     const regionList = document.getElementById('region-listbox');
-    const domReady = document.readyState === 'loading'
-      ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve))
-      : Promise.resolve();
-    Promise.all([region.loadOptions(), domReady]).then(([options]) => {
+    const selectReady = regionSelect.dataset.selectInitialized
+      ? Promise.resolve()
+      : new Promise((resolve) => regionSelect.addEventListener('basecoat:initialized', resolve, { once: true }));
+    Promise.all([region.loadOptions(), selectReady]).then(([options]) => {
       regionList.replaceChildren(...options.map((value) => {
         const option = document.createElement('div');
         option.setAttribute('role', 'option');
@@ -362,67 +741,85 @@
         option.textContent = String(value);
         return option;
       }));
-      regionBox.refresh();
-    }).catch((err) => console.error('Could not load region options', err));
-    regionBox.addEventListener('change', (event) => {
-      const values = Array.isArray(event.detail.value) ? event.detail.value : [];
-      region.setCondition({ operator: 'is', values });
-      app.execute();
+      regionSelect.refresh();
+    }).catch((err) => {
+      // Say it in the field, not only in the console: an empty menu reads as "no regions".
+      regionSelect.querySelector('.select-value').textContent = 'Couldn’t load regions';
+      document.getElementById('region-trigger').disabled = true;
+      console.error('Could not load region options', err);
     });
+    // Chips that fit, then "+N" listing all picks; the list and the menu never show at once.
+    const regionField = regionSelect.closest('.multi-select');
+    const regionChips = document.getElementById('region-chips');
+    const regionPicks = document.getElementById('region-picks');
+    const removeIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
-    // Date range: two date inputs plus presets. Empty means no filter.
-    const fromInput = document.getElementById('date-from');
-    const toInput = document.getElementById('date-to');
-    function applyDateRange () {
-      if (fromInput.value && toInput.value) {
-        dates.setCondition({ operator: 'between', values: [fromInput.value, toInput.value] });
-      } else {
-        dates.setCondition({ operator: 'is', values: [] });
-      }
-      app.execute();
+    function chipFor (value) {
+      const chip = Object.assign(document.createElement('span'), { className: 'chip' });
+      const remove = Object.assign(document.createElement('button'), { type: 'button', className: 'chip-remove', innerHTML: removeIcon });
+      remove.setAttribute('aria-label', `Remove ${value}`);
+      remove.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const list = remove.closest('.chips, .picks-panel');
+        const index = [...list.querySelectorAll('.chip-remove')].indexOf(remove);
+        regionSelect.deselect(value); // updates Basecoat's state and fires its change event
+        // The focused button went with its chip: focus the chip now in its place, else the field.
+        const left = list.hidden ? [] : list.querySelectorAll('.chip-remove');
+        (left[Math.min(index, left.length - 1)] ?? document.getElementById('region-trigger')).focus();
+      });
+      chip.title = value; // a chip cut to an ellipsis can still be read
+      chip.append(Object.assign(document.createElement('span'), { textContent: value }), remove);
+      return chip;
     }
-    const isoDay = (date) => date.toISOString().slice(0, 10);
-    fromInput.addEventListener('change', applyDateRange);
-    toInput.addEventListener('change', applyDateRange);
-    document.querySelectorAll('[data-days]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const today = new Date();
-        const kind = button.dataset.days;
-        if (kind === 'all') {
-          fromInput.value = '';
-          toInput.value = '';
-        } else {
-          const from = kind === 'ytd'
-            ? new Date(Date.UTC(today.getUTCFullYear(), 0, 1))
-            : new Date(today.getTime() - Number(kind) * 86400000);
-          fromInput.value = isoDay(from);
-          toInput.value = isoDay(today);
-        }
-        applyDateRange();
-      });
-    });
 
-    // Grain: a segmented control. The pressed button is the secondary variant.
-    document.querySelectorAll('[data-grain]').forEach((button) => {
-      button.addEventListener('click', () => {
-        document.querySelectorAll('[data-grain]').forEach((other) => {
-          const on = other === button;
-          other.dataset.variant = on ? 'secondary' : 'outline';
-          other.setAttribute('aria-pressed', String(on));
-        });
-        grain.setGrain(button.dataset.grain);
-        app.execute();
+    function renderChips () {
+      regionField.toggleAttribute('data-picked', pickedRegions.length > 0);
+      const chips = pickedRegions.map(chipFor);
+      const more = Object.assign(document.createElement('button'), { type: 'button', className: 'chip-more', hidden: true });
+      more.addEventListener('click', (event) => {
+        event.stopPropagation();
+        regionSelect.close();
+        regionPicks.hidden = !regionPicks.hidden;
       });
-    });
+      regionChips.replaceChildren(...chips, more);
+      let shown = chips.length;
+      while (regionChips.scrollWidth > regionChips.clientWidth && shown > 1) {
+        chips[--shown].remove();
+        more.hidden = false;
+        more.textContent = `+${pickedRegions.length - shown}`;
+        more.setAttribute('aria-label', `Show all ${pickedRegions.length} picked regions`);
+      }
+      // One chip still too wide: let it shrink and end in an ellipsis.
+      if (shown === 1 && regionChips.scrollWidth > regionChips.clientWidth) Object.assign(chips[0].style, { flex: '0 1 auto', minWidth: '0' });
+      // The full list follows the picks while it is open, and closes once every pick fits the field.
+      regionPicks.replaceChildren(...pickedRegions.map(chipFor));
+      if (more.hidden) regionPicks.hidden = true;
+    }
 
-    document.getElementById('clear-selection').addEventListener('click', () => {
+    document.getElementById('region-trigger').addEventListener('click', () => { regionPicks.hidden = true; });
+    document.addEventListener('click', (event) => {
+      if (!regionPicks.hidden && !regionPicks.contains(event.target)) regionPicks.hidden = true;
+    });
+    // Escape closes the list and gives focus back to the "+N" that opened it.
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || regionPicks.hidden) return;
+      const wasInside = regionPicks.contains(document.activeElement);
+      regionPicks.hidden = true;
+      if (wasInside) regionChips.querySelector('.chip-more')?.focus();
+    });
+    regionSelect.addEventListener('change', (event) => {
+      if (event.target !== regionSelect) return; // a search input's own change bubbles here too
+      pickedRegions = Array.isArray(event.detail.value) ? event.detail.value : [];
+      renderChips();
+      region.setCondition({ operator: 'is', values: pickedRegions });
+      // A bar picked in the old scope would keep filtering the KPIs and trend, unseen.
       app.clearSelection();
       app.execute();
     });
 
     window.addEventListener('resize', () => {
-      byRegionChart.resize();
       trendChart.resize();
+      byRegionChart.resize();
     });
 
     app.execute();
