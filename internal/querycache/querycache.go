@@ -88,6 +88,22 @@ type Tag struct {
 	Value string
 }
 
+// Contents are what a store holds at a time, as anfra cache status reports it.
+type Contents struct {
+	// Entries are the committed entries no lookup has stopped using yet, and
+	// Bytes their size.
+	Entries int
+	Bytes   int64
+	// OldestCachedAt and NewestCachedAt are those entries' oldest and newest
+	// CachedAt: zero without any.
+	OldestCachedAt, NewestCachedAt time.Time
+	// Expired are the entries no query uses any more, expired, cleaned or
+	// abandoned, which a sweep removes.
+	Expired Expired
+	// Writing is how many writes are pending, their lease still running.
+	Writing int
+}
+
 // Expired is what Expire expired: how many committed entries, and their size.
 type Expired struct {
 	Entries int

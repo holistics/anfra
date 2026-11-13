@@ -44,14 +44,14 @@ func TestClean(t *testing.T) {
 	cc := command.CommandContext{QueryCache: qc}
 	for _, step := range []struct {
 		name string
-		in   QueryCacheSelector
+		in   *QueryCacheSelector
 		want int
 	}{
-		{"both fields must match", QueryCacheSelector{DataSource: "other", Dataset: "sales"}, 0},
-		{"by dataset", QueryCacheSelector{Dataset: "sales"}, 1},
-		{"by data source", QueryCacheSelector{DataSource: "w"}, 1},
-		{"everything", QueryCacheSelector{}, 1},
-		{"nothing left", QueryCacheSelector{}, 0},
+		{"both fields must match", &QueryCacheSelector{DataSource: "other", Dataset: "sales"}, 0},
+		{"by dataset", &QueryCacheSelector{Dataset: "sales"}, 1},
+		{"by data source", &QueryCacheSelector{DataSource: "w"}, 1},
+		{"every cache", nil, 1},
+		{"all of the query cache, nothing left", &QueryCacheSelector{}, 0},
 	} {
 		got, err := clean(ctx, cc, CacheCleanRequestParams{Query: step.in})
 		if err != nil || got.Query.Entries != step.want || got.Query.Bytes != int64(100*step.want) {

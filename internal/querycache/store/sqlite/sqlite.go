@@ -89,6 +89,52 @@ func Peek(ctx context.Context, path string) (Versions, error) {
 	return readVersions(ctx, db)
 }
 
+// ReadContents reads what the store at path holds at now, without creating,
+// changing or migrating it, as Peek reads its versions: nothing when it isn't
+// there. A store this anfra can't use is a *VersionError, since its tables may
+// not be the ones read here.
+func ReadContents(ctx context.Context, path string, now time.Time) (querycache.Contents, error) {
+	v, err := Peek(ctx, path)
+	if errors.Is(err, os.ErrNotExist) {
+		return querycache.Contents{}, nil
+	}
+	if err != nil {
+		return querycache.Contents{}, err
+	}
+	if !v.Compatible() {
+		return querycache.Contents{}, &VersionError{v}
+	}
+	params := url.Values{}
+	params.Set("mode", "ro")
+	db, err := sql.Open("sqlite", dsn(path, params))
+	if err != nil {
+		return querycache.Contents{}, fmt.Errorf("open the query cache's store: %w", err)
+	}
+	defer db.Close()
+	var (
+		c              querycache.Contents
+		oldest, newest sql.NullInt64
+	)
+	err = db.QueryRowContext(ctx, `
+		SELECT
+		  COALESCE(SUM(CASE WHEN cached_at IS NOT NULL AND expires_at > ?1 THEN 1 END), 0),
+		  COALESCE(SUM(CASE WHEN cached_at IS NOT NULL AND expires_at > ?1 THEN size_bytes END), 0),
+		  MIN(CASE WHEN cached_at IS NOT NULL AND expires_at > ?1 THEN cached_at END),
+		  MAX(CASE WHEN cached_at IS NOT NULL AND expires_at > ?1 THEN cached_at END),
+		  COALESCE(SUM(CASE WHEN expires_at <= ?1 THEN 1 END), 0),
+		  COALESCE(SUM(CASE WHEN expires_at <= ?1 THEN size_bytes END), 0),
+		  COALESCE(SUM(CASE WHEN cached_at IS NULL AND expires_at > ?1 THEN 1 END), 0)
+		FROM query_cache_physical_entries`, ms(now)).Scan(
+		&c.Entries, &c.Bytes, &oldest, &newest, &c.Expired.Entries, &c.Expired.Bytes, &c.Writing)
+	if err != nil {
+		return querycache.Contents{}, fmt.Errorf("read the query cache store's contents: %w", err)
+	}
+	if oldest.Valid {
+		c.OldestCachedAt, c.NewestCachedAt = fromMs(oldest.Int64), fromMs(newest.Int64)
+	}
+	return c, nil
+}
+
 // Close closes the store.
 func (s *Store) Close() error { return s.db.Close() }
 
