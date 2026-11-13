@@ -102,6 +102,9 @@ type QueryCache interface {
 	// StartLake starts the canal-lake a write needs, unless it runs already
 	// or something else runs it.
 	StartLake(ctx context.Context) error
+	// Contents are what the cache holds, and where, for cache.status: read
+	// without creating, changing or migrating anything.
+	Contents(ctx context.Context) (QueryCacheContents, error)
 	// Report tells whoever runs anfra why a query ran without the cache: an
 	// error of Manager's, of a write, or a key that couldn't be made. The
 	// query's answer only says that it did.
@@ -115,6 +118,19 @@ type QueryCacheSettings struct {
 	Disabled string
 	// Default is cache.query.default.
 	Default QueryCacheDefaults
+	// Namespace is the subfolder of canal-lake's storage the cache's files
+	// go in, as whoever runs anfra set it (ANFRA_CACHE_QUERY_NAMESPACE):
+	// empty, the storage's top level.
+	Namespace string
+}
+
+// QueryCacheContents are what a query cache holds, and where.
+type QueryCacheContents struct {
+	// Folder is the cache's folder on this machine: its store, and the
+	// results of the canal-lake anfra starts. Empty when the host keeps its
+	// cache elsewhere.
+	Folder string
+	querycache.Contents
 }
 
 // QueryCacheDefaults are the cache options of a query that sets none

@@ -1,5 +1,6 @@
-// Package cache is the commands on the repo's caches: cache.clean removes the
-// query cache's entries. See docs/designs/query-cache.md#cleaning.
+// Package cache is the commands on the repo's caches: cache.status reports
+// what they hold, and cache.clean removes their entries. The query cache is
+// the only one yet. See docs/designs/query-cache.md#cleaning.
 package cache
 
 import (
@@ -20,7 +21,7 @@ var Clean = command.Define(command.Def[CacheCleanRequestParams, CacheCleanResult
 	Short: "Remove results from the repo's query cache, so that queries run on the warehouse again",
 	Long: `Remove results from the repo's query cache, so that queries run on the warehouse again.
 
-Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every result of the repo is removed.`,
+Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every cache of the repo is cleaned: today, every result of its query cache.`,
 	Idempotent: true,
 	Timeout:    time.Minute,
 	Errors:     []apperr.AnyCode{errcode.CacheDisabled, errcode.CacheUnavailable},
@@ -30,7 +31,7 @@ Clean after fixing data in the warehouse: from then on, no query is answered fro
 // CacheCleanRequestParams is what cache.clean takes: which of each cache's
 // entries to remove.
 type CacheCleanRequestParams struct {
-	Query QueryCacheSelector `json:"query,omitempty" doc:"the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the repo is removed."`
+	Query *QueryCacheSelector `json:"query,omitempty" doc:"the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the query cache is removed. Without query, every cache of the repo is cleaned, which today is the query cache alone."`
 }
 
 func (CacheCleanRequestParams) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
@@ -44,9 +45,13 @@ type QueryCacheSelector struct {
 	Dataset    string `json:"dataset,omitempty" doc:"entries of queries run against this dataset"`
 }
 
-// tags are the selector's tags, all of which an entry must have.
-func (s QueryCacheSelector) tags() []querycache.Tag {
+// tags are the selector's tags, all of which an entry must have: none for a
+// nil selector, every entry.
+func (s *QueryCacheSelector) tags() []querycache.Tag {
 	var tags []querycache.Tag
+	if s == nil {
+		return nil
+	}
 	if s.DataSource != "" {
 		tags = append(tags, querycache.Tag{Kind: querycache.TagDataSource, Value: s.DataSource})
 	}
@@ -56,9 +61,9 @@ func (s QueryCacheSelector) tags() []querycache.Tag {
 	return tags
 }
 
-// CacheCleanResult is what cache.clean removed.
+// CacheCleanResult is what cache.clean removed, from each cache it cleaned.
 type CacheCleanResult struct {
-	Query QueryCacheCleaned `json:"query" doc:"what was removed from the query cache"`
+	Query *QueryCacheCleaned `json:"query,omitempty" doc:"what was removed from the query cache"`
 }
 
 // QueryCacheCleaned is what a clean removed from the query cache.
@@ -90,5 +95,5 @@ func clean(ctx context.Context, cc command.CommandContext, in CacheCleanRequestP
 		return CacheCleanResult{}, apperr.Encapsulate(err, errcode.CacheUnavailable,
 			"The query cache isn't working, so it couldn't be cleaned. anfra's log says why, and anfra status shows the cache's state.")
 	}
-	return CacheCleanResult{Query: QueryCacheCleaned{Entries: expired.Entries, Bytes: expired.Bytes}}, nil
+	return CacheCleanResult{Query: &QueryCacheCleaned{Entries: expired.Entries, Bytes: expired.Bytes}}, nil
 }

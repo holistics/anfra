@@ -17,9 +17,31 @@ export interface paths {
          * Remove results from the repo's query cache, so that queries run on the warehouse again
          * @description Remove results from the repo's query cache, so that queries run on the warehouse again.
          *
-         *     Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every result of the repo is removed.
+         *     Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every cache of the repo is cleaned: today, every result of its query cache.
          */
         post: operations["core.cache.clean"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core.cache.status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show what the repo's caches hold, and where
+         * @description Show what the repo's caches hold, and where: for the query cache, its state, its folder, its settings, and how many results it holds and their size.
+         *
+         *     It reads the caches without changing them. anfra status shows the same state, without the counts.
+         */
+        post: operations["core.cache.status"];
         delete?: never;
         options?: never;
         head?: never;
@@ -254,12 +276,12 @@ export interface components {
             severity: string;
         };
         CacheCleanRequestParams: {
-            /** @description the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the repo is removed. */
+            /** @description the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the query cache is removed. Without query, every cache of the repo is cleaned, which today is the query cache alone. */
             query?: components["schemas"]["QueryCacheSelector"];
         };
         CacheCleanResult: {
             /** @description what was removed from the query cache */
-            query: components["schemas"]["QueryCacheCleaned"];
+            query?: components["schemas"]["QueryCacheCleaned"];
         };
         CacheOptions: {
             /** @description true answers from a cached result, or fails with cache_miss without running the query. */
@@ -292,6 +314,13 @@ export interface components {
         CacheStatus: {
             /** @description the query cache, which keeps queries' results */
             query: components["schemas"]["Summary"];
+        };
+        CacheStatusRequestParams: Record<string, never>;
+        CacheStatusResult: {
+            /** @description what to do about a problem the caches have, if any */
+            hints?: string[];
+            /** @description the query cache. Absent when the server keeps none. */
+            query?: components["schemas"]["QueryCacheStatus"];
         };
         CacheWarning: {
             /**
@@ -592,6 +621,18 @@ export interface components {
             /** @constant */
             status: 422;
         };
+        Expired: {
+            /**
+             * Format: int64
+             * @description their size
+             */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description how many
+             */
+            entries: number;
+        };
         ExportFormatOptions: {
             /** @description csv: start the file with a UTF-8 byte-order mark, which Excel needs to read non-ASCII text; set it for a file a person will open */
             bom?: boolean;
@@ -685,11 +726,63 @@ export interface components {
              */
             entries: number;
         };
+        QueryCacheContents: {
+            /**
+             * Format: int64
+             * @description their size, as the rows were streamed
+             */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description how many cached results queries can be answered from: committed, and not expired
+             */
+            entries: number;
+            /** @description results no query uses any more, expired, cleaned or abandoned, whose files are deleted by the next sweep */
+            expired: components["schemas"]["Expired"];
+            /**
+             * Format: date-time
+             * @description when the newest of those results was read from the warehouse. Absent without any.
+             */
+            newest_cached_at?: string;
+            /**
+             * Format: date-time
+             * @description when the oldest of those results was read from the warehouse. Absent without any.
+             */
+            oldest_cached_at?: string;
+            /**
+             * Format: int64
+             * @description results being written now, by queries still running
+             */
+            writing: number;
+        };
         QueryCacheSelector: {
             /** @description entries of queries run on this data source */
             data_source?: string;
             /** @description entries of queries run against this dataset */
             dataset?: string;
+        };
+        QueryCacheSettings: {
+            /** @description the cache.duration of a query that sets none (cache.query.default.duration in .anfra/config.yml) */
+            default_duration?: string;
+            /** @description the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE) */
+            namespace?: string;
+        };
+        QueryCacheStatus: {
+            /** @description what the cache holds, when it is ready */
+            contents?: components["schemas"]["QueryCacheContents"];
+            /** @description the cache's folder on this machine: its store, and the results of the canal-lake anfra starts. Absent when the cache is disabled, or the server keeps it elsewhere. */
+            folder?: string;
+            /** @description what's wrong with the cache, when it is incompatible or unavailable */
+            problem?: string;
+            /** @description what turns the cache off, when it is disabled */
+            reason?: string;
+            /** @description the settings the cache runs with, those that are set */
+            settings?: components["schemas"]["QueryCacheSettings"];
+            /**
+             * @description "ready": the cache can be used. "incompatible": a newer anfra changed the cache's store in a way this anfra can't read. "unavailable": the cache's store can't be used, as "problem" says. "disabled": the query cache is turned off, as "reason" says.
+             * @enum {string}
+             */
+            state: "ready" | "incompatible" | "unavailable" | "disabled";
         };
         QueryCompileRequestParams: {
             /** @description the data source a SQL query runs against */
@@ -1260,6 +1353,63 @@ export interface operations {
                 content: {
                     "application/json": {
                         error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyCacheDisabled"] | components["schemas"]["ErrorBodyCacheUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.cache.status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CacheStatusRequestParams"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheStatusResult"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
                     };
                 };
             };

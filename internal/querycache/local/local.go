@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/querycache"
@@ -86,7 +87,7 @@ const NamespaceEnv = "ANFRA_CACHE_QUERY_NAMESPACE"
 // report, rather than failing here: a cache problem never fails a command.
 func New(dir string, o Options) *Cache {
 	c := &Cache{dir: dir, disabled: o.Disabled, lake: o.Lake, report: o.Report, notice: o.Notice,
-		settings: command.QueryCacheSettings{Disabled: o.Disabled, Default: o.Default}}
+		settings: command.QueryCacheSettings{Disabled: o.Disabled, Default: o.Default, Namespace: strings.TrimSuffix(o.Namespace, "/")}}
 	if o.Namespace != "" {
 		c.namespace = strings.TrimSuffix(o.Namespace, "/") + "/"
 		if !querycache.ValidNamespace(c.namespace) {
@@ -220,6 +221,13 @@ func (c *Cache) Manager(ctx context.Context) (*querycache.Manager, error) {
 	// No Lake for the manager yet: only a sweep drops files, through
 	// canal-query, which comes with the sweep.
 	return querycache.NewManager(querycache.Config{Store: store, Namespace: c.namespace})
+}
+
+// Contents are what the store holds now, read without creating, changing or
+// migrating it, and the cache's folder.
+func (c *Cache) Contents(ctx context.Context) (command.QueryCacheContents, error) {
+	contents, err := sqlitestore.ReadContents(ctx, c.StorePath(), time.Now())
+	return command.QueryCacheContents{Folder: c.dir, Contents: contents}, err
 }
 
 // Report tells whoever runs anfra why a query ran without the cache.

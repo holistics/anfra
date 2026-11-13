@@ -22,7 +22,7 @@ components:
       properties:
         query:
           $ref: "#/components/schemas/QueryCacheSelector"
-          description: the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the repo is removed.
+          description: the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the query cache is removed. Without query, every cache of the repo is cleaned, which today is the query cache alone.
       type: object
     CacheCleanResult:
       additionalProperties: false
@@ -30,8 +30,6 @@ components:
         query:
           $ref: "#/components/schemas/QueryCacheCleaned"
           description: what was removed from the query cache
-      required:
-        - query
       type: object
     CacheOptions:
       additionalProperties: false
@@ -80,6 +78,21 @@ components:
           description: the query cache, which keeps queries' results
       required:
         - query
+      type: object
+    CacheStatusRequestParams:
+      additionalProperties: false
+      type: object
+    CacheStatusResult:
+      additionalProperties: false
+      properties:
+        hints:
+          description: what to do about a problem the caches have, if any
+          items:
+            type: string
+          type: array
+        query:
+          $ref: "#/components/schemas/QueryCacheStatus"
+          description: the query cache. Absent when the server keeps none.
       type: object
     CacheWarning:
       additionalProperties: false
@@ -727,6 +740,21 @@ components:
         - message
         - request_id
       type: object
+    Expired:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size
+          format: int64
+          type: integer
+        entries:
+          description: how many
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
+      type: object
     ExportFormatOptions:
       additionalProperties: false
       properties:
@@ -882,6 +910,38 @@ components:
         - entries
         - bytes
       type: object
+    QueryCacheContents:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size, as the rows were streamed
+          format: int64
+          type: integer
+        entries:
+          description: "how many cached results queries can be answered from: committed, and not expired"
+          format: int64
+          type: integer
+        expired:
+          $ref: "#/components/schemas/Expired"
+          description: results no query uses any more, expired, cleaned or abandoned, whose files are deleted by the next sweep
+        newest_cached_at:
+          description: when the newest of those results was read from the warehouse. Absent without any.
+          format: date-time
+          type: string
+        oldest_cached_at:
+          description: when the oldest of those results was read from the warehouse. Absent without any.
+          format: date-time
+          type: string
+        writing:
+          description: results being written now, by queries still running
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
+        - expired
+        - writing
+      type: object
     QueryCacheSelector:
       additionalProperties: false
       properties:
@@ -891,6 +951,45 @@ components:
         dataset:
           description: entries of queries run against this dataset
           type: string
+      type: object
+    QueryCacheSettings:
+      additionalProperties: false
+      properties:
+        default_duration:
+          description: the cache.duration of a query that sets none (cache.query.default.duration in .anfra/config.yml)
+          type: string
+        namespace:
+          description: the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE)
+          type: string
+      type: object
+    QueryCacheStatus:
+      additionalProperties: false
+      properties:
+        contents:
+          $ref: "#/components/schemas/QueryCacheContents"
+          description: what the cache holds, when it is ready
+        folder:
+          description: "the cache's folder on this machine: its store, and the results of the canal-lake anfra starts. Absent when the cache is disabled, or the server keeps it elsewhere."
+          type: string
+        problem:
+          description: what's wrong with the cache, when it is incompatible or unavailable
+          type: string
+        reason:
+          description: what turns the cache off, when it is disabled
+          type: string
+        settings:
+          $ref: "#/components/schemas/QueryCacheSettings"
+          description: the settings the cache runs with, those that are set
+        state:
+          description: "\"ready\": the cache can be used. \"incompatible\": a newer anfra changed the cache's store in a way this anfra can't read. \"unavailable\": the cache's store can't be used, as \"problem\" says. \"disabled\": the query cache is turned off, as \"reason\" says."
+          enum:
+            - ready
+            - incompatible
+            - unavailable
+            - disabled
+          type: string
+      required:
+        - state
       type: object
     QueryCompileRequestParams:
       additionalProperties: false
@@ -1851,7 +1950,7 @@ paths:
       description: |-
         Remove results from the repo's query cache, so that queries run on the warehouse again.
 
-        Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every result of the repo is removed.
+        Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every cache of the repo is cleaned: today, every result of its query cache.
       operationId: core.cache.clean
       requestBody:
         content:
@@ -1906,6 +2005,63 @@ paths:
       x-destructive: true
       x-idempotent: true
       x-read-only: false
+  /core.cache.status:
+    post:
+      description: |-
+        Show what the repo's caches hold, and where: for the query cache, its state, its folder, its settings, and how many results it holds and their size.
+
+        It reads the caches without changing them. anfra status shows the same state, without the counts.
+      operationId: core.cache.status
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CacheStatusRequestParams"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheStatusResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+      summary: Show what the repo's caches hold, and where
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
   /core.ingest:
     post:
       operationId: core.ingest
