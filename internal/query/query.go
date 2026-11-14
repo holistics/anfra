@@ -243,59 +243,82 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 // compile failure (a query problem) from an execution failure (a data-source/DB
 // problem).
 func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, bounds ResultBounds, h canalquery.Handler) error {
-	p, err := Prepare(ctx, sources, compiled)
+	q, err := InDataSource(ctx, sources, compiled)
 	if err != nil {
 		return err
 	}
-	return p.Stream(ctx, canal, bounds, h)
+	return q.Stream(ctx, canal, bounds, h)
 }
 
-// Prepared is a statement ready to run: on its data source, connection
-// included, from the engine's one call of DataSources.Connection for it. What
-// the query cache's key needs of the data source is read from it, so the key
-// describes the connection the statement runs on.
-type Prepared struct {
+// DataSourceQuery is a query in its data source, ready to run there: its SQL,
+// and the data source, connection included, as the engine's one call of
+// DataSources.Connection gave it. What the query cache's key needs of the data
+// source is read from it, so the key describes the connection the query runs
+// on.
+type DataSourceQuery struct {
 	ds datasource.DataSource
 	st canalquery.Statement
 }
 
-// Prepare is compiled ready to run on the data source its dataset targets.
-func Prepare(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (Prepared, error) {
+// InDataSource is compiled in the data source its dataset targets, asked of
+// sources in the governed mode: the data source's name is the compiler's.
+func InDataSource(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (DataSourceQuery, error) {
 	ds, err := dataSourceOf(ctx, sources, compiled)
 	if err != nil {
-		return Prepared{}, err
+		return DataSourceQuery{}, err
 	}
-	return Prepared{ds: ds, st: canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType}}, nil
+	return DataSourceQuery{ds: ds, st: canalquery.Statement{SQL: compiled.SQL, DBType: compiled.DataSource.DBType}}, nil
 }
 
-// DataSource is the name of the data source p runs on.
-func (p Prepared) DataSource() string { return p.ds.Name }
+// CacheReadQuery is a read of the query cache's entry at lakeKey, in canal-lake
+// as its data source: through canal-query's canal_lake connector, which reads canal-lake as
+// a data source, so a cached result is streamed and encoded as a warehouse's
+// is, within the same bounds (docs/designs/query-cache.md#a-hit). Its rows
+// are the entry's, as they were written.
+func CacheReadQuery(lakeKey string) DataSourceQuery {
+	ds := datasource.DataSource{
+		Name:       "the query cache",
+		DBType:     canalLakeType,
+		Connection: map[string]any{"entries": map[string]any{"entry": lakeKey}},
+		Unpooled:   true, // canal-query keeps one connection to canal-lake, for every read
+	}
+	return DataSourceQuery{ds: ds, st: canalquery.Statement{SQL: "SELECT * FROM entry", DBType: canalLakeType}}
+}
+
+// canalLakeType is canal-query's dbtype for reading canal-lake's entries.
+const canalLakeType = "canal_lake"
+
+// SQL is the SQL q runs.
+func (q DataSourceQuery) SQL() string { return q.st.SQL }
+
+// DataSource is the name of the data source q runs on.
+func (q DataSourceQuery) DataSource() string { return q.ds.Name }
 
 // Identity is the data source's identity: who the warehouse sees
 // (datasource.DataSource.Identity).
-func (p Prepared) Identity() string { return p.ds.Identity }
+func (q DataSourceQuery) Identity() string { return q.ds.Identity }
 
 // DBType is the data source's type.
-func (p Prepared) DBType() string { return p.ds.DBType }
+func (q DataSourceQuery) DBType() string { return q.ds.DBType }
 
-// Caching is p also writing its result to canal-lake under lakeKey, as it
-// streams it (canalquery.Statement.LakeKey).
-func (p Prepared) Caching(lakeKey string) Prepared {
-	p.st.LakeKey = lakeKey
-	return p
+// WithLakeKey is q also writing its result to canal-lake under key, as it
+// streams it (canal-query's cache_key, canalquery.Statement.LakeKey).
+func (q DataSourceQuery) WithLakeKey(key string) DataSourceQuery {
+	q.st.LakeKey = key
+	return q
 }
 
-// Stream runs p, handing its rows within bounds to h as they arrive, as the
+// Stream runs q, handing its rows within bounds to h as they arrive, as the
 // package's Stream does.
-func (p Prepared) Stream(ctx context.Context, canal *canalquery.Client, bounds ResultBounds, h canalquery.Handler) error {
-	return stream(ctx, canal, p.ds, p.st, bounds, h)
+func (q DataSourceQuery) Stream(ctx context.Context, canal *canalquery.Client, bounds ResultBounds, h canalquery.Handler) error {
+	return stream(ctx, canal, q.ds, q.st, bounds, h)
 }
 
 // dataSourceOf is the data source a compiled query runs on, connection included:
 // the one its dataset targets, and only that one is asked for, in the governed
 // mode: what runs on it is the compiler's.
 func dataSourceOf(ctx context.Context, sources datasource.DataSources, compiled anfranode.CompileToSQLResult) (datasource.DataSource, error) {
-	ds, err := connect(ctx, sources, compiled.DataSource.Name, datasource.DataPermModeGoverned)
+	ds, err := lookUpDataSource(ctx, sources, compiled.DataSource.Name, datasource.DataPermModeGoverned)
 	if errors.Is(err, datasource.ErrUnknown) {
 		return datasource.DataSource{}, fmt.Errorf("the dataset uses the data source %q, which isn't defined in this repo", compiled.DataSource.Name)
 	}

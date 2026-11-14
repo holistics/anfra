@@ -450,6 +450,34 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyCacheMiss:
+      additionalProperties: false
+      description: The query's result isn't cached.
+      properties:
+        code:
+          const: cache_miss
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyCacheUnavailable:
       additionalProperties: false
       description: The query cache isn't working.
@@ -2299,11 +2327,15 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyCacheMiss"
+                      - $ref: "#/components/schemas/ErrorBodyCacheDisabled"
+                      - $ref: "#/components/schemas/ErrorBodyCacheUnavailable"
                 required:
                   - error
                 type: object
-          description: internal_server_error
+          description: internal_server_error, cache_miss, cache_disabled, cache_unavailable
         "503":
           content:
             application/json:

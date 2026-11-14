@@ -47,6 +47,10 @@ var (
 	// CacheDisabled: the repo, or whoever runs anfra, turned the query cache
 	// off, so an operation on it has nothing to act on.
 	CacheDisabled = apperr.DefinePublicCode(NS, "cache_disabled", apperr.User, "The query cache is turned off.")
+	// CacheMiss: a query asked to be answered from the cache only
+	// (cache.cached_only), and its result isn't cached, or is older than its
+	// cache.duration accepts. Nothing ran on the warehouse.
+	CacheMiss = apperr.DefinePublicCode(NS, "cache_miss", apperr.Client, "The query's result isn't cached.")
 	// CacheUnavailable: the query cache isn't working (its store can't be
 	// opened). Its cause is in the log, for whoever runs anfra.
 	CacheUnavailable = apperr.DefinePublicCode(NS, "cache_unavailable", apperr.Server, "The query cache isn't working.")

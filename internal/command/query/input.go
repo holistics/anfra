@@ -74,9 +74,10 @@ func (in QueryInput) pageSize() int {
 // defaultTimezone is the time zone anfra-node compiles in when none is given.
 const defaultTimezone = "Etc/UTC"
 
-// ran is the input as the query ran: every default filled in, and the seeds
-// it compiled with, when anfra-node returned them.
-func (in QueryInput) ran(seeds *anfranode.Seeds) *QueryInput {
+// filled is the input with every default filled in (the first page, the time
+// zone) and the seeds the query compiled with, when anfra-node returned them:
+// the input its answer returns, to send back for the same answer again.
+func (in QueryInput) filled(seeds *anfranode.Seeds) *QueryInput {
 	out := in
 	if in.Pagination != nil {
 		p := *in.Pagination
@@ -169,11 +170,6 @@ func (c CacheOptions) check() error {
 		case d > querycache.MaxDuration:
 			return command.InvalidArg("cache.duration", "invalid", "cache.duration can be at most 168h (7 days).")
 		}
-	}
-	if c.CachedOnly && !c.Refresh {
-		// Until a hit can be read: canal-query can't read an entry from
-		// canal-lake yet (docs/designs/query-cache.md#implementation-plan).
-		return command.InvalidArg("cache.cached_only", "unsupported", "cache.cached_only isn't supported yet, because anfra can't answer a query from the cache yet.")
 	}
 	if c.CachedOnly && c.Refresh {
 		return command.InvalidArg("cache.cached_only", "invalid", "cache.cached_only can't be used with cache.refresh, because refresh never answers from a cached result.")
@@ -315,7 +311,7 @@ func (in QueryDefinition) ungoverned(ctx context.Context, cc command.CommandCont
 	if err != nil {
 		return query.UngovernedSQL{}, err
 	}
-	sql, err := query.ConnectUngoverned(ctx, cc.DataPerms, sources, in.DataSource, in.Query)
+	sql, err := query.InDataSourceUngoverned(ctx, cc.DataPerms, sources, in.DataSource, in.Query)
 	if errors.Is(err, datasource.ErrUnknown) {
 		return query.UngovernedSQL{}, in.unknownDataSource()
 	}

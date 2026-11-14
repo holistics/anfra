@@ -69,6 +69,10 @@ func (in QueryExportRequestParams) check() error {
 	if err := in.runInput().check(); err != nil {
 		return err
 	}
+	if in.Cache.CachedOnly {
+		// An export doesn't read the cache yet, and would run on the warehouse.
+		return command.InvalidArg("cache.cached_only", "unsupported", "an export can't be answered from the cache yet, so it can't take cache.cached_only.")
+	}
 	if name := strings.TrimSpace(in.Filename); name != "" {
 		if msg := badFilename(name); msg != "" {
 			return command.InvalidArg("filename", "invalid", msg)
