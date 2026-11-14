@@ -30,9 +30,10 @@ Over HTTP, a request that accepts application/x-ndjson gets the result as the qu
 	},
 	Normalize: QueryRequestParams.normalize,
 	Check:     QueryRequestParams.check,
-	Errors:    []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge},
-	Events:    queryEvents,
-	Run:       newQueryRun,
+	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge,
+		errcode.CacheMiss, errcode.CacheDisabled, errcode.CacheUnavailable}, // the last three for cache.cached_only alone
+	Events: queryEvents,
+	Run:    newQueryRun,
 })
 
 // Compile compiles a query to SQL, without running it.
@@ -68,7 +69,7 @@ var Compile = command.Define(command.Def[QueryCompileRequestParams, CompiledQuer
 		if err != nil {
 			return CompiledQuery{}, err
 		}
-		return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Input: in.Input.ran(compiled.Seeds), Columns: compiledColumns(compiled.Columns)}, nil
+		return CompiledQuery{SQL: compiled.SQL, AQL: compiled.AQL, Input: in.Input.filled(compiled.Seeds), Columns: compiledColumns(compiled.Columns)}, nil
 	},
 })
 

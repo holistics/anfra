@@ -78,7 +78,8 @@ Conventions for writing anfra's code.
 
 | Doc | Covers |
 |---|---|
-| [method naming](dev/method-naming.md) | Methods as messages: whose act a name is, hooks versus methods, one name for one action across layers. |
+| [design patterns](dev/design-pattern.md) | The established ideas behind our code's shape, and what each means here: stamp coupling and pass-through variables, values over places, functional core, value objects, ubiquitous language, command–query separation. |
+| [naming](dev/naming.md) | A name read where it is read (with its package, receiver and path); types as concepts, not baggage; acting versus answering; hooks; one name, one shape per family. |
 | [error mapping](dev/error-mapping.md) | One function per operation boundary deciding which error its caller sees: nil and the unmapped passing through, called at every exit. |
 
 For working on anfra itself, see [DEVELOPMENT.md](../DEVELOPMENT.md).

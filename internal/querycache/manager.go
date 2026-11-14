@@ -65,7 +65,7 @@ func NewManager(c Config) (*Manager, error) {
 	}
 	m := &Manager{
 		store: c.Store, namespace: c.Namespace,
-		readGrace: c.ReadGrace, leaseMargin: c.LeaseMargin, defaultLease: c.DefaultLease, now: c.Now,
+		readGrace: c.ReadGrace, leaseMargin: c.LeaseMargin, defaultLease: c.DefaultLease,
 	}
 	if m.readGrace <= 0 {
 		m.readGrace = DefaultReadGrace
@@ -76,11 +76,17 @@ func NewManager(c Config) (*Manager, error) {
 	if m.defaultLease <= 0 {
 		m.defaultLease = DefaultLease
 	}
-	if m.now == nil {
-		m.now = time.Now
+	clock := c.Now
+	if clock == nil {
+		clock = time.Now
 	}
+	m.now = func() time.Time { return ms(clock()) }
 	return m, nil
 }
+
+// ms is t in whole milliseconds, as a store keeps times: so an entry the
+// manager hands out has the times a lookup of it gives back.
+func ms(t time.Time) time.Time { return t.Truncate(time.Millisecond) }
 
 // Lookup is the entry a query accepts: the key's current entry, unexpired, and
 // younger than maxAge, the query's cache duration. So a query asking for
@@ -124,7 +130,7 @@ func (m *Manager) Begin(ctx context.Context, key Key, tags []Tag, aql, sql strin
 	now := m.now()
 	lease := now.Add(m.defaultLease)
 	if deadline, ok := ctx.Deadline(); ok {
-		lease = deadline.Add(m.leaseMargin)
+		lease = ms(deadline.Add(m.leaseMargin))
 	}
 	e := Entry{Namespace: m.namespace, Key: key, ExpiresAt: lease, AQL: aql, SQL: sql}
 	id, err := m.store.Begin(ctx, e, tags)
@@ -143,7 +149,7 @@ func (m *Manager) Begin(ctx context.Context, key Key, tags []Tag, aql, sql strin
 // used. ErrNotPending when it was swept or committed already.
 func (w *Write) Commit(ctx context.Context, rowCount, sizeBytes int64, columns []byte, duration time.Duration) (Entry, error) {
 	e := w.entry
-	e.CachedAt, e.ExpiresAt = w.started, w.started.Add(duration)
+	e.CachedAt, e.ExpiresAt = w.started, ms(w.started.Add(duration))
 	e.RowCount, e.SizeBytes, e.Columns = rowCount, sizeBytes, columns
 	if err := w.m.store.Commit(ctx, e, w.m.now()); err != nil {
 		return Entry{}, err

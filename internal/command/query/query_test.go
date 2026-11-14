@@ -129,7 +129,7 @@ func TestCacheOptionsRefusals(t *testing.T) {
 		{"a duration", CacheOptions{Duration: "1h"}, ""},
 		{"0s", CacheOptions{Duration: "0s"}, ""},
 		{"7 days", CacheOptions{Duration: "168h"}, ""},
-		{"cached only, until a hit can be read", CacheOptions{CachedOnly: true}, "cache.cached_only"},
+
 		{"not a duration", CacheOptions{Duration: "1 hour"}, "cache.duration"},
 		{"a day unit, which Go has none of", CacheOptions{Duration: "1d"}, "cache.duration"},
 		{"negative", CacheOptions{Duration: "-1m"}, "cache.duration"},
@@ -147,6 +147,12 @@ func TestCacheOptionsRefusals(t *testing.T) {
 				}
 			}
 		})
+	}
+	if err := (QueryRequestParams{QueryDefinition: aql, Cache: CacheOptions{CachedOnly: true}}).normalize().check(); err != nil {
+		t.Errorf("cached only, for query: %v", err)
+	}
+	if err := (QueryExportRequestParams{QueryDefinition: aql, Cache: CacheOptions{CachedOnly: true}}).check(); field(err) != "cache.cached_only" {
+		t.Errorf("cached only, for an export, which doesn't read the cache yet: %v", err)
 	}
 	if d, set := (CacheOptions{Duration: "90m"}).duration(); !set || d != 90*time.Minute {
 		t.Errorf("duration() = %v, %v", d, set)
@@ -170,7 +176,7 @@ func TestCompileTakesQuerysParams(t *testing.T) {
 // explicit, the default time zone, and anfra-node's seeds.
 func TestInputAsItRan(t *testing.T) {
 	in := QueryInput{Pagination: &Pagination{PageSize: 20}}
-	got := in.ran(&anfranode.Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"})
+	got := in.filled(&anfranode.Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"})
 	want := &QueryInput{Pagination: &Pagination{Page: 1, PageSize: 20}, Timezone: "Etc/UTC", Seeds: &Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ran = %+v, want %+v", got, want)
@@ -179,7 +185,7 @@ func TestInputAsItRan(t *testing.T) {
 		t.Error("ran changed the input it was given")
 	}
 	// An anfra-node that returns no seeds: the ones sent, if any.
-	if got := (QueryInput{Seeds: &Seeds{ReferenceTime: "2026-01-01T00:00:00Z"}}).ran(nil); got.Seeds.ReferenceTime != "2026-01-01T00:00:00Z" {
+	if got := (QueryInput{Seeds: &Seeds{ReferenceTime: "2026-01-01T00:00:00Z"}}).filled(nil); got.Seeds.ReferenceTime != "2026-01-01T00:00:00Z" {
 		t.Errorf("seeds = %+v, want the ones sent", got.Seeds)
 	}
 }
