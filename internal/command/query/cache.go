@@ -232,14 +232,16 @@ func (l cacheLookup) unavailable(ctx context.Context, qc command.QueryCache, err
 var unavailableWarning = CacheWarning{Code: cacheUnavailable,
 	Message: "The query ran without the cache, because the cache isn't working. " + unavailableMessage}
 
-// readCacheEntry answers the query from the entry e, a hit, through canal-query
-// within bounds, as a warehouse result is answered (query.CacheReadQuery).
-// The header's field names and column types are the miss's, which canal-lake
-// doesn't keep (it names a file's columns hcol0, hcol1, …): its Arrow types
-// and rows are the entry's. answered says whether the header reached h.
+// readCacheEntry streams the hit e to h through canal-query, within bounds, the
+// same way a warehouse result is streamed (query.CacheReadQuery). The rows come
+// from the cache file. The header is the one the miss returned, stored with the
+// entry, because canal-lake's header differs from it in three ways. canal-lake
+// names the columns hcol0, hcol1 and so on, gives each column the type DuckDB
+// reads from the file, and labels a timestamp with its own time zone (Etc/UTC
+// where the miss said UTC). answered says whether the header reached h.
 func readCacheEntry(ctx context.Context, canal *canalquery.Client, e querycache.Entry, bounds query.ResultBounds, h canalquery.Handler) (answered bool, err error) {
 	var stored canalquery.Header
-	_ = jsonkit.Unmarshal(e.Columns, &stored) // no types kept: canal-lake's own
+	_ = jsonkit.Unmarshal(e.Columns, &stored)
 	header := h.Header
 	h.Header = func(hd canalquery.Header) error {
 		answered = true
@@ -248,6 +250,9 @@ func readCacheEntry(ctx context.Context, canal *canalquery.Client, e querycache.
 		}
 		if len(stored.Types) == len(hd.Fields) {
 			hd.Types = stored.Types
+		}
+		if len(stored.ArrowTypes) == len(hd.Fields) {
+			hd.ArrowTypes = stored.ArrowTypes
 		}
 		return header(hd)
 	}

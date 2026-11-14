@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -182,7 +183,7 @@ func TestLookUpAndWrite(t *testing.T) {
 			t.Fatalf("the answer: %+v, the write %+v", a, w)
 		}
 		e, ok, err := qc.store.Lookup(ctx, querycache.Key(a.Key), time.Now())
-		if err != nil || !ok || e.RowCount != 1 || e.SizeBytes != 3 || !strings.Contains(string(e.Columns), `"a"`) || e.SQL != "select 1" {
+		if err != nil || !ok || e.RowCount != 1 || e.SizeBytes != 28 || !strings.Contains(string(e.Columns), `"a"`) || e.SQL != "select 1" {
 			t.Errorf("the entry: %+v, %v, %v", e, ok, err)
 		}
 		if !e.CachedAt.Equal(a.CachedAt) || !e.ExpiresAt.Equal(a.ExpiresAt) {
@@ -219,15 +220,19 @@ func TestLookUpAndWrite(t *testing.T) {
 		}
 	})
 
-	t.Run("a hit's header: the miss's types and names, the entry read", func(t *testing.T) {
+	t.Run("a hit's header: the miss's names and types, the entry read", func(t *testing.T) {
 		qc := newStandIn(ctx, t)
 		cached(t, qc, st)
 		l := lookUp(t, qc, CacheOptions{Duration: "1h"}, st)
 		var got canalquery.Header
 		reader, sent := canalLakeStub(t, false)
 		answered, err := readCacheEntry(ctx, reader, *l.hit, query.Unbounded, canalquery.Handler{Header: func(h canalquery.Header) error { got = h; return nil }, Row: func(canalquery.Row) error { return nil }})
-		if err != nil || !answered || len(got.Types) != 1 || got.Types[0] != "NUMERIC" || len(got.Fields) != 1 || got.Fields[0] != "a" {
+		if err != nil || !answered || fmt.Sprint(got.Fields, got.Types) != "[a t] [NUMERIC TIMESTAMPTZ]" {
 			t.Fatalf("header %+v, %v", got, err)
+		}
+		// canal-lake names its own session's zone; the miss said UTC
+		if zone, _ := jsonkit.Marshal(got.ArrowTypes[1]); !strings.Contains(string(zone), `"timezone":"UTC"`) {
+			t.Errorf("arrow type %s", zone)
 		}
 		entries, _ := (*sent)["dbconfig"].(map[string]any)["entries"].(map[string]any)
 		if (*sent)["dbtype"] != "canal_lake" || (*sent)["sql"] != "SELECT * FROM entry" || entries["entry"] != l.hit.LakeKey() || (*sent)["skip_cache"] != true {
@@ -331,11 +336,11 @@ func canalLakeStub(t *testing.T, gone bool) (*canalquery.Client, *map[string]any
 		case sent["dbtype"] == "canal_lake" && gone:
 			_, _ = w.Write([]byte(`{"__holistics_trailer__":true,"metadata":{},"http_code":422,"error":{"type":"QueryLocationNotFoundError","message":"query location not found"}}` + "\n"))
 		case sent["dbtype"] == "canal_lake":
-			_, _ = w.Write([]byte(`{"__holistics_header__":true,"fields":["hcol0"],"types":["DECIMAL(18,2)"],"arrow_types":[{"type":"decimal","precision":18,"scale":2}]}` + "\n" +
-				`["1.00"]` + "\n" + `{"__holistics_trailer__":true,"metadata":{},"http_code":200}` + "\n"))
+			_, _ = w.Write([]byte(`{"__holistics_header__":true,"fields":["hcol0","hcol1"],"types":["DECIMAL(18,2)","TIMESTAMP WITH TIME ZONE"],"arrow_types":[{"type":"decimal","precision":18,"scale":2},{"type":"timestamp","unit":"MICROSECOND","timezone":"Etc/UTC"}]}` + "\n" +
+				`["1.00","2026-11-14 00:00:00+00"]` + "\n" + `{"__holistics_trailer__":true,"metadata":{},"http_code":200}` + "\n"))
 		default:
-			_, _ = w.Write([]byte(`{"__holistics_header__":true,"fields":["a"],"types":["NUMERIC"],"arrow_types":[{"type":"decimal","precision":18,"scale":2}]}` + "\n" +
-				`[1]` + "\n" + `{"__holistics_trailer__":true,"metadata":{},"http_code":200}` + "\n"))
+			_, _ = w.Write([]byte(`{"__holistics_header__":true,"fields":["a","t"],"types":["NUMERIC","TIMESTAMPTZ"],"arrow_types":[{"type":"decimal","precision":18,"scale":2},{"type":"timestamp","unit":"MICROSECOND","timezone":"UTC"}]}` + "\n" +
+				`[1,"2026-11-14 00:00:00+00"]` + "\n" + `{"__holistics_trailer__":true,"metadata":{},"http_code":200}` + "\n"))
 		}
 	}))
 	t.Cleanup(srv.Close)
