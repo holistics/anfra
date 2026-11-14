@@ -1,3 +1,44 @@
+## [0.21.0](https://github.com/holistics/anfra/compare/v0.20.0...v0.21.0) (2026-11-14)
+
+### Features
+
+* **appserve:** replace Reload with the Refresh command ([f2f74a6](https://github.com/holistics/anfra/commit/f2f74a6153b1d33f607091aec5a10d6373cd2953))
+* **appserve:** draw Refresh with no detail tooltip ([2d31b75](https://github.com/holistics/anfra/commit/2d31b75ca172ac573eca013c210a3a56df78c33e))
+* **cli:** offer cloud servers by region at login ([717037d](https://github.com/holistics/anfra/commit/717037de0a01768f635f7b0e1ba970a90b57d22b))
+* **cli:** support nested flags, camelCase, snake_case, kebab-case flags ([02075c4](https://github.com/holistics/anfra/commit/02075c4ce0ebff2d37c51e1efb6851beeda6ba08))
+* **engine.query:** carry a result cache's fields in core.query ([593487b](https://github.com/holistics/anfra/commit/593487b09846239e030414e5d25868166b6ef5f8))
+* **engine.query:** leave a result cache's fields out of core.query ([26c8c5e](https://github.com/holistics/anfra/commit/26c8c5e157aa863750ecd18c6cff569814fbf36a))
+* **sdk:** refresh a Data App from the host, with a Refresh command ([342b105](https://github.com/holistics/anfra/commit/342b105e39170ce59c7a2ba9818ebfb83721e9e4))
+* **sdk:** leave the result cache out of core.refresh and the Refresh command ([e20348c](https://github.com/holistics/anfra/commit/e20348ced54485f8ca13fcd0e9660772d3651658))
+* **sdk:** run one query alone with query.execute ([8fb912e](https://github.com/holistics/anfra/commit/8fb912e072f4b510e3bb5feeb8161194547ca112))
+* **sdk:** attribute requests by the query the frame stamps them with ([3fb4dd6](https://github.com/holistics/anfra/commit/3fb4dd6e4ed9e2384acd8ffa0c7f903ae36dc460))
+* **sdk.app:** run every app's queries for the host, and tell it what came from a cache ([f9ae2fa](https://github.com/holistics/anfra/commit/f9ae2fa38686f493ebd3db7b2e5fe415d3497b84))
+* **sdk.app:** edit and remove queries, controls and edges at runtime ([c260b31](https://github.com/holistics/anfra/commit/c260b31ffdd406934a6b65b054fc7d8f1f410af9))
+* **skills:** teach app.refresh's bustCache and the host's Refresh ([a770b7b](https://github.com/holistics/anfra/commit/a770b7b41ae75dff5c56e563f6ea3ffec585f4ef))
+* **skills:** teach query.execute ([7d73481](https://github.com/holistics/anfra/commit/7d73481fec7d106956b96e5ed00cedaf8bb7098f))
+* **skills:** teach editing and removing a data app's entities at runtime ([1909535](https://github.com/holistics/anfra/commit/19095353b88375a793ef6f50df02c86c46526600))
+
+### Bug Fixes
+
+* **cli:** report a question canceled with esc as interrupted ([ed4560b](https://github.com/holistics/anfra/commit/ed4560b5150f041e2ac3c02e345ef370e7176d56))
+* **cli:** fix results that aren't an object  (e.g. ingest) in the pretty format ([3facaa0](https://github.com/holistics/anfra/commit/3facaa0efa4351b77725cfd8781b782d8362532e))
+* **sdk:** drop Refresh's shortcut, which a frame's forwarded key could not run ([19ee28d](https://github.com/holistics/anfra/commit/19ee28dd407c12413ea41a85e14a0dcd3541e303))
+* **sdk:** keep a query dirty after fetchMore with an unapplied change ([4d74d17](https://github.com/holistics/anfra/commit/4d74d174db5dc1ce2aaa758e1cbaf3067c2a3fb4))
+* **sdk:** stamp the underlying rows' requests with their query ([aad28de](https://github.com/holistics/anfra/commit/aad28def7e9d49599017fe36e9b3137fdf6269f9))
+* **sdk:** keep the rows behind a point out of a query's own result in inspect ([1a35cf3](https://github.com/holistics/anfra/commit/1a35cf336154a80d68ca3b1010bbc8e6c668d9ce))
+* **sdk:** start a query created again by its name with no requests in inspect ([123e385](https://github.com/holistics/anfra/commit/123e3851989df05300049d6d6535c7be81632acf))
+* **sdk:** let the kernel add the query id to a plugin's stamp ([87d29db](https://github.com/holistics/anfra/commit/87d29dbefb065c6e17e38e4b2793da30fd864ccd))
+* **sdk.app:** drop work in flight and stale paging when a query is updated ([b9b87fc](https://github.com/holistics/anfra/commit/b9b87fcbcb589f426105fcc13cea39737ba0b0b0))
+* **sdk.app:** count edited, unrun and unlinked queries in app.hasChanges ([e61108e](https://github.com/holistics/anfra/commit/e61108eb11081472d6b8202fa9b7413c31f66d87))
+* **sdk.app:** leave failed runs and runs in flight out of app.hasChanges ([b7267cb](https://github.com/holistics/anfra/commit/b7267cb110a79c7f443e7722ba05e8ce3ff85db6))
+* **skills:** teach app.refresh with no bustCache ([8a0c902](https://github.com/holistics/anfra/commit/8a0c902e346f16cc9497a4bf5566895dbf692b69))
+* **skills:** say what app.hasChanges counts and what query.update drops ([f119b4a](https://github.com/holistics/anfra/commit/f119b4ab9c89bce4fe61279a53966248f57ef1f4))
+* **skills:** keep the data app API reference to the shape of runtime edits ([04cd059](https://github.com/holistics/anfra/commit/04cd059d9de493bb84e9f7cb24d1b4da80dd9454))
+
+### Build
+
+* take login's cloud servers and support email from manifest.yml ([5503bd8](https://github.com/holistics/anfra/commit/5503bd83c11df82d4605fc3e12cdc191e93831a1))
+* anfra-node 0.14.0 - new query input structure and cache key ([7a4a55f](https://github.com/holistics/anfra/commit/7a4a55f0def1bf4dd3f577a0d4fe4c432841eb09))
 ## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
 
 ### Features

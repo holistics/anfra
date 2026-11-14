@@ -1,3 +1,16 @@
+## [0.21.0](https://github.com/holistics/anfra/compare/v0.20.0...v0.21.0) (2026-11-14)
+
+### Features
+
+* **skills:** teach app.refresh's bustCache and the host's Refresh ([a770b7b](https://github.com/holistics/anfra/commit/a770b7b41ae75dff5c56e563f6ea3ffec585f4ef))
+* **skills:** teach query.execute ([7d73481](https://github.com/holistics/anfra/commit/7d73481fec7d106956b96e5ed00cedaf8bb7098f))
+* **skills:** teach editing and removing a data app's entities at runtime ([1909535](https://github.com/holistics/anfra/commit/19095353b88375a793ef6f50df02c86c46526600))
+
+### Bug Fixes
+
+* **skills:** teach app.refresh with no bustCache ([8a0c902](https://github.com/holistics/anfra/commit/8a0c902e346f16cc9497a4bf5566895dbf692b69))
+* **skills:** say what app.hasChanges counts and what query.update drops ([f119b4a](https://github.com/holistics/anfra/commit/f119b4ab9c89bce4fe61279a53966248f57ef1f4))
+* **skills:** keep the data app API reference to the shape of runtime edits ([04cd059](https://github.com/holistics/anfra/commit/04cd059d9de493bb84e9f7cb24d1b4da80dd9454))
 ## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
 
 ### Features
