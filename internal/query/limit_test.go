@@ -64,7 +64,7 @@ var sqlSource = datasource.DataSource{Name: "warehouse", DBType: "postgresql", C
 // ungoverned is "select 1", as written, on sqlSource.
 func ungoverned(t *testing.T) UngovernedSQL {
 	t.Helper()
-	sql, err := ConnectUngoverned(context.Background(), dataperm.Ungoverned(), datasource.Set{"warehouse": sqlSource}, "warehouse", "select 1")
+	sql, err := InDataSourceUngoverned(context.Background(), dataperm.Ungoverned(), datasource.Set{"warehouse": sqlSource}, "warehouse", "select 1")
 	if err != nil {
 		t.Fatal(err)
 	}

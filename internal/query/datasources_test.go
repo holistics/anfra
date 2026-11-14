@@ -78,19 +78,19 @@ func TestRunningAsksForOneConnection(t *testing.T) {
 // for.
 func TestUngovernedSQL(t *testing.T) {
 	spy := &spySources{set: warehouse}
-	if _, err := ConnectUngoverned(context.Background(), dataperm.Governed(nil), spy, "warehouse", "select 1"); !errors.Is(err, errcode.DataPermsUnenforceable) {
+	if _, err := InDataSourceUngoverned(context.Background(), dataperm.Governed(nil), spy, "warehouse", "select 1"); !errors.Is(err, errcode.DataPermsUnenforceable) {
 		t.Errorf("a governed caller: %v, want data_perms_unenforceable", err)
 	}
 	if len(spy.connections) != 0 {
 		t.Errorf("a governed caller's SQL asked for connections %v", spy.connections)
 	}
-	if _, err := ConnectUngoverned(context.Background(), dataperm.Ungoverned(), spy, "warehouse", "select 1"); err != nil {
+	if _, err := InDataSourceUngoverned(context.Background(), dataperm.Ungoverned(), spy, "warehouse", "select 1"); err != nil {
 		t.Fatal(err)
 	}
 	if len(spy.modes) != 1 || spy.modes[0] != datasource.DataPermModeUngoverned {
 		t.Errorf("SQL as written was connected as %v, want ungoverned", spy.modes)
 	}
-	if _, err := ConnectUngoverned(context.Background(), dataperm.Ungoverned(), spy, "gone", "select 1"); !errors.Is(err, datasource.ErrUnknown) {
+	if _, err := InDataSourceUngoverned(context.Background(), dataperm.Ungoverned(), spy, "gone", "select 1"); !errors.Is(err, datasource.ErrUnknown) {
 		t.Errorf("an unknown data source: %v, want ErrUnknown", err)
 	}
 }

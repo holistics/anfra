@@ -161,6 +161,10 @@ type Statement struct {
 	LakeKey string
 }
 
+// TypeLakeFileGone is the Error.Type of a canal-lake read whose entry's file
+// isn't there: swept, or deleted by hand.
+const TypeLakeFileGone = "QueryLocationNotFoundError"
+
 // TypeResultTooLarge is the Error.Type of a result past its MaxResultBytes.
 const TypeResultTooLarge = "ResultTooLarge"
 

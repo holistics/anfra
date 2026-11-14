@@ -28,7 +28,7 @@ type Key string
 type EntryID int64
 
 // Entry is a physical entry: one write of a key's result, with its own file in
-// canal-lake. Whether it answers the key now is the store's to say: Lookup and
+// canal-lake. Its times are whole milliseconds, as a store keeps them. Whether it answers the key now is the store's to say: Lookup and
 // Get return only an entry that does; Sweepable returns ones that don't.
 type Entry struct {
 	ID EntryID

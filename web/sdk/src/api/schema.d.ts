@@ -496,6 +496,18 @@ export interface components {
             /** @constant */
             status: 500;
         };
+        /** @description The query's result isn't cached. */
+        ErrorBodyCacheMiss: {
+            /** @constant */
+            code: "cache_miss";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "client";
+            /** @constant */
+            status: 500;
+        };
         /** @description The query cache isn't working. */
         ErrorBodyCacheUnavailable: {
             /** @constant */
@@ -1621,14 +1633,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description internal_server_error */
+            /** @description internal_server_error, cache_miss, cache_disabled, cache_unavailable */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyCacheMiss"] | components["schemas"]["ErrorBodyCacheDisabled"] | components["schemas"]["ErrorBodyCacheUnavailable"];
                     };
                 };
             };

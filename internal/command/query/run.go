@@ -9,6 +9,7 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apikit"
@@ -67,9 +68,9 @@ type QuerySummary struct {
 	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without input.pagination, every row was sent, and this is false."`
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
-	BytesScanned *int64       `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
-	Cache        *CacheResult `json:"cache,omitempty" doc:"what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
-	Timings      Timings      `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
+	BytesScanned *int64      `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
+	Cache        CacheResult `json:"cache,omitzero" doc:"what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
+	Timings      Timings     `json:"timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 }
 
 func (QueryCompiled) queryEvent()  {}
@@ -105,7 +106,7 @@ type queryRun struct {
 // data source, a malformed limit: — it refuses here, before any work, as an
 // ordinary error rather than in a stream.
 func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequestParams) (QueryRun, error) {
-	q := queryRun{cc: cc, in: in, limit: query.NoLimit}
+	r := queryRun{cc: cc, in: in, limit: query.NoLimit}
 	if in.Lang == "sql" {
 		sql, err := in.ungoverned(ctx, cc)
 		if err != nil {
@@ -114,7 +115,7 @@ func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequest
 		if err := command.RequireSidecars(cc, command.Sidecars{CanalQuery: true}); err != nil {
 			return QueryRun{}, err
 		}
-		q.sql = sql
+		r.sql = sql
 	} else {
 		aql, limit, err := in.aql()
 		if err != nil {
@@ -127,9 +128,9 @@ func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequest
 		if err != nil {
 			return QueryRun{}, err
 		}
-		q.src, q.aql, q.limit = src, aql, limit
+		r.src, r.aql, r.limit = src, aql, limit
 	}
-	return QueryRun{Page: q.page, Stream: q.stream}, nil
+	return QueryRun{Page: r.page, Stream: r.stream}, nil
 }
 
 // sink receives a run's result as it is produced.
@@ -140,7 +141,6 @@ type sink struct {
 	scanned   func(bytes int64)
 	header    func(columns []Column, fields []string) error
 	row       func(canalquery.Row) error
-	cache     func(*CacheResult) // once the run has ended well
 }
 
 // Timings and TimedStep are a run's timeline, command's (CommandContext's
@@ -202,63 +202,105 @@ func (t *tracker) progress(p canalquery.Progress) error {
 
 func (t *tracker) timings() Timings { return Timings{Steps: t.steps, EndMs: t.since()} }
 
-// execute compiles the query, when it is AQL, and runs it, its result truncated
-// at truncate rows (query.NoLimit: none) and failing past the host's maximum;
-// and answers its timings. The invocation's query observer is told of it as it
-// goes (observation).
-func (q queryRun) execute(ctx context.Context, truncate int, s sink) (_ Timings, err error) {
-	canal := q.cc.Clients.CanalQuery
-	bounds := query.Bounded(truncate, q.cc.QueryLimits)
-	t := newTracker(s)
-	o := observe(q.cc, t)
-	defer func() { o.finished(ctx, err) }()
-	handler := func(columns []anfranode.ExploreColumn) canalquery.Handler {
-		return o.handler(ctx, canalquery.Handler{
-			Header: func(h canalquery.Header) error { return s.header(describeColumns(h, columns), h.Fields) },
-			Row:    s.row,
-		})
+// statement is a query as the query cache sees it: what runs, in its data
+// source, and what describes it.
+type statement struct {
+	query       query.DataSourceQuery // the SQL, in its data source
+	aql         string                // the AQL that compiled, its Query Input applied; "" for SQL
+	compilerKey string                // anfra-node's key; "" for SQL, or from an anfra-node without one
+	dataset     string                // the dataset an AQL query ran against; "" for SQL
+}
+
+// tags are what a clean selects the statement's cached results by: its data
+// source, and an AQL query's dataset (docs/designs/query-cache.md#tags). The
+// models it read come when anfra-node says which they are.
+func (st statement) tags() []querycache.Tag {
+	tags := []querycache.Tag{{Kind: querycache.TagDataSource, Value: st.query.DataSource()}}
+	if st.dataset != "" {
+		tags = append(tags, querycache.Tag{Kind: querycache.TagDataset, Value: st.dataset})
 	}
-	// run streams p, through the query cache.
-	run := func(p query.Prepared, k keyInput, aql, sql string, columns []anfranode.ExploreColumn) error {
-		c := q.startCache(ctx, p, k, aql, sql)
-		t.requested()
-		err := c.prepared(p).Stream(ctx, canal, bounds, c.handler(handler(columns)))
-		c.finish(ctx, err)
-		if err != nil {
-			return asQueryFailed(err)
-		}
-		s.cache(c.result)
-		return nil
-	}
-	if q.in.Lang == "sql" {
-		if err := s.compiled(q.in.Query, "", nil); err != nil {
-			return Timings{}, err
-		}
-		o.compiled(ctx, q.in.DataSource, "", "", q.in.Query)
-		if err := run(q.sql.Prepared, keyInput{sql: q.in.Query, truncate: truncate}, "", q.in.Query, nil); err != nil {
-			return Timings{}, err
-		}
-		return t.timings(), nil
+	return tags
+}
+
+// compile is the AQL query compiled, its step on t's timeline: nil for a SQL
+// query, which runs as written.
+func (r queryRun) compile(ctx context.Context, t *tracker) (*anfranode.CompileToSQLResult, error) {
+	if r.in.Lang == "sql" {
+		return nil, nil
 	}
 	if err := t.begin("compiling_query", 0); err != nil {
-		return Timings{}, err
+		return nil, err
 	}
-	compiled, err := compileAQL(ctx, q.cc, q.src, q.in.Dataset, q.aql, q.in.run())
+	compiled, err := compileAQL(ctx, r.cc, r.src, r.in.Dataset, r.aql, r.in.run())
 	if err != nil {
-		return Timings{}, err
+		return nil, err
 	}
-	if err := s.compiled(compiled.SQL, compiled.AQL, q.in.Input.ran(compiled.Seeds)); err != nil {
-		return Timings{}, err
+	return &compiled, nil
+}
+
+// inDataSource is the query in its data source: an AQL query's SQL in the one
+// its dataset targets, or a SQL query in the one it named, as it was accepted.
+func (r queryRun) inDataSource(ctx context.Context, compiled *anfranode.CompileToSQLResult) (query.DataSourceQuery, error) {
+	if compiled == nil {
+		return r.sql.DataSourceQuery, nil
 	}
-	o.compiled(ctx, compiled.DataSource.Name, q.in.Dataset, compiled.AQL, compiled.SQL)
-	p, err := query.Prepare(ctx, q.src.DataSources, compiled)
+	return query.InDataSource(ctx, r.src.DataSources, *compiled)
+}
+
+// ran is what a run produced besides its rows.
+type ran struct {
+	timings Timings
+	cache   CacheResult
+}
+
+// execute runs the query: compiled, when it is AQL, then answered through the
+// query cache, its result truncated at truncate rows (query.NoLimit: none) and
+// failing past the host's maximum. The invocation's query observer is told of
+// it as it goes (observation).
+func (r queryRun) execute(ctx context.Context, truncate int, s sink) (_ ran, err error) {
+	t := newTracker(s)
+	o := observe(r.cc, t)
+	defer func() { o.finished(ctx, err) }()
+
+	compiled, err := r.compile(ctx, t)
 	if err != nil {
-		return Timings{}, asQueryFailed(err)
+		return ran{}, err
 	}
-	if err := run(p, keyInput{compilerKey: compiled.CacheKey, truncate: truncate, dataset: q.in.Dataset}, compiled.AQL, compiled.SQL, compiled.Columns); err != nil {
-		return Timings{}, err
+	// What runs, and what describes it: the SQL as written, or as compiled.
+	sql, dataSource := r.in.Query, r.in.DataSource
+	var (
+		aql, compilerKey, dataset string
+		input                     *QueryInput
+		columns                   []anfranode.ExploreColumn
+	)
+	if compiled != nil {
+		sql, dataSource = compiled.SQL, compiled.DataSource.Name
+		aql, compilerKey, dataset = compiled.AQL, compiled.CacheKey, r.in.Dataset
+		input, columns = r.in.Input.filled(compiled.Seeds), compiled.Columns
 	}
-	return t.timings(), nil
+
+	// Announced before it reaches its data source, so a query on one the repo
+	// lacks still shows its SQL.
+	if err := s.compiled(sql, aql, input); err != nil {
+		return ran{}, err
+	}
+	o.compiled(ctx, dataSource, dataset, aql, sql)
+
+	dq, err := r.inDataSource(ctx, compiled)
+	if err != nil {
+		return ran{}, asQueryFailed(err)
+	}
+	st := statement{query: dq, aql: aql, compilerKey: compilerKey, dataset: dataset}
+	h := o.handler(ctx, canalquery.Handler{
+		Header: func(hd canalquery.Header) error { return s.header(describeColumns(hd, columns), hd.Fields) },
+		Row:    s.row,
+	})
+	bounds := query.Bounded(truncate, r.cc.QueryLimits)
+	cache, err := st.runCached(ctx, r, t, r.cc.Clients.CanalQuery, bounds, h)
+	if err != nil {
+		return ran{}, asQueryFailed(err)
+	}
+	return ran{timings: t.timings(), cache: cache}, nil
 }
 
 // observation is a query as the invocation's observer is told of it: once
@@ -336,59 +378,57 @@ func asQueryFailed(err error) error {
 // host's page bytes. With page_size, the page is compiled into the SQL, and a
 // full page may have more after it. Without, it is the first MaxPageSize rows,
 // and one more row asked for says whether there are more.
-func (q queryRun) page(ctx context.Context) (QueryResult, error) {
-	keep, truncate := q.in.Input.pageSize(), query.NoLimit
+func (r queryRun) page(ctx context.Context) (QueryResult, error) {
+	keep, truncate := r.in.Input.pageSize(), query.NoLimit
 	if keep == 0 {
 		keep, truncate = MaxPageSize, MaxPageSize+1
-		if q.limit != query.NoLimit && q.limit <= MaxPageSize {
-			keep, truncate = q.limit, q.limit
+		if r.limit != query.NoLimit && r.limit <= MaxPageSize {
+			keep, truncate = r.limit, r.limit
 		}
 	}
-	maxBytes := q.cc.QueryLimits.PageBytes()
-	r := QueryResult{Result: QueryRows{Records: []canalquery.Row{}}}
+	maxBytes := r.cc.QueryLimits.PageBytes()
+	result := QueryResult{Result: QueryRows{Records: []canalquery.Row{}}}
 	size := 0
-	timings, err := q.execute(ctx, truncate, sink{
+	ran, err := r.execute(ctx, truncate, sink{
 		status:    func(string) error { return nil },
 		warehouse: func(string) error { return nil },
 		scanned:   func(int64) {},
 		compiled: func(sql, aql string, input *QueryInput) error {
-			r.SQL, r.AQL, r.Input = sql, aql, input
+			result.SQL, result.AQL, result.Input = sql, aql, input
 			return nil
 		},
 		header: func(columns []Column, fields []string) error {
-			r.Columns, r.Result.Fields = columns, fields
+			result.Columns, result.Result.Fields = columns, fields
 			return nil
 		},
-		cache: func(c *CacheResult) { r.Cache = c },
 		row: func(row canalquery.Row) error {
-			if len(r.Result.Records) == keep {
-				r.HasMore = true // the row past the page
+			if len(result.Result.Records) == keep {
+				result.HasMore = true // the row past the page
 				return nil
 			}
 			if size += len(row); size > maxBytes {
 				return query.NewPageTooLarge(maxBytes)
 			}
-			r.Result.Records = append(r.Result.Records, row)
+			result.Result.Records = append(result.Result.Records, row)
 			return nil
 		},
 	})
 	if err != nil {
 		return QueryResult{}, err
 	}
-	if n := q.in.Input.pageSize(); n > 0 {
-		r.HasMore = len(r.Result.Records) == n
+	if n := r.in.Input.pageSize(); n > 0 {
+		result.HasMore = len(result.Result.Records) == n
 	}
-	r.Timings = timings
-	return r, nil
+	result.Timings, result.Cache = ran.timings, ran.cache
+	return result, nil
 }
 
 // stream is the query's events: compiled, header, then its rows in batches,
 // then summary. With page_size, the rows are that page; without, every row, up
 // to the host's maximum (query.Limits).
-func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) error {
+func (r queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) error {
 	batch, size, count := []canalquery.Row{}, 0, 0
 	var scanned *int64
-	var cache *CacheResult
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
@@ -397,7 +437,7 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 		batch, size = []canalquery.Row{}, 0
 		return err
 	}
-	timings, err := q.execute(ctx, q.limit, sink{
+	ran, err := r.execute(ctx, r.limit, sink{
 		status: events.Status,
 		compiled: func(sql, aql string, input *QueryInput) error {
 			return events.Emit(QueryCompiled{Type: "compiled", SQL: sql, AQL: aql, Input: input})
@@ -406,7 +446,6 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 			return events.Emit(QueryWarehouse{Type: "warehouse_query", ID: id})
 		},
 		scanned: func(bytes int64) { scanned = &bytes },
-		cache:   func(c *CacheResult) { cache = c },
 		header: func(columns []Column, fields []string) error {
 			return events.Emit(QueryHeader{Type: "header", Columns: columns, Fields: fields})
 		},
@@ -424,6 +463,6 @@ func (q queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 	if err := flush(); err != nil {
 		return err
 	}
-	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: q.in.Input.pageSize() > 0 && count == q.in.Input.pageSize(),
-		BytesScanned: scanned, Cache: cache, Timings: timings})
+	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: r.in.Input.pageSize() > 0 && count == r.in.Input.pageSize(),
+		BytesScanned: scanned, Cache: ran.cache, Timings: ran.timings})
 }

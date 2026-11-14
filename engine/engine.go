@@ -229,11 +229,16 @@ var (
 	// AllowLocalRepo. A host mistake, never declared by an op.
 	LocalRepoNotAllowed = errcode.LocalRepoNotAllowed
 
-	// CacheDisabled: an operation on the query cache (core.cache.clean) when
-	// the invocation has none, or it is turned off.
+	// CacheDisabled: an operation on the query cache (core.cache.clean), or a
+	// query with cache.cached_only, when the invocation has none, or it is
+	// turned off.
 	CacheDisabled = errcode.CacheDisabled
-	// CacheUnavailable: an operation on the query cache when its store can't
-	// be used. The cause went to the cache's Report.
+	// CacheMiss: a query with cache.cached_only whose result isn't cached, or
+	// is older than its cache.duration accepts. Nothing ran on the warehouse.
+	CacheMiss = errcode.CacheMiss
+	// CacheUnavailable: an operation on the query cache, or a query with
+	// cache.cached_only, when the cache can't be used. The cause went to the
+	// cache's Report.
 	CacheUnavailable = errcode.CacheUnavailable
 )
 
