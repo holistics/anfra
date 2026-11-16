@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/repo"
@@ -182,8 +183,9 @@ type Source struct {
 // CompileRequest builds the sidecar compile request for a (dataset, aql) against
 // src, with its data sources' dialects and no connection. Shared by SQL
 // generation and AQL validation (both feed the same {repo, datasetFqn, aql,
-// dataSources} to the sidecar).
-func CompileRequest(ctx context.Context, src Source, dataset, aql string) (anfranode.CompileToSQLRequest, error) {
+// dataSources} to the sidecar). For a governed caller (perms), the query's own
+// SQL passthrough calls are refused: SQL as written, which no rule applies to.
+func CompileRequest(ctx context.Context, src Source, perms dataperm.Set, dataset, aql string) (anfranode.CompileToSQLRequest, error) {
 	dialects, err := src.DataSources.Dialects(ctx)
 	if err != nil {
 		return anfranode.CompileToSQLRequest{}, fmt.Errorf("data source dialects: %w", err)
@@ -195,7 +197,10 @@ func CompileRequest(ctx context.Context, src Source, dataset, aql string) (anfra
 		DataSources: anfranode.CompileDataSources(dialects),
 		// The AQL v2 compiler is off: anfra-node compiles and type-checks with
 		// the legacy one.
-		Options: &anfranode.CompileOptions{UseV2Compiler: false},
+		Options: &anfranode.CompileOptions{
+			UseV2Compiler:                     false,
+			AllowAdhocSQLPassthroughFunctions: !perms.Governed(),
+		},
 	}, nil
 }
 
@@ -217,8 +222,8 @@ type Run struct {
 // refusal (a dataset that cannot be used, the run's shaping) is returned as it
 // is, for the command to place on its arg (anfranode.Violation). The result's
 // AQL is the query with run's Query Input applied.
-func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, aql string, run Run) (anfranode.CompileToSQLResult, error) {
-	req, err := CompileRequest(ctx, src, dataset, aql)
+func Compile(ctx context.Context, node *anfranode.Client, src Source, perms dataperm.Set, dataset, aql string, run Run) (anfranode.CompileToSQLResult, error) {
+	req, err := CompileRequest(ctx, src, perms, dataset, aql)
 	if err != nil {
 		return anfranode.CompileToSQLResult{}, err
 	}

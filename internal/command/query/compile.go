@@ -22,7 +22,7 @@ func sourceOf(cc command.CommandContext) (query.Source, error) {
 // compileAQL compiles a query (see query.Compile) against src, with anfra-node's
 // refusal of what shapes the run as the violation of the arg at fault.
 func compileAQL(ctx context.Context, cc command.CommandContext, src query.Source, dataset, aql string, run query.Run) (anfranode.CompileToSQLResult, error) {
-	compiled, err := query.Compile(ctx, cc.Clients.Node, src, dataset, aql, run)
+	compiled, err := query.Compile(ctx, cc.Clients.Node, src, cc.DataPerms, dataset, aql, run)
 	if v, ok := runViolation(err); ok {
 		return anfranode.CompileToSQLResult{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 	}
@@ -48,7 +48,7 @@ var datasetArgs = anfranode.ArgMap{"datasetFqn": "dataset"}
 // checkAQL type-checks a query (see query.Check) against src, with anfra-node's
 // refusal of the dataset as the violation of the dataset arg.
 func checkAQL(ctx context.Context, cc command.CommandContext, src query.Source, dataset, aql string) (query.QueryValidation, error) {
-	res, err := query.Check(ctx, cc.Clients.Node, src, dataset, aql)
+	res, err := query.Check(ctx, cc.Clients.Node, src, cc.DataPerms, dataset, aql)
 	if v, ok := anfranode.Violation(err, datasetArgs); ok {
 		return query.QueryValidation{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 	}

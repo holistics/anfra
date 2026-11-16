@@ -46,7 +46,7 @@ var warehouse = datasource.Set{
 // Compiling asks for every data source's dialect and never for a connection.
 func TestCompilingAsksOnlyForDialects(t *testing.T) {
 	spy := &spySources{set: warehouse}
-	req, err := CompileRequest(context.Background(), Source{Repo: repo.Local{Dir: "/r", ID: "r"}.Repo(), DataSources: spy}, "d", "q")
+	req, err := CompileRequest(context.Background(), Source{Repo: repo.Local{Dir: "/r", ID: "r"}.Repo(), DataSources: spy}, dataperm.Ungoverned(), "d", "q")
 	if err != nil {
 		t.Fatal(err)
 	}

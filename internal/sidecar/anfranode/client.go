@@ -426,11 +426,15 @@ type PivotPage struct {
 
 // CompileOptions are the compile options anfra sets. TimezoneRegion is an IANA
 // zone, for relative dates and date truncation. UseV2Compiler picks the AQL v2
-// pipeline for compiling and type-checking; anfra-node defaults it to true, so
-// it is always sent.
+// pipeline for compiling and type-checking. AllowAdhocSQLPassthroughFunctions
+// allows the query's own calls of the SQL passthrough functions (`sql_text`,
+// `agg_number`, ...): SQL as written, which nothing can apply a rule to; false
+// refuses each such call as query_invalid, while a dataset's fields that wrap
+// one stay allowed. anfra-node defaults both to true, so both are always sent.
 type CompileOptions struct {
-	TimezoneRegion string `json:"timezoneRegion,omitempty"`
-	UseV2Compiler  bool   `json:"useV2Compiler"`
+	TimezoneRegion                    string `json:"timezoneRegion,omitempty"`
+	UseV2Compiler                     bool   `json:"useV2Compiler"`
+	AllowAdhocSQLPassthroughFunctions bool   `json:"allowAdhocSqlPassthroughFunctions"`
 }
 
 type CompileToSQLResult struct {

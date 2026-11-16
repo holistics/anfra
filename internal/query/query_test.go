@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -104,7 +105,7 @@ func TestCompileRequestCarriesTheRepo(t *testing.T) {
 		"revision": {revision, map[string]any{"repoId": "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b",
 			"revision": "0b6f1c2e-8d4a-4f3b-9a1e-2c3d4e5f6a7b@0123456789abcdef0123456789abcdef01234567"}},
 	} {
-		req, err := CompileRequest(context.Background(), Source{Repo: tc.r, DataSources: sources}, "ecommerce", "products | select(products.name)")
+		req, err := CompileRequest(context.Background(), Source{Repo: tc.r, DataSources: sources}, dataperm.Ungoverned(), "ecommerce", "products | select(products.name)")
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -123,6 +124,38 @@ func TestCompileRequestCarriesTheRepo(t *testing.T) {
 		}
 		if ds, ok := wire["dataSources"].(map[string]any)["demo"].(map[string]any); !ok || ds["dbtype"] != "postgresql" {
 			t.Errorf("%s: wire dataSources = %v", name, wire["dataSources"])
+		}
+	}
+}
+
+// A governed caller's query may not call the SQL passthrough functions itself:
+// they are SQL as written, which no rule applies to. An ungoverned caller's may.
+func TestCompileRequestAllowsSQLPassthroughOnlyUngoverned(t *testing.T) {
+	sources := datasource.Set{"demo": {Name: "demo", DBType: "postgresql"}}
+	src := Source{Repo: repo.Local{Dir: "/r", ID: "r"}.Repo(), DataSources: sources}
+	for name, tc := range map[string]struct {
+		perms dataperm.Set
+		want  bool
+	}{
+		"governed":   {dataperm.Governed(nil), false},
+		"ungoverned": {dataperm.Ungoverned(), true},
+	} {
+		req, err := CompileRequest(context.Background(), src, tc.perms, "ecommerce", "products | select(products.name)")
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		raw, err := jsonkit.Marshal(req)
+		if err != nil {
+			t.Fatalf("%s: marshal: %v", name, err)
+		}
+		var wire struct {
+			Options map[string]any `json:"options"`
+		}
+		if err := jsonkit.Unmarshal(raw, &wire); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		if got := wire.Options["allowAdhocSqlPassthroughFunctions"]; got != tc.want {
+			t.Errorf("%s: wire options.allowAdhocSqlPassthroughFunctions = %v, want %v", name, got, tc.want)
 		}
 	}
 }

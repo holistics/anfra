@@ -53,7 +53,7 @@ Data source credentials live in the repo's `.anfra/data_sources.yml`.
 
 ## The engine makes no access decisions
 
-The engine has no principal, role, policy or tenant. A platform decides whether a caller may run a command, and passes the outcome as `DataPerms`: whether the caller's queries are governed (only through the semantic layer, the repo's rules applied) or ungoverned (raw SQL too). The engine refuses a call whose `DataPerms` nobody decided (`data_perms_missing`), and a governed caller's raw SQL (`data_perms_unenforceable`). `anfra serve` states `Ungoverned`: its one user owns the repo. See [engine.md](engine.md).
+The engine has no principal, role, policy or tenant. A platform decides whether a caller may run a command, and passes the outcome as `DataPerms`: whether the caller's queries are governed (only through the semantic layer, the repo's rules applied) or ungoverned (raw SQL too). The engine refuses a call whose `DataPerms` nobody decided (`data_perms_missing`), and a governed caller's raw SQL (`data_perms_unenforceable`). A governed caller's AQL may not call a SQL passthrough function (`sql_text`, `agg_number`, ...) itself either: anfra-node refuses it as `query_invalid`. A dataset's field that wraps one is the repo's, and stays allowed. `anfra serve` states `Ungoverned`: its one user owns the repo. See [engine.md](engine.md).
 
 ## Local state and processes
 
