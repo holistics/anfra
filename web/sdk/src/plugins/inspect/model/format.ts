@@ -29,6 +29,19 @@ export function formatAgo (value: Date | string | undefined, now: number = Date.
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+/** How long until a time, as `formatAgo` counts back: `in 57m`; `expired` once it has passed. */
+export function formatIn (value: Date | string | undefined, now: number = Date.now()): string {
+  if (!value) return '';
+  const time = (value instanceof Date ? value : new Date(value)).getTime();
+  if (Number.isNaN(time)) return String(value);
+  const seconds = Math.floor((time - now) / 1000);
+  if (seconds < 0) return 'expired';
+  if (seconds < 60) return 'in < 1m';
+  if (seconds < 3600) return `in ${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `in ${Math.floor(seconds / 3600)}h`;
+  return `in ${Math.floor(seconds / 86400)}d`;
+}
+
 /** A count and its noun: `1 row`, `2 rows`. */
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 

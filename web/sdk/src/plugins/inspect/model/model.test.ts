@@ -3,7 +3,7 @@ import {
   ORDERS_AQL, REVENUE_AQL, column, salesApp, salesSnapshot,
 } from '../tabs/testSupport';
 import { changesOf } from './changes';
-import { dedent } from './format';
+import { dedent, formatAgo, formatIn } from './format';
 import { declaredFilters, isActive, queryInputs } from './inputs';
 import { problemsOf, queryCounts, runtimeProblem } from './problems';
 import { attributeRequests, createRequestLog, type RequestEntry } from './requests';
@@ -133,5 +133,16 @@ describe('the request log', () => {
 describe('dedent', () => {
   it('strips the indent of the lines after the first', () => {
     expect(dedent('explore {\n    a\n      b\n  }')).toBe('explore {\n  a\n    b\n}');
+  });
+});
+
+describe('times', () => {
+  const now = Date.parse('2026-11-16T10:00:00Z');
+  it('counts back to a time, and on to one ahead, in the same units', () => {
+    expect(formatAgo('2026-11-16T07:00:00Z', now)).toBe('3h ago');
+    expect(formatIn('2026-11-16T10:57:30Z', now)).toBe('in 57m');
+    expect(formatIn('2026-11-16T10:00:30Z', now)).toBe('in < 1m');
+    expect(formatIn('2026-11-18T10:00:00Z', now)).toBe('in 2d');
+    expect(formatIn('2026-11-16T09:59:59Z', now)).toBe('expired');
   });
 });

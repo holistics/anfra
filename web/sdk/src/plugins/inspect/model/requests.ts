@@ -14,6 +14,7 @@ import type {
   FieldSuggestionsRequest,
   InspectedApp,
   LineageResult,
+  QueryCacheResult,
   QueryInput,
   QueryStamp,
 } from '../../../common/types';
@@ -44,6 +45,8 @@ export interface RequestEntry {
   aql?: string;
   input?: QueryInput;
   bustCache?: boolean;
+  /** For a run's later page or its export: no result cached before this time is used. */
+  minCachedAt?: string;
   /** For an export: the file format asked for, its options and the file's name. */
   format?: string;
   formatOptions?: ExportFormatOptions;
@@ -56,6 +59,8 @@ export interface RequestEntry {
   /** For a call the log doesn't know: its request, as the frame sent it. */
   request?: unknown;
   fromCache?: boolean;
+  /** What the cache did for a query, as its answer said. */
+  cache?: QueryCacheResult;
   numRows?: number;
   columns?: string[];
   /** The first rows, as the backend returned them, positional by `columns`. */
@@ -103,6 +108,7 @@ function describe (call: string, request: unknown): Partial<RequestEntry> {
         aql: r.aql,
         input: r.input,
         bustCache: r.bustCache,
+        minCachedAt: r.minCachedAt,
       };
     }
     case 'core.fieldSuggestions': {
@@ -115,6 +121,7 @@ function describe (call: string, request: unknown): Partial<RequestEntry> {
         dataset: r.dataset,
         aql: r.aql,
         input: r.input,
+        minCachedAt: r.minCachedAt,
         format: r.format,
         formatOptions: r.formatOptions,
         filename: r.filename,
@@ -139,6 +146,7 @@ function summarize (call: string, result: unknown, previewRows: number): Partial
       const r = result as BackendQueryResult;
       return {
         fromCache: r.debug?.fromCache,
+        cache: r.debug?.cache,
         numRows: r.meta?.numRows ?? r.values.length,
         columns: r.columns.map((column) => column.name),
         preview: r.values.slice(0, previewRows),

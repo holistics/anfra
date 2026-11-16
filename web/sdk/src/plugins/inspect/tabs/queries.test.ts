@@ -2,7 +2,7 @@ import {
   afterEach, describe, expect, it, vi,
 } from 'vitest';
 import {
-  byTestId, inspect, REVENUE_AQL, REVENUE_STAMP, salesApp, salesSnapshot, type Harness,
+  byTestId, inspect, REVENUE_AQL, REVENUE_STAMP, revenueResult, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
 import { lineagePlugin } from '../../lineage';
 
@@ -204,6 +204,57 @@ describe('Queries', () => {
     expect(byTestId(row, 'general')?.textContent).not.toMatch(/\d+ ms/);
     const removed = byTestId(root, 'section-removed-0')!;
     expect(byTestId(removed, 'removed-0/revenue')?.querySelector('summary')?.textContent).toContain('1 request');
+  });
+
+  // What the cache did: on the query's line, a hit's badge, or a warning's when it ran without the
+  // cache it asked for; opened, a line saying when its rows were read and expire, with its key.
+  it('shows what the cache did for a query: a hit, when its rows were read and expire, its key', async () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+    const app = salesApp();
+    app.queries.revenue.debug = { fromCache: true, cache: { hit: true, key: 'k1:abc', cachedAt: at(-181), expiresAt: at(57.5) } };
+    harness = await inspect({ tab: QUERIES, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(QUERIES);
+    const row = byTestId(root, 'query-0/revenue')!;
+    expect(row.querySelector('summary .a-badge')?.textContent).toBe('cache');
+    await open(row);
+    expect(byTestId(byTestId(row, 'general')!, 'cache')?.textContent).toBe('Hit · read 3h ago · expires in 57m');
+    expect(byTestId(row, 'copy-cache-key')).not.toBeNull();
+  });
+
+  it("shows why a query ran without the cache: the warning's, or no duration", async () => {
+    const message = "The query ran without the cache, because the cache isn't working. The server's log says why.";
+    const app = salesApp();
+    app.queries.revenue.debug = { fromCache: false, cache: { hit: false, key: 'k1:abc', warning: { code: 'cache_unavailable', message } } };
+    harness = await inspect({ tab: QUERIES, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(QUERIES);
+    const row = byTestId(root, 'query-0/revenue')!;
+    const badge = row.querySelector<HTMLElement>('summary .a-badge')!;
+    expect([badge.textContent, badge.dataset.tip]).toEqual(['no cache', message]);
+    await open(row);
+    expect(byTestId(row, 'general')?.textContent).toContain(`CacheNot used: ${message}`);
+
+    harness.post(salesSnapshot());
+    expect(byTestId(root, 'query-0/revenue')?.querySelector(':scope > summary .a-badge')).toBeNull();
+    expect(byTestId(root, 'general')?.textContent).toContain('CacheNot used');
+  });
+
+  // A refresh says so on its request, and a later page shows the bound it sent.
+  it("shows a request's refresh, its cache, and a later page's bound", async () => {
+    const cachedAt = new Date();
+    harness = await inspect({
+      tab: QUERIES,
+      submitQuery: () => ({ ...revenueResult, debug: { fromCache: false, cache: { hit: false, key: 'k1:abc', cachedAt, expiresAt: new Date(cachedAt.getTime() + 3_630_000) } } }),
+    });
+    const { root } = await harness.tab(QUERIES);
+    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {}, bustCache: true }, REVENUE_STAMP);
+    await harness.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: { pagination: { page: 2, pageSize: 2 } }, minCachedAt: cachedAt.toISOString() }, REVENUE_STAMP);
+    const row = await open(byTestId(root, 'query-0/revenue'));
+    const [later, refreshed] = Array.from((await open(byTestId(row, 'requests'))).querySelectorAll<HTMLElement>('[data-testid^="request-"]'));
+    expect(refreshed.querySelector('summary')?.textContent).toContain('refresh · database · 2 rows');
+    expect(byTestId(await open(refreshed), 'cache')?.textContent).toBe('Refreshed · read < 1m ago · expires in 1h');
+    await open(later);
+    expect(byTestId(later, 'cache')?.textContent).toMatch(/^Miss · read/);
+    expect(later.textContent).toContain(`"minCachedAt": "${cachedAt.toISOString()}"`);
   });
 
   it('lists requests no query claims under Other requests', async () => {
