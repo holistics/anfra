@@ -122,7 +122,7 @@ The message's last sentence is for a local repo, whose log is on the reader's ma
 
 - **`query`, as a page or a stream:** cached.
 - **`query export`:** reads a cached result if there is one, and caches what it ran otherwise, as `query` does: the same key, lookup, write and options (`cached_only` included). Its file is written as it is today, from either. Its answer adds the same `cache` beside the link; the link's own `expires_at` stays at the top. An export without a page reads every row, so its entry is the query's whole result.
-  - **canal-lake holds a read's whole result in memory before sending it** (canal's `query-lake-streaming` to-do), so an export of a large cached result costs canal-lake that much memory, where a miss streams from the warehouse. Accepted until canal-lake streams its reads.
+  - **canal-lake streams its reads** (`LAKE_STREAMING_READS=1`, from canal-lake 2.10.0), so an export of a large cached result costs canal-lake a buffer, not the whole result. The setting is off by default: anfra sets it for the canal-lake it spawns, and a deployer sets it on their own canal-lake ([configs](../usage/configs.md#running-canal-query-and-canal-lake-yourself)), or each read holds its whole result in memory, outside DuckDB's `memory_limit`.
   - **canal-lake's read limit, `LAKE_READ_TIMEOUT_SECONDS`, stays at its one-minute default.** It covers the whole stream, the export's file writing included, so an export from the cache that takes longer fails, naming the setting, where the warehouse would have taken up to the export's 30 minutes. No export has come near it yet; a user raises it with `ANFRA_CANAL_LAKE_ENV_LAKE_READ_TIMEOUT_SECONDS`, a deployer on their own canal-lake.
 - **`query compile` and `query validate`:** run nothing on the warehouse, so nothing to cache.
 
@@ -557,10 +557,10 @@ A check holds a hit to a miss: a test runs a set of queries (every type [result 
 
 ## Implementation plan
 
-Status as of 2026-11-13, on the `cache/query-cache` branch.
+Status as of 2026-11-16, on the `cache/query-cache` branch.
 
 1. **anfra-node:** the structural cache key, and the seeds, done (0.14.0). To do: paging a pivot in its SQL. Until then, a paged pivot is refused, cached or not.
-2. **canal:** anfra-canal and pprof's address, done but not released (`anfra-canal-v1.0.0`, which anfra's manifest already pins). To do: decimals kept, canal-query reading an entry from canal-lake, a read's limit as a setting; the parity test.
+2. **canal:** done, released as `anfra-canal-v1.1.0` (canal-query 2.26.0, canal-lake 2.10.0), which anfra's manifest pins: anfra-canal and pprof's address; canal-query reading an entry from canal-lake (its `canal_lake` connector), with decimals kept (`exact_arrow_types`); canal-lake's read limit (`LAKE_READ_TIMEOUT_SECONDS`), its DuckDB's connections and memory (`DUCKDB_MAX_CONNECTIONS`, `DUCKDB_MEMORY_LIMIT`), and streaming reads (`LAKE_STREAMING_READS`), which anfra turns on for the canal-lake it spawns.
 3. **The canal-lake sidecar.**
    1. canal-query run from anfra-canal (`internal/sidecar/anfracanal`, the manifest's `anfra_canal` and `anfra_canal_services`, `scripts/sidecars.sh`, `make build`, the release workflow, `anfra publish` recognising anfra-canal, anfra-cloud's `scripts/bump-anfra.sh`). Done.
    2. canal-lake's supervisor ([canal-lake as a sidecar](#canal-lake-as-a-sidecar)), started on demand (`localquerycache`'s `StartLake`); `scripts/sidecars.sh` checking canal-lake's version too. Proved by a test against the real binary (`internal/sidecar/canallake`): a DuckDB query with a canal-lake key writes its Parquet file under the folder anfra gave canal-lake. Done.
