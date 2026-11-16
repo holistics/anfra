@@ -4,12 +4,12 @@ import { tagCall } from '../common/runtimeErrors';
 import type { DatasetIndex } from './validation';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
+import type { Run } from './execution/submitQuery';
 import type {
   ExecuteOptions,
   ExecuteSummary,
   QueryDeclaration,
   QueryResult,
-  QueryInput,
   QuerySort,
   QueryState,
   Row,
@@ -68,7 +68,7 @@ export class Query extends Observable {
 
   private _page = 1;
   // The input the result's run came back with: its next page and its export replay it.
-  private _ranInput: QueryInput | undefined;
+  private _run: Run | undefined;
 
   /**
    * A sort applied to the result, independent of the query's own AQL — the same mechanism a click
@@ -174,7 +174,7 @@ export class Query extends Observable {
     this._sort = [...sort];
     // The last run's input belongs to the old declaration: replaying it with the new AQL would
     // bring back a sort the edit cleared. Pages and exports build from the applied state instead.
-    this._ranInput = undefined;
+    this._run = undefined;
     this.resetPage();
     this.notify();
   }
@@ -407,17 +407,17 @@ export class Query extends Observable {
     this.notify();
   }
 
-  /** @internal The input the result's run came back with, for its next page and its export. */
-  get ranInput (): QueryInput | undefined {
-    return this._ranInput;
+  /** @internal The run the result on screen came from, for its next page and its export. */
+  get run (): Run | undefined {
+    return this._run;
   }
 
   /** @internal */
-  markSuccess (result: QueryResult, signature: string, append: boolean, ranInput?: QueryInput): void {
+  markSuccess (result: QueryResult, signature: string, append: boolean, run?: Run): void {
     if (this.removed) return;
     this._state = 'success';
     if (!append) {
-      this._ranInput = ranInput;
+      this._run = run;
       this.resultSuperseded = false;
     }
     this._error = undefined;

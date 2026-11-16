@@ -555,7 +555,49 @@ describe('retry', () => {
     expect(sent).toEqual([[1, undefined], [2, { referenceTime: 'run 1' }], [1, undefined]]);
     expect(send.mock.calls[0][0].input).toMatchObject({ seeds: { referenceTime: 'run 1' } });
     expect(send.mock.calls[0][0].input).not.toHaveProperty('pagination');
-    expect(revenue.ranInput?.seeds).toEqual({ referenceTime: 'run 2' });
+    expect(revenue.run?.input.seeds).toEqual({ referenceTime: 'run 2' });
+  });
+
+  // A run's first page says when its rows were read. Its next page and its export send that time,
+  // so neither is older than the first page; a run sends none, and sets it again; a run whose
+  // answer has no cache leaves none.
+  it('holds a run\'s later pages and its export to its first page\'s time: a run sends none, and sets it', async () => {
+    const cachedAt = ['2026-11-16T08:00:00.123Z', '2026-11-16T09:30:00.456Z'];
+    let run = 0;
+    let cached = true;
+    const submitQuery = vi.fn(async (request: BackendQueryRequest) => {
+      const page = request.input.pagination?.page;
+      if (page === 1) run += 1;
+      return {
+        values: [['1'], ['2']],
+        columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }],
+        meta: { page, pageSize: 2, numRows: 2 },
+        debug: { fromCache: page === 1 && run === 1, ...(cached ? { cache: { hit: page === 1 && run === 1, cachedAt: new Date(cachedAt[run - 1]) } } : {}) },
+      };
+    });
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: { submitQuery, fieldSuggestions: async () => [] } as Backend }).createApp();
+    const revenue = app.createQuery('revenue', { dataset: 'sales', aql: 'explore { measures { total: orders | sum(orders.amount) } }', pageSize: 2 });
+    const send = vi.fn(async (_request: BackendExportRequest) => ({ url: 'u', filename: 'f', format: 'csv', rowCount: 4, expiresAt: new Date() }));
+
+    await app.execute(); // a hit, read at 08:00
+    await revenue.fetchMore();
+    await app.exportQuery(revenue, {}, send);
+    await app.refresh(); // read now: 09:30
+    await revenue.fetchMore();
+    cached = false;
+    await app.execute({ force: true });
+    await revenue.fetchMore();
+
+    const sent = submitQuery.mock.calls.map(([request]) => [request.input.pagination?.page, request.bustCache, request.minCachedAt]);
+    expect(sent).toEqual([
+      [1, undefined, undefined],
+      [2, undefined, cachedAt[0]],
+      [1, true, undefined],
+      [2, undefined, cachedAt[1]],
+      [1, undefined, undefined],
+      [2, undefined, undefined],
+    ]);
+    expect(send.mock.calls[0][0].minCachedAt).toBe(cachedAt[0]);
   });
 
   it('keeps the loaded pages when a fetchMore failed: execute() does not rerun it', async () => {

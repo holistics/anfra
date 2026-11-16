@@ -25,6 +25,22 @@ export interface SubmitContext {
 }
 
 /**
+ * The run a query's result on screen came from, as its next page and its export continue it: the
+ * input it ran with, its seeds filled in, and when its first page's rows were read from the
+ * warehouse, if they were cached.
+ *
+ * Only a run sets it, and a run always starts at the first page. A later page and an export send
+ * `cachedAt` as `minCachedAt`, so none of them is older than the first page
+ * (docs/designs/query-cache.md#a-runs-later-pages). A call that fetched page x would have to be
+ * such a later page, not a new run: a run of page x would set `cachedAt` from page x, and the pages
+ * before it would no longer be held to it.
+ */
+export interface Run {
+  input: QueryInput;
+  cachedAt?: string;
+}
+
+/**
  * The filter one control mapping contributes, if any.
  *
  * Mapped conditions (runtime, arriving through controls) and selection conditions (runtime,
@@ -165,10 +181,16 @@ export function buildRequest (
 
 /**
  * A later page of the query's run: the input the run came back with, replayed with the query's
- * page, so it continues that run (its seeds among it) rather than starting one as of now.
+ * page, so it continues that run (its seeds among it) rather than starting one as of now; and no
+ * older than its first page.
  */
-export function pageRequest (query: Query, ran: QueryInput): BackendQueryRequest {
-  return { dataset: query.dataset.descriptor.name, aql: query.declaration.aql, input: withPage(ran, query) };
+export function pageRequest (query: Query, run: Run): BackendQueryRequest {
+  return {
+    dataset: query.dataset.descriptor.name,
+    aql: query.declaration.aql,
+    input: withPage(run.input, query),
+    ...(run.cachedAt ? { minCachedAt: run.cachedAt } : {}),
+  };
 }
 
 // The input with the query's page: omitted for a query that declares no page size, so the backend
@@ -189,8 +211,8 @@ export function defaultExportFilename (query: Query, title: string | undefined):
 
 /**
  * An export of the query: the input its run came back with, so the file holds the result on screen
- * (as of that run), with no page, every row; or, before any run, the query as the app has it now.
- * And the file's format and name.
+ * (as of that run, and no older than its first page), with no page, every row; or, before any run,
+ * the query as the app has it now. And the file's format and name.
  * A CSV starts with a byte-order mark unless the author says otherwise, since a person opens it;
  * a format other than CSV gets no default it might not take.
  */
@@ -200,30 +222,35 @@ export function buildExportRequest (
   selection: SelectionInput,
   context: Pick<SubmitContext, 'timezone'> & { title?: string },
   options: ExportOptions,
-  ran?: QueryInput,
+  run?: Run,
 ): BackendExportRequest {
   const format = options.format ?? 'csv';
   const formatOptions = format === 'csv' ? { bom: true, ...options.formatOptions } : options.formatOptions;
   const built = buildQuery(query, mappings, selection, context);
-  const { pagination: _, ...input } = ran ?? built.input;
+  const { pagination: _, ...input } = run?.input ?? built.input;
   return {
     ...built,
     input,
+    ...(run?.cachedAt ? { minCachedAt: run.cachedAt } : {}),
     format,
     ...(formatOptions ? { formatOptions } : {}),
     filename: options.filename?.trim() || defaultExportFilename(query, context.title),
   };
 }
 
-/** Runs a request of the query: its result, and the input it ran with, for its next page and its export. */
+/**
+ * Runs a request of the query: its result, and the run it makes, for its next page and its export,
+ * when the request is a run's first page.
+ */
 export async function runQuery (
   query: Query,
   request: BackendQueryRequest,
   backend: Backend,
   signal: AbortSignal,
   stamp?: QueryStamp,
-): Promise<{ result: QueryResult, input: QueryInput }> {
+): Promise<{ result: QueryResult, run: Run }> {
   const data = await backend.submitQuery(request, signal, stamp);
-  // As the backend ran it, or, from one that doesn't say, as it was sent.
-  return { result: toResult(query, data), input: data.input ?? request.input };
+  const cachedAt = data.debug?.cache?.cachedAt?.toISOString();
+  // The input as the backend ran it, or, from one that doesn't say, as it was sent.
+  return { result: toResult(query, data), run: { input: data.input ?? request.input, ...(cachedAt ? { cachedAt } : {}) } };
 }

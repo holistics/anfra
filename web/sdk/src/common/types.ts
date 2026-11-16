@@ -325,10 +325,30 @@ export type Row = Record<string, unknown>;
 export interface QueryDebug {
   executedAql?: string;
   executedSql?: string;
+  /** Whether the rows came from the backend's result cache. The same as `cache.hit`, where the backend says. */
   fromCache: boolean;
   executedAt?: Date;
+  /** What the backend's result cache did for this result. Absent when the query didn't use one. */
+  cache?: QueryCacheResult;
   /** How the run's time went, where the server reports it. */
   timings?: QueryTimings;
+}
+
+/**
+ * What the backend's result cache did for a result: whether its rows came from the cache, and when
+ * they were read from the warehouse.
+ */
+export interface QueryCacheResult {
+  /** Whether the rows came from the cache. `false`: they came from the warehouse. */
+  hit: boolean;
+  /** When the rows were read from the warehouse, on a hit or a miss. Absent when the result wasn't cached. */
+  cachedAt?: Date;
+  /** When the cached result stops being used. Absent when the result wasn't cached. */
+  expiresAt?: Date;
+  /** The query's key in the cache. Absent when the backend couldn't make one. */
+  key?: string;
+  /** Why the query ran without the cache, though it asked for it. */
+  warning?: { code: string, message: string };
 }
 
 /**
@@ -683,6 +703,12 @@ export interface BackendQueryRequest {
   input: QueryInput;
   /** Present on `refresh()`: skip any result cache. */
   bustCache?: boolean;
+  /**
+   * Present on a run's later page: the time its first page's rows were read (its
+   * `debug.cache.cachedAt`), as an ISO 8601 time. A result cached before it isn't used, so no page
+   * is older than the first.
+   */
+  minCachedAt?: string;
 }
 
 /**
@@ -745,6 +771,7 @@ export interface ExportResult {
 /**
  * An export: the same query a run sends, built by the same code so the two cannot drift, but with
  * no page (an export is every row) and no cache to bust; plus the file's format and name.
+ * `minCachedAt` keeps it no older than the result on screen, as a later page's does.
  */
 export interface BackendExportRequest {
   /** The dataset's `name`, as in `DatasetDescriptor.name`. */
@@ -753,6 +780,8 @@ export interface BackendExportRequest {
   aql: string;
   /** With `pagination`, the file holds that page; without, every row. */
   input: QueryInput;
+  /** As a later page's: a result cached before the run's first page isn't used. */
+  minCachedAt?: string;
   format?: ExportFormat;
   formatOptions?: ExportFormatOptions;
   filename?: string;

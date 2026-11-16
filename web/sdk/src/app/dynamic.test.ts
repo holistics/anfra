@@ -107,10 +107,10 @@ describe('editing a query', () => {
     const query = app.createQuery('table', { dataset: 'sales', aql: AQL.byRegion, pageSize: 2 });
     query.setSort([{ field: 'total', direction: 'desc' }]);
     await app.execute();
-    expect(query.ranInput?.sorts).toHaveLength(1);
+    expect(query.run?.input.sorts).toHaveLength(1);
 
     query.update({ aql: AQL.byStatus });
-    expect(query.ranInput).toBeUndefined();
+    expect(query.run).toBeUndefined();
 
     await app.execute();
     await query.fetchMore();
@@ -166,7 +166,7 @@ describe('editing a query', () => {
 
     expect(await running).toEqual({ succeeded: [], failed: [] });
     expect(query.result).toBe(before);
-    expect(query.ranInput).toBeUndefined();
+    expect(query.run).toBeUndefined();
     expect(query.state).toBe('success');
     expect(listener).not.toHaveBeenCalled();
     expect(query.isDirty).toBe(true);
