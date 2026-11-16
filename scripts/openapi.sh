@@ -12,6 +12,11 @@
 # A breaking change reaches every client of the core API — Data Apps on either
 # host, the core SDK — so it is refused unless it is declared: CI accepts one in
 # a pull request whose commits mark it (`feat!:` or a `BREAKING CHANGE:` footer).
+#
+# api/oasdiff-severity-levels.txt lowers oasdiff's checks that don't break a
+# client to warnings: printed, not failed. Adding an error code to an op is one
+# (response-property-one-of-added), since a client already has to handle a code
+# it doesn't know: anything unclassified is internal_server_error.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -34,7 +39,8 @@ diff)
   ;;
 breaking)
   base=${2:?usage: scripts/openapi.sh breaking <base spec>}
-  go run "$oasdiff" breaking --fail-on ERR "$base" "$spec"
+  go run "$oasdiff" breaking --fail-on ERR \
+    --severity-levels api/oasdiff-severity-levels.txt "$base" "$spec"
   ;;
 *)
   echo "usage: scripts/openapi.sh generate|diff|breaking <base spec>" >&2

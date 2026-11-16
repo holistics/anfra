@@ -74,6 +74,8 @@ scripts/openapi.sh breaking <base>   # fail if it breaks the base document
 
 Run `generate` after changing anything a command publishes: a command added, removed or renamed, its input or output types, its declared errors, or a code. CI (`.github/workflows/continuous_integration.yml`, the `api` job) fails on a stale file, and refuses a breaking change unless a commit in the pull request declares it (`feat!:`, or a `BREAKING CHANGE:` footer). A breaking change reaches every client at once: Data Apps, the SDK, agents and every platform serving these ops. It has to be a decision, not a side effect.
 
+Adding an error code to an op is not breaking. A client already has to handle a code it doesn't know, since anything unclassified reaches it as `internal_server_error`. Removing or renaming a code is breaking. `api/oasdiff-severity-levels.txt` sets this: the check prints the added codes as warnings, for review, and doesn't fail.
+
 The document's version is the contract's, not the binary's: it does not change with every release.
 
 ### Deprecation before removal
