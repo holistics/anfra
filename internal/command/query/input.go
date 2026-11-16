@@ -145,6 +145,9 @@ type CacheOptions struct {
 	Refresh    bool   `json:"refresh,omitempty" doc:"true runs the query on the warehouse whatever is cached, and caches its result."`
 	ReadOnly   bool   `json:"read_only,omitempty" doc:"true answers from a cached result if there is one, and otherwise runs the query without caching its result."`
 	CachedOnly bool   `json:"cached_only,omitempty" doc:"true answers from a cached result, or fails with cache_miss without running the query."`
+	// MinCachedAt keeps a run's later pages and its export from being older
+	// than its first page (docs/designs/query-cache.md#a-runs-later-pages).
+	MinCachedAt string `json:"min_cached_at,omitempty" doc:"the earliest time a cached result may have been read from the warehouse, as an RFC 3339 time, such as 2026-11-16T09:30:00.123Z. A result cached before it is treated as not cached. Send the cache.cached_at of a run's first page with the run's later pages and its export, so that none of them is older than that page."`
 }
 
 // duration is cache.duration, and whether the request sets it. check refused
@@ -157,8 +160,15 @@ func (c CacheOptions) duration() (time.Duration, bool) {
 	return d, true
 }
 
-// check refuses cache options that aren't a duration anfra takes, or that
-// could never do what they ask.
+// minCachedAt is cache.min_cached_at, zero when the request sets none. check
+// refused one that isn't a time.
+func (c CacheOptions) minCachedAt() time.Time {
+	t, _ := time.Parse(time.RFC3339Nano, c.MinCachedAt)
+	return t
+}
+
+// check refuses cache options that aren't a duration or a time anfra takes, or
+// that could never do what they ask.
 func (c CacheOptions) check() error {
 	if c.Duration != "" {
 		d, err := time.ParseDuration(c.Duration)
@@ -169,6 +179,11 @@ func (c CacheOptions) check() error {
 			return command.InvalidArg("cache.duration", "invalid", "cache.duration can't be negative. Use 0s to run the query without the cache.")
 		case d > querycache.MaxDuration:
 			return command.InvalidArg("cache.duration", "invalid", "cache.duration can be at most 168h (7 days).")
+		}
+	}
+	if c.MinCachedAt != "" {
+		if _, err := time.Parse(time.RFC3339Nano, c.MinCachedAt); err != nil {
+			return command.InvalidArg("cache.min_cached_at", "invalid", fmt.Sprintf("%q isn't an RFC 3339 time, such as 2026-11-16T09:30:00.123Z.", c.MinCachedAt))
 		}
 	}
 	if c.CachedOnly && c.Refresh {

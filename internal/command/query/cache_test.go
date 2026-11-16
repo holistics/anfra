@@ -212,6 +212,26 @@ func TestLookUpAndWrite(t *testing.T) {
 		}
 	})
 
+	t.Run("a bound: an entry cached before it is a miss, or cache_miss with cached only", func(t *testing.T) {
+		qc := newStandIn(ctx, t)
+		cached(t, qc, st)
+		first := lookUp(t, qc, CacheOptions{Duration: "1h"}, st)
+		if first.hit == nil {
+			t.Fatalf("no entry to bound: %+v", first)
+		}
+		at := first.hit.CachedAt
+		if l := lookUp(t, qc, CacheOptions{Duration: "1h", MinCachedAt: at.Format(time.RFC3339Nano)}, st); l.hit == nil {
+			t.Errorf("an entry cached at the bound, as a first page's answer says it: %+v", l)
+		}
+		after := at.Add(time.Millisecond).Format(time.RFC3339Nano)
+		if l := lookUp(t, qc, CacheOptions{Duration: "1h", MinCachedAt: after}, st); l.hit != nil || l.key == "" {
+			t.Errorf("an entry cached before the bound: %+v", l)
+		}
+		if _, err := run(qc, CacheOptions{Duration: "1h", MinCachedAt: after, CachedOnly: true}).lookUpInCache(ctx, st, 10); errCode(err) != "cache_miss" {
+			t.Errorf("cached only, the entry before the bound: %v", err)
+		}
+	})
+
 	t.Run("read only: the key, nothing written", func(t *testing.T) {
 		qc := newStandIn(ctx, t)
 		l := lookUp(t, qc, CacheOptions{Duration: "1h", ReadOnly: true}, st)

@@ -288,6 +288,8 @@ export interface components {
             cached_only?: boolean;
             /** @description how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's cache.query.default.duration by default. */
             duration?: string;
+            /** @description the earliest time a cached result may have been read from the warehouse, as an RFC 3339 time, such as 2026-11-16T09:30:00.123Z. A result cached before it is treated as not cached. Send the cache.cached_at of a run's first page with the run's later pages and its export, so that none of them is older than that page. */
+            min_cached_at?: string;
             /** @description true answers from a cached result if there is one, and otherwise runs the query without caching its result. */
             read_only?: boolean;
             /** @description true runs the query on the warehouse whatever is cached, and caches its result. */
