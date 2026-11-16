@@ -92,6 +92,10 @@ func (s *Sidecar) Start(ctx context.Context) error {
 			"SOCKET=" + s.socketPath,
 			"STORAGE_ROOT=" + s.storage + string(os.PathSeparator),
 			"SHUTDOWN_GRACE_SECONDS=" + shutdownGrace,
+			// Stream each read rather than build its whole result in
+			// memory first, outside DuckDB's memory_limit: an export of a
+			// large cached result would otherwise cost canal-lake all of it.
+			"LAKE_STREAMING_READS=1",
 		},
 		EnvPrefix: EnvPrefix,
 		Stdout:    s.cfg.StdoutWriter,
