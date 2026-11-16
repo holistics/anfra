@@ -214,6 +214,18 @@ export interface QueryDeclaration {
    * so a pivot query must not declare one.
    */
   pageSize?: number;
+  /** How this query uses the backend's result cache. Without it, the app's default. */
+  cache?: QueryCacheSettings;
+}
+
+/** How a query uses the backend's result cache, as the core API's `cache` takes it. */
+export interface QueryCacheSettings {
+  /**
+   * How old a cached result the query accepts, and how long the result it caches is kept: a
+   * duration such as `30s`, `10m` or `2h`, at most `168h` (7 days). `0s` runs it on the warehouse,
+   * uncached.
+   */
+  duration?: string;
 }
 
 /**
@@ -252,6 +264,16 @@ export interface AppDeclaration {
    * browser's. Part of the declaration, not the environment: two apps in one host may differ.
    */
   timezone?: string;
+  /**
+   * How the app's queries use the backend's caches, as `.anfra/config.yml`'s `cache` says it for a
+   * repo. `query.default.duration`: the cache duration of each query that declares none, such as
+   * `5m`. Without it, the repo's default, if any.
+   *
+   * ```ts
+   * Anfra.createApp({ title: 'Sales', cache: { query: { default: { duration: '5m' } } } });
+   * ```
+   */
+  cache?: { query?: { default?: QueryCacheSettings } };
 }
 
 /* ----------------------------------------------------------------
@@ -703,6 +725,8 @@ export interface BackendQueryRequest {
   input: QueryInput;
   /** Present on `refresh()`: skip any result cache. */
   bustCache?: boolean;
+  /** The query's cache duration, its own or its app's default. Absent: the backend's default. */
+  cacheDuration?: string;
   /**
    * Present on a run's later page: the time its first page's rows were read (its
    * `debug.cache.cachedAt`), as an ISO 8601 time. A result cached before it isn't used, so no page
@@ -712,11 +736,11 @@ export interface BackendQueryRequest {
 }
 
 /**
- * What a query runs with now, apart from its page and seeds: its dataset, its AQL, and its input
+ * What a query runs with now, apart from its page and seeds: its dataset, its AQL, its input
  * (what reaches it: mapped controls, the selection, the reader's sort, date drills; and the
- * timezone). A run and an export are both built on it.
+ * timezone), and its cache duration. A run and an export are both built on it.
  */
-export type QueryRequest = Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input'>;
+export type QueryRequest = Pick<BackendQueryRequest, 'dataset' | 'aql' | 'input' | 'cacheDuration'>;
 
 /** One page of a query's rows. `values` is positional: each row lines up with `columns`. */
 export interface BackendQueryResult {
@@ -780,6 +804,8 @@ export interface BackendExportRequest {
   aql: string;
   /** With `pagination`, the file holds that page; without, every row. */
   input: QueryInput;
+  /** As a run's. */
+  cacheDuration?: string;
   /** As a later page's: a result cached before the run's first page isn't used. */
   minCachedAt?: string;
   format?: ExportFormat;

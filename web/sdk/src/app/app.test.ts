@@ -47,6 +47,18 @@ describe('declaration', () => {
     expect(app.createQuery('all', { dataset: 'sales', aql }).pageSize).toBeUndefined();
   });
 
+  it('refuses a cache duration the server would refuse, naming who declared it', () => {
+    const aql = 'explore { measures { n: count(orders.id) } }';
+    expect(() => sdk().createApp({ cache: { query: { default: { duration: '1 hour' } } } }))
+      .toThrowError('The app declares cache.query.default.duration "1 hour", which isn\'t a duration. Use one such as 30s, 10m or 2h.');
+    const app = sdk().createApp();
+    expect(() => app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '1d' } }))
+      .toThrowError(/Query 'q' declares cache.duration "1d", which isn't a duration/);
+    expect(() => app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '169h' } }))
+      .toThrowError("Query 'q' declares cache.duration 169h, which is over 168h (7 days), the longest a result can be cached.");
+    expect(app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '0s' } }).cacheDuration).toBe('0s');
+  });
+
   it('rejects duplicate entity names across queries and controls', () => {
     const app = sdk().createApp();
     monthlyRevenue(app);
@@ -598,6 +610,39 @@ describe('retry', () => {
       [2, undefined, undefined],
     ]);
     expect(send.mock.calls[0][0].minCachedAt).toBe(cachedAt[0]);
+  });
+
+  // A query's cache duration is its own, or its app's default, or none, for the backend's; every
+  // request of its run sends it: the run, its next page, its export.
+  it("sends each query's cache duration with its run, its next page and its export", async () => {
+    const submitQuery = vi.fn(async (request: BackendQueryRequest) => ({
+      values: [['1'], ['2']],
+      columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }],
+      meta: { page: request.input.pagination?.page, pageSize: 2, numRows: 2 },
+    }));
+    const backend = { submitQuery, fieldSuggestions: async () => [] } as Backend;
+    const aql = 'explore { measures { total: orders | sum(orders.amount) } }';
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend }).createApp({ cache: { query: { default: { duration: '5m' } } } });
+    const revenue = app.createQuery('revenue', { dataset: 'sales', aql, pageSize: 2 });
+    app.createQuery('targets', { dataset: 'sales', aql, cache: { duration: '1h' } });
+    app.createQuery('live', { dataset: 'sales', aql, cache: { duration: '0s' } });
+    const send = vi.fn(async (_request: BackendExportRequest) => ({ url: 'u', filename: 'f', format: 'csv', rowCount: 4, expiresAt: new Date() }));
+
+    await app.execute();
+    await revenue.fetchMore();
+    await app.exportQuery(revenue, {}, send);
+
+    // The three runs, then revenue's next page; the queries share their AQL, so only revenue is paged.
+    const sent = submitQuery.mock.calls.map(([r]) => [r.input.pagination?.page, r.cacheDuration]);
+    expect(sent.slice(0, 3).sort()).toEqual([[undefined, '0s'], [undefined, '1h'], [1, '5m']]);
+    expect(sent[3]).toEqual([2, '5m']);
+    expect(send.mock.calls[0][0].cacheDuration).toBe('5m');
+
+    const plain = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend }).createApp();
+    plain.createQuery('q', { dataset: 'sales', aql });
+    submitQuery.mockClear();
+    await plain.execute();
+    expect(submitQuery.mock.calls[0][0]).not.toHaveProperty('cacheDuration');
   });
 
   it('keeps the loaded pages when a fetchMore failed: execute() does not rerun it', async () => {

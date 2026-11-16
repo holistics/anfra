@@ -43,9 +43,13 @@ export function toQueryRequestParams (request: BackendQueryRequest): QueryReques
 }
 
 /** The cache options a request asks for, or none for the default: the repo's cache duration. */
-function toCacheOptions ({ bustCache, minCachedAt }: { bustCache?: boolean, minCachedAt?: string }): CacheOptions | undefined {
-  if (!bustCache && !minCachedAt) return undefined;
-  return { ...(bustCache ? { refresh: true } : {}), ...(minCachedAt ? { min_cached_at: minCachedAt } : {}) };
+function toCacheOptions ({ cacheDuration, bustCache, minCachedAt }: { cacheDuration?: string, bustCache?: boolean, minCachedAt?: string }): CacheOptions | undefined {
+  if (!cacheDuration && !bustCache && !minCachedAt) return undefined;
+  return {
+    ...(cacheDuration ? { duration: cacheDuration } : {}),
+    ...(bustCache ? { refresh: true } : {}),
+    ...(minCachedAt ? { min_cached_at: minCachedAt } : {}),
+  };
 }
 
 /** What the query cache did, as a Data App reads it. */

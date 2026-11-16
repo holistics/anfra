@@ -63,22 +63,33 @@ arrives as the query's `validation_failed` error, its violation at `input.filter
 ## App
 
 ```js
-const app = Anfra.createApp({ title: 'Sales', timezone: 'Asia/Singapore' }); // both optional
+const app = Anfra.createApp({
+  title: 'Sales',
+  timezone: 'Asia/Singapore',
+  cache: { query: { default: { duration: '5m' } } },
+}); // all optional
 ```
 
 Omit `timezone` to use anfra's default; set it to an IANA zone to evaluate relative dates and
 date truncation in that zone. An HTML file may create several apps; one
 is almost always right.
 
+`cache.query.default.duration` lets the app's queries answer from results cached up to that long
+ago, instead of the warehouse: `5m` suits most pages. A query's own `cache.duration` overrides it.
+Without either, the repo's `cache.query.default.duration` in `.anfra/config.yml` applies, if it sets
+one, and otherwise every query runs on the warehouse. A duration is like `30s`, `10m` or `2h`, at
+most `168h`; `0s` runs a query uncached. The reader sees how old the data is in `inspect`, and the
+host's Refresh command reads it again from the warehouse.
+
 | Member | Does |
 | --- | --- |
-| `app.createQuery(name, { dataset, aql, pageSize? })` | Declares a query. Without `pageSize` it is not paged and returns every row. With one (a whole number of at least 1; anything else throws) it returns a page at a time: page further with `fetchMore()`. A pivot query (`rows { }` / `columns { }`) can't be paged, so must not declare one. |
+| `app.createQuery(name, { dataset, aql, pageSize?, cache? })` | Declares a query. Without `pageSize` it is not paged and returns every row. With one (a whole number of at least 1; anything else throws) it returns a page at a time: page further with `fetchMore()`. A pivot query (`rows { }` / `columns { }`) can't be paged, so must not declare one. `cache: { duration }` is how old a cached result it accepts, overriding the app's default: `'0s'` for a query that must always be live. |
 | `app.createFilter(name, decl)` | Declares a filter. See [Filter](#filter). |
 | `app.createDateDrill(name, { default?, label? })` | Declares a date grain switch. See [Date drill](#date-drill). |
 | `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. Returns the mapping; `mapping.remove()` takes it out. |
 | `app.mapCrossFilter(fromQuery, toQuery)` | Rows selected in `fromQuery` filter `toQuery`. Returns the edge; `edge.remove()` takes it out. |
 | `await app.execute()` | Runs every query whose inputs changed, and every query whose last run failed: it is also the retry. Resolves `{ succeeded, failed }`, never rejects. |
-| `await app.refresh()` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
+| `await app.refresh()` | Re-runs every query with its current inputs, whether or not they changed, and a paged query from its first page, on the warehouse rather than from the cache. The host has a Refresh command that does this for the reader, so a page needs no refresh button of its own. |
 | `app.subscribe(fn)` | Calls `fn` on any change in the app or its entities. Returns an unsubscribe. An exception `fn` throws is logged to the console and stops nothing else: the queries and the other listeners carry on. |
 | `app.hasChanges` | The next `execute()` has something to apply (a changed control or selection, an edited, new or unlinked query). Use it for an "Apply" button. |
 | `app.selection` / `app.clearSelection()` | The current cross-filter selection. |
@@ -92,7 +103,7 @@ A dynamic app (a chart builder whose reader drags fields, a dashboard builder wh
 edits and deletes widgets) can change what it declared at any time, including after `execute()`:
 
 - **Add**: `createQuery`, `createFilter`, `createDateDrill`, `mapControl`, `mapCrossFilter`.
-- **Edit in place**: `query.update({ dataset?, aql?, pageSize?, sort? })`,
+- **Edit in place**: `query.update({ dataset?, aql?, pageSize?, cache?, sort? })`,
   `filter.update({ field?, dataset?, type?, options?, label?, default? })`,
   `dateDrill.update({ label?, default? })`. The entity keeps its name and its edges.
 - **Remove**: `query.remove()`, `filter.remove()`, `dateDrill.remove()` take their edges with them;

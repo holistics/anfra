@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DatasetIndex, resolveDataset } from './validation';
+import { DatasetIndex, parseDuration, resolveDataset } from './validation';
 import { ValidationError } from '../common/errors';
 import { salesDataset } from './testSupport';
 
@@ -47,5 +47,22 @@ describe('resolveDataset', () => {
     expect(() => resolveDataset(datasets, 'sale', 'q')).toThrowError(
       /Unknown dataset 'sale'\. Did you mean 'sales'\?/,
     );
+  });
+});
+
+describe('parseDuration', () => {
+  it('reads a duration as the server does, Go\'s time.ParseDuration', () => {
+    expect(parseDuration('5m')).toBe(300_000);
+    expect(parseDuration('1h30m')).toBe(5_400_000);
+    expect(parseDuration('1.5h')).toBe(5_400_000);
+    expect(parseDuration('250ms')).toBe(250);
+    expect(parseDuration('0s')).toBe(0);
+    expect(parseDuration('0')).toBe(0);
+  });
+
+  it('refuses what the server would: no unit, a unit Go has none of, words, a sign', () => {
+    for (const text of ['', '5', '1d', '5 m', 'five minutes', '-5m', '5mh', 'm']) {
+      expect(parseDuration(text), text).toBeUndefined();
+    }
   });
 });

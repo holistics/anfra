@@ -132,7 +132,7 @@ Most definitions declare their queries, controls and edges once, as the page loa
 - An edited query goes back to its first page.
 - A run or a page in flight was asked for the old declaration, so it is aborted and its late answer dropped. The result kept on screen has no more pages until the rerun, so `fetchMore` does nothing: a second page of the new AQL must not be appended to the old first page.
 - The input its last run came back with (`input.seeds`) belonged to the old declaration, so it is dropped: until the next run, a page or an export builds its input from what the app has applied.
-- A new AQL or dataset gives the query new columns. So its sort is cleared, unless the edit passes one, and so is a selection made in its rows (the reader's and the applied one). A new page size alone keeps both.
+- A new AQL or dataset gives the query new columns. So its sort is cleared, unless the edit passes one, and so is a selection made in its rows (the reader's and the applied one). A new page size or cache duration alone keeps both.
 - A filter given a new field, dataset or type goes back to its new default, and drops the options it loaded and any `loadOptions` in flight, because the old values filtered something else. A new label, options or default keeps the reader's condition, and `reset()` then goes to the new default.
 - No mapping changes. Each mapping names its own field, which decides what the control's condition applies to.
 

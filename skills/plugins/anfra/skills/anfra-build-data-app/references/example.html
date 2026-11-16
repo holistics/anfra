@@ -197,7 +197,8 @@
     }
 
     // ---- SDK wiring ----
-    const app = Anfra.createApp({ title: 'Sales Overview' });
+    // Queries answer from results cached up to 5 minutes ago; the host's Refresh reads them again.
+    const app = Anfra.createApp({ title: 'Sales Overview', cache: { query: { default: { duration: '5m' } } } });
 
     const byRegion = app.createQuery('byRegion', {
       dataset: 'ecommerce',

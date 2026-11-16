@@ -109,13 +109,17 @@ describe('coreApiBackend', () => {
 
   // refresh() is the cache's refresh, and a later page's bound its min_cached_at; a request asking
   // neither sends no cache, so the repo's default applies.
-  it('sends refresh and a later page\'s bound as the cache\'s options', async () => {
-    const { client, sent } = api(asStream(answered), asStream(answered));
+  it('sends the duration, refresh and a later page\'s bound as the cache\'s options', async () => {
+    const { client, sent } = api(asStream(answered), asStream(answered), asStream(answered), asStream(answered));
     await coreApiBackend(client).submitQuery({ ...request, bustCache: true }, signal);
     await coreApiBackend(client).submitQuery({ ...request, minCachedAt: '2026-11-16T09:30:00.123Z' }, signal);
+    await coreApiBackend(client).submitQuery({ ...request, cacheDuration: '5m', minCachedAt: '2026-11-16T09:30:00.123Z' }, signal);
+    await coreApiBackend(client).submitQuery(request, signal);
     expect(sent.map(({ body }) => (body as { cache?: unknown }).cache)).toEqual([
       { refresh: true },
       { min_cached_at: '2026-11-16T09:30:00.123Z' },
+      { duration: '5m', min_cached_at: '2026-11-16T09:30:00.123Z' },
+      undefined,
     ]);
   });
 

@@ -1,13 +1,14 @@
 import { Observable } from './observable';
 import { ValidationError, type DataAppError } from '../common/errors';
 import { tagCall } from '../common/runtimeErrors';
-import type { DatasetIndex } from './validation';
+import { assertCacheDuration, type DatasetIndex } from './validation';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
 import type { Run } from './execution/submitQuery';
 import type {
   ExecuteOptions,
   ExecuteSummary,
+  QueryCacheSettings,
   QueryDeclaration,
   QueryResult,
   QuerySort,
@@ -15,11 +16,15 @@ import type {
   Row,
 } from '../common/types';
 
-/** What `query.update` may change. `pageSize: undefined` drops the paging. */
+/**
+ * What `query.update` may change. `pageSize: undefined` drops the paging, and `cache: undefined`
+ * goes back to the app's default cache duration.
+ */
 export interface QueryUpdate {
   dataset?: string;
   aql?: string;
   pageSize?: number;
+  cache?: QueryCacheSettings;
   /** The sort to keep; left out, a new AQL or dataset clears the sort, and anything else keeps it. */
   sort?: readonly QuerySort[];
 }
@@ -36,6 +41,7 @@ export function assertDeclaration (name: string, declaration: QueryDeclaration):
       name,
     );
   }
+  assertCacheDuration(declaration.cache?.duration, `Query '${name}'`, 'cache.duration', name);
 }
 
 export class Query extends Observable {
@@ -131,7 +137,7 @@ export class Query extends Observable {
   }
 
   /**
-   * Swaps what this query is: its dataset, its AQL, its page size, checked as `createQuery` checks
+   * Swaps what this query is: its dataset, its AQL, its page size, its cache, checked as `createQuery` checks
    * them. Its name, its edges and its result stay; the result until the rerun replaces it. Runs
    * nothing: the query is dirty, and the next `app.execute()` reruns it, so several edits go out
    * as one run. Back to the first page. A run or page in flight is aborted, and `fetchMore` does
@@ -405,6 +411,11 @@ export class Query extends Observable {
     this._state = 'executing';
     this._error = undefined;
     this.notify();
+  }
+
+  /** @internal The cache duration it runs with: its own, or its app's default. Absent: the backend's default. */
+  get cacheDuration (): string | undefined {
+    return this.declaration.cache?.duration ?? this.app.queryCacheDefaultDuration;
   }
 
   /** @internal The run the result on screen came from, for its next page and its export. */
