@@ -5,13 +5,13 @@
  * open inside a row (its sections, code tab, "Show all") is the tab's.
  */
 import type {
-  ColumnMeta, InspectedApp, InspectedControl, InspectedError, InspectedQuery, InspectedSelection, InspectedStructure, LocateKind,
+  ColumnMeta, InspectedApp, InspectedControl, InspectedError, InspectedQuery, InspectedSelection, InspectedStructure, LocateKind, QueryCacheResult,
 } from '../../../common/types';
 import type { TabContext } from '../../../host/contributions';
 import { columnKind } from '../model/columns';
 import { isChanged } from '../model/changes';
 import {
-  blockNodeKey, dedent, entityAttribute, entityKey, entityNodeKey, formatAgo, formatCondition, formatTime, plural, usageOf,
+  blockNodeKey, dedent, entityAttribute, entityKey, entityNodeKey, formatAgo, formatCondition, formatIn, formatTime, plural, usageOf,
 } from '../model/format';
 import {
   controlTargets, crossFilterTargets, declaredFilters, isActive, queryInputs, type QueryFilterSource,
@@ -27,6 +27,9 @@ import {
 } from '../view';
 
 type CodeTab = 'declared' | 'aql' | 'sql' | 'signature';
+
+/** Why a query that ran didn't use the cache, when it didn't ask for it. */
+const NO_CACHE_DURATION = 'Neither the query nor the repo sets a cache duration (cache.query.default.duration).';
 type Section = 'queries' | 'controls' | 'selection' | 'removed' | 'other';
 type Attributed = { entry: RequestEntry };
 
@@ -103,6 +106,7 @@ function describeCall (entry: RequestEntry): string {
     return [entry.targets?.join(', ') ?? entry.filename ?? (entry.caller === 'frame' ? undefined : entry.caller), ended].filter(Boolean).join(' · ');
   }
   return [
+    entry.bustCache ? 'refresh' : undefined,
     entry.fromCache === undefined ? undefined : entry.fromCache ? 'cache' : 'database',
     (entry.input?.pagination?.page ?? 1) > 1 ? `page ${entry.input?.pagination?.page}` : undefined,
     entry.status === 'ok' ? plural(entry.numRows ?? 0, 'row') : ended,
@@ -111,9 +115,9 @@ function describeCall (entry: RequestEntry): string {
 
 /** What a request asked, as JSON: its input with the call's other fields merged in, the declared AQL left out. */
 function inputOf (entry: RequestEntry): string | undefined {
-  const { input, bustCache, dataset, aql, field, q, format, formatOptions, filename, targets, request } = entry;
-  const shown = entry.call === 'core.submitQuery' ? { dataset, bustCache, ...input }
-    : entry.call === 'export.query' ? { dataset, format, formatOptions, filename, ...input }
+  const { input, bustCache, minCachedAt, dataset, aql, field, q, format, formatOptions, filename, targets, request } = entry;
+  const shown = entry.call === 'core.submitQuery' ? { dataset, bustCache, minCachedAt, ...input }
+    : entry.call === 'export.query' ? { dataset, minCachedAt, format, formatOptions, filename, ...input }
       : entry.call === 'core.fieldSuggestions' ? { dataset, field, q }
         : entry.call === 'lineage.trace' ? { targets }
           : entry.call === 'render.save' ? { filename }
@@ -222,6 +226,25 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       })), { class: 'inline' });
   }
 
+  /**
+   * What the cache did for a query's result, as one line: a hit or a miss, when its rows were read
+   * from the warehouse, when they expire, and its key to copy; or why it wasn't used. `refreshed`:
+   * the request skipped the cache (`refresh()`).
+   */
+  function cacheLine (cache: QueryCacheResult | undefined, refreshed: boolean | undefined): Children {
+    if (!cache) return h(doc, 'span', { class: 'muted', 'data-tip': NO_CACHE_DURATION }, 'Not used');
+    if (cache.warning) return h(doc, 'span', { class: 'tone-warn' }, `Not used: ${cache.warning.message}`);
+    const { key, cachedAt, expiresAt } = cache;
+    const parts: Children[] = [
+      cache.hit ? 'Hit' : refreshed ? 'Refreshed' : 'Miss',
+      cachedAt ? h(doc, 'span', { 'data-tip': formatTime(cachedAt) }, `read ${formatAgo(cachedAt)}`) : 'not cached',
+      expiresAt && h(doc, 'span', { 'data-tip': formatTime(expiresAt) }, `expires ${formatIn(expiresAt)}`),
+    ].filter(Boolean);
+    return h(doc, 'span', { 'data-testid': 'cache' },
+      parts.flatMap((part, i) => (i === 0 ? [part] : [' · ', part])),
+      key && copyIcon(doc, 'Copy the cache key', () => key, { 'data-testid': 'copy-cache-key' }));
+  }
+
   /** The queries something reaches: a count that opens to a link to each. */
   function mapsTo (key: string, app: number, targets: { query: string, field?: string, self?: boolean }[], empty: Children): Children {
     if (targets.length === 0) return empty;
@@ -259,13 +282,17 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     const details = collapsible(doc, `${scope}:request:${entry.id}`, summary, () => [
       card ? fields(doc, [
         ['Type', labelOf(entry)],
+        entry.call === 'core.submitQuery' && entry.status === 'ok' && ['Cache', cacheLine(entry.cache, entry.bustCache)],
         ['Call', entry.call],
         !!entry.dataset && ['Dataset', entry.dataset],
         ['Caller', entry.caller],
         !!entry.trace && ['Middleware', entry.trace.join(' → ')],
         ['Sent at', formatTime(entry.at)],
         ['Duration', entry.durationMs === undefined ? 'Still running' : `${entry.durationMs} ms`],
-      ]) : entry.error && h(doc, 'p', { class: 'error-text' }, entry.error),
+      ]) : [
+        entry.error && h(doc, 'p', { class: 'error-text' }, entry.error),
+        entry.call === 'core.submitQuery' && entry.status === 'ok' && fields(doc, [['Cache', cacheLine(entry.cache, entry.bustCache)]]),
+      ],
       entry.preview && entry.columns && [
         h(doc, 'p', { class: 'preview-count' }, rowCount(entry.preview.length, entry.numRows)),
         entry.preview.length > 0 && table(doc, entry.columns, entry.preview, { 'data-testid': 'request-preview' }),
@@ -335,7 +362,9 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         h(doc, 'span', { class: 'name' }, name),
         h(doc, 'span', { class: 'rows', 'data-tip': query.state === 'success' ? plural(query.rowCount, 'row') : 'No rows yet' },
           query.state === 'success' ? query.rowCount.toLocaleString() : '—'),
-        query.isDirty ? h(doc, 'span', { ...badge('warn') }, 'dirty') : query.debug?.fromCache && h(doc, 'span', { ...badge() }, 'cache'),
+        query.isDirty ? h(doc, 'span', { ...badge('warn') }, 'dirty')
+          : query.debug?.fromCache ? h(doc, 'span', { ...badge() }, 'cache')
+            : query.debug?.cache?.warning && h(doc, 'span', { ...badge('warn'), 'data-tip': query.debug.cache.warning.message }, 'no cache'),
         h(doc, 'span', { class: 'spacer' }),
         filterIndicator(doc, active),
         hasLineage && lineageButton(doc, panel, marker),
@@ -358,6 +387,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
           fields(doc, [
             ['Dataset', declaration?.dataset || h(doc, 'span', { class: 'muted' }, 'none declared')],
             !!lastRun && ['Last run', lastRun],
+            !!query.debug && ['Cache', cacheLine(query.debug.cache, latest?.bustCache)],
             ['On the page', drawn(structure, 'query', index, name)],
             ['Cross-filters', mapsTo(`${key}:cross`, index, crossFilterTargets(app, name), h(doc, 'span', { class: 'muted' }, 'No query'))],
             query.selectedRowCount > 0 && ['Selected', plural(query.selectedRowCount, 'row')],
