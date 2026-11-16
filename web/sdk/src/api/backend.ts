@@ -228,6 +228,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         format: link.format,
         rowCount: link.row_count,
         expiresAt: new Date(link.expires_at),
+        ...(link.cache ? { cache: toCacheResult(link.cache) } : {}),
       };
     },
 

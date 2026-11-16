@@ -237,19 +237,6 @@ func Compile(ctx context.Context, node *anfranode.Client, src Source, dataset, a
 	return anfranode.CompileToSQLResult{}, err
 }
 
-// Stream runs already-compiled SQL via canal-query against the data source the
-// dataset targets, handing its rows within bounds to h as they arrive, its
-// header first, holding none of it. Split from Compile so callers can distinguish a
-// compile failure (a query problem) from an execution failure (a data-source/DB
-// problem).
-func Stream(ctx context.Context, canal *canalquery.Client, sources datasource.DataSources, compiled anfranode.CompileToSQLResult, bounds ResultBounds, h canalquery.Handler) error {
-	q, err := InDataSource(ctx, sources, compiled)
-	if err != nil {
-		return err
-	}
-	return q.Stream(ctx, canal, bounds, h)
-}
-
 // DataSourceQuery is a query in its data source, ready to run there: its SQL,
 // and the data source, connection included, as the engine's one call of
 // DataSources.Connection gave it. What the query cache's key needs of the data

@@ -23,7 +23,7 @@ import (
 
 // Export runs a query and answers its whole result as a file: a link to
 // download it. See docs/designs/exports.md.
-var Export = command.Define(command.Def[QueryExportRequestParams, command.ExportLink]{
+var Export = command.Define(command.Def[QueryExportRequestParams, QueryExportResult]{
 	Name:  "query.export",
 	Short: "Export a query's whole result as a file to download",
 	Long:  "Export a query's whole result as a file, and return a link to download it once the file is ready.",
@@ -48,7 +48,14 @@ type QueryExportRequestParams struct {
 	Format        string              `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
 	FormatOptions ExportFormatOptions `json:"format_options,omitempty" doc:"the format's options"`
 	Filename      string              `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
-	Cache         CacheOptions        `json:"cache,omitempty" doc:"how to use the query cache for this export. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."`
+	Cache         CacheOptions        `json:"cache,omitempty" doc:"how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."`
+}
+
+// QueryExportResult is query.export's answer: its file's link, and what the
+// query cache did for its query, as a query's answer says it.
+type QueryExportResult struct {
+	command.ExportLink
+	Cache CacheResult `json:"cache,omitzero" doc:"what the query cache did for the export's query: whether the file was written from a cached result, and when its rows were read from the warehouse. Absent when the export doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
 }
 
 func (QueryExportRequestParams) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Schema {
@@ -68,10 +75,6 @@ type ExportFormatOptions struct {
 func (in QueryExportRequestParams) check() error {
 	if err := in.runInput().check(); err != nil {
 		return err
-	}
-	if in.Cache.CachedOnly {
-		// An export doesn't read the cache yet, and would run on the warehouse.
-		return command.InvalidArg("cache.cached_only", "unsupported", "an export can't be answered from the cache yet, so it can't take cache.cached_only.")
 	}
 	if name := strings.TrimSpace(in.Filename); name != "" {
 		if msg := badFilename(name); msg != "" {
@@ -108,12 +111,14 @@ type streamFunc func(h canalquery.Handler) error
 
 // runExport decides what runs before any file exists, so a query that is
 // refused, or does not compile, fails as it would in query; then writes the
-// rows as they arrive.
-func runExport(ctx context.Context, cc command.CommandContext, in QueryExportRequestParams) (_ command.ExportLink, err error) {
+// rows as they arrive, through the query cache as query runs them: from a
+// cached result of the same query, or from the warehouse, caching it.
+func runExport(ctx context.Context, cc command.CommandContext, in QueryExportRequestParams) (_ QueryExportResult, err error) {
 	var (
 		name      string
 		described []anfranode.ExploreColumn
-		run       streamFunc
+		st        statement
+		bounds    = query.Unbounded
 	)
 	// Told to the invocation's query observer as a query run is (execute); its
 	// timings kept by a tracker that streams nothing.
@@ -123,48 +128,56 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 	if in.Lang == "sql" {
 		sql, err := in.ungoverned(ctx, cc)
 		if err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		if err := command.RequireSidecars(cc, command.Sidecars{CanalQuery: true}); err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		if err := command.RequireExports(cc); err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		name = in.DataSource
 		o.compiled(ctx, in.DataSource, "", "", in.Query)
-		run = func(h canalquery.Handler) error {
-			t.requested()
-			return sql.Stream(ctx, cc.Clients.CanalQuery, query.Unbounded, o.handler(ctx, h))
-		}
+		st = statement{query: sql.DataSourceQuery}
 	} else {
 		aql, limit, err := in.aql()
 		if err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		if err := command.RequireExports(cc); err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		src, err := sourceOf(cc)
 		if err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		_ = t.begin("compiling_query", 0)
 		compiled, err := compileAQL(ctx, cc, src, in.Dataset, aql, in.runInput().run())
 		if err != nil {
-			return command.ExportLink{}, err
+			return QueryExportResult{}, err
 		}
 		name, described = in.Dataset, compiled.Columns
 		o.compiled(ctx, compiled.DataSource.Name, in.Dataset, compiled.AQL, compiled.SQL)
-		run = func(h canalquery.Handler) error {
-			t.requested()
-			return query.Stream(ctx, cc.Clients.CanalQuery, src.DataSources, compiled, query.ResultBounds{Truncate: limit}, o.handler(ctx, h))
+		dq, err := query.InDataSource(ctx, src.DataSources, compiled)
+		if err != nil {
+			return QueryExportResult{}, asQueryFailed(err)
 		}
+		st = statement{query: dq, aql: compiled.AQL, compilerKey: compiled.CacheKey, dataset: in.Dataset}
+		bounds = query.ResultBounds{Truncate: limit}
 	}
-	return writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, run)
+	var cache CacheResult
+	link, err := writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, func(h canalquery.Handler) error {
+		var err error
+		cache, err = st.runCached(ctx, queryRun{cc: cc, in: in.runInput()}, t, cc.Clients.CanalQuery, bounds, o.handler(ctx, h))
+		return err
+	})
+	if err != nil {
+		return QueryExportResult{}, err
+	}
+	return QueryExportResult{ExportLink: link, Cache: cache}, nil
 }
 
 // writeCSV writes the query's result as a CSV file in store, and answers its

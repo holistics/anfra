@@ -155,8 +155,8 @@ func TestCacheOptionsRefusals(t *testing.T) {
 	if err := (QueryRequestParams{QueryDefinition: aql, Cache: CacheOptions{CachedOnly: true}}).normalize().check(); err != nil {
 		t.Errorf("cached only, for query: %v", err)
 	}
-	if err := (QueryExportRequestParams{QueryDefinition: aql, Cache: CacheOptions{CachedOnly: true}}).check(); field(err) != "cache.cached_only" {
-		t.Errorf("cached only, for an export, which doesn't read the cache yet: %v", err)
+	if err := (QueryExportRequestParams{QueryDefinition: aql, Cache: CacheOptions{CachedOnly: true}}).check(); err != nil {
+		t.Errorf("cached only, for an export, which reads the cache as query does: %v", err)
 	}
 	if d, set := (CacheOptions{Duration: "90m"}).duration(); !set || d != 90*time.Minute {
 		t.Errorf("duration() = %v, %v", d, set)

@@ -16,6 +16,8 @@ One op, `query.export`, and a link:
    { "url": "…", "filename": "sales.csv", "format": "csv", "row_count": 123456, "expires_at": "…" }
    ```
 
+   An export that uses the query cache adds `cache`, as a query's answer does: whether the file was written from a cached result, and when its rows were read ([query cache](query-cache.md#which-commands)).
+
 2. **The download is a plain `GET` of `url`** before `expires_at`: no headers, no credentials beyond the URL. What the URL points to is the server's (anfra's own endpoint, or a presigned object-storage URL); the API promises only that a `GET` returns the file until it expires. Downloading is not an op: a browser saves a file to disk only by following a link, and a link to object storage must not pass through anfra.
 
 The answer is an ordinary typed document, so the op is an ordinary op: its schema, Strict mode, discovery, MCP and the CLI need nothing new.

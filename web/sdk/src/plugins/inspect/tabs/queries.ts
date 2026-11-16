@@ -283,7 +283,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     const details = collapsible(doc, `${scope}:request:${entry.id}`, summary, () => [
       card ? fields(doc, [
         ['Type', labelOf(entry)],
-        entry.call === 'core.submitQuery' && entry.status === 'ok' && ['Cache', cacheLine(entry.cache, entry.bustCache)],
+        (entry.call === 'core.submitQuery' || entry.call === 'export.query') && entry.status === 'ok' && ['Cache', cacheLine(entry.cache, entry.bustCache)],
         ['Call', entry.call],
         !!entry.dataset && ['Dataset', entry.dataset],
         ['Caller', entry.caller],
@@ -292,7 +292,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
         ['Duration', entry.durationMs === undefined ? 'Still running' : `${entry.durationMs} ms`],
       ]) : [
         entry.error && h(doc, 'p', { class: 'error-text' }, entry.error),
-        entry.call === 'core.submitQuery' && entry.status === 'ok' && fields(doc, [['Cache', cacheLine(entry.cache, entry.bustCache)]]),
+        (entry.call === 'core.submitQuery' || entry.call === 'export.query') && entry.status === 'ok' && fields(doc, [['Cache', cacheLine(entry.cache, entry.bustCache)]]),
       ],
       entry.preview && entry.columns && [
         h(doc, 'p', { class: 'preview-count' }, rowCount(entry.preview.length, entry.numRows)),

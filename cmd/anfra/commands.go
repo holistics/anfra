@@ -518,10 +518,25 @@ const (
 // presentationOf is how the CLI shows c's answer, by what the answer is: the
 // one place that decides it, for the flags it takes and for how it is shown.
 func presentationOf(c command.Command) presentation {
-	if c.Output() == reflect.TypeFor[command.ExportLink]() {
+	if isExportLink(c.Output()) {
 		return presentDownload
 	}
 	return presentYAML
+}
+
+// isExportLink says whether an answer is an export's link: command.ExportLink,
+// or an answer that embeds it with more beside, as query.export's adds what the
+// query cache did.
+func isExportLink(t reflect.Type) bool {
+	link := reflect.TypeFor[command.ExportLink]()
+	if t == link {
+		return true
+	}
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	f, ok := t.FieldByName("ExportLink")
+	return ok && f.Anonymous && f.Type == link
 }
 
 // deliver shows an answer as presentationOf says: an export's file downloaded,
