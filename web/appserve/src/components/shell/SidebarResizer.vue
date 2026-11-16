@@ -4,9 +4,10 @@
 // edge reads as a handle; a tooltip names both actions and the shortcut. The shell follows the
 // width as it is dragged, keeps the Data App's frame from taking the pointer from the press to
 // the release (a first move that lands on the frame would go into it before the capture holds),
-// and remembers the width once the drag ends.
+// and keeps the width once the drag ends (lib/edgeDrag.ts ends it however the pointer goes).
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { clampWidth, DRAG_PX, SIDEBAR_SHORTCUT } from '@/lib/sidebar';
+import { startEdgeDrag } from '@/lib/edgeDrag';
+import { clampWidth, SIDEBAR_SHORTCUT } from '@/lib/sidebar';
 import ShortcutKeys from './ShortcutKeys.vue';
 
 const props = defineProps<{ width: number }>();
@@ -25,30 +26,19 @@ let dragged = false;
 
 function down (event: PointerEvent): void {
   dragged = false;
-  if (event.button !== 0) return;
-  event.preventDefault();
-  const rail = event.currentTarget as HTMLElement;
-  rail.setPointerCapture(event.pointerId);
-  emit('press');
-  const startX = event.clientX;
   const startWidth = props.width;
   let width = startWidth;
-
-  const move = (moved: PointerEvent): void => {
-    if (!dragged && Math.abs(moved.clientX - startX) < DRAG_PX) return;
-    dragged = true;
-    width = clampWidth(startWidth + moved.clientX - startX);
-    emit('resize', width);
-  };
-  const up = (): void => {
-    rail.removeEventListener('pointermove', move);
-    rail.removeEventListener('pointerup', up);
-    rail.removeEventListener('pointercancel', up);
-    emit('release', dragged ? width : undefined);
-  };
-  rail.addEventListener('pointermove', move);
-  rail.addEventListener('pointerup', up);
-  rail.addEventListener('pointercancel', up);
+  const started = startEdgeDrag(event, {
+    move: (dx) => {
+      dragged = true;
+      width = clampWidth(startWidth + dx);
+      emit('resize', width);
+    },
+    end: (moved) => emit('release', moved ? width : undefined),
+  });
+  if (!started) return;
+  event.preventDefault();
+  emit('press');
 }
 
 /** A click that ends a drag does not also collapse the sidebar. */
