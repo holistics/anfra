@@ -42,7 +42,7 @@ func (QueryDefinition) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Sc
 // input its answer returned (docs/designs/query-input.md).
 type QueryInput struct {
 	anfranode.QueryTransforms
-	Pagination *Pagination `json:"pagination,omitempty" doc:"which rows to return: pageSize rows, from the 1-based page. Without it, every row."`
+	Pagination *Pagination `json:"pagination,omitempty" doc:"which rows to return: pageSize rows, from the 1-based page; for a pivot, pageSize rows of its grid. Without it, every row."`
 	Timezone   string      `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default."`
 	Seeds      *Seeds      `json:"seeds,omitempty" doc:"values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time."`
 }
@@ -52,10 +52,18 @@ type Seeds struct {
 	ReferenceTime string `json:"referenceTime,omitempty" format:"date-time" doc:"the time the query runs as of. Relative dates, such as last 7 days, are counted from this time's day."`
 }
 
-// Pagination is one page of a query's rows.
+// Pagination is one page of a query's rows: of its result's, or of a pivot's
+// grid, and of its columns too.
 type Pagination struct {
-	Page     int `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to return, 1 by default"`
-	PageSize int `json:"pageSize" minimum:"1" maximum:"10000" doc:"how many rows a page has"`
+	Page     int         `json:"page,omitempty" minimum:"1" doc:"the 1-based page of rows to return, 1 by default"`
+	PageSize int         `json:"pageSize" minimum:"1" maximum:"10000" doc:"how many rows a page has: of the result, or for a pivot, of its grid, each with every row of its cells, the header rows and the totals"`
+	Columns  *ColumnPage `json:"columns,omitempty" doc:"for a pivot, one page of its grid's columns. Without it, every column. Refused for a query that isn't a pivot."`
+}
+
+// ColumnPage is one page of a pivot's columns.
+type ColumnPage struct {
+	Page     int `json:"page,omitempty" minimum:"1" doc:"the 1-based page of columns to return, 1 by default"`
+	PageSize int `json:"pageSize" minimum:"1" maximum:"10000" doc:"how many of the grid's columns a page has"`
 }
 
 // IsZero reports an input that changes nothing about a query.
@@ -250,6 +258,9 @@ func (in QueryRequestParams) check() error {
 		if p.PageSize == 0 {
 			return command.InvalidArg(in.paginationName(), "required", "a page needs a page size")
 		}
+		if p.Columns != nil && p.Columns.PageSize == 0 {
+			return command.InvalidArg("input.pagination.columns", "required", "a page of columns needs a page size")
+		}
 		if _, limit, err := query.ExtractLimit(in.Query); err == nil && limit != query.NoLimit {
 			return command.InvalidArg(in.paginationName(), "invalid", "a query can't have both a page size and a `limit:` directive")
 		}
@@ -279,6 +290,9 @@ func (in QueryRequestParams) run() query.Run {
 	}
 	if p := in.Input.Pagination; p != nil {
 		r.Pagination = &anfranode.Pagination{Page: max(p.Page, 1), PageSize: p.PageSize}
+		if c := p.Columns; c != nil {
+			r.Pagination.Columns = &anfranode.Page{Page: max(c.Page, 1), PageSize: c.PageSize}
+		}
 	}
 	return r
 }

@@ -362,6 +362,18 @@ export interface components {
              */
             semantic_type?: "bit" | "date" | "datetime" | "json" | "number" | "text" | "truefalse" | "unknown";
         };
+        ColumnPage: {
+            /**
+             * Format: int64
+             * @description the 1-based page of columns to return, 1 by default
+             */
+            page?: number;
+            /**
+             * Format: int64
+             * @description how many of the grid's columns a page has
+             */
+            pageSize: number;
+        };
         CompileError: {
             /** Format: int64 */
             col?: number;
@@ -699,6 +711,8 @@ export interface components {
             max_bytes: number;
         };
         Pagination: {
+            /** @description for a pivot, one page of its grid's columns. Without it, every column. Refused for a query that isn't a pivot. */
+            columns?: components["schemas"]["ColumnPage"];
             /**
              * Format: int64
              * @description the 1-based page of rows to return, 1 by default
@@ -706,9 +720,23 @@ export interface components {
             page?: number;
             /**
              * Format: int64
-             * @description how many rows a page has
+             * @description how many rows a page has: of the result, or for a pivot, of its grid, each with every row of its cells, the header rows and the totals
              */
             pageSize: number;
+        };
+        PivotPage: {
+            /**
+             * Format: int64
+             * @description how many columns the pivot's grid has, the total column not counted
+             */
+            columns: number;
+            /** @description with input.pagination.columns: whether there are columns after this page's */
+            has_more_columns?: boolean;
+            /**
+             * Format: int64
+             * @description how many rows the pivot's grid has, in all of its pages, the grand total not counted
+             */
+            rows: number;
         };
         QueryCacheCleaned: {
             /**
@@ -945,7 +973,7 @@ export interface components {
             dateDrills?: components["schemas"]["QueryDateDrill"][];
             /** @description conditions on fields, ANDed with the query's own filters */
             filters?: components["schemas"]["QueryFilter"][];
-            /** @description which rows to return: pageSize rows, from the 1-based page. Without it, every row. */
+            /** @description which rows to return: pageSize rows, from the 1-based page; for a pivot, pageSize rows of its grid. Without it, every row. */
             pagination?: components["schemas"]["Pagination"];
             /** @description values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time. */
             seeds?: components["schemas"]["Seeds"];
@@ -1005,10 +1033,12 @@ export interface components {
             cache?: components["schemas"]["CacheResult"];
             /** @description one per field of result, in order */
             columns: components["schemas"]["Column"][];
-            /** @description whether there may be rows after this page. To get them, ask for the next page, or export the query. */
+            /** @description whether there are rows after this page; for a pivot, rows of its grid. To get them, ask for the next page, or export the query. */
             has_more: boolean;
             /** @description the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query. */
             input?: components["schemas"]["QueryInput"];
+            /** @description for a page of a pivot: its grid's size, and whether there are columns after this page's. Absent for any other query. */
+            pivot?: components["schemas"]["PivotPage"];
             result: components["schemas"]["QueryRows"];
             sql: string;
             /** @description the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps. */
@@ -1036,8 +1066,10 @@ export interface components {
             bytes_scanned?: number;
             /** @description what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s. */
             cache?: components["schemas"]["CacheResult"];
-            /** @description whether there may be rows after this page. Without input.pagination, every row was sent, and this is false. */
+            /** @description whether there are rows after this page; for a pivot, rows of its grid. Without input.pagination, every row was sent, and this is false. */
             has_more: boolean;
+            /** @description for a page of a pivot: its grid's size, and whether there are columns after this page's. Absent for any other query. */
+            pivot?: components["schemas"]["PivotPage"];
             /** Format: int64 */
             row_count: number;
             /** @description the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps. */

@@ -337,8 +337,9 @@ type CompileToSQLRequest struct {
 	// Input is the query's Query Input, applied by rewriting the AQL before it
 	// compiles. Nil: none.
 	Input *QueryTransforms `json:"input,omitempty"`
-	// Pagination asks for one page of rows, compiled into LIMIT/OFFSET. Nil: every
-	// row. Refused for a pivot query.
+	// Pagination asks for one page of rows: of the result's, or of a pivot's
+	// grid, and of its columns too. The result says how to read the page
+	// (CompileToSQLResult.RowPage, PivotPage). Nil: every row.
 	Pagination *Pagination `json:"pagination,omitempty"`
 	// Seeds are the values the query compiles with that anfra-node would
 	// otherwise generate for the request. Nil: all generated.
@@ -393,10 +394,34 @@ type QueryDateDrill struct {
 	Grain string `json:"grain" doc:"the grain, such as month"`
 }
 
-// Pagination is one 1-based page of rows.
+// Pagination is one 1-based page of rows; for a pivot, of its grid's rows,
+// and of its columns too with Columns (every column without).
 type Pagination struct {
+	Page     int   `json:"page"`
+	PageSize int   `json:"pageSize"`
+	Columns  *Page `json:"columns,omitempty"`
+}
+
+// Page is one 1-based page.
+type Page struct {
 	Page     int `json:"page"`
 	PageSize int `json:"pageSize"`
+}
+
+// RowPage is how to read a page of a query that isn't a pivot: its SQL answers
+// up to Rows+1 rows. Keep the first Rows; one more says there is a next page.
+type RowPage struct {
+	Rows int `json:"rows"`
+}
+
+// PivotPage is how to read a page of a pivot: keep every row, since a page of
+// its grid's rows has any number of them (a row a cell, the header rows, the
+// totals, placeholders). Every row has the grid's counts, in these two
+// columns: its rows, the grand total not counted, and its columns, the total
+// column not counted.
+type PivotPage struct {
+	RowCountColumn    string `json:"rowCountColumn"`
+	ColumnCountColumn string `json:"columnCountColumn"`
 }
 
 // CompileOptions are the compile options anfra sets. TimezoneRegion is an IANA
@@ -423,6 +448,11 @@ type CompileToSQLResult struct {
 	// Seeds are the seeds the query compiled with, every one filled in. Nil
 	// from an anfra-node that doesn't return them.
 	Seeds *Seeds `json:"seeds,omitempty"`
+	// RowPage is set for a page of a query that isn't a pivot, PivotPage for
+	// a page of a pivot: how to read its rows. Neither from an anfra-node that
+	// compiles a page as LIMIT/OFFSET of pageSize rows.
+	RowPage   *RowPage   `json:"rowPage,omitempty"`
+	PivotPage *PivotPage `json:"pivotPage,omitempty"`
 }
 
 // ExploreColumn is one column of a query's answer: the key its values come back

@@ -6,7 +6,7 @@
 # already exists and no new release is cut.
 version: 0.20.0
 sidecars:
-  anfra_node: anfra-node-v0.14.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
+  anfra_node: anfra-node-v0.15.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
   anfra_canal: anfra-canal-v1.1.0 # holistics/canal release tag (build_and_release_binaries.yml)
   # The services anfra_canal runs, as the releases it contains, for deployments that run each as
   # a service of its own (anfra-cloud's scripts/bump-anfra.sh). scripts/sidecars.sh check holds

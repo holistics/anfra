@@ -333,6 +333,7 @@ func TestRunCachedFileGone(t *testing.T) {
 	if err != nil || first.Hit || first.CachedAt.IsZero() {
 		t.Fatalf("a miss, cached: %+v, %v", first, err)
 	}
+	time.Sleep(2 * time.Millisecond)                // times are whole milliseconds: the second write's, later
 	again, err := run(CacheOptions{Duration: "1h"}) // a hit, its file gone: canal-lake says so
 	if err != nil || again.Hit || again.CachedAt.IsZero() || !again.CachedAt.After(first.CachedAt) {
 		t.Errorf("the gone file read as a miss, cached again: %+v, %v", again, err)

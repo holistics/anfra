@@ -23,7 +23,8 @@ type QueryResult struct {
 	Input   *QueryInput `json:"input,omitempty" pretty:"-" doc:"the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query."`
 	Columns []Column    `json:"columns" pretty:"-" doc:"one per field of result, in order"`
 	Result  QueryRows   `json:"result" pretty:",inline"`
-	HasMore bool        `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
+	HasMore bool        `json:"has_more" doc:"whether there are rows after this page; for a pivot, rows of its grid. To get them, ask for the next page, or export the query."`
+	Pivot   *PivotPage  `json:"pivot,omitempty" doc:"for a page of a pivot: its grid's size, and whether there are columns after this page's. Absent for any other query."`
 	Timings Timings     `json:"timings" pretty:",view=timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 	Cache   CacheResult `json:"cache,omitzero" pretty:"-" doc:"what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
 }

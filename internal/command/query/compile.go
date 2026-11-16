@@ -36,13 +36,10 @@ var runArgs = anfranode.ArgMap{"datasetFqn": "dataset", "input": "input", "pagin
 
 // runViolation is anfra-node's refusal of what the caller gave a run, as the
 // violation of the arg at fault: a dataset that cannot be used, a Query Input
-// entry, or the paging of a query that cannot be paged.
+// entry, or a page of columns for a query that isn't a pivot
+// (input.pagination.columns).
 func runViolation(err error) (apperr.Violation, bool) {
-	v, ok := anfranode.Violation(err, runArgs)
-	if ok && v.Field == "input.pagination" {
-		v.Code = "unsupported"
-	}
-	return v, ok
+	return anfranode.Violation(err, runArgs)
 }
 
 // datasetArgs are the args of query validate anfra-node's params are.
