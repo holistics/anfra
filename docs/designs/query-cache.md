@@ -108,8 +108,10 @@ cache:
   hit: false
   warning:
     code: cache_unavailable
-    message: The query ran without the cache, because the cache isn't working. The server's log says why.
+    message: The query ran without the cache, because the cache isn't working. Run `anfra logs` to see what failed.
 ```
+
+The message's last sentence is for a local repo, whose log is on the reader's machine, whether the query came through the CLI, `anfra serve`'s HTTP API or its MCP tools (`command.LogHint`). A managed repo's host keeps its own logs, so its message ends at "isn't working", and `cached_only`'s and `cache.clean`'s failures likewise.
 
 | Code | Means |
 |---|---|
@@ -342,7 +344,7 @@ A failure that doesn't fail the request is still reported, because a cache that 
 | Who | What they get |
 |---|---|
 | **The caller** | On its answer, `cache.warning`, `cache_unavailable` ([A query's answer](#a-querys-answer)): its rows weren't cached, and the log says why |
-| **A person at the CLI** | A `warning` document on stderr, with the cause, as the CLI reports other problems that don't stop a command |
+| **A person at the CLI** | A `warning` document on stderr, as the CLI reports other problems that don't stop a command. It's printed where the answer isn't shown as YAML or JSON, which hold it already: in the pretty format (and so in `anfra console`), and for an export's file, downloaded. An answer that reports warnings says so by implementing `command.Warner` (`QueryResult.Warnings`, `QueryExportResult.Warnings`). |
 | **The person running `anfra serve`** | **At startup**, unless the repo turned the cache off, the server opens the store, creating or migrating it, and a failure is a warning in its startup output, before it serves. While it runs, a failure is in the log, with each query it affected |
 | **Whoever investigates** | The log and the trace, at error level, as every server-scope failure |
 
@@ -567,7 +569,8 @@ Status as of 2026-11-13, on the `cache/query-cache` branch.
    - Done: the parity test (`TestCacheParity`, against the anfra-canal binary, run by `make test-sidecars`). A hit answers what its miss did for every type canal-query's DuckDB connector returns. canal-lake's own header differs in three ways, which a hit restores from the header stored at write: names (`hcolN`), types (Arrow's labels), and a timestamp's zone (`Etc/UTC` where the miss said `UTC`). The connector returns nested types, `HUGEINT`, `UUID`, `ENUM` and `INTERVAL` as strings, so their Parquet round trip needs a warehouse that keeps them, such as Postgres.
    - Done: `cache.min_cached_at` ([A run's later pages](#a-runs-later-pages)).
    - Done: `query export` through the cache, miss and hit, its answer's `cache` beside the link, and `cached_only` for it.
-   - To do: the CLI's warning; uncached when canal-lake fails mid-write (canal-query fails the query today); the `model` tag, once anfra-node's compile says every model a query read (its columns name only the selected fields' models, so a clean by model built from them would leave entries that read the model through a filter or a join), and `cache.clean`'s `model` with it.
+   - Done: the CLI's warning.
+   - To do: uncached when canal-lake fails mid-write (canal-query fails the query today); the `model` tag, once anfra-node's compile says every model a query read (its columns name only the selected fields' models, so a clean by model built from them would leave entries that read the model through a filter or a join), and `cache.clean`'s `model` with it.
 5. **The SDK:** a query's result keeps the `input` it ran with, and replays it for the next page and an export (done); `refresh` leaves the seeds out (done). Done: a Data App asking for the cache in its declaration, the app's default and a query's own ([In a Data App](#in-a-data-app)), which the first plan missed; `refresh()` sent as `cache.refresh`; the answer's `cache` read into `debug.cache` (`fromCache` from its `hit`, and a hit's `executedAt` its `cachedAt`); the bound a run sets, kept with the run's input and sent with `fetchMore` and an export ([A run's later pages](#a-runs-later-pages)). `inspect` showing the answer's `cache`: a query's badge (a hit, or "no cache" with its warning), its Cache line (hit, miss or refreshed, when its rows were read, when they expire, its key), and each request's, with a later page's bound in its input. The whole app's refresh is `core`'s Refresh, which now skips the cache.
 6. **The engine:** the `Store`, `Planner` and `Recorder` on each invocation, with core's implementations; `DataSource.Identity`, which anfra Cloud sets for each data source, and for each viewer under OAuth passthrough.
 7. **After:** a block's own refresh ([In a Data App](#in-a-data-app)); removing orphaned files (in canal-lake with no row); a command to throw a repo's cache away by hand (`anfra cache clean --query --reset`); the caller's tags (`app`, `block`, an origin, through a `cache.origin` input) and attribution by tag (hits, misses and size per tag, for a `cache.stats` op and `inspect`); the size limit; canal-query streaming on when its canal-lake write fails; the data source settings that change rows, in the key; canal-lake in `anfra status`.

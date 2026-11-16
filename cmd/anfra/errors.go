@@ -275,16 +275,24 @@ func coded(err error) bool {
 
 // printWarning shows a problem that did not stop the command, such as an
 // operator's setting that could not take effect, as a YAML document like
-// printError's.
+// printError's, with the help the CLI adds for its code (codeHelp), as an
+// error's.
 func printWarning(w io.Writer, code, message string) {
-	if forPerson() { // as a person reads it: a yellow !, its code faint
+	help := codeHelp[code]
+	if forPerson() { // as a person reads it: a yellow !, its code faint, its help under it
 		st := cliui.NewTerminalStyles(w)
 		fmt.Fprintln(w, st.Warning.Render("! "+cliui.SafeText(message))+st.Muted.Render(" ("+code+")"))
+		if help != "" {
+			fmt.Fprintln(w, "  "+st.Muted.Render(help))
+		}
 		return
 	}
 	e := &yaml.Node{Kind: yaml.MappingNode}
 	setKey(e, "code", code)
 	setKey(e, "message", message)
+	if help != "" {
+		setKey(e, "help", help)
+	}
 	writeDoc(w, "warning", e)
 }
 

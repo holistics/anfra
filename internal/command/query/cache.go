@@ -22,10 +22,6 @@ const (
 	cacheDisabled    = "cache_disabled"
 )
 
-// unavailableMessage is the cache_unavailable warning's, and failure's, word
-// on where to look.
-const unavailableMessage = "anfra's log says why, and anfra status shows the cache's state."
-
 // cacheLookup is a query looked up in the query cache, before it runs: whether
 // the query uses the cache, its key, the cache it was looked up in, and the
 // entry it's answered from, if any; or why it runs without the cache. A
@@ -42,11 +38,13 @@ type cacheLookup struct {
 }
 
 // openCache is the repo's query cache, opened for a query: what the query
-// reports the cache's failures to and starts canal-lake through, and the
-// manager its lookup and write go through.
+// reports the cache's failures to and starts canal-lake through, the manager
+// its lookup and write go through, and where its failures' reader can see why
+// (command.LogHint).
 type openCache struct {
 	command.QueryCache
-	m *querycache.Manager
+	m       *querycache.Manager
+	logHint string
 }
 
 // cacheWrite is how a miss's write of its result ended: committed, or a
@@ -120,6 +118,7 @@ func newCacheResult(l cacheLookup, w cacheWrite) CacheResult {
 func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int) (cacheLookup, error) {
 	opts, qc := r.in.Cache, r.cc.QueryCache
 	l := cacheLookup{cachedOnly: opts.CachedOnly, readOnly: opts.ReadOnly}
+	logHint := command.LogHint(r.cc.Repo)
 
 	// Does the query use the cache?
 	if qc == nil {
@@ -141,14 +140,14 @@ func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int)
 	}
 	key, err := cacheKeyOf(r.cc.TenantID, st, truncate)
 	if err != nil {
-		return l.unavailable(ctx, qc, err)
+		return l.unavailable(ctx, qc, err, logHint)
 	}
 	l.key = key
 	m, err := qc.Manager(ctx)
 	if err != nil {
-		return l.unavailable(ctx, qc, err)
+		return l.unavailable(ctx, qc, err, logHint)
 	}
-	l.cache = &openCache{QueryCache: qc, m: m}
+	l.cache = &openCache{QueryCache: qc, m: m, logHint: logHint}
 
 	// Is its result cached?
 	if opts.Refresh {
@@ -156,7 +155,7 @@ func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int)
 	}
 	e, ok, err := l.cache.m.Lookup(ctx, l.key, l.duration, opts.minCachedAt())
 	if err != nil {
-		return l.unavailable(ctx, qc, fmt.Errorf("look the query up in the cache: %w", err))
+		return l.unavailable(ctx, qc, fmt.Errorf("look the query up in the cache: %w", err), logHint)
 	}
 	if !ok {
 		if l.cachedOnly {
@@ -165,7 +164,7 @@ func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int)
 		return l, nil
 	}
 	if err := qc.StartLake(ctx); err != nil {
-		return l.unavailable(ctx, qc, fmt.Errorf("start canal-lake: %w", err))
+		return l.unavailable(ctx, qc, fmt.Errorf("start canal-lake: %w", err), logHint)
 	}
 	l.hit = &e
 	return l, nil
@@ -215,22 +214,25 @@ func cacheMissError() error {
 }
 
 // unavailable is l for a query whose cache, qc, isn't working, as err says:
-// run with the cache_unavailable warning, or failing for cache.cached_only.
-// qc is told err either way.
-func (l cacheLookup) unavailable(ctx context.Context, qc command.QueryCache, err error) (cacheLookup, error) {
+// run with the cache_unavailable warning, or failing for cache.cached_only,
+// either ending with logHint. qc is told err either way.
+func (l cacheLookup) unavailable(ctx context.Context, qc command.QueryCache, err error, logHint string) (cacheLookup, error) {
 	qc.Report(ctx, err)
 	if l.cachedOnly {
-		return cacheLookup{}, apperr.Encapsulate(err, errcode.CacheUnavailable, "The query cache isn't working, so a query with cache.cached_only can't be answered. "+unavailableMessage)
+		return cacheLookup{}, apperr.Encapsulate(err, errcode.CacheUnavailable,
+			command.WithHint("The query cache isn't working, so a query with cache.cached_only can't be answered.", logHint))
 	}
 	l.cache, l.hit = nil, nil
-	l.warning = unavailableWarning
+	l.warning = unavailableWarning(logHint)
 	return l, nil
 }
 
 // unavailableWarning is the warning of a query that ran without the cache
-// because the cache isn't working.
-var unavailableWarning = CacheWarning{Code: cacheUnavailable,
-	Message: "The query ran without the cache, because the cache isn't working. " + unavailableMessage}
+// because the cache isn't working, ending with logHint.
+func unavailableWarning(logHint string) CacheWarning {
+	return CacheWarning{Code: cacheUnavailable,
+		Message: command.WithHint("The query ran without the cache, because the cache isn't working.", logHint)}
+}
 
 // readCacheEntry streams the hit e to h through canal-query, within bounds, the
 // same way a warehouse result is streamed (query.CacheReadQuery). The rows come
@@ -280,12 +282,12 @@ func runAndCache(ctx context.Context, l cacheLookup, st statement, canal *canalq
 	}
 	if err := c.StartLake(ctx); err != nil {
 		c.Report(ctx, fmt.Errorf("start canal-lake: %w", err))
-		return cacheWrite{warning: unavailableWarning}, st.query.Stream(ctx, canal, bounds, h)
+		return cacheWrite{warning: unavailableWarning(c.logHint)}, st.query.Stream(ctx, canal, bounds, h)
 	}
 	w, err := c.m.Begin(ctx, l.key, st.tags(), st.aql, st.query.SQL())
 	if err != nil {
 		c.Report(ctx, fmt.Errorf("begin the query's cache write: %w", err))
-		return cacheWrite{warning: unavailableWarning}, st.query.Stream(ctx, canal, bounds, h)
+		return cacheWrite{warning: unavailableWarning(c.logHint)}, st.query.Stream(ctx, canal, bounds, h)
 	}
 
 	// What the commit needs, recorded as the result streams.
@@ -319,7 +321,7 @@ func runAndCache(ctx context.Context, l cacheLookup, st statement, canal *canalq
 			err = fmt.Errorf("the write's entry was swept before it committed: %w", err)
 		}
 		c.Report(ctx, fmt.Errorf("commit the query's cache write: %w", err))
-		return cacheWrite{warning: unavailableWarning}, nil
+		return cacheWrite{warning: unavailableWarning(c.logHint)}, nil
 	}
 	return cacheWrite{committed: &e}, nil
 }

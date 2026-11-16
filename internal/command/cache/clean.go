@@ -77,7 +77,7 @@ type CacheCleanResult struct {
 type QueryCacheCleaned struct {
 	Entries int         `json:"entries" doc:"how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran."`
 	Bytes   int64       `json:"bytes" doc:"their size, in bytes. Their files are deleted by a sweep once they've been expired for 35 minutes, so that a read that began before the clean can finish. anfra serve sweeps every few minutes, and so does the next clean."`
-	Freed   *QueryFreed `json:"freed,omitempty" doc:"the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted: anfra's log says why, and the next sweep tries again."`
+	Freed   *QueryFreed `json:"freed,omitempty" doc:"the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted, in which case the next sweep tries again."`
 }
 
 // QueryFreed is what a clean's sweep deleted.
@@ -98,7 +98,7 @@ func clean(ctx context.Context, cc command.CommandContext, in CacheCleanRequestP
 	if err != nil {
 		qc.Report(ctx, err)
 		return CacheCleanResult{}, apperr.Encapsulate(err, errcode.CacheUnavailable,
-			"The query cache isn't working, so it couldn't be cleaned. anfra's log says why, and anfra status shows the cache's state.")
+			command.WithHint("The query cache isn't working, so it couldn't be cleaned.", command.LogHint(cc.Repo)))
 	}
 	expired, err := m.Clean(ctx, in.Query.tags())
 	if err != nil {
@@ -107,7 +107,7 @@ func clean(ctx context.Context, cc command.CommandContext, in CacheCleanRequestP
 			return CacheCleanResult{}, err
 		}
 		return CacheCleanResult{}, apperr.Encapsulate(err, errcode.CacheUnavailable,
-			"The query cache isn't working, so it couldn't be cleaned. anfra's log says why, and anfra status shows the cache's state.")
+			command.WithHint("The query cache isn't working, so it couldn't be cleaned.", command.LogHint(cc.Repo)))
 	}
 	out := &QueryCacheCleaned{Entries: expired.Entries, Bytes: expired.Bytes}
 	if canal := cc.Clients.CanalQuery; canal != nil {

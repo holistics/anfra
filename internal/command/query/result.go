@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
@@ -25,6 +26,21 @@ type QueryResult struct {
 	HasMore bool        `json:"has_more" doc:"whether there may be rows after this page. To get them, ask for the next page, or export the query."`
 	Timings Timings     `json:"timings" pretty:",view=timings" doc:"the query's steps, and when each started. The steps are compiling_query (for AQL only), connecting_to_dw, executing_query, fetching_query_result, and retrying_query, which is a wait before the query is tried again. connecting_to_dw, executing_query, and fetching_query_result may have child steps."`
 	Cache   CacheResult `json:"cache,omitzero" pretty:"-" doc:"what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."`
+}
+
+// Warnings are the query's warnings: its cache's, when it ran without the
+// cache it asked for.
+func (r QueryResult) Warnings() []command.AnswerWarning { return r.Cache.warnings() }
+
+// Warnings are the export's warnings: its query's cache's, when it ran without
+// the cache it asked for.
+func (r QueryExportResult) Warnings() []command.AnswerWarning { return r.Cache.warnings() }
+
+func (c CacheResult) warnings() []command.AnswerWarning {
+	if c.Warning.Code == "" {
+		return nil
+	}
+	return []command.AnswerWarning{{Code: c.Warning.Code, Message: c.Warning.Message}}
 }
 
 // CacheResult is what the query cache did for a query
