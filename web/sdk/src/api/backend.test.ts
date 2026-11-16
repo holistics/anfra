@@ -144,6 +144,18 @@ describe('coreApiBackend', () => {
     expect(result.debug?.cache).toEqual({ key: 'k1:abc', hit: false, warning });
   });
 
+  it("answers a pivot's page with how big its grid is", async () => {
+    const { client } = api(streamed(
+      { type: 'start' },
+      { type: 'compiled', sql: 'select 1' },
+      { type: 'header', columns: answered.columns, fields: answered.result.fields },
+      { type: 'summary', row_count: 0, has_more: true, pivot: { rows: 120, columns: 14 }, timings: { steps: [], end_ms: 1 } },
+      { type: 'end', status: 'succeeded' },
+    ));
+    const result = await coreApiBackend(client).submitQuery(request, signal);
+    expect(result.meta).toMatchObject({ hasMore: true, pivot: { rows: 120, columns: 14 } });
+  });
+
   it("fails a query whose columns come without their types, which a Data App decides by", async () => {
     const { semantic_type: _, ...untyped } = answered.columns[0];
     const { client } = api(asStream({ ...answered, columns: [untyped] }));

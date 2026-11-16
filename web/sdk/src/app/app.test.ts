@@ -645,6 +645,33 @@ describe('retry', () => {
     expect(submitQuery.mock.calls[0][0]).not.toHaveProperty('cacheDuration');
   });
 
+  // A pivot's page is rows of its grid, with the header rows and a rolled-up grand total on
+  // every page: fetchMore adds the next grid rows only, and the result says how big the grid is.
+  it("adds a pivot's next grid rows, without the rows every page repeats", async () => {
+    const pivotColumn = (name: string) => ({ name, fieldName: name, label: name, adhoc: true, isMeasure: false, ...numberTypes });
+    const pages: Record<number, unknown[][]> = {
+      1: [['0', null], ['0', null], ['1', '9'], ['2', '4'], ['3', '3']],
+      2: [['0', null], ['0', null], ['1', '9'], ['4', '2']],
+    };
+    const submitQuery = vi.fn(async (request: BackendQueryRequest) => {
+      const page = request.input.pagination?.page ?? 1;
+      return {
+        values: pages[page],
+        columns: [pivotColumn('__pivot_row__'), pivotColumn('n')],
+        meta: { page, pageSize: 2, numRows: pages[page].length, hasMore: page === 1, pivot: { rows: 3, columns: 2 } },
+      };
+    });
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: { submitQuery, fieldSuggestions: async () => [] } as Backend }).createApp();
+    const grid = app.createQuery('grid', { dataset: 'sales', aql: 'explore { dimensions { rows { rollup(r: orders.status) } } measures { n: count(orders.id) } }', pageSize: 2 });
+
+    await app.execute();
+    await grid.fetchMore();
+
+    expect(grid.result?.rows.map((row) => row.__pivot_row__)).toEqual(['0', '0', '1', '2', '3', '4']);
+    expect(grid.result?.meta).toMatchObject({ pivot: { rows: 3, columns: 2 }, numRows: 6 });
+    expect(grid.hasMore).toBe(false);
+  });
+
   it('keeps the loaded pages when a fetchMore failed: execute() does not rerun it', async () => {
     let failing = false;
     const submitQuery = vi.fn(async () => {
