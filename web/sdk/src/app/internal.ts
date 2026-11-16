@@ -12,6 +12,8 @@ import type {
  */
 export interface AppContext {
   readonly timezone?: string;
+  /** The cache duration of each of its queries that declares none; absent leaves the backend's default. */
+  readonly queryCacheDefaultDuration?: string;
   /** Server-side capabilities the host declared, so a declaration can refuse what would be dropped. */
   readonly features?: SdkFeatures;
   /** The live selection, if any. App-scoped: at most one query is the source at a time. */

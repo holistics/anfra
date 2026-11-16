@@ -233,7 +233,8 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
    */
   function cacheLine (cache: QueryCacheResult | undefined, refreshed: boolean | undefined): Children {
     if (!cache) return h(doc, 'span', { class: 'muted', 'data-tip': NO_CACHE_DURATION }, 'Not used');
-    if (cache.warning) return h(doc, 'span', { class: 'tone-warn' }, `Not used: ${cache.warning.message}`);
+    // The repo turning the cache off is its own choice, not a problem to flag.
+    if (cache.warning) return h(doc, 'span', { class: cache.warning.code === 'cache_disabled' ? 'muted' : 'tone-warn' }, `Not used: ${cache.warning.message}`);
     const { key, cachedAt, expiresAt } = cache;
     const parts: Children[] = [
       cache.hit ? 'Hit' : refreshed ? 'Refreshed' : 'Miss',
@@ -364,7 +365,8 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
           query.state === 'success' ? query.rowCount.toLocaleString() : '—'),
         query.isDirty ? h(doc, 'span', { ...badge('warn') }, 'dirty')
           : query.debug?.fromCache ? h(doc, 'span', { ...badge() }, 'cache')
-            : query.debug?.cache?.warning && h(doc, 'span', { ...badge('warn'), 'data-tip': query.debug.cache.warning.message }, 'no cache'),
+            : query.debug?.cache?.warning && query.debug.cache.warning.code !== 'cache_disabled'
+              && h(doc, 'span', { ...badge('warn'), 'data-tip': query.debug.cache.warning.message }, 'no cache'),
         h(doc, 'span', { class: 'spacer' }),
         filterIndicator(doc, active),
         hasLineage && lineageButton(doc, panel, marker),

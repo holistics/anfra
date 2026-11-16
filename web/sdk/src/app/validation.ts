@@ -125,3 +125,40 @@ export function assertUniqueName (
     }
   }
 }
+
+/** Milliseconds per unit, as Go's `time.ParseDuration` names them: the server reads durations with it. */
+const DURATION_UNITS: Record<string, number> = { ns: 1e-6, us: 1e-3, 'µs': 1e-3, ms: 1, s: 1_000, m: 60_000, h: 3_600_000 };
+
+/** The longest a result can be cached: the server's `querycache.MaxDuration`. */
+const MAX_CACHE_DURATION_MS = 168 * 3_600_000;
+
+/** A duration in milliseconds, as Go's `time.ParseDuration` reads it; undefined when it isn't one, or is negative. */
+export function parseDuration (text: string): number | undefined {
+  if (text === '0') return 0;
+  // Each part a number and its unit, from where the last ended: a failed match resets lastIndex,
+  // so where the parts ended is kept apart.
+  const part = /(\d+(?:\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h)/y;
+  let total = 0;
+  let end = 0;
+  for (let match = part.exec(text); match; match = part.exec(text)) {
+    total += parseFloat(match[1]) * DURATION_UNITS[match[2]];
+    end = part.lastIndex;
+  }
+  return end > 0 && end === text.length ? total : undefined;
+}
+
+/**
+ * Refuses a cache duration the server would refuse, before any query runs: one that isn't a
+ * duration, or is over 7 days. `declarer` says who declared it (`Query 'revenue'`, `The app`), and
+ * `setting` which setting it is.
+ */
+export function assertCacheDuration (duration: unknown, declarer: string, setting: string, entity?: string): void {
+  if (duration === undefined) return;
+  const ms = typeof duration === 'string' ? parseDuration(duration) : undefined;
+  if (ms === undefined) {
+    throw new ValidationError(`${declarer} declares ${setting} ${JSON.stringify(duration)}, which isn't a duration. Use one such as 30s, 10m or 2h.`, entity);
+  }
+  if (ms > MAX_CACHE_DURATION_MS) {
+    throw new ValidationError(`${declarer} declares ${setting} ${duration}, which is over 168h (7 days), the longest a result can be cached.`, entity);
+  }
+}

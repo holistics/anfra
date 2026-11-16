@@ -6,7 +6,7 @@ import {
 import { CrossFilter, Mapping, type Edge } from './mapping';
 import { DataAppError, ValidationError, isDataAppError } from '../common/errors';
 import {
-  assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
+  assertCacheDuration, assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
 } from './validation';
 import {
   buildExportRequest, buildQuery, buildRequest, pageRequest, runQuery, type SubmitContext,
@@ -172,6 +172,9 @@ export class App extends Observable implements AppContext {
 
   private _timezone?: string;
 
+  /** The cache duration of each of the app's queries that declares none (`cache.query.default.duration`). */
+  readonly queryCacheDefaultDuration?: string;
+
   private readonly datasets: Record<string, DatasetIndex>;
 
   private readonly backend: Backend;
@@ -211,6 +214,9 @@ export class App extends Observable implements AppContext {
     super();
     this.title = declaration.title;
     this._timezone = declaration.timezone;
+    const duration = declaration.cache?.query?.default?.duration;
+    assertCacheDuration(duration, 'The app', 'cache.query.default.duration');
+    this.queryCacheDefaultDuration = duration;
     this.datasets = datasets;
     this.backend = backend;
     this.features = features;
@@ -383,7 +389,7 @@ export class App extends Observable implements AppContext {
   /** @internal Backs `query.update`: checks the change against the app, then swaps it in. */
   updateQuery (query: Query, changes: QueryUpdate): void {
     const previous = query.declaration;
-    const declaration = withChanges<QueryDeclaration>(previous, changes, ['dataset', 'aql', 'pageSize']);
+    const declaration = withChanges<QueryDeclaration>(previous, changes, ['dataset', 'aql', 'pageSize', 'cache']);
     assertDeclaration(query.name, declaration);
     const dataset = this.datasetIndex(declaration.dataset, query.name);
 

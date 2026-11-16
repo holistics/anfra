@@ -119,9 +119,9 @@ export interface SelectionInput {
 }
 
 /**
- * What a run and an export of a query share: the query, and everything that reaches it (mapped
- * controls, the selection, the reader's sort, the timezone). One builder, so a page of a query and
- * its export cannot drift apart.
+ * What a run and an export of a query share: the query, everything that reaches it (mapped
+ * controls, the selection, the reader's sort, the timezone), and its cache duration. One builder,
+ * so a page of a query and its export cannot drift apart.
  */
 export function buildQuery (
   query: Query,
@@ -161,6 +161,7 @@ export function buildQuery (
       // than the SDK guessing the browser's.
       ...(context.timezone ? { timezone: context.timezone } : {}),
     },
+    ...(query.cacheDuration ? { cacheDuration: query.cacheDuration } : {}),
   };
 }
 
@@ -189,6 +190,7 @@ export function pageRequest (query: Query, run: Run): BackendQueryRequest {
     dataset: query.dataset.descriptor.name,
     aql: query.declaration.aql,
     input: withPage(run.input, query),
+    ...(query.cacheDuration ? { cacheDuration: query.cacheDuration } : {}),
     ...(run.cachedAt ? { minCachedAt: run.cachedAt } : {}),
   };
 }

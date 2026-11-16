@@ -258,6 +258,8 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
         sorts,
         dateDrills: [],
       },
+      // Cached as the query it drills into is.
+      ...(base.cacheDuration ? { cacheDuration: base.cacheDuration } : {}),
     },
   };
 }

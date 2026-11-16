@@ -227,7 +227,25 @@ describe('editing a query', () => {
     expect(() => query.update({ aql: '  ' })).toThrowError(ValidationError);
     expect(() => query.update({ pageSize: 0 })).toThrowError(/whole number of at least 1/);
     expect(() => query.update({ dataset: 'nowhere' })).toThrowError(ValidationError);
+    expect(() => query.update({ cache: { duration: 'soon' } })).toThrowError(/cache\.duration/);
     expect(query.declaration).toEqual({ dataset: 'sales', aql: AQL.byRegion });
+  });
+
+  it('reruns with a new cache duration, keeping the sort, and drops the duration given undefined', async () => {
+    const { stub, app } = build();
+    const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion, cache: { duration: '0s' } });
+    await app.execute();
+    query.setSort([{ field: 'total', direction: 'desc' }]);
+    await app.execute();
+
+    query.update({ cache: { duration: '10m' } });
+    await app.execute();
+    expect(stub.queries.at(-1)).toMatchObject({ cacheDuration: '10m', input: { sorts: [{ field: 'total', direction: 'desc' }] } });
+
+    query.update({ cache: undefined });
+    expect(query.declaration).toEqual({ dataset: 'sales', aql: AQL.byRegion });
+    await app.execute();
+    expect(stub.queries.at(-1)).not.toHaveProperty('cacheDuration');
   });
 
   it('drops the page size when given undefined', () => {

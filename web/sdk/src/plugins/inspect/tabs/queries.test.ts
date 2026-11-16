@@ -238,6 +238,19 @@ describe('Queries', () => {
     expect(byTestId(root, 'general')?.textContent).toContain('CacheNot used');
   });
 
+  it('shows the repo turning the cache off as its own choice: muted, with no badge', async () => {
+    const message = 'The query ran without the cache, because the repo turns it off (cache.query.enabled: false).';
+    const app = salesApp();
+    app.queries.revenue.debug = { fromCache: false, cache: { hit: false, warning: { code: 'cache_disabled', message } } };
+    harness = await inspect({ tab: QUERIES, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(QUERIES);
+    const row = byTestId(root, 'query-0/revenue')!;
+    expect(row.querySelector(':scope > summary .a-badge')).toBeNull();
+    await open(row);
+    const line = Array.from(byTestId(row, 'general')!.querySelectorAll('dd')).find((dd) => dd.textContent?.startsWith('Not used'));
+    expect(line?.querySelector('.muted')?.textContent).toBe(`Not used: ${message}`);
+  });
+
   // A refresh says so on its request, and a later page shows the bound it sent.
   it("shows a request's refresh, its cache, and a later page's bound", async () => {
     const cachedAt = new Date();
