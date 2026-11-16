@@ -17,7 +17,7 @@ import ShortcutKeys from './ShortcutKeys.vue';
 import SidebarFoot from './SidebarFoot.vue';
 import { sidebarGroupLabel } from './sidebar-menu';
 
-defineProps<{
+withDefaults(defineProps<{
   repoName?: string;
   entries: CatalogEntry[];
   loaded: boolean;
@@ -28,7 +28,11 @@ defineProps<{
   version?: server.Version;
   themeChoice: ThemeChoice;
   theme: 'light' | 'dark';
-}>();
+  /** In the sidebar's peek, rather than the sidebar. */
+  inPeek?: boolean;
+  /** Whether the sidebar holding it shows. */
+  shown?: boolean;
+}>(), { shown: true });
 
 const emit = defineEmits<{
   select: [path: string];
@@ -97,6 +101,8 @@ const paletteShortcut = IS_MAC ? 'Meta+K' : 'Ctrl+K';
     :version="version"
     :theme-choice="themeChoice"
     :theme="theme"
+    :in-peek="inPeek"
+    :shown="shown"
     @set-theme="emit('setTheme', $event)"
   />
 </template>

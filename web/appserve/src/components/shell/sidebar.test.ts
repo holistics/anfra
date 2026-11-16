@@ -1,11 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { h, nextTick, type Component } from 'vue';
+import {
+  h, nextTick, ref, type Component,
+} from 'vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { CatalogEntry } from '@/lib/catalog';
 import { MAX_WIDTH } from '@/lib/sidebar';
 import { mount as mountBare, unmountAll } from '@/test/mount';
 import AppTree from './AppTree.vue';
-import SidebarFoot, { themeMenuOpen } from './SidebarFoot.vue';
+import SidebarFoot from './SidebarFoot.vue';
 import SidebarPanel from './SidebarPanel.vue';
 import SidebarPeek from './SidebarPeek.vue';
 import SidebarResizer from './SidebarResizer.vue';
@@ -13,8 +15,9 @@ import SidebarResizer from './SidebarResizer.vue';
 afterEach(unmountAll);
 
 beforeAll(() => {
-  // jsdom has no pointer capture.
+  // jsdom has no pointer capture, nor the ResizeObserver a tooltip's arrow measures with.
   HTMLElement.prototype.setPointerCapture ??= () => {};
+  globalThis.ResizeObserver ??= class { observe () {} unobserve () {} disconnect () {} } as unknown as typeof ResizeObserver;
 });
 
 /** Mounts inside a TooltipProvider, as App mounts the shell. */
@@ -131,7 +134,7 @@ describe('SidebarFoot', () => {
     const status = host.querySelector('[data-testid="anfra-status"]')!;
     expect(status.getAttribute('role')).toBe('status');
     expect(status.getAttribute('data-status')).toBe('up');
-    expect(status.textContent).toContain('anfra v0.16.0');
+    expect(status.textContent!.trim()).toBe('anfra v0.16.0');
     expect(host.querySelector('[data-testid="status-dot"]')!.className).toContain('bg-success-default');
     expect(host.querySelector('[data-testid="alpha-badge"]')!.textContent).toBe('Alpha');
   });
@@ -158,13 +161,33 @@ describe('SidebarFoot', () => {
     expect(onSetTheme).toHaveBeenCalledWith('system');
   });
 
-  it('stops counting its menu as open when it goes while open, as when the peek closes under it', async () => {
-    const { host, unmount } = await mount(SidebarFoot, props);
+  it('reads out only the status when it changes, not the badges beside it', async () => {
+    const { host } = await mount(SidebarFoot, { ...props, version: { current: '0.16.0', latest: '0.17.0' } });
+    const live = host.querySelector('[role="status"]')!;
+    expect(live.querySelector('[data-testid="alpha-badge"]')).toBeNull();
+    expect(live.querySelector('[data-testid="update-badge"]')).toBeNull();
+    expect(host.querySelector('[data-testid="update-badge"]')).not.toBeNull();
+  });
+
+  it('closes its menu when the sidebar holding it collapses', async () => {
+    const shown = ref(true);
+    const { host } = await mountBare(TooltipProvider, {}, () => h(SidebarFoot as Component, { ...props, shown: shown.value }));
     host.querySelector<HTMLButtonElement>('[data-testid="theme-menu"]')!.click();
     await nextTick();
-    expect(themeMenuOpen.value).toBe(true);
-    unmount();
-    expect(themeMenuOpen.value).toBe(false);
+    await nextTick();
+    expect(document.querySelector('[data-testid="theme-options"]')).not.toBeNull();
+    shown.value = false;
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(document.querySelector('[data-testid="theme-options"]')).toBeNull();
+    expect(host.querySelector('[data-testid="theme-menu"]')!.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('draws its menu in place in the peek, not in a portal', async () => {
+    const { host } = await mount(SidebarFoot, { ...props, inPeek: true });
+    host.querySelector<HTMLButtonElement>('[data-testid="theme-menu"]')!.click();
+    await nextTick();
+    await nextTick();
+    expect(host.querySelector('[data-testid="theme-options"]')).not.toBeNull();
   });
 });
 
@@ -240,27 +263,80 @@ describe('SidebarPeek', () => {
     expect(peek.querySelector('[data-testid="peek-content"]')).not.toBeNull();
   });
 
-  it('closes 150 ms after the pointer leaves, but stays while the theme menu is open', async () => {
+  /** Peeks at a collapsed sidebar holding the real foot, as App does; with fake timers on. */
+  async function peekAtFoot () {
+    const onSetTheme = vi.fn();
+    const { host } = await mount(SidebarPeek, { open: false, narrow: false, width: 256 }, () => h(SidebarFoot, {
+      health: 'up', themeChoice: 'system', theme: 'light', inPeek: true, onSetTheme,
+    }));
+    const toggle = host.querySelector('[data-testid="sidebar-toggle"]')!;
+    toggle.dispatchEvent(new MouseEvent('pointerenter'));
+    await nextTick();
+    await nextTick();
+    const peek = document.querySelector<HTMLElement>('[data-testid="sidebar-peek"]')!;
+    return { toggle, peek, onSetTheme };
+  }
+  const state = () => document.querySelector('[data-testid="sidebar-peek"]')?.getAttribute('data-state') ?? 'closed';
+  const wait = async (ms: number) => {
+    vi.advanceTimersByTime(ms);
+    await nextTick();
+    await nextTick();
+  };
+
+  it('closes 150 ms after the pointer leaves the toggle and the panel', async () => {
     vi.useFakeTimers();
     try {
-      const { host } = await mount(SidebarPeek, { open: false, narrow: false, width: 256 }, content);
-      const toggle = host.querySelector('[data-testid="sidebar-toggle"]')!;
-      const anchor = toggle.parentElement!;
-      const peek = () => document.querySelector('[data-testid="sidebar-peek"]');
-      toggle.dispatchEvent(new MouseEvent('pointerenter'));
-      await nextTick();
-      themeMenuOpen.value = true;
-      anchor.dispatchEvent(new MouseEvent('pointerleave'));
-      vi.advanceTimersByTime(200);
-      await nextTick();
-      expect(peek()?.getAttribute('data-state')).toBe('open');
-      themeMenuOpen.value = false; // the menu closes, the pointer away: the peek follows
-      await nextTick();
-      vi.advanceTimersByTime(200);
-      await nextTick();
-      expect(peek()?.getAttribute('data-state') ?? 'closed').toBe('closed');
+      const { toggle, peek } = await peekAtFoot();
+      toggle.parentElement!.dispatchEvent(new MouseEvent('pointerleave'));
+      peek.dispatchEvent(new MouseEvent('pointerenter'));
+      await wait(200);
+      expect(state()).toBe('open');
+      peek.dispatchEvent(new MouseEvent('pointerleave'));
+      await wait(100);
+      expect(state()).toBe('open');
+      await wait(100);
+      expect(state()).toBe('closed');
     } finally {
-      themeMenuOpen.value = false;
+      vi.useRealTimers();
+    }
+  });
+
+  it('stays open through a pick in the theme menu, which is drawn inside it', async () => {
+    const { peek, onSetTheme } = await peekAtFoot();
+    peek.dispatchEvent(new MouseEvent('pointerenter'));
+    peek.querySelector<HTMLButtonElement>('[data-testid="theme-menu"]')!.click();
+    await nextTick();
+    await nextTick();
+    const option = peek.querySelector<HTMLElement>('[data-theme-option="dark"]')!;
+    expect(option).not.toBeNull();
+    // Not modal: the page keeps the pointer, so the panel under the menu stays pointed at.
+    expect(document.body.style.pointerEvents).not.toBe('none');
+    option.click();
+    // Past the peek's close delay, in real time: the menu's own closing takes a frame.
+    await new Promise((resolve) => { setTimeout(resolve, 250); });
+    expect(onSetTheme).toHaveBeenCalledWith('dark');
+    expect(peek.querySelector('[data-testid="theme-options"]')).toBeNull();
+    expect(state()).toBe('open');
+  });
+
+  it('stays open when focus leaves with the pointer still on it, and closes when it leaves with the pointer away', async () => {
+    vi.useFakeTimers();
+    try {
+      const { peek } = await peekAtFoot();
+      const button = peek.querySelector<HTMLButtonElement>('[data-testid="theme-menu"]')!;
+      peek.dispatchEvent(new MouseEvent('pointerenter'));
+      button.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      await wait(200);
+      expect(state()).toBe('open');
+      peek.dispatchEvent(new MouseEvent('pointerleave'));
+      peek.dispatchEvent(new MouseEvent('pointerenter'));
+      await wait(0);
+      // The pointer away, focus going elsewhere closes it.
+      peek.dispatchEvent(new MouseEvent('pointerleave'));
+      button.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
+      await wait(200);
+      expect(state()).toBe('closed');
+    } finally {
       vi.useRealTimers();
     }
   });

@@ -10,21 +10,26 @@ defineOptions({
 });
 
 const props = withDefaults(
-  defineProps<DropdownMenuContentProps & { class?: HTMLAttributes['class'] }>(),
+  defineProps<DropdownMenuContentProps & {
+    class?: HTMLAttributes['class'];
+    /** Drawn in a portal at the end of the page (the default), or in place, inside the layer that opened it. */
+    portal?: boolean;
+  }>(),
   {
     align: 'start',
     sideOffset: 8,
+    portal: true,
   },
 );
 const emits = defineEmits<DropdownMenuContentEmits>();
 
-const delegatedProps = reactiveOmit(props, 'class');
+const delegatedProps = reactiveOmit(props, 'class', 'portal');
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>
-  <DropdownMenuPortal>
+  <DropdownMenuPortal :disabled="!portal">
     <DropdownMenuContent
       data-slot="dropdown-menu-content"
       v-bind="{ ...$attrs, ...forwarded }"

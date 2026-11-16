@@ -5,6 +5,7 @@ import {
 import {
   Moon, PanelLeft, Sun,
 } from '@lucide/vue';
+import { useStorage } from '@vueuse/core';
 import CommandPalette, { type PaletteEntry } from '@/components/apps/CommandPalette.vue';
 import DataAppFrame from '@/components/apps/DataAppFrame.vue';
 import PluginPanel from '@/components/apps/PluginPanel.vue';
@@ -24,8 +25,10 @@ import {
 import { layerOpen } from '@/lib/layers';
 import { commandIcon, overflowMenus } from '@/lib/pluginUI';
 import * as server from '@/lib/server';
+import { startEdgeDrag } from '@/lib/edgeDrag';
+import { useFolders } from '@/lib/folders';
 import {
-  isSidebarKey, rememberOpen, rememberWidth, SIDEBAR_SHORTCUT, storedOpen, storedWidth,
+  isSidebarKey, keptOpen, keptWidth, SIDEBAR_SHORTCUT,
 } from '@/lib/sidebar';
 import { useTheme } from '@/lib/theme';
 
@@ -103,51 +106,30 @@ async function refreshAll (): Promise<void> {
   revision.value += 1;
 }
 
-const COLLAPSED_KEY = 'anfra-appserve:collapsed-folders';
-function loadCollapsed (): Set<string> {
-  try {
-    return new Set(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY) ?? '[]') as string[]);
-  } catch {
-    return new Set();
-  }
-}
-// Folders start open; a reader collapses what they don't need, and it sticks.
-const collapsed = ref(loadCollapsed());
-
-function setCollapsed (next: Set<string>): void {
-  collapsed.value = next;
-  try {
-    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
-  } catch { /* storage unavailable: the choice just doesn't persist */ }
-}
-
-function toggleFolder (path: string): void {
-  const next = new Set(collapsed.value);
-  if (next.has(path)) next.delete(path);
-  else next.add(path);
-  setCollapsed(next);
-}
+// The folders that show collapsed, the reader's choice kept (lib/folders.ts).
+const folders = useFolders();
 
 const narrowQuery = window.matchMedia('(max-width: 800px)');
 const narrow = ref(narrowQuery.matches);
 // Wide, the sidebar is as the reader left it, at the width they dragged it to; narrow, it floats
 // over the viewer and starts closed (lib/sidebar.ts).
-const sidebarOpen = ref(!narrow.value && storedOpen());
+const sidebarOpen = ref(!narrow.value && keptOpen.value);
 function onNarrowChange (): void {
   narrow.value = narrowQuery.matches;
-  sidebarOpen.value = !narrow.value && storedOpen();
+  sidebarOpen.value = !narrow.value && keptOpen.value;
 }
 function setSidebarOpen (open: boolean): void {
   sidebarOpen.value = open;
-  if (!narrow.value) rememberOpen(open);
+  if (!narrow.value) keptOpen.value = open;
 }
 const toggleSidebar = (): void => setSidebarOpen(!sidebarOpen.value);
-const sidebarWidth = ref(storedWidth());
+// Follows a drag of the edge; kept once the drag ends.
+const sidebarWidth = ref(keptWidth.value);
 // From the press on the sidebar's edge to the release no frame takes the pointer; through a drag
 // the sidebar follows the pointer, without easing.
 const sidebarDrag = ref<'pressing' | 'resizing'>();
 function releaseSidebarEdge (width?: number): void {
-  if (width !== undefined) rememberWidth(width);
+  if (width !== undefined) keptWidth.value = width;
   sidebarDrag.value = undefined;
 }
 function resizeSidebar (width: number): void {
@@ -232,39 +214,32 @@ async function runCommand (command: Command): Promise<void> {
   }
 }
 
-const WIDTH_KEY = 'anfra-appserve:inspect-width';
+// The panel's width, dragged on its edge as the sidebar's is (lib/edgeDrag.ts), and kept once the
+// drag ends.
 const MIN_WIDTH = 280;
-function loadWidth (): number {
-  try {
-    const saved = Number(window.localStorage.getItem(WIDTH_KEY));
-    if (saved >= MIN_WIDTH) return saved;
-  } catch { /* use the default */ }
-  return 380;
-}
-const inspectWidth = ref(loadWidth());
+const keptInspectWidth = useStorage('anfra-appserve:inspect-width', 380, undefined, {
+  writeDefaults: false,
+  onError: () => {},
+  serializer: { read: (value) => (Number(value) >= MIN_WIDTH ? Number(value) : 380), write: String },
+});
+const inspectWidth = ref(keptInspectWidth.value);
 const dragging = ref(false);
 const viewerBody = ref<HTMLElement>();
 
 function startResize (event: PointerEvent): void {
-  const handle = event.currentTarget as HTMLElement;
-  handle.setPointerCapture(event.pointerId);
-  dragging.value = true;
   const body = viewerBody.value?.getBoundingClientRect();
-  const onMove = (move: PointerEvent): void => {
-    if (!body) return;
-    const max = Math.max(MIN_WIDTH, body.width - 240);
-    inspectWidth.value = Math.round(Math.min(max, Math.max(MIN_WIDTH, body.right - move.clientX)));
-  };
-  const onUp = (): void => {
-    dragging.value = false;
-    handle.removeEventListener('pointermove', onMove);
-    handle.removeEventListener('pointerup', onUp);
-    try {
-      window.localStorage.setItem(WIDTH_KEY, String(inspectWidth.value));
-    } catch { /* the width just doesn't persist */ }
-  };
-  handle.addEventListener('pointermove', onMove);
-  handle.addEventListener('pointerup', onUp);
+  const started = startEdgeDrag(event, {
+    move: (_dx, moved) => {
+      if (!body) return;
+      const max = Math.max(MIN_WIDTH, body.width - 240);
+      inspectWidth.value = Math.round(Math.min(max, Math.max(MIN_WIDTH, body.right - moved.clientX)));
+    },
+    end: (dragged) => {
+      dragging.value = false;
+      if (dragged) keptInspectWidth.value = inspectWidth.value;
+    },
+  });
+  if (started) dragging.value = true;
 }
 
 const loading = ref(false);
@@ -295,12 +270,11 @@ function select (path: string): void {
   if (narrow.value) sidebarOpen.value = false;
 }
 
-// Breadcrumb folders: open the sidebar, expand the folder and bring it into view.
+// Breadcrumb folders: open the sidebar, show the folder open and bring it into view. Shown, as
+// the open Data App's folders are, not kept: the reader's own toggle is what sticks.
 async function revealFolder (path: string): Promise<void> {
   setSidebarOpen(true);
-  const next = new Set(collapsed.value);
-  next.delete(path);
-  setCollapsed(next);
+  folders.reveal([path]);
   await nextTick();
   document.querySelector(`[data-folder="${CSS.escape(path)}"]`)?.scrollIntoView({ block: 'nearest' });
 }
@@ -316,8 +290,7 @@ watch(() => (selected.value ? `${selected.value.path}#${revision.value}` : ''), 
 }, { immediate: true });
 // The tree opens down to the open Data App, however it was opened: the tree, the palette, a link.
 watch(() => selected.value?.path, (path) => {
-  const closed = path ? folderPaths(path).filter((folder) => collapsed.value.has(folder)) : [];
-  if (closed.length) setCollapsed(new Set([...collapsed.value].filter((folder) => !closed.includes(folder))));
+  if (path) folders.reveal(folderPaths(path));
 }, { immediate: true });
 watch(selectedPath, () => {
   keptPanel = undefined;
@@ -365,12 +338,12 @@ function onKeydown (event: KeyboardEvent): void {
     paletteOpen.value = !paletteOpen.value;
     return;
   }
+  if (paletteOpen.value) return;
   if (isSidebarKey(event)) {
     event.preventDefault();
     toggleSidebar();
     return;
   }
-  if (paletteOpen.value) return;
   // The plugins' shortcuts first (Alt+Shift+I for Inspect); the frame forwards its own.
   if (app.value?.handleKeydown(event)) return;
   const target = event.target as HTMLElement | null;
@@ -393,13 +366,13 @@ const sidebarPanel = computed(() => ({
   loaded: loaded.value,
   loadError: loadError.value,
   selected: selected.value?.path,
-  collapsed: collapsed.value,
+  collapsed: folders.collapsed.value,
   health: health.value,
   version: version.value,
   themeChoice: themeChoice.value,
   theme: theme.value,
   onSelect: select,
-  onToggle: toggleFolder,
+  onToggle: folders.toggle,
   onOpenPalette: () => { paletteOpen.value = true; },
   onSetTheme: setTheme,
   onRetry: retryCatalog,
@@ -468,7 +441,7 @@ onBeforeUnmount(() => {
     >
       <Scrim v-if="narrow && sidebarOpen" @click="setSidebarOpen(false)" />
       <AppSidebar :open="sidebarOpen" :narrow="narrow">
-        <SidebarPanel v-bind="sidebarPanel" />
+        <SidebarPanel v-bind="sidebarPanel" :shown="sidebarOpen" />
       </AppSidebar>
       <SidebarResizer
         v-if="!narrow && sidebarOpen"
@@ -498,7 +471,7 @@ onBeforeUnmount(() => {
         >
           <template #toggle>
             <SidebarPeek :open="sidebarOpen" :narrow="narrow" :width="sidebarWidth" @toggle-sidebar="toggleSidebar">
-              <SidebarPanel v-bind="sidebarPanel" />
+              <SidebarPanel v-bind="sidebarPanel" in-peek />
             </SidebarPeek>
           </template>
         </AppHeader>
