@@ -437,7 +437,8 @@ export class Query extends Observable {
     this.lastPageRows = result.rows.length;
 
     if (append && this._result) {
-      const rows = [...this._result.rows, ...result.rows];
+      const added = result.meta.pivot ? newGridRows(this._result.rows, result.rows) : result.rows;
+      const rows = [...this._result.rows, ...added];
       this._result = { ...result, rows, meta: { ...result.meta, numRows: rows.length } };
     } else {
       this._result = result;
@@ -475,6 +476,19 @@ export class Query extends Observable {
   toJSON (): QueryDeclaration {
     return this._declaration;
   }
+}
+
+/** A pivot's result column that ranks each row in its grid: 0 for a header row. */
+const PIVOT_ROW = '__pivot_row__';
+
+/**
+ * The rows of a pivot's page that add to those loaded: its grid rows. Every page repeats the
+ * header rows, and a rolled-up grand total, which those loaded have already, by rank; a grid row
+ * is on one page only.
+ */
+function newGridRows (loaded: readonly Row[], page: readonly Row[]): Row[] {
+  const ranks = new Set(loaded.map((row) => String(row[PIVOT_ROW])));
+  return page.filter((row) => !ranks.has(String(row[PIVOT_ROW])));
 }
 
 /** What the installed plugins add to every query (`AnfraPlugins`): each member is there only where its plugin is. */

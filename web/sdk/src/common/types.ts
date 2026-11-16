@@ -210,8 +210,10 @@ export interface QueryDeclaration {
   aql: string;
   /**
    * Rows per page, a whole number of at least 1. Past the first page, use `fetchMore()`. Leave it
-   * out to get every row in one result. anfra can't page a pivot query (`rows { }` / `columns { }`),
-   * so a pivot query must not declare one.
+   * out to get every row in one result. A pivot query's (`rows { }` / `columns { }`) page is
+   * `pageSize` rows of its grid, each with every cell it has, and the grid's header rows:
+   * `fetchMore()` adds the next grid rows, without repeating the header rows or a grand total, and
+   * `result.meta.pivot` says how big the grid is.
    */
   pageSize?: number;
   /** How this query uses the backend's result cache. Without it, the app's default. */
@@ -400,8 +402,20 @@ export interface QueryResult {
      * mean more may follow.
      */
     hasMore?: boolean;
+    /** For a paged pivot query: how big its grid is, across every page. */
+    pivot?: QueryPivot;
   };
   debug?: QueryDebug;
+}
+
+/**
+ * How big a paged pivot's grid is, across every page: its rows (`__pivot_row__` 1 and up), the
+ * grand total not counted, and its columns, the total column not counted. Divide `rows` by the
+ * page size to number its pages.
+ */
+export interface QueryPivot {
+  rows: number;
+  columns: number;
 }
 
 export type QueryState = 'idle' | 'executing' | 'success' | 'error';
@@ -752,6 +766,8 @@ export interface BackendQueryResult {
     numRows?: number;
     /** For a paged query: whether rows may follow this page. Omit it when not known. */
     hasMore?: boolean;
+    /** For a paged pivot query: how big its grid is. Omit it for any other query. */
+    pivot?: QueryPivot;
   };
   debug?: QueryDebug;
   /** The input as the query ran, its seeds filled in: for its next page and its export. Omit it when not known. */

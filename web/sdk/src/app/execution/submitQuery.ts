@@ -104,6 +104,7 @@ function toResult (query: Query, data: BackendQueryResult): QueryResult {
             page: data.meta?.page ?? query.page,
             pageSize: data.meta?.pageSize ?? pageSize,
             ...(data.meta?.hasMore !== undefined ? { hasMore: data.meta.hasMore } : {}),
+            ...(data.meta?.pivot ? { pivot: data.meta.pivot } : {}),
           }
         : {}),
       numRows: data.meta?.numRows ?? rows.length,

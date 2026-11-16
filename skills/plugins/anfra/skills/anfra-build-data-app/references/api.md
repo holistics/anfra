@@ -83,7 +83,7 @@ host's Refresh command reads it again from the warehouse.
 
 | Member | Does |
 | --- | --- |
-| `app.createQuery(name, { dataset, aql, pageSize?, cache? })` | Declares a query. Without `pageSize` it is not paged and returns every row. With one (a whole number of at least 1; anything else throws) it returns a page at a time: page further with `fetchMore()`. A pivot query (`rows { }` / `columns { }`) can't be paged, so must not declare one. `cache: { duration }` is how old a cached result it accepts, overriding the app's default: `'0s'` for a query that must always be live. |
+| `app.createQuery(name, { dataset, aql, pageSize?, cache? })` | Declares a query. Without `pageSize` it is not paged and returns every row. With one (a whole number of at least 1; anything else throws) it returns a page at a time: page further with `fetchMore()`. A pivot query's (`rows { }` / `columns { }`) page is that many rows of its grid, with their cells and the header rows; `fetchMore()` adds the next grid rows without repeating the header rows or a grand total, and `result.meta.pivot` (`rows`, `columns`) says how big the grid is. `cache: { duration }` is how old a cached result it accepts, overriding the app's default: `'0s'` for a query that must always be live. |
 | `app.createFilter(name, decl)` | Declares a filter. See [Filter](#filter). |
 | `app.createDateDrill(name, { default?, label? })` | Declares a date grain switch. See [Date drill](#date-drill). |
 | `app.mapControl(control, query, { field, aggregation? })` | The control conditions `field` of `query`. Returns the mapping; `mapping.remove()` takes it out. |
@@ -140,7 +140,7 @@ a bare dataset metric is an aggregate condition too.
 | Member | Does |
 | --- | --- |
 | `query.state` | `'idle' \| 'executing' \| 'success' \| 'error'` |
-| `query.result` | `{ columns, rows, meta: { numRows, page?, pageSize?, hasMore? }, debug? }` (`page`, `pageSize` and `hasMore` only for a paged query), or `undefined` before success. Kept while re-executing, so you can render stale data under a spinner. For a paged query, `rows` and `numRows` count the pages loaded so far, not the whole result, and `debug` describes the latest page's request. |
+| `query.result` | `{ columns, rows, meta: { numRows, page?, pageSize?, hasMore?, pivot? }, debug? }` (`page`, `pageSize` and `hasMore` only for a paged query, `pivot` only for a paged pivot), or `undefined` before success. Kept while re-executing, so you can render stale data under a spinner. For a paged query, `rows` and `numRows` count the pages loaded so far, not the whole result, and `debug` describes the latest page's request. |
 | `query.error` | The error when `state === 'error'`. |
 | `query.setSort([{ field, direction }])` | Sorts by a result column `name`. `[]` restores the AQL's own sort. Re-run with `execute()`. |
 | `await query.execute({ force? })` | Runs this query alone, with the inputs the app last applied, when its own sort or the timezone changed or its last run failed; with `force`, whatever changed, and a paged query from its first page. Applies none of the reader's pending control or selection changes: `app.execute()` applies those, for every query. Resolves `{ succeeded, failed }`, never rejects. For one block's own refresh or retry. |

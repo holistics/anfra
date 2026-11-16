@@ -141,6 +141,7 @@ async function runQuery (client: CoreClient, body: QueryRequestParams, signal: A
           break;
         case 'summary':
           result.has_more = event.has_more;
+          if (event.pivot) result.pivot = event.pivot;
           result.timings = event.timings;
           if (event.cache) result.cache = event.cache;
           break;
@@ -172,6 +173,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         values,
         meta: {
           ...(pagination ? { page: pagination.page, pageSize: pagination.pageSize, hasMore: data.has_more } : {}),
+          ...(data.pivot ? { pivot: { rows: data.pivot.rows, columns: data.pivot.columns } } : {}),
           numRows: values.length,
         },
         debug: {
