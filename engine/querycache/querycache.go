@@ -21,6 +21,11 @@ type (
 	Settings = command.QueryCacheSettings
 	// Defaults are the cache options of a query that sets none.
 	Defaults = command.QueryCacheDefaults
+	// Contents are what the cache holds, and where, as Cache.Contents
+	// answers for cache.status.
+	Contents = command.QueryCacheContents
+	// StoreContents are what a store holds at a time: Contents without where.
+	StoreContents = cache.Contents
 
 	// Summarizer reports the cache's state, as status does.
 	Summarizer = cache.Summarizer
@@ -39,6 +44,8 @@ type (
 	Lake = cache.Lake
 	// Write is a write of a key's result in progress.
 	Write = cache.Write
+	// Swept is what a Manager's sweep removed.
+	Swept = cache.Swept
 
 	// Store keeps the cache's metadata. A platform may implement it on its own
 	// database; engine/querycachetest is what it must pass.
@@ -66,6 +73,19 @@ const (
 	Unavailable  = cache.StateUnavailable
 	Disabled     = cache.StateDisabled
 )
+
+// The kinds of Tag: what a query read, which a clean selects its entries by.
+const (
+	TagDataSource = cache.TagDataSource
+	TagDataset    = cache.TagDataset
+	TagModel      = cache.TagModel
+)
+
+// DefaultReadGrace is how long after an entry expires a Manager keeps its
+// file, unless its Config says otherwise: the longest a read of it can run, and
+// a margin. A platform sweeping its store across tenants removes no entry
+// expired for less.
+const DefaultReadGrace = cache.DefaultReadGrace
 
 // MaxDuration is the longest a query may ask the cache to keep its result,
 // and accept a cached one for.
