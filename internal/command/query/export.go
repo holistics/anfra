@@ -119,6 +119,8 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 		described []anfranode.ExploreColumn
 		st        statement
 		bounds    = query.Unbounded
+		// a page asked for, read as it was compiled; SQL's isn't compiled
+		p = newPageReading(in.Input.Pagination, nil)
 	)
 	// Told to the invocation's query observer as a query run is (execute); its
 	// timings kept by a tracker that streams nothing.
@@ -160,6 +162,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 			return QueryExportResult{}, err
 		}
 		name, described = in.Dataset, compiled.Columns
+		p = newPageReading(in.Input.Pagination, &compiled)
 		o.compiled(ctx, compiled.DataSource.Name, in.Dataset, compiled.AQL, compiled.SQL)
 		dq, err := query.InDataSource(ctx, src.DataSources, compiled)
 		if err != nil {
@@ -171,7 +174,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 	var cache CacheResult
 	link, err := writeCSV(ctx, cc.Exports, in.filename(name, "csv"), in.options(), described, func(h canalquery.Handler) error {
 		var err error
-		cache, err = st.runCached(ctx, queryRun{cc: cc, in: in.runInput()}, t, cc.Clients.CanalQuery, bounds, o.handler(ctx, h))
+		cache, err = st.runCached(ctx, queryRun{cc: cc, in: in.runInput()}, t, cc.Clients.CanalQuery, bounds, p.handler(o.handler(ctx, h)))
 		return err
 	})
 	if err != nil {

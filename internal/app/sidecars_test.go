@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -89,7 +90,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"query, a Query Input entry anfra-node refuses", valid, clients, Request{Command: "query", Args: shaped(map[string]any{
 			"input": map[string]any{"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}})}, "", apperr.ValidationFailed},
 		{"query, a pivot paged", valid, clients, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "page_size": 2,
-			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}}, "", apperr.ValidationFailed},
+			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}}, ok, nil},
 		{"cache status, a server with no query cache", valid, clients, Request{Command: "cache.status"}, ok, nil},
 		{"cache clean, a server with no query cache", valid, clients, Request{Command: "cache.clean"}, "", errcode.CacheDisabled},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
@@ -128,6 +129,16 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		lines := strings.Split(strings.TrimSpace(string(b)), "\n")
 		if lines[0] != "name" || len(lines)-1 != link.RowCount || link.RowCount == 0 || link.Filename != "ecommerce.csv" {
 			t.Errorf("link %+v, file:\n%s", link, b)
+		}
+
+		// A page exported: its rows, not the one past them that says there are more.
+		res, err = Dispatch(ctx, cc, Request{Command: "query.export", Args: map[string]any{"dataset": "ecommerce", "input": map[string]any{"pagination": map[string]any{"page": 1, "pageSize": 2}},
+			"query": "explore { dimensions { name: products.name } }"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := res.Data.(querycmd.QueryExportResult).RowCount; n != 2 {
+			t.Errorf("an exported page of 2: %d rows", n)
 		}
 	})
 
@@ -183,8 +194,6 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		for path, args := range map[string]map[string]any{
 			"input.filters[0].field": shaped(map[string]any{"input": map[string]any{
 				"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}}),
-			"page_size": {"dataset": "ecommerce", "page_size": 2,
-				"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"},
 		} {
 			_, err := Dispatch(ctx, cc, Request{Command: "query", Args: args})
 			if d, _ := apperr.DetailsOf(err, apperr.ValidationFailed); len(d.Violations) != 1 || d.Violations[0].Field != path {
@@ -197,8 +206,31 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if n := len(res.Data.(querycmd.QueryResult).Result.Records); n != 1 {
-			t.Errorf("page 2 of 3 rows by 2: %d rows, want 1", n)
+		if r := res.Data.(querycmd.QueryResult); len(r.Result.Records) != 1 || r.HasMore {
+			t.Errorf("page 2 of 3 rows by 2: %d rows, more %v; want 1, and none", len(r.Result.Records), r.HasMore)
+		}
+		res, err = Dispatch(ctx, cc, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "input": map[string]any{"pagination": map[string]any{"page": 1, "pageSize": 3}},
+			"query": "explore { dimensions { name: products.name } }"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r := res.Data.(querycmd.QueryResult); len(r.Result.Records) != 3 || r.HasMore {
+			t.Errorf("page 1 of 3 rows by 3: %d rows, more %v; want 3, and none past them", len(r.Result.Records), r.HasMore)
+		}
+
+		// A pivot's page: its grid's rows, every row of them, its counts taken
+		// out of the rows and answered as numbers.
+		res, err = Dispatch(ctx, cc, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "input": map[string]any{"pagination": map[string]any{"page": 1, "pageSize": 2}},
+			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pivot := res.Data.(querycmd.QueryResult)
+		if pivot.Pivot == nil || pivot.Pivot.Rows != 3 || pivot.Pivot.Columns != 3 || !pivot.HasMore || slices.Contains(pivot.Result.Fields, "__pivot_row_count__") || len(pivot.Columns) != len(pivot.Result.Fields) {
+			t.Errorf("a pivot's page 1 of 3 grid rows by 2: %+v, more %v, fields %v", pivot.Pivot, pivot.HasMore, pivot.Result.Fields)
+		}
+		if len(pivot.Result.Records) <= 2 {
+			t.Errorf("a pivot's page: %d rows, want its header rows and its 2 grid rows' cells", len(pivot.Result.Records))
 		}
 	})
 

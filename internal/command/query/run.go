@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -63,9 +64,10 @@ type QueryRecords struct {
 // QuerySummary ends the result: how many rows it held, and, for a page,
 // whether there are more.
 type QuerySummary struct {
-	Type     string `json:"type" enum:"summary"`
-	RowCount int    `json:"row_count"`
-	HasMore  bool   `json:"has_more" doc:"whether there may be rows after this page. Without input.pagination, every row was sent, and this is false."`
+	Type     string     `json:"type" enum:"summary"`
+	RowCount int        `json:"row_count"`
+	HasMore  bool       `json:"has_more" doc:"whether there are rows after this page; for a pivot, rows of its grid. Without input.pagination, every row was sent, and this is false."`
+	Pivot    *PivotPage `json:"pivot,omitempty" doc:"for a page of a pivot: its grid's size, and whether there are columns after this page's. Absent for any other query."`
 	// BytesScanned is what the warehouse read to run the query, as it reports
 	// it: BigQuery and Athena.
 	BytesScanned *int64      `json:"bytes_scanned,omitempty" doc:"the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)"`
@@ -247,10 +249,13 @@ func (r queryRun) inDataSource(ctx context.Context, compiled *anfranode.CompileT
 	return query.InDataSource(ctx, r.src.DataSources, *compiled)
 }
 
-// ran is what a run produced besides its rows.
+// ran is what a run produced besides its rows: its timings, what the cache did,
+// and for a page, whether more follow and, for a pivot's, its grid's size.
 type ran struct {
 	timings Timings
 	cache   CacheResult
+	hasMore bool
+	pivot   *PivotPage
 }
 
 // execute runs the query: compiled, when it is AQL, then answered through the
@@ -291,16 +296,19 @@ func (r queryRun) execute(ctx context.Context, truncate int, s sink) (_ ran, err
 		return ran{}, asQueryFailed(err)
 	}
 	st := statement{query: dq, aql: aql, compilerKey: compilerKey, dataset: dataset}
-	h := o.handler(ctx, canalquery.Handler{
+	// The page read as it was compiled, outermost: the cache keeps the rows as
+	// the warehouse answered them, and its hit is read the same way.
+	p := newPageReading(r.in.Input.Pagination, compiled)
+	h := p.handler(o.handler(ctx, canalquery.Handler{
 		Header: func(hd canalquery.Header) error { return s.header(describeColumns(hd, columns), hd.Fields) },
 		Row:    s.row,
-	})
+	}))
 	bounds := query.Bounded(truncate, r.cc.QueryLimits)
 	cache, err := st.runCached(ctx, r, t, r.cc.Clients.CanalQuery, bounds, h)
 	if err != nil {
 		return ran{}, asQueryFailed(err)
 	}
-	return ran{timings: t.timings(), cache: cache}, nil
+	return ran{timings: t.timings(), cache: cache, hasMore: p.hasMore(), pivot: p.pivot()}, nil
 }
 
 // observation is a query as the invocation's observer is told of it: once
@@ -374,13 +382,13 @@ func asQueryFailed(err error) error {
 	return apperr.Encapsulate(err, errcode.QueryFailed, e.Message)
 }
 
-// page is the query answered whole: one page, at most MaxPageSize rows and the
-// host's page bytes. With page_size, the page is compiled into the SQL, and a
-// full page may have more after it. Without, it is the first MaxPageSize rows,
-// and one more row asked for says whether there are more.
+// page is the query answered whole: one page, within the host's page bytes.
+// With a page asked for, the page is compiled into the SQL, which says
+// whether more follow (pageReading). Without, it is the first MaxPageSize
+// rows, and one more row asked for says whether there are more.
 func (r queryRun) page(ctx context.Context) (QueryResult, error) {
-	keep, truncate := r.in.Input.pageSize(), query.NoLimit
-	if keep == 0 {
+	keep, truncate := math.MaxInt, query.NoLimit
+	if r.in.Input.pageSize() == 0 {
 		keep, truncate = MaxPageSize, MaxPageSize+1
 		if r.limit != query.NoLimit && r.limit <= MaxPageSize {
 			keep, truncate = r.limit, r.limit
@@ -416,8 +424,8 @@ func (r queryRun) page(ctx context.Context) (QueryResult, error) {
 	if err != nil {
 		return QueryResult{}, err
 	}
-	if n := r.in.Input.pageSize(); n > 0 {
-		result.HasMore = len(result.Result.Records) == n
+	if r.in.Input.pageSize() > 0 {
+		result.HasMore, result.Pivot = ran.hasMore, ran.pivot
 	}
 	result.Timings, result.Cache = ran.timings, ran.cache
 	return result, nil
@@ -463,6 +471,6 @@ func (r queryRun) stream(ctx context.Context, events apikit.Events[QueryEvent]) 
 	if err := flush(); err != nil {
 		return err
 	}
-	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: r.in.Input.pageSize() > 0 && count == r.in.Input.pageSize(),
+	return events.Emit(QuerySummary{Type: "summary", RowCount: count, HasMore: ran.hasMore, Pivot: ran.pivot,
 		BytesScanned: scanned, Cache: ran.cache, Timings: ran.timings})
 }
