@@ -59,7 +59,7 @@ export interface RequestEntry {
   /** For a call the log doesn't know: its request, as the frame sent it. */
   request?: unknown;
   fromCache?: boolean;
-  /** What the cache did for a query, as its answer said. */
+  /** What the cache did for a query or an export, as its answer said. */
   cache?: QueryCacheResult;
   numRows?: number;
   columns?: string[];
@@ -154,8 +154,10 @@ function summarize (call: string, result: unknown, previewRows: number): Partial
     }
     case 'core.fieldSuggestions':
       return { numRows: (result as ConditionValue[]).length };
-    case 'export.query':
-      return { numRows: (result as ExportResult).rowCount };
+    case 'export.query': {
+      const r = result as ExportResult;
+      return { numRows: r.rowCount, cache: r.cache };
+    }
     case 'lineage.trace':
       return { numRows: (result as LineageResult).results.length };
     default:

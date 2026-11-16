@@ -58,13 +58,14 @@ func TestCompilingAsksOnlyForDialects(t *testing.T) {
 	}
 }
 
-// Running asks for exactly one connection, the compiled query's data source's,
-// and no dialects.
+// Putting a compiled query in its data source, to run it, asks for exactly one
+// connection, the compiled query's data source's, and no dialects.
 func TestRunningAsksForOneConnection(t *testing.T) {
 	spy := &spySources{set: warehouse}
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "warehouse", DBType: "postgresql"}}
-	canal := canalquery.NewClient("http://127.0.0.1:1", false).ForTenant("org_1") // nothing listens: the run fails after the data source is fetched
-	_ = Stream(context.Background(), canal, spy, compiled, Unbounded, canalquery.Handler{Row: func(canalquery.Row) error { return nil }})
+	if _, err := InDataSource(context.Background(), spy, compiled); err != nil {
+		t.Fatal(err)
+	}
 	if spy.dialects != 0 || len(spy.connections) != 1 || spy.connections[0] != "warehouse" {
 		t.Errorf("running asked for %d dialects and connections %v; want the warehouse connection only", spy.dialects, spy.connections)
 	}
@@ -112,12 +113,11 @@ func TestRunsWithTheDataSourcesSettings(t *testing.T) {
 // refusal (an authorization failure, say) reaches the caller as it is.
 func TestConnectionRefusals(t *testing.T) {
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "gone"}}
-	canal := canalquery.NewClient("http://127.0.0.1:1", false).ForTenant("org_1")
-	if err := Stream(context.Background(), canal, &spySources{set: warehouse}, compiled, Unbounded, canalquery.Handler{}); err == nil || !strings.Contains(err.Error(), `data source "gone", which isn't defined`) {
+	if _, err := InDataSource(context.Background(), &spySources{set: warehouse}, compiled); err == nil || !strings.Contains(err.Error(), `data source "gone", which isn't defined`) {
 		t.Errorf("an unknown data source: %v", err)
 	}
 	denied := errors.New("the host refuses this data source")
-	if err := Stream(context.Background(), canal, &spySources{set: warehouse, err: denied}, compiled, Unbounded, canalquery.Handler{}); !errors.Is(err, denied) {
+	if _, err := InDataSource(context.Background(), &spySources{set: warehouse, err: denied}, compiled); !errors.Is(err, denied) {
 		t.Errorf("the host's refusal: %v, want it as it is", err)
 	}
 }

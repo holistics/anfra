@@ -107,8 +107,12 @@ func TestResultAtTheMaximumIsAnswered(t *testing.T) {
 func TestOwnLimitWithinTheMaximum(t *testing.T) {
 	canal, truncate := canalAnswering(t, 2)
 	compiled := anfranode.CompileToSQLResult{SQL: "select 1", DataSource: anfranode.CompileDataSource{Name: "warehouse", DBType: "postgresql"}}
+	q, err := InDataSource(context.Background(), datasource.Set{"warehouse": sqlSource}, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
 	n := 0
-	err := Stream(context.Background(), canal, datasource.Set{"warehouse": sqlSource}, compiled, ResultBounds{Truncate: 2, MaxRows: 5}, rows(&n))
+	err = q.Stream(context.Background(), canal, ResultBounds{Truncate: 2, MaxRows: 5}, rows(&n))
 	if err != nil || n != 2 {
 		t.Fatalf("got %d rows, %v; want 2 rows", n, err)
 	}

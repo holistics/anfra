@@ -790,6 +790,8 @@ export interface ExportResult {
   /** The rows the file holds. */
   rowCount: number;
   expiresAt: Date;
+  /** What the backend's result cache did for the export's query. Absent when it didn't use one. */
+  cache?: QueryCacheResult;
 }
 
 /**

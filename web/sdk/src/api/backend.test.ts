@@ -357,6 +357,15 @@ describe('coreApiBackend', () => {
       expect((sent[0].body as { cache?: unknown }).cache).toEqual({ min_cached_at: '2026-11-16T09:30:00.123Z' });
     });
 
+    it('answers what the cache did for the export\'s query', async () => {
+      const { client } = api(ok({
+        url: 'u', filename: 'f.csv', format: 'csv', row_count: 2, expires_at: '2026-10-13T10:00:00Z',
+        cache: { key: 'k1:abc', hit: true, cached_at: '2026-11-16T09:30:00.123Z', expires_at: '2026-11-16T10:30:00.123Z' },
+      }));
+      const link = await coreApiBackend(client).exportQuery!(exportRequest, signal);
+      expect(link.cache).toEqual({ key: 'k1:abc', hit: true, cachedAt: new Date('2026-11-16T09:30:00.123Z'), expiresAt: new Date('2026-11-16T10:30:00.123Z') });
+    });
+
     it('fails as the SDK error the API error is', async () => {
       const { client } = api(
         fail(500, { code: 'exports_unavailable', scope: 'server', message: 'This server cannot make exports.' }),

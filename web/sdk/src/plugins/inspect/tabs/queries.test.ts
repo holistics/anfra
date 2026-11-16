@@ -5,6 +5,7 @@ import {
   byTestId, inspect, REVENUE_AQL, REVENUE_STAMP, revenueResult, salesApp, salesSnapshot, type Harness,
 } from './testSupport';
 import { lineagePlugin } from '../../lineage';
+import { exportPlugin } from '../../export';
 
 const QUERIES = 'inspect.queries';
 
@@ -268,6 +269,20 @@ describe('Queries', () => {
     await open(later);
     expect(byTestId(later, 'cache')?.textContent).toMatch(/^Miss · read/);
     expect(later.textContent).toContain(`"minCachedAt": "${cachedAt.toISOString()}"`);
+  });
+
+  it("shows what the cache did for an export's query", async () => {
+    const exportQuery = async () => ({
+      url: 'u', filename: 'revenue.csv', format: 'csv', rowCount: 2, expiresAt: new Date(),
+      cache: { hit: true, key: 'k1:abc', cachedAt: new Date(Date.now() - 181 * 60_000), expiresAt: new Date(Date.now() + 57.5 * 60_000) },
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {}); // the plugin saves the file through a link
+    harness = await inspect({ tab: QUERIES, plugins: [exportPlugin({ exportQuery })] });
+    const { root } = await harness.tab(QUERIES);
+    await harness.frameCall('export.query', { dataset: 'sales', aql: REVENUE_AQL, input: {}, format: 'csv' }, REVENUE_STAMP);
+    const row = await open(byTestId(root, 'query-0/revenue'));
+    const request = (await open(byTestId(row, 'requests'))).querySelector<HTMLElement>('[data-testid^="request-"]')!;
+    expect(byTestId(await open(request), 'cache')?.textContent).toBe('Hit · read 3h ago · expires in 57m');
   });
 
   it('lists requests no query claims under Other requests', async () => {

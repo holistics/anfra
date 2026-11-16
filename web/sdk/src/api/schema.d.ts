@@ -656,24 +656,6 @@ export interface components {
              */
             header?: "labels" | "names" | "none";
         };
-        ExportLink: {
-            /**
-             * Format: date-time
-             * @description when the link stops working
-             */
-            expires_at: string;
-            /** @description the file's name, as a download saves it */
-            filename: string;
-            /** @description the file's format */
-            format: string;
-            /**
-             * Format: int64
-             * @description how many rows the file holds
-             */
-            row_count: number;
-            /** @description where to download the file: a plain GET, with no credentials, until expires_at */
-            url: string;
-        };
         FieldLineage: {
             /** @description the field's lineage. Absent when error is set. */
             diagram?: components["schemas"]["Diagram"];
@@ -870,7 +852,7 @@ export interface components {
             query: string;
         };
         QueryExportRequestParams: {
-            /** @description how to use the query cache for this export. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached. */
+            /** @description how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached. */
             cache?: components["schemas"]["CacheOptions"];
             /** @description the data source a SQL query runs against */
             data_source?: string;
@@ -901,6 +883,26 @@ export interface components {
              * @description deprecated: use input.timezone. Ignored when input.timezone is set.
              */
             timezone?: string;
+        };
+        QueryExportResult: {
+            /** @description what the query cache did for the export's query: whether the file was written from a cached result, and when its rows were read from the warehouse. Absent when the export doesn't use the cache: it sets no cache.duration and the repo no default, or 0s. */
+            cache?: components["schemas"]["CacheResult"];
+            /**
+             * Format: date-time
+             * @description when the link stops working
+             */
+            expires_at: string;
+            /** @description the file's name, as a download saves it */
+            filename: string;
+            /** @description the file's format */
+            format: string;
+            /**
+             * Format: int64
+             * @description how many rows the file holds
+             */
+            row_count: number;
+            /** @description where to download the file: a plain GET, with no credentials, until expires_at */
+            url: string;
         };
         QueryFilter: {
             /** @description the aggregation to apply to the field before filtering, such as sum */
@@ -1746,7 +1748,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExportLink"];
+                    "application/json": components["schemas"]["QueryExportResult"];
                 };
             };
             /** @description invalid_request */

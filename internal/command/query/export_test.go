@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
@@ -185,5 +186,54 @@ func TestExportEmptyResult(t *testing.T) {
 	}
 	if store.buf.String() != "Order ID,Note\n" || link.RowCount != 0 {
 		t.Errorf("file = %q, %d rows; want the header alone", store.buf.String(), link.RowCount)
+	}
+}
+
+// An export goes through the query cache as query does: a miss writes the file
+// from the warehouse and caches the result; the next export of the query
+// writes its file from that result, the miss's header kept; cached_only
+// answers from it. Its answer says what the cache did, beside the link.
+func TestExportThroughTheCache(t *testing.T) {
+	ctx := context.Background()
+	canal, sent := canalLakeStub(t, false)
+	qc := newStandIn(ctx, t)
+	cc := command.CommandContext{
+		Clients:     command.Clients{CanalQuery: canal},
+		DataSources: datasource.Set{"w": {Name: "w", DBType: "duckdb", Connection: map[string]any{}, Identity: "id1"}},
+		QueryCache:  qc,
+		TenantID:    "acme",
+	}
+	export := func(opts CacheOptions) (QueryExportResult, string) {
+		t.Helper()
+		store := &memStore{}
+		cc.Exports = store
+		res, err := runExport(ctx, cc, QueryExportRequestParams{QueryDefinition: QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "w"}, Cache: opts})
+		if err != nil || !store.done {
+			t.Fatalf("export: %v, done %v", err, store.done)
+		}
+		return res, store.buf.String()
+	}
+
+	miss, file := export(CacheOptions{Duration: "1h"})
+	if miss.Cache.Hit || miss.Cache.CachedAt.IsZero() || miss.Cache.Key == "" || miss.RowCount != 1 || (*sent)["dbtype"] != "duckdb" {
+		t.Fatalf("a miss: %+v, sent %v", miss, *sent)
+	}
+	if file != "a,t\n1,2026-11-14 00:00:00+00\n" {
+		t.Errorf("the miss's file = %q", file)
+	}
+
+	hit, file := export(CacheOptions{Duration: "1h"})
+	if !hit.Cache.Hit || hit.Cache.Key != miss.Cache.Key || !hit.Cache.CachedAt.Equal(miss.Cache.CachedAt) || (*sent)["dbtype"] != "canal_lake" {
+		t.Fatalf("a hit: %+v, sent %v", hit, *sent)
+	}
+	if file != "a,t\n1.00,2026-11-14 00:00:00+00\n" { // the stub's canal-lake writes the decimal as it reads it back
+		t.Errorf("the hit's file = %q, want the miss's header", file)
+	}
+
+	if only, _ := export(CacheOptions{Duration: "1h", CachedOnly: true}); !only.Cache.Hit {
+		t.Errorf("cached only: %+v", only)
+	}
+	if uncached, _ := export(CacheOptions{}); uncached.Cache != (CacheResult{}) {
+		t.Errorf("no duration: %+v, want no cache", uncached.Cache)
 	}
 }
