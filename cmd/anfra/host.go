@@ -139,7 +139,7 @@ func newQueryCache(repo repo.Local, cfg sidecar.Config) queryCache {
 		Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv), Default: command.QueryCacheDefaults{Duration: defaultDuration},
 		Report: func(ctx context.Context, err error) {
 			cfg.Logger.WarnContext(ctx, "Query ran without the cache", logkit.EventKey, eventQueryCacheUnavailable, "error", err,
-				"hint", "the query cache failed, so the query ran on the warehouse, uncached; anfra status shows the cache's state")
+				"hint", "the query cache failed, so the query ran on the warehouse, uncached; a sidecar's lines just before this one may say why")
 		},
 		Notice: func(ctx context.Context, n localquerycache.Notice) {
 			cfg.Logger.WarnContext(ctx, "Query cache folder holds orphaned files", logkit.EventKey, eventQueryCacheOrphanedFiles,

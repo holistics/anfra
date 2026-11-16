@@ -323,7 +323,7 @@ func TestPrettyErrorChain(t *testing.T) {
 func TestPrintErrorSidecarHelp(t *testing.T) {
 	var out bytes.Buffer
 	printError(&out, apperr.New(errcode.SidecarUnavailable, "anfra-node didn't start within 10s"), "")
-	if !strings.Contains(out.String(), "help: The sidecar's logs are in the repo's log file") {
+	if !strings.Contains(out.String(), "help: Run `anfra logs` to see what the sidecar wrote before it failed.") {
 		t.Errorf("got:\n%s", out.String())
 	}
 }

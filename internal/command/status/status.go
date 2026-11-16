@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -118,6 +119,9 @@ var Status = command.Define(command.Def[command.NoInput, StatusResult]{
 		if s := cc.Server; s != nil {
 			r.Server.URL, r.Server.InstanceID, r.Server.Version = s.URL, s.InstanceID, s.Version
 		}
+		if r.Server.State == StateDegraded && r.Repo.Logs != "" {
+			r.Hints = append(r.Hints, "Run `anfra logs` to see why "+r.Server.Sidecars.failing()+" answering.")
+		}
 		r.Cache, r.Hints = cacheStatus(ctx, cc.QueryCache, r.Hints)
 		return r, nil
 	},
@@ -195,7 +199,7 @@ type RepoStatus struct {
 	ID string `json:"id" doc:"the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id>"`
 	// Logs is the repo's log file; absent for a repo with no directory (a
 	// managed repo), whose host keeps its logs.
-	Logs string `json:"logs,omitempty" doc:"the repo's log file, which holds anfra's and its sidecars' logs. Absent for a managed repo."`
+	Logs string `json:"logs,omitempty" doc:"the repo's log file, which holds anfra's and its sidecars' logs, and which anfra logs shows. Absent for a managed repo."`
 }
 
 // ServerStatus is the warm server's state and, when it is running, where it is,
@@ -224,6 +228,22 @@ const (
 type SidecarHealth struct {
 	Node       string `json:"node"`
 	CanalQuery string `json:"canal-query"`
+}
+
+// failing names the sidecars that don't answer, with their verb: "anfra-node
+// isn't", "canal-query isn't", or both "aren't".
+func (h *SidecarHealth) failing() string {
+	var names []string
+	if h.Node != "ok" {
+		names = append(names, "anfra-node")
+	}
+	if h.CanalQuery != "ok" {
+		names = append(names, "canal-query")
+	}
+	if len(names) == 2 {
+		return strings.Join(names, " and ") + " aren't"
+	}
+	return strings.Join(names, "") + " isn't"
 }
 
 // checkStatus reports the warm server's health. status spawns no sidecars, so in

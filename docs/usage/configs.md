@@ -121,6 +121,8 @@ If several anfras write to one canal-lake storage, replicas included, give each 
 
 ### Logs
 
+`anfra logs` shows the repo's log, and `anfra logs --help` how to narrow it.
+
 | Variable | Effect |
 |---|---|
 | `LOG_LEVEL` | `debug`, `info`, `warn` or `error`, case-insensitive. Default: `info`, also for any other value. anfra-node inherits it. |

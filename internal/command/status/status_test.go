@@ -52,6 +52,20 @@ func TestStatusState(t *testing.T) {
 	}
 }
 
+// A degraded server's hint names the sidecars that don't answer, with their
+// verb.
+func TestFailingSidecars(t *testing.T) {
+	for h, want := range map[SidecarHealth]string{
+		{Node: "down", CanalQuery: "ok"}:          "anfra-node isn't",
+		{Node: "ok", CanalQuery: "unavailable"}:   "canal-query isn't",
+		{Node: "down", CanalQuery: "unavailable"}: "anfra-node and canal-query aren't",
+	} {
+		if got := h.failing(); got != want {
+			t.Errorf("%+v: %q, want %q", h, got, want)
+		}
+	}
+}
+
 // summarizer is a host's query cache, such as a platform's over its own store.
 type summarizer querycache.Summary
 

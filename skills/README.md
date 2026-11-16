@@ -150,6 +150,7 @@ Develop analytics with Anfra.
 | `anfra-setup-repo` | Set up a new Anfra repo: `anfra init`, connect a data source, a first model and dataset. |
 | `anfra-build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve`. |
 | `anfra-publish` | Publish the repo to its org, and pull what others published to it, resolving conflicts. |
+| `anfra-read-logs` | Read anfra's log to find out why something went wrong: the query cache, a sidecar, a Data App's errors. |
 | `anfra-docs` | Look up the anfra and AMQL docs, for what the other skills don't cover. |
 
 | Agent | What it does |

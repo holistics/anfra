@@ -238,27 +238,19 @@ exception: run `anfra ingest` after an AML change, or it shows the old definitio
 the repo's problems (AML that does not compile, a data source not configured).
 
 Open the app in a browser (yours, or ask the user to) and exercise every control and click. Then
-read what went wrong without the browser: while the app is open, `anfra serve` writes each of its
-runtime errors (a failed query, an uncaught error or rejection, a listener's exception, a call
-the host failed) and its `console.error` / `console.warn` lines to its log, the file `anfra
-status` prints as `repo.logs`, one JSON line each with `"service":"app"`, the app's path as `app`,
-and `"event":"app.error"` (the error's message as `msg`, with its `kind`, `code`, `scope`,
-`request_id`, `stack`) or
-`"event":"app.console"` (the line as `msg`). The `kind` says where the error came from:
-`call.query` (a failed query), `call.fetch_more`, `call.export` and the like (a call you left
-unhandled), `app.uncaught`, `app.listener` (your code), `plugin.uncaught` (a plugin's), or
-`host.internal` (the host's):
+read what went wrong without the browser: `anfra serve` logs the open app's runtime errors and
+console warnings, which you read with `anfra logs` in the repo it serves:
 
 ```sh
-grep '"service":"app"' <repo.logs> | grep '"app":"sales/overview.html"' | tail -20
+anfra logs --event app --since 10m --jq '.entries[] | select(.attrs.app == "sales/overview.html")'
 ```
 
-No `"service":"app"` lines at all, with the app open, means `anfra serve` runs with
-`ANFRA_NO_APP_LOGS=1`: read the panel instead, or ask the user to.
-
-Each load of the app starts with an `"event":"app.mounted"` line, with the file's `modified` time:
-after an edit, read only the lines after the last one, or you are reading the old file's errors.
-A stack names the file's own lines as `definition:<line>:<column>`, and the SDK's as `anfra-sdk.js`.
+Read only the entries after the app's last `app.mounted`, since earlier ones are the old file's.
+An error's `kind` says whose code failed: `call.*` and `app.*` are the app's to handle or fix
+([references/api.md](references/api.md#errors)); `plugin.uncaught` and `host.internal` aren't, so
+report them to the user rather than change the app. A stack names the file's own lines as
+`definition:<line>:<column>`, and the SDK's as `anfra-sdk.js`. [](../anfra-read-logs/) covers the
+rest of the log.
 
 The same errors are in the panel's Overview, under Problems. Read errors against
 [references/api.md](references/api.md#errors), by `code`: a `declaration_invalid` error
@@ -284,9 +276,10 @@ serve` has no authentication, so ask before serving it beyond loopback (`--addr`
 requested change the same way: restate it if it changes what a number means, change the smallest
 thing, and check that the agreed result still holds.
 
-When the user says something is wrong ("the chart is empty"), read the app's log lines since its
+When the user says something is wrong ("the chart is empty"), read the app's log entries since its
 last `app.mounted` before asking them anything (see "Run and check it"): the error, its `kind` and
-the server's line by `request_id` usually say what. If there is no mount since your last edit, ask
+the server's entry with the same `request_id` ([](../anfra-read-logs/) shows how to find it)
+usually say what. If there is no mount since your last edit, ask
 them to reload the app first.
 
 ## Related skills

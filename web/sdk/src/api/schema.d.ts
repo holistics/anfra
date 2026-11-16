@@ -1064,7 +1064,7 @@ export interface components {
         RepoStatus: {
             /** @description the repo's id, which names its state folder: <ANFRA_HOME>/repos/<id> */
             id: string;
-            /** @description the repo's log file, which holds anfra's and its sidecars' logs. Absent for a managed repo. */
+            /** @description the repo's log file, which holds anfra's and its sidecars' logs, and which anfra logs shows. Absent for a managed repo. */
             logs?: string;
         };
         RepoValidation: {
