@@ -33,7 +33,7 @@ The types (`Request`, `Response`, `Invocation`, `Repo`, `DataPerms`, …) are al
 
 **Errors with meaning.** Every failure carries a code, a scope (whose fault it is) and typed details, under the engine's namespace (`engine.Namespace`). A platform translates them into its own codes where it calls the engine (`apperr.Translate`), or imports them as its own (`httpkit.Codes.Imported`). Anything unclassified is an internal error, never a leak. See [errors.md](errors.md).
 
-**Sidecars at the platform's addresses.** `Connect` dials anfra-node and canal-query where the platform runs them, as containers with their own lifecycle, restarts and scaling. It never starts a process: that is how the one-shot CLI works, and the wrong shape for a server. `WithTransport` lets the platform wrap each sidecar's HTTP transport (with `otelhttp`, say), so sidecar calls appear in the platform's traces, without the engine taking a tracing dependency.
+**Sidecars at the platform's addresses.** `Connect` dials anfra-node and canal-query where the platform runs them, as containers with their own lifecycle, restarts and scaling. It never starts a process: that is how the one-shot CLI works, and the wrong shape for a server. A platform that uses the query cache also runs canal-lake, which its canal-query reaches by its own settings: the engine never calls canal-lake ([query-cache.md](query-cache.md#canal-lake-as-a-sidecar)). `WithTransport` lets the platform wrap each sidecar's HTTP transport (with `otelhttp`, say), so sidecar calls appear in the platform's traces, without the engine taking a tracing dependency.
 
 ## What the engine refuses to do
 

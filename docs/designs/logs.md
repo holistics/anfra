@@ -6,11 +6,11 @@ A log record has two readers: a person reading what happened, and a program (an 
 |---|---|
 | anfra-host (`anfra`) | `internal/logging`: where records go; `shared/logkit`: the events, defined once |
 | anfra-node (`holistics-core/apps/anfra-node`) | `src/logger.ts`, and its events, defined the same way |
-| canal-query | not yet: plain text lines ([not yet](#not-yet)) |
+| canal-query, canal-lake | not yet: plain text lines ([not yet](#not-yet)) |
 
 ## Where records go
 
-anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo id>/logs/`, which `anfra status` prints, and `anfra logs` reads), and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes. A command's terminal stays clean for its answer, its warnings and its error; `anfra serve` also copies the log to stderr, as a server's operator watches it there. `ANFRA_LOG_STDERR` changes either default (`0` or `1`). `LOG_LEVEL` sets the level.
+anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo id>/logs/`, which `anfra status` prints, and `anfra logs` reads), and forwards each sidecar's stderr into the same file, so one file tells the story of every process. A command's terminal stays clean for its answer, its warnings and its error; `anfra serve` also copies the log to stderr, as a server's operator watches it there. `ANFRA_LOG_STDERR` changes either default (`0` or `1`). `LOG_LEVEL` sets the level.
 
 ## What a record carries, and who reads it
 
@@ -99,5 +99,5 @@ Logs are for operators and debugging, not for a program reading a command's stde
 
 ## Not yet
 
-- **canal-query** writes plain text lines (`starting Canal Query at 42183 (…)`), and its OpenTelemetry exporter's failures, to the same `anfra.log`: no JSON, no `service`, no `event`, no trace context. TODO: JSON records in the shape above.
+- **canal-query** and **canal-lake** write plain text lines (`starting Canal Query at 42183 (…)`), and their OpenTelemetry exporters' failures, to the same `anfra.log`: no JSON, no `service`, no `event`, no trace context. TODO: JSON records in the shape above.
 - **A list of events, and release notes from it.** TODO: each service commits a list of its events, generated from its definitions (`logkit.Events()`, anfra-node's `listEvents()`) and checked by a test, so a change to an event shows in its pull request. `pnpm bump` compares the lists at the last release with the lists now, anfra-node's at the versions anfra pinned, writes a "Log events" section (what was removed, what is new), and refuses a patch version with anything removed. The lists are read from source, by version, rather than asked of a running binary: events are fixed at build time, and a release compares two versions.

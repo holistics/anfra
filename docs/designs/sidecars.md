@@ -15,7 +15,7 @@ Each has its own package under `internal/sidecar/` (its supervisor, client and w
 ## Where the binaries come from
 
 - **Releases embed them.** A build with the `embed_sidecar` tag embeds the binaries dropped in `internal/sidecar/<sidecar>/assets/` (`embed_release.go`); the release workflow puts the pinned ones there for each target ([release.md](release.md)). At startup, anfra writes each one to `<ANFRA_HOME>/sidecars/<name>-<hash>` (`internal/sidecar/binary.go`, `internal/home`), keyed by content hash: written only when missing, so concurrent runs converge on one file, and older versions of the same sidecar are pruned.
-- **Builds from source embed nothing** (`embed_dev.go`), and take paths from `ANFRA_NODE_BIN` and `ANFRA_CANAL_BIN`, or `ANFRA_CANAL_QUERY_BIN` for a canal-query built alone. `make build` is the exception: it embeds them as a release does, so `bin/anfra` runs on its own. `make dev` and `make build` default them to the pinned releases, downloaded into `.sidecars/` (`scripts/sidecars.sh`): anfra-node's unminified build, which each anfra-node release publishes beside the minified one releases embed, so a trace names the source's functions.
+- **Builds from source embed nothing** (`embed_dev.go`), and take paths from `ANFRA_NODE_BIN` and `ANFRA_CANAL_BIN`, or `ANFRA_CANAL_QUERY_BIN` and `ANFRA_CANAL_LAKE_BIN` for a canal-query or canal-lake built alone. `make build` is the exception: it embeds them as a release does, so `bin/anfra` runs on its own. `make dev` and `make build` default them to the pinned releases, downloaded into `.sidecars/` (`scripts/sidecars.sh`): anfra-node's unminified build, which each anfra-node release publishes beside the minified one releases embed, so a trace names the source's functions.
 - **Or none is spawned:** `ANFRA_NODE_URL` and `ANFRA_CANAL_QUERY_URL` point anfra at sidecars something else runs (a compose or Kubernetes deployment, or a long-lived one while developing). anfra then only dials them, and never stops them.
 
 Which sidecar releases a release embeds is pinned in `manifest.yml`, alongside anfra's own version. The sidecars' wire contracts are therefore versioned with anfra: a change to one is a pin bump here.
@@ -24,13 +24,13 @@ Which sidecar releases a release embeds is pinned in `manifest.yml`, alongside a
 
 **Spawn** (`internal/sidecar/process.go`). Each sidecar runs in its own process group, so anfra can signal it with everything it started. On Linux the kernel also sends it SIGTERM if anfra dies, even by SIGKILL (`proc_linux.go`, Pdeathsig). Its stderr goes into anfra's log stream and its stdout is discarded, unless configured otherwise (see Logs below).
 
-**Ready.** anfra polls each sidecar's health endpoint until it answers or a deadline passes (each client's `WaitReady`), and fails the command or the server's start with the sidecar's name if it does not.
+**Ready.** anfra polls each sidecar's health endpoint until it answers or a deadline passes (each client's `WaitReady`), and fails the command or the server's start with the sidecar's name if it does not. canal-lake has no client in anfra, so anfra counts it ready once its socket accepts a connection (`internal/sidecar/canallake`).
 
 **Shutdown.** `Close` sends SIGTERM, waits a few seconds (`process.go`), then SIGKILLs the process group. anfra-node uses the time to write out its compile cache.
 
-**Orphans.** A sidecar must not outlive anfra: it would hold its socket and memory for nobody. Besides the process group and Pdeathsig, anfra keeps a pipe open to anfra-node's stdin; when anfra dies however it dies, the pipe closes and anfra-node shuts down (its watchdog, `apps/anfra-node/src/rpc/watchdog.ts`). The watchdog also treats a *change* of its parent PID as anfra having died (it was reparented). It used to treat a parent PID of 1 as that too, which fails wherever anfra is itself PID 1, as in a container: anfra-node shut down seconds after start. anfra-node's source now compares only against the parent PID it started with; an anfra-node release from before that fix still has the old check, which is one reason anfra's Docker image runs tini as PID 1 ([release.md](release.md)). canal-query relies on the process group and Pdeathsig, and has no stdin watchdog.
+**Orphans.** A sidecar must not outlive anfra: it would hold its socket and memory for nobody. Besides the process group and Pdeathsig, anfra keeps a pipe open to anfra-node's stdin; when anfra dies however it dies, the pipe closes and anfra-node shuts down (its watchdog, `apps/anfra-node/src/rpc/watchdog.ts`). The watchdog also treats a *change* of its parent PID as anfra having died (it was reparented). It used to treat a parent PID of 1 as that too, which fails wherever anfra is itself PID 1, as in a container: anfra-node shut down seconds after start. anfra-node's source now compares only against the parent PID it started with; an anfra-node release from before that fix still has the old check, which is one reason anfra's Docker image runs tini as PID 1 ([release.md](release.md)). canal-query and canal-lake rely on the process group and Pdeathsig, and have no stdin watchdog.
 
-**Known gap:** a sidecar that exits is not restarted. Every later call that needs it fails with `sidecar_unavailable` until anfra restarts.
+**Known gap:** a sidecar that exits is not restarted. Every later call that needs it fails with `sidecar_unavailable` until anfra restarts. canal-lake is the exception: the query cache starts it again the next time a query needs it.
 
 ## Environment
 
@@ -49,7 +49,7 @@ A sidecar setting that is a generic name, read by the sidecar's own code, belong
 
 A sidecar anfra does not spawn (`ANFRA_NODE_URL`, `ANFRA_CANAL_QUERY_URL`) gets its environment from its own deployment.
 
-> Open: canal-query loads a `.env` from its working directory, which is anfra's, usually the repo's. Values already set win, but a repo's `.env` can add others. Running it from a folder of its own needs anfra to resolve the paths in a `connection` (a DuckDB file's) first, which are relative to that directory today.
+> Open: canal-query loads a `.env` from its working directory, which is anfra's, usually the repo's. canal-lake does too, so anfra runs it in its own storage folder instead. Values already set win, but a repo's `.env` can add others. Running it from a folder of its own needs anfra to resolve the paths in a `connection` (a DuckDB file's) first, which are relative to that directory today.
 
 ## Sockets and ports
 
@@ -57,7 +57,7 @@ A spawned sidecar listens on a Unix socket, `<name>.sock`, in a directory of its
 
 ## One-shot and warm
 
-A CLI command spawns only the sidecars it declares it needs (`Needs`), and stops them when it is done. `anfra serve` starts both and keeps them for its lifetime; CLI commands in that repo are forwarded to it rather than spawning their own ([architecture.md](architecture.md)). A warm canal-query gets connection pooling (`Config.EnablePooling`, set by `serve` and by the engine's `Connect`): database connections are reused across requests, which matters most for a remote warehouse, where opening a connection can cost more than the query. An in-memory DuckDB (no `path`, or `:memory:`) is never pooled (`poolFor` in `internal/sidecar/canalquery/client.go`): each of its connections is a database of its own, so a pooled one would carry one query's tables into the next, and canal-query refuses it. Neither is a data source the host marks `Unpooled` (`datasource.DataSource`): one used once, such as a connection being checked, which a pool would outlive by hours, holding connections open to its host.
+A CLI command spawns only the sidecars it declares it needs (`Needs`), and stops them when it is done. `anfra serve` starts anfra-node and canal-query and keeps them for its lifetime, and canal-lake once a cached query needs it; CLI commands in that repo are forwarded to it rather than spawning their own ([architecture.md](architecture.md)). A warm canal-query gets connection pooling (`Config.EnablePooling`, set by `serve` and by the engine's `Connect`): database connections are reused across requests, which matters most for a remote warehouse, where opening a connection can cost more than the query. An in-memory DuckDB (no `path`, or `:memory:`) is never pooled (`poolFor` in `internal/sidecar/canalquery/client.go`): each of its connections is a database of its own, so a pooled one would carry one query's tables into the next, and canal-query refuses it. Neither is a data source the host marks `Unpooled` (`datasource.DataSource`): one used once, such as a connection being checked, which a pool would outlive by hours, holding connections open to its host.
 
 ## anfra-node's compile cache
 
@@ -78,6 +78,6 @@ anfra reads `.anfra/data_sources.yml` itself (`internal/datasource`). For each q
 
 **Traces.** When anfra exports traces ([configs](../usage/configs.md)), it also points anfra-node at the same collector, through the `H_OTEL_*` variables its tracing library reads (`internal/telemetry`), unless they are set already. Calls to the sidecars carry the trace (`traceparent`) through `Config.WrapTransport`, which the CLI and `serve` set to an otelhttp transport (`cmd/anfra/telemetry.go`); the engine's `WithTransport` lets an embedding platform do the same ([engine.md](engine.md)). So one trace runs from the command or request into anfra-node's own spans.
 
-**Logs.** Both sidecars' stderr goes into the repo's `anfra.log`, with anfra's own records (`internal/logging`). `anfra serve` also copies that stream to its stderr, as `ANFRA_LOG_STDERR` does for any command; `ANFRA_SIDECAR_STDOUT` passes the sidecars' stdout through instead of discarding it.
+**Logs.** Every sidecar's stderr goes into the repo's `anfra.log`, with anfra's own records (`internal/logging`). `anfra serve` also copies that stream to its stderr, as `ANFRA_LOG_STDERR` does for any command; `ANFRA_SIDECAR_STDOUT` passes the sidecars' stdout through instead of discarding it.
 
 **Failures.** A sidecar logs and traces its own failures, with their stacks. canal-query answers anfra their causes when `EXPOSE_ERROR_CAUSES=1`, which anfra sets on the one it spawns; anfra-node always does. anfra then decides which of its clients see them. See [errors.md](errors.md#sidecar-failures).

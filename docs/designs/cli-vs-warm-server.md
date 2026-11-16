@@ -4,7 +4,7 @@ While `anfra serve` runs for a repo, the CLI in that repo is mostly its client: 
 
 ## The warm server
 
-`anfra serve` is a long-running server for one repo, with both sidecars kept warm ([architecture.md](architecture.md#two-ways-to-run)):
+`anfra serve` is a long-running server for one repo, with anfra-node and canal-query kept warm ([architecture.md](architecture.md#two-ways-to-run)):
 
 - **anfra-node** keeps the compiled program in memory, so a query or a validate after the first skips most of the compile.
 - **canal-query** pools warehouse connections, which matters most for a remote warehouse, where opening a connection can cost more than the query ([sidecars.md](sidecars.md)).

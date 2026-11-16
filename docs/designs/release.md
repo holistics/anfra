@@ -1,6 +1,6 @@
 # Releases
 
-A release is one `anfra` binary per platform, with both sidecars embedded ([sidecars.md](sidecars.md)) and the Data App frontend built in, plus a Docker image of the Linux ones and the SDK on npm. Everything about a release follows from one file.
+A release is one `anfra` binary per platform, with its sidecars embedded as two binaries, anfra-node and anfra-canal ([sidecars.md](sidecars.md)) and the Data App frontend built in, plus a Docker image of the Linux ones and the SDK on npm. Everything about a release follows from one file.
 
 ## `manifest.yml`, the single source
 
