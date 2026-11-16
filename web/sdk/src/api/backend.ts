@@ -1,7 +1,7 @@
 import { DataAppError, connectionFailed, invalidRequest } from '../common/errors';
 import type {
   Backend, BackendExportRequest, BackendLineageRequest, BackendQueryRequest, BackendQueryResult, ColumnMeta, ConditionValue,
-  DatasetDescriptor, ExportResult, FieldSuggestionsRequest, LineageResult,
+  DatasetDescriptor, ExportResult, FieldSuggestionsRequest, LineageResult, QueryCacheResult,
 } from '../common/types';
 import { coreClient, type CoreClient } from './client';
 import type { components } from './schema';
@@ -12,6 +12,8 @@ type QueryRequestParams = components['schemas']['QueryRequestParams'];
 type Column = components['schemas']['Column'];
 type QueryExportRequestParams = components['schemas']['QueryExportRequestParams'];
 type QueryResult = components['schemas']['QueryResult'];
+type CacheOptions = components['schemas']['CacheOptions'];
+type CacheResult = components['schemas']['CacheResult'];
 type QueryEvent = components['schemas']['QueryCompiled'] | components['schemas']['QueryWarehouse'] | components['schemas']['QueryHeader']
   | components['schemas']['QueryRecords'] | components['schemas']['QuerySummary']
   | components['schemas']['StreamStart'] | components['schemas']['StreamStatus'];
@@ -31,17 +33,40 @@ function isAbort (err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError';
 }
 
-/** The core.query request params a Backend request is: the AQL, its dataset and its input. */
+/**
+ * The core.query request params a Backend request is: the AQL, its dataset and its input; and how
+ * it uses the query cache, when it asks for something other than the default.
+ */
 export function toQueryRequestParams (request: BackendQueryRequest): QueryRequestParams {
-  return { query: request.aql, dataset: request.dataset, input: request.input };
+  const cache = toCacheOptions(request);
+  return { query: request.aql, dataset: request.dataset, input: request.input, ...(cache ? { cache } : {}) };
+}
+
+/** The cache options a request asks for, or none for the default: the repo's cache duration. */
+function toCacheOptions ({ bustCache, minCachedAt }: { bustCache?: boolean, minCachedAt?: string }): CacheOptions | undefined {
+  if (!bustCache && !minCachedAt) return undefined;
+  return { ...(bustCache ? { refresh: true } : {}), ...(minCachedAt ? { min_cached_at: minCachedAt } : {}) };
+}
+
+/** What the query cache did, as a Data App reads it. */
+function toCacheResult (cache: CacheResult): QueryCacheResult {
+  return {
+    hit: cache.hit,
+    ...(cache.cached_at ? { cachedAt: new Date(cache.cached_at) } : {}),
+    ...(cache.expires_at ? { expiresAt: new Date(cache.expires_at) } : {}),
+    ...(cache.key ? { key: cache.key } : {}),
+    ...(cache.warning ? { warning: { code: cache.warning.code, message: cache.warning.message } } : {}),
+  };
 }
 
 /** The core.query.export request params an export request is: the query as a run sends it, every row, and the file. */
 export function toExportRequestParams (request: BackendExportRequest): QueryExportRequestParams {
+  const cache = toCacheOptions(request);
   return {
     query: request.aql,
     dataset: request.dataset,
     input: request.input,
+    ...(cache ? { cache } : {}),
     // The server names its formats; one it does not know it refuses, with a message the author sees.
     ...(request.format ? { format: request.format as QueryExportRequestParams['format'] } : {}),
     ...(request.formatOptions ? { format_options: request.formatOptions } : {}),
@@ -113,6 +138,7 @@ async function runQuery (client: CoreClient, body: QueryRequestParams, signal: A
         case 'summary':
           result.has_more = event.has_more;
           result.timings = event.timings;
+          if (event.cache) result.cache = event.cache;
           break;
       }
     });
@@ -136,6 +162,7 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
       const data = await runQuery(client, toQueryRequestParams(request), signal);
       const values = data.result.records;
       const { pagination } = request.input;
+      const cache = data.cache ? toCacheResult(data.cache) : undefined;
       return {
         columns: toColumns(data.columns),
         values,
@@ -146,12 +173,14 @@ export function coreApiBackend (base: string | CoreClient, options: CoreApiBacke
         debug: {
           ...(data.aql ? { executedAql: data.aql } : {}),
           executedSql: data.sql,
-          fromCache: false,
+          fromCache: cache?.hit ?? false,
           timings: {
             steps: data.timings.steps.map((s) => ({ step: s.step, startMs: s.start_ms })),
             endMs: data.timings.end_ms,
           },
-          executedAt: new Date(),
+          // A hit's rows were read when they were cached, not now.
+          executedAt: cache?.hit && cache.cachedAt ? cache.cachedAt : new Date(),
+          ...(cache ? { cache } : {}),
         },
         // The input as it ran: the one sent, with the seeds the server generated for it. The rest
         // the server answers with is what was sent, or its defaults, which a replay needn't send.

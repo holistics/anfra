@@ -27,13 +27,13 @@ const ok = (body: unknown): Answer => ({ status: 200, body });
 const streamed = (...events: unknown[]): Answer => ({ events: events.map((e) => JSON.stringify(e) + '\n').join('') });
 
 /** A query's page, streamed as the server streams it: its SQL, its header, its rows, its summary. */
-function asStream (page: { sql: string, aql?: string, input?: unknown, columns: unknown[], result: { fields: string[], records: unknown[][] } }, hasMore = false): Answer {
+function asStream (page: { sql: string, aql?: string, input?: unknown, cache?: unknown, columns: unknown[], result: { fields: string[], records: unknown[][] } }, hasMore = false): Answer {
   return streamed(
     { type: 'start' },
     { type: 'compiled', sql: page.sql, ...(page.aql ? { aql: page.aql } : {}), ...(page.input ? { input: page.input } : {}) },
     { type: 'header', columns: page.columns, fields: page.result.fields },
     ...(page.result.records.length ? [{ type: 'rows', records: page.result.records }] : []),
-    { type: 'summary', row_count: page.result.records.length, has_more: hasMore, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }, { step: 'executing_query', start_ms: 40 }], end_ms: 95 } },
+    { type: 'summary', row_count: page.result.records.length, has_more: hasMore, timings: { steps: [{ step: 'compiling_query', start_ms: 0 }, { step: 'executing_query', start_ms: 40 }], end_ms: 95 }, ...(page.cache ? { cache: page.cache } : {}) },
     { type: 'end', status: 'succeeded' },
   );
 }
@@ -105,6 +105,39 @@ describe('coreApiBackend', () => {
     const { client } = api(asStream({ ...answered, input: { ...request.input, timezone: 'Asia/Ho_Chi_Minh', seeds } }));
     const result = await coreApiBackend(client).submitQuery(request, signal);
     expect(result.input).toEqual({ ...request.input, seeds });
+  });
+
+  // refresh() is the cache's refresh, and a later page's bound its min_cached_at; a request asking
+  // neither sends no cache, so the repo's default applies.
+  it('sends refresh and a later page\'s bound as the cache\'s options', async () => {
+    const { client, sent } = api(asStream(answered), asStream(answered));
+    await coreApiBackend(client).submitQuery({ ...request, bustCache: true }, signal);
+    await coreApiBackend(client).submitQuery({ ...request, minCachedAt: '2026-11-16T09:30:00.123Z' }, signal);
+    expect(sent.map(({ body }) => (body as { cache?: unknown }).cache)).toEqual([
+      { refresh: true },
+      { min_cached_at: '2026-11-16T09:30:00.123Z' },
+    ]);
+  });
+
+  // A hit's rows were read when they were cached: that's when the result ran, as far as the reader
+  // is concerned.
+  it('answers what the cache did: a hit, read when it was cached', async () => {
+    const cache = { key: 'k1:abc', hit: true, cached_at: '2026-11-16T09:30:00.123+07:00', expires_at: '2026-11-16T10:30:00.123+07:00' };
+    const { client } = api(asStream({ ...answered, cache }));
+    const result = await coreApiBackend(client).submitQuery(request, signal);
+    expect(result.debug).toMatchObject({
+      fromCache: true,
+      executedAt: new Date('2026-11-16T02:30:00.123Z'),
+      cache: { key: 'k1:abc', hit: true, cachedAt: new Date('2026-11-16T02:30:00.123Z'), expiresAt: new Date('2026-11-16T03:30:00.123Z') },
+    });
+  });
+
+  it('answers what the cache did: a query that ran without it, and why', async () => {
+    const warning = { code: 'cache_unavailable', message: "The query ran without the cache, because the cache isn't working." };
+    const { client } = api(asStream({ ...answered, cache: { key: 'k1:abc', hit: false, warning } }));
+    const result = await coreApiBackend(client).submitQuery(request, signal);
+    expect(result.debug?.fromCache).toBe(false);
+    expect(result.debug?.cache).toEqual({ key: 'k1:abc', hit: false, warning });
   });
 
   it("fails a query whose columns come without their types, which a Data App decides by", async () => {
@@ -312,6 +345,12 @@ describe('coreApiBackend', () => {
         rowCount: 2,
         expiresAt: new Date('2026-10-13T10:00:00Z'),
       });
+    });
+
+    it('sends a run\'s bound, so the file is no older than the result on screen', async () => {
+      const { client, sent } = api(ok({ url: 'u', filename: 'f.csv', format: 'csv', row_count: 2, expires_at: '2026-10-13T10:00:00Z' }));
+      await coreApiBackend(client).exportQuery!({ ...exportRequest, minCachedAt: '2026-11-16T09:30:00.123Z' }, signal);
+      expect((sent[0].body as { cache?: unknown }).cache).toEqual({ min_cached_at: '2026-11-16T09:30:00.123Z' });
     });
 
     it('fails as the SDK error the API error is', async () => {

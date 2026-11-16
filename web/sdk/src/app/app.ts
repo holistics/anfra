@@ -752,10 +752,10 @@ export class App extends Observable implements AppContext {
         },
         context,
       );
-      const { result, input } = await runQuery(query, request, context.backend, controller.signal, this.stampOf(query));
+      const { result, run } = await runQuery(query, request, context.backend, controller.signal, this.stampOf(query));
       // Also after `remove()` or `update()`, which take the controller away.
       if (superseded(query, controller)) return undefined;
-      query.markSuccess(result, signature, false, input);
+      query.markSuccess(result, signature, false, run);
       return 'succeeded';
     } catch (err) {
       if (superseded(query, controller)) return undefined;
@@ -793,10 +793,11 @@ export class App extends Observable implements AppContext {
     query.markExecuting();
 
     try {
-      // The run's input replayed with the next page: a page fetched after midnight continues the
-      // same last 7 days. Before any run came back with one, the query as the app has it applied.
-      const request = query.ranInput
-        ? pageRequest(query, query.ranInput)
+      // The run continued with the next page: its input replayed, so a page fetched after midnight
+      // continues the same last 7 days, and no older than its first page. Before any run came
+      // back, the query as the app has it applied.
+      const request = query.run
+        ? pageRequest(query, query.run)
         : buildRequest(query, this.mappingsTo(query.name), {
           conditions: this.selectionConditionsFor(query.name, 'applied'),
           expression: this.selectionExpressionFor(query.name, 'applied'),
@@ -841,7 +842,7 @@ export class App extends Observable implements AppContext {
       { timezone: this._timezone, title: this.title },
       options,
       // As the result on screen ran, so the file holds what the reader sees.
-      query.ranInput,
+      query.run,
     );
     try {
       // Sent through `kernel.call`, which adds the query's id.
