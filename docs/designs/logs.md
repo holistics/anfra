@@ -10,7 +10,7 @@ A log record has two readers: a person reading what happened, and a program (an 
 
 ## Where records go
 
-anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo id>/logs/`, which `anfra status` prints), and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes. A command's terminal stays clean for its answer, its warnings and its error; `anfra serve` also copies the log to stderr, as a server's operator watches it there. `ANFRA_LOG_STDERR` changes either default (`0` or `1`). `LOG_LEVEL` sets the level.
+anfra writes JSON records to the repo's `anfra.log` (`<ANFRA_HOME>/repos/<repo id>/logs/`, which `anfra status` prints, and `anfra logs` reads), and forwards each sidecar's stderr into the same file, so one file tells the story of all three processes. A command's terminal stays clean for its answer, its warnings and its error; `anfra serve` also copies the log to stderr, as a server's operator watches it there. `ANFRA_LOG_STDERR` changes either default (`0` or `1`). `LOG_LEVEL` sets the level.
 
 ## What a record carries, and who reads it
 
@@ -88,6 +88,14 @@ The same code can answer both ways, depending on who runs it. A sidecar started 
 ## Logs and the CLI
 
 Logs are for operators and debugging, not for a program reading a command's stderr: that is a stream of documents with a contract of its own ([errors](errors.md#from-error-to-caller)), and log lines reach it only with `ANFRA_LOG_STDERR=1`.
+
+**`anfra logs`** reads the repo's log (`cmd/anfra/logs.go`, `internal/logging/read.go`), so a hint that sends someone to it names a command to run rather than a file to find:
+
+- **Which entries:** the last 50 by default (`-n`, `0` for every one), narrowed by `--level` (that level and above), `--event` (a name, or a prefix before a dot: `query_cache` takes `query_cache.swept`) and `--since` (a duration back, or a time). It reads from the log's end back, so the last entries of a long log come at once.
+- **An entry** is a record, its envelope apart (`ts`, `level`, `msg`, `service`, `event`) and its other fields as `attrs`, `repo` left out since it's the same throughout; or a sidecar's own line (`line`), with the time Go's log starts it with, when it has one. A sidecar's line has no level or event, so `--level` and `--event` leave it out. Levels are read in capitals, as older anfra-node records wrote them in lowercase; those older records also put their event in `msg`, which `--event` doesn't select.
+- **As a person reads it** (the pretty format, by default): an entry a line, its time, level, message and event, and its other fields under it, but `pid`, `trace_id` and `span_id`; the level colored, the event accented. `--yaml` and `--json` write the entries as the result, every field kept.
+- **When `--event app` finds nothing,** its hints say why, from the servers' runtime records: `anfra serve` runs here with `ANFRA_NO_APP_LOGS=1` (recorded as `no_app_logs`), or runs here and no app was opened, or runs in another repo, named, or nowhere. So a skill needn't list the reasons.
+- **`-f`** then shows each entry as it's written, laid out by the same view, a line once it ends, until Ctrl-C. It takes no `--yaml` or `--json`, which write one result.
 
 ## Not yet
 

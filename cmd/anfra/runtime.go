@@ -39,6 +39,9 @@ type runtimeFile struct {
 type runtimeConfig struct {
 	NodeURL       string `json:"node_url,omitempty"`
 	CanalQueryURL string `json:"canal_query_url,omitempty"`
+	// NoAppLogs is ANFRA_NO_APP_LOGS: the server doesn't log its Data Apps'
+	// reports, which anfra logs says when it finds none.
+	NoAppLogs bool `json:"no_app_logs,omitempty"`
 }
 
 func runtimePath(r repo.Local) string { return filepath.Join(r.RuntimeDir(), "serve.json") }

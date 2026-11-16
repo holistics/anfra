@@ -240,7 +240,7 @@ func nodeValue(n *yaml.Node) any {
 // inside the engine that platforms embed, where there's no `anfra status` or
 // repo log, so the sidecar's own error can't point to them.
 var codeHelp = map[string]string{
-	errcode.SidecarUnavailable.String(): "The sidecar's logs are in the repo's log file, which `anfra status` shows.",
+	errcode.SidecarUnavailable.String(): "Run `anfra logs` to see what the sidecar wrote before it failed.",
 }
 
 // failureHint records a failure the caller could fix, off a terminal and

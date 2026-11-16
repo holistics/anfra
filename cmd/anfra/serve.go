@@ -172,7 +172,7 @@ func runServe(ctx context.Context, opts serveOptions) error {
 		if err := writeRuntime(h.repo, runtimeFile{
 			PID: os.Getpid(), URL: info.URL, RepoID: h.repo.ID, RepoDir: h.repo.Dir, InstanceID: info.InstanceID,
 			Version: info.Version, StartedAt: time.Now().UTC(),
-			Config: runtimeConfig{NodeURL: cfg.NodeURL, CanalQueryURL: cfg.CanalQueryURL},
+			Config: runtimeConfig{NodeURL: cfg.NodeURL, CanalQueryURL: cfg.CanalQueryURL, NoAppLogs: envflag.On(envflag.NoAppLogs)},
 		}); err != nil {
 			return fmt.Errorf("record the server in %s: %w", runtimePath(h.repo), err)
 		}

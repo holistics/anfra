@@ -284,7 +284,7 @@ func (c *Cache) explain(s querycache.Summary, err error) querycache.Summary {
 	default:
 		s.State = querycache.StateUnavailable
 		s.Problem = fmt.Sprintf("anfra can't read the query cache's store: %v. Queries run without the cache.", err)
-		s.Hint = "The repo's log file says more, and anfra tries the store again at the next cached query."
+		s.Hint = "Run `anfra logs` to see what failed. anfra tries the store again at the next cached query."
 	}
 	return s
 }

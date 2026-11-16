@@ -40,6 +40,28 @@ func RenderStyled(w io.Writer, v any, width int, styles cliui.TerminalStyles) er
 	return err
 }
 
+// RenderView writes v in the named view (views) alone, each of its lines
+// indented by indent, in styles: for what is shown a piece at a time, such
+// as a log's entries as they're written, laid out as the result they follow
+// laid them out. A view that can't show v writes nothing.
+func RenderView(w io.Writer, view string, v any, indent int, styles cliui.TerminalStyles) error {
+	show, ok := views[view]
+	if !ok {
+		return fmt.Errorf("no pretty view named %q", view)
+	}
+	pv, ok := show(reflect.ValueOf(v))
+	if !ok {
+		return nil
+	}
+	r := prettyRenderer{styles: styles}
+	var b strings.Builder
+	for _, l := range pv.lines {
+		b.WriteString(spaces(indent) + r.cell(l) + "\n")
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
 // The view model: what to show, decided once, whatever draws it.
 
 // prettyDoc is a result's view: its message first, its hints last, its
@@ -107,6 +129,7 @@ const (
 	styleWarn
 	styleBad
 	styleLink
+	styleAccent // a name to scan by: a log entry's event
 )
 
 func (c prettyCell) plain() string {
@@ -1197,6 +1220,8 @@ func (r prettyRenderer) cell(c prettyCell) string {
 			b.WriteString(r.styles.Error.Render(s.text))
 		case styleLink:
 			b.WriteString(r.styles.Link.Render(s.text))
+		case styleAccent:
+			b.WriteString(r.styles.Accent.Render(s.text))
 		default:
 			b.WriteString(r.code(s.text))
 		}
