@@ -46,6 +46,7 @@ cache:
   refresh: true       # don't read an entry: run the query, and cache its result
   read_only: true     # use an entry if there is one, but don't cache this query's result
   cached_only: true   # use an entry, or fail: never run the query on the warehouse
+  min_cached_at: 2026-11-16T09:30:00.123Z  # use no entry cached before this time
 ```
 
 | Input | Meaning |
@@ -54,12 +55,13 @@ cache:
 | `cache.refresh` | `true` runs the query on the warehouse whatever is cached, and caches its result. |
 | `cache.read_only` | `true` uses a cached result if there is one, and otherwise runs the query without caching its result: for a one-off query that shouldn't take up the cache. |
 | `cache.cached_only` | `true` uses a cached result, or fails with `cache_miss` without running the query: to find out whether a result is still there ([Re-reading a result](#re-reading-a-result)). |
+| `cache.min_cached_at` | An RFC 3339 time. A result cached before it is treated as not cached. A run's later pages and its export send their first page's `cached_at`, so none is older than that page ([A run's later pages](#a-runs-later-pages)). |
 
 Each flag changes one thing from the default, which is to use a cached result, or run the query and cache it. Two combinations are refused, since they can never do what they ask: `refresh` with `cached_only`, and `cached_only` with a `duration` of `0s`.
 
 `cached_only`'s miss is a failure, not an empty result, so it can't be taken for a query that returns no rows. Its code is `cache_miss`, a caller's error, with the help: "The query's result isn't cached anymore. Run it without cached_only to get it again."
 
-At the CLI, they are `--cache.duration`, `--cache.refresh`, `--cache.read-only` and `--cache.cached-only`, as anfra names an object's fields.
+At the CLI, they are `--cache.duration`, `--cache.refresh`, `--cache.read-only`, `--cache.cached-only` and `--cache.min-cached-at`, as anfra names an object's fields.
 
 `cache` is not part of the query's `input`: it is how this run treats the cache, not part of the query a caller replays ([a query's input](query-input.md#what-it-holds)).
 
@@ -67,7 +69,7 @@ And one, in `input`, that isn't the cache's alone: `input.seeds.referenceTime`, 
 
 ### Which entry a query accepts
 
-A query uses a cached entry only if the entry is both **unexpired** (its own `expires_at` is ahead) and **younger than the query's `cache.duration`**. A query that asks for fresher data than an entry was written for is never answered from data older than it accepts:
+A query uses a cached entry only if the entry is both **unexpired** (its own `expires_at` is ahead) and **younger than the query's `cache.duration`**, and, when the query sets `cache.min_cached_at`, **cached at that time or later**. A query that asks for fresher data than an entry was written for is never answered from data older than it accepts:
 
 | Entry (written with, age) | Query's `cache.duration` | Used? |
 |---|---|---|
@@ -233,6 +235,34 @@ Two rules hold this up:
 
 - **No one reads an entry by its key.** A key is something anfra computes, and never something a caller is trusted with. A key from a caller is at most a hint ([Extension points](#extension-points)).
 - **What decides access never comes from the request.** User attributes and restrictions are filled in from who is asking, on every query. A platform that passes them to the engine takes them from its own identity, never from its client.
+
+### A run's later pages
+
+anfra pages a query on the warehouse: each page is its own query, with its own entry. So the pages of one run can come from different times. The case a person notices is a refresh. A refreshed run's first page is read now, but its next page, sent without `refresh`, could be answered from an entry written an hour earlier, older than the page just refreshed.
+
+`cache.min_cached_at` prevents that. A caller sends the first page's `cached_at` with the run's later pages and its export, and anfra answers them from no entry cached before it. A page whose entry is older runs on the warehouse instead, and caches its result. It applies whatever the first page was:
+
+| The run's first page | Its `cached_at`, the bound | A later page's entry from before the first page |
+|---|---|---|
+| Refreshed | now | not used: the page runs now |
+| A miss | now | not used: the page runs now |
+| A hit, cached an hour ago | an hour ago | not used; an entry from between then and now is |
+
+The bound stays fixed for the run. Raising it to the newest page read so far would keep pages in time order when they only move forward, but a caller that switches between pages would then re-run a page on every switch.
+
+What it doesn't guarantee: that every page is as old as the first. When the first page was a hit, a later page can be newer, because its entry is missing or older than the bound, and it runs now. Only paging over one cached result would avoid that, which is a requery ([Extension points](#extension-points)).
+
+`cache.min_cached_at` isn't part of the key. Like `duration`, it only decides which entry may answer. anfra checks it against the time it recorded itself, so a bound sent back from an answer compares like for like. On a platform with several servers, a server's clock running behind another's can make an entry just written look older than the bound. The page then runs again: a cost, never a wrong answer.
+
+**In the SDK.** A query keeps the bound beside the `input` its run came back with:
+
+| Request | Sends `cache.min_cached_at` | Afterwards |
+|---|---|---|
+| A run: the first, a re-run after a change, `execute()`, `refresh()` | no | the bound is the answer's `cache.cached_at`, or none when the answer has no `cache` |
+| `fetchMore()`, the next page | the bound | unchanged |
+| An export | the bound | unchanged |
+
+A run always starts at the first page, and `fetchMore()` only appends the next one: the SDK has no call that runs page x. A call that did would have to be a later page of the run, sending the bound, rather than a new run, which would set the bound from page x and drop it for the pages before.
 
 ### A miss
 
@@ -522,7 +552,8 @@ Status as of 2026-11-13, on the `cache/query-cache` branch.
 4. **The cache.**
    - Done: `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `internal/querycache` with `engine/querycachetest`; anfra's key (`querycache.NewKey`) with its access test, and each data source's identity (`DataSource.Identity`, the connection hashed for a local repo); the SQLite store with its migrations and their compatibility rule; `cache.query.enabled`; where it lives; its state in `anfra status`, and `anfra serve`'s startup check; the `cache` input on `query` and `query export` (`query.compile` has its own params, without it), and `cache.query.default.duration`, both capped at 7 days; the miss path in `query`: its result written to canal-lake as it streams, committed when it succeeds, abandoned when it fails, and the answer's `cache` (`key`, `hit`, `cached_at`, `expires_at`, and a `warning` when it ran without the cache, its cause in the log); the `data_source` and `dataset` tags on each write; `cache.clean` (`anfra cache clean`), by those tags, all of the query cache (`query: {}`), or every cache (no `query`), with `cache_disabled` and `cache_unavailable`; `cache.status` (`anfra cache status`): the state, the cache's folder, its settings, and its contents (current results, their size, the oldest and newest, expired ones awaiting the sweep, writes in progress), read without changing the store; the hit path in `query`: an entry the age rule accepts is read through canal-query's `canal_lake` connector within the query's bounds, its field names and column types restored from the header stored with it, and a file gone before any row is a miss; `cache.cached_only`, failing with `cache_miss`, `cache_disabled` or `cache_unavailable` rather than running on the warehouse (refused for `query export` until it reads the cache); the sweep, through canal-query's `/do_lake_action` (canal-lake started only when there's a file to drop): `anfra serve` every 5 minutes, logging `query_cache.swept` and `query_cache.sweep_failed`, and `cache.clean` after it expires, its answer's `freed` saying what the sweep deleted. Results it has just cleaned wait out the read grace (35 minutes), so in a repo that never runs `anfra serve`, their files are freed by the next clean after that.
    - Done: the parity test (`TestCacheParity`, against the anfra-canal binary, run by `make test-sidecars`). A hit answers what its miss did for every type canal-query's DuckDB connector returns. canal-lake's own header differs in three ways, which a hit restores from the header stored at write: names (`hcolN`), types (Arrow's labels), and a timestamp's zone (`Etc/UTC` where the miss said `UTC`). The connector returns nested types, `HUGEINT`, `UUID`, `ENUM` and `INTERVAL` as strings, so their Parquet round trip needs a warehouse that keeps them, such as Postgres.
+   - Done: `cache.min_cached_at` ([A run's later pages](#a-runs-later-pages)).
    - To do: `query export` through the cache, miss and hit, and how its answer says what the cache did; the CLI's warning; uncached when canal-lake fails mid-write (canal-query fails the query today); the `model` tag, once anfra-node's compile says every model a query read (its columns name only the selected fields' models, so a clean by model built from them would leave entries that read the model through a filter or a join), and `cache.clean`'s `model` with it.
-5. **The SDK:** a query's result keeps the `input` it ran with, and replays it for the next page and an export; `refresh` leaves the seeds out. `inspect` showing the answer's `cache`, the `refresh` plugin.
+5. **The SDK:** a query's result keeps the `input` it ran with, and replays it for the next page and an export (done); `refresh` leaves the seeds out (done). To do: `refresh` sent as `cache.refresh` (today the SDK's `bustCache` is never sent); the answer's `cache` read into `debug` (today `fromCache` is always `false`); the bound a run sets, sent with `fetchMore` and an export ([A run's later pages](#a-runs-later-pages)); `inspect` showing the answer's `cache`; the `refresh` plugin.
 6. **The engine:** the `Store`, `Planner` and `Recorder` on each invocation, with core's implementations; `DataSource.Identity`, which anfra Cloud sets for each data source, and for each viewer under OAuth passthrough.
 7. **After:** removing orphaned files (in canal-lake with no row); a command to throw a repo's cache away by hand (`anfra cache clean --query --reset`); the caller's tags (`app`, `block`, an origin, through a `cache.origin` input) and attribution by tag (hits, misses and size per tag, for a `cache.stats` op and `inspect`); the size limit; canal-query streaming on when its canal-lake write fails; the data source settings that change rows, in the key; canal-lake in `anfra status`.

@@ -88,12 +88,14 @@ func NewManager(c Config) (*Manager, error) {
 // manager hands out has the times a lookup of it gives back.
 func ms(t time.Time) time.Time { return t.Truncate(time.Millisecond) }
 
-// Lookup is the entry a query accepts: the key's current entry, unexpired, and
-// younger than maxAge, the query's cache duration. So a query asking for
-// fresher data than an entry was written for never gets older data than it
-// accepts (docs/designs/query-cache.md#which-entry-a-query-accepts). None when
-// maxAge is not positive: the query doesn't read the cache.
-func (m *Manager) Lookup(ctx context.Context, key Key, maxAge time.Duration) (Entry, bool, error) {
+// Lookup is the entry a query accepts: the key's current entry, unexpired,
+// younger than maxAge, the query's cache duration, and cached at notBefore or
+// later, when notBefore isn't zero. So a query asking for fresher data than an
+// entry was written for never gets older data than it accepts, and a later page
+// of a run never gets data older than its first page
+// (docs/designs/query-cache.md#which-entry-a-query-accepts). None when maxAge is
+// not positive: the query doesn't read the cache.
+func (m *Manager) Lookup(ctx context.Context, key Key, maxAge time.Duration, notBefore time.Time) (Entry, bool, error) {
 	if maxAge <= 0 {
 		return Entry{}, false, nil
 	}
@@ -102,7 +104,7 @@ func (m *Manager) Lookup(ctx context.Context, key Key, maxAge time.Duration) (En
 	if err != nil || !ok {
 		return Entry{}, false, err
 	}
-	if now.Sub(e.CachedAt) >= maxAge {
+	if now.Sub(e.CachedAt) >= maxAge || e.CachedAt.Before(notBefore) {
 		return Entry{}, false, nil
 	}
 	return e, true, nil

@@ -88,28 +88,34 @@ func manager(t *testing.T, s *store, l *lake, now *time.Time, namespace string) 
 	return m
 }
 
-// A query accepts an entry younger than its own duration; with none, it doesn't
-// read the cache at all.
+// A query accepts an entry younger than its own duration, and cached no
+// earlier than its bound, if it sets one; with no duration, it doesn't read the
+// cache at all.
 func TestLookupAgeRule(t *testing.T) {
 	now := t0
-	s := &store{current: querycache.Entry{ID: 1, CachedAt: t0.Add(-5 * time.Minute)}, hasEntry: true}
+	cachedAt := t0.Add(-5 * time.Minute)
+	s := &store{current: querycache.Entry{ID: 1, CachedAt: cachedAt}, hasEntry: true}
 	m := manager(t, s, &lake{s: s}, &now, "")
 	for _, tc := range []struct {
-		name   string
-		maxAge time.Duration
-		want   bool
+		name      string
+		maxAge    time.Duration
+		notBefore time.Time
+		want      bool
 	}{
-		{"older than it accepts", 5 * time.Minute, false},
-		{"younger than it accepts", 10 * time.Minute, true},
-		{"no duration", 0, false},
+		{"older than it accepts", 5 * time.Minute, time.Time{}, false},
+		{"younger than it accepts", 10 * time.Minute, time.Time{}, true},
+		{"cached before the bound", 10 * time.Minute, cachedAt.Add(time.Millisecond), false},
+		{"cached at the bound", 10 * time.Minute, cachedAt, true},
+		{"cached after the bound", 10 * time.Minute, cachedAt.Add(-time.Minute), true},
+		{"no duration", 0, time.Time{}, false},
 	} {
-		_, ok, err := m.Lookup(context.Background(), "k", tc.maxAge)
+		_, ok, err := m.Lookup(context.Background(), "k", tc.maxAge, tc.notBefore)
 		if err != nil || ok != tc.want {
 			t.Errorf("%s: %v (%v), want %v", tc.name, ok, err, tc.want)
 		}
 	}
-	if s.lookups != 2 {
-		t.Errorf("the store was asked %d times, want 2: none without a duration", s.lookups)
+	if s.lookups != 5 {
+		t.Errorf("the store was asked %d times, want 5: none without a duration", s.lookups)
 	}
 }
 

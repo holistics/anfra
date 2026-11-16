@@ -129,6 +129,8 @@ func TestCacheOptionsRefusals(t *testing.T) {
 		{"a duration", CacheOptions{Duration: "1h"}, ""},
 		{"0s", CacheOptions{Duration: "0s"}, ""},
 		{"7 days", CacheOptions{Duration: "168h"}, ""},
+		{"a bound, as an answer's cached_at", CacheOptions{MinCachedAt: "2026-11-16T09:30:00.123Z"}, ""},
+		{"a bound with an offset", CacheOptions{MinCachedAt: "2026-11-16T16:30:00+07:00"}, ""},
 
 		{"not a duration", CacheOptions{Duration: "1 hour"}, "cache.duration"},
 		{"a day unit, which Go has none of", CacheOptions{Duration: "1d"}, "cache.duration"},
@@ -136,6 +138,8 @@ func TestCacheOptionsRefusals(t *testing.T) {
 		{"over 7 days", CacheOptions{Duration: "169h"}, "cache.duration"},
 		{"refresh and cached only", CacheOptions{Refresh: true, CachedOnly: true}, "cache.cached_only"},
 		{"cached only for 0s", CacheOptions{CachedOnly: true, Duration: "0s"}, "cache.cached_only"},
+		{"a bound with no zone", CacheOptions{MinCachedAt: "2026-11-16T09:30:00"}, "cache.min_cached_at"},
+		{"a bound that isn't a time", CacheOptions{MinCachedAt: "yesterday"}, "cache.min_cached_at"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for op, err := range map[string]error{
@@ -156,6 +160,12 @@ func TestCacheOptionsRefusals(t *testing.T) {
 	}
 	if d, set := (CacheOptions{Duration: "90m"}).duration(); !set || d != 90*time.Minute {
 		t.Errorf("duration() = %v, %v", d, set)
+	}
+	if at := (CacheOptions{MinCachedAt: "2026-11-16T09:30:00.123Z"}).minCachedAt(); !at.Equal(time.Date(2026, 11, 16, 9, 30, 0, 123e6, time.UTC)) {
+		t.Errorf("minCachedAt() = %v", at)
+	}
+	if at := (CacheOptions{}).minCachedAt(); !at.IsZero() {
+		t.Errorf("minCachedAt() without one = %v, want zero", at)
 	}
 }
 

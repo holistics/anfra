@@ -154,7 +154,7 @@ func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int)
 	if opts.Refresh {
 		return l, nil
 	}
-	e, ok, err := l.cache.m.Lookup(ctx, l.key, l.duration)
+	e, ok, err := l.cache.m.Lookup(ctx, l.key, l.duration, opts.minCachedAt())
 	if err != nil {
 		return l.unavailable(ctx, qc, fmt.Errorf("look the query up in the cache: %w", err))
 	}
