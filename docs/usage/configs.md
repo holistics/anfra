@@ -12,7 +12,7 @@ A repo's config is its `.anfra/` folder, committed with it (`anfra init` creates
 | `context_sources.yml` | What `anfra ingest` reads into the local catalog that `anfra search` searches and `anfra lineage` traces through; by default, the repo's own semantic layer. |
 | `config.yml` | The repo's settings, written by hand and committed ([below](#configyml)). |
 
-anfra reads them on every command, so an edit needs no restart.
+anfra reads them on every command, so an edit needs no restart, except `config.yml`'s `cache` settings, which `anfra serve` reads when it starts.
 
 ### `config.yml`
 
@@ -22,6 +22,10 @@ The repo's settings, written by hand and committed. It never holds a credential.
 |---|---|
 | `org.url` | The org `anfra publish` publishes the repo to, by its address on its server (`https://bi.example.com/o/acme`), so everyone publishes to the same org. `anfra publish --set-org` sets it, changing nothing else in the file. |
 | `apps.allow_origins` | Origins the repo's Data Apps may load scripts, styles and fonts from, and send requests to, beyond the SDK's own CDNs, as `anfra serve` runs them, each `https://<host>[:<port>]`. It's never published, since an org keeps its own list, and `anfra publish` says which of them the org doesn't allow. |
+| `cache.query.default.duration` | How old a cached result a query accepts, and how long a result it caches is kept, for every query that sets no `cache.duration` of its own: a duration such as `5m` or `1h`, at most `168h` (7 days). It applies to every caller, `anfra query` and MCP included, so an agent asking a question again gets the cached answer. To cache only a Data App's queries, set the app's own default instead, in its `createApp` (`cache: { query: { default: { duration: '5m' } } }`), which takes precedence for its queries. Default: unset, so a query uses the cache only when it, or its Data App, asks. A value anfra doesn't take is logged, and those queries run uncached until it's fixed. |
+| `cache.query.enabled` | `false` turns the query cache off for the repo: anfra keeps no store and starts no canal-lake. A query that asks for the cache runs on the warehouse, and its answer says why (`cache.warning`, `cache_disabled`); `anfra cache clean` fails. Default: `true`. `ANFRA_CACHE_QUERY_ENABLED` overrides it for one process ([below](#query-cache)). |
+
+`anfra serve` reads the `cache` settings when it starts: restart it after changing them.
 
 For example:
 
@@ -31,6 +35,10 @@ org:
 apps:
   allow_origins:
     - https://cdn.acme.com
+cache:
+  query:
+    default:
+      duration: 5m
 ```
 
 ## `anfra serve`
@@ -55,6 +63,15 @@ anfra's on/off switches take `1` (on) or `0` (off); unset means off. Any other v
 | Variable | Effect |
 |---|---|
 | `ANFRA_HOME` | anfra's own folder: the installed binary, the unpacked sidecars, each repo's logs and caches (`internal/home`). A repo's query cache is in `repos/<repo id>/cache/query/`: its store, `store.sqlite`, and the results of the canal-lake anfra starts, `lake/`. In a container, put it on a lasting volume to keep the cache across restarts. A path. Default: `~/.anfra`. The installer honours it too. |
+
+### Query cache
+
+See [designs/query-cache.md](../designs/query-cache.md).
+
+| Variable | Effect |
+|---|---|
+| `ANFRA_CACHE_QUERY_ENABLED` | `0` turns the query cache off for this process, whatever the repo's `cache.query.enabled`; `1` turns it on over a repo's `false`. For a run that must see live data, such as CI, or to rule the cache out while debugging. Default: unset, so the repo's setting applies. |
+| `ANFRA_CACHE_QUERY_NAMESPACE` | The folder in canal-lake's storage that anfra writes its results to, for several anfras sharing one storage ([below](#running-canal-query-and-canal-lake-yourself)). Default: none. |
 
 ### Sidecars
 
