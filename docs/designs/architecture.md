@@ -4,15 +4,18 @@ How anfra is put together: the processes, how a command flows through them, the 
 
 ## Processes
 
-anfra is a Go program and two sidecar processes it talks to. Each sidecar exists because its work is best done in another runtime, not to split anfra into services: locally, anfra starts both and they live and die with it.
+anfra is a Go program and three sidecar processes. Each sidecar exists because its work is best done in another runtime, not to split anfra into services: locally, anfra starts them and they live and die with it. canal-lake starts only once a query needs the query cache.
 
 | Process | Role | Code |
 |---|---|---|
 | **anfra** (Go) | The main process: commands, the CLI, `anfra serve` (HTTP API, MCP, Data App pages), config and credentials, orchestration, logs. | `cmd/anfra`, `internal/`, `engine/`, `shared/` |
 | **anfra-node** (Node.js) | Supplies anfra with core functions that exist in Node.js. Today these are mainly the semantic layer's (compiling, validating and showing AML; compiling and validating AQL) and the local catalog's (ingest, search, lineage). | holistics-core `apps/anfra-node`; Go client in `internal/sidecar/anfranode` |
-| **canal-query** (Go) | Executes SQL against the warehouse, with connection pooling. | holistics/canal; Go client in `internal/sidecar/canalquery` |
+| **canal-query** (Go) | Executes SQL against the warehouse, with connection pooling. Writes a cached query's result to canal-lake, and reads it back. | holistics/canal (`app/query`); Go client in `internal/sidecar/canalquery` |
+| **canal-lake** (Go) | Stores the query cache's results as Parquet files, in DuckDB. | holistics/canal (`app/lake`); supervisor in `internal/sidecar/canallake`, with no client: anfra never calls it |
 
-anfra talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on another (`internal/sidecar`). The catalog commands also pass anfra-node canal-query's address (`internal/ingest/ingest.go`), `unix:<path>` for the one anfra spawns, for the catalog's database context sources to reach it. Those are off today, and anfra-node's query client cannot dial a socket yet: with them back, it fails on that address (`unknown scheme`) until it can.
+canal-query and canal-lake run from one binary, anfra-canal (`anfra-canal query`, `anfra-canal lake`), which anfra embeds ([sidecars.md](sidecars.md)).
+
+anfra talks to anfra-node over JSON-RPC on a Unix socket, and to canal-query over HTTP on another (`internal/sidecar`). Only canal-query talks to canal-lake, over gRPC on a third socket, which anfra gives both of them. The catalog commands also pass anfra-node canal-query's address (`internal/ingest/ingest.go`), `unix:<path>` for the one anfra spawns, for the catalog's database context sources to reach it. Those are off today, and anfra-node's query client cannot dial a socket yet: with them back, it fails on that address (`unknown scheme`) until it can.
 
 Only anfra reads `.anfra/data_sources.yml`. anfra-node receives each data source's name and type, which it needs for the SQL dialect; the connection, credentials included, goes to canal-query alone, with the query to run (`internal/datasource/datasource.go`).
 
@@ -31,6 +34,7 @@ flowchart LR
   end
   node["anfra-node (Node.js)<br/>semantic layer · query · catalog"]
   canal["canal-query (Go)<br/>SQL execution"]
+  lake["canal-lake (Go)<br/>query cache results"]
   wh[(Warehouse)]
   repo[["Repo: semantic layer, apps/, .anfra/"]]
 
@@ -45,6 +49,7 @@ flowchart LR
   reg -->|HTTP, Unix socket| canal
   node -->|catalog writes| canal
   canal --> wh
+  canal -->|gRPC, Unix socket| lake
   node --> repo
   reg --> repo
 ```
@@ -56,15 +61,16 @@ Every command, on every surface, goes through the one registry (`internal/app`):
 1. The input is checked against the command's schema, then its `Check` (rules between arguments), before any sidecar is needed ([commands-and-api.md](commands-and-api.md)).
 2. anfra asks anfra-node to compile the query for the dataset (AQL, by default). anfra-node reads the repo's semantic layer (its AML), from its compile cache where it can, and answers SQL, or diagnostics saying what is wrong.
 3. anfra sends the SQL and the data source's connection to canal-query, which runs it on the warehouse.
+   If the query asks for the query cache, anfra first looks its key up in the cache's store. On a hit, canal-query reads the stored result from canal-lake instead of the warehouse. On a miss, canal-query runs the query and writes its result to canal-lake as it streams it back ([query-cache.md](query-cache.md)).
 4. anfra shapes the rows into the command's answer. A failure anywhere becomes a classified error ([errors.md](errors.md)).
 
 ## Two ways to run
 
-**One-shot CLI.** `anfra query …` starts only the sidecars that command needs (each command declares them, `Needs` in `internal/command/command.go`), runs it, and stops them. Nothing stays behind but logs and caches.
+**One-shot CLI.** `anfra query …` starts only the sidecars that command needs (each command declares them, `Needs` in `internal/command/command.go`), runs it, and stops them. It starts canal-lake only if the command's query uses the cache. Nothing stays behind but logs and caches.
 
-**`anfra serve`.** A long-running server for one repo, with both sidecars kept warm: anfra-node keeps the compiled program in memory, and canal-query pools warehouse connections. It serves the HTTP API, MCP and the Data App pages (`cmd/anfra/serve.go`). It records itself in the repo's runtime file (`serve.json`, under the repo's state folder), and while it runs, CLI commands in that repo find it there and are forwarded to it rather than starting sidecars of their own (`cmd/anfra/runtime.go`, `runCommand` in `cmd/anfra/commands.go`; which are not, and why: [cli-vs-warm-server.md](cli-vs-warm-server.md)). A server keeps the version it started with, so a CLI of another version warns that the command runs on that one ([release.md](release.md#updates)). A second `anfra serve` for the same repo refuses to start.
+**`anfra serve`.** A long-running server for one repo, with anfra-node and canal-query kept warm: anfra-node keeps the compiled program in memory, and canal-query pools warehouse connections. canal-lake starts when the first cached query needs it, and runs until the server stops. It serves the HTTP API, MCP and the Data App pages (`cmd/anfra/serve.go`). It records itself in the repo's runtime file (`serve.json`, under the repo's state folder), and while it runs, CLI commands in that repo find it there and are forwarded to it rather than starting sidecars of their own (`cmd/anfra/runtime.go`, `runCommand` in `cmd/anfra/commands.go`; which are not, and why: [cli-vs-warm-server.md](cli-vs-warm-server.md)). A server keeps the version it started with, so a CLI of another version warns that the command runs on that one ([release.md](release.md#updates)). A second `anfra serve` for the same repo refuses to start.
 
-**Embedded.** A platform imports the `engine` package and calls `Dispatch` in its own process. It runs the sidecars itself, with their own lifecycle and scaling, and connects to them by URL (`engine.Connect`): the engine never spawns processes in a platform's server. See [engine.md](engine.md).
+**Embedded.** A platform imports the `engine` package and calls `Dispatch` in its own process. It runs the sidecars itself, with their own lifecycle and scaling, canal-lake beside canal-query if it uses the query cache, and connects to anfra-node and canal-query by URL (`engine.Connect`): the engine never spawns processes in a platform's server. See [engine.md](engine.md).
 
 ## State and config
 
@@ -90,7 +96,9 @@ Two places, with different owners.
 ├── update-check.json          the last update check (internal/update)
 └── repos/<repo id>/           one per repo: <folder name>-<hash of its path>
     ├── logs/anfra.log         anfra's and the sidecars' log
-    ├── cache/                 anfra-node's compile cache
+    ├── cache/
+    │   ├── compile-cache/     anfra-node's compile cache
+    │   └── query/             the query cache: its store (store.sqlite) and canal-lake's files (lake/)
     ├── runtime/serve.json     the running server, while there is one
     └── catalog/               the local search catalog
 ```
@@ -112,4 +120,5 @@ Keeping state out of the repo means a repo never fills with generated files, and
 - [data-apps.md](data-apps.md): Data Apps, the SDK and appserve.
 - [security.md](security.md): the trust model.
 - [sidecars.md](sidecars.md): the sidecars' lifecycle, caches and configuration.
+- [query-cache.md](query-cache.md): the query cache, and canal-lake's part in it.
 - [release.md](release.md): releases, the Docker image and versions.

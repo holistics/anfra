@@ -14,6 +14,7 @@ The engine does its work through two sidecars, which your deployment runs as ser
 
 - **anfra-node** listens on a port with `--port=<n>` (or `ANFRA_PORT`). Its releases are published by holistics-core, and anfra pins the version it was built against in `manifest.yml`.
 - **canal-query** is published by holistics/canal; `manifest.yml` pins its release too.
+- **canal-lake**, only if you use the query cache: it stores the cached results, and canal-query reads and writes them there. The engine never calls it. Run it from anfra-canal (`anfra-canal lake`) or canal's own image, at the release `manifest.yml` records in `anfra_canal_services`, and configure both as [configs.md](configs.md#running-canal-query-and-canal-lake-yourself) says.
 
 Use the versions your anfra's `manifest.yml` names: the engine and its sidecars are released together.
 
