@@ -174,7 +174,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 	}
 
 	cmd.RunE = func(runCmd *cobra.Command, posArgs []string) error {
-		d := delivery{stdout: runCmd.OutOrStdout()}
+		d := delivery{stdout: runCmd.OutOrStdout(), stderr: runCmd.ErrOrStderr()}
 		if presentationOf(c) == presentDownload {
 			d.output, _ = runCmd.Flags().GetString("output")
 			d.link, _ = runCmd.Flags().GetBool("link")
@@ -503,6 +503,7 @@ func logFailure(ctx context.Context, logger *slog.Logger, name string, err error
 // file, to stdout or to output, or as its link alone.
 type delivery struct {
 	stdout io.Writer
+	stderr io.Writer // the answer's warnings, when it isn't shown as YAML or JSON
 	output string
 	link   bool
 }
@@ -540,9 +541,16 @@ func isExportLink(t reflect.Type) bool {
 }
 
 // deliver shows an answer as presentationOf says: an export's file downloaded,
-// or its link shown when asked for (--link), and any other answer shown.
+// or its link shown when asked for (--link), and any other answer shown. Its
+// warnings then go to stderr, unless it was shown as YAML or JSON, which hold
+// them already.
 func deliver(ctx context.Context, c command.Command, body []byte, d delivery) error {
-	if presentationOf(c) != presentDownload || d.link {
+	downloaded := presentationOf(c) == presentDownload && !d.link
+	if !downloaded && !wantsPretty(prettyViews[c.Name()]) {
+		return presentTo(c, body, d.stdout)
+	}
+	defer printAnswerWarnings(c, body, d.stderr)
+	if !downloaded {
 		return presentTo(c, body, d.stdout)
 	}
 	var link command.ExportLink
@@ -550,6 +558,20 @@ func deliver(ctx context.Context, c command.Command, body []byte, d delivery) er
 		return fmt.Errorf("decode the export's link: %w", err)
 	}
 	return download(ctx, link.URL, d.output, d.stdout)
+}
+
+// printAnswerWarnings prints the warnings of an answer that reports them
+// (command.Warner) on w, each a warning document.
+func printAnswerWarnings(c command.Command, body []byte, w io.Writer) {
+	v := reflect.New(c.Output())
+	if w == nil || jsonkit.Unmarshal(body, v.Interface()) != nil {
+		return
+	}
+	if warner, ok := v.Elem().Interface().(command.Warner); ok {
+		for _, warning := range warner.Warnings() {
+			printWarning(w, warning.Code, warning.Message)
+		}
+	}
 }
 
 // download copies the file at link (file:// from the CLI's own exports,

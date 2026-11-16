@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/query"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
@@ -350,4 +351,21 @@ func TestAsQueryFailed(t *testing.T) {
 			t.Errorf("canal scope %s: query_failed = %v, want %v", scope, got, want)
 		}
 	}
+}
+
+// A query's answer, and an export's, warn of what its cache reports: the
+// warning of a query that ran without the cache it asked for; nothing
+// otherwise.
+func TestAnswerWarnings(t *testing.T) {
+	warned := CacheResult{Key: "k1:abc", Warning: unavailableWarning("Run `anfra logs` to see what failed.")}
+	for _, w := range [][]command.AnswerWarning{QueryResult{Cache: warned}.Warnings(), QueryExportResult{Cache: warned}.Warnings()} {
+		if len(w) != 1 || w[0].Code != "cache_unavailable" || !strings.HasSuffix(w[0].Message, "isn't working. Run `anfra logs` to see what failed.") {
+			t.Errorf("warnings: %+v", w)
+		}
+	}
+	if w := (QueryResult{Cache: CacheResult{Key: "k1:abc", Hit: true}}).Warnings(); w != nil {
+		t.Errorf("a hit warns: %+v", w)
+	}
+	var _ command.Warner = QueryResult{}
+	var _ command.Warner = QueryExportResult{}
 }

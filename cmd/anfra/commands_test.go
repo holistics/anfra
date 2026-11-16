@@ -364,3 +364,49 @@ func TestStatusHintsPublishStatus(t *testing.T) {
 		t.Errorf("with an org: %q", out.String())
 	}
 }
+
+// An answer's warnings go to stderr where the answer isn't shown as YAML or
+// JSON: in the pretty format, and for an export's file, downloaded. Shown as
+// YAML, the answer holds them.
+func TestAnswerWarningsOnStderr(t *testing.T) {
+	t.Cleanup(resetOutput)
+	t.Setenv("NO_COLOR", "1")
+	warning := `"cache":{"key":"k1:abc","hit":false,"warning":{"code":"cache_unavailable","message":"The query ran without the cache, because the cache isn't working. Run ` + "`anfra logs`" + ` to see what failed."}}`
+	queryBody := []byte(`{"sql":"select 1","columns":[],"result":{"fields":[],"records":[]},"has_more":false,"timings":{"steps":[],"end_ms":1},` + warning + `}`)
+	file := filepath.Join(t.TempDir(), "x.csv")
+	if err := os.WriteFile(file, []byte("a\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exportBody := []byte(`{"url":"file://` + file + `","filename":"x.csv","format":"csv","row_count":1,"expires_at":"2026-11-16T12:00:00Z",` + warning + `}`)
+
+	for _, tc := range []struct {
+		name   string
+		pretty bool
+		cmd    string
+		body   []byte
+		d      delivery
+		warns  bool
+	}{
+		{"a query, as YAML", false, "query", queryBody, delivery{}, false},
+		{"a query, pretty", true, "query", queryBody, delivery{}, true},
+		{"an export, downloaded", false, "query.export", exportBody, delivery{output: filepath.Join(t.TempDir(), "out.csv")}, true},
+		{"an export's link, as YAML", false, "query.export", exportBody, delivery{link: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetOutput()
+			output.pretty = tc.pretty
+			var stdout, stderr bytes.Buffer
+			tc.d.stdout, tc.d.stderr = &stdout, &stderr
+			if err := deliver(t.Context(), registered(t, tc.cmd), tc.body, tc.d); err != nil {
+				t.Fatal(err)
+			}
+			got := stderr.String()
+			if warned := strings.Contains(got, "cache_unavailable"); warned != tc.warns {
+				t.Fatalf("warned %v, want %v: %q", warned, tc.warns, got)
+			}
+			if tc.warns && !strings.Contains(got, "isn't working. Run `anfra logs` to see what failed.") {
+				t.Errorf("not its message: %q", got)
+			}
+		})
+	}
+}

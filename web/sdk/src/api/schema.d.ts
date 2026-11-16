@@ -721,7 +721,7 @@ export interface components {
              * @description how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran.
              */
             entries: number;
-            /** @description the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted: anfra's log says why, and the next sweep tries again. */
+            /** @description the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted, in which case the next sweep tries again. */
             freed?: components["schemas"]["QueryFreed"];
         };
         QueryCacheContents: {
