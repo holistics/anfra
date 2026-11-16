@@ -90,6 +90,8 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 			"input": map[string]any{"filters": []any{map[string]any{"field": "products.nope", "operator": "is", "values": []any{"x"}}}}})}, "", apperr.ValidationFailed},
 		{"query, a pivot paged", valid, clients, Request{Command: "query", Args: map[string]any{"dataset": "ecommerce", "page_size": 2,
 			"query": "explore { dimensions { rows { name: products.name } columns { id: products.id } } measures { n: count(products.id) } }"}}, "", apperr.ValidationFailed},
+		{"cache status, a server with no query cache", valid, clients, Request{Command: "cache.status"}, ok, nil},
+		{"cache clean, a server with no query cache", valid, clients, Request{Command: "cache.clean"}, "", errcode.CacheDisabled},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
 		{"lineage, after ingest", valid, clients, Request{Command: "lineage", Args: map[string]any{"targets": []any{map[string]any{"parent": "products", "child": "name"}}}}, ok, nil},
@@ -114,7 +116,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		link := res.Data.(command.ExportLink)
+		link := res.Data.(querycmd.QueryExportResult).ExportLink
 		u, err := url.Parse(link.URL)
 		if err != nil {
 			t.Fatal(err)
