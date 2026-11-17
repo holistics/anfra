@@ -69,7 +69,7 @@ type Options struct {
 	// prod or prod/eu; empty for the storage's top level
 	// (docs/designs/query-cache.md#file-names).
 	Namespace string
-	// Default is the repo's cache.query.default: the cache options of a query
+	// Default is the repo's query.default.cache: the cache options of a query
 	// that sets none.
 	Default command.QueryCacheDefaults
 	// Report and Notice are how whoever runs anfra is told why a query ran

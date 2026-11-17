@@ -14,7 +14,7 @@ import (
 )
 
 // The switches. Each is off by default, but LogStderr, which is on for
-// `anfra serve`, and CacheQueryEnabled, which defaults to the repo's setting
+// `anfra serve`, and QueryCacheEnabled, which defaults to the repo's setting
 // (OnOr).
 const (
 	LogStderr        = "ANFRA_LOG_STDERR"
@@ -23,12 +23,12 @@ const (
 	AutoUpdate       = "ANFRA_AUTO_UPDATE"
 	HideErrorCauses  = "ANFRA_HIDE_ERROR_CAUSES"
 	NoAppLogs        = "ANFRA_NO_APP_LOGS"
-	// CacheQueryEnabled is cache.query.enabled for this process, whatever the
+	// QueryCacheEnabled is query.cache.enabled for this process, whatever the
 	// repo sets: 0 turns the query cache off, 1 on. Unset leaves the repo's.
-	CacheQueryEnabled = "ANFRA_CACHE_QUERY_ENABLED"
+	QueryCacheEnabled = "ANFRA_QUERY_CACHE_ENABLED"
 )
 
-var all = []string{LogStderr, SidecarStdout, NoUpdateNotifier, AutoUpdate, HideErrorCauses, NoAppLogs, CacheQueryEnabled}
+var all = []string{LogStderr, SidecarStdout, NoUpdateNotifier, AutoUpdate, HideErrorCauses, NoAppLogs, QueryCacheEnabled}
 
 // Validate refuses a switch set to anything but 1 or 0, naming it and the value
 // it has. Call it once, before anything reads a switch.

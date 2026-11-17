@@ -22,18 +22,19 @@ The cache changes how fresh an answer may be, never its shape: a query answers t
 
 ### Turning it on
 
-The query cache is on in every repo, and a query uses it when it asks to, with its own `cache.duration`, or when the repo sets a default for every query. In the repo's settings, `.anfra/config.yml`:
+The query cache is on in every repo, and a query uses it when it asks to, with its own `cache.duration`, or when the repo sets a default for every query. In the repo's settings, `.anfra/config.yml` ([query settings](query-settings.md)):
 
 ```yaml
-cache:
-  query:
-    enabled: true    # the default. false: the query cache is off for this repo
-    default:
+query:
+  default:
+    cache:
       duration: 1h   # how old a cached result a query accepts, unless it says otherwise
+  cache:
+    enabled: true    # the default. false: the query cache is off for this repo
 ```
 
-- **Off for a repo** (`cache.query.enabled: false`): no store, no canal-lake, no checks and no warnings, ever. A query that asks for the cache anyway runs without it, and its answer says so (`cache.warning`, `cache_disabled`). `cache.cached_only` and `cache.clean` fail with `cache_disabled`, scope `user`: the repo's own setting refuses them.
-- **Off for a process** (`ANFRA_CACHE_QUERY_ENABLED=0`, the setting's path as a variable, `1` or `0` as anfra's other switches): whatever the repo says, and `1` turns it on over a repo's `false`. For a run that must see live data, such as CI, or to rule the cache out while debugging.
+- **Off for a repo** (`query.cache.enabled: false`): no store, no canal-lake, no checks and no warnings, ever. A query that asks for the cache anyway runs without it, and its answer says so (`cache.warning`, `cache_disabled`). `cache.cached_only` and `cache.clean` fail with `cache_disabled`, scope `user`: the repo's own setting refuses them.
+- **Off for a process** (`ANFRA_QUERY_CACHE_ENABLED=0`, the setting's path as a variable, `1` or `0` as anfra's other switches): whatever the repo says, and `1` turns it on over a repo's `false`. For a run that must see live data, such as CI, or to rule the cache out while debugging.
 - **What it costs a repo whose queries never ask:** one small file, the store, which `anfra serve` creates at startup to check the cache works ([When the cache isn't working](#when-the-cache-isnt-working)). canal-lake, a process, starts only when a query is cached.
 
 ### A query's input
@@ -51,7 +52,7 @@ cache:
 
 | Input | Meaning |
 |---|---|
-| `cache.duration` | How old a cached result this query accepts, as a duration (`10m`, `1h`), and how long the result it writes stays cached. Without it, `cache.query.default.duration`. `0s` turns the cache off for the query: no entry is younger than it, so none is read, and one written with it would expire at once, so none is written. |
+| `cache.duration` | How old a cached result this query accepts, as a duration (`10m`, `1h`), and how long the result it writes stays cached. Without it, `query.default.cache.duration`. `0s` turns the cache off for the query: no entry is younger than it, so none is read, and one written with it would expire at once, so none is written. |
 | `cache.refresh` | `true` runs the query on the warehouse whatever is cached, and caches its result. |
 | `cache.read_only` | `true` uses a cached result if there is one, and otherwise runs the query without caching its result: for a one-off query that shouldn't take up the cache. |
 | `cache.cached_only` | `true` uses a cached result, or fails with `cache_miss` without running the query: to find out whether a result is still there ([Re-reading a result](#re-reading-a-result)). |
@@ -116,7 +117,7 @@ The message's last sentence is for a local repo, whose log is on the reader's ma
 | Code | Means |
 |---|---|
 | `cache_unavailable` | The cache isn't working: its store or canal-lake failed. The cause is in the log, for whoever runs anfra, not in the answer |
-| `cache_disabled` | The repo turned the query cache off (`cache.query.enabled: false`) |
+| `cache_disabled` | The repo turned the query cache off (`query.cache.enabled: false`) |
 
 ### Which commands
 
@@ -131,12 +132,12 @@ The message's last sentence is for a local repo, whose log is on the reader's ma
 A Data App asks for the cache in its own code, so its staleness is the app author's choice, visible where it applies, rather than every query's in the repo:
 
 ```js
-const app = Anfra.createApp({ title: 'Sales', cache: { query: { default: { duration: '5m' } } } });
+const app = Anfra.createApp({ title: 'Sales', query: { default: { cache: { duration: '5m' } } } });
 app.createQuery('targets', { dataset: 'sales', aql: '…', cache: { duration: '1h' } }); // its own
 app.createQuery('live', { dataset: 'sales', aql: '…', cache: { duration: '0s' } });    // always the warehouse
 ```
 
-- **The app's default** has the same name and meaning as the repo's `cache.query.default.duration`, for the app's queries. A query's own `cache.duration` overrides it, as in the API. The first one set wins: the query's, the app's, then the repo's.
+- **The app's default** has the same name and meaning as the repo's `query.default.cache.duration`, for the app's queries. A query's own `cache.duration` overrides it, as in the API. The first one set wins: the query's, the app's, then the repo's.
 - **Every request of a query** sends it as `cache.duration`: a run, `fetchMore` (with the [bound](#a-runs-later-pages)), an export, and "View underlying data" from it.
 - **The SDK checks it** when the app or the query is declared, as the server would: a duration, at most `168h`.
 - **There's no default in the SDK itself.** The Data App skill's starting example declares `5m`, so a new app is cached, with the line saying so in its code. A repo's default would also make `anfra query` and MCP answer from the cache, where an agent asking a question again expects the warehouse's answer.
@@ -301,7 +302,7 @@ An entry expires at its `expires_at`, or when a newer one replaces it. Expired, 
 
 - **Expired entries**, once expired for longer than the longest read: a read that started before expiry finishes first.
 - **Pending entries**, once their lease has run out ([below](#a-writes-lease)): a write still running is never removed.
-- **Over the size limit** (after the first version): the oldest entries first, while the repo's cache is over `cache.query.max_bytes` (or `ANFRA_CACHE_QUERY_MAX_BYTES`).
+- **Over the size limit** (after the first version): the oldest entries first, while the repo's cache is over `query.cache.max_bytes` (or `ANFRA_QUERY_CACHE_MAX_BYTES`).
 
 A sweep drops an entry's file from canal-lake, then its rows from the store. In that order, a store row may name a file already gone, but no file is left that no row names.
 
@@ -355,7 +356,7 @@ A failure that doesn't fail the request is still reported, because a cache that 
 | `ready` | The store can be used: at this anfra's version, older (brought up to date when next opened), newer but compatible, or not made yet (made at the first cached query, or when `anfra serve` starts) | Nothing |
 | `incompatible` | A newer anfra changed the store in a way this one can't read. Its `problem` gives the versions | `anfra update` |
 | `unavailable` | The store isn't a file anfra made, or can't be read | Move the file aside, or read the error |
-| `disabled` | The repo's settings, or `ANFRA_CACHE_QUERY_ENABLED`, turn the cache off. `reason` says which | Nothing, or turn it on |
+| `disabled` | The repo's settings, or `ANFRA_QUERY_CACHE_ENABLED`, turn the cache off. `reason` says which | Nothing, or turn it on |
 
 How a store's version is kept is the cache's own affair: no state, command or message mentions migrating.
 
@@ -565,7 +566,7 @@ Status as of 2026-11-16, on the `cache/query-cache` branch.
    1. canal-query run from anfra-canal (`internal/sidecar/anfracanal`, the manifest's `anfra_canal` and `anfra_canal_services`, `scripts/sidecars.sh`, `make build`, the release workflow, `anfra publish` recognising anfra-canal, anfra-cloud's `scripts/bump-anfra.sh`). Done.
    2. canal-lake's supervisor ([canal-lake as a sidecar](#canal-lake-as-a-sidecar)), started on demand (`localquerycache`'s `StartLake`); `scripts/sidecars.sh` checking canal-lake's version too. Proved by a test against the real binary (`internal/sidecar/canallake`): a DuckDB query with a canal-lake key writes its Parquet file under the folder anfra gave canal-lake. Done.
 4. **The cache.**
-   - Done: `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `internal/querycache` with `engine/querycachetest`; anfra's key (`querycache.NewKey`) with its access test, and each data source's identity (`DataSource.Identity`, the connection hashed for a local repo); the SQLite store with its migrations and their compatibility rule; `cache.query.enabled`; where it lives; its state in `anfra status`, and `anfra serve`'s startup check; the `cache` input on `query` and `query export` (`query.compile` has its own params, without it), and `cache.query.default.duration`, both capped at 7 days; the miss path in `query`: its result written to canal-lake as it streams, committed when it succeeds, abandoned when it fails, and the answer's `cache` (`key`, `hit`, `cached_at`, `expires_at`, and a `warning` when it ran without the cache, its cause in the log); the `data_source` and `dataset` tags on each write; `cache.clean` (`anfra cache clean`), by those tags, all of the query cache (`query: {}`), or every cache (no `query`), with `cache_disabled` and `cache_unavailable`; `cache.status` (`anfra cache status`): the state, the cache's folder, its settings, and its contents (current results, their size, the oldest and newest, expired ones awaiting the sweep, writes in progress), read without changing the store; the hit path in `query`: an entry the age rule accepts is read through canal-query's `canal_lake` connector within the query's bounds, its field names and column types restored from the header stored with it, and a file gone before any row is a miss; `cache.cached_only`, failing with `cache_miss`, `cache_disabled` or `cache_unavailable` rather than running on the warehouse (refused for `query export` until it reads the cache); the sweep, through canal-query's `/do_lake_action` (canal-lake started only when there's a file to drop): `anfra serve` every 5 minutes, logging `query_cache.swept` and `query_cache.sweep_failed`, and `cache.clean` after it expires, its answer's `freed` saying what the sweep deleted. Results it has just cleaned wait out the read grace (35 minutes), so in a repo that never runs `anfra serve`, their files are freed by the next clean after that.
+   - Done: `input.seeds`, and `pagination` and `timezone` moved into `input` ([a query's input](query-input.md)); `internal/querycache` with `engine/querycachetest`; anfra's key (`querycache.NewKey`) with its access test, and each data source's identity (`DataSource.Identity`, the connection hashed for a local repo); the SQLite store with its migrations and their compatibility rule; `query.cache.enabled`; where it lives; its state in `anfra status`, and `anfra serve`'s startup check; the `cache` input on `query` and `query export` (`query.compile` has its own params, without it), and `query.default.cache.duration`, both capped at 7 days; the miss path in `query`: its result written to canal-lake as it streams, committed when it succeeds, abandoned when it fails, and the answer's `cache` (`key`, `hit`, `cached_at`, `expires_at`, and a `warning` when it ran without the cache, its cause in the log); the `data_source` and `dataset` tags on each write; `cache.clean` (`anfra cache clean`), by those tags, all of the query cache (`query: {}`), or every cache (no `query`), with `cache_disabled` and `cache_unavailable`; `cache.status` (`anfra cache status`): the state, the cache's folder, its settings, and its contents (current results, their size, the oldest and newest, expired ones awaiting the sweep, writes in progress), read without changing the store; the hit path in `query`: an entry the age rule accepts is read through canal-query's `canal_lake` connector within the query's bounds, its field names and column types restored from the header stored with it, and a file gone before any row is a miss; `cache.cached_only`, failing with `cache_miss`, `cache_disabled` or `cache_unavailable` rather than running on the warehouse (refused for `query export` until it reads the cache); the sweep, through canal-query's `/do_lake_action` (canal-lake started only when there's a file to drop): `anfra serve` every 5 minutes, logging `query_cache.swept` and `query_cache.sweep_failed`, and `cache.clean` after it expires, its answer's `freed` saying what the sweep deleted. Results it has just cleaned wait out the read grace (35 minutes), so in a repo that never runs `anfra serve`, their files are freed by the next clean after that.
    - Done: the parity test (`TestCacheParity`, against the anfra-canal binary, run by `make test-sidecars`). A hit answers what its miss did for every type canal-query's DuckDB connector returns. canal-lake's own header differs in three ways, which a hit restores from the header stored at write: names (`hcolN`), types (Arrow's labels), and a timestamp's zone (`Etc/UTC` where the miss said `UTC`). The connector returns nested types, `HUGEINT`, `UUID`, `ENUM` and `INTERVAL` as strings, so their Parquet round trip needs a warehouse that keeps them, such as Postgres.
    - Done: `cache.min_cached_at` ([A run's later pages](#a-runs-later-pages)).
    - Done: `query export` through the cache, miss and hit, its answer's `cache` beside the link, and `cached_only` for it.

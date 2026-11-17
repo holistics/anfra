@@ -115,7 +115,7 @@ type QueryRequestParams struct {
 	PageSize int    `json:"page_size,omitempty" minimum:"1" maximum:"10000" deprecated:"true" doc:"deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."`
 	Timezone string `json:"timezone,omitempty" deprecated:"true" doc:"deprecated: use input.timezone. Ignored when input.timezone is set."`
 
-	Cache CacheOptions `json:"cache,omitempty" doc:"how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."`
+	Cache CacheOptions `json:"cache,omitempty" doc:"how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached."`
 
 	// The names the page and the time zone were set by, for a refusal to name
 	// what the caller sent: a deprecated input's, or "" for input's.
@@ -149,7 +149,7 @@ func (in QueryCompileRequestParams) queryParams() QueryRequestParams {
 // CacheOptions are how the query cache answers a request
 // (docs/designs/query-cache.md#a-querys-input).
 type CacheOptions struct {
-	Duration   string `json:"duration,omitempty" doc:"how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's cache.query.default.duration by default."`
+	Duration   string `json:"duration,omitempty" doc:"how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's query.default.cache.duration by default."`
 	Refresh    bool   `json:"refresh,omitempty" doc:"true runs the query on the warehouse whatever is cached, and caches its result."`
 	ReadOnly   bool   `json:"read_only,omitempty" doc:"true answers from a cached result if there is one, and otherwise runs the query without caching its result."`
 	CachedOnly bool   `json:"cached_only,omitempty" doc:"true answers from a cached result, or fails with cache_miss without running the query."`

@@ -679,7 +679,7 @@ func TestFirstPublishDestinationOrdering(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := t.TempDir()
-			original := "# keep this comment\nother: untouched\n"
+			original := "# keep this comment\nquery:\n  cache:\n    enabled: true # untouched\n"
 			write(t, dir, map[string]string{"a.aml": "a", ".anfra/config.yml": original})
 			env, _, _ := testEnv(never(t))
 			selected, loaded := 0, 0
@@ -778,7 +778,7 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 			if scenario == "switch org" || scenario == "credentials still missing" {
 				selected, _ = cloudapi.ParseOrg("https://cloud.example.com/o/beta")
 			}
-			original := "# keep\norg:\n  url: " + linked.String() + "\nother: untouched\n"
+			original := "# keep\norg:\n  url: " + linked.String() + "\nquery:\n  cache:\n    enabled: true # untouched\n"
 			write(t, dir, map[string]string{"a.aml": "a", ".anfra/config.yml": original})
 			env, _, _ := testEnv(never(t))
 			missing := errors.New("authentication required")
@@ -839,7 +839,7 @@ func TestConfiguredPublishAuthenticationRecovery(t *testing.T) {
 				t.Fatal(readErr)
 			}
 			if scenario == "switch org" {
-				if !strings.Contains(string(after), selected.String()) || !strings.Contains(string(after), "# keep") || !strings.Contains(string(after), "other: untouched") {
+				if !strings.Contains(string(after), selected.String()) || !strings.Contains(string(after), "# keep") || !strings.Contains(string(after), "enabled: true # untouched") {
 					t.Fatalf("destination or unrelated config lost: %s", after)
 				}
 			} else if string(after) != original {

@@ -50,7 +50,7 @@ type QueryCacheStatus struct {
 
 // QueryCacheSettings are the query cache's settings that are set.
 type QueryCacheSettings struct {
-	DefaultDuration string `json:"default_duration,omitempty" doc:"the cache.duration of a query that sets none (cache.query.default.duration in .anfra/config.yml)"`
+	DefaultDuration string `json:"default_duration,omitempty" doc:"the cache.duration of a query that sets none (query.default.cache.duration in .anfra/config.yml)"`
 	Namespace       string `json:"namespace,omitempty" doc:"the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE)"`
 }
 

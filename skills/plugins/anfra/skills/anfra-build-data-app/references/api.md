@@ -66,7 +66,7 @@ arrives as the query's `validation_failed` error, its violation at `input.filter
 const app = Anfra.createApp({
   title: 'Sales',
   timezone: 'Asia/Singapore',
-  cache: { query: { default: { duration: '5m' } } },
+  query: { default: { cache: { duration: '5m' } } },
 }); // all optional
 ```
 
@@ -74,9 +74,9 @@ Omit `timezone` to use anfra's default; set it to an IANA zone to evaluate relat
 date truncation in that zone. An HTML file may create several apps; one
 is almost always right.
 
-`cache.query.default.duration` lets the app's queries answer from results cached up to that long
+`query.default.cache.duration` lets the app's queries answer from results cached up to that long
 ago, instead of the warehouse: `5m` suits most pages. A query's own `cache.duration` overrides it.
-Without either, the repo's `cache.query.default.duration` in `.anfra/config.yml` applies, if it sets
+Without either, the repo's `query.default.cache.duration` in `.anfra/config.yml` applies, if it sets
 one, and otherwise every query runs on the warehouse. A duration is like `30s`, `10m` or `2h`, at
 most `168h`; `0s` runs a query uncached. The reader sees how old the data is in `inspect`, and the
 host's Refresh command reads it again from the warehouse.

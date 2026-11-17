@@ -23,6 +23,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [export stores](designs/export-store.md) | Where an export's file goes and how its link is served: anfra's own store, its cleanup, and how a platform's differs. |
 | [result values](designs/result-values.md) | What a query's answer holds: values encoded (every number a string), and each column's semantic, Arrow and database types. |
 | [numbers in the SDK](designs/sdk-numbers.md) | What a Data App gets for a number: the API's string and its column's type, which say what it is; helpers come later. |
+| [query settings](designs/query-settings.md) | Proposal: a repo's `query` settings in `.anfra/config.yml`: defaults shaped like a query, the defaults a query can't change, the cache's rules, the week start day, strict reading, and what `anfra init` writes. |
 | [a query's input](designs/query-input.md) | What a caller chooses about a query, kept together in `input` so a query can be run again (paged, exported, replayed, requeried) by sending it back; seeds (proposal). |
 | [Data Apps](designs/data-apps.md) | Data Apps end to end: the SDK, the sandboxed frame, provisioning, Query Input, editing and removing entities while an app runs, appserve. |
 | [SDK plugins](designs/sdk-plugins.md) | Everything a Data App reaches is a plugin the host installs: how host, frame and plugins talk, middleware, the plugin layer. |

@@ -112,11 +112,11 @@ type QueryCache interface {
 }
 
 // QueryCacheSettings are a repo's query cache settings, as a query uses them
-// (cache.query in .anfra/config.yml).
+// (query.cache and query.default.cache in .anfra/config.yml).
 type QueryCacheSettings struct {
 	// Disabled says why the cache is off for the repo; empty, it is on.
 	Disabled string
-	// Default is cache.query.default.
+	// Default is the repo's query.default.cache.
 	Default QueryCacheDefaults
 	// Namespace is the subfolder of canal-lake's storage the cache's files
 	// go in, as whoever runs anfra set it (ANFRA_CACHE_QUERY_NAMESPACE):
@@ -134,7 +134,7 @@ type QueryCacheContents struct {
 }
 
 // QueryCacheDefaults are the cache options of a query that sets none
-// (cache.query.default): its cache.duration, for now.
+// (query.default.cache in .anfra/config.yml): its cache.duration, for now.
 type QueryCacheDefaults struct {
 	// Duration is a query's cache.duration when it sets none; zero, such a
 	// query doesn't use the cache.

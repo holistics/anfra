@@ -401,7 +401,7 @@
 
     // ---- SDK wiring ----
     // Queries answer from results cached up to 5 minutes ago; the host's Refresh reads them again.
-    const app = Anfra.createApp({ title: 'Sales', cache: { query: { default: { duration: '5m' } } } });
+    const app = Anfra.createApp({ title: 'Sales', query: { default: { cache: { duration: '5m' } } } });
 
     // Each figure and the same figure one year earlier. relative_period shifts the period filter.
     // No alias is named after a model (orders), because it would hide the model from the others.

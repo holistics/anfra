@@ -130,7 +130,7 @@ func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int)
 		l.duration = d
 	}
 	if l.duration <= 0 {
-		return l.uncached(command.InvalidArg("cache.cached_only", "invalid", "cache.cached_only needs a cache.duration, because the repo sets no default (cache.query.default.duration)."))
+		return l.uncached(command.InvalidArg("cache.cached_only", "invalid", "cache.cached_only needs a cache.duration, because the repo sets no default (query.default.cache.duration)."))
 	}
 	l.used = true
 

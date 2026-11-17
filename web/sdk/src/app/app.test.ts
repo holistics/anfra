@@ -49,8 +49,8 @@ describe('declaration', () => {
 
   it('refuses a cache duration the server would refuse, naming who declared it', () => {
     const aql = 'explore { measures { n: count(orders.id) } }';
-    expect(() => sdk().createApp({ cache: { query: { default: { duration: '1 hour' } } } }))
-      .toThrowError('The app declares cache.query.default.duration "1 hour", which isn\'t a duration. Use one such as 30s, 10m or 2h.');
+    expect(() => sdk().createApp({ query: { default: { cache: { duration: '1 hour' } } } }))
+      .toThrowError('The app declares query.default.cache.duration "1 hour", which isn\'t a duration. Use one such as 30s, 10m or 2h.');
     const app = sdk().createApp();
     expect(() => app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '1d' } }))
       .toThrowError(/Query 'q' declares cache.duration "1d", which isn't a duration/);
@@ -622,7 +622,7 @@ describe('retry', () => {
     }));
     const backend = { submitQuery, fieldSuggestions: async () => [] } as Backend;
     const aql = 'explore { measures { total: orders | sum(orders.amount) } }';
-    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend }).createApp({ cache: { query: { default: { duration: '5m' } } } });
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend }).createApp({ query: { default: { cache: { duration: '5m' } } } });
     const revenue = app.createQuery('revenue', { dataset: 'sales', aql, pageSize: 2 });
     app.createQuery('targets', { dataset: 'sales', aql, cache: { duration: '1h' } });
     app.createQuery('live', { dataset: 'sales', aql, cache: { duration: '0s' } });

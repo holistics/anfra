@@ -286,7 +286,7 @@ export interface components {
         CacheOptions: {
             /** @description true answers from a cached result, or fails with cache_miss without running the query. */
             cached_only?: boolean;
-            /** @description how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's cache.query.default.duration by default. */
+            /** @description how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's query.default.cache.duration by default. */
             duration?: string;
             /** @description the earliest time a cached result may have been read from the warehouse, as an RFC 3339 time, such as 2026-11-16T09:30:00.123Z. A result cached before it is treated as not cached. Send the cache.cached_at of a run's first page with the run's later pages and its export, so that none of them is older than that page. */
             min_cached_at?: string;
@@ -788,7 +788,7 @@ export interface components {
             dataset?: string;
         };
         QueryCacheSettings: {
-            /** @description the cache.duration of a query that sets none (cache.query.default.duration in .anfra/config.yml) */
+            /** @description the cache.duration of a query that sets none (query.default.cache.duration in .anfra/config.yml) */
             default_duration?: string;
             /** @description the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE) */
             namespace?: string;
@@ -880,7 +880,7 @@ export interface components {
             query: string;
         };
         QueryExportRequestParams: {
-            /** @description how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached. */
+            /** @description how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached. */
             cache?: components["schemas"]["CacheOptions"];
             /** @description the data source a SQL query runs against */
             data_source?: string;
@@ -992,7 +992,7 @@ export interface components {
             type: "rows";
         };
         QueryRequestParams: {
-            /** @description how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached. */
+            /** @description how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached. */
             cache?: components["schemas"]["CacheOptions"];
             /** @description the data source a SQL query runs against */
             data_source?: string;
