@@ -454,7 +454,7 @@ export type AnnotationKind = 'mark' | 'focus' | 'line' | 'band' | 'series';
  * `query.selectedRows` matches them; `measure`, the measure column meant when a chart draws several.
  */
 export interface RowsAnchor {
-  rows: Row[];
+  rows: readonly Row[];
   measure?: string;
 }
 
@@ -485,7 +485,7 @@ export interface SeriesPoint {
 /** New points through one measure, shaped like the query's rows. */
 export interface SeriesAnchor {
   measure: string;
-  points: SeriesPoint[];
+  points: readonly SeriesPoint[];
 }
 
 interface AnnotationText {

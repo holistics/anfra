@@ -4,7 +4,9 @@
  * reports with `query.menu`). Built in the frame, and checked by the host, which trusts nothing the
  * frame sends.
  */
-import type { Row, SelectionCondition, StructureNode } from './types';
+import type {
+  Annotation, Row, SelectionCondition, StructureNode,
+} from './types';
 
 /** A box in the frame's viewport. */
 export interface TargetRect {
@@ -40,6 +42,11 @@ export interface RowsTarget {
   conditions: SelectionCondition[];
   expression?: string;
   node?: NodeTarget;
+  /**
+   * The annotations plugins set on these rows, for the frame's items only (a plugin's `when` on
+   * them, say): the host never gets them.
+   */
+  annotations?: Annotation[];
 }
 
 export type MenuTarget = NodeTarget | RowsTarget;

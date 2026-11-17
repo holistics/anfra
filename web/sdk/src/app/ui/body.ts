@@ -2,8 +2,10 @@
  * The kernel's UI body: the menu, the modal and the popover plugins draw content UI with, in the
  * plugin layer, on the host's `--anfra-*` tokens. Sent to a frame the first time it opens one
  * (`anfra.body` for `anfra`), so a frame that never does carries none of it. The kernel hands it its
- * shadow root, and keeps one open at a time.
+ * shadow root, and keeps one open at a time. Also the annotations badge, and the list its popover
+ * shows (docs/designs/sdk-plugins.md, Annotations).
  */
+import type { AnnotationSeverity } from '../../common/types';
 
 export interface Rect {
   x: number;
@@ -19,10 +21,21 @@ export interface MenuEntry {
   disabled?: string;
 }
 
+/** An annotation as a reader is shown it: in a menu's head, or in the badge's popover. */
+export interface AnnotationNote {
+  label: string;
+  detail?: string;
+  severity?: AnnotationSeverity;
+  /** The plugin that set it. */
+  plugin: string;
+}
+
 export interface MenuOptions {
   /** Where the pointer was, in the viewport. */
   x: number;
   y: number;
+  /** The annotations on the rows, listed before the entries, to read only. */
+  notes?: AnnotationNote[];
   /** Entries in groups: a line between each. */
   groups: MenuEntry[][];
   onPick: (id: string) => void;
@@ -53,11 +66,55 @@ export interface PopoverOptions {
   onClose: () => void;
 }
 
+/** One badge: on a query's marked element, for the annotations it doesn't draw. */
+export interface Badge {
+  /** Which query and element it is for (`app/query#n`). */
+  id: string;
+  /** The marked element: the badge sits inside its top-right corner. */
+  element: Element;
+  count: number;
+  /** The highest severity of its annotations, if any has one. */
+  severity?: AnnotationSeverity;
+  /** What a screen reader says of it. */
+  label: string;
+  /** The reader clicked it: open its popover beside `anchor`. */
+  onOpen: (anchor: () => Rect | undefined) => void;
+}
+
+/** An action on an annotation: one of its plugin's rows menu entries. */
+export interface AnnotationAction {
+  label: string;
+  /** Why it can't run: shown, and it can't be picked. */
+  disabled?: string;
+  run?: () => unknown;
+}
+
 export interface UiBody {
   menu: (root: ShadowRoot, options: MenuOptions) => () => void;
   modal: (root: ShadowRoot, options: ModalOptions) => () => void;
   popover: (root: ShadowRoot, options: PopoverOptions) => () => void;
+  /** Draw these badges in `root`, in place of those drawn before; none takes them all away. */
+  badges: (root: ShadowRoot, badges: Badge[]) => void;
+  /** Draw the badge's popover content: each annotation, and its actions; `onPick` runs the one picked. */
+  annotationList: (root: ShadowRoot, items: (AnnotationNote & { actions: AnnotationAction[] })[], onPick: (action: AnnotationAction) => void) => void;
 }
+
+/** Each severity's colour, from the theme. */
+const SEVERITY_COLORS = `
+[data-severity="critical"] { --dot: var(--anfra-color-danger, oklch(0.501 0.17 27.2)); }
+[data-severity="warning"] { --dot: var(--anfra-color-warning, oklch(0.501 0.1 70.3)); }
+[data-severity="info"] { --dot: var(--anfra-color-accent, oklch(0.484 0.181 298.1)); }
+.dot { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dot, var(--anfra-color-muted, oklch(0.485 0.022 306.3))); }
+`;
+
+/** An annotation's lines, in a menu or a list: its dot, label and detail. */
+const NOTE_STYLES = `
+.note { display: flex; gap: 8px; align-items: baseline; padding: 4px; }
+.note > div { min-width: 0; }
+.label { font-weight: 500; }
+.detail { display: block; color: var(--anfra-color-fg-weak, oklch(0.392 0.021 304.3)); }
+.plugin { display: block; font-size: 11px; color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); }
+`;
 
 const STYLES = `
 :host { all: initial; }
@@ -87,6 +144,10 @@ const STYLES = `
 .popover { max-width: min(360px, calc(100vw - 16px)); outline: none; }
 .popover > .close { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; font-size: 16px; }
 .popover.closable > .content { padding-right: 26px; }
+
+.notes { margin: 0; padding: 4px 6px; list-style: none; }
+${SEVERITY_COLORS}
+${NOTE_STYLES}
 `;
 
 const GAP = 6;
@@ -171,6 +232,35 @@ function mountContent (win: Window, mount: (root: ShadowRoot) => void | (() => v
   }
 }
 
+/** One annotation's item: its severity's dot, its label, its detail, and its plugin when asked. */
+function noteItem (doc: Document, note: AnnotationNote, withPlugin: boolean): HTMLLIElement {
+  const item = doc.createElement('li');
+  item.className = 'note';
+  if (note.severity) item.dataset.severity = note.severity;
+  const dot = doc.createElement('span');
+  dot.className = 'dot';
+  if (note.severity) dot.title = note.severity;
+  const text = doc.createElement('div');
+  const label = doc.createElement('span');
+  label.className = 'label';
+  label.textContent = note.label;
+  text.append(label);
+  if (note.detail) {
+    const detail = doc.createElement('span');
+    detail.className = 'detail';
+    detail.textContent = note.detail;
+    text.append(detail);
+  }
+  if (withPlugin) {
+    const plugin = doc.createElement('span');
+    plugin.className = 'plugin';
+    plugin.textContent = note.plugin;
+    text.append(plugin);
+  }
+  item.append(dot, text);
+  return item;
+}
+
 function menu (root: ShadowRoot, options: MenuOptions): () => void {
   const doc = root.ownerDocument;
   const win = doc.defaultView!;
@@ -179,8 +269,15 @@ function menu (root: ShadowRoot, options: MenuOptions): () => void {
   list.className = 'surface menu';
   list.setAttribute('role', 'menu');
   const buttons: HTMLButtonElement[] = [];
+  if (options.notes?.length) {
+    const notes = doc.createElement('ul');
+    notes.className = 'notes';
+    notes.setAttribute('aria-label', 'Annotations');
+    options.notes.forEach((note) => notes.append(noteItem(doc, note, false)));
+    list.append(notes);
+  }
   options.groups.filter((group) => group.length).forEach((group, index) => {
-    if (index > 0) list.append(doc.createElement('hr'));
+    if (index > 0 || options.notes?.length) list.append(doc.createElement('hr'));
     for (const entry of group) {
       const button = doc.createElement('button');
       button.type = 'button';
@@ -371,7 +468,10 @@ function popover (root: ShadowRoot, options: PopoverOptions): () => void {
     pending = true;
     win.requestAnimationFrame(position);
   };
+  // Before the first placing, which closes it when its anchor is already gone.
+  let closed = false;
   position();
+  if (closed) return close;
 
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); close(); }
@@ -381,7 +481,6 @@ function popover (root: ShadowRoot, options: PopoverOptions): () => void {
   win.addEventListener('scroll', schedule, true);
   win.addEventListener('resize', schedule);
   if (options.dismiss === 'outside') doc.addEventListener('pointerdown', onOutside, true);
-  let closed = false;
   function close (): void {
     if (closed) return;
     closed = true;
@@ -396,5 +495,135 @@ function popover (root: ShadowRoot, options: PopoverOptions): () => void {
   return close;
 }
 
-const body: UiBody = { menu, modal, popover };
+const BADGE_STYLES = `
+:host { all: initial; }
+.badges { position: fixed; inset: 0; pointer-events: none; }
+.badge { position: fixed; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; pointer-events: auto; cursor: pointer;
+  color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); background: var(--anfra-color-bg, oklch(1 0 0));
+  border: 1px solid var(--anfra-color-border-strong, oklch(0.201 0.022 301.1 / 0.24)); border-radius: 9999px;
+  font: 500 11px/1 var(--anfra-font, system-ui, sans-serif); font-variant-numeric: tabular-nums; }
+.badge:hover { background: var(--anfra-color-hover, oklch(0.201 0.022 301.1 / 0.05)); }
+.badge:focus-visible { outline: 2px solid var(--anfra-color-accent, oklch(0.484 0.181 298.1)); outline-offset: 1px; }
+.badge[hidden] { display: none; }
+${SEVERITY_COLORS}
+`;
+
+/** How far a badge sits inside its element's top-right corner. */
+const INSET = 6;
+
+/** Each badges root's listeners and what it shows, so a redraw replaces them. */
+const drawn = new WeakMap<ShadowRoot, () => void>();
+
+function badges (root: ShadowRoot, list: Badge[]): void {
+  drawn.get(root)?.();
+  drawn.delete(root);
+  root.replaceChildren();
+  if (!list.length) return;
+  const doc = root.ownerDocument;
+  const win = doc.defaultView!;
+  const realm = win as Window & typeof globalThis;
+  const style = doc.createElement('style');
+  style.textContent = BADGE_STYLES;
+  const container = doc.createElement('div');
+  container.className = 'badges';
+  const placed = list.map((badge) => {
+    const button = doc.createElement('button');
+    button.type = 'button';
+    button.className = 'badge';
+    button.dataset.for = badge.id;
+    if (badge.severity) button.dataset.severity = badge.severity;
+    button.setAttribute('aria-label', badge.label);
+    button.title = badge.label;
+    const dot = doc.createElement('span');
+    dot.className = 'dot';
+    dot.setAttribute('aria-hidden', 'true');
+    button.append(dot, String(badge.count));
+    const anchor = (): Rect | undefined => {
+      if (!button.isConnected) return undefined;
+      const { x, y, width, height } = button.getBoundingClientRect();
+      return { x, y, width, height };
+    };
+    button.addEventListener('click', () => badge.onOpen(anchor));
+    container.append(button);
+    return { badge, button };
+  });
+  root.append(style, container);
+
+  // Inside each element's top-right corner, following it as the page scrolls or it resizes, at most
+  // once a frame. Hidden while the element is gone or has no box.
+  let pending = false;
+  const position = () => {
+    pending = false;
+    for (const { badge, button } of placed) {
+      const rect = badge.element.isConnected ? badge.element.getBoundingClientRect() : undefined;
+      button.hidden = !rect || (rect.width === 0 && rect.height === 0);
+      if (!rect || button.hidden) continue;
+      const width = button.getBoundingClientRect().width;
+      button.style.left = `${rect.x + rect.width - width - INSET}px`;
+      button.style.top = `${rect.y + INSET}px`;
+    }
+  };
+  const schedule = () => {
+    if (pending) return;
+    pending = true;
+    win.requestAnimationFrame(position);
+  };
+  position();
+  win.addEventListener('scroll', schedule, true);
+  win.addEventListener('resize', schedule);
+  const observer = typeof realm.ResizeObserver === 'function' ? new realm.ResizeObserver(schedule) : undefined;
+  placed.forEach(({ badge }) => observer?.observe(badge.element));
+  drawn.set(root, () => {
+    win.removeEventListener('scroll', schedule, true);
+    win.removeEventListener('resize', schedule);
+    observer?.disconnect();
+  });
+}
+
+const LIST_STYLES = `
+:host { display: block; font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); }
+ul { margin: 0; padding: 8px; list-style: none; max-height: 60vh; overflow: auto; }
+li + li { border-top: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); }
+.note { padding: 6px 4px; }
+.actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.actions button { padding: 2px 8px; border: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); border-radius: var(--anfra-radius, 10px);
+  background: none; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.actions button:hover { background: var(--anfra-color-hover, oklch(0.201 0.022 301.1 / 0.05)); }
+.actions button[aria-disabled="true"] { color: var(--anfra-color-muted, oklch(0.485 0.022 306.3)); cursor: default; }
+${NOTE_STYLES}
+${SEVERITY_COLORS}
+`;
+
+function annotationList (root: ShadowRoot, items: (AnnotationNote & { actions: AnnotationAction[] })[], onPick: (action: AnnotationAction) => void): void {
+  const doc = root.ownerDocument;
+  const style = doc.createElement('style');
+  style.textContent = LIST_STYLES;
+  const list = doc.createElement('ul');
+  list.setAttribute('aria-label', 'Annotations');
+  for (const entry of items) {
+    const item = noteItem(doc, entry, true);
+    if (entry.actions.length) {
+      const actions = doc.createElement('div');
+      actions.className = 'actions';
+      for (const action of entry.actions) {
+        const button = doc.createElement('button');
+        button.type = 'button';
+        button.textContent = action.label;
+        if (action.disabled) {
+          button.setAttribute('aria-disabled', 'true');
+          button.title = action.disabled;
+        }
+        button.addEventListener('click', () => { if (!action.disabled) onPick(action); });
+        actions.append(button);
+      }
+      item.lastElementChild!.append(actions);
+    }
+    list.append(item);
+  }
+  root.replaceChildren(style, list);
+}
+
+const body: UiBody = {
+  menu, modal, popover, badges, annotationList,
+};
 export default body;

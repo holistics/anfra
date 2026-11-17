@@ -14,6 +14,7 @@ import { Control } from './controls';
 import { installCore } from './core';
 import { installInspection } from './inspection';
 import { installContentUi } from './menu';
+import { installAnnotationBadges } from './annotationBadges';
 import { themeLayer } from './layer';
 import { resolveTheme } from '../common/theme';
 import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
@@ -102,6 +103,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   // `core`'s frame side: the host's refresh.
   installCore(createKernel('core', shared, { Query, Control }));
   shared.contentUi = installContentUi(own);
+  installAnnotationBadges(own, shared.contentUi);
   own.on('theme', (theme: unknown) => {
     const resolved = resolveTheme(theme);
     themeLayer(win.document, resolved);
