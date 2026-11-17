@@ -13,7 +13,8 @@ the element's top-right corner instead, with a count. A click on the badge lists
 
 `query.annotations` lists every plugin's annotations on the query's current result. It changes
 through `query.subscribe` like the result does, so a render function that subscribes already redraws
-on a change. The list is empty until a plugin sets some, and it empties when the result is replaced.
+on a change. The list is empty until a plugin sets some. It empties when the result is replaced, and as soon as
+your code calls `query.update`.
 
 | Field | Means |
 | --- | --- |
