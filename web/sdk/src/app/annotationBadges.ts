@@ -6,6 +6,7 @@
  * the plugin layer, so renderings leave it out. See docs/designs/sdk-plugins.md, Annotations.
  */
 import type { Annotation, AnnotationKind, AnnotationSeverity } from '../common/types';
+import type { TargetPoint } from '../common/menu';
 import type { App } from './app';
 import type { FrameKernel } from './kernel';
 import type { Query } from './query';
@@ -62,25 +63,30 @@ export function installAnnotationBadges (kernel: FrameKernel, contentUi: Content
 
   const ui = () => kernel.body<UiBody>();
 
-  /** One annotation's actions: the rows menu entries of the plugin that set it, for its rows. */
-  function actionsFor (app: App, query: Query, annotation: Annotation): FrameMenuEntry[] {
+  /**
+   * One annotation's actions: the rows menu entries of the plugin that set it, for its rows, opened
+   * at `at` (the badge's bottom left, so what an action opens there sits by the badge).
+   */
+  function actionsFor (app: App, query: Query, annotation: Annotation, at: TargetPoint | undefined): FrameMenuEntry[] {
     const rows = query.result?.rows;
     if ((annotation.kind !== 'mark' && annotation.kind !== 'focus') || !rows) return [];
-    const target = app.rowsTarget(query, annotation.anchor.index.map((at) => rows[at]), undefined, annotation.anchor.measure);
-    return contentUi.rowsEntries(annotation.plugin, { ...target, annotations: [annotation] });
+    const target = app.rowsTarget(query, annotation.anchor.index.map((index) => rows[index]), undefined, annotation.anchor.measure);
+    return contentUi.rowsEntries(annotation.plugin, { ...target, ...(at ? { at } : {}), annotations: [annotation] });
   }
 
   /** The badge's popover: each annotation it covers, with its actions; picking one closes it. */
   async function open (app: App, query: Query, covered: Annotation[], anchor: () => Rect | undefined): Promise<void> {
     // The body first, so the list is drawn as the popover opens and is placed at its full size.
     const body = await ui();
+    const badge = anchor();
+    const at = badge ? { x: badge.x, y: badge.y + badge.height } : undefined;
     const opening = contentUi.popoverAt(anchor, {
       about: { app: app.index, query: query.name },
       side: 'bottom',
       dismiss: 'outside',
       mount: (root) => body.annotationList(
         root,
-        covered.map((annotation) => ({ ...annotationNote(annotation), actions: actionsFor(app, query, annotation) })),
+        covered.map((annotation) => ({ ...annotationNote(annotation), actions: actionsFor(app, query, annotation, at) })),
         (action) => {
           void opening.then((opened) => opened.close());
           Promise.resolve().then(action.run).catch((err: unknown) => {

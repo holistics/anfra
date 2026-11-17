@@ -122,6 +122,29 @@ describe('the menu on a query\'s rows', () => {
     }));
   });
 
+  it('says where it opened: the right-click\'s point', async () => {
+    const run = vi.fn();
+    const f = frame((kernel) => { kernel.menuItem({ id: 'underlying', label: 'View underlying data', target: 'rows', run }); });
+    const query = f.anfra.createApp().createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    document.getElementById('inside')!.addEventListener('contextmenu', (e) => { query.menu(e, { region: 'APAC' }); }, { once: true });
+    rightClick('inside', { clientX: 120, clientY: 75 });
+    await settle();
+    entries()[0].click();
+    await settle();
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rows', at: { x: 120, y: 75 } }));
+  });
+
+  it('says nowhere for an event without a point', async () => {
+    const run = vi.fn();
+    const f = frame((kernel) => { kernel.menuItem({ id: 'underlying', label: 'View underlying data', target: 'rows', run }); });
+    const query = f.anfra.createApp().createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    expect(query.menu(new Event('contextmenu', { cancelable: true }), { region: 'APAC' })).toBe(true);
+    await settle();
+    entries()[0].click();
+    await settle();
+    expect(run.mock.calls[0][0]).not.toHaveProperty('at');
+  });
+
   it('closes the menu on a query\'s rows when the query is removed, and leaves it open for another', async () => {
     const f = frame((kernel) => kernel.menuItem({ id: 'underlying', label: 'View underlying data', target: 'rows', run: () => {} }));
     const app = f.anfra.createApp();

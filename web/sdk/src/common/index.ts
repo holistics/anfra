@@ -11,7 +11,7 @@ export { FILTER_AGGREGATIONS } from './aggregations';
 export type { AppErrorEvent, AppErrorKind, AppConsoleEvent } from './runtimeErrors';
 export { PROVISION_ELEMENT_ID } from './bridge';
 export {
-  checkTarget, type MenuEntry, type MenuTarget, type MenuTargetKind, type NodeTarget, type RowsTarget, type TargetRect,
+  checkTarget, type MenuEntry, type MenuTarget, type MenuTargetKind, type NodeTarget, type RowsTarget, type TargetPoint, type TargetRect,
 } from './menu';
 export {
   THEME_TOKENS, DEFAULT_TOKENS, DESIGN_TOKENS, designTheme, resolveTheme, type Theme, type ThemeInput, type ThemeScheme, type ThemeToken, type ThemeTokens,
