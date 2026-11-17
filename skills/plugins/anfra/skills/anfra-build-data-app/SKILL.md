@@ -22,6 +22,10 @@ References, read when a step needs them:
   and check `Anfra.plugins.has(name)` before using it.
 - [references/downloads.md](references/downloads.md): the download button for exports and pictures.
   Read it only when the agreed design lists a download.
+- [references/annotations.md](references/annotations.md): drawing what plugins say about a query's
+  rows (a flagged point, a target line, a forecast) as the chart's own marks. Read it only when the
+  design asks for annotations or the host installs a plugin that sets them. The kinds listed in a
+  chart's `data-anfra-annotations` must be exactly the kinds its helper draws.
 - [references/example.html](references/example.html): a complete app in the default look: header
   with page controls, KPI row with delta pills, and a trend beside its breakdown. Start a new file
   from it, or from the closest app already in `apps/`.
