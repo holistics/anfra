@@ -37,7 +37,7 @@ describe('the annotations example', () => {
       ['mark', { rows: [{ month: '2026-03-01' }], measure: 'revenue', index: [2] }],
       ['focus', { rows: [{ month: '2026-03-01' }, { month: '2026-04-01' }, { month: '2026-02-01' }], measure: 'revenue', index: [1, 2, 3] }],
       ['line', { column: 'revenue', value: '45' }],
-      ['band', { column: 'month', from: '2026-03-01', to: '2026-04-01' }],
+      ['band', { column: 'month', from: '2026-02-01', to: '2026-04-01' }],
       ['series', {
         measure: 'revenue',
         points: [
@@ -59,9 +59,10 @@ describe('the annotations example', () => {
     expect(query.annotations.find((annotation) => annotation.kind === 'mark')?.anchor).toMatchObject({ rows: [{ month: '2026-01-01' }] });
   });
 
-  it('leaves out the series when the periods aren\'t dates', async () => {
+  it('sets a target zone on the measure, and no series, when the periods aren\'t dates', async () => {
     const { app, query } = frame([[['APAC', '10'], ['EMEA', '30']]]);
     await app.execute();
     expect(query.annotations.map((annotation) => annotation.kind)).toEqual(['mark', 'focus', 'line', 'band']);
+    expect(query.annotations.find((annotation) => annotation.kind === 'band')?.anchor).toEqual({ column: 'revenue', from: '18', to: '22' });
   });
 });

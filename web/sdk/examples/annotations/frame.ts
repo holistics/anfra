@@ -32,7 +32,11 @@ function nextPeriods (before: string, last: string, count: number): string[] {
   return Array.from({ length: count }, (_, at) => format(new Date(end + step * (at + 1))));
 }
 
-/** One annotation of each kind, on the result's first dimension and first measure. */
+/**
+ * One annotation of each kind, on the result's first dimension and first measure. When the
+ * dimension holds dates, the band covers the middle periods and the series forecasts three more;
+ * else the band is a target zone on the measure, and there is no series.
+ */
 export function annotationsFor (result: QueryResult): AnnotationInput[] {
   const period = result.columns.find((column) => !column.isMeasure)?.name;
   const measure = result.columns.find((column) => column.isMeasure)?.name;
@@ -53,20 +57,30 @@ export function annotationsFor (result: QueryResult): AnnotationInput[] {
       id: 'mean', kind: 'line', anchor: { column: measure, value: text(mean) }, label: 'Mean', detail: `The mean of ${measure}.`,
     },
   ];
-  if (rows.length >= 2) {
-    const [before, last] = rows.slice(-2);
+  if (rows.every((row) => DAY.test(String(row[period])))) {
+    // Periods: a made-up campaign over the middle two or three, and a forecast after the last.
+    const middle = Math.floor(rows.length / 2);
+    const [from, to] = [rows[Math.max(0, middle - 1)], rows[Math.min(rows.length - 1, middle + 1)]];
     annotations.push({
-      id: 'latest', kind: 'band', anchor: { column: period, from: String(before[period]), to: String(last[period]) }, label: 'Latest two periods', severity: 'info',
+      id: 'campaign', kind: 'band', anchor: { column: period, from: String(from[period]), to: String(to[period]) }, label: 'Campaign', detail: 'A made-up campaign over the middle periods.', severity: 'info',
     });
-    const flat = value(last);
-    const points = nextPeriods(String(before[period]), String(last[period]), 3).map((at) => ({
-      at: { [period]: at }, value: text(flat), lower: text(flat * 0.9), upper: text(flat * 1.1),
-    }));
-    if (points.length) {
-      annotations.push({
-        id: 'flat', kind: 'series', anchor: { measure, points }, label: 'Flat forecast', detail: 'The last value, held for three periods, ±10%.', severity: 'critical',
-      });
+    if (rows.length >= 2) {
+      const [before, last] = rows.slice(-2);
+      const flat = value(last);
+      const points = nextPeriods(String(before[period]), String(last[period]), 3).map((at) => ({
+        at: { [period]: at }, value: text(flat), lower: text(flat * 0.9), upper: text(flat * 1.1),
+      }));
+      if (points.length) {
+        annotations.push({
+          id: 'flat', kind: 'series', anchor: { measure, points }, label: 'Flat forecast', detail: 'The last value, held for three periods, ±10%.', severity: 'critical',
+        });
+      }
     }
+  } else {
+    // Categories have no range to shade or periods to forecast: a target zone on the measure instead.
+    annotations.push({
+      id: 'target', kind: 'band', anchor: { column: measure, from: text(mean * 0.9), to: text(mean * 1.1) }, label: 'Target', detail: `Within 10% of the mean of ${measure}.`, severity: 'info',
+    });
   }
   return annotations;
 }
