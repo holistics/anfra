@@ -6,7 +6,7 @@ installs a plugin that sets them (an anomaly detector, a forecast, targets).
 An **annotation** is something a plugin says about a query's rows, for the reader to see on the
 chart that draws the query: a flagged month, a target line, a forecast. The plugin sets it. Your app
 draws it with the chart's own marks, so it shows in pictures of the page too. The SDK draws nothing
-on your chart. When an element doesn't draw an annotation's kind, the host shows a small badge in
+on your chart. When an element doesn't draw an annotation's kind, the SDK shows a small badge in
 the element's top-right corner instead, with a count. A click on the badge lists the annotations.
 
 ## What `query.annotations` holds
