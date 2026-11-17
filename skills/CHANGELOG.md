@@ -1,3 +1,25 @@
+## [0.21.0](https://github.com/holistics/anfra/compare/v0.20.0...v0.21.0) (2026-11-17)
+
+### Features
+
+* let data apps configure query cache duration ([96d21b7](https://github.com/holistics/anfra/commit/96d21b77b013fe1386a96ce7718524d111b6f2bc))
+* **cli:** add `anfra logs` ([8f0ec08](https://github.com/holistics/anfra/commit/8f0ec0804f27a68f79fbbac635cb317bb66714a1))
+* **sdk:** support pivot pagination ([1bbf8b4](https://github.com/holistics/anfra/commit/1bbf8b414ff8a01fd0c3e0a8fa9aecd65b40d7b8))
+* **sdk:** support configuring query weekStartDay ([88e6dea](https://github.com/holistics/anfra/commit/88e6deabae1dc1ee4841f232df2961a8d0296775))
+* **skills:** teach app.refresh's bustCache and the host's Refresh ([a770b7b](https://github.com/holistics/anfra/commit/a770b7b41ae75dff5c56e563f6ea3ffec585f4ef))
+* **skills:** teach query.execute ([7d73481](https://github.com/holistics/anfra/commit/7d73481fec7d106956b96e5ed00cedaf8bb7098f))
+* **skills:** teach editing and removing a data app's entities at runtime ([1909535](https://github.com/holistics/anfra/commit/19095353b88375a793ef6f50df02c86c46526600))
+* **skills:** design a Data App by default in build-data-app ([c5c7e6b](https://github.com/holistics/anfra/commit/c5c7e6b8ae1f93d3f6eec4274dc1a0709a34bcf9)), closes [holistics/anfra-skills#12](https://github.com/holistics/anfra-skills/issues/12)
+
+### Bug Fixes
+
+* **skills:** teach app.refresh with no bustCache ([8a0c902](https://github.com/holistics/anfra/commit/8a0c902e346f16cc9497a4bf5566895dbf692b69))
+* **skills:** say what app.hasChanges counts and what query.update drops ([f119b4a](https://github.com/holistics/anfra/commit/f119b4ab9c89bce4fe61279a53966248f57ef1f4))
+* **skills:** keep the data app API reference to the shape of runtime edits ([04cd059](https://github.com/holistics/anfra/commit/04cd059d9de493bb84e9f7cb24d1b4da80dd9454))
+* **skills:** clear the example's charts when a query returns no rows ([02c107c](https://github.com/holistics/anfra/commit/02c107cbfcf78352ce159dd72a59e5fba84c8fae))
+* **skills:** drop the web app's DESIGN.md and fix the example's bugs ([1480714](https://github.com/holistics/anfra/commit/14807146a6370469ab25c2a02974ff60a5b7c787))
+* **skills:** drop the definitions footer from build-data-app ([47265b0](https://github.com/holistics/anfra/commit/47265b061201c2fb7373e4f9333dedfdd1c6711f))
+* **skills:** stop asking for a definitions block on the page ([91a5333](https://github.com/holistics/anfra/commit/91a533314d999441c2becd33dc1f00ceae5b0a8f))
 ## [0.20.0](https://github.com/holistics/anfra/compare/v0.19.0...v0.20.0) (2026-11-11)
 
 ### Features
