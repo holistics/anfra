@@ -195,9 +195,11 @@ func TestLogsFollow(t *testing.T) {
 	}
 	_, _ = f.WriteString(`{"ts":"2026-11-16T12:12:00.000+07:00","level":"INFO","msg":"Closing sidecar","service":"anfra-host","event":"sidecar.closing"}` + "\n")
 	_ = f.Close()
-	// The entry shows in local time, whatever zone the test runs in.
+	// The entry shows in local time, whatever zone the test runs in; its
+	// date too on any day but the one it was written, so the time is
+	// matched before its level, not after the line's start.
 	shown := time.Date(2026, 11, 16, 5, 12, 0, 0, time.UTC).Local().Format("15:04:05")
-	for !strings.Contains(stdout.String(), "  "+shown) || !strings.Contains(stdout.String(), "Closing sidecar  sidecar.closing") {
+	for !strings.Contains(stdout.String(), " "+shown+"  INFO") || !strings.Contains(stdout.String(), "Closing sidecar  sidecar.closing") {
 		if ctx.Err() != nil {
 			t.Fatalf("not followed: %s", stdout.String())
 		}
