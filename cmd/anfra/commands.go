@@ -27,6 +27,7 @@ import (
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/holistics/anfra/shared/jsonkit"
+	sharedrepoconfig "github.com/holistics/anfra/shared/repoconfig"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -679,11 +680,19 @@ func presentTo(c command.Command, body []byte, out io.Writer) error {
 // to point to.
 var resultHints = map[string]func() []string{
 	"status": func() []string {
-		c, err := repoconfig.Read(".")
-		if err != nil || c.Org.URL == "" {
-			return nil
+		var hints []string
+		if keys, err := repoconfig.LocalKeys("."); err == nil && len(keys) > 0 {
+			names := make([]string, len(keys))
+			for i, k := range keys {
+				names[i] = k.String()
+			}
+			hints = append(hints, fmt.Sprintf("%s sets %s on this machine only, over the repo's settings. Remove a setting from it to use the repo's.",
+				sharedrepoconfig.LocalFilePath, strings.Join(names, ", ")))
 		}
-		return []string{"To see whether this folder is behind its org, or has changes it hasn't published, run `anfra publish status`."}
+		if c, err := repoconfig.Read("."); err == nil && c.Org.URL != "" {
+			hints = append(hints, "To see whether this folder is behind its org, or has changes it hasn't published, run `anfra publish status`.")
+		}
+		return hints
 	},
 }
 

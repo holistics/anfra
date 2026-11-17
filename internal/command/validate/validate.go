@@ -35,7 +35,7 @@ var Validate = command.Define(command.Def[ValidateInput, aml.RepoValidation]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return aml.RepoValidation{}, err
 		}
-		v2, err := repoconfig.UseV2Compiler(cc.Repo)
+		v2, err := repoconfig.UseV2Compiler(cc)
 		if err != nil {
 			return aml.RepoValidation{}, err
 		}

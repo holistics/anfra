@@ -147,11 +147,8 @@ func (s *Server) context(w http.ResponseWriter) {
 		AllowOrigins: []string{}, Problems: []Problem{}, AppLogs: s.opts.AppLogger != nil,
 	}
 	conf, err := repoconfig.Read(s.opts.RepoDir)
-	if err == nil {
-		var origins []string
-		if origins, err = conf.AllowedOrigins(); err == nil && origins != nil {
-			ctx.AllowOrigins = origins
-		}
+	if origins := conf.AllowedOrigins(); err == nil && origins != nil {
+		ctx.AllowOrigins = origins
 	}
 	if err != nil {
 		ctx.Problems = append(ctx.Problems, Problem{Message: err.Error()})

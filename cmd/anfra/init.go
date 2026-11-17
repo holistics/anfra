@@ -139,7 +139,7 @@ func newInitCmd() *cobra.Command {
 			"  .anfra/context_sources.yml       what anfra ingest reads for anfra search\n" +
 			"  .anfra/config.yml                the repo's settings, such as its queries' defaults, each at anfra's own\n" +
 			"  models/, datasets/, apps/        AML models, AML datasets, Data Apps\n" +
-			"  .gitignore                       + .anfra/data_sources.yml\n" +
+			"  .gitignore                       + .anfra/data_sources.yml, .anfra/config.local.yml\n" +
 			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
 			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
 			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n" +
@@ -249,8 +249,13 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 	steps := []initStep{
 		{sources, writeNew(dataSources, 0o600)},
 		{sources + ".example", writeNew([]byte(template), 0o644)},
-		{".gitignore", ignoreLine(sources)},
 	}
+	ignored := []ignoreEntry{{sources, "data source credentials"}}
+	if !opts.dataSourcesOnly {
+		// A member's own settings, laid over the repo's on their machine only.
+		ignored = append(ignored, ignoreEntry{filepath.ToSlash(filepath.Join(config, "config.local.yml")), "this machine's own settings"})
+	}
+	steps = append(steps, initStep{".gitignore", ignoreLines(ignored)})
 	if !opts.dataSourcesOnly {
 		steps = append(steps, initStep{filepath.ToSlash(filepath.Join(config, "context_sources.yml")), writeNew([]byte(contextSourcesTemplate), 0o644)})
 		for _, d := range initLayout {
@@ -509,32 +514,43 @@ func writeNew(content []byte, perm fs.FileMode) func(path string) (bool, error) 
 	}
 }
 
-// ignoreLine adds pattern to a .gitignore, creating it, unless a line already
-// is that pattern. Reported as created when it adds the line. A .gitignore
-// that is not a regular file is refused: Git does not follow a symlinked
-// one, so the line would not ignore anything, and writing through the link
-// would change a file outside the repo.
-func ignoreLine(pattern string) func(path string) (bool, error) {
+// ignoreEntry is a pattern for a .gitignore, and what the comment above it
+// says it is.
+type ignoreEntry struct{ pattern, what string }
+
+// ignoreLines adds each entry's pattern to a .gitignore, creating it, unless a
+// line already is that pattern. Reported as created when it adds a line. A
+// .gitignore that is not a regular file is refused: Git does not follow a
+// symlinked one, so the lines would not ignore anything, and writing through
+// the link would change a file outside the repo.
+func ignoreLines(entries []ignoreEntry) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
 		if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
-			return false, fmt.Errorf("it's a symlink, which Git doesn't follow. Add %s to the repo's ignore rules yourself", pattern)
+			patterns := make([]string, len(entries))
+			for i, e := range entries {
+				patterns[i] = e.pattern
+			}
+			return false, fmt.Errorf("it's a symlink, which Git doesn't follow. Add %s to the repo's ignore rules yourself", strings.Join(patterns, " and "))
 		}
 		existing, err := os.ReadFile(path) //nolint:gosec // G304: the .gitignore of the repo being set up
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return false, err
 		}
-		for line := range strings.SplitSeq(string(existing), "\n") {
-			if strings.TrimSpace(line) == pattern || strings.TrimSpace(line) == "/"+pattern {
-				return false, nil
-			}
-		}
 		var add bytes.Buffer
-		if len(existing) > 0 && !bytes.HasSuffix(existing, []byte("\n")) {
+		for _, e := range entries {
+			if hasLine(existing, e.pattern) {
+				continue
+			}
+			if add.Len() == 0 && len(existing) > 0 && !bytes.HasSuffix(existing, []byte("\n")) {
+				add.WriteString("\n")
+			}
+			add.WriteString("# anfra: " + e.what + "\n")
+			add.WriteString(e.pattern)
 			add.WriteString("\n")
 		}
-		add.WriteString("# anfra: data source credentials\n")
-		add.WriteString(pattern)
-		add.WriteString("\n")
+		if add.Len() == 0 {
+			return false, nil
+		}
 		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644) //nolint:gosec // G304: as above
 		if err != nil {
 			return false, err
@@ -545,4 +561,15 @@ func ignoreLine(pattern string) func(path string) (bool, error) {
 		}
 		return true, f.Close()
 	}
+}
+
+// hasLine reports whether a .gitignore's content has a line that is pattern,
+// or pattern anchored at the root.
+func hasLine(content []byte, pattern string) bool {
+	for line := range strings.SplitSeq(string(content), "\n") {
+		if strings.TrimSpace(line) == pattern || strings.TrimSpace(line) == "/"+pattern {
+			return true
+		}
+	}
+	return false
 }
