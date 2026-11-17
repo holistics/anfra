@@ -225,7 +225,7 @@ attribute each.
 | `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
 | `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
 | `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. A control lives in a block like a query does: its own block when it stands alone, or the block of the chart it belongs to. |
-| `data-anfra-annotations="<kinds>"` | an element marked `data-anfra-query` | The annotation kinds the chart draws (`mark line`), or `off`. The host badges the kinds left out. See [annotations.md](annotations.md). |
+| `data-anfra-annotations="<kinds>"` | an element marked `data-anfra-query` | The annotation kinds the chart draws (`mark line`), or `off`. The SDK shows a badge for the kinds left out. See [annotations.md](annotations.md). |
 | `data-anfra-render="skip"` | any element | Left out of every [picture](plugins/render.md), with what it holds: a download button, a spinner. |
 
 - Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
