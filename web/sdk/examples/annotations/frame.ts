@@ -3,7 +3,7 @@
 // detector, a forecast) computes them the same way and annotates each new result. It imports only
 // types: everything it reaches, it reaches through the kernel.
 import type {
-  AnnotationInput, FrameKernel, MenuTarget, Query, QueryResult, Row,
+  Annotation, AnnotationInput, FrameKernel, MenuTarget, Query, QueryResult, Row,
 } from '@holistics/anfra-sdk/app';
 
 /** A number as rows carry it: a string with no float noise (`55`, not `55.00000000000001`). */
@@ -95,12 +95,42 @@ export default function setup (kernel: FrameKernel): void {
     label: 'Why is this marked?',
     target: 'rows',
     when: (target) => ours(target).length > 0,
-    run: (target) => kernel.popover({
-      anchor: target.kind === 'rows' && target.node ? target.node : { x: 16, y: 16 },
-      dismiss: 'outside',
-      mount: (root) => {
-        root.textContent = ours(target).map((annotation) => annotation.detail ?? annotation.label ?? annotation.kind).join(' ');
-      },
-    }),
+    run: (target) => {
+      if (target.kind !== 'rows') return undefined;
+      return kernel.popover({
+        // Where the reader opened it: the right-click, or the badge; the block when neither says.
+        anchor: target.at ?? target.node ?? { x: 16, y: 16 },
+        about: { app: target.app, query: target.query },
+        dismiss: 'outside',
+        mount: (root) => drawReasons(root, ours(target)),
+      });
+    },
   });
+}
+
+/** One line per annotation: its label, and its detail under it. The popover's root is bare: it draws its own padding. */
+function drawReasons (root: ShadowRoot, annotations: readonly Annotation[]): void {
+  const doc = root.ownerDocument;
+  const style = doc.createElement('style');
+  style.textContent = `
+    ul { margin: 0; padding: 12px 14px; list-style: none; display: grid; gap: 8px; max-width: 280px; }
+    .label { font-weight: 500; }
+    .detail { color: var(--anfra-color-fg-weak, oklch(0.392 0.021 304.3)); }
+  `;
+  const list = doc.createElement('ul');
+  for (const annotation of annotations) {
+    const item = doc.createElement('li');
+    const label = doc.createElement('div');
+    label.className = 'label';
+    label.textContent = annotation.label ?? annotation.kind;
+    item.append(label);
+    if (annotation.detail) {
+      const detail = doc.createElement('div');
+      detail.className = 'detail';
+      detail.textContent = annotation.detail;
+      item.append(detail);
+    }
+    list.append(item);
+  }
+  root.append(style, list);
 }
