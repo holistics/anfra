@@ -1,0 +1,181 @@
+import deepGet from "../common/deep-get.js"
+import encodeProperty from "../common/encode-property.js"
+import {getPositionsRecurse} from "../positions/get-positions.js"
+
+export default transformations_addPositions
+
+/** Given a project object with a `file` and optionally a `model`, will add a `positions` index
+ * 
+ * @param {object} project
+ * @param {object} trace An object with boolean properties indicating whether specific types of tracing should be logged. Possible keys: `includes`
+ */
+function transformations_addPositions(project, options = {}) {
+	const trace = options.trace || {}
+	const fastPositions = options.fastPositions || false
+	
+	if(!project.file){
+		throw new Error("`project` argument must be a LookML project with the 'by-name' file representation")
+		}	
+	
+	let positions = {}
+	let errors = []
+
+	// First create position data for files, then move on to models later
+	positions.file = {}
+	if (project.file && (project.file.model || project.file.view || project.file.explore)) {
+		for (const [type, fileGroup] of Object.entries(project.file)) {
+			if (!fileGroup || typeof fileGroup !== 'object') continue
+			for (const [relName, file] of Object.entries(fileGroup)) {
+				if (!file || !file.$strings) continue
+				const fKey = `${relName}.${type}`
+				const {$errors, ...filePositions} = getPositionsRecurse(file.$strings, 0, 0, ['$', `file['${fKey}']`], 0, trace, file)
+				positions.file[encodeProperty(fKey)] = filePositions
+			}
+		}
+	} else {
+		for (let [f, file] of Object.entries(project.file || {})) {
+			if (trace.positions) { console.log(`\n📂 File: ${f}` + (file.$strings ? "" : " - No $strings")) }
+			if (!file || !file.$strings) { continue }
+			let { $errors, ...filePositions } = getPositionsRecurse(file.$strings, 0, 0, ['$', `file['${f}']`], 0, trace, file)
+			positions.file[encodeProperty(f)] = filePositions
+		}
+	}
+
+	// Use the files' position data to populate positions for model objects
+	positions.model = {}
+	for(let [m,model] of Object.entries(project.model || {})){
+		if(trace.positions){console.log(`\n📘 Model: ${m}`)}
+		let filePaths = coerceArray(model.$file_path).map(full => full.replace(/\.lkml$/,""))
+		let {$errors, ...modelPositions} = recurseModels(
+			model, [`model`,m], filePaths, positions.file, trace, 0, 0, fastPositions, model, project
+			)
+		positions.model[encodeProperty(m)] = modelPositions
+		}
+		
+	
+	// Add position and error data to project
+	project.positions = positions
+	if(errors.length){
+		project.errors = project.errors ?? []
+		project.errors.push(...errors)
+		}
+	}
+
+function recurseModels(context, valuePath, modelFiles=[], filePositions, trace, d=0, lastMatchedFileIdx=0, fastPositions=false, model=context, project=undefined){
+	let logPadding = (new Array(d+2)).join("  ")
+	let traceLog = trace.positions
+		? (x)=>{console.log(logPadding + x)}
+		: ()=>{}
+	traceLog("$."+valuePath.join("."))
+
+	let $p, positionsNotFound
+	//Find the position of the context (for levels deeper than model root)
+	if(!context){traceLog("- No such context")}
+	else if(valuePath.length<=2){traceLog("- Skipping $p for root model")}
+	else if(typeof context == "object" && !context.$type && !Array.isArray(context)){
+		traceLog(`- Skipping $p for presumed collection: ${logtype(context)}`)
+		}
+	else {
+		let pathFromModel = valuePath.slice(2)
+		let fLen = modelFiles.length
+		let pathKey = pathToString(valuePath)
+		let sources = project?.indexRefinementsExtensions?.[pathKey]
+
+		if (sources && sources.length) {
+			let chosenSource
+			if (pathFromModel.length === 2 && (pathFromModel[0] === 'view' || pathFromModel[0] === 'explore')) {
+				const name = pathFromModel[1]
+				chosenSource = sources.find(s => s[2] === name) || sources[sources.length - 1]
+			} else {
+				chosenSource = sources[sources.length - 1]
+			}
+			let [f, ...pathInFile] = chosenSource
+			let fPath = modelFiles[f]
+			let filePositionData = filePositions[fPath]
+			let targetPositionData = deepGet(filePositionData, pathInFile)
+			if (targetPositionData !== undefined) {
+				lastMatchedFileIdx = f
+				$p = [f, ...(targetPositionData.$p ?? [])]
+				traceLog(`- Found via index in ${f}: ${fPath}`)
+			}
+		}
+
+		if (!$p) {
+			//traceLog(`- Searching in ${fLen} files`)
+			for(let fOffset=0; fOffset<fLen; fOffset++){
+				// Check starting from the last matched index, since that is most likely to be the right file 
+				let f = (lastMatchedFileIdx + fOffset) % fLen
+				let fPath = modelFiles[f].replace()
+				let filePositionData = filePositions[fPath]
+				let maybeObjectPositionData = deepGet(filePositionData,pathFromModel)
+
+				if(maybeObjectPositionData !== undefined){
+					lastMatchedFileIdx = f
+					$p = [f, ...(maybeObjectPositionData.$p ?? [])]
+					traceLog(`- Found in ${f}: ${fPath}`)
+					break
+					}
+				}
+		}
+		if(!$p){
+			positionsNotFound = true
+			traceLog(`- Not found`)
+			}
+		}
+
+	let children = {}
+	let errors = []
+
+	// Recurse into the positions of the children
+	if(typeof context === "object" && !positionsNotFound){
+		if (Array.isArray(context) && context.length === 1 && typeof context[0] !== 'object') {
+			let refPositions = recurseModels(context[0], valuePath, modelFiles, filePositions, trace, d+1, lastMatchedFileIdx, fastPositions, model, project)
+			if (refPositions.$errors) errors.push(...refPositions.$errors)
+			if (errors.length) refPositions.$errors = errors
+			return refPositions
+		}
+
+		if (!fastPositions || valuePath.length < 4) {
+			for(let [k,val] of Object.entries(context)){
+				if(k[0]==="$"){
+					traceLog(`@ ${k} : Skipping metadata key`)
+					continue
+					}
+				traceLog(`@ ${k} : ${logtype(val)}`)
+				let refPositions = recurseModels(
+					val, [...valuePath, k], modelFiles, filePositions, trace, d+1, lastMatchedFileIdx, fastPositions, model, project
+					)
+				if(refPositions.$errors){
+					errors.push(...refPositions.$errors)
+					}
+				children[encodeProperty(k)] = refPositions
+				}
+		}
+	}
+
+	if($p){children.$p = $p}
+	if(errors.length){children.$errors = errors}
+	return children
+	}
+
+
+function logtype(x){
+	return Array.isArray(x) ? 'array'
+		: x === null ? 'null'
+		: typeof x === "object" ? `object(${Object.keys(x).slice(0,6).join(",")})` 
+		: typeof x
+	}
+
+function coerceArray(x){
+	if(Array.isArray(x)){return x}
+	if(x === undefined){return []}
+	return [x]
+	}
+
+
+function pathToString(path){
+	return path
+		.filter(part=>part!=='')
+		.map(p=>(''+p).replace(/\\/g,"\\\\").replace(/\./g,"\\."))
+		.join('.')
+}
