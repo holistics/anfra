@@ -1,6 +1,6 @@
 # A repo's query settings
 
-> Status: proposal, 2026-11-17. Not built. Replaces `cache.query.*` in `.anfra/config.yml`, which hasn't been released, so it is renamed without a deprecation.
+> Status: 2026-11-17. Partly built: the settings, read strictly; the time zone and week start day defaults, `input.weekStartDay`, and the locks. Not yet: `query.cache.max_duration` enforced on queries, `anfra init` writing the file, and the repo's info returning the settings. Replaces `cache.query.*` in `.anfra/config.yml`, which hasn't been released, so it is renamed without a deprecation.
 
 A repo sets how its queries run in `.anfra/config.yml`, under `query`: the values a query gets when it sets none, which of those values a query can't change, and the rules for the query cache. This doc says what each setting means, how anfra reads the file, and what `anfra init` writes.
 
@@ -11,11 +11,11 @@ query:
   default:                  # what a query gets when it sets none
     input:
       timezone: Etc/UTC
-      week_start_day: monday
+      weekStartDay: monday
     cache:
       duration: 10m
   locked_defaults:          # defaults a query can't change
-    - input.week_start_day
+    - input.weekStartDay
   cache:                    # the query cache's rules
     enabled: true
     max_duration: 168h
@@ -31,12 +31,12 @@ query:
 
 ### `query.default`
 
-`query.default` has the shape of a query request. Each key under it is the path of a field a query sets, in snake_case: `query.default.input.week_start_day` is the default of a query's `input.weekStartDay`, and `query.default.cache.duration` the default of its `cache.duration`. So a reader who knows a query's field knows its default's key.
+`query.default` has the shape of a query request, case included. Each key under it is the path of a field a query sets, as the query sets it: `query.default.input.weekStartDay` is the default of a query's `input.weekStartDay`, and `query.default.cache.duration` the default of its `cache.duration`. So a reader who knows a query's field knows its default's key, and values copy between an answer's `input` and the file unchanged. `input`'s keys are camelCase wherever they appear ([its case](query-input.md#its-case)), so under `query.default.input` they are camelCase, and the rest of the file is snake_case, as the request's other inputs are.
 
 | Key | Default of | Without it |
 |---|---|---|
 | `input.timezone` | `input.timezone` | `Etc/UTC` |
-| `input.week_start_day` | `input.weekStartDay` (new) | `monday` |
+| `input.weekStartDay` | `input.weekStartDay` (new) | `monday` |
 | `cache.duration` | `cache.duration` | none: a query that sets no `cache.duration` runs uncached |
 
 A query's answer returns its `input` with every default filled in ([a query's input](query-input.md#the-response)), so a replay runs with the values it ran with, even after the repo's defaults change.
@@ -64,7 +64,7 @@ A path names a single value, such as `input.timezone`, or an object. Locking an 
 ```
 query.locked_defaults in .anfra/config.yml names input, which has fields
 that can't have a default. Lock its fields one by one, such as
-input.timezone and input.week_start_day.
+input.timezone and input.weekStartDay.
 ```
 
 The list keeps whole-object locks possible for when such an object exists, which is why it is a list of paths ([alternatives](#alternatives-considered)).
@@ -101,16 +101,16 @@ anfra always sends a day, `monday` unless the query or the repo sets another. To
 
 So on MySQL today, a `this week` filter covers Monday to Sunday while its weekly buckets run Sunday to Saturday. A given day makes every part agree, on every database.
 
-This changes results: a MySQL repo's weekly groupings move from Sunday to Monday, and so do BigQuery's and any other database whose own week starts on Sunday. The changelog says so, with the fix for a repo that wants Sunday: `query.default.input.week_start_day: sunday`.
+This changes results: a MySQL repo's weekly groupings move from Sunday to Monday, and so do BigQuery's and any other database whose own week starts on Sunday. The changelog says so, with the fix for a repo that wants Sunday: `query.default.input.weekStartDay: sunday`.
 
 ## Reading the file
 
-anfra reads `.anfra/config.yml` strictly. A key it doesn't know is an error, not ignored, because an ignored key fails without a sign: a misspelled `week_start_day` leaves every week starting on Monday, and nobody notices until the numbers look wrong.
+anfra reads `.anfra/config.yml` strictly. A key it doesn't know is an error, not ignored, because an ignored key fails without a sign: a misspelled `weekStartDay` leaves every week starting on Monday, and nobody notices until the numbers look wrong.
 
 The keys anfra knows are the fields of `repoconfig.Config`, decoded with yaml.v3's `KnownFields(true)`. So the settings are an allowlist, kept by the struct itself: `query.default.input.pagination` is refused because the struct has no such field, not because a list forbids it, and a new default exists once its field is added. The errors list the allowed keys by reading the struct's `yaml` tags, so they can't drift from it either. `locked_defaults` needs no list of its own, because it may only name what `query.default` sets.
 
 ```
-.anfra/config.yml line 6: weekStartDay isn't a setting. Did you mean week_start_day?
+.anfra/config.yml line 6: query.default.input.week_start_day isn't a setting. Did you mean weekStartDay?
 ```
 
 The suggestion is the known key equal to it with case, `_` and `-` ignored, or else the nearest within a small edit distance, as for a query's input ([a query's input](query-input.md#moving-to-it)).
@@ -124,8 +124,8 @@ The other config errors:
 | A default or a locked duration over the cap | `query.default.cache.duration in .anfra/config.yml is 48h, more than query.cache.max_duration (24h). Lower the default or raise the cap.` |
 | A path in `locked_defaults` that `query.default` doesn't set | `query.locked_defaults in .anfra/config.yml names input.timezone, which query.default doesn't set. Set query.default.input.timezone, or remove it from query.locked_defaults.` |
 | A locked `cache.duration` with the cache off | `query.locked_defaults in .anfra/config.yml locks cache.duration, but query.cache.enabled is false. Remove the lock, or turn the cache on.` |
-| A lock on an object with fields that can't have a default | `query.locked_defaults in .anfra/config.yml names input, which has fields that can't have a default. Lock its fields one by one, such as input.timezone and input.week_start_day.` |
-| A path that can't be a default | ``.anfra/config.yml line 4: query.default.input.pagination isn't a setting. The settings under query.default.input are timezone and week_start_day. If a newer anfra added it, update anfra (`anfra update`).`` |
+| A lock on an object with fields that can't have a default | `query.locked_defaults in .anfra/config.yml names input, which has fields that can't have a default. Lock its fields one by one, such as input.timezone and input.weekStartDay.` |
+| A path that can't be a default | ``.anfra/config.yml line 4: query.default.input.pagination isn't a setting. The settings under query.default.input are timezone and weekStartDay. If a newer anfra added it, update anfra (`anfra update`).`` |
 
 ## What `anfra init` writes
 
@@ -137,10 +137,10 @@ query:
   default:            # what a query gets when it sets none
     input:
       timezone: Etc/UTC
-      week_start_day: monday
+      weekStartDay: monday
     cache:
       # duration: 10m   # cache every query's result for this long, unless it sets cache.duration
-  locked_defaults: [] # defaults a query can't change, such as input.week_start_day
+  locked_defaults: [] # defaults a query can't change, such as input.weekStartDay
   cache:
     enabled: true
     max_duration: 168h
@@ -151,6 +151,19 @@ query:
 The values init writes are the values anfra uses without the file, so a repo set up before this change and one set up after it behave the same.
 
 `anfra publish` sets `org.url` in the same file, through `repoconfig.SetString`, which changes only that value and keeps init's comments.
+
+## Where a host gets them
+
+The file is how anfra's CLI and `anfra serve` learn a repo's settings. The engine doesn't read it: a host sets them on each invocation, so a platform embedding the engine, such as anfra Cloud, keeps them wherever it keeps a repo's settings.
+
+| On the invocation | Holds | The file's keys |
+|---|---|---|
+| `QueryDefaults` | `Timezone`, `WeekStartDay`, `CacheDuration`, `Locked`, and `Err`: why they can't be used | `query.default.*`, `query.locked_defaults` |
+| `QueryCache.Settings()` | `Disabled`, `Namespace` | `query.cache.*` |
+
+`QueryDefaults.Check()` holds the rules every host's defaults follow: a time zone and a week start day anfra takes, a cache duration of 0s or more, and locks only on defaults. The engine calls it before every query, which fails with `repo_settings_invalid` when it refuses, or when `Err` is set. anfra's own reading of the file calls it too (`repoconfig.Config.QueryDefaults`, the one place the file's defaults become the engine's), adding where the value came from. A platform calls it when it saves a repo's settings, so a mistake is refused there, not on the next query.
+
+The file's reading keeps what is about the file: unknown keys, line numbers, and that a locked default is set in it explicitly. A platform's empty value means anfra's default, so locking an unset time zone locks it at `Etc/UTC`.
 
 ## What a caller can read
 
@@ -166,4 +179,5 @@ The repo's info, which already returns the default cache duration (`api/openapi.
 
 ## Open
 
+- **Syncing a repo's settings to anfra Cloud.** The plan is for `anfra publish` to send the repo's `QueryDefaults` and cache rules, typed, through Cloud's publish API, which checks them with `QueryDefaults.Check()`. Cloud never parses the file, so its format stays anfra's, and a newer CLI's setting is an API change rather than a key an older Cloud refuses. If Cloud ever reads repos without publish, such as from git, the file's reading moves to a `shared/` package, which makes the format public.
 - **The docs page** the init comment links to doesn't exist yet.

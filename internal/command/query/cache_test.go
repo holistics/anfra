@@ -26,11 +26,14 @@ import (
 // standInCache is a query cache over a real store, its settings and failures
 // set by the test, what it was told kept.
 type standInCache struct {
-	settings   command.QueryCacheSettings
-	store      *sqlitestore.Store
-	managerErr error
-	lakeErr    error
-	reported   []error
+	settings command.QueryCacheSettings
+	// defaultDuration is the repo's default cache.duration, which run sets
+	// on the invocation's QueryDefaults.
+	defaultDuration time.Duration
+	store           *sqlitestore.Store
+	managerErr      error
+	lakeErr         error
+	reported        []error
 }
 
 func (c *standInCache) Summarize(context.Context) querycache.Summary { return querycache.Summary{} }
@@ -99,6 +102,9 @@ func TestLookUpAndWrite(t *testing.T) {
 		if qc != nil {
 			cc.QueryCache = qc
 		}
+		if s, ok := qc.(*standInCache); ok {
+			cc.QueryDefaults.CacheDuration = s.defaultDuration
+		}
 		cc.TenantID = "acme"
 		return queryRun{cc: cc, in: QueryRequestParams{Cache: opts}}
 	}
@@ -138,7 +144,7 @@ func TestLookUpAndWrite(t *testing.T) {
 				t.Errorf("%+v: %+v", opts, l)
 			}
 		}
-		qc.settings.Default.Duration = time.Hour
+		qc.defaultDuration = time.Hour
 		if l := lookUp(t, qc, CacheOptions{Duration: "0s"}, st); newCacheResult(l, cacheWrite{}) != (CacheResult{}) {
 			t.Errorf("0s over the repo's default: %+v", l)
 		}
@@ -175,7 +181,7 @@ func TestLookUpAndWrite(t *testing.T) {
 
 	t.Run("a miss: written under the namespace, committed when it succeeds", func(t *testing.T) {
 		qc := newStandIn(ctx, t)
-		qc.settings.Default.Duration = time.Hour // the query sets none
+		qc.defaultDuration = time.Hour // the query sets none
 		l := lookUp(t, qc, CacheOptions{}, st)
 		w := write(t, l, st)
 		a := newCacheResult(l, w)

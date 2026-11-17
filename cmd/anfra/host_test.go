@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/holistics/anfra/internal/envflag"
 	localquerycache "github.com/holistics/anfra/internal/querycache/local"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
@@ -22,7 +25,6 @@ import (
 // The repo's query.cache.enabled turns the query cache off, and
 // ANFRA_QUERY_CACHE_ENABLED overrides it either way.
 func TestQueryCacheDisabled(t *testing.T) {
-	logger := slog.New(slog.DiscardHandler)
 	repoOff := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(repoOff, ".anfra"), 0o700); err != nil {
 		t.Fatal(err)
@@ -43,36 +45,11 @@ func TestQueryCacheDisabled(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(envflag.QueryCacheEnabled, tc.env)
-			got, _ := queryCacheSettings(tc.repo, logger)
+			got := queryCacheDisabled(repoconfig.Read(tc.repo))
 			if (got == "") != (tc.off == "") || !strings.Contains(got, tc.off) {
 				t.Errorf("reason %q, want one naming %q", got, tc.off)
 			}
 		})
-	}
-}
-
-// query.default.cache.duration is read whatever turns the cache off; a settings
-// file anfra doesn't take leaves none.
-func TestQueryCacheDefaultDuration(t *testing.T) {
-	logger := slog.New(slog.DiscardHandler)
-	write := func(yml string) string {
-		dir := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, ".anfra", "config.yml"), []byte(yml), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return dir
-	}
-	t.Setenv(envflag.QueryCacheEnabled, "")
-	if _, d := queryCacheSettings(write("query:\n  default:\n    cache:\n      duration: 90m\n"), logger); d != 90*time.Minute {
-		t.Errorf("default duration %v, want 90m", d)
-	}
-	for _, bad := range []string{"1d", "200h", "-1m"} {
-		if _, d := queryCacheSettings(write("query:\n  default:\n    cache:\n      duration: "+bad+"\n"), logger); d != 0 {
-			t.Errorf("%s: default %v, want none", bad, d)
-		}
 	}
 }
 
@@ -93,7 +70,7 @@ func TestNewQueryCache(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(envflag.QueryCacheEnabled, tc.enabled)
-			c := newQueryCache(r, sidecar.Config{Logger: logger, CanalQueryURL: tc.url})
+			c := newQueryCache(r, sidecar.Config{Logger: logger, CanalQueryURL: tc.url}, repoconfig.Config{}, nil)
 			defer c.Close(t.Context())
 			if (c.lakeSocket != "") != tc.socket {
 				t.Errorf("canal-lake's socket %q, want one: %v", c.lakeSocket, tc.socket)
@@ -151,5 +128,23 @@ func TestSweepQueryCache(t *testing.T) {
 	expiredLongAgo()
 	if err := sweep(ctx); err != nil || !strings.Contains(logs.String(), `"event":"query_cache.sweep_failed"`) {
 		t.Errorf("a failed drop: %v, logged %s", err, logs.String())
+	}
+}
+
+// A repo's defaults and locks reach every command; a settings file anfra
+// can't use refuses every query, rather than leaving the defaults.
+func TestQueryDefaults(t *testing.T) {
+	if got := queryDefaults(repoconfig.Config{}, nil); got.Err != nil || got.Timezone != "" || got.CacheDuration != 0 || got.Locked != nil {
+		t.Errorf("no file: %+v, want anfra's defaults", got)
+	}
+	var c repoconfig.Config
+	c.Query.Default.Input.WeekStartDay, c.Query.Default.Cache.Duration = "sunday", "90m"
+	c.Query.LockedDefaults = []string{"input.weekStartDay"}
+	if got := queryDefaults(c, nil); got.WeekStartDay != "sunday" || got.CacheDuration != 90*time.Minute || !slices.Equal(got.Locked, c.Query.LockedDefaults) {
+		t.Errorf("settings: %+v", got)
+	}
+	broken := errors.New(".anfra/config.yml line 1: x isn't a setting.")
+	if got := queryDefaults(c, broken); !errors.Is(got.Err, broken) || got.WeekStartDay != "" {
+		t.Errorf("a broken file: %+v, want its error and nothing else", got)
 	}
 }

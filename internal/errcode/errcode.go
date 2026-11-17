@@ -54,4 +54,8 @@ var (
 	// CacheUnavailable: the query cache isn't working (its store can't be
 	// opened). Its cause is in the log, for whoever runs anfra.
 	CacheUnavailable = apperr.DefinePublicCode(NS, "cache_unavailable", apperr.Server, "The query cache isn't working.")
+	// RepoSettingsInvalid: the repo's settings (.anfra/config.yml) hold a key
+	// or a value anfra doesn't take. A query is refused rather than run with
+	// defaults the repo may not mean, such as another week start day.
+	RepoSettingsInvalid = apperr.DefinePublicCode(NS, "repo_settings_invalid", apperr.User, "The repo's settings can't be used.")
 )

@@ -25,6 +25,7 @@ Kept together, running a query again is copying one object, and an input added l
 | The Query Input: `filters`, `conditions`, `sorts`, `dateDrills` | What a reader changes about the query, applied to its `explore { }` before it compiles ([Data Apps](data-apps.md)). |
 | `pagination`: `page`, `pageSize` | Which rows of the result to return: `pageSize` rows, from the 1-based `page` (1 by default). Without it, every row. |
 | `timezone` | The IANA time zone relative dates and date truncation use. |
+| `weekStartDay` | The day weeks start on, `monday` to `sunday`, for grouping by week, relative dates and the day of the week's number. |
 | `seeds` | Values the server generates for each request when they're unset (below). |
 
 Rules for what goes in:

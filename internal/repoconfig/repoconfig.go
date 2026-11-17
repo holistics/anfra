@@ -16,6 +16,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/repoformat"
@@ -46,7 +47,7 @@ type Config struct {
 				// Timezone is input.timezone's default, an IANA zone.
 				Timezone string `yaml:"timezone"`
 				// WeekStartDay is input.weekStartDay's default: monday to sunday.
-				WeekStartDay string `yaml:"week_start_day"`
+				WeekStartDay string `yaml:"weekStartDay"`
 			} `yaml:"input"`
 			Cache struct {
 				// Duration is cache.duration's default: how old a cached result
@@ -56,7 +57,7 @@ type Config struct {
 			} `yaml:"cache"`
 		} `yaml:"default"`
 		// LockedDefaults are the paths of the defaults a query can't change, such
-		// as input.week_start_day. Each names a value Default sets.
+		// as input.weekStartDay. Each names a value Default sets.
 		LockedDefaults []string `yaml:"locked_defaults"`
 		Cache          struct {
 			// Enabled turns the query cache off for the repo when false: no
@@ -87,11 +88,16 @@ func (c Config) QueryCacheMaxDuration() time.Duration {
 	return d
 }
 
-// QueryDefaultCacheDuration is query.default.cache.duration: zero when unset.
-// Read checked it.
-func (c Config) QueryDefaultCacheDuration() time.Duration {
-	d, _ := time.ParseDuration(c.Query.Default.Cache.Duration)
-	return d
+// QueryDefaults are query.default and query.locked_defaults, as the engine
+// takes them: the one place the file's defaults become a query's. Read checked
+// them.
+func (c Config) QueryDefaults() command.QueryDefaults {
+	d := c.Query.Default
+	duration, _ := time.ParseDuration(d.Cache.Duration)
+	return command.QueryDefaults{
+		Timezone: d.Input.Timezone, WeekStartDay: d.Input.WeekStartDay, CacheDuration: duration,
+		Locked: c.Query.LockedDefaults,
+	}
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content

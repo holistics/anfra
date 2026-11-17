@@ -69,9 +69,6 @@ type Options struct {
 	// prod or prod/eu; empty for the storage's top level
 	// (docs/designs/query-cache.md#file-names).
 	Namespace string
-	// Default is the repo's query.default.cache: the cache options of a query
-	// that sets none.
-	Default command.QueryCacheDefaults
 	// Report and Notice are how whoever runs anfra is told why a query ran
 	// without the cache, and of what doesn't stop it (Open's notices). Nil
 	// tells no one.
@@ -87,7 +84,7 @@ const NamespaceEnv = "ANFRA_CACHE_QUERY_NAMESPACE"
 // report, rather than failing here: a cache problem never fails a command.
 func New(dir string, o Options) *Cache {
 	c := &Cache{dir: dir, disabled: o.Disabled, lake: o.Lake, report: o.Report, notice: o.Notice,
-		settings: command.QueryCacheSettings{Disabled: o.Disabled, Default: o.Default, Namespace: strings.TrimSuffix(o.Namespace, "/")}}
+		settings: command.QueryCacheSettings{Disabled: o.Disabled, Namespace: strings.TrimSuffix(o.Namespace, "/")}}
 	if o.Namespace != "" {
 		c.namespace = strings.TrimSuffix(o.Namespace, "/") + "/"
 		if !querycache.ValidNamespace(c.namespace) {

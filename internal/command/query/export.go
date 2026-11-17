@@ -34,7 +34,7 @@ var Export = command.Define(command.Def[QueryExportRequestParams, QueryExportRes
 		return command.Sidecars{Node: in.Lang != "sql", CanalQuery: true}
 	},
 	Check:  QueryExportRequestParams.check,
-	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, errcode.ExportsUnavailable},
+	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, errcode.ExportsUnavailable, errcode.RepoSettingsInvalid},
 	Run:    runExport,
 })
 
@@ -127,6 +127,11 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 	t := newTracker(quiet)
 	o := observe(cc, t)
 	defer func() { o.finished(ctx, err) }()
+	settled, err := in.runInput().withRepoDefaults(cc)
+	if err != nil {
+		return QueryExportResult{}, err
+	}
+	in.Input, in.Timezone = settled.Input, ""
 	if in.Lang == "sql" {
 		sql, err := in.ungoverned(ctx, cc)
 		if err != nil {

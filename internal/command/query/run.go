@@ -108,6 +108,10 @@ type queryRun struct {
 // data source, a malformed limit: — it refuses here, before any work, as an
 // ordinary error rather than in a stream.
 func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequestParams) (QueryRun, error) {
+	in, err := in.withRepoDefaults(cc)
+	if err != nil {
+		return QueryRun{}, err
+	}
 	r := queryRun{cc: cc, in: in, limit: query.NoLimit}
 	if in.Lang == "sql" {
 		sql, err := in.ungoverned(ctx, cc)

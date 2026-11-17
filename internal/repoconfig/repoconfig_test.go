@@ -97,10 +97,10 @@ func TestReadQuerySettings(t *testing.T) {
   default:
     input:
       timezone: Asia/Ho_Chi_Minh
-      week_start_day: sunday
+      weekStartDay: sunday
     cache:
       duration: 10m
-  locked_defaults: [input.week_start_day]
+  locked_defaults: [input.weekStartDay]
   cache:
     enabled: false
     max_duration: 1h
@@ -108,14 +108,14 @@ func TestReadQuerySettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != time.Hour || c.QueryDefaultCacheDuration() != 10*time.Minute ||
+	if c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != time.Hour || c.QueryDefaults().CacheDuration != 10*time.Minute ||
 		c.Query.Default.Input.Timezone != "Asia/Ho_Chi_Minh" || c.Query.Default.Input.WeekStartDay != "sunday" {
 		t.Errorf("read %+v", c.Query)
 	}
 
 	for _, yml := range []string{"", "# only a comment\n"} {
 		c, err := read(t, yml)
-		if err != nil || !c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != 168*time.Hour || c.QueryDefaultCacheDuration() != 0 {
+		if err != nil || !c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != 168*time.Hour || c.QueryDefaults().CacheDuration != 0 {
 			t.Errorf("%q: %+v, %v; want the defaults", yml, c.Query, err)
 		}
 	}
@@ -126,14 +126,15 @@ func TestReadQuerySettings(t *testing.T) {
 // each other. Each error names the setting.
 func TestReadRefuses(t *testing.T) {
 	for name, tc := range map[string]struct{ yml, want string }{
-		"camelCase": {"query:\n  default:\n    input:\n      weekStartDay: monday\n",
-			".anfra/config.yml line 4: query.default.input.weekStartDay isn't a setting. Did you mean week_start_day?"},
-		"a typo": {"query:\n  cache:\n    enabeld: false\n", "line 3: query.cache.enabeld isn't a setting. Did you mean enabled?"},
+		"snake_case under input": {"query:\n  default:\n    input:\n      week_start_day: monday\n",
+			".anfra/config.yml line 4: query.default.input.week_start_day isn't a setting. Did you mean weekStartDay?"},
+		"camelCase outside input": {"query:\n  cache:\n    maxDuration: 1h\n", "query.cache.maxDuration isn't a setting. Did you mean max_duration?"},
+		"a typo":                  {"query:\n  cache:\n    enabeld: false\n", "line 3: query.cache.enabeld isn't a setting. Did you mean enabled?"},
 		"no default for it": {"query:\n  default:\n    input:\n      pagination: {page: 1}\n",
-			"query.default.input.pagination isn't a setting. The settings under query.default.input are timezone and week_start_day. If a newer anfra added it, update anfra (`anfra update`)."},
+			"query.default.input.pagination isn't a setting. The settings under query.default.input are timezone and weekStartDay. If a newer anfra added it, update anfra (`anfra update`)."},
 		"an unknown section": {"queries: {}\n", "The settings at the top level are org, apps, and query."},
 		"the old key":        {"cache:\n  query:\n    enabled: false\n", "line 1: cache isn't a setting."},
-		"not a duration":     {"query:\n  default:\n    cache:\n      duration: 1 hour\n", `query.default.cache.duration in .anfra/config.yml is "1 hour", which isn't a duration.`},
+		"not a duration":     {"query:\n  default:\n    cache:\n      duration: 1 hour\n", `.anfra/config.yml: query.default.cache.duration is "1 hour", which isn't a duration.`},
 		"a negative default": {"query:\n  default:\n    cache:\n      duration: -1m\n", "is -1m, which is negative"},
 		"over the cap":       {"query:\n  default:\n    cache:\n      duration: 2h\n  cache:\n    max_duration: 1h\n", "is 2h, more than query.cache.max_duration (1h). Lower the default or raise the cap"},
 		"over 7 days":        {"query:\n  default:\n    cache:\n      duration: 200h\n", "more than query.cache.max_duration (168h, by default)"},
@@ -141,13 +142,14 @@ func TestReadRefuses(t *testing.T) {
 		"a cap over 7 days":  {"query:\n  cache:\n    max_duration: 200h\n", "anfra caches a result for at most 168h (7 days)"},
 		"a time zone":        {"query:\n  default:\n    input:\n      timezone: Mars/Olympus\n", `"Mars/Olympus", which isn't an IANA time zone`},
 		"the local zone":     {"query:\n  default:\n    input:\n      timezone: Local\n", "isn't an IANA time zone"},
-		"a week start day":   {"query:\n  default:\n    input:\n      week_start_day: Monday\n", `is "Monday". Use one of monday, tuesday, wednesday, thursday, friday, saturday, and sunday`},
+		"a week start day":   {"query:\n  default:\n    input:\n      weekStartDay: Monday\n", `is "Monday". Did you mean monday?`},
+		"not a day":          {"query:\n  default:\n    input:\n      weekStartDay: weekend\n", `is "weekend". Use one of monday, tuesday, wednesday, thursday, friday, saturday, and sunday`},
 		"a lock on nothing set": {"query:\n  locked_defaults: [input.timezone]\n",
 			"names input.timezone, which query.default doesn't set. Set query.default.input.timezone, or remove it from query.locked_defaults"},
 		"a lock on an object": {"query:\n  default:\n    input:\n      timezone: Etc/UTC\n  locked_defaults: [input]\n",
-			"names input, which has fields that can't have a default. Lock its fields one by one, such as input.timezone and input.week_start_day"},
+			"names input, which has fields that can't have a default. Lock its fields one by one, such as input.timezone and input.weekStartDay"},
 		"a lock on no default": {"query:\n  locked_defaults: [input.pagination]\n",
-			"names input.pagination, which isn't a default. The defaults are input.timezone, input.week_start_day, and cache.duration"},
+			"names input.pagination, which isn't a default. The defaults are input.timezone, input.weekStartDay, and cache.duration"},
 		"a lock on a cache turned off": {"query:\n  default:\n    cache:\n      duration: 5m\n  locked_defaults: [cache.duration]\n  cache:\n    enabled: false\n",
 			"locks cache.duration, but query.cache.enabled is false"},
 	} {

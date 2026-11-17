@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
 	"go.opentelemetry.io/otel"
 
@@ -33,12 +32,13 @@ import (
 // tenant, LocalTenant, for the same reason.
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
 	cc := command.CommandContext{
-		Clients:    clients,
-		Exports:    exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
-		Repo:       h.repo.Repo(),
-		QueryCache: h.queryCache,
-		TenantID:   LocalTenant,
-		DataPerms:  dataperm.Ungoverned(),
+		Clients:       clients,
+		Exports:       exports.Store{Files: h.exportFiles}, // file:// links; serve links them where it serves them
+		Repo:          h.repo.Repo(),
+		QueryCache:    h.queryCache,
+		QueryDefaults: h.queryDefaults,
+		TenantID:      LocalTenant,
+		DataPerms:     dataperm.Ungoverned(),
 		// anfra core serves the directory it was pointed at: the local repo is the
 		// point, not a mistake.
 		AllowLocalRepo: true,
@@ -68,6 +68,8 @@ type hostContext struct {
 	appLogger *slog.Logger
 	// queryCache is the repo's query cache, its store opened at first use.
 	queryCache *localquerycache.Cache
+	// queryDefaults are what the repo's queries get when they set none.
+	queryDefaults command.QueryDefaults
 }
 
 // withRepo resolves the repo and sets up host-aggregated logging, then runs fn
@@ -106,17 +108,24 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 		CanalQueryURL: os.Getenv("ANFRA_CANAL_QUERY_URL"),
 		WrapTransport: traceSidecar,
 	}
-	queryCache := newQueryCache(repo, cfg)
+	// The settings file is read once: a server's at startup.
+	settings, settingsErr := repoconfig.Read(repo.Dir)
+	if settingsErr != nil {
+		lg.Logger.Warn("Repo settings unusable", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repo.Dir), "error", settingsErr,
+			"hint", "queries are refused until the settings file is fixed")
+	}
+	queryCache := newQueryCache(repo, cfg, settings, settingsErr)
 	// canal-query reaches canal-lake at its socket, chosen before either runs.
 	cfg.CanalLakeSocket = queryCache.lakeSocket
 	defer queryCache.Close(context.WithoutCancel(ctx))
 
 	return fn(ctx, hostContext{
-		repo:        repo,
-		exportFiles: exports.New(exportLinkLife),
-		appLogger:   lg.App,
-		queryCache:  queryCache.Cache,
-		cfg:         cfg,
+		repo:          repo,
+		exportFiles:   exports.New(exportLinkLife),
+		appLogger:     lg.App,
+		queryCache:    queryCache.Cache,
+		queryDefaults: queryDefaults(settings, settingsErr),
+		cfg:           cfg,
 	})
 }
 
@@ -132,11 +141,11 @@ type queryCache struct {
 // whose socket can't be chosen fails when started, so a command that never
 // caches isn't failed by it. A canal-query at a URL is a deployment's, which
 // runs its canal-lake too: anfra starts none.
-func newQueryCache(repo repo.Local, cfg sidecar.Config) queryCache {
+func newQueryCache(repo repo.Local, cfg sidecar.Config, settings repoconfig.Config, settingsErr error) queryCache {
 	dir := filepath.Join(repo.CacheDir(), "query")
-	disabled, defaultDuration := queryCacheSettings(repo.Dir, cfg.Logger)
+	disabled := queryCacheDisabled(settings, settingsErr)
 	o := localquerycache.Options{
-		Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv), Default: command.QueryCacheDefaults{Duration: defaultDuration},
+		Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv),
 		Report: func(ctx context.Context, err error) {
 			cfg.Logger.WarnContext(ctx, "Query ran without the cache", logkit.EventKey, eventQueryCacheUnavailable, "error", err,
 				"hint", "the query cache failed, so the query ran on the warehouse, uncached; a sidecar's lines just before this one may say why")
@@ -175,27 +184,27 @@ type failedLake struct{ err error }
 func (l failedLake) Start(context.Context) error { return l.err }
 func (failedLake) Close(context.Context)         {}
 
-// queryCacheSettings are the repo's query cache settings: what turns the
-// cache off, if anything (ANFRA_QUERY_CACHE_ENABLED, whatever the repo sets,
-// or the repo's query.cache.enabled), and the default duration of a query
-// that sets none (query.default.cache.duration). A settings file that can't be
-// read, or holds a setting anfra doesn't take, leaves the defaults (the cache
-// on, no default duration), and is logged.
-func queryCacheSettings(repoDir string, logger *slog.Logger) (disabled string, defaultDuration time.Duration) {
-	c, readErr := repoconfig.Read(repoDir)
-	if readErr != nil {
-		logger.Warn("Query cache settings unknown", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repoDir), "error", readErr,
-			"hint", "the query cache keeps its defaults until anfra can read its settings from the file")
-	} else {
-		defaultDuration = c.QueryDefaultCacheDuration()
-	}
+// queryCacheDisabled says what turns the repo's query cache off, if anything:
+// ANFRA_QUERY_CACHE_ENABLED, whatever the repo sets, or the repo's
+// query.cache.enabled, from its settings file as Read returned it. A file that
+// can't be used leaves the cache on: queries are refused anyway (queryDefaults).
+func queryCacheDisabled(c repoconfig.Config, readErr error) string {
 	switch {
 	case os.Getenv(envflag.QueryCacheEnabled) != "":
 		if !envflag.On(envflag.QueryCacheEnabled) {
-			disabled = envflag.QueryCacheEnabled + "=0 turns the query cache off for this process."
+			return envflag.QueryCacheEnabled + "=0 turns the query cache off for this process."
 		}
 	case readErr == nil && !c.QueryCacheEnabled():
-		disabled = repoconfig.RelPath + " turns the query cache off (query.cache.enabled: false)."
+		return repoconfig.RelPath + " turns the query cache off (query.cache.enabled: false)."
 	}
-	return disabled, defaultDuration
+	return ""
+}
+
+// queryDefaults are the repo's query defaults, from its settings file as Read
+// returned it: when it can't be used, why, which refuses every query.
+func queryDefaults(c repoconfig.Config, readErr error) command.QueryDefaults {
+	if readErr != nil {
+		return command.QueryDefaults{Err: readErr}
+	}
+	return c.QueryDefaults()
 }

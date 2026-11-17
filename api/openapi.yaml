@@ -700,6 +700,34 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyRepoSettingsInvalid:
+      additionalProperties: false
+      description: The repo's settings can't be used.
+      properties:
+        code:
+          const: repo_settings_invalid
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyResultTooLarge:
       additionalProperties: false
       description: The query's result is larger than this server allows.
@@ -1308,7 +1336,18 @@ components:
             $ref: "#/components/schemas/QuerySort"
           type: array
         timezone:
-          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default.
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. The repo's query.default.input.timezone by default, or else UTC.
+          type: string
+        weekStartDay:
+          description: the day weeks start on, for grouping by week, relative dates such as this week, and the day of the week's number. The repo's query.default.input.weekStartDay by default, or else monday.
+          enum:
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
           type: string
       type: object
     QueryRecords:
@@ -2379,13 +2418,14 @@ paths:
                   error:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoSettingsInvalid"
                       - $ref: "#/components/schemas/ErrorBodyCacheMiss"
                       - $ref: "#/components/schemas/ErrorBodyCacheDisabled"
                       - $ref: "#/components/schemas/ErrorBodyCacheUnavailable"
                 required:
                   - error
                 type: object
-          description: internal_server_error, cache_miss, cache_disabled, cache_unavailable
+          description: internal_server_error, repo_settings_invalid, cache_miss, cache_disabled, cache_unavailable
         "503":
           content:
             application/json:
@@ -2447,11 +2487,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoSettingsInvalid"
                 required:
                   - error
                 type: object
-          description: internal_server_error
+          description: internal_server_error, repo_settings_invalid
         "503":
           content:
             application/json:
@@ -2515,11 +2557,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoSettingsInvalid"
                 required:
                   - error
                 type: object
-          description: internal_server_error
+          description: internal_server_error, repo_settings_invalid
         "501":
           content:
             application/json:

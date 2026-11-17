@@ -158,9 +158,9 @@ func pagingContext(ctx context.Context, t *testing.T, r repo.Repo) command.Comma
 		t.Fatalf("start canal-query: %v", err)
 	}
 	t.Cleanup(func() { canal.Close(context.WithoutCancel(ctx)) })
-	qc := localquerycache.New(dir, localquerycache.Options{Lake: lake, Default: command.QueryCacheDefaults{Duration: time.Hour}})
+	qc := localquerycache.New(dir, localquerycache.Options{Lake: lake})
 	return command.CommandContext{Clients: command.Clients{Node: node.Client(), CanalQuery: canal.Client()}, TenantID: "local", Repo: r,
-		AllowLocalRepo: true, DataPerms: dataperm.Ungoverned(), QueryCache: qc}
+		AllowLocalRepo: true, DataPerms: dataperm.Ungoverned(), QueryCache: qc, QueryDefaults: command.QueryDefaults{CacheDuration: time.Hour}}
 }
 
 // streamedPage is a query's stream, as the SDK reads it: its fields, its rows
