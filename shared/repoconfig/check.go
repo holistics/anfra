@@ -1,11 +1,14 @@
 package repoconfig
 
 import (
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"reflect"
 	"slices"
 	"time"
+
+	"github.com/holistics/anfra/shared/jsonkit"
 )
 
 // Check refuses settings no repo can run with: a value anfra doesn't take, or
@@ -125,4 +128,40 @@ func orDefault(s, def string) string {
 		return def
 	}
 	return s
+}
+
+// Get is k's value in c, as JSON, as a file would hold it: nil when c leaves it
+// unset, which is anfra's default, or when k names no setting.
+func (c Config) Get(k Key) jsontext.Value {
+	f, ok := field(reflect.ValueOf(c), k)
+	if !ok || f.IsZero() {
+		return nil
+	}
+	if f.Kind() == reflect.Pointer {
+		f = f.Elem()
+	}
+	b, err := jsonkit.Marshal(f.Interface())
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// Equal reports whether a and b, two values of the setting k as JSON, mean the
+// same (Diff): nil is unset, anfra's default. A value k doesn't take equals
+// nothing but itself.
+func Equal(k Key, a, b jsontext.Value) bool {
+	if string(a) == string(b) {
+		return true
+	}
+	one := func(v jsontext.Value) (Config, bool) {
+		if v == nil {
+			return Config{}, true
+		}
+		c, broken := Layer([]Setting{{Key: k, Value: v}})
+		return c, len(broken) == 0
+	}
+	ca, okA := one(a)
+	cb, okB := one(b)
+	return okA && okB && !slices.Contains(Diff(ca, cb), k)
 }

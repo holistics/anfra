@@ -26,18 +26,19 @@ type comparison struct {
 }
 
 // compare lists the published revision's files, and the base's when it
-// differs, and classifies every path.
-func compare(ctx context.Context, client *cloudapi.Client, status cloudapi.StatusOut, base string, local workdir.Tree) (comparison, error) {
-	c := comparison{status: status, base: base, local: local}
+// differs, and classifies every path, the settings file among them when the
+// org's server takes it (orgSettings.scope).
+func compare(ctx context.Context, client *cloudapi.Client, settings orgSettings, status cloudapi.StatusOut, base string, local workdir.Tree) (comparison, error) {
+	c := comparison{status: status, base: base, local: settings.scope(local)}
 	var err error
-	if c.live, err = listTree(ctx, client, status.Revision); err != nil {
+	if c.live, err = listTree(ctx, client, status.Revision, settings.supported); err != nil {
 		return comparison{}, err
 	}
 	switch {
 	case base == status.Revision:
 		c.baseTree = c.live
 	case base != "":
-		if c.baseTree, err = listTree(ctx, client, base); err != nil {
+		if c.baseTree, err = listTree(ctx, client, base, settings.supported); err != nil {
 			if !cloudapi.IsCode(err, "not_found") {
 				return comparison{}, err
 			}
@@ -47,7 +48,7 @@ func compare(ctx context.Context, client *cloudapi.Client, status cloudapi.Statu
 	if c.base == "" {
 		c.baseTree = treemerge.Tree{}
 	}
-	c.paths = treemerge.Classify(c.baseTree, local.Files(), c.live)
+	c.paths = treemerge.Classify(c.baseTree, c.local.Files(), c.live)
 	return c, nil
 }
 

@@ -26,6 +26,9 @@ type publishSync struct {
 	// base is the revision this publish is built on, once catchUp has
 	// checked it: the server refuses the publish if it's no longer published.
 	base string
+	// settings are the org's repo settings, which say whether the folder's
+	// settings file is compared and sent (orgSettings.scope).
+	settings orgSettings
 }
 
 // openSync takes the folder's lock and reads its sync state. A folder anfra
@@ -62,7 +65,7 @@ func (sc *publishSync) catchUp(ctx context.Context, client *cloudapi.Client, org
 	base := sc.lastBase(org)
 	var pulled *Pulled
 	if base != status.Revision {
-		c, err := compare(ctx, client, status, base, local)
+		c, err := compare(ctx, client, sc.settings, status, base, local)
 		if err != nil {
 			return nil, err
 		}

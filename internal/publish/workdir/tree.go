@@ -40,6 +40,27 @@ func Read(dir string) (Tree, error) {
 	return t, nil
 }
 
+// Without is t without path, as if the folder didn't select it.
+func (t Tree) Without(path string) Tree {
+	id, ok := t.files[path]
+	if !ok {
+		return t
+	}
+	out := Tree{dir: t.dir, files: maps.Clone(t.files), byID: maps.Clone(t.byID), sizes: maps.Clone(t.sizes)}
+	delete(out.files, path)
+	delete(out.sizes, path)
+	if out.byID[id] == path {
+		delete(out.byID, id)
+		for p, other := range out.files {
+			if other == id {
+				out.byID[id] = p
+				break
+			}
+		}
+	}
+	return out
+}
+
 // Files is the tree's paths and blob ids. Callers mustn't change it.
 func (t Tree) Files() map[string]string { return t.files }
 

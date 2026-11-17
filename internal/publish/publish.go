@@ -148,12 +148,10 @@ func check(tg target) CheckResult {
 
 // publish publishes tg's files to its org, configured or chosen here.
 func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg target) (Result, error) {
-	files, org, configured := tg.tree.Paths(), tg.org, tg.configured
-	oids := tg.tree.Files()
+	org, configured := tg.org, tg.configured
 	ask := env.Ask
 	p := cliui.NewPrinter(env.ErrOut)
-	selected := fmt.Sprintf("%d files of the repo", len(files))
-	if len(files) == 0 {
+	if len(tg.tree.Paths()) == 0 {
 		return Result{}, clierr.Precondition("Not published, because this folder has no .aml files, and no Data Apps under %s/. Run `anfra publish` in the repo's folder.", repoformat.AppsDir)
 	}
 	if o.Yes {
@@ -176,6 +174,20 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if err != nil {
 		return Result{}, err
 	}
+	settings, err := loadOrgSettings(ctx, client)
+	if err != nil {
+		return Result{}, err
+	}
+	// Choosing the org may have written org.url into the settings file, which
+	// a publish now carries: read the folder as it is now.
+	if tg.tree, err = readFolder(dir, verbPublish); err != nil {
+		return Result{}, err
+	}
+	settings.warnUnsupported(t, tg.tree, org)
+	tg.tree = settings.scope(tg.tree)
+	files, oids := tg.tree.Paths(), tg.tree.Files()
+	selected := fmt.Sprintf("%d files of the repo", len(files))
+	sc.settings = settings
 	// What the org has that this folder hasn't seen is never replaced unseen
 	// (docs/designs/publish.md, flow 6). Checked before anything changes, in
 	// this folder or on the org; with --pull, merged into the folder first.
@@ -187,8 +199,17 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 		if tg.tree, err = readFolder(dir, verbPublish); err != nil {
 			return Result{}, err
 		}
+		tg.tree = settings.scope(tg.tree)
 		files, oids = tg.tree.Paths(), tg.tree.Files()
 		selected = fmt.Sprintf("%d files of the repo", len(files))
+	}
+	// The repo's settings: what the org runs with that this folder doesn't
+	// say. Whether the member may change them is the org's server's to say.
+	for _, w := range settings.localDifferences(dir) {
+		t.Warn("settings_local", "%s", w)
+	}
+	for _, w := range settings.overriddenChanges(dir, tg.tree, org) {
+		t.Warn("settings_overridden", "%s", w)
 	}
 
 	p.Step("Validating…")
@@ -209,7 +230,6 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	if err := offerDataSourcesToOrg(ctx, &mdCopy{md: env.MotherDuck, c: client, org: org, p: p, t: t, ask: ask, input: env.Input}, dir, o.CreateDataSources); err != nil {
 		return Result{}, err
 	}
-	warnOfOriginsOrgLacks(ctx, client, t, p, dir)
 
 	byOID := map[string]string{} // blob id → a path holding it
 	for _, f := range files {
@@ -231,6 +251,7 @@ func publish(ctx context.Context, dir string, o Options, env Env, t *told, tg ta
 	}
 	p.Step("Publishing %s to %s…", selected, org)
 	in.Base = sc.base
+	in.WithConfig = settings.supported
 	res, err := client.Publish(ctx, in)
 	if again, ok := cloudapi.Missing(err); ok {
 		// Uploaded, then collected before this publish named it: once more.

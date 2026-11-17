@@ -83,7 +83,7 @@ func TestSelectFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tree.Paths()
-	want := []string{"apps/dash/data/rows.json", "apps/dash/index.html", "datasets/sales.aml", "models/orders.aml", "nested/deep/x.AML"}
+	want := []string{".anfra/config.yml", "apps/dash/data/rows.json", "apps/dash/index.html", "datasets/sales.aml", "models/orders.aml", "nested/deep/x.AML"}
 	if !slices.Equal(got, want) {
 		t.Errorf("files = %v\nwant    %v", got, want)
 	}
@@ -146,10 +146,12 @@ type server struct {
 	settings     map[string]map[string]any // the settings each one was created with
 	forbidList   bool
 	forbidCreate bool
-	unreachable  map[string]string          // a data source's check failing, with this reason
-	tested       int                        // data_sources.test calls
-	origins      []string                   // the org's allowed origins; nil: a server without app_origins.list
-	history      map[string][]cloudapi.File // every revision's files, for repos.list_files
+	unreachable  map[string]string // a data source's check failing, with this reason
+	tested       int               // data_sources.test calls
+	// repoConfig is the org's repo settings; nil: a server from before them,
+	// without repo_config.get, which neither lists nor takes the settings file.
+	repoConfig *cloudapi.RepoConfigOut
+	history    map[string][]cloudapi.File // every revision's files, for repos.list_files
 	// race, when set, is published by someone else just before the next
 	// publish arrives, as if they published in between.
 	race map[string]string
@@ -231,6 +233,18 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if s.forget {
 			s.blobs, s.forget = map[string][]byte{}, false
 		}
+		if !in.WithConfig {
+			// As anfra-cloud: the settings file only with with_config, and the
+			// published one kept without it.
+			if slices.ContainsFunc(in.Files, func(f cloudapi.File) bool { return f.Path == repoformat.ConfigFile }) {
+				refuse(w, http.StatusUnprocessableEntity, "validation_failed")
+				return
+			}
+			if i := slices.IndexFunc(s.deployed, func(f cloudapi.File) bool { return f.Path == repoformat.ConfigFile }); i >= 0 {
+				in.Files = append(in.Files, s.deployed[i])
+				slices.SortFunc(in.Files, func(a, b cloudapi.File) int { return strings.Compare(a.Path, b.Path) })
+			}
+		}
 		var missing []string
 		for _, f := range in.Files {
 			if _, ok := s.blobs[f.OID]; !ok {
@@ -259,7 +273,13 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			refuse(w, http.StatusNotFound, "not_found")
 			return
 		}
-		reply(cloudapi.ListFilesOut{Files: append([]cloudapi.File{}, files...)})
+		listed := []cloudapi.File{}
+		for _, f := range files {
+			if in.WithConfig || f.Path != repoformat.ConfigFile {
+				listed = append(listed, f)
+			}
+		}
+		reply(cloudapi.ListFilesOut{Files: listed})
 	case cloudapi.OpGetBlobs:
 		var in cloudapi.GetBlobsIn
 		_ = jsonkit.UnmarshalRead(r.Body, &in)
@@ -268,12 +288,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			out.Blobs = append(out.Blobs, cloudapi.BlobContent{OID: id, Content: s.blobs[id]})
 		}
 		reply(out)
-	case cloudapi.OpListAppOrigins:
-		if s.origins == nil { // a server from before allowed origins
-			http.NotFound(w, r)
+	case cloudapi.OpRepoConfig:
+		if s.repoConfig == nil {
+			refuse(w, http.StatusNotFound, "not_found") // as a server without the op answers
 			return
 		}
-		reply(cloudapi.AppOriginsOut{Origins: s.origins})
+		reply(s.repoConfig)
 	case cloudapi.OpListDataSources:
 		if s.forbidList {
 			refuse(w, http.StatusForbidden, "forbidden")

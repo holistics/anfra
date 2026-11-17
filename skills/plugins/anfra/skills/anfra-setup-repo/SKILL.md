@@ -158,6 +158,13 @@ well-formed, not that the numbers are right.
 - `anfra publish` publishes the repo to the user's org, once they ask. A team that shares work
   through git publishes what it merged to its shared branch: see [](../anfra-publish/).
 
+## Settings for this machine only
+
+`.anfra/config.yml` holds the repo's settings, such as its queries' time zone, and is published with
+the repo, so the org runs with them too. For a setting only the user's machine should have, such as
+trying different AQL compiler versions, write it in `.anfra/config.local.yml` instead, with the same keys. It's
+never committed or published, and `anfra status` lists what it sets.
+
 ## Related skills
 * [](../anfra-aml/) — write the models, relationships and datasets.
 * [](../anfra-run-aql/) — query a dataset.

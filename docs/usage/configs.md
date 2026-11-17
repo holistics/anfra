@@ -10,13 +10,19 @@ A repo's config is its `.anfra/` folder, committed with it (`anfra init` creates
 |---|---|
 | `data_sources.yml` | The data sources the repo's models query, by name: a `type`, a `connection` passed to the database driver unchanged, and optional `settings` for the query engine (timeouts such as `statement_timeout_ms`, `require_ssl` and the like; see [sidecars](../designs/sidecars.md#what-canal-query-is-given)). It holds credentials, so it is git-ignored; `anfra init` also creates `data_sources.yml.example`, the same without them, to commit. Each type's connection keys are listed in the anfra skills' [data source reference](https://github.com/holistics/anfra-skills/blob/main/plugins/anfra/skills/setup-repo/references/data-sources.md). |
 | `context_sources.yml` | What `anfra ingest` reads into the local catalog that `anfra search` searches and `anfra lineage` traces through; by default, the repo's own semantic layer. |
-| `config.yml` | The repo's settings, written by hand and committed ([below](#configyml)). `anfra init` creates it with every setting at its default. |
+| `config.yml` | The repo's settings, written by hand and committed ([below](#configyml)). `anfra init` creates it with every setting at its default. `anfra publish` publishes it with the repo. |
+| `config.local.yml` | Your own settings on this machine, laid over `config.yml` ([below](#configlocalyml)). Never committed or published: `anfra init` adds it to `.gitignore`. |
 
 anfra reads them on every command, so an edit needs no restart, except `config.yml`'s `query` settings, which `anfra serve` reads when it starts.
 
 ### `config.yml`
 
-The repo's settings, written by hand and committed. It never holds a credential. anfra refuses a key it doesn't know, naming its line and the key meant, rather than ignoring it.
+The repo's settings, written by hand and committed. It never holds a credential. anfra refuses a key it doesn't know, naming its line and the key meant, rather than ignoring it, and a setting with no value (`enabled:` or `enabled: ~`), since a setting is unset by leaving it out.
+
+`anfra publish` publishes `config.yml` with the repo's other files, so the org runs with the same settings, and `anfra pull` merges it as any other file. `org.url` only says where this folder publishes, so the org ignores it. On the org:
+
+- **Changing a setting is an Admin's.** A publish that changes one, as anything but an Admin, is refused with `settings_change_forbidden`, and nothing is published. Comments and formatting aren't settings, so anyone who can publish can change them.
+- **An Admin can override a setting on the org,** in its settings, without publishing. The override stays across publishes, and `anfra publish` warns when it changes a setting the org overrides, since the change takes no effect there. Overrides don't apply on your machine.
 
 | Setting | Effect |
 |---|---|
@@ -30,7 +36,7 @@ The repo's settings, written by hand and committed. It never holds a credential.
 | `query.cache.max_duration` | The longest a query's result may be cached, from `1s` to `168h` (7 days). A query that asks for longer, by its own `cache.duration`, is refused with the cap to use, rather than cached for less than it asked. A `query.default.cache.duration` over it is an error in the file. Default: `168h`. |
 | `aql.compiler.version` | The AQL compiler that queries and `anfra validate` use: `v1` (default) or `v2` (experimental). anfra reads it on every command. |
 
-`anfra serve` reads the `query` settings when it starts: restart it after changing them.
+`anfra serve` reads the `query` settings when it starts: restart it after changing them. The same goes for `config.local.yml`.
 
 If `config.yml` holds a key or a value anfra doesn't take, every query fails with `repo_settings_invalid` and the file's error, rather than run with defaults the repo may not mean.
 
@@ -53,6 +59,21 @@ query:
     - input.weekStartDay
   cache:
     max_duration: 24h
+```
+
+### `config.local.yml`
+
+Your own settings, on this machine only, with the same keys as `config.yml`, read as strictly. Each setting it sets replaces `config.yml`'s, and a list replaces the whole list. Use it to try a setting before the team takes it, such as the v2 compiler or a longer cache, or to publish one folder to another org (`org.url`).
+
+It's never committed or published, so it never changes what others run with:
+
+- `anfra status` lists what it sets.
+- `anfra publish` warns about each setting it gives a value the org doesn't use. The org validates with its own settings, so a repo that passes here with your settings can still be refused there.
+
+```yaml
+aql:
+  compiler:
+    version: v2
 ```
 
 ## `anfra serve`

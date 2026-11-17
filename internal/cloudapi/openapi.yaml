@@ -107,6 +107,104 @@ components:
         - oid
         - content
       type: object
+    BrokenView:
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+        source:
+          description: "\"repo\" or \"override\"."
+          type: string
+      required:
+        - source
+        - reason
+      type: object
+    CacheCleanRequestParams:
+      additionalProperties: false
+      properties:
+        query:
+          $ref: "#/components/schemas/QueryCacheSelector"
+          description: the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the query cache is removed. Without query, every cache of the repo is cleaned, which today is the query cache alone.
+      type: object
+    CacheCleanResult:
+      additionalProperties: false
+      properties:
+        query:
+          $ref: "#/components/schemas/QueryCacheCleaned"
+          description: what was removed from the query cache
+      type: object
+    CacheOptions:
+      additionalProperties: false
+      properties:
+        cached_only:
+          description: true answers from a cached result, or fails with cache_miss without running the query.
+          type: boolean
+        duration:
+          description: how old a cached result the query accepts, and how long the result it caches is kept, such as 10m or 1h, at most 168h (7 days). 0s turns the cache off for this query. The repo's query.default.cache.duration by default.
+          type: string
+        min_cached_at:
+          description: the earliest time a cached result may have been read from the warehouse, as an RFC 3339 time, such as 2026-11-16T09:30:00.123Z. A result cached before it is treated as not cached. Send the cache.cached_at of a run's first page with the run's later pages and its export, so that none of them is older than that page.
+          type: string
+        read_only:
+          description: true answers from a cached result if there is one, and otherwise runs the query without caching its result.
+          type: boolean
+        refresh:
+          description: true runs the query on the warehouse whatever is cached, and caches its result.
+          type: boolean
+      type: object
+    CacheResult:
+      additionalProperties: false
+      properties:
+        cached_at:
+          description: when the cached rows were read from the warehouse. Absent when the result wasn't cached.
+          format: date-time
+          type: string
+        expires_at:
+          description: when the cached result stops being used. Absent when the result wasn't cached.
+          format: date-time
+          type: string
+        hit:
+          description: "whether the rows came from the cache. false: they came from the warehouse."
+          type: boolean
+        key:
+          description: the query's key in the cache. Absent when the cache couldn't make one.
+          type: string
+        warning:
+          $ref: "#/components/schemas/CacheWarning"
+          description: why the query ran without the cache, though it asked for it
+      required:
+        - hit
+      type: object
+    CacheStatusRequestParams:
+      additionalProperties: false
+      type: object
+    CacheStatusResult:
+      additionalProperties: false
+      properties:
+        hints:
+          description: what to do about a problem the caches have, if any
+          items:
+            type: string
+          type: array
+        query:
+          $ref: "#/components/schemas/QueryCacheStatus"
+          description: the query cache. Absent when the server keeps none.
+      type: object
+    CacheWarning:
+      additionalProperties: false
+      properties:
+        code:
+          description: "cache_unavailable: the cache isn't working. cache_disabled: the repo, or whoever runs anfra, turned it off."
+          enum:
+            - cache_unavailable
+            - cache_disabled
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
+      type: object
     CancelOut:
       additionalProperties: false
       properties:
@@ -237,6 +335,23 @@ components:
         - adhoc
         - isMeasure
       type: object
+    ColumnPage:
+      additionalProperties: false
+      properties:
+        page:
+          description: the 1-based page of columns to return, 1 by default
+          format: int64
+          minimum: 1
+          type: integer
+        pageSize:
+          description: how many of the grid's columns a page has
+          format: int64
+          maximum: 10000
+          minimum: 1
+          type: integer
+      required:
+        - pageSize
+      type: object
     CompileError:
       additionalProperties: false
       properties:
@@ -264,6 +379,9 @@ components:
           items:
             $ref: "#/components/schemas/Column"
           type: array
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: the query's input as it compiled, every default filled in, its seeds included. Send it back with the same query to compile it the same way again. Absent for a SQL query.
         sql:
           type: string
       required:
@@ -749,6 +867,90 @@ components:
           type: string
         status:
           const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyCacheDisabled:
+      additionalProperties: false
+      description: The query cache is turned off.
+      properties:
+        code:
+          const: cache_disabled
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 409
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyCacheMiss:
+      additionalProperties: false
+      description: The query's result isn't cached.
+      properties:
+        code:
+          const: cache_miss
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 404
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyCacheUnavailable:
+      additionalProperties: false
+      description: The query cache isn't working.
+      properties:
+        code:
+          const: cache_unavailable
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 503
           type: integer
       required:
         - code
@@ -1389,6 +1591,34 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyRepoSettingsInvalid:
+      additionalProperties: false
+      description: The repo's settings can't be used.
+      properties:
+        code:
+          const: repo_settings_invalid
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: user
+          type: string
+        status:
+          const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyResultTooLarge:
       additionalProperties: false
       description: The query's result is larger than this server allows.
@@ -1411,6 +1641,36 @@ components:
           type: string
         status:
           const: 422
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodySettingsChangeForbidden:
+      additionalProperties: false
+      description: This publish changes repo settings you can't change. Undo the change, or ask a member who manages the repo's settings to publish it.
+      properties:
+        code:
+          const: settings_change_forbidden
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        details:
+          $ref: "#/components/schemas/RefusedSettings"
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: client
+          type: string
+        status:
+          const: 403
           type: integer
       required:
         - code
@@ -1535,6 +1795,21 @@ components:
         - message
         - request_id
       type: object
+    Expired:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size
+          format: int64
+          type: integer
+        entries:
+          description: how many
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
+      type: object
     ExportFormatOptions:
       additionalProperties: false
       properties:
@@ -1548,74 +1823,6 @@ components:
             - names
             - none
           type: string
-      type: object
-    ExportInput:
-      additionalProperties: false
-      properties:
-        data_source:
-          description: the data source a SQL query runs against
-          type: string
-        dataset:
-          description: the dataset an AQL query runs against
-          type: string
-        filename:
-          description: the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name
-          type: string
-        format:
-          default: csv
-          description: the file's format
-          enum:
-            - csv
-          type: string
-        format_options:
-          $ref: "#/components/schemas/ExportFormatOptions"
-          description: the format's options
-        input:
-          $ref: "#/components/schemas/QueryTransforms"
-          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
-        lang:
-          default: aql
-          description: the language the query is written in
-          enum:
-            - aql
-            - sql
-          type: string
-        query:
-          description: the query
-          minLength: 1
-          type: string
-        timezone:
-          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
-          type: string
-      required:
-        - query
-      type: object
-    ExportLink:
-      additionalProperties: false
-      properties:
-        expires_at:
-          description: when the link stops working
-          format: date-time
-          type: string
-        filename:
-          description: the file's name, as a download saves it
-          type: string
-        format:
-          description: the file's format
-          type: string
-        row_count:
-          description: how many rows the file holds
-          format: int64
-          type: integer
-        url:
-          description: "where to download the file: a plain GET, with no credentials, until expires_at"
-          type: string
-      required:
-        - url
-        - filename
-        - format
-        - row_count
-        - expires_at
       type: object
     Field:
       additionalProperties: false
@@ -1797,6 +2004,23 @@ components:
           $ref: "#/components/schemas/JobView"
       required:
         - job
+      type: object
+    GetRepoConfigOut:
+      additionalProperties: false
+      properties:
+        error:
+          description: "Why the settings in effect can't be used, when they can't: every query is refused until they're fixed."
+          type: string
+        revision:
+          description: The published revision the repo's values come from; absent when its .anfra/config.yml sets nothing.
+          type: string
+        settings:
+          description: Every setting anfra knows, in .anfra/config.yml's order, but org.url, which the organization ignores.
+          items:
+            $ref: "#/components/schemas/SettingView"
+          type: array
+      required:
+        - settings
       type: object
     IdentitiesOut:
       additionalProperties: false
@@ -2248,6 +2472,9 @@ components:
         revision:
           description: A revision of the organization's repo, as repos.status or repos.publish answered it.
           type: string
+        with_config:
+          description: "Whether to list the repo's settings, .anfra/config.yml, with its other files: send true. Without it, the settings file is left out."
+          type: boolean
       required:
         - revision
       type: object
@@ -2783,6 +3010,20 @@ components:
       required:
         - orgs
       type: object
+    OverrideView:
+      additionalProperties: false
+      properties:
+        updated_at:
+          format: date-time
+          type: string
+        updated_by:
+          description: The email of who set it; absent once their account is gone.
+          type: string
+        value: {}
+      required:
+        - value
+        - updated_at
+      type: object
     PageLimit:
       additionalProperties: false
       properties:
@@ -2791,6 +3032,26 @@ components:
           type: integer
       required:
         - max_bytes
+      type: object
+    Pagination:
+      additionalProperties: false
+      properties:
+        columns:
+          $ref: "#/components/schemas/ColumnPage"
+          description: for a pivot, one page of its grid's columns. Without it, every column. Refused for a query that isn't a pivot.
+        page:
+          description: the 1-based page of rows to return, 1 by default
+          format: int64
+          minimum: 1
+          type: integer
+        pageSize:
+          description: "how many rows a page has: of the result, or for a pivot, of its grid, each with every row of its cells, the header rows and the totals"
+          format: int64
+          maximum: 10000
+          minimum: 1
+          type: integer
+      required:
+        - pageSize
       type: object
     PasswordChanged:
       additionalProperties: false
@@ -2824,6 +3085,24 @@ components:
         - id
         - email
       type: object
+    PivotPage:
+      additionalProperties: false
+      properties:
+        columns:
+          description: how many columns the pivot's grid has, the total column not counted
+          format: int64
+          type: integer
+        has_more_columns:
+          description: "with input.pagination.columns: whether there are columns after this page's"
+          type: boolean
+        rows:
+          description: how many rows the pivot's grid has, in all of its pages, the grand total not counted
+          format: int64
+          type: integer
+      required:
+        - rows
+        - columns
+      type: object
     PublishFile:
       additionalProperties: false
       properties:
@@ -2851,6 +3130,9 @@ components:
         message:
           description: What the publish is, for the repo's history.
           type: string
+        with_config:
+          description: "Whether files hold the repo's settings, .anfra/config.yml: send true. Then a file not listed is deleted, the settings file too. Without it, .anfra/config.yml may not be listed, and the published one is kept."
+          type: boolean
       required:
         - files
       type: object
@@ -2878,12 +3160,160 @@ components:
       required:
         - limits
       type: object
+    QueryCacheCleaned:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size, in bytes. Their files are deleted by a sweep once they've been expired for 35 minutes, so that a read that began before the clean can finish. anfra serve sweeps every few minutes, and so does the next clean.
+          format: int64
+          type: integer
+        entries:
+          description: how many cached results were removed. From now on, no query is answered from a result read before the clean, including one still being written when it ran.
+          format: int64
+          type: integer
+        freed:
+          $ref: "#/components/schemas/QueryFreed"
+          description: "the files deleted by this clean: those of results expired for more than 35 minutes, by this clean or before it. Absent when they couldn't be deleted, in which case the next sweep tries again."
+      required:
+        - entries
+        - bytes
+      type: object
+    QueryCacheContents:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size, as the rows were streamed
+          format: int64
+          type: integer
+        entries:
+          description: "how many cached results queries can be answered from: committed, and not expired"
+          format: int64
+          type: integer
+        expired:
+          $ref: "#/components/schemas/Expired"
+          description: results no query uses any more, expired, cleaned or abandoned, whose files are deleted by the next sweep
+        newest_cached_at:
+          description: when the newest of those results was read from the warehouse. Absent without any.
+          format: date-time
+          type: string
+        oldest_cached_at:
+          description: when the oldest of those results was read from the warehouse. Absent without any.
+          format: date-time
+          type: string
+        writing:
+          description: results being written now, by queries still running
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
+        - expired
+        - writing
+      type: object
+    QueryCacheSelector:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: entries of queries run on this data source
+          type: string
+        dataset:
+          description: entries of queries run against this dataset
+          type: string
+      type: object
+    QueryCacheSettings:
+      additionalProperties: false
+      properties:
+        default_duration:
+          description: the cache.duration of a query that sets none (query.default.cache.duration in .anfra/config.yml)
+          type: string
+        max_duration:
+          description: the longest a query's result may be cached, when the repo sets less than 168h (query.cache.max_duration in .anfra/config.yml)
+          type: string
+        namespace:
+          description: the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE)
+          type: string
+      type: object
+    QueryCacheStatus:
+      additionalProperties: false
+      properties:
+        contents:
+          $ref: "#/components/schemas/QueryCacheContents"
+          description: what the cache holds, when it is ready
+        folder:
+          description: "the cache's folder on this machine: its store, and the results of the canal-lake anfra starts. Absent when the cache is disabled, or the server keeps it elsewhere."
+          type: string
+        problem:
+          description: what's wrong with the cache, when it is incompatible or unavailable
+          type: string
+        reason:
+          description: what turns the cache off, when it is disabled
+          type: string
+        settings:
+          $ref: "#/components/schemas/QueryCacheSettings"
+          description: the settings the cache runs with, those that are set
+        state:
+          description: "\"ready\": the cache can be used. \"incompatible\": a newer anfra changed the cache's store in a way this anfra can't read. \"unavailable\": the cache's store can't be used, as \"problem\" says. \"disabled\": the query cache is turned off, as \"reason\" says."
+          enum:
+            - ready
+            - incompatible
+            - unavailable
+            - disabled
+          type: string
+      required:
+        - state
+      type: object
+    QueryCompileRequestParams:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query compiled: send it back with the same query to get the same SQL again."
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        page:
+          deprecated: true
+          description: "deprecated: use input.pagination.page. Ignored when input.pagination is set."
+          format: int64
+          minimum: 1
+          type: integer
+        page_size:
+          deprecated: true
+          description: "deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."
+          format: int64
+          maximum: 10000
+          minimum: 1
+          type: integer
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          deprecated: true
+          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
+          type: string
+      required:
+        - query
+      type: object
     QueryCompiled:
       additionalProperties: false
       properties:
         aql:
           description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: the query's input as it runs, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
         sql:
           type: string
         type:
@@ -2916,6 +3346,104 @@ components:
         - field
         - grain
       type: object
+    QueryDefinition:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+      required:
+        - query
+      type: object
+    QueryExportRequestParams:
+      additionalProperties: false
+      properties:
+        cache:
+          $ref: "#/components/schemas/CacheOptions"
+          description: "how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached."
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        filename:
+          description: the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name
+          type: string
+        format:
+          default: csv
+          description: the file's format
+          enum:
+            - csv
+          type: string
+        format_options:
+          $ref: "#/components/schemas/ExportFormatOptions"
+          description: the format's options
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. With input.pagination, the file holds that page; without, every row."
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          deprecated: true
+          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
+          type: string
+      required:
+        - query
+      type: object
+    QueryExportResult:
+      additionalProperties: false
+      properties:
+        cache:
+          $ref: "#/components/schemas/CacheResult"
+          description: "what the query cache did for the export's query: whether the file was written from a cached result, and when its rows were read from the warehouse. Absent when the export doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."
+        expires_at:
+          description: when the link stops working
+          format: date-time
+          type: string
+        filename:
+          description: the file's name, as a download saves it
+          type: string
+        format:
+          description: the file's format
+          type: string
+        row_count:
+          description: how many rows the file holds
+          format: int64
+          type: integer
+        url:
+          description: "where to download the file: a plain GET, with no credentials, until expires_at"
+          type: string
+      required:
+        - url
+        - filename
+        - format
+        - row_count
+        - expires_at
+      type: object
     QueryFilter:
       additionalProperties: false
       properties:
@@ -2939,6 +3467,21 @@ components:
         - field
         - operator
         - values
+      type: object
+    QueryFreed:
+      additionalProperties: false
+      properties:
+        bytes:
+          description: their size, in bytes
+          format: int64
+          type: integer
+        entries:
+          description: how many results' files were deleted
+          format: int64
+          type: integer
+      required:
+        - entries
+        - bytes
       type: object
     QueryHeader:
       additionalProperties: false
@@ -2964,25 +3507,46 @@ components:
     QueryInput:
       additionalProperties: false
       properties:
-        data_source:
-          description: the data source a SQL query runs against
+        conditions:
+          description: AQL conditions ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryCondition"
+          type: array
+        dateDrills:
+          description: grain changes on date fields. The fields keep their column names.
+          items:
+            $ref: "#/components/schemas/QueryDateDrill"
+          type: array
+        filters:
+          description: conditions on fields, ANDed with the query's own filters
+          items:
+            $ref: "#/components/schemas/QueryFilter"
+          type: array
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+          description: "which rows to return: pageSize rows, from the 1-based page; for a pivot, pageSize rows of its grid. Without it, every row."
+        seeds:
+          $ref: "#/components/schemas/Seeds"
+          description: values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time.
+        sorts:
+          description: sorts by result column, replacing the query's own
+          items:
+            $ref: "#/components/schemas/QuerySort"
+          type: array
+        timezone:
+          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. The repo's query.default.input.timezone by default, or else UTC.
           type: string
-        dataset:
-          description: the dataset an AQL query runs against
-          type: string
-        lang:
-          default: aql
-          description: the language the query is written in
+        weekStartDay:
+          description: the day weeks start on, for grouping by week, relative dates such as this week, and the day of the week's number. The repo's query.default.input.weekStartDay by default, or else monday.
           enum:
-            - aql
-            - sql
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
           type: string
-        query:
-          description: the query
-          minLength: 1
-          type: string
-      required:
-        - query
       type: object
     QueryRecords:
       additionalProperties: false
@@ -3001,20 +3565,75 @@ components:
         - type
         - records
       type: object
+    QueryRequestParams:
+      additionalProperties: false
+      properties:
+        cache:
+          $ref: "#/components/schemas/CacheOptions"
+          description: how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached.
+        data_source:
+          description: the data source a SQL query runs against
+          type: string
+        dataset:
+          description: the dataset an AQL query runs against
+          type: string
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: "the query's input, for AQL only: the Query Input (filters, conditions, sorts and date drills applied to the AQL before it compiles), a page of rows, the time zone, and the seeds. The answer returns it as the query ran: send it back with the same query to get the same answer again."
+        lang:
+          default: aql
+          description: the language the query is written in
+          enum:
+            - aql
+            - sql
+          type: string
+        page:
+          deprecated: true
+          description: "deprecated: use input.pagination.page. Ignored when input.pagination is set."
+          format: int64
+          minimum: 1
+          type: integer
+        page_size:
+          deprecated: true
+          description: "deprecated: use input.pagination.pageSize. Ignored when input.pagination is set."
+          format: int64
+          maximum: 10000
+          minimum: 1
+          type: integer
+        query:
+          description: the query
+          minLength: 1
+          type: string
+        timezone:
+          deprecated: true
+          description: "deprecated: use input.timezone. Ignored when input.timezone is set."
+          type: string
+      required:
+        - query
+      type: object
     QueryResult:
       additionalProperties: false
       properties:
         aql:
           description: the final AQL (with the Query Input applied). Absent for a SQL query.
           type: string
+        cache:
+          $ref: "#/components/schemas/CacheResult"
+          description: "what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."
         columns:
           description: one per field of result, in order
           items:
             $ref: "#/components/schemas/Column"
           type: array
         has_more:
-          description: whether there may be rows after this page. To get them, ask for the next page, or export the query.
+          description: whether there are rows after this page; for a pivot, rows of its grid. To get them, ask for the next page, or export the query.
           type: boolean
+        input:
+          $ref: "#/components/schemas/QueryInput"
+          description: the query's input as it ran, every default filled in, its seeds included. Send it back with the same query to get the same answer again. Absent for a SQL query.
+        pivot:
+          $ref: "#/components/schemas/PivotPage"
+          description: "for a page of a pivot: its grid's size, and whether there are columns after this page's. Absent for any other query."
         result:
           $ref: "#/components/schemas/QueryRows"
         sql:
@@ -3045,46 +3664,6 @@ components:
       required:
         - fields
         - records
-      type: object
-    QueryRunInput:
-      additionalProperties: false
-      properties:
-        data_source:
-          description: the data source a SQL query runs against
-          type: string
-        dataset:
-          description: the dataset an AQL query runs against
-          type: string
-        input:
-          $ref: "#/components/schemas/QueryTransforms"
-          description: "the Query Input: filters, conditions, sorts and date drills applied to the AQL before it compiles"
-        lang:
-          default: aql
-          description: the language the query is written in
-          enum:
-            - aql
-            - sql
-          type: string
-        page:
-          description: the 1-based page of rows to return, 1 by default, for AQL only. Needs page_size.
-          format: int64
-          minimum: 1
-          type: integer
-        page_size:
-          description: how many rows a page has, for AQL only
-          format: int64
-          maximum: 10000
-          minimum: 1
-          type: integer
-        query:
-          description: the query
-          minLength: 1
-          type: string
-        timezone:
-          description: the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh, for AQL only
-          type: string
-      required:
-        - query
       type: object
     QueryRunView:
       additionalProperties: false
@@ -3148,9 +3727,15 @@ components:
           description: the bytes the warehouse read to run the query, where it reports them (BigQuery, Athena)
           format: int64
           type: integer
+        cache:
+          $ref: "#/components/schemas/CacheResult"
+          description: "what the query cache did for this query. Absent when the query doesn't use the cache: it sets no cache.duration and the repo no default, or 0s."
         has_more:
-          description: whether there may be rows after this page. Without page_size, every row was sent, and this is false.
+          description: whether there are rows after this page; for a pivot, rows of its grid. Without input.pagination, every row was sent, and this is false.
           type: boolean
+        pivot:
+          $ref: "#/components/schemas/PivotPage"
+          description: "for a page of a pivot: its grid's size, and whether there are columns after this page's. Absent for any other query."
         row_count:
           format: int64
           type: integer
@@ -3166,30 +3751,6 @@ components:
         - row_count
         - has_more
         - timings
-      type: object
-    QueryTransforms:
-      additionalProperties: false
-      properties:
-        conditions:
-          description: AQL conditions ANDed with the query's own filters
-          items:
-            $ref: "#/components/schemas/QueryCondition"
-          type: array
-        dateDrills:
-          description: grain changes on date fields. The fields keep their column names.
-          items:
-            $ref: "#/components/schemas/QueryDateDrill"
-          type: array
-        filters:
-          description: conditions on fields, ANDed with the query's own filters
-          items:
-            $ref: "#/components/schemas/QueryFilter"
-          type: array
-        sorts:
-          description: sorts by result column, replacing the query's own
-          items:
-            $ref: "#/components/schemas/QuerySort"
-          type: array
       type: object
     QueryValidation:
       additionalProperties: false
@@ -3236,6 +3797,39 @@ components:
         - quota
         - max
         - used
+      type: object
+    RefusedSetting:
+      additionalProperties: false
+      properties:
+        key:
+          description: "The setting's key: its path in .anfra/config.yml, such as query.cache.max_duration."
+          type: string
+        permission:
+          description: The permission changing it needs.
+          type: string
+      required:
+        - key
+        - permission
+      type: object
+    RefusedSettings:
+      additionalProperties: false
+      properties:
+        settings:
+          description: Each setting the publish changes that the publisher may not change.
+          items:
+            $ref: "#/components/schemas/RefusedSetting"
+          type: array
+      required:
+        - settings
+      type: object
+    RemoveOverrideIn:
+      additionalProperties: false
+      properties:
+        key:
+          description: The setting's path, as repo_config.get lists it.
+          type: string
+      required:
+        - key
       type: object
     Replaced:
       additionalProperties: false
@@ -3395,6 +3989,14 @@ components:
             type: string
           type: array
       type: object
+    Seeds:
+      additionalProperties: false
+      properties:
+        referenceTime:
+          description: the time the query runs as of. Relative dates, such as last 7 days, are counted from this time's day.
+          format: date-time
+          type: string
+      type: object
     SendCodeIn:
       additionalProperties: false
       properties:
@@ -3431,6 +4033,18 @@ components:
           $ref: "#/components/schemas/UserView"
       required:
         - user
+      type: object
+    SetOverrideIn:
+      additionalProperties: false
+      properties:
+        key:
+          description: "The setting's path, as repo_config.get lists it: query.cache.max_duration."
+          type: string
+        value:
+          description: "The value, as .anfra/config.yml would hold it: \"24h\", false, [\"https://maps.example.com\"]."
+      required:
+        - key
+        - value
       type: object
     SetPasswordIn:
       additionalProperties: false
@@ -3478,6 +4092,35 @@ components:
         - key
         - label
         - kind
+      type: object
+    SettingView:
+      additionalProperties: false
+      properties:
+        broken:
+          description: Stored values of it that aren't applied, because this server's anfra doesn't take them, and why.
+          items:
+            $ref: "#/components/schemas/BrokenView"
+          type: array
+        editable:
+          description: "Whether the caller may change it: override it, or publish a change to it."
+          type: boolean
+        key:
+          description: "The setting's path in .anfra/config.yml, its names joined with \".\": query.cache.max_duration."
+          type: string
+        override:
+          $ref: "#/components/schemas/OverrideView"
+          description: The override on the organization, if any.
+        repo:
+          description: The published .anfra/config.yml's value, also when an override replaces it; absent when the file doesn't set it.
+        source:
+          description: "Where the value in effect comes from. \"repo\": the published .anfra/config.yml. \"override\": an Admin's override on the organization. \"default\": anfra's own default."
+          type: string
+        value:
+          description: The value in effect, as the file would hold it; absent when it is anfra's default.
+      required:
+        - key
+        - source
+        - editable
       type: object
     SetupIn:
       additionalProperties: false
@@ -4481,7 +5124,7 @@ paths:
         - sessionCookie: []
   /app_origins.list:
     post:
-      description: "A host adds them to every Data App's content policy: scripts, styles, fonts and images may load from them, and fetches reach them. Every member may read it, as every member opens the apps; anfra publish reads it to warn about an origin a repo uses and the organization does not allow."
+      description: "A host adds them to every Data App's content policy: scripts, styles, fonts and images may load from them, and fetches reach them. They are the repo's apps.allow_origins, or an admin's override of it (repo_config.get). Every member may read them, as every member opens the apps."
       operationId: app_origins.list
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -4620,7 +5263,7 @@ paths:
         - all
   /app_origins.update:
     post:
-      description: Replaces the list, for every member, from their next page load. Each origin is one more server whose code runs beside readers' query results. An entry that is not an https origin, or more than 20, is validation_failed, naming the entry.
+      description: "Overrides the repo's apps.allow_origins on the organization with this list, for every member, from their next page load. Each origin is one more server whose code runs beside readers' query results. An entry that is not an https origin, or more than 20, is validation_failed, naming the entry. Deprecated: use repo_config.set_override with the key [\"apps\", \"allow_origins\"]."
       operationId: app_origins.update
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -5020,6 +5663,324 @@ paths:
       x-read-only: true
       security:
         - sessionCookie: []
+  /core.cache.clean:
+    post:
+      description: |-
+        Remove results from the repo's query cache, so that queries run on the warehouse again.
+
+        Clean after fixing data in the warehouse: from then on, no query is answered from a result read before the clean, including one still being written when it ran. Select what to remove by what the queries read, such as --query.data-source or --query.dataset. Without any, every cache of the repo is cleaned: today, every result of its query cache.
+      operationId: core.cache.clean
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CacheCleanRequestParams"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheCleanResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+          headers:
+            WWW-Authenticate:
+              description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
+              schema:
+                type: string
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyCacheDisabled"
+                required:
+                  - error
+                type: object
+          description: cache_disabled
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodyCacheUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable, sidecar_unavailable, cache_unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Remove results from the repo's query cache, so that queries run on the warehouse again
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
+      x-anfra-required-scopes:
+        - all
+  /core.cache.status:
+    post:
+      description: |-
+        Show what the repo's caches hold, and where: for the query cache, its state, its folder, its settings, and how many results it holds and their size.
+
+        It reads the caches without changing them. anfra status shows the same state, without the counts.
+      operationId: core.cache.status
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CacheStatusRequestParams"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheStatusResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+          headers:
+            WWW-Authenticate:
+              description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
+              schema:
+                type: string
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Show what the repo's caches hold, and where
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
+      x-anfra-required-scopes:
+        - all
   /core.ingest:
     post:
       operationId: core.ingest
@@ -5326,9 +6287,9 @@ paths:
       description: |-
         Run a query, and return a page of its rows and the SQL that produced them.
 
-        A page is page_size rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
+        A page is input.pagination.pageSize rows, or the first 10000 without it, and has_more says whether there may be more. Rather than paging through many rows, ask the query for what you need: an aggregate, a filter, or a limit: directive. To get every row of a large result, export it.
 
-        Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without page_size, that's every row, up to the server's maximum.
+        Over HTTP, a request that accepts application/x-ndjson gets the result as the query runs: its phase, its SQL, its columns, then its rows in batches. Without input.pagination, that's every row, up to the server's maximum.
 
         Querying a dataset needs access to it. Querying a data source directly in SQL (`data_source` with `lang: sql`) needs access to the data source, which only admins have.
       operationId: core.query
@@ -5342,7 +6303,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryRunInput"
+              $ref: "#/components/schemas/QueryRequestParams"
         required: true
       responses:
         "200":
@@ -5426,11 +6387,24 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyNotFound"
+                      - $ref: "#/components/schemas/ErrorBodyCacheMiss"
                 required:
                   - error
                 type: object
-          description: not_found
+          description: not_found, cache_miss
+        "409":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyCacheDisabled"
+                required:
+                  - error
+                type: object
+          description: cache_disabled
         "412":
           content:
             application/json:
@@ -5454,10 +6428,11 @@ paths:
                       - $ref: "#/components/schemas/ErrorBodyQueryFailed"
                       - $ref: "#/components/schemas/ErrorBodyResultTooLarge"
                       - $ref: "#/components/schemas/ErrorBodyPageTooLarge"
+                      - $ref: "#/components/schemas/ErrorBodyRepoSettingsInvalid"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid, query_failed, result_too_large, page_too_large
+          description: validation_failed, query_invalid, query_failed, result_too_large, page_too_large, repo_settings_invalid
         "429":
           content:
             application/json:
@@ -5500,10 +6475,11 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyUnavailable"
                       - $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                      - $ref: "#/components/schemas/ErrorBodyCacheUnavailable"
                 required:
                   - error
                 type: object
-          description: unavailable, sidecar_unavailable
+          description: unavailable, sidecar_unavailable, cache_unavailable
       servers:
         - url: /api/o/{org}
           variables:
@@ -5533,7 +6509,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryRunInput"
+              $ref: "#/components/schemas/QueryCompileRequestParams"
         required: true
       responses:
         "200":
@@ -5618,10 +6594,11 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyValidationFailed"
                       - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
+                      - $ref: "#/components/schemas/ErrorBodyRepoSettingsInvalid"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid
+          description: validation_failed, query_invalid, repo_settings_invalid
         "429":
           content:
             application/json:
@@ -5689,14 +6666,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ExportInput"
+              $ref: "#/components/schemas/QueryExportRequestParams"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ExportLink"
+                $ref: "#/components/schemas/QueryExportResult"
           description: OK
         "400":
           content:
@@ -5775,10 +6752,11 @@ paths:
                       - $ref: "#/components/schemas/ErrorBodyValidationFailed"
                       - $ref: "#/components/schemas/ErrorBodyQueryInvalid"
                       - $ref: "#/components/schemas/ErrorBodyQueryFailed"
+                      - $ref: "#/components/schemas/ErrorBodyRepoSettingsInvalid"
                 required:
                   - error
                 type: object
-          description: validation_failed, query_invalid, query_failed
+          description: validation_failed, query_invalid, query_failed, repo_settings_invalid
         "429":
           content:
             application/json:
@@ -5854,7 +6832,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryInput"
+              $ref: "#/components/schemas/QueryDefinition"
         required: true
       responses:
         "200":
@@ -11613,6 +12591,429 @@ paths:
       security:
         - {}
         - sessionCookie: []
+  /repo_config.get:
+    post:
+      description: A setting's value comes from an override on the organization, else the published .anfra/config.yml, else anfra's default. The repo's value is listed also when an override replaces it. editable says whether the caller may change a setting.
+      operationId: repo_config.get
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetRepoConfigOut"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+          headers:
+            WWW-Authenticate:
+              description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
+              schema:
+                type: string
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Every repo setting as it applies on the organization, and where each value comes from.
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+      security:
+        - sessionCookie: []
+        - oauthBearer: []
+      x-anfra-required-scopes:
+        - all
+  /repo_config.remove_override:
+    post:
+      description: Removing an override that isn't there changes nothing. If the settings it leaves in effect contradict each other, it is validation_failed, saying why, and the override stays.
+      operationId: repo_config.remove_override
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoveOverrideIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Remove one repo setting's override, so the published value, or anfra's default, applies again.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
+  /repo_config.set_override:
+    post:
+      description: The override applies to every query and Data App from now on, and stays when the repo is published again, until it is removed. A value the setting doesn't take, or one that contradicts the other settings in effect, is validation_failed, saying why.
+      operationId: repo_config.set_override
+      parameters:
+        - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
+          in: header
+          name: Anfra-Client-Compat
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetOverrideIn"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                type: object
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnauthenticated"
+                required:
+                  - error
+                type: object
+          description: unauthenticated
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenges identify the configured API protected-resource metadata URL; invalid credentials include error=invalid_token.
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyForbidden"
+                      - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                required:
+                  - error
+                type: object
+          description: forbidden, quota_exceeded
+        "404":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyNotFound"
+                required:
+                  - error
+                type: object
+          description: not_found
+        "412":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyApiVersionMismatch"
+                required:
+                  - error
+                type: object
+          description: api_version_mismatch
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyRateLimited"
+                required:
+                  - error
+                type: object
+          description: rate_limited
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyUnavailable"
+                required:
+                  - error
+                type: object
+          description: unavailable
+      servers:
+        - url: /api/o/{org}
+          variables:
+            org:
+              default: my-org
+              description: The organization the request acts in, by its slug.
+      summary: Override one repo setting on the organization.
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+      security:
+        - sessionCookie: []
   /repos.create_blobs:
     post:
       description: Upload what repos.list_missing_blobs listed, in calls within limits.upload_blobs and limits.upload_bytes. Uploading content the repo has is harmless. An upload that would take the repo past the organization's storage quota, its history included, is refused with quota_exceeded.
@@ -12200,7 +13601,7 @@ paths:
         - all
   /repos.publish:
     post:
-      description: "List every file, as path and blob id: a file not listed is deleted. Upload the content first; blobs_missing names any that is not. Files that fail validation are refused with repo_invalid, carrying the engine's problems, and nothing is published. Name the files' base, so that someone else's publish since is refused with base_outdated rather than replaced unseen; without one, the last publish wins. The answer says what it replaced."
+      description: "List every file, as path and blob id: a file not listed is deleted. Upload the content first; blobs_missing names any that is not. Files that fail validation are refused with repo_invalid, carrying the engine's problems, and nothing is published. Name the files' base, so that someone else's publish since is refused with base_outdated rather than replaced unseen; without one, the last publish wins. A publish that changes a setting in .anfra/config.yml the caller may not change is refused with settings_change_forbidden, naming each. The answer says what it replaced."
       operationId: repos.publish
       parameters:
         - description: The x-anfra-compat this client was built against; another is refused with api_version_mismatch. Omit it to skip the check.
@@ -12257,10 +13658,11 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/ErrorBodyForbidden"
                       - $ref: "#/components/schemas/ErrorBodyQuotaExceeded"
+                      - $ref: "#/components/schemas/ErrorBodySettingsChangeForbidden"
                 required:
                   - error
                 type: object
-          description: forbidden, quota_exceeded
+          description: forbidden, quota_exceeded, settings_change_forbidden
           headers:
             WWW-Authenticate:
               description: Only insufficient-scope denials include error=insufficient_scope and the complete required scope set; role denials do not include a challenge.
@@ -13596,4 +14998,4 @@ paths:
         - sessionCookie: []
 servers:
   - url: /api
-x-anfra-compat: 11
+x-anfra-compat: 12

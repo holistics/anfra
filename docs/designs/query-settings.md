@@ -166,6 +166,7 @@ The file is how anfra's CLI and `anfra serve` learn a repo's settings. The engin
 |---|---|---|
 | `QueryDefaults` | `Timezone`, `WeekStartDay`, `CacheDuration`, `Locked`, and `Err`: why they can't be used | `query.default.*`, `query.locked_defaults` |
 | `QueryCache.Settings()` | `Disabled`, `MaxDuration`, `Namespace` | `query.cache.*` |
+| `AQLCompiler` | `"v1"` or `"v2"`; empty, a local repo's file says, and a managed repo compiles with v1 | `aql.compiler.version` |
 
 `QueryDefaults.Check()` holds the rules every host's defaults follow: a time zone and a week start day anfra takes, a cache duration of 0s or more, and locks only on defaults. The engine calls it before every query, which fails with `repo_settings_invalid` when it refuses, or when `Err` is set. anfra's own reading of the file calls it too (`repoconfig.Config.QueryDefaults`, the one place the file's defaults become the engine's), adding where the value came from. A platform calls it when it saves a repo's settings, so a mistake is refused there, not on the next query. `QueryCacheSettings` has the same pair for its cap: `Check()` for its range, and `CheckDefault(QueryDefaults)` for a default duration over it, which would refuse every query that sets none. The engine calls both before each query, and anfra's reading of the file calls the same functions, so each rule has one copy.
 
@@ -199,4 +200,4 @@ The repo's info, which already returns the default cache duration (`api/openapi.
 
 ## Open
 
-- **Syncing a repo's settings to anfra Cloud.** The plan is for `anfra publish` to send the repo's `QueryDefaults` and cache rules, typed, through Cloud's publish API, which checks them with `QueryDefaults.Check()`. Cloud never parses the file, so its format stays anfra's, and a newer CLI's setting is an API change rather than a key an older Cloud refuses. If Cloud ever reads repos without publish, such as from git, the file's reading moves to a `shared/` package, which makes the format public.
+- **Syncing a repo's settings to a platform.** Decided: `anfra publish` publishes `.anfra/config.yml` as one of the repo's files (`repoformat.Publishable`), and a platform reads it with `shared/repoconfig`, the same code the CLI reads it with. So the file's format is public: a stricter rule is a breaking change. `shared/repoconfig` also lays a platform's overrides, or a member's `.anfra/config.local.yml`, over the file's settings, key by key (`Layer`). An earlier plan sent the settings typed, through the publish API: they would have had no revision, and a pull would have had to rebuild the file and lose its comments.

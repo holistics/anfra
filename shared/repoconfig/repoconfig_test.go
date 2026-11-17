@@ -247,3 +247,40 @@ func TestLockedKey(t *testing.T) {
 		t.Errorf("LockedKey = %s", k)
 	}
 }
+
+// Get is a setting's value as a file holds it, nil unset; Equal compares two
+// by what they mean.
+func TestGetAndEqual(t *testing.T) {
+	c, err := Parse(FilePath, []byte("query:\n  cache:\n    enabled: false\n    max_duration: 60m\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(c.Get("query.cache.max_duration")); got != `"60m"` {
+		t.Errorf("Get = %s", got)
+	}
+	if got := c.Get("query.default.input.timezone"); got != nil {
+		t.Errorf("Get of an unset setting = %s, want nil", got)
+	}
+	for _, tc := range []struct {
+		key  Key
+		a, b string
+		want bool
+	}{
+		{"query.cache.max_duration", `"60m"`, `"1h"`, true},
+		{"query.cache.max_duration", `"60m"`, `"2h"`, false},
+		{"query.default.input.weekStartDay", `"monday"`, ``, true},
+		{"query.cache.enabled", `false`, ``, false},
+		{"query.cache.enabled", `"nope"`, `true`, false},
+	} {
+		var a, b jsontext.Value
+		if tc.a != "" {
+			a = jsontext.Value(tc.a)
+		}
+		if tc.b != "" {
+			b = jsontext.Value(tc.b)
+		}
+		if got := Equal(tc.key, a, b); got != tc.want {
+			t.Errorf("Equal(%s, %s, %s) = %v, want %v", tc.key, tc.a, tc.b, got, tc.want)
+		}
+	}
+}

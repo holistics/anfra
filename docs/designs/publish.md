@@ -85,7 +85,9 @@ $ cd acme && anfra pull
 - **Pull chooses the org as publish does.** With no org set, on a terminal, it offers the saved logins and signing in to a new one, then saves `org.url`. `--set-org` names the org directly. Without a terminal and with no org set, pull fails and names `--set-org`.
 - **Pull needs an anfra repo,** a folder `init` set up. Elsewhere it fails and says to run `anfra init` first, so a mistaken pull, in a home folder say, can't scatter `.aml` files into it.
 
-**Each command writes its own files.** `init` writes only local files, which a publish never sends. `pull` writes only publishable files, plus `org.url` when it chooses the org. So local files never reach the org, and the org's files never mix with local setup. A test keeps `init`'s files free of publishable ones.
+**Each command writes its own files.** `init` writes only local files, which a publish never sends, and the repo's settings file, `.anfra/config.yml`, which it does. That file holds only anfra's defaults, so it changes no setting on the org. `pull` writes only publishable files, plus `org.url` when it chooses the org. So local files never reach the org, and the org's files never mix with local setup. A test keeps `init`'s files free of publishable ones but that settings file, and checks it holds only defaults.
+
+**The settings file in a fresh folder.** A pull with no base takes the org's `.anfra/config.yml` without a conflict when the folder's sets nothing but anfra's defaults and `org.url`, as `init`'s does, and then sets the folder's `org.url` again. A folder whose file sets anything else merges it as any file.
 
 ### A folder with files but no base
 

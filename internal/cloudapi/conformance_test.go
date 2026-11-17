@@ -32,13 +32,13 @@ func TestConformsToTheServersContract(t *testing.T) {
 		{cloudapi.OpStatus, empty{}, cloudapi.StatusOut{}, nil},
 		{cloudapi.OpListMissingBlobs, cloudapi.ListMissingBlobsIn{}, cloudapi.ListMissingBlobsOut{}, nil},
 		{cloudapi.OpCreateBlobs, cloudapi.CreateBlobsIn{}, cloudapi.CreateBlobsOut{}, nil},
-		{cloudapi.OpPublish, cloudapi.PublishIn{}, cloudapi.PublishOut{}, []string{cloudapi.CodeBlobsMissing, cloudapi.CodeRepoInvalid, cloudapi.CodeBaseOutdated}},
+		{cloudapi.OpPublish, cloudapi.PublishIn{}, cloudapi.PublishOut{}, []string{cloudapi.CodeBlobsMissing, cloudapi.CodeRepoInvalid, cloudapi.CodeBaseOutdated, cloudapi.CodeSettingsChangeForbidden}},
 		{cloudapi.OpListFiles, cloudapi.ListFilesIn{}, cloudapi.ListFilesOut{}, nil},
 		{cloudapi.OpGetBlobs, cloudapi.GetBlobsIn{}, cloudapi.GetBlobsOut{}, []string{cloudapi.CodeRateLimited}},
 		{cloudapi.OpListDataSources, empty{}, cloudapi.ListDataSourcesOut{}, []string{cloudapi.CodeForbidden}},
 		{cloudapi.OpCreateDataSource, cloudapi.CreateDataSourceIn{}, cloudapi.DataSource{}, []string{cloudapi.CodeForbidden}},
 		{cloudapi.OpTestDataSource, cloudapi.TestDataSourceIn{}, cloudapi.TestDataSourceOut{}, []string{cloudapi.CodeForbidden}},
-		{cloudapi.OpListAppOrigins, empty{}, cloudapi.AppOriginsOut{}, nil},
+		{cloudapi.OpRepoConfig, empty{}, cloudapi.RepoConfigOut{}, nil},
 	} {
 		t.Run(c.op, func(t *testing.T) {
 			op, ok := spec.ops[c.op]
@@ -205,6 +205,12 @@ func (c contract) match(s map[string]any, t reflect.Type, at string, sending boo
 			return p
 		}
 		return c.members(s, t, at, sending)
+	case t.Kind() == reflect.Interface:
+		// Any JSON: the server's schema must take any too, with no type.
+		if _, typed := s["type"]; typed {
+			return []string{fmt.Sprintf("%s: the server's is %v, this is any JSON", at, s["type"])}
+		}
+		return nil
 	}
 	return []string{fmt.Sprintf("%s: %s is not a type this test knows", at, t)}
 }

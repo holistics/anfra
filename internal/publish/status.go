@@ -85,7 +85,11 @@ func Status(ctx context.Context, dir string, env Env) (StatusResult, error) {
 			base = s.Pending.Revision
 		}
 	}
-	c, err := compare(ctx, client, status, base, local)
+	settings, err := loadOrgSettings(ctx, client)
+	if err != nil {
+		return StatusResult{}, err
+	}
+	c, err := compare(ctx, client, settings, status, base, local)
 	if err != nil {
 		return StatusResult{}, err
 	}

@@ -88,6 +88,12 @@ preserving other config. A later publish failure leaves that destination configu
 Without a terminal, provide a destination and matching stored credentials; there is no
 automatic selection or browser launch.
 
+A publish carries the repo's AML, its Data Apps, and its settings, `.anfra/config.yml`. Only an Admin of
+the org can publish a change to a setting, and an Admin can override one on the org. To keep a setting to
+this machine, put it in `.anfra/config.local.yml`, which is never published ([configuring
+anfra](configs.md#configlocalyml)). An org's server from before settings were published doesn't take the
+file: publish then leaves it out, and says so.
+
 `anfra publish check` lists the files a publish would send, and where to, without authentication
 or config writes: the preflight, which checks more as it grows. It was `--list`, and before it
 `--dry-run`, which still work for now, with a warning. `--yes` is deprecated and does nothing.
