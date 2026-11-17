@@ -89,8 +89,8 @@ export interface FrameKernel {
    * Set this plugin's annotations on a query, replacing its last set; `[]` clears it. `result` is
    * the `query.result` they were computed from: when it is no longer the query's, nothing changes
    * and this returns false. Throws on a malformed annotation; a rows anchor's row the result lacks
-   * is dropped quietly. They go when the query's result is replaced, so annotate each new result
-   * (`query.subscribe`).
+   * is dropped quietly. They go when the query's result is replaced, or at once when the
+   * definition updates the query, so annotate each new result (`query.subscribe`).
    */
   annotate: (query: Query, annotations: readonly AnnotationInput[], options: { result: QueryResult }) => boolean;
 }

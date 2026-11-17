@@ -153,7 +153,8 @@ export class Query extends Observable {
 
   /**
    * Swaps what this query is: its dataset, its AQL, its page size, its cache, checked as `createQuery` checks
-   * them. Its name, its edges and its result stay; the result until the rerun replaces it. Runs
+   * them. Its name, its edges and its result stay; the result until the rerun replaces it, but its
+   * annotations go at once, and plugins can't annotate that result any more. Runs
    * nothing: the query is dirty, and the next `app.execute()` reruns it, so several edits go out
    * as one run. Back to the first page. A run or page in flight is aborted, and `fetchMore` does
    * nothing until the rerun. A new AQL or dataset clears the sort (unless `sort` is given) and a
@@ -190,6 +191,10 @@ export class Query extends Observable {
     this.runningSignature = undefined;
     if (this._state === 'executing') this._state = this._result ? 'success' : 'idle';
     this.resultSuperseded = true;
+    // What plugins said was about the old declaration's result: it goes now, and a plugin still
+    // computing from that result finds it no longer current.
+    this.clearAnnotations();
+    this.currentResults = new WeakSet();
     this._declaration = declaration;
     this._dataset = dataset;
     this._sort = [...sort];

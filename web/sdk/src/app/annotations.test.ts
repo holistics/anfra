@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testFrame } from './testFrame';
 import type { FrameKernel } from './kernel';
 import type { PluginSetup } from './bootstrap';
@@ -152,10 +152,24 @@ describe('how long annotations last', () => {
     expect(query.annotations).toEqual([]);
   });
 
-  it('go when the definition updates the query and it reruns', async () => {
+  it('go when the definition updates the query, before it reruns, and stay gone after', async () => {
     const { app, query } = await annotated();
+    const notified = vi.fn();
+    query.subscribe(notified);
     query.update({ aql: 'explore { dimensions { orders.status } }' });
+    expect(query.annotations).toEqual([]);
+    expect(notified).toHaveBeenCalled();
     await app.execute();
+    expect(query.annotations).toEqual([]);
+  });
+
+  it('can\'t be set from the result the query had before the definition updated it', async () => {
+    const { query, anomalies } = await annotated();
+    const before = query.result!;
+    query.update({ aql: 'explore { dimensions { orders.status } }' });
+    // The old result is still shown until the rerun, but it is no longer current.
+    expect(query.result).toBe(before);
+    expect(anomalies.annotate(query, [line], { result: before })).toBe(false);
     expect(query.annotations).toEqual([]);
   });
 
