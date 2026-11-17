@@ -153,6 +153,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.hasMore` / `await query.fetchMore()` | Appends the next page. Unlike `execute`, `fetchMore` rejects on failure. A query with no `pageSize` has no more pages: `fetchMore` rejects with a `ValidationError`. Each page is a query of its own, and a re-execute starts again from page 1, so sort a paged query down to a unique field, or rows can repeat or go missing between pages. |
 | `query.select(rows, { fields? })` | Sets the app's selection from rows of this query. `fields` (result column aliases) limits which columns become conditions. See [Cross-filtering](#cross-filtering). |
 | `query.selectedRows` | This query's rows that are currently selected, for highlighting. |
+| `query.annotations` | What plugins say about the current result (a flagged row, a target line, a forecast), for the chart to draw. Empty until a plugin sets some. See [annotations.md](annotations.md). |
 | `await query.export(options?)` | The `export` plugin, where installed: downloads the query's whole result as a file for the reader. See [plugins/export.md](plugins/export.md). |
 | `query.abort()` | Cancels this query's in-flight request. |
 | `query.update(changes)` / `query.remove()` | Edits the query in place, or takes it out with its edges. See [Changing the app while it runs](#changing-the-app-while-it-runs). |
@@ -224,6 +225,7 @@ attribute each.
 | `data-anfra-label="<text>"` | a container or block | Its display name in the tree. Optional. |
 | `data-anfra-query="<name>"` | any element | This element is drawn by that query. Several names space-separated. On a block's own element it means the block is drawn by it. |
 | `data-anfra-control="<name>"` | any element | The same, for a filter or date drill. A control lives in a block like a query does: its own block when it stands alone, or the block of the chart it belongs to. |
+| `data-anfra-annotations="<kinds>"` | an element marked `data-anfra-query` | The annotation kinds the chart draws (`mark line`), or `off`. The host badges the kinds left out. See [annotations.md](annotations.md). |
 | `data-anfra-render="skip"` | any element | Left out of every [picture](plugins/render.md), with what it holds: a download button, a spinner. |
 
 - Names are the ones given to `createQuery`, `createFilter` and `createDateDrill`. In a file that
