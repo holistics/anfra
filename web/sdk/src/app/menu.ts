@@ -93,22 +93,23 @@ export interface ContentUi {
 
 /** An annotation as the reader reads it: its label, or what it is when it has none. */
 export function annotationNote (annotation: Annotation): AnnotationNote {
-  const { anchor } = annotation;
-  let label = annotation.label;
-  if (!label) {
-    if (annotation.kind === 'line') label = `${(anchor as { column: string }).column} at ${(anchor as { value: string }).value}`;
-    else if (annotation.kind === 'band') {
-      const { column, from, to } = anchor as { column: string, from: string, to: string };
-      label = `${column} from ${from} to ${to}`;
-    } else if (annotation.kind === 'series') label = `A series of ${(anchor as { measure: string }).measure}`;
-    else label = annotation.kind === 'focus' ? 'In focus' : 'Marked';
-  }
   return {
-    label,
+    label: annotation.label || defaultLabel(annotation),
     ...(annotation.detail ? { detail: annotation.detail } : {}),
     ...(annotation.severity ? { severity: annotation.severity } : {}),
     plugin: annotation.plugin,
   };
+}
+
+/** What an annotation without a `label` is called in a list. */
+function defaultLabel (annotation: Annotation): string {
+  switch (annotation.kind) {
+    case 'line': return `${annotation.anchor.column} at ${annotation.anchor.value}`;
+    case 'band': return `${annotation.anchor.column} from ${annotation.anchor.from} to ${annotation.anchor.to}`;
+    case 'series': return `A series of ${annotation.anchor.measure}`;
+    case 'focus': return 'In focus';
+    case 'mark': return 'Marked';
+  }
 }
 
 /** A target as the host gets it: without the annotations, which stay in the frame. */
