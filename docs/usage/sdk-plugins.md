@@ -161,6 +161,7 @@ What the kernel gives a setup:
 | `layer()` | This plugin's shadow root in the plugin layer. Draw only here. |
 | `overlay`, `structure()` | The kernel's highlight overlay, and the page's structure (its marked blocks and containers). |
 | `body()` | The plugin's body, fetched and run on first use. |
+| `annotate(query, annotations, { result })` | Sets this plugin's annotations on a query's result, replacing its previous set. See [Annotations](#annotations). |
 | `errors` | The SDK's error class, the helpers that make its errors (`invalidRequest`, `forbidden`, ...), `hasErrorCode` and `isDataAppError`. Reject with these, so authors can branch on `code` and `scope`. |
 | `window` | The frame's window. |
 
@@ -190,6 +191,36 @@ kernel.menuItem({
 An item whose entries depend on the target gives `entries(target)` instead of `label` and `run`: each entry a `{ label, run }`, or a `{ label, disabled }` that shows why it can't run; none leaves the item out.
 
 `kernel.modal({ title, size, mount, about })` and `kernel.popover({ anchor, side, mount, dismiss, closeButton, about })` (`side` is where it opens, `right` unless given, another side when that one has no room; it closes on Escape and its close button, and on a click outside with `dismiss: 'outside'`) draw the frame around your content (`mount` gets its own shadow root, on the host's `--anfra-*` tokens) and close the other one open. `about` (`{ app, query }`) names the query it shows something of: the app removing that query closes it, as it closes the menu on the query's rows. `when` only decides what shows: the definition can call anything a frame half can, so anything that must hold is checked on the host, in the calls `run` makes.
+
+### Annotations
+
+A plugin that has something to say about a query's data, such as an anomalous month, a target or a forecast, sets **annotations** on the query. It never draws on the chart. The definition draws the annotations as its chart's own marks, so they show in renderings too. The runtime shows the ones a chart doesn't draw as a badge on the chart's element. The design is in [designs/sdk-plugins.md](../designs/sdk-plugins.md#annotations), and a plugin that sets every kind is in [`web/sdk/examples/annotations/`](../../web/sdk/examples/annotations/).
+
+```ts
+kernel.onApp((app) => {
+  const seen = new WeakMap<Query, QueryResult>();
+  app.subscribe(() => {
+    for (const query of Object.values(app.queries)) {
+      const { result } = query;
+      if (!result || seen.get(query) === result) continue;
+      seen.set(query, result);
+      kernel.annotate(query, [
+        { id: 'spike', kind: 'mark', anchor: { rows: [{ month: '2026-03-01' }], measure: 'revenue' }, label: 'Spike', severity: 'warning' },
+        { kind: 'line', anchor: { column: 'revenue', value: '120000' }, label: 'Target' },
+      ], { result });
+    }
+  });
+});
+```
+
+- **The kinds** are fixed: `mark` and `focus` on rows, `line` at a value, `band` over a range, and `series` through new points (a forecast, with `lower` and `upper` bounds for a band around it). A plugin can't add a kind, or choose a colour or a shape. `severity` (`info`, `warning`, `critical`) picks the colour from the reader's theme.
+- **Anchors** use the query's own column aliases. Name a row by its dimension values (`{ month: '2026-03-01' }`), as `query.selectedRows` matches rows, never by its position. `measure` names the measure column meant when a chart draws several. Values are strings, as the rows carry them.
+- **`annotate` replaces the plugin's whole set** on the query. Pass `[]` to clear it. Each plugin's set is separate, and `query.annotations` merges them, each with its `plugin` and a `key` (your `id`, or the annotation's position).
+- **Pass the result you computed from.** When `result` is no longer the query's current result (the reader changed a filter while you computed), the call changes nothing and returns `false`. A page that `fetchMore` added doesn't count as a new result.
+- **The set goes when the result is replaced**: changed inputs, a refresh, a re-sort, the definition's `update`, or the query's removal. Annotate each new result, as above. Your annotate call notifies subscribers, so skip a result you have already annotated.
+- **A malformed annotation throws**: an unknown kind, a column the result lacks, a `measure` that isn't a measure column, a malformed anchor or `series` point. A rows anchor's row that isn't in the result is dropped without an error.
+- **Actions on annotations** are ordinary rows menu items. A rows target carries `annotations`, the ones on its rows, so `when` can offer an item only for your own: `when: (target) => target.kind === 'rows' && !!target.annotations?.some((a) => a.plugin === kernel.plugin)`. The badge's popover lists the same items under each of your annotations.
+- **The host never sees annotations.** They aren't in the snapshot and send no event. If your host half computes them, have your frame half call it and set what it answers.
 
 ### Build it
 

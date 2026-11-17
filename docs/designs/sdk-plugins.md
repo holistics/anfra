@@ -49,6 +49,7 @@ flowchart LR
 | Plugin layer | Where frame halves draw: a layer above the definition's page, never in it. |
 | Contribution | UI a plugin, or the host, adds to the host page as data: a command or a tab. The host draws it. |
 | Panel | One per mounted Data App: the host's devtools over it, whose tabs plugins add. |
+| Annotation | Something a frame half says about a query's result (a kind, an anchor in the query's columns, a label, a detail, a severity), which the definition draws as its chart's own marks. |
 
 
 ## What a plugin is
@@ -242,6 +243,34 @@ The runtime leaves right-click alone until something offers an entry, and always
 
 **Shortcuts**: a command's `shortcut` runs it from the host's page (`mounted.handleKeydown(event)`, from the host's own key handler) and from inside the frame, which forwards the combinations the host registered (`anfra.shortcuts`, `anfra.shortcut`). A key the page handled itself (`preventDefault`) is left to it.
 
+### Annotations
+
+A plugin that has something to say about a query's data (an anomalous month, a goal line, a forecast) sets it as **annotations** on the query, and the definition draws them with whatever draws the query: ECharts, another library, SVG or a table. A plugin never draws on the chart. The runtime shows only a badge for what the chart doesn't draw. Every platform surveyed does the same: Power BI hands a visual its highlights, Grafana and Superset hand each panel its annotation records, and none lets outside code paint on a visual it doesn't render. Canvas charts (ECharts, Chart.js, Vega) have no DOM node per point to find anyway.
+
+**An annotation** has a kind, an anchor in the query's own column aliases, and optionally a `label`, a `detail` and a `severity` (`info`, `warning`, `critical`, which map to the theme's tokens). The kernel adds `plugin`. Plugins choose no colours or shapes, and can't add kinds: a new kind is an SDK change.
+
+| Kind | Anchor | Covers |
+|---|---|---|
+| `mark` | rows: `{ rows: [{ month: '2026-03-01' }], measure? }` | anomalies, outliers, breaches, data-quality flags |
+| `focus` | rows, as for `mark` | "look here", with the rest dimmed |
+| `line` | `{ column, value }`, on a dimension or a measure | an event on x, a target or an average on y |
+| `band` | `{ column, from, to }` | an incident window, an incomplete period, a target zone |
+| `series` | `{ measure, points: [{ at, value?, lower?, upper? }] }` | a forecast, an expected band (bounds only), a trend line |
+
+Rows are named by their dimension values, with the key `query.selectedRows` matches by, never by a row's index or object, so they survive a re-sort and a pivot needs no special case. Values are strings, as rows carry them ([sdk-numbers.md](sdk-numbers.md)). A `series` point may be at dimension values the result lacks, such as a future month, and needs a `value`, both bounds, or both.
+
+**Setting them.** Only frame halves set annotations, with `kernel.annotate(query, annotations, { result })`, which replaces the plugin's whole set on that query (`[]` clears it). `result` is the `query.result` they were computed from. When it is no longer the query's current result, the call is ignored and returns `false`, so a slow plugin's flags for one region never land on the result for the next. A malformed annotation throws: an unknown kind, a column the result lacks, a `measure` that isn't a measure column, a bad anchor. A rows anchor's row that the result lacks is dropped quietly. A host half that computes annotations answers its own frame half's call, and the definition sets none.
+
+**Lifetime.** The kernel clears every plugin's set on a query when its result is replaced (changed inputs, a refresh, a re-sort, a definition's `update`) and when the query is removed. `fetchMore` extends the result without replacing it, so the set stays, and a result read before the page loaded still counts as current. Plugins watch `query.subscribe` and annotate each new result.
+
+**Reading and drawing them.** `query.annotations` is a read-only list of every plugin's annotations, merged. A rows anchor there carries `index`, the rows' positions in `query.result.rows`, and drops rows it can't find. Each annotation has a stable `key` (the plugin and its `id`, or its position), and a change notifies through `query.subscribe`. The element marked for the query (`data-anfra-query`) declares the kinds its definition draws, `data-anfra-annotations="mark line band"`, or `off` to opt out of the badge. What the definition draws is its chart's own, so renderings keep it. The skill teaches one helper per chart library, written once per app (`drawAnnotations(chart, query)` for ECharts).
+
+**The badge.** The runtime pins one badge inside the top-right corner of each element marked for an annotated query, counting the kinds the element doesn't list (all of them when it has no attribute, none with `off`), and shows nothing at a count of 0. It shows the count and a dot in the highest severity's colour, with an accessible label ("3 annotations, highest: warning"). It follows the element on scroll and resize, as a popover does, and lives in the plugin layer, so renderings leave it out. A click opens a popover listing each annotation (severity, label, detail, plugin) with the annotating plugin's rows menu items for its rows. Once a host installs an annotating plugin, apps with marked queries show badges with no edits, which is intended. The kernel decides which elements get a badge. The badge, its popover's list and their styles are in the kernel's UI body, fetched once a badge is first needed.
+
+**Detail and actions.** The definition's tooltip shows `label` and `detail`. A rows menu target (`query.menu`) carries `annotations`, those anchored on its rows, and the menu lists them first, read only, above its items. Actions on annotations ("Explain this anomaly", "Dismiss") are ordinary `kernel.menuItem({ target: 'rows', when })` items: there is no action API, and clicks on the chart stay the definition's.
+
+**The host** sees no annotations: they aren't in the snapshot, send no event, and are taken off a rows target before the host is asked for its entries. A plugin's host half reaches its frame half's annotations through its own calls.
+
 ## The frame side
 
 A frame half goes into an opaque-origin frame, so it is script source, in two parts:
@@ -285,7 +314,8 @@ A plugin outside the SDK is the same object, `{ name, version, requires, host, f
 | Contributions, the panel, the theme | `host/contributions.ts`, `host/panel.ts`, `common/theme.ts`, `common/shortcut.ts`; the frame's side in `app/inspection.ts` and `app/bootstrap.ts` |
 | How a frame half is built: the SDK's own, and anyone's | `tsup.config.ts`, `build/index.ts` |
 | Testing helpers | `testing/` |
-| A worked example | `web/sdk/examples/notes/` |
+| Annotations: the checks and the merge, the badge, its drawing | `app/annotations.ts`, `app/annotationBadges.ts`, `app/ui/body.ts` |
+| Worked examples | `web/sdk/examples/notes/`; `web/sdk/examples/annotations/` sets every kind of annotation |
 
 ## What was decided against
 
@@ -297,5 +327,6 @@ A plugin outside the SDK is the same object, `{ name, version, requires, host, f
 - The host drawing UI about the page's content (a menu on a chart's point, a "view data" modal), as Power BI, Tableau and Looker do for their sandboxed visuals. Each of them is one host; anfra's plugins must work in hosts nobody here writes, with no work from them. Drawing in the frame needs no positioning across its edge and keeps the app's state where it is. The cost: such UI stays inside the frame's box.
 - The SDK shipping host chrome (a panel drawer, an action bar, a palette). Each is simple for a host to build from `host.commands`, `host.tabs` and `mounted.panel`, and every host would want its own look.
 - Definitions declaring the plugins they need, refused at mount when one is missing. It can be added if hosts want it.
+- The runtime drawing annotations over a chart at positions from a geometry function the definition registers (ECharts' `convertToPixel` and the like). Renderings leave the plugin layer out, so a picture would lose them; an overlay covers the chart's own tooltip; dimming the other points can only be faked over a canvas; and it would give agents writing apps a second way to draw annotations. The model leaves room for it if a need shows up.
 
 What these choices cost: anything that can't cross a call, such as a live object or a hook into each render, can't be shared between plugins.
