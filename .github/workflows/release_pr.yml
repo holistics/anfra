@@ -3,9 +3,11 @@
 # tag_and_release.yml tags it and build_release.yml publishes it.
 #
 # Daily (Monday to Saturday), onto one branch, release/next: each run rebuilds it from main
-# and force-pushes it, and creates or updates its one pull request, so there is never more
-# than one, and it is never more than a day behind main. When main has nothing releasable
-# since the last tag (scripts/next-version.mjs), it closes that pull request instead.
+# and force-pushes it, and closes its one pull request and opens a new one (an edit notifies
+# no one), so there is never more than one open, and it is never more than a day behind main.
+# A run that finds release/next holding this release of the current main already changes
+# nothing. When main has nothing releasable since the last tag (scripts/next-version.mjs), it
+# closes that pull request instead.
 # scripts/release-pr.sh does all of it, and runs locally with --dry-run.
 #
 # By hand (workflow_dispatch): `version` names the version instead of computing it; `branch`
@@ -17,8 +19,8 @@
 # TODO: push and open the pull request as a GitHub App (actions/create-github-app-token)
 # instead of GITHUB_TOKEN. GitHub starts no workflow for what GITHUB_TOKEN does, so CI
 # (continuous_integration.yml, and its required ci_passed) does not run on the pull request
-# until someone approves it, with the button GitHub shows on the pull request, and again
-# after each later run updates it.
+# until someone approves it, with the button GitHub shows on the pull request; on each new
+# pull request a run opens.
 name: Release PR
 
 on:
@@ -64,7 +66,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile # conventional-changelog and -recommended-bump
 
-      - name: Open, update or close the release pull request
+      - name: Open, replace or close the release pull request
         env:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_BRANCH: ${{ inputs.branch }}
