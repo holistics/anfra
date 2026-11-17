@@ -16,6 +16,12 @@ export interface TargetRect {
   height: number;
 }
 
+/** A point in the frame's viewport. */
+export interface TargetPoint {
+  x: number;
+  y: number;
+}
+
 /** A marked node, as the structure has it, its ancestors outermost first (both without children's children), and where it is. */
 export interface NodeTarget {
   kind: 'node';
@@ -43,6 +49,12 @@ export interface RowsTarget {
   expression?: string;
   node?: NodeTarget;
   /**
+   * Where the gesture that opened it was, a point in the frame's viewport: the right-click's for
+   * `query.menu`, the badge's when an item runs from the annotations badge's popover. A plugin
+   * anchors a popover about the rows there.
+   */
+  at?: TargetPoint;
+  /**
    * The annotations plugins set on these rows, for the frame's items only (a plugin's `when` on
    * them, say): the host never gets them.
    */
@@ -63,6 +75,7 @@ export interface MenuEntry {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isRect = (value: unknown): value is TargetRect => isObject(value) && ['x', 'y', 'width', 'height'].every((key) => typeof value[key] === 'number');
+const isPoint = (value: unknown): value is TargetPoint => isObject(value) && Number.isFinite(value.x) && Number.isFinite(value.y);
 const isNode = (value: unknown): value is StructureNode => isObject(value) && typeof value.key === 'string' && typeof value.kind === 'string'
   && Array.isArray(value.problems) && Array.isArray(value.children);
 
@@ -85,6 +98,7 @@ export function checkTarget (value: unknown): MenuTarget | undefined {
   if (value.measure !== undefined && typeof value.measure !== 'string') return undefined;
   const node = value.node === undefined ? undefined : checkNode(value.node);
   if (value.node !== undefined && !node) return undefined;
+  if (value.at !== undefined && !isPoint(value.at)) return undefined;
   return {
     kind: 'rows',
     app: value.app,
@@ -95,5 +109,6 @@ export function checkTarget (value: unknown): MenuTarget | undefined {
     conditions: value.conditions as unknown as SelectionCondition[],
     ...(value.expression !== undefined ? { expression: value.expression } : {}),
     ...(node ? { node } : {}),
+    ...(value.at !== undefined ? { at: { x: value.at.x, y: value.at.y } } : {}),
   };
 }

@@ -153,6 +153,24 @@ describe('the annotations badge', () => {
     }));
   });
 
+  it('runs an action with a target at the badge, so what it opens sits by the badge', async () => {
+    const explain = vi.fn();
+    const { query, kernel } = await frame('<section data-anfra-query="revenue"></section>', (k) => {
+      k.menuItem({ id: 'explain', label: 'Explain this anomaly', target: 'rows', run: explain });
+    });
+    kernel.annotate(query, [ANNOTATIONS[0]], { result: query.result! });
+    await settle();
+    vi.spyOn(badges()[0], 'getBoundingClientRect').mockReturnValue({
+      x: 300, y: 40, width: 24, height: 18, left: 300, top: 40, right: 324, bottom: 58, toJSON: () => ({}),
+    });
+
+    badges()[0].click();
+    await settle();
+    popover()!.querySelector<HTMLElement>('.content')!.shadowRoot!.querySelector('button')!.click();
+    await settle();
+    expect(explain).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rows', at: { x: 300, y: 58 } }));
+  });
+
   it('keeps its popover open while the app changes something else', async () => {
     const { app, query, kernel } = await frame('<section data-anfra-query="revenue"></section>');
     kernel.annotate(query, [ANNOTATIONS[1]], { result: query.result! });

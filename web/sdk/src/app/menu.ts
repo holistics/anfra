@@ -290,7 +290,9 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     if (event.defaultPrevented || (event as MouseEvent).shiftKey) return false;
     const element = blockOf(event.target);
     const node = element ? nodeTarget(element) : undefined;
-    const rows: RowsTarget = node ? { ...target, node } : target;
+    const point = event as Partial<MouseEvent>;
+    const at = typeof point.clientX === 'number' && typeof point.clientY === 'number' ? { x: point.clientX, y: point.clientY } : undefined;
+    const rows: RowsTarget = { ...target, ...(node ? { node } : {}), ...(at ? { at } : {}) };
     return open(event, node ? [rows, node] : [rows], { app: target.app, query: target.query });
   };
 
