@@ -276,8 +276,7 @@ the real row keys, value types and the AQL that ran. Keep that log, and a `conso
 failure you catch, since that is what reaches `anfra serve`'s log. Delete other debug logging and
 commented-out code before handing over. A `console.log` stays in the browser's console (only
 warnings and errors reach `anfra serve`'s log): working from the log alone, run the query with
-`anfra query` for its columns. Put on the page the definitions, dates and any rounding a reader
-needs to trust a number.
+`anfra query` for its columns.
 
 ## 5. Run and check it
 
