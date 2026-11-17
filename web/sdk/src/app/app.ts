@@ -14,6 +14,8 @@ import {
 import { withSuggestion } from './suggest';
 import { deriveSelection } from './selection';
 import { openRowsMenu } from './menu';
+import { rowMatches } from './annotations';
+import type { RowsTarget } from '../common/menu';
 import { applyExtensions, type EntityExtensions } from './extensions';
 import { withChanges } from './changes';
 import { markersFor } from './structure';
@@ -638,8 +640,19 @@ export class App extends Observable implements AppContext {
         );
       }
     }
+    return openRowsMenu(event, this.rowsTarget(query, rows, fields, measure));
+  }
+
+  /**
+   * @internal What a menu on these rows of the query is about: their conditions, derived as a
+   * cross-filter's, and the annotations plugins set on them (on `measure`'s, when given).
+   */
+  rowsTarget (query: Query, rows: readonly Row[], fields?: readonly string[], measure?: string): RowsTarget {
     const derived = deriveSelection(query, rows, fields, this.drillTransformations(query));
-    return openRowsMenu(event, {
+    const annotations = query.annotations.filter((annotation) => (annotation.kind === 'mark' || annotation.kind === 'focus')
+      && (measure === undefined || annotation.anchor.measure === undefined || annotation.anchor.measure === measure)
+      && annotation.anchor.rows.some((named) => rows.some((row) => rowMatches(named, row))));
+    return {
       kind: 'rows',
       app: this.index,
       query: query.name,
@@ -648,7 +661,8 @@ export class App extends Observable implements AppContext {
       ...(measure !== undefined ? { measure } : {}),
       conditions: derived?.conditions ? [...derived.conditions] : [],
       ...(derived?.expression ? { expression: derived.expression } : {}),
-    });
+      ...(annotations.length ? { annotations } : {}),
+    };
   }
 
   /**

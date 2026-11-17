@@ -216,6 +216,66 @@ describe('the menu on a query\'s rows', () => {
     expect(open().defaultPrevented).toBe(false);
   });
 
+  it('carries the annotations on its rows, lists them before its items, and keeps them from the host', async () => {
+    const run = vi.fn();
+    let kernel!: FrameKernel;
+    const f = frame((k) => {
+      kernel = k;
+      k.menuItem({ id: 'explain', label: 'Explain', target: 'rows', run });
+    }, {
+      'core.submitQuery': () => ({
+        columns: [
+          { name: 'region', modelId: 'users', fieldName: 'region', label: 'Region', adhoc: false, isMeasure: false, ...textTypes },
+          { name: 'total', modelId: 'orders', fieldName: 'amount', label: 'total', adhoc: false, isMeasure: true, aggregation: 'sum', ...numberTypes },
+        ],
+        values: [['APAC', '10'], ['EMEA', '30']],
+      }),
+      'anfra.menu': () => [],
+    });
+    f.emit('anfra.menu', { kinds: ['rows'] });
+    const app = f.anfra.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    await app.execute();
+    kernel.annotate(query, [
+      { kind: 'mark', anchor: { rows: [{ region: 'EMEA' }] }, label: 'Spike', detail: 'Three times the usual', severity: 'warning' },
+      { kind: 'mark', anchor: { rows: [{ region: 'APAC' }] }, label: 'Dip' },
+      { kind: 'line', anchor: { column: 'total', value: '20' }, label: 'Mean' },
+    ], { result: query.result! });
+    const open = (row: Record<string, string>) => {
+      document.getElementById('inside')!.addEventListener('contextmenu', (e) => { query.menu(e, row); }, { once: true });
+      rightClick('inside');
+    };
+
+    open({ region: 'EMEA', total: '30' });
+    await settle();
+    const notes = [...menuRoot()!.querySelectorAll('.notes li')];
+    expect(notes.map((note) => [note.querySelector('.label')?.textContent, note.querySelector('.detail')?.textContent, note.getAttribute('data-severity')]))
+      .toEqual([['Spike', 'Three times the usual', 'warning']]);
+    expect(notes[0].compareDocumentPosition(entries()[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(f.calls.find((call) => call.name === 'anfra.menu')!.request).not.toHaveProperty('annotations');
+    entries()[0].click();
+    await settle();
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ annotations: [expect.objectContaining({ label: 'Spike', plugin: 'notes' })] }));
+  });
+
+  it('opens on annotated rows with no item for them, to show the annotations', async () => {
+    let kernel!: FrameKernel;
+    const f = frame((k) => { kernel = k; }, {
+      'core.submitQuery': () => ({
+        columns: [{ name: 'region', modelId: 'users', fieldName: 'region', label: 'Region', adhoc: false, isMeasure: false, ...textTypes }],
+        values: [['APAC']],
+      }),
+    });
+    const app = f.anfra.createApp();
+    const query = app.createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    await app.execute();
+    expect(query.menu(new MouseEvent('contextmenu', { cancelable: true }), { region: 'APAC' })).toBe(false);
+    kernel.annotate(query, [{ kind: 'focus', anchor: { rows: [{ region: 'APAC' }] } }], { result: query.result! });
+    expect(query.menu(new MouseEvent('contextmenu', { cancelable: true }), { region: 'APAC' })).toBe(true);
+    await settle();
+    expect([...menuRoot()!.querySelectorAll('.notes li .label')].map((label) => label.textContent)).toEqual(['In focus']);
+  });
+
   it('opens nothing when no item is for rows', () => {
     const f = frame();
     const query = f.anfra.createApp().createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });

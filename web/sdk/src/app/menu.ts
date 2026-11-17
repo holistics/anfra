@@ -10,7 +10,10 @@ import type { FrameKernel } from './kernel';
 import { layerRoot } from './layer';
 import { reportError } from './reporting';
 import { ATTR } from './structure';
-import type { PopoverSide, Rect, UiBody } from './ui/body';
+import type {
+  AnnotationNote, PopoverSide, Rect, UiBody,
+} from './ui/body';
+import type { Annotation } from '../common/types';
 
 /** One entry a frame item shows for a target: what it runs, or why it can't. */
 export interface FrameMenuEntry {
@@ -82,6 +85,37 @@ export interface ContentUi {
   addItem: (plugin: string, item: FrameMenuItem) => void;
   modal: (input: ModalInput) => Promise<Opened>;
   popover: (input: PopoverInput) => Promise<Opened>;
+  /** The kernel's own: a popover beside a box that may move (the annotations badge). */
+  popoverAt: (anchor: () => Rect | undefined, input: Omit<PopoverInput, 'anchor'>) => Promise<Opened>;
+  /** The kernel's own: one plugin's rows entries for a target, what its items show in the menu. */
+  rowsEntries: (plugin: string, target: RowsTarget) => FrameMenuEntry[];
+}
+
+/** An annotation as the reader reads it: its label, or what it is when it has none. */
+export function annotationNote (annotation: Annotation): AnnotationNote {
+  const { anchor } = annotation;
+  let label = annotation.label;
+  if (!label) {
+    if (annotation.kind === 'line') label = `${(anchor as { column: string }).column} at ${(anchor as { value: string }).value}`;
+    else if (annotation.kind === 'band') {
+      const { column, from, to } = anchor as { column: string, from: string, to: string };
+      label = `${column} from ${from} to ${to}`;
+    } else if (annotation.kind === 'series') label = `A series of ${(anchor as { measure: string }).measure}`;
+    else label = annotation.kind === 'focus' ? 'In focus' : 'Marked';
+  }
+  return {
+    label,
+    ...(annotation.detail ? { detail: annotation.detail } : {}),
+    ...(annotation.severity ? { severity: annotation.severity } : {}),
+    plugin: annotation.plugin,
+  };
+}
+
+/** A target as the host gets it: without the annotations, which stay in the frame. */
+function forHost (target: MenuTarget): MenuTarget {
+  if (target.kind !== 'rows' || !target.annotations) return target;
+  const { annotations: _, ...rest } = target;
+  return rest;
 }
 
 let rowsOpener: ((event: Event, target: RowsTarget) => boolean) | undefined;
@@ -112,7 +146,7 @@ const isElement = (value: unknown): value is Element => typeof (value as Element
 export function installContentUi (kernel: FrameKernel): ContentUi {
   const win = kernel.window;
   const doc = win.document;
-  const items: (FrameMenuItem & { full: string })[] = [];
+  const items: (FrameMenuItem & { full: string, plugin: string })[] = [];
   let hostKinds = new Set<MenuTargetKind>();
   let listening = false;
   let current: (() => void) | undefined;
@@ -185,12 +219,12 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     const entries = [...own.entries];
     if (hostKinds.has(target.kind)) {
       try {
-        const answered = await kernel.call<MenuEntry[]>('anfra.menu', target);
+        const answered = await kernel.call<MenuEntry[]>('anfra.menu', forHost(target));
         for (const entry of Array.isArray(answered) ? answered : []) {
           if (typeof entry?.id !== 'string' || typeof entry.label !== 'string') continue;
           const key = `host:${entry.id}:${target.kind}`;
           entries.push({ id: key, label: entry.label, ...(typeof entry.disabled === 'string' ? { disabled: entry.disabled } : {}) });
-          run.set(key, () => kernel.call('anfra.run', { id: entry.id, target }));
+          run.set(key, () => kernel.call('anfra.run', { id: entry.id, target: forHost(target) }));
         }
       } catch { /* the host's entries are left out; the frame's still show */ }
     }
@@ -201,9 +235,11 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
   function open (event: Event, targets: MenuTarget[], about?: QueryAbout): boolean {
     // The browser's menu is kept unless something may show: a frame item that applies, or the host's
     // commands for the kind (whose own conditions are only known once it answers).
+    // The annotations on the rows, listed first, are reason enough for it to open.
+    const notes = targets.flatMap((target) => (target.kind === 'rows' ? target.annotations ?? [] : [])).map(annotationNote);
     const relevant = targets.map((target) => ({ target, own: frameEntries(target) }))
       .filter(({ target, own }) => own.entries.length || hostKinds.has(target.kind));
-    if (!relevant.length) return false;
+    if (!relevant.length && !notes.length) return false;
     event.preventDefault();
     const point = event as Partial<MouseEvent>;
     const x = typeof point.clientX === 'number' ? point.clientX : 0;
@@ -211,11 +247,12 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     void (async () => {
       const [body, ...found] = await Promise.all([ui(), ...relevant.map(({ target, own }) => entriesFor(target, own))]);
       const groups = found.map((group) => group.entries).filter((group) => group.length);
-      if (!groups.length) return;
+      if (!groups.length && !notes.length) return;
       closeCurrent();
       const close = body.menu(root(), {
         x,
         y,
+        ...(notes.length ? { notes } : {}),
         groups,
         onPick: (key) => {
           const action = found.map((group) => group.run.get(key)).find(Boolean);
@@ -296,12 +333,27 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
 
   return {
     addItem (plugin, item) {
-      items.push({ ...item, full: `${plugin}.${item.id}` });
+      items.push({ ...item, full: `${plugin}.${item.id}`, plugin });
       listen();
     },
     modal: (input) => show(input, (body, onClose) => body.modal(root(), {
       title: input.title, size: input.size, mount: reported(input.mount), onClose,
     })),
+    popoverAt: (anchor, input) => show(input, (body, onClose) => body.popover(root(), {
+      anchor, side: input.side, mount: reported(input.mount), dismiss: input.dismiss, closeButton: input.closeButton, onClose,
+    })),
+    rowsEntries (plugin, target) {
+      return items.filter((item) => item.plugin === plugin).flatMap((item): FrameMenuEntry[] => {
+        if (item.target !== 'rows') return [];
+        try {
+          if (item.when && item.when(target) === false) return [];
+          if (!item.entries) return [{ label: item.label, run: () => item.run(target) }];
+          return (item.entries(target) ?? []).filter((entry) => typeof entry?.label === 'string' && (entry.disabled || typeof entry.run === 'function'));
+        } catch {
+          return [];
+        }
+      });
+    },
     popover: (input) => show(input, (body, onClose) => {
       const { anchor } = input;
       let rect: () => Rect | undefined;
