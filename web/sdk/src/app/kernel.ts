@@ -7,7 +7,10 @@ import {
   DataAppError, ValidationError, callFailed, connectionFailed, forbidden, fromHttpStatus, hasErrorCode, invalidRequest, isDataAppError,
 } from '../common/errors';
 import type { Endpoint } from '../common/endpoint';
-import type { CallStamp, QueryRequest, QueryStamp } from '../common/types';
+import type {
+  AnnotationInput, CallStamp, QueryRequest, QueryResult, QueryStamp,
+} from '../common/types';
+import { checkAnnotations } from './annotations';
 import type { App } from './app';
 import type { Control } from './controls';
 import type { Query } from './query';
@@ -82,6 +85,14 @@ export interface FrameKernel {
   modal: (input: ModalInput) => Promise<Opened>;
   /** Open a popover beside a node or a point, following it as the page scrolls. */
   popover: (input: PopoverInput) => Promise<Opened>;
+  /**
+   * Set this plugin's annotations on a query, replacing its last set; `[]` clears it. `result` is
+   * the `query.result` they were computed from: when it is no longer the query's, nothing changes
+   * and this returns false. Throws on a malformed annotation; a rows anchor's row the result lacks
+   * is dropped quietly. They go when the query's result is replaced, so annotate each new result
+   * (`query.subscribe`).
+   */
+  annotate: (query: Query, annotations: readonly AnnotationInput[], options: { result: QueryResult }) => boolean;
 }
 
 /** What every plugin's kernel shares: the frame, the SDK, and the bridge's two directions. */
@@ -191,6 +202,18 @@ export function createKernel (plugin: string, shared: KernelShared, entities: { 
     menuItem: (item) => shared.contentUi?.addItem(plugin, item),
     modal: (input) => shared.contentUi!.modal(input),
     popover: (input) => shared.contentUi!.popover(input),
+    annotate (query, annotations, options) {
+      // A slow plugin may finish after the query went: its result is gone with it.
+      if (query?.isRemoved) return false;
+      const app = sdk.apps.find((candidate) => candidate.queries[query?.name] === query);
+      if (!app) throw new ValidationError(`Plugin '${plugin}' annotated a query that belongs to no app.`, query?.name);
+      if (!options || typeof options.result !== 'object' || options.result === null) {
+        throw new ValidationError(`Plugin '${plugin}' annotated query '${query.name}' without the result it computed them from ({ result: query.result }).`, query.name);
+      }
+      if (!query.isCurrentResult(options.result)) return false;
+      query.setAnnotations(plugin, checkAnnotations(plugin, query.name, options.result, annotations));
+      return true;
+    },
     body<T> () {
       loading ??= endpoint.call<string>(BODY_CALL, { plugin })
         .then((code) => runBody(win, code))
