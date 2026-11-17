@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Open, update or close the pull request that cuts the next release: `pnpm bump` on a branch fresh
+# Open, replace or close the pull request that cuts the next release: `pnpm bump` on a branch fresh
 # from main, committed as `release: <version>`. release_pr.yml runs it; see its header for when,
 # and why release/next is overwritten.
 #
 # - The version: --version, else scripts/next-version.mjs's, from the commits since the last tag.
 # - The branch: --branch, which must not exist yet (it is never overwritten), else release/next,
-#   rebuilt and force-pushed.
+#   rebuilt and force-pushed. Its open pull request is closed, and a new one opened, so its readers
+#   are notified; unless it holds this release of the current main already, when nothing changes.
 # - Nothing releasable on release/next: its open pull request is closed. On a named branch,
 #   nothing releasable without --version fails.
 #
@@ -74,6 +75,17 @@ if [ -z "$version" ]; then
   fi
   exit 0
 fi
+
+# release/next holds this release of the current main already: change nothing, so the pull
+# request's readers get no notification for a run that brings nothing new.
+if [ "$branch" = "$DEFAULT_BRANCH" ] \
+  && git fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null \
+  && [ "$(git rev-parse "origin/$branch^")" = "$(git rev-parse "$base")" ] \
+  && [ "$(git log -1 --format=%s "origin/$branch")" = "release: $version" ] \
+  && [ -n "$(open_pr)" ]; then
+  echo "$branch is up to date: release $version of $base's $(git rev-parse --short "$base")"
+  exit 0
+fi
 echo "Releasing $version (after $last) from $branch"
 
 # The bump, committed as the bot.
@@ -109,7 +121,7 @@ trap 'rm -f "$body"' EXIT
   fi
   # TODO: drop once release_pr.yml uses a GitHub App's token.
   echo "> [!IMPORTANT]"
-  echo "> CI does not start on its own on this pull request: approve its workflows (the button on the pull request) to run it, again after each update."
+  echo "> CI does not start on its own on this pull request: approve its workflows (the button on the pull request) to run it."
 } > "$body"
 
 title="release: $version"
@@ -118,10 +130,15 @@ if $dry_run; then
   cat "$body"
   exit 0
 fi
-pr="$(open_pr)"
-if [ -n "$pr" ]; then
-  gh pr edit "$pr" --title "$title" --body-file "$body"
-  echo "Updated #$pr"
-else
-  gh pr create --base "$BASE" --head "$branch" --title "$title" --body-file "$body"
+# A new pull request rather than an edit of the open one: GitHub notifies no one of an edit, and a
+# new pull request tells its readers the release changed.
+old="$(open_pr)"
+if [ -n "$old" ]; then
+  gh pr close "$old" # its branch is the new one's, so it stays
+fi
+url="$(gh pr create --base "$BASE" --head "$branch" --title "$title" --body-file "$body")"
+echo "Opened $url"
+if [ -n "$old" ]; then
+  gh pr comment "$old" --body "Replaced by $url, for $BASE as it is now."
+  echo "Closed #$old"
 fi
