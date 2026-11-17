@@ -49,6 +49,16 @@ describe('the annotations example', () => {
     ]);
   });
 
+  it('writes the forecast\'s periods as the rows do, for a timestamp column', async () => {
+    const { app, query } = frame([[['2026-01-01T00:00:00Z', '10'], ['2026-02-01T00:00:00Z', '30'], ['2026-03-01T00:00:00Z', '20']]]);
+    await app.execute();
+    const series = query.annotations.find((annotation) => annotation.kind === 'series');
+    expect(series?.kind === 'series' && series.anchor.points.map((point) => point.at)).toEqual([
+      { month: '2026-04-01T00:00:00Z' }, { month: '2026-05-01T00:00:00Z' }, { month: '2026-06-01T00:00:00Z' },
+    ]);
+    expect(query.annotations.find((annotation) => annotation.kind === 'band')?.anchor).toEqual({ column: 'month', from: '2026-01-01T00:00:00Z', to: '2026-03-01T00:00:00Z' });
+  });
+
   it('annotates each new result', async () => {
     const { app, query } = frame([
       [['2026-01-01', '10'], ['2026-02-01', '30']],
