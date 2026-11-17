@@ -5,7 +5,10 @@ import { assertCacheDuration, gave, type DatasetIndex, type Giving } from './val
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
 import type { Run } from './execution/submitQuery';
+import { resolveAnnotations } from './annotations';
 import type {
+  Annotation,
+  AnnotationInput,
   ExecuteOptions,
   ExecuteSummary,
   QueryCacheSettings,
@@ -110,6 +113,18 @@ export class Query extends Observable {
   /** The signature of its last run, when that run failed. */
   private failedSignature?: string;
 
+  /** Each plugin's annotations on the current result, by plugin, in the order they were first set. */
+  private annotationSets = new Map<string, readonly AnnotationInput[]>();
+
+  /**
+   * The results that are the current one: the last run's, and each that a page extended it into, so
+   * annotations computed before a `fetchMore` still land.
+   */
+  private currentResults = new WeakSet<QueryResult>();
+
+  /** `annotations` as last read, until a set or the result changes. */
+  private resolvedAnnotations?: readonly Annotation[];
+
   constructor (name: string, app: AppContext & Observable, declaration: QueryDeclaration, id: number) {
     // Parented to the app so one `app.subscribe` sees every entity's changes.
     super(app);
@@ -188,6 +203,7 @@ export class Query extends Observable {
   /** @internal The app's half of `remove`: stop what is in flight, and stay quiet from then on. */
   markRemoved (): void {
     this.removed = true;
+    this.clearAnnotations();
     this.controller?.abort();
     this.controller = undefined;
     this.runningSignature = undefined;
@@ -405,6 +421,35 @@ export class Query extends Observable {
     return rows.filter((row) => picked.has(key(row)));
   }
 
+  /**
+   * What plugins say about this query's current result, every plugin's merged: draw the kinds your
+   * chart declares in `data-anfra-annotations`, by `index` for a rows anchor. Each has its plugin
+   * and a stable `key`. A change notifies through `subscribe`; they go when the result is replaced.
+   */
+  get annotations (): readonly Annotation[] {
+    this.resolvedAnnotations ??= Object.freeze(resolveAnnotations(this.annotationSets, this._result?.rows ?? []));
+    return this.resolvedAnnotations;
+  }
+
+  /** @internal Whether `result` is this query's current result, or one a page has since extended. */
+  isCurrentResult (result: QueryResult): boolean {
+    return this.currentResults.has(result);
+  }
+
+  /** @internal `kernel.annotate`'s, checked by then: replace one plugin's set, `[]` clearing it. */
+  setAnnotations (plugin: string, annotations: readonly AnnotationInput[]): void {
+    if (annotations.length) this.annotationSets.set(plugin, annotations);
+    else if (!this.annotationSets.delete(plugin)) return;
+    this.resolvedAnnotations = undefined;
+    this.notify();
+  }
+
+  /** Every plugin's annotations go, with the result they were about. */
+  private clearAnnotations (): void {
+    this.annotationSets.clear();
+    this.resolvedAnnotations = undefined;
+  }
+
   /** @internal */
   markExecuting (): void {
     if (this.removed) return;
@@ -436,13 +481,19 @@ export class Query extends Observable {
     this.lastRunSignature = signature;
     this.lastPageRows = result.rows.length;
 
+    // A new result: what plugins said goes with the old one. A page extends it, and keeps them.
+    if (!append) this.clearAnnotations();
+    else this.resolvedAnnotations = undefined;
+
     if (append && this._result) {
       const added = result.meta.pivot ? newGridRows(this._result.rows, result.rows) : result.rows;
       const rows = [...this._result.rows, ...added];
       this._result = { ...result, rows, meta: { ...result.meta, numRows: rows.length } };
     } else {
       this._result = result;
+      this.currentResults = new WeakSet();
     }
+    this.currentResults.add(this._result);
 
     this.notify();
   }

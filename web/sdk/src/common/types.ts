@@ -439,6 +439,100 @@ export interface QueryPivot {
   columns: number;
 }
 
+/* ----------------------------------------------------------------
+Annotations
+---------------------------------------------------------------- */
+
+/** How much an annotation matters: the theme's colour for it, and the badge's dot. */
+export type AnnotationSeverity = 'info' | 'warning' | 'critical';
+
+/** The kinds the SDK defines; a plugin can't add one. */
+export type AnnotationKind = 'mark' | 'focus' | 'line' | 'band' | 'series';
+
+/**
+ * Rows of the query's result, each named by its dimension values (`{ month: '2026-03-01' }`), as
+ * `query.selectedRows` matches them; `measure`, the measure column meant when a chart draws several.
+ */
+export interface RowsAnchor {
+  rows: Row[];
+  measure?: string;
+}
+
+/** A value on one column, a dimension's or a measure's, whether or not a row has it. */
+export interface ValueAnchor {
+  column: string;
+  value: string;
+}
+
+/** A range on one column, from one value to another. */
+export interface RangeAnchor {
+  column: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * One point of a series, at dimension values the result may lack (a future month): a `value`, or
+ * both bounds (`lower`, `upper`), or both.
+ */
+export interface SeriesPoint {
+  at: Row;
+  value?: string;
+  lower?: string;
+  upper?: string;
+}
+
+/** New points through one measure, shaped like the query's rows. */
+export interface SeriesAnchor {
+  measure: string;
+  points: SeriesPoint[];
+}
+
+interface AnnotationText {
+  /** The plugin's own name for it, unique in its set: its `key` is made from it. */
+  id?: string;
+  /** Short, for a chart's label. */
+  label?: string;
+  /** Longer, for a tooltip or a list. */
+  detail?: string;
+  severity?: AnnotationSeverity;
+}
+
+/**
+ * Something a plugin says about a query's data, as its frame half sets it with `kernel.annotate`:
+ * a kind, an anchor in the query's own column aliases, and optionally a label, a detail and a
+ * severity. Values are strings, as rows carry them. See docs/designs/sdk-plugins.md.
+ */
+export type AnnotationInput = AnnotationText & (
+  | { kind: 'mark' | 'focus', anchor: RowsAnchor }
+  | { kind: 'line', anchor: ValueAnchor }
+  | { kind: 'band', anchor: RangeAnchor }
+  | { kind: 'series', anchor: SeriesAnchor }
+);
+
+/** A rows anchor as `query.annotations` has it: with `index`, the rows' positions in `query.result.rows`. */
+export interface ResolvedRowsAnchor extends RowsAnchor {
+  index: number[];
+}
+
+interface AnnotationMeta {
+  /** The plugin that set it. */
+  plugin: string;
+  /** Stable across reads: the plugin and its `id`, or its position in the plugin's set. */
+  key: string;
+}
+
+/**
+ * An annotation as the definition reads it, from `query.annotations`: what a plugin set, with its
+ * plugin, its key, and a rows anchor's positions in the current result.
+ */
+export type Annotation = AnnotationText & AnnotationMeta & (
+  | { kind: 'mark' | 'focus', anchor: ResolvedRowsAnchor }
+  | { kind: 'line', anchor: ValueAnchor }
+  | { kind: 'band', anchor: RangeAnchor }
+  | { kind: 'series', anchor: SeriesAnchor }
+);
+
 export type QueryState = 'idle' | 'executing' | 'success' | 'error';
 
 export interface ExecuteSummary {
