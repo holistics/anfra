@@ -12,16 +12,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
 var initFiles = []string{
 	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".gitignore", ".anfra/context_sources.yml",
-	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", "AGENTS.md",
+	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", "AGENTS.md", ".anfra/config.yml",
 }
 
 func TestInitSetsUpARepo(t *testing.T) {
@@ -38,8 +40,17 @@ func TestInitSetsUpARepo(t *testing.T) {
 			t.Errorf("not reported as created: %s\n%+v", f, res.Files)
 		}
 	}
-	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 8 files." || len(res.Hints) != 2 {
+	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 9 files." || len(res.Hints) != 2 {
 		t.Errorf("result: %+v", res)
+	}
+	// The settings file reads back as anfra's own defaults: a new repo behaves as one without it.
+	settings, err := repoconfig.Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := settings.QueryDefaults(); d.Timezone != "Etc/UTC" || d.WeekStartDay != "monday" || d.CacheDuration != 0 || len(d.Locked) != 0 ||
+		!settings.QueryCacheEnabled() || settings.QueryCacheSettings().Max() != 168*time.Hour {
+		t.Errorf("settings: %+v", settings.Query)
 	}
 
 	// The template is a data source anfra reads, so a repo works once it is filled in.
@@ -93,8 +104,10 @@ func TestInitDataSourcesOnly(t *testing.T) {
 	if want := initFiles[:3]; strings.Join(paths, " ") != strings.Join(want, " ") {
 		t.Errorf("files: %v, want %v", paths, want)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err == nil {
-		t.Error("AGENTS.md was written")
+	for _, f := range []string{"AGENTS.md", ".anfra/config.yml"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			t.Errorf("%s was written", f)
+		}
 	}
 }
 
@@ -205,6 +218,7 @@ func sampleArchive(t *testing.T) []byte {
 	add(&tar.Header{Name: top + "AGENTS.md"}, "# Agent instructions\n")
 	add(&tar.Header{Name: top + "README.md"}, "# Sample\n")
 	add(&tar.Header{Name: top + ".anfra/data_sources.yml"}, "data_sources: {}\n")
+	add(&tar.Header{Name: top + ".anfra/config.yml"}, "query:\n  default:\n    input:\n      weekStartDay: sunday\n")
 	add(&tar.Header{Name: top + "models/ecommerce/../../escape.model.aml"}, "x")
 	add(&tar.Header{Name: top + "models/ecommerce/link.model.aml", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"}, "")
 	if err := tw.Close(); err != nil {
@@ -246,6 +260,9 @@ func TestInitWithSample(t *testing.T) {
 			t.Errorf("%s was written", f)
 		}
 	}
+	if strings.Contains(res.Message, "kept") {
+		t.Errorf("the sample's settings file reported twice: %q", res.Message)
+	}
 	if !strings.Contains(res.Message, "holistics/anfra-sample-ecommerce@f89940a") {
 		t.Errorf("the commit is not reported: %q", res.Message)
 	}
@@ -267,6 +284,10 @@ func TestInitWithSample(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(res.Hints, "\n"), "nobody was asked") {
 		t.Errorf("offered the sample it added: %q", res.Hints)
+	}
+	// The sample's settings file wins over init's defaults.
+	if settings, err := repoconfig.Read(dir); err != nil || settings.QueryDefaults().WeekStartDay != "sunday" {
+		t.Errorf("settings: %+v, %v; want the sample's", settings.Query, err)
 	}
 	// The repo's AGENTS.md is init's own: the sample's root AGENTS.md is not taken.
 	if md, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md")); strings.Contains(string(md), "Agent instructions") || !strings.Contains(string(md), "<!-- anfra:begin -->") {

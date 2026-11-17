@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/publish"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
@@ -75,6 +77,25 @@ sources:
     path: ..
 `
 
+// settingsTemplate is a new repo's settings file, every setting at anfra's
+// own default, so a new repo behaves as one without it, and shows what it can
+// set (docs/designs/query-settings.md#what-anfra-init-writes).
+const settingsTemplate = `# This repo's anfra settings: committed, and free of credentials.
+query:
+  # What a query gets when it sets none of its own.
+  default:
+    input:
+      timezone: Etc/UTC
+      weekStartDay: monday
+    cache:
+      # duration: 10m   # cache each query's result for this long, unless it sets cache.duration
+  # Defaults a query can't change, such as input.weekStartDay.
+  locked_defaults: []
+  cache:
+    enabled: true
+    max_duration: 168h
+`
+
 // initLayout is the folders a repo keeps its files in: AML models and
 // datasets, and Data Apps. Each gets a .gitkeep, so Git keeps it while empty.
 var initLayout = []string{"models", "datasets", "apps"}
@@ -91,6 +112,8 @@ var (
 		"apps/ecommerce/*.html",
 		sampleData,
 		"wiki/ecommerce/*.md",
+		// Its settings, if it has any: written before init's own, so they win.
+		repo.ConfigDirName + "/" + repoconfig.FileName,
 	}
 )
 
@@ -114,6 +137,7 @@ func newInitCmd() *cobra.Command {
 			"  .anfra/data_sources.yml          the data sources to query, with credentials (git-ignored)\n" +
 			"  .anfra/data_sources.yml.example  the same, without credentials, to commit\n" +
 			"  .anfra/context_sources.yml       what anfra ingest reads for anfra search\n" +
+			"  .anfra/config.yml                the repo's settings, such as its queries' defaults, each at anfra's own\n" +
 			"  models/, datasets/, apps/        AML models, AML datasets, Data Apps\n" +
 			"  .gitignore                       + .anfra/data_sources.yml\n" +
 			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
@@ -241,6 +265,16 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 	if err := runSteps(dir, steps, &res); err != nil {
 		return res, err
 	}
+	// The settings file comes last, so a sample's own wins over the defaults;
+	// a user's own is kept, as writeNew keeps every file that's there. One the
+	// sample just wrote is reported once, as the sample's.
+	writeSettings := func() error {
+		path := filepath.ToSlash(filepath.Join(config, repoconfig.FileName))
+		if opts.dataSourcesOnly || slices.ContainsFunc(res.Files, func(f initFile) bool { return f.Path == path }) {
+			return nil
+		}
+		return runSteps(dir, []initStep{{path, writeNew([]byte(settingsTemplate), 0o644)}}, &res)
+	}
 
 	commit := ""
 	if opts.sample {
@@ -248,6 +282,9 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 		commit, files, err = fetchSample(ctx)
 		if err != nil {
 			res.Hints = []string{fmt.Sprintf("The repo is set up without the sample. To try again, run `anfra init %s--example`.", retryArg(dir))}
+			// The download's failure is what to report; the settings file is written
+			// regardless, and a run that can't write it, as the retry says, adds it.
+			_ = writeSettings()
 			return res, err
 		}
 		steps = steps[:0]
@@ -257,6 +294,9 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 		if err := runSteps(dir, steps, &res); err != nil {
 			return res, err
 		}
+	}
+	if err := writeSettings(); err != nil {
+		return res, err
 	}
 
 	changed := 0
