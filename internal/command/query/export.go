@@ -48,7 +48,7 @@ type QueryExportRequestParams struct {
 	Format        string              `json:"format,omitempty" enum:"csv" default:"csv" doc:"the file's format"`
 	FormatOptions ExportFormatOptions `json:"format_options,omitempty" doc:"the format's options"`
 	Filename      string              `json:"filename,omitempty" doc:"the file's name, as a download saves it, with the format's extension added when it has none; when unset or blank, the dataset's or data source's name"`
-	Cache         CacheOptions        `json:"cache,omitempty" doc:"how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."`
+	Cache         CacheOptions        `json:"cache,omitempty" doc:"how to use the query cache for this export, as query does: the file is written from a cached result of the same query, or the query runs and its whole result is cached. An export uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached."`
 }
 
 // QueryExportResult is query.export's answer: its file's link, and what the

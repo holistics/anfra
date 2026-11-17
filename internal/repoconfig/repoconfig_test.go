@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Setting a value changes its bytes and nothing else: comments, order, other
@@ -74,5 +75,86 @@ func TestSetConfigStringRefusesSafely(t *testing.T) {
 	}
 	if err := SetString(path, "org", "url", "https://bi.example.com/o/acme"); err == nil || !strings.Contains(err.Error(), "it's locked") {
 		t.Errorf("err = %v, want the held lock refused", err)
+	}
+}
+
+// read writes yml as a repo's settings file and reads it.
+func read(t *testing.T, yml string) (Config, error) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(dir), []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return Read(dir)
+}
+
+// Every setting reads back; unset, each has anfra's default.
+func TestReadQuerySettings(t *testing.T) {
+	c, err := read(t, `query:
+  default:
+    input:
+      timezone: Asia/Ho_Chi_Minh
+      week_start_day: sunday
+    cache:
+      duration: 10m
+  locked_defaults: [input.week_start_day]
+  cache:
+    enabled: false
+    max_duration: 1h
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != time.Hour || c.QueryDefaultCacheDuration() != 10*time.Minute ||
+		c.Query.Default.Input.Timezone != "Asia/Ho_Chi_Minh" || c.Query.Default.Input.WeekStartDay != "sunday" {
+		t.Errorf("read %+v", c.Query)
+	}
+
+	for _, yml := range []string{"", "# only a comment\n"} {
+		c, err := read(t, yml)
+		if err != nil || !c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != 168*time.Hour || c.QueryDefaultCacheDuration() != 0 {
+			t.Errorf("%q: %+v, %v; want the defaults", yml, c.Query, err)
+		}
+	}
+}
+
+// A key anfra doesn't know is refused, with its line and the key meant, or the
+// keys there are; so is a value it doesn't take, or settings that contradict
+// each other. Each error names the setting.
+func TestReadRefuses(t *testing.T) {
+	for name, tc := range map[string]struct{ yml, want string }{
+		"camelCase": {"query:\n  default:\n    input:\n      weekStartDay: monday\n",
+			".anfra/config.yml line 4: query.default.input.weekStartDay isn't a setting. Did you mean week_start_day?"},
+		"a typo": {"query:\n  cache:\n    enabeld: false\n", "line 3: query.cache.enabeld isn't a setting. Did you mean enabled?"},
+		"no default for it": {"query:\n  default:\n    input:\n      pagination: {page: 1}\n",
+			"query.default.input.pagination isn't a setting. The settings under query.default.input are timezone and week_start_day. If a newer anfra added it, update anfra (`anfra update`)."},
+		"an unknown section": {"queries: {}\n", "The settings at the top level are org, apps, and query."},
+		"the old key":        {"cache:\n  query:\n    enabled: false\n", "line 1: cache isn't a setting."},
+		"not a duration":     {"query:\n  default:\n    cache:\n      duration: 1 hour\n", `query.default.cache.duration in .anfra/config.yml is "1 hour", which isn't a duration.`},
+		"a negative default": {"query:\n  default:\n    cache:\n      duration: -1m\n", "is -1m, which is negative"},
+		"over the cap":       {"query:\n  default:\n    cache:\n      duration: 2h\n  cache:\n    max_duration: 1h\n", "is 2h, more than query.cache.max_duration (1h). Lower the default or raise the cap"},
+		"over 7 days":        {"query:\n  default:\n    cache:\n      duration: 200h\n", "more than query.cache.max_duration (168h, by default)"},
+		"a cap of 0s":        {"query:\n  cache:\n    max_duration: 0s\n", "To turn the query cache off, set query.cache.enabled to false"},
+		"a cap over 7 days":  {"query:\n  cache:\n    max_duration: 200h\n", "anfra caches a result for at most 168h (7 days)"},
+		"a time zone":        {"query:\n  default:\n    input:\n      timezone: Mars/Olympus\n", `"Mars/Olympus", which isn't an IANA time zone`},
+		"the local zone":     {"query:\n  default:\n    input:\n      timezone: Local\n", "isn't an IANA time zone"},
+		"a week start day":   {"query:\n  default:\n    input:\n      week_start_day: Monday\n", `is "Monday". Use one of monday, tuesday, wednesday, thursday, friday, saturday, and sunday`},
+		"a lock on nothing set": {"query:\n  locked_defaults: [input.timezone]\n",
+			"names input.timezone, which query.default doesn't set. Set query.default.input.timezone, or remove it from query.locked_defaults"},
+		"a lock on an object": {"query:\n  default:\n    input:\n      timezone: Etc/UTC\n  locked_defaults: [input]\n",
+			"names input, which has fields that can't have a default. Lock its fields one by one, such as input.timezone and input.week_start_day"},
+		"a lock on no default": {"query:\n  locked_defaults: [input.pagination]\n",
+			"names input.pagination, which isn't a default. The defaults are input.timezone, input.week_start_day, and cache.duration"},
+		"a lock on a cache turned off": {"query:\n  default:\n    cache:\n      duration: 5m\n  locked_defaults: [cache.duration]\n  cache:\n    enabled: false\n",
+			"locks cache.duration, but query.cache.enabled is false"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := read(t, tc.yml); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v\nwant one containing %q", err, tc.want)
+			}
+		})
 	}
 }

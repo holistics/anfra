@@ -172,7 +172,7 @@ export class App extends Observable implements AppContext {
 
   private _timezone?: string;
 
-  /** The cache duration of each of the app's queries that declares none (`cache.query.default.duration`). */
+  /** The cache duration of each of the app's queries that declares none (`query.default.cache.duration`). */
   readonly queryCacheDefaultDuration?: string;
 
   private readonly datasets: Record<string, DatasetIndex>;
@@ -214,8 +214,8 @@ export class App extends Observable implements AppContext {
     super();
     this.title = declaration.title;
     this._timezone = declaration.timezone;
-    const duration = declaration.cache?.query?.default?.duration;
-    assertCacheDuration(duration, 'The app', 'cache.query.default.duration');
+    const duration = declaration.query?.default?.cache?.duration;
+    assertCacheDuration(duration, 'The app', 'query.default.cache.duration');
     this.queryCacheDefaultDuration = duration;
     this.datasets = datasets;
     this.backend = backend;

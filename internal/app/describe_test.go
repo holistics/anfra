@@ -58,7 +58,7 @@ func TestDescribeIsDerivedAndTheAPIView(t *testing.T) {
 	// nothing, doesn't.
 	for name, args := range map[string][]ArgSpec{
 		"query": slices.Concat(want, []ArgSpec{input("The answer returns it as the query ran: send it back with the same query to get the same answer again.")}, deprecated,
-			[]ArgSpec{{Name: "cache", Type: command.ArgObject, Usage: "how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (cache.query.default.duration). Otherwise it runs on the warehouse, uncached."}}),
+			[]ArgSpec{{Name: "cache", Type: command.ArgObject, Usage: "how to use the query cache for this request. A query uses it when it sets cache.duration, or when the repo sets a default (query.default.cache.duration). Otherwise it runs on the warehouse, uncached."}}),
 		"query.compile": slices.Concat(want, []ArgSpec{input("The answer returns it as the query compiled: send it back with the same query to get the same SQL again.")}, deprecated),
 	} {
 		if got := byName[name].Args; !reflect.DeepEqual(got, args) {

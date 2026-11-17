@@ -176,29 +176,26 @@ func (l failedLake) Start(context.Context) error { return l.err }
 func (failedLake) Close(context.Context)         {}
 
 // queryCacheSettings are the repo's query cache settings: what turns the
-// cache off, if anything (ANFRA_CACHE_QUERY_ENABLED, whatever the repo sets,
-// or the repo's cache.query.enabled), and the default duration of a query
-// that sets none (cache.query.default.duration). A settings file that can't be
-// read or parsed, or a default duration anfra doesn't take, leaves the
-// defaults (the cache on, no default duration), and is logged.
+// cache off, if anything (ANFRA_QUERY_CACHE_ENABLED, whatever the repo sets,
+// or the repo's query.cache.enabled), and the default duration of a query
+// that sets none (query.default.cache.duration). A settings file that can't be
+// read, or holds a setting anfra doesn't take, leaves the defaults (the cache
+// on, no default duration), and is logged.
 func queryCacheSettings(repoDir string, logger *slog.Logger) (disabled string, defaultDuration time.Duration) {
 	c, readErr := repoconfig.Read(repoDir)
 	if readErr != nil {
 		logger.Warn("Query cache settings unknown", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repoDir), "error", readErr,
 			"hint", "the query cache keeps its defaults until anfra can read its settings from the file")
-	} else if d, err := c.QueryCacheDefaultDuration(); err != nil {
-		logger.Warn("Query cache settings unknown", logkit.EventKey, eventQueryCacheSettingsUnknown, "path", repoconfig.Path(repoDir), "error", err,
-			"hint", "queries that set no cache.duration run without the cache until the setting is fixed")
 	} else {
-		defaultDuration = d
+		defaultDuration = c.QueryDefaultCacheDuration()
 	}
 	switch {
-	case os.Getenv(envflag.CacheQueryEnabled) != "":
-		if !envflag.On(envflag.CacheQueryEnabled) {
-			disabled = envflag.CacheQueryEnabled + "=0 turns the query cache off for this process."
+	case os.Getenv(envflag.QueryCacheEnabled) != "":
+		if !envflag.On(envflag.QueryCacheEnabled) {
+			disabled = envflag.QueryCacheEnabled + "=0 turns the query cache off for this process."
 		}
 	case readErr == nil && !c.QueryCacheEnabled():
-		disabled = repo.ConfigDirName + "/" + repoconfig.FileName + " turns the query cache off (cache.query.enabled: false)."
+		disabled = repoconfig.RelPath + " turns the query cache off (query.cache.enabled: false)."
 	}
 	return disabled, defaultDuration
 }

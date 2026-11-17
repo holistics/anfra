@@ -267,15 +267,15 @@ export interface AppDeclaration {
    */
   timezone?: string;
   /**
-   * How the app's queries use the backend's caches, as `.anfra/config.yml`'s `cache` says it for a
-   * repo. `query.default.duration`: the cache duration of each query that declares none, such as
-   * `5m`. Without it, the repo's default, if any.
+   * How the app's queries run, in the shape `.anfra/config.yml`'s `query` has for a repo.
+   * `default.cache.duration`: the cache duration of each query that declares none, such as `5m`.
+   * Without it, the repo's default, if any.
    *
    * ```ts
-   * Anfra.createApp({ title: 'Sales', cache: { query: { default: { duration: '5m' } } } });
+   * Anfra.createApp({ title: 'Sales', query: { default: { cache: { duration: '5m' } } } });
    * ```
    */
-  cache?: { query?: { default?: QueryCacheSettings } };
+  query?: { default?: { cache?: QueryCacheSettings } };
 }
 
 /* ----------------------------------------------------------------

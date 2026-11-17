@@ -146,9 +146,9 @@ func TestLookUpAndWrite(t *testing.T) {
 
 	t.Run("turned off: a warning saying by what", func(t *testing.T) {
 		qc := newStandIn(ctx, t)
-		qc.settings.Disabled = "ANFRA_CACHE_QUERY_ENABLED=0 turns the query cache off for this process."
+		qc.settings.Disabled = "ANFRA_QUERY_CACHE_ENABLED=0 turns the query cache off for this process."
 		l := lookUp(t, qc, CacheOptions{Duration: "1h"}, st)
-		if a := newCacheResult(l, write(t, l, st)); a.Warning.Code != cacheDisabled || !strings.Contains(a.Warning.Message, "ANFRA_CACHE_QUERY_ENABLED=0") || a.Key != "" {
+		if a := newCacheResult(l, write(t, l, st)); a.Warning.Code != cacheDisabled || !strings.Contains(a.Warning.Message, "ANFRA_QUERY_CACHE_ENABLED=0") || a.Key != "" {
 			t.Errorf("%+v", a)
 		}
 	})

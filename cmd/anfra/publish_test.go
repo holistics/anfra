@@ -84,7 +84,7 @@ func TestAuthCommandsLeaveRepoConfigAlone(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	t.Setenv("ANFRA_HOME", t.TempDir())
-	original := "# destination stays\norg:\n  url: https://bi.example.com/o/acme\nother: kept\n"
+	original := "# destination stays\norg:\n  url: https://bi.example.com/o/acme\nquery:\n  cache:\n    enabled: true # kept\n"
 	if err := os.Mkdir(".anfra", 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +663,7 @@ func TestAuthStatusRepoBoundariesAndJSON(t *testing.T) {
 			t.Fatalf("crossed Git boundary: %v %v", url, err)
 		}
 	}
-	writeConfig(filepath.Join(repo, "a"), "other: true\n")
+	writeConfig(filepath.Join(repo, "a"), "apps:\n  allow_origins: []\n")
 	if url, err := statusRepoOrg(nested); err != nil || url != nil {
 		t.Fatalf("skipped nearer config: %v %v", url, err)
 	}

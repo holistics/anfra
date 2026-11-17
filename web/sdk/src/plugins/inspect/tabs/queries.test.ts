@@ -240,7 +240,7 @@ describe('Queries', () => {
   });
 
   it('shows the repo turning the cache off as its own choice: muted, with no badge', async () => {
-    const message = 'The query ran without the cache, because the repo turns it off (cache.query.enabled: false).';
+    const message = 'The query ran without the cache, because the repo turns it off (query.cache.enabled: false).';
     const app = salesApp();
     app.queries.revenue.debug = { fromCache: false, cache: { hit: false, warning: { code: 'cache_disabled', message } } };
     harness = await inspect({ tab: QUERIES, snapshot: salesSnapshot([app]) });

@@ -29,7 +29,7 @@ import {
 type CodeTab = 'declared' | 'aql' | 'sql' | 'signature';
 
 /** Why a query that ran didn't use the cache, when it didn't ask for it. */
-const NO_CACHE_DURATION = 'Neither the query nor the repo sets a cache duration (cache.query.default.duration).';
+const NO_CACHE_DURATION = 'Neither the query nor the repo sets a cache duration (query.default.cache.duration).';
 type Section = 'queries' | 'controls' | 'selection' | 'removed' | 'other';
 type Attributed = { entry: RequestEntry };
 

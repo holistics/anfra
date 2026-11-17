@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 	"unicode/utf8"
 
@@ -36,41 +37,61 @@ type Config struct {
 		// holds its own list (AllowedOrigins checks them).
 		AllowOrigins []string `yaml:"allow_origins"`
 	} `yaml:"apps"`
-	Cache struct {
-		Query struct {
+	// Query is how the repo's queries run (docs/designs/query-settings.md).
+	Query struct {
+		// Default is what a query gets when it sets none: each key is the path
+		// of the query's own field, in snake_case. Unset, anfra's own default.
+		Default struct {
+			Input struct {
+				// Timezone is input.timezone's default, an IANA zone.
+				Timezone string `yaml:"timezone"`
+				// WeekStartDay is input.weekStartDay's default: monday to sunday.
+				WeekStartDay string `yaml:"week_start_day"`
+			} `yaml:"input"`
+			Cache struct {
+				// Duration is cache.duration's default: how old a cached result
+				// a query accepts, and how long the result it caches is kept.
+				// Unset, a query that sets none doesn't use the cache.
+				Duration string `yaml:"duration"`
+			} `yaml:"cache"`
+		} `yaml:"default"`
+		// LockedDefaults are the paths of the defaults a query can't change, such
+		// as input.week_start_day. Each names a value Default sets.
+		LockedDefaults []string `yaml:"locked_defaults"`
+		Cache          struct {
 			// Enabled turns the query cache off for the repo when false: no
 			// store, no canal-lake. Unset is on.
 			Enabled *bool `yaml:"enabled"`
-			Default struct {
-				// Duration is the cache.duration of a query that sets none:
-				// how old a cached result it accepts, and how long the result
-				// it caches is kept. Unset, such a query doesn't use the cache.
-				Duration string `yaml:"duration"`
-			} `yaml:"default"`
-		} `yaml:"query"`
-	} `yaml:"cache"`
+			// MaxDuration is the longest a query's result may be cached, at most
+			// querycache.MaxDuration, which it is when unset.
+			MaxDuration string `yaml:"max_duration"`
+		} `yaml:"cache"`
+	} `yaml:"query"`
 }
 
-// QueryCacheEnabled is cache.query.enabled: on unless the repo sets false.
+// RelPath is the settings file's path in a repo, as messages name it.
+const RelPath = repo.ConfigDirName + "/" + FileName
+
+// QueryCacheEnabled is query.cache.enabled: on unless the repo sets false.
 func (c Config) QueryCacheEnabled() bool {
-	return c.Cache.Query.Enabled == nil || *c.Cache.Query.Enabled
+	return c.Query.Cache.Enabled == nil || *c.Query.Cache.Enabled
 }
 
-// QueryCacheDefaultDuration is cache.query.default.duration: zero when unset,
-// or an error naming the setting when it isn't a duration anfra takes.
-func (c Config) QueryCacheDefaultDuration() (time.Duration, error) {
-	s := c.Cache.Query.Default.Duration
-	if s == "" {
-		return 0, nil
+// QueryCacheMaxDuration is query.cache.max_duration, querycache.MaxDuration
+// when unset. Read checked it.
+func (c Config) QueryCacheMaxDuration() time.Duration {
+	if c.Query.Cache.MaxDuration == "" {
+		return querycache.MaxDuration
 	}
-	d, err := time.ParseDuration(s)
-	switch {
-	case err != nil:
-		return 0, fmt.Errorf("cache.query.default.duration in %s/%s: %q isn't a duration, such as 30s, 10m or 2h", repo.ConfigDirName, FileName, s)
-	case d < 0 || d > querycache.MaxDuration:
-		return 0, fmt.Errorf("cache.query.default.duration in %s/%s: %s is outside 0s to 168h (7 days)", repo.ConfigDirName, FileName, s)
-	}
-	return d, nil
+	d, _ := time.ParseDuration(c.Query.Cache.MaxDuration)
+	return d
+}
+
+// QueryDefaultCacheDuration is query.default.cache.duration: zero when unset.
+// Read checked it.
+func (c Config) QueryDefaultCacheDuration() time.Duration {
+	d, _ := time.ParseDuration(c.Query.Default.Cache.Duration)
+	return d
 }
 
 // AllowedOrigins is apps.allow_origins, each an origin a Data App's content
@@ -87,7 +108,9 @@ func (c Config) AllowedOrigins() ([]string, error) {
 // Path is the settings file of the repo at dir.
 func Path(dir string) string { return filepath.Join(dir, repo.ConfigDirName, FileName) }
 
-// Read is the settings of the repo at dir: none set when it has no file.
+// Read is the settings of the repo at dir: none set when it has no file. A key
+// anfra doesn't know, or a value it doesn't take, is an error rather than
+// ignored, since an ignored setting fails without a sign.
 func Read(dir string) (Config, error) {
 	var c Config
 	raw, err := os.ReadFile(Path(dir))
@@ -97,8 +120,21 @@ func Read(dir string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	if err := yaml.Unmarshal(raw, &c); err != nil {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return c, fmt.Errorf("read %s: %w", Path(dir), err)
+	}
+	if len(doc.Content) == 0 { // empty, or comments only
+		return c, nil
+	}
+	if err := checkKeys(doc.Content[0], reflect.TypeFor[Config](), ""); err != nil {
+		return c, err
+	}
+	if err := doc.Decode(&c); err != nil {
+		return c, fmt.Errorf("read %s: %w", Path(dir), err)
+	}
+	if err := c.check(); err != nil {
+		return Config{}, err
 	}
 	return c, nil
 }
