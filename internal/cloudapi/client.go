@@ -167,9 +167,10 @@ func (c *Client) Publish(ctx context.Context, in PublishIn) (PublishOut, error) 
 	return call[PublishOut](ctx, c, OpPublish, in)
 }
 
-// ListFiles is a revision's files, as paths and blob ids.
-func (c *Client) ListFiles(ctx context.Context, revision string) ([]File, error) {
-	out, err := call[ListFilesOut](ctx, c, OpListFiles, ListFilesIn{Revision: revision})
+// ListFiles is a revision's files, as paths and blob ids, the repo's settings
+// file among them withConfig.
+func (c *Client) ListFiles(ctx context.Context, revision string, withConfig bool) ([]File, error) {
+	out, err := call[ListFilesOut](ctx, c, OpListFiles, ListFilesIn{Revision: revision, WithConfig: withConfig})
 	return out.Files, err
 }
 
@@ -220,10 +221,18 @@ func (c *Client) TestDataSource(ctx context.Context, in TestDataSourceIn) (TestD
 	return call[TestDataSourceOut](ctx, c, OpTestDataSource, in)
 }
 
-// ListAppOrigins is the origins the org's Data Apps may load from beyond the SDK's own.
-func (c *Client) ListAppOrigins(ctx context.Context) ([]string, error) {
-	out, err := call[AppOriginsOut](ctx, c, OpListAppOrigins, struct{}{})
-	return out.Origins, err
+// RepoConfig is the org's repo settings, as they apply on it. ok is false
+// when the org's server predates them: it has no repo_config.get, so it
+// doesn't publish the repo's settings file either.
+//
+// TEMPORARY (anfra-cloud's docs/implementation/repo-config.md, Temporary
+// checks): ok goes once no supported server lacks the op.
+func (c *Client) RepoConfig(ctx context.Context) (out RepoConfigOut, ok bool, err error) {
+	out, err = call[RepoConfigOut](ctx, c, OpRepoConfig, struct{}{})
+	if IsCode(err, CodeNotFound) {
+		return RepoConfigOut{}, false, nil
+	}
+	return out, err == nil, err
 }
 
 // call posts in to op and decodes its answer, ignoring members it does not know:

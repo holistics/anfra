@@ -17,8 +17,11 @@ import (
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/publish/workdir"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
+	sharedrepoconfig "github.com/holistics/anfra/shared/repoconfig"
+	"github.com/holistics/anfra/shared/repoformat"
 )
 
 var initFiles = []string{
@@ -330,5 +333,30 @@ func TestInitOffersTheSample(t *testing.T) {
 		if got := strings.Contains(strings.Join(res.Hints, "\n"), "ask the user whether to add it"); got != offer {
 			t.Errorf("offer %v, hints: %q", offer, res.Hints)
 		}
+	}
+}
+
+// init writes no file a publish carries but the settings file, and that holds
+// nothing but anfra's defaults: so `anfra init` then `anfra pull` takes the
+// org's files with nothing to conflict (docs/designs/publish.md, Starting a
+// folder), and an Analyst's first publish changes no setting.
+func TestInitWritesNothingToPublishButDefaults(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "shop")
+	if _, err := initRepo(context.Background(), dir, initOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	published, err := workdir.Files(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(published) != 1 || published[0] != repoformat.ConfigFile {
+		t.Fatalf("init wrote %v to publish, want only %s", published, repoformat.ConfigFile)
+	}
+	settings, err := repoconfig.ReadShared(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed := sharedrepoconfig.Diff(sharedrepoconfig.Config{}, settings); len(changed) > 0 {
+		t.Errorf("init's settings change %v from anfra's defaults", changed)
 	}
 }

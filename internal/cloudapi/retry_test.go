@@ -57,7 +57,7 @@ func TestRetryWhenAskedToWait(t *testing.T) {
 		Waiting:   func(_ string, d time.Duration) { told = append(told, d) },
 		Logger:    slog.New(slog.NewJSONHandler(&log, nil)),
 	})
-	files, err := c.ListFiles(context.Background(), "acme@1")
+	files, err := c.ListFiles(context.Background(), "acme@1", true)
 	if err != nil || len(files) != 1 {
 		t.Fatalf("%v, %v", files, err)
 	}

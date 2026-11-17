@@ -242,11 +242,21 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 		return res, nil
 	}
 
+	settings, err := loadOrgSettings(ctx, client)
+	if err != nil {
+		return PullResult{}, err
+	}
+	orgURL := ""
+	if s.Base == "" && settings.supported {
+		if orgURL, err = adoptOrgConfig(ctx, client, pl.dir, status.Revision); err != nil {
+			return PullResult{}, err
+		}
+	}
 	local, err := readFolder(pl.dir, verbPull)
 	if err != nil {
 		return PullResult{}, err
 	}
-	c, err := compare(ctx, client, status, s.Base, local)
+	c, err := compare(ctx, client, settings, status, s.Base, local)
 	if err != nil {
 		return PullResult{}, err
 	}
@@ -272,6 +282,9 @@ func (pl *puller) pull(ctx context.Context, org cloudapi.Org, configured, setOrg
 	}
 	res.Changes = merged.changes
 	conflicts := merged.conflicts
+	if err := keepOrgURL(pl.dir, orgURL); err != nil {
+		return PullResult{}, err
+	}
 
 	res.Message = fmt.Sprintf("Pulled the changes published to %s.", ref.shown())
 	if res.PublishedBy != "" {
@@ -611,8 +624,8 @@ func content(ctx context.Context, m treemerge.Result, r blobReader, id string) (
 	return r.ReadBlob(ctx, id)
 }
 
-func listTree(ctx context.Context, c *cloudapi.Client, revision string) (treemerge.Tree, error) {
-	files, err := c.ListFiles(ctx, revision)
+func listTree(ctx context.Context, c *cloudapi.Client, revision string, withConfig bool) (treemerge.Tree, error) {
+	files, err := c.ListFiles(ctx, revision, withConfig)
 	if err != nil {
 		return nil, err
 	}

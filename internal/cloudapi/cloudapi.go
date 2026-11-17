@@ -39,7 +39,7 @@ const (
 	OpListDataSources  = "data_sources.list"
 	OpCreateDataSource = "data_sources.create"
 	OpTestDataSource   = "data_sources.test"
-	OpListAppOrigins   = "app_origins.list"
+	OpRepoConfig       = "repo_config.get"
 )
 
 // The error codes the CLI tells apart.
@@ -58,6 +58,12 @@ const (
 	// CodeBaseOutdated: a publish whose base is no longer the published
 	// revision; its details are the published revision (LiveRevision).
 	CodeBaseOutdated = "base_outdated"
+	// CodeSettingsChangeForbidden: a publish changing repo settings in
+	// .anfra/config.yml the caller may not change; its details name them
+	// (RefusedSettings). Nothing is published.
+	CodeSettingsChangeForbidden = "settings_change_forbidden"
+	// CodeNotFound: no such thing, or, for an op, an older server without it.
+	CodeNotFound = "not_found"
 	// CodeRateLimited: too many calls; its details say how long to wait
 	// (RetryAfter).
 	CodeRateLimited = "rate_limited"
@@ -154,11 +160,18 @@ type PublishIn struct {
 	// refuses with base_outdated. Empty, the publish replaces whatever is
 	// published.
 	Base string `json:"base,omitempty"`
+	// WithConfig says Files hold the repo's settings, .anfra/config.yml: a
+	// file not listed is deleted, the settings too. Without it, the server
+	// refuses the settings file, and keeps the one published. Sent to a server
+	// that has repo_config.get (Client.RepoConfig).
+	WithConfig bool `json:"with_config,omitempty"`
 }
 
 // ListFilesIn names a revision of the org's repo.
 type ListFilesIn struct {
 	Revision string `json:"revision"`
+	// WithConfig lists the repo's settings file with its other files.
+	WithConfig bool `json:"with_config,omitempty"`
 }
 
 // ListFilesOut is a revision's files, as a publish carries them, by path.
@@ -215,10 +228,47 @@ type ListDataSourcesOut struct {
 	DataSources []DataSource `json:"data_sources"`
 }
 
-// AppOriginsOut is the origins the org's Data Apps may load from beyond the SDK's
-// own: each https://<host>[:<port>].
-type AppOriginsOut struct {
-	Origins []string `json:"origins"`
+// RepoConfigOut is the org's repo settings, as they apply on it: the
+// published .anfra/config.yml's, and an Admin's overrides.
+type RepoConfigOut struct {
+	Settings []RepoSetting `json:"settings"`
+	// Revision is the published revision the repo's values come from.
+	Revision string `json:"revision,omitempty"`
+	// Error is why the settings in effect can't be used, if they can't.
+	Error string `json:"error,omitempty"`
+}
+
+// RepoSetting is one setting, as it applies on the org.
+type RepoSetting struct {
+	// Key is its path in .anfra/config.yml: query.cache.max_duration.
+	Key string `json:"key"`
+	// Value is the value in effect, absent at anfra's default.
+	Value any `json:"value,omitempty"`
+	// Source is where Value comes from: "repo", "override" or "default".
+	Source string `json:"source"`
+	// Repo is the published file's value, absent when it doesn't set it.
+	Repo     any           `json:"repo,omitempty"`
+	Override *RepoOverride `json:"override,omitempty"`
+	// Editable says whether the caller may change it.
+	Editable bool `json:"editable"`
+}
+
+// RepoOverride is an Admin's override of a setting on the org.
+type RepoOverride struct {
+	Value     any       `json:"value"`
+	UpdatedBy string    `json:"updated_by,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// RefusedSettings are a settings_change_forbidden's details.
+type RefusedSettings struct {
+	Settings []RefusedSetting `json:"settings"`
+}
+
+// RefusedSetting is one setting a publish may not change.
+type RefusedSetting struct {
+	Key        string `json:"key"`
+	Permission string `json:"permission"`
 }
 
 // CreateDataSourceIn is a new data source.

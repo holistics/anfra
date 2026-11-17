@@ -5,6 +5,7 @@ package workdir
 
 import (
 	"io/fs"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -42,6 +43,8 @@ func Files(dir string) (files []string, err error) {
 		switch {
 		case rel == ".":
 			return nil
+		case d.IsDir() && rel == path.Dir(repoformat.ConfigFile):
+			return nil // walk into .anfra/ for the settings file. Publishable leaves out the rest
 		case d.IsDir() && (strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules"):
 			return filepath.SkipDir // nothing under it is publishable: not worth walking
 		case d.IsDir():
