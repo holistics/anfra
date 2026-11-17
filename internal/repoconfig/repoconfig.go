@@ -1,6 +1,7 @@
-// Package repoconfig is a repo's settings file, .anfra/config.yml: committed,
-// written by hand, and by anfra only through SetString, which changes nothing
-// but the value it sets.
+// Package repoconfig is a repo's settings file as the CLI keeps it on disk:
+// where it is in a folder, reading it there, and changing one value in it
+// (SetString), which changes nothing but the value it sets. What the settings
+// are, and how they're read and layered, is shared/repoconfig's.
 package repoconfig
 
 import (
@@ -10,106 +11,33 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
-	"time"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/repo"
-	"github.com/holistics/anfra/shared/repoformat"
+	"github.com/holistics/anfra/shared/repoconfig"
 )
 
 // FileName is the settings file, in the repo's config folder.
 const FileName = "config.yml"
 
-// Config is what anfra reads from the settings file.
-type Config struct {
-	Org struct {
-		// URL is the org `anfra publish` publishes the repo to, by its address on
-		// its server. Never a credential.
-		URL string `yaml:"url"`
-	} `yaml:"org"`
-	Apps struct {
-		// AllowOrigins are the origins the repo's Data Apps may load from beyond
-		// the SDK's own CDNs, as `anfra serve` runs them. Never published: an org
-		// holds its own list (AllowedOrigins checks them).
-		AllowOrigins []string `yaml:"allow_origins"`
-	} `yaml:"apps"`
-	// Query is how the repo's queries run (docs/designs/query-settings.md).
-	Query struct {
-		// Default is what a query gets when it sets none: each key is the path
-		// of the query's own field, in snake_case. Unset, anfra's own default.
-		Default struct {
-			Input struct {
-				// Timezone is input.timezone's default, an IANA zone.
-				Timezone string `yaml:"timezone"`
-				// WeekStartDay is input.weekStartDay's default: monday to sunday.
-				WeekStartDay string `yaml:"weekStartDay"`
-			} `yaml:"input"`
-			Cache struct {
-				// Duration is cache.duration's default: how old a cached result
-				// a query accepts, and how long the result it caches is kept.
-				// Unset, a query that sets none doesn't use the cache.
-				Duration string `yaml:"duration"`
-			} `yaml:"cache"`
-		} `yaml:"default"`
-		// LockedDefaults are the paths of the defaults a query can't change, such
-		// as input.weekStartDay. Each names a value Default sets.
-		LockedDefaults []string `yaml:"locked_defaults"`
-		Cache          struct {
-			// Enabled turns the query cache off for the repo when false: no
-			// store, no canal-lake. Unset is on.
-			Enabled *bool `yaml:"enabled"`
-			// MaxDuration is the longest a query's result may be cached, at most
-			// querycache.MaxDuration, which it is when unset.
-			MaxDuration string `yaml:"max_duration"`
-		} `yaml:"cache"`
-	} `yaml:"query"`
-	// AQL is how the repo's AQL compiles.
-	AQL struct {
-		Compiler struct {
-			// Version is the AQL compiler the repo's AQL compiles and type-checks
-			// with: "v1" (also when unset) or "v2". Read checked it.
-			Version string `yaml:"version"`
-		} `yaml:"compiler"`
-	} `yaml:"aql"`
-}
+// Config is a repo's settings (shared/repoconfig.Config).
+type Config = repoconfig.Config
 
 // RelPath is the settings file's path in a repo, as messages name it.
-const RelPath = repo.ConfigDirName + "/" + FileName
+const RelPath = repoconfig.FilePath
 
-// QueryCacheEnabled is query.cache.enabled: on unless the repo sets false.
-func (c Config) QueryCacheEnabled() bool {
-	return c.Query.Cache.Enabled == nil || *c.Query.Cache.Enabled
-}
-
-// QueryCacheSettings are query.cache's rules the engine takes: its cap, zero
-// when unset. Whether the cache is off is the host's to decide, since the
-// environment can override the file. Read checked them.
-func (c Config) QueryCacheSettings() command.QueryCacheSettings {
-	d, _ := time.ParseDuration(c.Query.Cache.MaxDuration)
-	return command.QueryCacheSettings{MaxDuration: d}
-}
-
-// QueryDefaults are query.default and query.locked_defaults, as the engine
-// takes them: the one place the file's defaults become a query's. Read checked
-// them.
-func (c Config) QueryDefaults() command.QueryDefaults {
-	d := c.Query.Default
-	duration, _ := time.ParseDuration(d.Cache.Duration)
-	return command.QueryDefaults{
-		Timezone: d.Input.Timezone, WeekStartDay: d.Input.WeekStartDay, CacheDuration: duration,
-		Locked: c.Query.LockedDefaults,
+// UseV2Compiler is whether the invocation's AQL compiles and type-checks with
+// the AQL v2 compiler: the compiler its host set (AQLCompiler), or else a local
+// repo's aql.compiler.version, read on every call, so an edit needs no
+// restart. A managed repo with none set uses v1.
+func UseV2Compiler(cc command.CommandContext) (bool, error) {
+	if cc.AQLCompiler != "" {
+		return cc.AQLCompiler == "v2", nil
 	}
-}
-
-// UseV2Compiler is whether r's AQL compiles and type-checks with the AQL v2
-// compiler: a local repo's aql.compiler.version, read on every call, so an edit
-// needs no restart. A managed repo has no config.yml here, so it uses v1.
-func UseV2Compiler(r repo.Repo) (bool, error) {
-	local, ok := r.Local()
+	local, ok := cc.Repo.Local()
 	if !ok {
 		return false, nil
 	}
@@ -117,52 +45,80 @@ func UseV2Compiler(r repo.Repo) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return c.AQL.Compiler.Version == "v2", nil
-}
-
-// AllowedOrigins is apps.allow_origins, each an origin a Data App's content
-// policy can take (repoformat.CheckOrigin), or an error naming the first that is not.
-func (c Config) AllowedOrigins() ([]string, error) {
-	for _, o := range c.Apps.AllowOrigins {
-		if err := repoformat.CheckOrigin(o); err != nil {
-			return nil, fmt.Errorf("apps.allow_origins in %s/%s: %w", repo.ConfigDirName, FileName, err)
-		}
-	}
-	return c.Apps.AllowOrigins, nil
+	return c.UseV2Compiler(), nil
 }
 
 // Path is the settings file of the repo at dir.
 func Path(dir string) string { return filepath.Join(dir, repo.ConfigDirName, FileName) }
 
-// Read is the settings of the repo at dir: none set when it has no file. A key
-// anfra doesn't know, or a value it doesn't take, is an error rather than
-// ignored, since an ignored setting fails without a sign.
+// LocalPath is the member's own settings file in the repo at dir
+// (repoconfig.LocalFilePath).
+func LocalPath(dir string) string {
+	return filepath.Join(dir, filepath.FromSlash(repoconfig.LocalFilePath))
+}
+
+// Read is the settings the repo at dir runs with on this machine: its settings
+// file, with the member's own file laid over it, key by key. None set when it
+// has neither. A key anfra doesn't know, or a value it doesn't take, in either
+// file is an error rather than ignored, since an ignored setting fails without
+// a sign.
 func Read(dir string) (Config, error) {
-	var c Config
-	raw, err := os.ReadFile(Path(dir))
-	if errors.Is(err, fs.ErrNotExist) {
-		return c, nil
-	}
+	shared, err := readRows(Path(dir), RelPath)
 	if err != nil {
-		return c, err
-	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return c, fmt.Errorf("read %s: %w", Path(dir), err)
-	}
-	if len(doc.Content) == 0 { // empty, or comments only
-		return c, nil
-	}
-	if err := checkKeys(doc.Content[0], reflect.TypeFor[Config](), ""); err != nil {
-		return c, err
-	}
-	if err := doc.Decode(&c); err != nil {
-		return c, fmt.Errorf("read %s: %w", Path(dir), err)
-	}
-	if err := c.check(); err != nil {
 		return Config{}, err
 	}
+	local, err := readRows(LocalPath(dir), repoconfig.LocalFilePath)
+	if err != nil {
+		return Config{}, err
+	}
+	c, broken := repoconfig.Layer(shared, local)
+	if len(broken) > 0 { // ParseRows checked each row, so this is a bug
+		return Config{}, broken[0].Err
+	}
+	if err := c.Check(); err != nil {
+		if len(local) > 0 {
+			return Config{}, fmt.Errorf("%s with %s: %w", RelPath, repoconfig.LocalFilePath, err)
+		}
+		return Config{}, fmt.Errorf("%s: %w", RelPath, err)
+	}
 	return c, nil
+}
+
+// ReadShared is the repo's settings file alone, without the member's own:
+// what a publish sends, and what everyone who has the repo gets.
+func ReadShared(dir string) (Config, error) {
+	raw, err := os.ReadFile(Path(dir))
+	if errors.Is(err, fs.ErrNotExist) {
+		return Config{}, nil
+	}
+	if err != nil {
+		return Config{}, err
+	}
+	return repoconfig.Parse(RelPath, raw)
+}
+
+// LocalKeys are the settings the member's own file in the repo at dir sets,
+// in the file's order: none when it has no such file.
+func LocalKeys(dir string) ([]repoconfig.Key, error) {
+	rows, err := readRows(LocalPath(dir), repoconfig.LocalFilePath)
+	keys := make([]repoconfig.Key, len(rows))
+	for i, r := range rows {
+		keys[i] = r.Key
+	}
+	return keys, err
+}
+
+// readRows is what the settings file at path sets: none when there's no file.
+// name is how messages name it.
+func readRows(path, name string) ([]repoconfig.Setting, error) {
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: a settings file of the repo anfra runs in
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return repoconfig.ParseSettings(name, raw)
 }
 
 // SetString sets section.key to value in the YAML file at path, as git

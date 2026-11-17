@@ -92,6 +92,11 @@ type CommandContext struct {
 	// it can't change (docs/designs/query-settings.md). Zero: anfra's own
 	// defaults, none locked. Check them when they're set.
 	QueryDefaults QueryDefaults
+	// AQLCompiler is the AQL compiler the repo's AQL compiles and type-checks
+	// with, "v1" or "v2", as a platform sets it from the repo's settings
+	// (aql.compiler.version). Empty: a local repo's settings file says, and a
+	// managed repo, which has none here, compiles with v1.
+	AQLCompiler string
 }
 
 // QueryCache is the invocation's query cache, as commands use it.

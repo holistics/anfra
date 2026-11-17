@@ -20,9 +20,14 @@ import (
 // TODO: configurable, in the repo's config, rather than fixed.
 const AppsDir = "apps"
 
+// ConfigFile is the repo's settings file, relative to its root: the one file
+// under a dot folder that a publish carries (shared/repoconfig).
+const ConfigFile = ".anfra/config.yml"
+
 // Publishable reports whether a file is part of an anfra repo, so a publish
-// carries it: its AML (*.aml), and its Data Apps (everything under AppsDir).
-// path is slash-separated and relative to the repo root.
+// carries it: its AML (*.aml), its Data Apps (everything under AppsDir), and
+// its settings (ConfigFile). path is slash-separated and relative to the repo
+// root.
 //
 // A publish carries the repo, not the folder it is in: what the server uses,
 // chosen by the repo's format, the same on every machine, with or without git.
@@ -30,14 +35,18 @@ const AppsDir = "apps"
 // nothing depends on .gitignore, which says what belongs in version control, a
 // different question (PUBLISH.md §What gets published). Within the repo, never:
 //
-//   - a path with a part starting with ".": git's own files, the repo's config
-//     (.anfra/, whose data_sources.yml holds credentials), editors' and tools'
-//     state;
+//   - a path with a part starting with ".", but ConfigFile: git's own files,
+//     the rest of the repo's config (.anfra/, whose data_sources.yml holds
+//     credentials, and config.local.yml a member's own settings), editors'
+//     and tools' state;
 //   - a path through node_modules: a Data App's installed dependencies.
 //
 // The CLI selects with it, and a server refuses what it does not allow, so
 // neither a modified client nor a mistake in one can publish anything else.
 func Publishable(path string) bool {
+	if path == ConfigFile {
+		return true
+	}
 	parts := strings.Split(path, "/")
 	for _, p := range parts {
 		if p == "" || strings.HasPrefix(p, ".") || p == "node_modules" {

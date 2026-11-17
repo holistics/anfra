@@ -154,9 +154,10 @@ func TestInitKeepsWhatIsThere(t *testing.T) {
 	if res.Files[0] != (initFile{Path: ".anfra/data_sources.yml", Changed: false}) {
 		t.Errorf("not reported as kept: %+v", res.Files[0])
 	}
-	// Another tool's lines stay, and anfra's is added after them, on a line of its own.
+	// Another tool's lines stay, and anfra's are added after them, each on a line of its own.
 	ignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
-	if !strings.HasPrefix(string(ignore), "node_modules\n") || !strings.HasSuffix(string(ignore), "\n.anfra/data_sources.yml\n") {
+	if !strings.HasPrefix(string(ignore), "node_modules\n") || !strings.Contains(string(ignore), "\n.anfra/data_sources.yml\n") ||
+		!strings.HasSuffix(string(ignore), "\n.anfra/config.local.yml\n") {
 		t.Errorf(".gitignore: %q", ignore)
 	}
 

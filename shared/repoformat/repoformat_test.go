@@ -27,7 +27,7 @@ func TestBlobIDIsGits(t *testing.T) {
 	}
 }
 
-// A publish carries the repo's AML and Data Apps, and nothing else.
+// A publish carries the repo's AML, Data Apps and settings, and nothing else.
 func TestPublishable(t *testing.T) {
 	for path, want := range map[string]bool{
 		"models/orders.aml":                 true,
@@ -36,6 +36,10 @@ func TestPublishable(t *testing.T) {
 		"apps/dash/index.html":              true,
 		"apps/dash/data/rows.json":          true,
 		"apps":                              false, // a file named apps
+		".anfra/config.yml":                 true,
+		".anfra/config.local.yml":           false,
+		".anfra/config.yml.lock":            false,
+		"sub/.anfra/config.yml":             false,
 		".anfra/data_sources.yml":           false,
 		".anfra/context_sources.yml":        false,
 		".git/config":                       false,

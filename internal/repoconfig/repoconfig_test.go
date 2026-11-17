@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/repo"
 )
 
@@ -187,7 +188,7 @@ func TestUseV2Compiler(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, err := UseV2Compiler(repo.Local{Dir: dir}.Repo())
+			got, err := UseV2Compiler(command.CommandContext{Repo: repo.Local{Dir: dir}.Repo()})
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, want error %v", err, tc.wantErr)
 			}
@@ -198,5 +199,106 @@ func TestUseV2Compiler(t *testing.T) {
 				t.Errorf("UseV2Compiler = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// A compiler the host sets wins over the repo's file, and a managed repo, which
+// has no file here, compiles with v1 unless its host says otherwise.
+func TestUseV2CompilerFromHost(t *testing.T) {
+	managed, err := repo.Managed("acme", "acme@0123456789abcdef0123456789abcdef01234567")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(dir), []byte("aql:\n  compiler:\n    version: v2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		cc   command.CommandContext
+		want bool
+	}{
+		"managed, unset":      {command.CommandContext{Repo: managed}, false},
+		"managed, v2":         {command.CommandContext{Repo: managed, AQLCompiler: "v2"}, true},
+		"local v2, host's v1": {command.CommandContext{Repo: repo.Local{Dir: dir}.Repo(), AQLCompiler: "v1"}, false},
+	} {
+		if got, err := UseV2Compiler(tc.cc); err != nil || got != tc.want {
+			t.Errorf("%s: UseV2Compiler = %v, %v; want %v", name, got, err, tc.want)
+		}
+	}
+}
+
+// writeRepo writes a repo's settings file and the member's own, each when given.
+func writeRepo(t *testing.T, shared, local string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range map[string]string{Path(dir): shared, LocalPath(dir): local} {
+		if content == "" {
+			continue
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// The member's own file wins key by key, a list replaced whole; the repo's
+// file alone is what everyone gets.
+func TestReadLocal(t *testing.T) {
+	dir := writeRepo(t, `query:
+  default:
+    input:
+      timezone: Asia/Ho_Chi_Minh
+  cache:
+    max_duration: 24h
+apps:
+  allow_origins: [https://a.example.com, https://b.example.com]
+`, `query:
+  cache:
+    max_duration: 1h
+apps:
+  allow_origins: [https://c.example.com]
+aql:
+  compiler:
+    version: v2
+`)
+	c, err := Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Query.Default.Input.Timezone != "Asia/Ho_Chi_Minh" || c.QueryCacheSettings().MaxDuration != time.Hour ||
+		strings.Join(c.AllowedOrigins(), ",") != "https://c.example.com" || !c.UseV2Compiler() {
+		t.Errorf("Read = %+v", c)
+	}
+	shared, err := ReadShared(dir)
+	if err != nil || shared.QueryCacheSettings().MaxDuration != 24*time.Hour || shared.UseV2Compiler() {
+		t.Errorf("ReadShared = %+v, %v", shared, err)
+	}
+	keys, err := LocalKeys(dir)
+	var names []string
+	for _, k := range keys {
+		names = append(names, k.String())
+	}
+	if err != nil || strings.Join(names, " ") != "query.cache.max_duration apps.allow_origins aql.compiler.version" {
+		t.Errorf("LocalKeys = %v, %v", names, err)
+	}
+}
+
+// An error in the member's own file names it; one that only the two files
+// together make names both.
+func TestReadLocalRefuses(t *testing.T) {
+	_, err := Read(writeRepo(t, "", "query:\n  cache:\n    enabeld: false\n"))
+	if err == nil || !strings.Contains(err.Error(), ".anfra/config.local.yml line 3: query.cache.enabeld isn't a setting. Did you mean enabled?") {
+		t.Errorf("err = %v", err)
+	}
+	_, err = Read(writeRepo(t, "query:\n  default:\n    cache:\n      duration: 2h\n", "query:\n  cache:\n    max_duration: 1h\n"))
+	if err == nil || !strings.Contains(err.Error(), ".anfra/config.yml with .anfra/config.local.yml: query.default.cache.duration is 2h") {
+		t.Errorf("err = %v", err)
 	}
 }

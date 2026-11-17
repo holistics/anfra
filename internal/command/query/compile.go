@@ -18,7 +18,7 @@ func sourceOf(cc command.CommandContext) (query.Source, error) {
 	if err != nil {
 		return query.Source{}, err
 	}
-	v2, err := repoconfig.UseV2Compiler(cc.Repo)
+	v2, err := repoconfig.UseV2Compiler(cc)
 	if err != nil {
 		return query.Source{}, err
 	}

@@ -20,11 +20,7 @@ func warnOfOriginsOrgLacks(ctx context.Context, c *cloudapi.Client, t *told, p *
 	if err != nil {
 		return // validation has said so
 	}
-	local, err := conf.AllowedOrigins()
-	if err != nil {
-		t.Warn("origins_not_checked", "Not checking the org's allowed origins: %v", errMessage(err))
-		return
-	}
+	local := conf.AllowedOrigins()
 	if len(local) == 0 {
 		return
 	}
