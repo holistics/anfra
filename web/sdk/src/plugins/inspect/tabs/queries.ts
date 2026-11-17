@@ -491,7 +491,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
     return h(doc, 'div', { class: 'app', 'data-testid': `app-${index}` },
       h(doc, 'p', { class: 'app-line', 'data-testid': 'app-line' },
         several && h(doc, 'strong', {}, `App ${index + 1} · `),
-        `${app.title || 'Untitled'} · ${app.timezone || 'tenant timezone'} · `,
+        `${app.title || 'Untitled'} · ${app.queryInput?.timezone ?? (app.timezone || 'tenant timezone')} · `,
         app.hasChanges ? h(doc, 'span', { class: 'tone-warn' }, 'unapplied changes') : 'no unapplied changes'),
       section('queries', index, 'Queries', queries.length, filtering ? shownQueries.length : undefined, filtering ? none('queries') : 'None.',
         () => shownQueries.map(([name, query]) => queryRow(app, index, name, query, byQuery.get(`${index}/${name}`) ?? [], structure))),

@@ -1,7 +1,7 @@
 import { Observable } from './observable';
 import { ValidationError, type DataAppError } from '../common/errors';
 import { tagCall } from '../common/runtimeErrors';
-import { assertCacheDuration, type DatasetIndex } from './validation';
+import { assertCacheDuration, gave, type DatasetIndex, type Giving } from './validation';
 import type { AppContext } from './internal';
 import type { PluginMembers } from './pluginTypes';
 import type { Run } from './execution/submitQuery';
@@ -29,19 +29,19 @@ export interface QueryUpdate {
   sort?: readonly QuerySort[];
 }
 
-/** What `createQuery` and `update` check of a declaration. */
-export function assertDeclaration (name: string, declaration: QueryDeclaration): void {
+/**
+ * What `createQuery` and `update` check of a declaration. `how` is how its settings were given:
+ * declared by `createQuery`, or set by `update`.
+ */
+export function assertDeclaration (name: string, declaration: QueryDeclaration, how: Giving = 'declares'): void {
   if (!declaration.aql?.trim()) {
-    throw new ValidationError(`Query '${name}' declares no AQL.`, name);
+    throw new ValidationError(`Query '${name}' ${how} no AQL.`, name);
   }
   const { pageSize } = declaration;
   if (pageSize !== undefined && !(Number.isInteger(pageSize) && pageSize >= 1)) {
-    throw new ValidationError(
-      `Query '${name}' declares pageSize ${pageSize}; it must be a whole number of at least 1.`,
-      name,
-    );
+    throw new ValidationError(`${gave(`Query '${name}'`, 'pageSize', pageSize, how)}, but it must be a whole number of at least 1.`, name);
   }
-  assertCacheDuration(declaration.cache?.duration, `Query '${name}'`, 'cache.duration', name);
+  assertCacheDuration(declaration.cache?.duration, `Query '${name}'`, 'cache.duration', name, how);
 }
 
 export class Query extends Observable {
@@ -271,7 +271,7 @@ export class Query extends Observable {
       // next one and the query is never re-run.
       selectionExpression: this.app.selectionExpressionFor(this.name, phase),
       sort: this._sort,
-      timezone: this.app.timezone,
+      inputDefaults: this.app.queryInputDefaults,
       page: this._page,
     });
   }

@@ -24,8 +24,8 @@ func TestQueryDefaultsCheck(t *testing.T) {
 	}{
 		"a time zone":       {QueryDefaults{Timezone: "Mars/Olympus"}, `query.default.input.timezone is "Mars/Olympus", which isn't an IANA time zone`},
 		"the local zone":    {QueryDefaults{Timezone: "Local"}, "isn't an IANA time zone"},
-		"a capitalized day": {QueryDefaults{WeekStartDay: "Monday"}, `query.default.input.weekStartDay is "Monday". Did you mean monday?`},
-		"not a day":         {QueryDefaults{WeekStartDay: "weekend"}, "Use one of monday, tuesday, wednesday, thursday, friday, saturday, and sunday"},
+		"a capitalized day": {QueryDefaults{WeekStartDay: "Monday"}, `query.default.input.weekStartDay is "Monday". Did you mean "monday"?`},
+		"not a day":         {QueryDefaults{WeekStartDay: "weekend"}, "Use one of: \"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\", \"saturday\", or \"sunday\""},
 		"a negative cache":  {QueryDefaults{CacheDuration: -time.Minute}, "query.default.cache.duration is -1m, which is negative"},
 		"an object": {QueryDefaults{Locked: []string{"input"}},
 			"query.locked_defaults names input, which has fields that can't have a default. Lock its fields one by one, such as input.timezone and input.weekStartDay"},

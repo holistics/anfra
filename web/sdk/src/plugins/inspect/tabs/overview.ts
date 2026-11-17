@@ -271,15 +271,29 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
     const datasets = Object.values(mount.datasets).map((dataset) => dataset.label || dataset.name);
     // An app without a timezone of its own runs in the tenant's, which the host doesn't know.
     const label = (index: number) => (apps.length > 1 ? `App ${index + 1}` : 'the app');
-    const mismatched = apps.flatMap((app, index) => (app.timezone && app.timezone !== user.timezone ? [`${label(index)} runs in ${app.timezone}`] : []));
+    const queriesTimezone = (app: InspectedApp) => app.queryInput?.timezone ?? app.timezone;
+    const mismatched = apps.flatMap((app, index) => {
+      const timezone = queriesTimezone(app);
+      return timezone && timezone !== user.timezone ? [`${label(index)}'s queries run in ${timezone}`] : [];
+    });
+    // An app whose query.default.input differs from its own: its UI and its results can disagree.
+    const overridden = apps.flatMap((app, index) => ([
+      ['timezone', app.timezone, app.queryInput?.timezone],
+      ['weekStartDay', app.weekStartDay, app.queryInput?.weekStartDay],
+    ] as const).flatMap(([setting, own, queries]) => (own && queries && own !== queries
+      ? [`${apps.length > 1 ? `App ${index + 1}'s` : 'The app\'s'} queries use ${queries} (query.default.input.${setting}), not the app's ${own}, so dates in its UI and in its results may differ.`]
+      : [])));
+    const perApp = (index: number, what: string) => (apps.length > 1 ? `App ${index + 1} ${what}` : `App ${what}`);
     return collapsible(doc, 'environment', 'Environment', () => [
       mismatched.length > 0 && h(doc, 'p', { class: 'warning', role: 'note', 'data-testid': 'timezone-warning' },
-        `The reader is in ${user.timezone}, but ${mismatched.join(', ')}: dates are computed in the app's timezone.`),
+        `The reader is in ${user.timezone}, but ${mismatched.join(', ')}: dates are computed in the queries' timezone.`),
+      ...overridden.map((text) => h(doc, 'p', { class: 'warning', role: 'note', 'data-testid': 'query-default-warning' }, text)),
       fields(doc, [
         ['SDK', PLUGIN_VERSION],
         ['Reader', `${user.name} · ${user.email} · ${user.role}`],
         ['Reader timezone', user.timezone],
-        ...apps.map((app, index) => [apps.length > 1 ? `App ${index + 1} timezone` : 'App timezone', app.timezone || 'tenant default'] as const),
+        ...apps.map((app, index) => [perApp(index, 'timezone'), app.timezone || 'tenant default'] as const),
+        ...apps.map((app, index) => [perApp(index, 'week start day'), app.weekStartDay || 'server default'] as const),
         ['Generated SQL', user.permissions.canViewGeneratedSql ? 'can view' : 'hidden'],
         ['Export', user.permissions.canExportData ? 'allowed' : 'not allowed'],
         // The log keeps the newest 200, so this stops there.

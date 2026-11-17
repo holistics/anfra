@@ -184,12 +184,29 @@ describe('Overview', () => {
       'Reader: Ada Lovelace · ada@example.com · analyst',
       'Reader timezone: Asia/Singapore',
       'App timezone: Europe/Paris',
+      'App week start day: server default',
       'Generated SQL: can view',
       'Export: allowed',
       'Requests: 1 since the app loaded',
       'Datasets (1): Sales',
     ]);
-    expect(byTestId(details, 'timezone-warning')?.textContent).toBe('The reader is in Asia/Singapore, but the app runs in Europe/Paris: dates are computed in the app\'s timezone.');
+    expect(byTestId(details, 'timezone-warning')?.textContent).toBe('The reader is in Asia/Singapore, but the app\'s queries run in Europe/Paris: dates are computed in the queries\' timezone.');
+    expect(byTestId(details, 'query-default-warning')).toBeNull();
+  });
+
+  it('warns when the app\'s queries use another timezone or week start day than the app\'s own', async () => {
+    const app = salesApp({ timezone: 'Europe/London', weekStartDay: 'sunday', queryInput: { timezone: 'Asia/Singapore', weekStartDay: 'sunday' } });
+    const root = await overview({ snapshot: salesSnapshot([app]) });
+    await harness!.frameCall('core.submitQuery', { dataset: 'sales', aql: REVENUE_AQL, input: {} }, REVENUE_STAMP);
+    const details = await open(root, 'environment');
+    // The queries run in the reader's timezone, so only the override is worth a warning; the same
+    // week start day at both levels is no difference.
+    expect(byTestId(details, 'timezone-warning')).toBeNull();
+    expect([...details.querySelectorAll('[data-testid="query-default-warning"]')].map((p) => p.textContent)).toEqual([
+      'The app\'s queries use Asia/Singapore (query.default.input.timezone), not the app\'s Europe/London, so dates in its UI and in its results may differ.',
+    ]);
+    expect(details.textContent).toContain('App week start day');
+    expect(details.textContent).toContain('sunday');
   });
 
   it('waits for the frame', async () => {
