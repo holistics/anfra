@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,9 +51,9 @@ func (d QueryDefaults) Check() error {
 	}
 	if s := d.WeekStartDay; s != "" && !slices.Contains(anfranode.WeekStartDays, s) {
 		if near := didyoumean.Find(s, anfranode.WeekStartDays); near != "" {
-			return fmt.Errorf("query.default.input.weekStartDay is %q. Did you mean %s?", s, near)
+			return fmt.Errorf("query.default.input.weekStartDay is %q. Did you mean %q?", s, near)
 		}
-		return fmt.Errorf("query.default.input.weekStartDay is %q. Use one of %s", s, prose(anfranode.WeekStartDays))
+		return fmt.Errorf("query.default.input.weekStartDay is %q. Use one of: %s", s, oneOf(anfranode.WeekStartDays))
 	}
 	if d.CacheDuration < 0 {
 		return fmt.Errorf("query.default.cache.duration is %s, which is negative. Use 0s or more", FormatDuration(d.CacheDuration))
@@ -86,6 +87,18 @@ func FormatDuration(d time.Duration) string {
 		s = strings.TrimSuffix(s, "0m")
 	}
 	return s
+}
+
+// oneOf is values to choose from, each quoted: "a" or "b", or "a", "b", or "c".
+func oneOf(values []string) string {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = strconv.Quote(v)
+	}
+	if len(quoted) < 3 {
+		return strings.Join(quoted, " or ")
+	}
+	return strings.Join(quoted[:len(quoted)-1], ", ") + ", or " + quoted[len(quoted)-1]
 }
 
 // prose is names as a sentence lists them: "a", "a and b", or "a, b, and c".

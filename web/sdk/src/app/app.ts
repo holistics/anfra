@@ -6,7 +6,7 @@ import {
 import { CrossFilter, Mapping, type Edge } from './mapping';
 import { DataAppError, ValidationError, isDataAppError } from '../common/errors';
 import {
-  assertCacheDuration, assertUniqueName, assertValidFilterAggregation, resolveDataset, type DatasetIndex,
+  assertCacheDuration, assertUniqueName, assertValidFilterAggregation, assertWeekStartDay, resolveDataset, type DatasetIndex,
 } from './validation';
 import {
   buildExportRequest, buildQuery, buildRequest, pageRequest, runQuery, type SubmitContext,
@@ -43,10 +43,12 @@ import type {
   InspectedSelection,
   LocateKind,
   QueryDeclaration,
+  QueryInputDefaults,
   Row,
   SdkFeatures,
   Selection,
   SelectionCondition,
+  WeekStartDay,
 } from '../common/types';
 
 const NO_CONDITIONS: readonly SelectionCondition[] = Object.freeze([]);
@@ -172,6 +174,11 @@ export class App extends Observable implements AppContext {
 
   private _timezone?: string;
 
+  private _weekStartDay?: WeekStartDay;
+
+  /** The app's `query.default.input`: what its queries use over its own timezone and week start day. */
+  private readonly queryInput: QueryInputDefaults;
+
   /** The cache duration of each of the app's queries that declares none (`query.default.cache.duration`). */
   readonly queryCacheDefaultDuration?: string;
 
@@ -214,6 +221,11 @@ export class App extends Observable implements AppContext {
     super();
     this.title = declaration.title;
     this._timezone = declaration.timezone;
+    assertWeekStartDay(declaration.weekStartDay, 'The app', 'weekStartDay');
+    this._weekStartDay = declaration.weekStartDay;
+    const queryInput = declaration.query?.default?.input ?? {};
+    assertWeekStartDay(queryInput.weekStartDay, 'The app', 'query.default.input.weekStartDay');
+    this.queryInput = { ...queryInput };
     const duration = declaration.query?.default?.cache?.duration;
     assertCacheDuration(duration, 'The app', 'query.default.cache.duration');
     this.queryCacheDefaultDuration = duration;
@@ -390,7 +402,7 @@ export class App extends Observable implements AppContext {
   updateQuery (query: Query, changes: QueryUpdate): void {
     const previous = query.declaration;
     const declaration = withChanges<QueryDeclaration>(previous, changes, ['dataset', 'aql', 'pageSize', 'cache']);
-    assertDeclaration(query.name, declaration);
+    assertDeclaration(query.name, declaration, 'sets');
     const dataset = this.datasetIndex(declaration.dataset, query.name);
 
     if (declaration.dataset !== previous.dataset) {
@@ -507,6 +519,31 @@ export class App extends Observable implements AppContext {
 
   get timezone (): string | undefined {
     return this._timezone;
+  }
+
+  /**
+   * The app's own, like `setTimezone`: for its UI, and for its queries unless
+   * `query.default.input.weekStartDay` says otherwise. Changing it makes every query it reaches dirty.
+   */
+  setWeekStartDay (day: WeekStartDay | undefined): void {
+    assertWeekStartDay(day, 'The app', 'weekStartDay', 'sets');
+    this._weekStartDay = day;
+    this.notify();
+  }
+
+  /** The app's own week start day, for its UI: undefined when it declares none. */
+  get weekStartDay (): WeekStartDay | undefined {
+    return this._weekStartDay;
+  }
+
+  /**
+   * What the app's queries get in their input when they set none: its `query.default.input`, or else
+   * its own timezone and week start day. A value absent from both is left to the backend's default.
+   */
+  get queryInputDefaults (): QueryInputDefaults {
+    const timezone = this.queryInput.timezone ?? this._timezone;
+    const weekStartDay = this.queryInput.weekStartDay ?? this._weekStartDay;
+    return { ...(timezone ? { timezone } : {}), ...(weekStartDay ? { weekStartDay } : {}) };
   }
 
   /* ----------------------------------------------------------------
@@ -629,7 +666,7 @@ export class App extends Observable implements AppContext {
         conditions: this.selectionConditionsFor(query.name, 'applied'),
         expression: this.selectionExpressionFor(query.name, 'applied'),
       },
-      { timezone: this._timezone },
+      this.queryInputDefaults,
     );
   }
 
@@ -704,7 +741,7 @@ export class App extends Observable implements AppContext {
 
     const context: SubmitContext = {
       backend: this.backend,
-      timezone: this._timezone,
+      ...this.queryInputDefaults,
       bustCache: options.bustCache,
     };
 
@@ -729,7 +766,7 @@ export class App extends Observable implements AppContext {
     query.resetPage();
     const outcome = await this.run(query, query.signature('applied'), {
       backend: this.backend,
-      timezone: this._timezone,
+      ...this.queryInputDefaults,
       bustCache: options.bustCache,
     });
     return {
@@ -807,7 +844,7 @@ export class App extends Observable implements AppContext {
         : buildRequest(query, this.mappingsTo(query.name), {
           conditions: this.selectionConditionsFor(query.name, 'applied'),
           expression: this.selectionExpressionFor(query.name, 'applied'),
-        }, { backend: this.backend, timezone: this._timezone });
+        }, { backend: this.backend, ...this.queryInputDefaults });
       const { result } = await runQuery(query, request, this.backend, controller.signal, this.stampOf(query));
       // A newer run, `remove()` or `update()` took the query over: this page is not its any more.
       if (superseded(query, controller)) return;
@@ -845,7 +882,7 @@ export class App extends Observable implements AppContext {
         conditions: this.selectionConditionsFor(query.name, 'applied'),
         expression: this.selectionExpressionFor(query.name, 'applied'),
       },
-      { timezone: this._timezone, title: this.title },
+      { ...this.queryInputDefaults, title: this.title },
       options,
       // As the result on screen ran, so the file holds what the reader sees.
       query.run,
@@ -877,6 +914,7 @@ export class App extends Observable implements AppContext {
     return {
       ...(this.title ? { title: this.title } : {}),
       ...(this._timezone ? { timezone: this._timezone } : {}),
+      ...(this._weekStartDay ? { weekStartDay: this._weekStartDay } : {}),
       queries: Object.fromEntries([...this._queries.entries()].map(([name, q]) => [name, q.toJSON()])),
       filters: byKind<FilterDeclaration>('filter'),
       dateDrills: byKind<DateDrillDeclaration>('dateDrill'),
@@ -900,6 +938,8 @@ export class App extends Observable implements AppContext {
     return {
       ...(this.title ? { title: this.title } : {}),
       ...(this._timezone ? { timezone: this._timezone } : {}),
+      ...(this._weekStartDay ? { weekStartDay: this._weekStartDay } : {}),
+      ...(Object.keys(this.queryInput).length > 0 ? { queryInput: { ...this.queryInput } } : {}),
       hasChanges: this.hasChanges,
       declaration: this.toJSON(),
       queries: Object.fromEntries(

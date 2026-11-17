@@ -220,6 +220,18 @@ export interface QueryDeclaration {
   cache?: QueryCacheSettings;
 }
 
+/** The day a week starts on, as the core API's `input.weekStartDay` takes it. */
+export type WeekStartDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+/**
+ * What an app's queries get in their input when they set none, overriding the app's own
+ * `timezone` and `weekStartDay` for its queries only.
+ */
+export interface QueryInputDefaults {
+  timezone?: string;
+  weekStartDay?: WeekStartDay;
+}
+
 /** How a query uses the backend's result cache, as the core API's `cache` takes it. */
 export interface QueryCacheSettings {
   /**
@@ -262,20 +274,29 @@ export interface DateDrillDeclaration {
 export interface AppDeclaration {
   title?: string;
   /**
-   * Omitted means the server applies the tenant reporting timezone — the SDK does not guess the
-   * browser's. Part of the declaration, not the environment: two apps in one host may differ.
+   * The app's timezone: for its own UI (`app.timezone`), and for its queries unless
+   * `query.default.input.timezone` says otherwise. Omitted means the server's default, such as the
+   * tenant's reporting timezone — the SDK does not guess the browser's. Part of the declaration, not
+   * the environment: two apps in one host may differ.
    */
   timezone?: string;
   /**
-   * How the app's queries run, in the shape `.anfra/config.yml`'s `query` has for a repo.
-   * `default.cache.duration`: the cache duration of each query that declares none, such as `5m`.
-   * Without it, the repo's default, if any.
+   * The day the app's weeks start on: for its own UI (`app.weekStartDay`), such as a date picker,
+   * and for its queries unless `query.default.input.weekStartDay` says otherwise. Omitted means the
+   * server's default (monday on anfra, unless the repo sets another).
+   */
+  weekStartDay?: WeekStartDay;
+  /**
+   * What the app's queries get when they set none, in the shape `.anfra/config.yml`'s `query` has
+   * for a repo. `default.input` overrides the app's own `timezone` and `weekStartDay`, for its
+   * queries only. `default.cache.duration`: the cache duration of each query that declares none,
+   * such as `5m`. Without either, the repo's defaults, if any.
    *
    * ```ts
    * Anfra.createApp({ title: 'Sales', query: { default: { cache: { duration: '5m' } } } });
    * ```
    */
-  query?: { default?: { cache?: QueryCacheSettings } };
+  query?: { default?: { input?: QueryInputDefaults, cache?: QueryCacheSettings } };
 }
 
 /* ----------------------------------------------------------------
@@ -539,6 +560,7 @@ export type MappingJson = ControlMappingJson | CrossFilterJson;
 export interface AppJson {
   title?: string;
   timezone?: string;
+  weekStartDay?: WeekStartDay;
   queries: Record<string, QueryDeclaration>;
   filters: Record<string, FilterDeclaration>;
   dateDrills: Record<string, DateDrillDeclaration>;
@@ -655,6 +677,9 @@ export interface InspectedSelection {
 export interface InspectedApp {
   title?: string;
   timezone?: string;
+  weekStartDay?: WeekStartDay;
+  /** The app's `query.default.input`, which its queries use over its own timezone and week start day. */
+  queryInput?: QueryInputDefaults;
   hasChanges: boolean;
   declaration: AppJson;
   queries: Record<string, InspectedQuery>;
@@ -710,6 +735,8 @@ export interface QueryInput {
   pagination?: QueryPagination;
   /** Absent when the app declares none, leaving the backend's default. */
   timezone?: string;
+  /** Absent when the app declares none, leaving the backend's default. */
+  weekStartDay?: WeekStartDay;
   /** Absent for a fresh run, which runs as of now. */
   seeds?: QuerySeeds;
 }

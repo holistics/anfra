@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSdk } from './sdk';
 import { ValidationError } from '../common/errors';
 import { numberTypes, salesDataset, stubBackend, testUser, textTypes } from './testSupport';
-import type { Backend, BackendExportRequest, BackendQueryRequest } from '../common/types';
+import type { AppDeclaration, Backend, BackendExportRequest, BackendQueryRequest, WeekStartDay } from '../common/types';
 import type { App } from './app';
 
 function sdk () {
@@ -55,7 +55,7 @@ describe('declaration', () => {
     expect(() => app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '1d' } }))
       .toThrowError(/Query 'q' declares cache.duration "1d", which isn't a duration/);
     expect(() => app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '169h' } }))
-      .toThrowError("Query 'q' declares cache.duration 169h, which is over 168h (7 days), the longest a result can be cached.");
+      .toThrowError('Query \'q\' declares cache.duration "169h", which is over 168h (7 days), the longest a result can be cached.');
     expect(app.createQuery('q', { dataset: 'sales', aql, cache: { duration: '0s' } }).cacheDuration).toBe('0s');
   });
 
@@ -643,6 +643,55 @@ describe('retry', () => {
     submitQuery.mockClear();
     await plain.execute();
     expect(submitQuery.mock.calls[0][0]).not.toHaveProperty('cacheDuration');
+  });
+
+  it('refuses a week start day the server would refuse, suggesting the one meant', () => {
+    expect(() => sdk().createApp({ weekStartDay: 'Monday' as WeekStartDay }))
+      .toThrowError('The app declares weekStartDay "Monday". Did you mean "monday"?');
+    expect(() => sdk().createApp({ query: { default: { input: { weekStartDay: 'weekend' as WeekStartDay } } } }))
+      .toThrowError('The app declares query.default.input.weekStartDay "weekend". Use one of: "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", or "sunday".');
+    const app = sdk().createApp();
+    expect(() => app.setWeekStartDay('sundy' as WeekStartDay)).toThrowError('The app sets weekStartDay to "sundy". Did you mean "sunday"?');
+    expect(app.weekStartDay).toBeUndefined();
+  });
+
+  // A query's timezone and week start day are its app's query.default.input, or else the app's
+  // own, or else none, for the backend's default; every request of its run sends them. The app's
+  // own stay what its UI reads.
+  it("sends the app's timezone and week start day, query.default.input over the app's own", async () => {
+    const submitQuery = vi.fn(async (request: BackendQueryRequest) => ({
+      values: [['1']],
+      columns: [{ name: 'total', fieldName: 'total', label: 'Total', adhoc: true, isMeasure: true, ...numberTypes }],
+      meta: { page: request.input.pagination?.page, pageSize: 1, numRows: 1 },
+    }));
+    const backend = { submitQuery, fieldSuggestions: async () => [] } as Backend;
+    const aql = 'explore { measures { total: orders | sum(orders.amount) } }';
+    const create = (declaration: AppDeclaration) => {
+      const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend }).createApp(declaration);
+      app.createQuery('q', { dataset: 'sales', aql });
+      return app;
+    };
+    const sent = async (app: ReturnType<typeof create>) => {
+      submitQuery.mockClear();
+      await app.execute({ force: true });
+      const { timezone, weekStartDay } = submitQuery.mock.calls[0][0].input;
+      return { timezone, weekStartDay };
+    };
+
+    expect(await sent(create({}))).toEqual({ timezone: undefined, weekStartDay: undefined });
+    const own = create({ timezone: 'Europe/London', weekStartDay: 'sunday' });
+    expect(await sent(own)).toEqual({ timezone: 'Europe/London', weekStartDay: 'sunday' });
+    own.setWeekStartDay('tuesday');
+    expect(own.queries.q.isDirty).toBe(true);
+    expect(await sent(own)).toEqual({ timezone: 'Europe/London', weekStartDay: 'tuesday' });
+
+    const both = create({ timezone: 'Europe/London', weekStartDay: 'sunday', query: { default: { input: { timezone: 'Asia/Singapore', weekStartDay: 'monday' } } } });
+    expect(await sent(both)).toEqual({ timezone: 'Asia/Singapore', weekStartDay: 'monday' });
+    expect([both.timezone, both.weekStartDay]).toEqual(['Europe/London', 'sunday']);
+    // The app's own reaches no query while query.default.input sets it.
+    both.setWeekStartDay('friday');
+    expect(both.queries.q.isDirty).toBe(false);
+    expect(await sent(both)).toEqual({ timezone: 'Asia/Singapore', weekStartDay: 'monday' });
   });
 
   // A pivot's page is rows of its grid, with the header rows and a rolled-up grand total on

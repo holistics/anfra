@@ -1,7 +1,7 @@
 import { FILTER_AGGREGATIONS, type FilterAggregation } from '../common/aggregations';
 import { ValidationError } from '../common/errors';
-import { withSuggestion } from './suggest';
-import type { Aggregation, DatasetDescriptor } from '../common/types';
+import { suggest, withSuggestion } from './suggest';
+import type { Aggregation, DatasetDescriptor, WeekStartDay } from '../common/types';
 
 export interface ResolvedField {
   /**
@@ -148,17 +148,46 @@ export function parseDuration (text: string): number | undefined {
 }
 
 /**
- * Refuses a cache duration the server would refuse, before any query runs: one that isn't a
- * duration, or is over 7 days. `declarer` says who declared it (`Query 'revenue'`, `The app`), and
- * `setting` which setting it is.
+ * How an entity came to have a setting: declared (`createApp`, `createQuery`), or set later (a setter,
+ * `query.update`). A message says it as the author did it.
  */
-export function assertCacheDuration (duration: unknown, declarer: string, setting: string, entity?: string): void {
+export type Giving = 'declares' | 'sets';
+
+/** "The app declares weekStartDay "Monday"", or "Query 'q' sets pageSize to 0". */
+export function gave (declarer: string, setting: string, value: unknown, how: Giving): string {
+  const shown = JSON.stringify(value);
+  return how === 'sets' ? `${declarer} sets ${setting} to ${shown}` : `${declarer} declares ${setting} ${shown}`;
+}
+
+/** The days a week can start on, as the core API takes them. */
+export const WEEK_START_DAYS: readonly WeekStartDay[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+/**
+ * Refuses a week start day the server would refuse, before any query runs, suggesting the day a
+ * different case or a typo meant. `declarer` says who gave it (`The app`), `setting` which setting it
+ * is (`weekStartDay`, `query.default.input.weekStartDay`), and `how` how it was given.
+ */
+export function assertWeekStartDay (day: unknown, declarer: string, setting: string, how: Giving = 'declares'): void {
+  if (day === undefined || WEEK_START_DAYS.includes(day as WeekStartDay)) return;
+  const said = `${gave(declarer, setting, day, how)}.`;
+  const meant = typeof day === 'string' ? suggest(day.trim(), [...WEEK_START_DAYS]) : undefined;
+  if (meant) throw new ValidationError(`${said} Did you mean ${JSON.stringify(meant)}?`);
+  const choices = WEEK_START_DAYS.map((d) => JSON.stringify(d));
+  throw new ValidationError(`${said} Use one of: ${choices.slice(0, -1).join(', ')}, or ${choices[choices.length - 1]}.`);
+}
+
+/**
+ * Refuses a cache duration the server would refuse, before any query runs: one that isn't a
+ * duration, or is over 7 days. `declarer` says who gave it (`Query 'revenue'`, `The app`), `setting`
+ * which setting it is, and `how` how it was given.
+ */
+export function assertCacheDuration (duration: unknown, declarer: string, setting: string, entity?: string, how: Giving = 'declares'): void {
   if (duration === undefined) return;
   const ms = typeof duration === 'string' ? parseDuration(duration) : undefined;
   if (ms === undefined) {
-    throw new ValidationError(`${declarer} declares ${setting} ${JSON.stringify(duration)}, which isn't a duration. Use one such as 30s, 10m or 2h.`, entity);
+    throw new ValidationError(`${gave(declarer, setting, duration, how)}, which isn't a duration. Use one such as 30s, 10m or 2h.`, entity);
   }
   if (ms > MAX_CACHE_DURATION_MS) {
-    throw new ValidationError(`${declarer} declares ${setting} ${duration}, which is over 168h (7 days), the longest a result can be cached.`, entity);
+    throw new ValidationError(`${gave(declarer, setting, duration, how)}, which is over 168h (7 days), the longest a result can be cached.`, entity);
   }
 }

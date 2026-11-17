@@ -224,10 +224,10 @@ describe('editing a query', () => {
     const { app } = build();
     const query = app.createQuery('chart', { dataset: 'sales', aql: AQL.byRegion });
 
-    expect(() => query.update({ aql: '  ' })).toThrowError(ValidationError);
-    expect(() => query.update({ pageSize: 0 })).toThrowError(/whole number of at least 1/);
+    expect(() => query.update({ aql: '  ' })).toThrowError(/sets no AQL/);
+    expect(() => query.update({ pageSize: 0 })).toThrowError(/sets pageSize to 0, but it must be a whole number of at least 1/);
     expect(() => query.update({ dataset: 'nowhere' })).toThrowError(ValidationError);
-    expect(() => query.update({ cache: { duration: 'soon' } })).toThrowError(/cache\.duration/);
+    expect(() => query.update({ cache: { duration: 'soon' } })).toThrowError(/sets cache\.duration to "soon", which isn't a duration/);
     expect(query.declaration).toEqual({ dataset: 'sales', aql: AQL.byRegion });
   });
 

@@ -103,7 +103,7 @@ func TestWithRepoSettingsRefuses(t *testing.T) {
 	// A host's defaults that Check refuses: refused the same way, the
 	// message ending once.
 	_, err = in(func(*QueryRequestParams) {}).withRepoDefaults(command.CommandContext{QueryDefaults: command.QueryDefaults{WeekStartDay: "Monday"}})
-	if !errors.Is(err, errcode.RepoSettingsInvalid) || !strings.Contains(err.Error(), `query.default.input.weekStartDay is "Monday". Did you mean monday?`) || strings.Contains(err.Error(), "?.") {
+	if !errors.Is(err, errcode.RepoSettingsInvalid) || !strings.Contains(err.Error(), `query.default.input.weekStartDay is "Monday". Did you mean "monday"?`) || strings.Contains(err.Error(), "?.") {
 		t.Errorf("err = %v, want repo_settings_invalid naming the default", err)
 	}
 }

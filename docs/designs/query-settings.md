@@ -1,6 +1,6 @@
 # A repo's query settings
 
-> Status: 2026-11-17. Partly built: the settings, read strictly; the time zone and week start day defaults, `input.weekStartDay`, the locks, and `query.cache.max_duration`. Not yet: the SDK's levels, `anfra init` writing the file, and the repo's info returning the settings. Replaces `cache.query.*` in `.anfra/config.yml`, which hasn't been released, so it is renamed without a deprecation.
+> Status: 2026-11-17. Partly built: the settings, read strictly; the time zone and week start day defaults, `input.weekStartDay`, the locks, and `query.cache.max_duration`. Not yet: `anfra init` writing the file, and the repo's info returning the settings. Replaces `cache.query.*` in `.anfra/config.yml`, which hasn't been released, so it is renamed without a deprecation.
 
 A repo sets how its queries run in `.anfra/config.yml`, under `query`: the values a query gets when it sets none, which of those values a query can't change, and the rules for the query cache. This doc says what each setting means, how anfra reads the file, and what `anfra init` writes.
 
@@ -164,6 +164,20 @@ The file is how anfra's CLI and `anfra serve` learn a repo's settings. The engin
 `QueryDefaults.Check()` holds the rules every host's defaults follow: a time zone and a week start day anfra takes, a cache duration of 0s or more, and locks only on defaults. The engine calls it before every query, which fails with `repo_settings_invalid` when it refuses, or when `Err` is set. anfra's own reading of the file calls it too (`repoconfig.Config.QueryDefaults`, the one place the file's defaults become the engine's), adding where the value came from. A platform calls it when it saves a repo's settings, so a mistake is refused there, not on the next query. `QueryCacheSettings` has the same pair for its cap: `Check()` for its range, and `CheckDefault(QueryDefaults)` for a default duration over it, which would refuse every query that sets none. The engine calls both before each query, and anfra's reading of the file calls the same functions, so each rule has one copy.
 
 The file's reading keeps what is about the file: unknown keys, line numbers, and that a locked default is set in it explicitly. A platform's empty value means anfra's default, so locking an unset time zone locks it at `Etc/UTC`.
+
+## Levels
+
+A setting may have a default at several levels, each added where something needs it, and the more specific level wins. For a query's time zone and week start day, the first that is set:
+
+1. the query's own `input.timezone` and `input.weekStartDay`;
+2. its Data App's `query.default.input.*`, for the app's queries only;
+3. its Data App's own `timezone` and `weekStartDay`, for the app: its UI (`app.timezone`, `app.weekStartDay`) and its queries;
+4. the repo's `query.default.input.*`, applied by the server;
+5. anfra's own, `Etc/UTC` and `monday`.
+
+The SDK sends a value only when 1–3 sets one, so a host's own defaults apply underneath. An app sets 2 only to give its queries another value than its page uses, and since `app.setTimezone()` and `app.setWeekStartDay()` change 3, they reach no query while 2 is set: `inspect` warns when 2 and 3 differ.
+
+The repo has no level like 3 yet: nothing but queries uses its time zone and week start day. When something does, such as a Data App's page using the repo's when the app sets none, the repo gains its own `timezone` and `weekStartDay` at that level, and `query.default.input` keeps overriding them for queries.
 
 ## What a caller can read
 

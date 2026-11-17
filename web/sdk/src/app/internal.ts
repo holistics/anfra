@@ -3,7 +3,7 @@ import type { Mapping } from './mapping';
 import type { Query, QueryUpdate } from './query';
 import type { DatasetIndex } from './validation';
 import type {
-  ExecuteOptions, ExecuteSummary, LocateKind, Row, SdkFeatures, Selection, SelectionCondition,
+  ExecuteOptions, ExecuteSummary, LocateKind, QueryInputDefaults, Row, SdkFeatures, Selection, SelectionCondition,
 } from '../common/types';
 
 /**
@@ -12,6 +12,8 @@ import type {
  */
 export interface AppContext {
   readonly timezone?: string;
+  /** What its queries get in their input when they set none: a timezone and a week start day. */
+  readonly queryInputDefaults: QueryInputDefaults;
   /** The cache duration of each of its queries that declares none; absent leaves the backend's default. */
   readonly queryCacheDefaultDuration?: string;
   /** Server-side capabilities the host declared, so a declaration can refuse what would be dropped. */

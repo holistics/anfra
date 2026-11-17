@@ -66,13 +66,19 @@ arrives as the query's `validation_failed` error, its violation at `input.filter
 const app = Anfra.createApp({
   title: 'Sales',
   timezone: 'Asia/Singapore',
+  weekStartDay: 'sunday',
   query: { default: { cache: { duration: '5m' } } },
 }); // all optional
 ```
 
-Omit `timezone` to use anfra's default; set it to an IANA zone to evaluate relative dates and
-date truncation in that zone. An HTML file may create several apps; one
-is almost always right.
+Omit `timezone` to use the repo's default (UTC unless the repo sets one); set it to an IANA zone to
+evaluate relative dates and date truncation in that zone. `weekStartDay` (`monday` to `sunday`) is
+the day weeks start on, for grouping by week, `this week` and the like: omit it for the repo's
+(monday unless the repo sets one). Both are the app's own: read them as `app.timezone` and
+`app.weekStartDay` for the page's own dates, such as a date picker, and change them with
+`app.setTimezone()` and `app.setWeekStartDay()`. To give the queries a different value from the
+page, set `query: { default: { input: { timezone, weekStartDay } } }`, which the queries use over
+the app's own; you rarely need it. An HTML file may create several apps; one is almost always right.
 
 `query.default.cache.duration` lets the app's queries answer from results cached up to that long
 ago, instead of the warehouse: `5m` suits most pages. A query's own `cache.duration` overrides it.

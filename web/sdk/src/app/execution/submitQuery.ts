@@ -16,11 +16,13 @@ import type {
   QueryResult,
   QueryStamp,
   SelectionCondition,
+  WeekStartDay,
 } from '../../common/types';
 
 export interface SubmitContext {
   backend: Backend;
   timezone?: string;
+  weekStartDay?: WeekStartDay;
   bustCache?: boolean;
 }
 
@@ -128,7 +130,7 @@ export function buildQuery (
   query: Query,
   mappings: Mapping[],
   selection: SelectionInput,
-  context: Pick<SubmitContext, 'timezone'>,
+  context: Pick<SubmitContext, 'timezone' | 'weekStartDay'>,
 ): QueryRequest {
   const mappedFilters = mappings
     .map((mapping) => toFilter(mapping, mapping.from.appliedCondition))
@@ -161,6 +163,7 @@ export function buildQuery (
       // Omitted entirely when the app declares none, so the backend applies its own default rather
       // than the SDK guessing the browser's.
       ...(context.timezone ? { timezone: context.timezone } : {}),
+      ...(context.weekStartDay ? { weekStartDay: context.weekStartDay } : {}),
     },
     ...(query.cacheDuration ? { cacheDuration: query.cacheDuration } : {}),
   };
@@ -223,7 +226,7 @@ export function buildExportRequest (
   query: Query,
   mappings: Mapping[],
   selection: SelectionInput,
-  context: Pick<SubmitContext, 'timezone'> & { title?: string },
+  context: Pick<SubmitContext, 'timezone' | 'weekStartDay'> & { title?: string },
   options: ExportOptions,
   run?: Run,
 ): BackendExportRequest {
