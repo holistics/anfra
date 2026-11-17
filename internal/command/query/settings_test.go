@@ -107,3 +107,33 @@ func TestWithRepoSettingsRefuses(t *testing.T) {
 		t.Errorf("err = %v, want repo_settings_invalid naming the default", err)
 	}
 }
+
+// A query's cache.duration over the repo's cap is refused on it, with the cap
+// to use; a repo whose default is over its cap refuses every query.
+func TestWithRepoDefaultsCap(t *testing.T) {
+	capped := &standInCache{settings: command.QueryCacheSettings{MaxDuration: 24 * time.Hour}}
+	query := func(duration string) QueryRequestParams {
+		return QueryRequestParams{QueryDefinition: QueryDefinition{Dataset: "d", Query: "q"}, Cache: CacheOptions{Duration: duration}}
+	}
+	cc := command.CommandContext{QueryCache: capped}
+	for _, ok := range []string{"", "24h", "10m"} {
+		if _, err := query(ok).withRepoDefaults(cc); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	_, err := query("48h").withRepoDefaults(cc)
+	v, _ := apperr.DetailsOf(err, apperr.ValidationFailed)
+	const want = "cache.duration is 48h, but the repo caches a result for at most 24h (query.cache.max_duration in the repo's settings). Use 24h or less."
+	if len(v.Violations) != 1 || v.Violations[0].Field != "cache.duration" || v.Violations[0].Message != want {
+		t.Errorf("over the cap: %v, want a violation on cache.duration: %q", err, want)
+	}
+	// Without a cache of the host's, the cap is anfra's.
+	if _, err := query("48h").withRepoDefaults(command.CommandContext{}); err != nil {
+		t.Errorf("no cache: %v", err)
+	}
+
+	cc.QueryDefaults.CacheDuration = 48 * time.Hour
+	if _, err := query("").withRepoDefaults(cc); !errors.Is(err, errcode.RepoSettingsInvalid) || !strings.Contains(err.Error(), "more than query.cache.max_duration (24h)") {
+		t.Errorf("a default over the cap: %v, want repo_settings_invalid", err)
+	}
+}

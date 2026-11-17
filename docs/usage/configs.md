@@ -27,6 +27,7 @@ The repo's settings, written by hand and committed. It never holds a credential.
 | `query.locked_defaults` | The defaults above that a query can't change, by their path under `query.default`: `input.timezone`, `input.weekStartDay` or `cache.duration`. A query may leave a locked input out, or send the same value; any other value is refused. Each must be set under `query.default`. Default: none. |
 | `query.default.cache.duration` | How old a cached result a query accepts, and how long a result it caches is kept, for every query that sets no `cache.duration` of its own: a duration such as `5m` or `1h`, at most `168h` (7 days). It applies to every caller, `anfra query` and MCP included, so an agent asking a question again gets the cached answer. To cache only a Data App's queries, set the app's own default instead, in its `createApp` (`query: { default: { cache: { duration: '5m' } } }`), which takes precedence for its queries. Default: unset, so a query uses the cache only when it, or its Data App, asks. |
 | `query.cache.enabled` | `false` turns the query cache off for the repo: anfra keeps no store and starts no canal-lake. A query that asks for the cache runs on the warehouse, and its answer says why (`cache.warning`, `cache_disabled`); `anfra cache clean` fails. Default: `true`. `ANFRA_QUERY_CACHE_ENABLED` overrides it for one process ([below](#query-cache)). |
+| `query.cache.max_duration` | The longest a query's result may be cached, from `1s` to `168h` (7 days). A query that asks for longer, by its own `cache.duration`, is refused with the cap to use, rather than cached for less than it asked. A `query.default.cache.duration` over it is an error in the file. Default: `168h`. |
 
 `anfra serve` reads the `query` settings when it starts: restart it after changing them.
 
@@ -49,6 +50,8 @@ query:
       duration: 5m
   locked_defaults:
     - input.weekStartDay
+  cache:
+    max_duration: 24h
 ```
 
 ## `anfra serve`

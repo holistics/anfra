@@ -108,14 +108,14 @@ func TestReadQuerySettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != time.Hour || c.QueryDefaults().CacheDuration != 10*time.Minute ||
+	if c.QueryCacheEnabled() || c.QueryCacheSettings().MaxDuration != time.Hour || c.QueryDefaults().CacheDuration != 10*time.Minute ||
 		c.Query.Default.Input.Timezone != "Asia/Ho_Chi_Minh" || c.Query.Default.Input.WeekStartDay != "sunday" {
 		t.Errorf("read %+v", c.Query)
 	}
 
 	for _, yml := range []string{"", "# only a comment\n"} {
 		c, err := read(t, yml)
-		if err != nil || !c.QueryCacheEnabled() || c.QueryCacheMaxDuration() != 168*time.Hour || c.QueryDefaults().CacheDuration != 0 {
+		if err != nil || !c.QueryCacheEnabled() || c.QueryCacheSettings().MaxDuration != 0 || c.QueryDefaults().CacheDuration != 0 {
 			t.Errorf("%q: %+v, %v; want the defaults", yml, c.Query, err)
 		}
 	}

@@ -51,6 +51,7 @@ type QueryCacheStatus struct {
 // QueryCacheSettings are the query cache's settings that are set.
 type QueryCacheSettings struct {
 	DefaultDuration string `json:"default_duration,omitempty" doc:"the cache.duration of a query that sets none (query.default.cache.duration in .anfra/config.yml)"`
+	MaxDuration     string `json:"max_duration,omitempty" doc:"the longest a query's result may be cached, when the repo sets less than 168h (query.cache.max_duration in .anfra/config.yml)"`
 	Namespace       string `json:"namespace,omitempty" doc:"the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE)"`
 }
 
@@ -85,10 +86,13 @@ func status(ctx context.Context, cc command.CommandContext, _ CacheStatusRequest
 		return CacheStatusResult{Query: out, Hints: hints}, nil
 	}
 	settings := qc.Settings()
-	if d, ns := cc.QueryDefaults.CacheDuration, settings.Namespace; d > 0 || ns != "" {
+	if d, limit, ns := cc.QueryDefaults.CacheDuration, settings.MaxDuration, settings.Namespace; d > 0 || limit > 0 || ns != "" {
 		out.Settings = &QueryCacheSettings{Namespace: ns}
 		if d > 0 {
-			out.Settings.DefaultDuration = d.String()
+			out.Settings.DefaultDuration = command.FormatDuration(d)
+		}
+		if limit > 0 {
+			out.Settings.MaxDuration = command.FormatDuration(limit)
 		}
 	}
 	contents, err := qc.Contents(ctx)

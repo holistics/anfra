@@ -9,7 +9,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/didyoumean"
-	"github.com/holistics/anfra/internal/querycache"
 )
 
 // checkKeys refuses the first key in n that t, the struct n decodes into, has
@@ -85,30 +84,25 @@ func yamlName(f reflect.StructField) string {
 // other, each error naming the setting and how to fix it.
 func (c Config) check() error {
 	q := c.Query
-	maxDuration := querycache.MaxDuration
 	if s := q.Cache.MaxDuration; s != "" {
 		d, err := time.ParseDuration(s)
 		switch {
 		case err != nil:
 			return notDuration("query.cache.max_duration", s)
-		case d <= 0:
+		case d == 0: // unset, to the engine: the file says it, so it means none
 			return fmt.Errorf(RelPath+": query.cache.max_duration is %s. Use a duration from 1s to 168h (7 days). To turn the query cache off, set query.cache.enabled to false", s)
-		case d > querycache.MaxDuration:
-			return fmt.Errorf(RelPath+": query.cache.max_duration is %s, but anfra caches a result for at most 168h (7 days). Use 168h or less", s)
 		}
-		maxDuration = d
 	}
 	if s := q.Default.Cache.Duration; s != "" {
-		d, err := time.ParseDuration(s)
-		switch {
-		case err != nil:
+		if _, err := time.ParseDuration(s); err != nil {
 			return notDuration("query.default.cache.duration", s)
-		case d > maxDuration:
-			return fmt.Errorf(RelPath+": query.default.cache.duration is %s, more than query.cache.max_duration (%s). Lower the default or raise the cap", s, maxDurationShown(q.Cache.MaxDuration))
 		}
 	}
-	if err := c.QueryDefaults().Check(); err != nil {
-		return fmt.Errorf("%s: %w", RelPath, err)
+	cache, defaults := c.QueryCacheSettings(), c.QueryDefaults()
+	for _, err := range []error{cache.Check(), defaults.Check(), cache.CheckDefault(defaults)} {
+		if err != nil {
+			return fmt.Errorf("%s: %w", RelPath, err)
+		}
 	}
 	return c.checkLocks()
 }
@@ -152,13 +146,6 @@ func defaultValues(v reflect.Value, prefix string) map[string]string {
 
 func notDuration(setting, s string) error {
 	return fmt.Errorf("%s: %s is %q, which isn't a duration. Use one such as 30s, 10m or 2h", RelPath, setting, s)
-}
-
-func maxDurationShown(s string) string {
-	if s == "" {
-		return "168h, by default"
-	}
-	return s
 }
 
 func join(prefix, name string) string {

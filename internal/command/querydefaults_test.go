@@ -39,3 +39,45 @@ func TestQueryDefaultsCheck(t *testing.T) {
 		})
 	}
 }
+
+// The cap is querycache.MaxDuration unless set; Check refuses one anfra can't
+// apply, and CheckDefault a default over it, naming the cap and where it came
+// from.
+func TestQueryCacheSettingsCheck(t *testing.T) {
+	if got := (QueryCacheSettings{}).Max(); got != 168*time.Hour {
+		t.Errorf("Max() unset = %v, want 168h", got)
+	}
+	for _, ok := range []QueryCacheSettings{{}, {MaxDuration: time.Second}, {MaxDuration: 168 * time.Hour}} {
+		if err := ok.Check(); err != nil {
+			t.Errorf("%+v: %v", ok, err)
+		}
+	}
+	for d, want := range map[time.Duration]string{
+		-time.Minute:    "query.cache.max_duration is -1m. Use a duration from 1s to 168h (7 days)",
+		200 * time.Hour: "query.cache.max_duration is 200h, but anfra caches a result for at most 168h (7 days)",
+	} {
+		if err := (QueryCacheSettings{MaxDuration: d}).Check(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%v: %v, want %q", d, err, want)
+		}
+	}
+
+	capped := QueryCacheSettings{MaxDuration: time.Hour}
+	if err := capped.CheckDefault(QueryDefaults{CacheDuration: time.Hour}); err != nil {
+		t.Errorf("a default at the cap: %v", err)
+	}
+	for _, tc := range []struct {
+		s    QueryCacheSettings
+		want string
+	}{
+		{capped, "query.default.cache.duration is 2h, more than query.cache.max_duration (1h). Lower the default or raise the cap"},
+		{QueryCacheSettings{}, "more than query.cache.max_duration (168h, by default)"},
+	} {
+		d := QueryDefaults{CacheDuration: 2 * time.Hour}
+		if tc.s.MaxDuration == 0 {
+			d.CacheDuration = 200 * time.Hour
+		}
+		if err := tc.s.CheckDefault(d); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%+v: %v, want %q", tc.s, err, tc.want)
+		}
+	}
+}

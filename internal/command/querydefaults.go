@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/didyoumean"
+	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 )
 
@@ -98,4 +99,38 @@ func prose(names []string) string {
 		return names[0] + " and " + names[1]
 	}
 	return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
+}
+
+// Max is the longest a query's result may be cached: MaxDuration, or
+// querycache.MaxDuration when unset.
+func (s QueryCacheSettings) Max() time.Duration {
+	if s.MaxDuration == 0 {
+		return querycache.MaxDuration
+	}
+	return s.MaxDuration
+}
+
+// Check refuses a MaxDuration anfra can't apply, naming the setting as the
+// repo's settings do (query.cache.max_duration).
+func (s QueryCacheSettings) Check() error {
+	switch d := s.MaxDuration; {
+	case d < 0:
+		return fmt.Errorf("query.cache.max_duration is %s. Use a duration from 1s to 168h (7 days). To turn the query cache off, set query.cache.enabled to false", FormatDuration(d))
+	case d > querycache.MaxDuration:
+		return fmt.Errorf("query.cache.max_duration is %s, but anfra caches a result for at most 168h (7 days). Use 168h or less", FormatDuration(d))
+	}
+	return nil
+}
+
+// CheckDefault refuses a repo's default cache duration over the cap: every
+// query that sets none would be refused.
+func (s QueryCacheSettings) CheckDefault(d QueryDefaults) error {
+	if d.CacheDuration <= s.Max() {
+		return nil
+	}
+	limit := FormatDuration(s.Max())
+	if s.MaxDuration == 0 {
+		limit += ", by default"
+	}
+	return fmt.Errorf("query.default.cache.duration is %s, more than query.cache.max_duration (%s). Lower the default or raise the cap", FormatDuration(d.CacheDuration), limit)
 }

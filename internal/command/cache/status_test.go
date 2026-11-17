@@ -18,7 +18,7 @@ import (
 func TestStatus(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "query")
-	qc := localquerycache.New(dir, localquerycache.Options{Namespace: "prod"})
+	qc := localquerycache.New(dir, localquerycache.Options{Namespace: "prod", MaxDuration: 24 * time.Hour})
 	t.Cleanup(func() { qc.Close(ctx) })
 	cc := command.CommandContext{QueryCache: qc, QueryDefaults: command.QueryDefaults{CacheDuration: time.Hour}}
 
@@ -29,7 +29,7 @@ func TestStatus(t *testing.T) {
 	if _, err := os.Stat(qc.StorePath()); !os.IsNotExist(err) {
 		t.Error("the status made a store")
 	}
-	if s := got.Query.Settings; s == nil || s.DefaultDuration != "1h0m0s" || s.Namespace != "prod" {
+	if s := got.Query.Settings; s == nil || s.DefaultDuration != "1h" || s.MaxDuration != "24h" || s.Namespace != "prod" {
 		t.Errorf("settings: %+v", s)
 	}
 

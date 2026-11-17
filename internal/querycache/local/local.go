@@ -62,6 +62,9 @@ type Options struct {
 	// Disabled says why the cache is off, as anfra status reports it; empty,
 	// it is on.
 	Disabled string
+	// MaxDuration is the repo's cap on a query's cache duration: zero,
+	// querycache.MaxDuration (command.QueryCacheSettings.MaxDuration).
+	MaxDuration time.Duration
 	// Lake is its canal-lake; nil when the cache is off.
 	Lake Lake
 	// Namespace is the subfolder of canal-lake's storage its files go in, as
@@ -84,7 +87,7 @@ const NamespaceEnv = "ANFRA_CACHE_QUERY_NAMESPACE"
 // report, rather than failing here: a cache problem never fails a command.
 func New(dir string, o Options) *Cache {
 	c := &Cache{dir: dir, disabled: o.Disabled, lake: o.Lake, report: o.Report, notice: o.Notice,
-		settings: command.QueryCacheSettings{Disabled: o.Disabled, Namespace: strings.TrimSuffix(o.Namespace, "/")}}
+		settings: command.QueryCacheSettings{Disabled: o.Disabled, MaxDuration: o.MaxDuration, Namespace: strings.TrimSuffix(o.Namespace, "/")}}
 	if o.Namespace != "" {
 		c.namespace = strings.TrimSuffix(o.Namespace, "/") + "/"
 		if !querycache.ValidNamespace(c.namespace) {
