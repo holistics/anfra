@@ -19,7 +19,7 @@ out by inventory, one equal card per measure, and the reader can't tell what mat
 ## 1. Layout
 
 Top to bottom: the header (the `h1`, one caption line with the scope and basis, page controls on
-the right of the same row), the body, then the footer. Leave out a part the plan has nothing for.
+the right of the same row), then the body. Leave out a part the plan has nothing for.
 
 **A KPI or monitoring page** leads with its numbers:
 
@@ -31,14 +31,9 @@ the right of the same row), the body, then the footer. Leave out a part the plan
   comparison: "[↑ +6.2%] vs last year". Pills stay in KPI tiles. In tables and charts a change is
   signed text, because a pill on every number marks none of them.
 - Then the chart that explains the lead, then detail.
-- **A footer of definitions:** one entry per measure under its KPI's column (the term over one
-  short clause from its AML description, which fits one line under a tile), then a line with the
-  comparison, the date basis and the as-of date. A list rather than a paragraph, so the reader
-  finds one measure without reading them all.
 
 **Other kinds** (an explorer, a catalog, a lineage view, a detail lookup, an ops list) have no
-lead, so open with the control or view the reader came for (the search, the filter, the list). Add
-a definitions footer only when the page shows measures a reader could misread.
+lead, so open with the control or view the reader came for (the search, the filter, the list).
 
 **Grid:** every row is a `.row` of spanned cards on one 12-column grid, as in the example, so edges
 between rows line up or differ by a whole column, never by a few pixels. Spans follow the content.
@@ -126,7 +121,7 @@ Every control has a visible label. "Clear selection" shows only while there is a
   growth". Never "Dashboard", "Overview" or "Analytics". Keep `<title>`, `h1` and
   `createApp({ title })` the same.
 - **Card heading:** what is plotted and against what: "New signups by week, vs the previous 13".
-- **One name per concept** in tile, chart, table, tooltip and footer, taken from the field's label
+- **One name per concept** in tile, chart, table and tooltip, taken from the field's label
   in sentence case. Never a field name, query name or alias.
 - **A sentence on the page is computed** from a query result, and claims only what a query
   measured: no "strong", no "driven by". A finding typed as static text is wrong the day the data

@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
   A complete Data App in the default look. Dataset `ecommerce` and its fields are placeholders:
-  replace them with names from `anfra show`, the definitions with the AML descriptions, and the
-  formatters' locale and currency with the dataset's. The design layer (links, <style>, markup,
+  replace them with names from `anfra show`, and the formatters' locale and currency with the
+  dataset's. The design layer (links, <style>, markup,
   chartTheme(), formatters) and the SDK wiring (the last <script>) change independently.
 -->
 <html lang="en">
@@ -229,16 +229,8 @@
     .tt-row { display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 8px; }
     .tt-swatch { width: 8px; height: 8px; border-radius: 2px; }
     .tt-value { font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
-    .tt-hint { color: var(--muted-foreground); }
-
-    .definitions { padding-top: 16px; border-top: var(--hairline) solid var(--border); row-gap: 12px; }
-    .definition { margin: 0; padding: 0 16px; display: grid; gap: 2px; align-content: start; }
-    .definition dt { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--weak); }
-    .definition dd { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); max-width: 48ch; text-wrap: pretty; }
-    .definitions .basis { grid-column: 1 / -1; padding: 0 16px; }
-
-    @media (max-width: 900px) { .row.charts > * { grid-column: span 12; } }
-    @media (max-width: 720px) { .row.kpis > *, .row.definitions > .definition { grid-column: span 6; } }
+    .tt-hint { color: var(--muted-foreground); }    @media (max-width: 900px) { .row.charts > * { grid-column: span 12; } }
+    @media (max-width: 720px) { .row.kpis > * { grid-column: span 6; } }
     @media (prefers-reduced-motion: reduce) {
       .skeleton { animation: none; } /* a still skeleton still holds the shape */
       [data-popover][aria-hidden="true"] { scale: none; }
@@ -335,13 +327,6 @@
         </section>
       </section>
     </section>
-
-    <footer class="row definitions" data-anfra-block="definitions" data-anfra-label="Definitions">
-      <dl class="definition span-4"><dt>Revenue</dt><dd>Order amount before refunds, by order date</dd></dl>
-      <dl class="definition span-4"><dt>Orders</dt><dd>Orders placed, by order date</dd></dl>
-      <dl class="definition span-4"><dt>Average order value</dt><dd>Revenue divided by orders</dd></dl>
-      <p class="caption basis">Last year is the same dates one year earlier. <span id="as-of"></span></p>
-    </footer>
   </main>
 
   <script>
@@ -385,7 +370,6 @@
     const minus = (text) => text.replace('-', '−'); // true minus sign
     const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
     const dayLabel = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-    const fullDate = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
     function periodLabel (iso, grain) {
       const date = new Date(iso);
@@ -574,9 +558,7 @@
       const row = kpis.result.rows[0] ?? {};
       setKpi('kpi-revenue', row.revenue, (v) => moneyShort.format(v), row.revenue_ly, 'up');
       setKpi('kpi-orders', row.order_count, (v) => count.format(v), row.order_count_ly, 'up');
-      setKpi('kpi-aov', row.aov, (v) => money.format(v), row.aov_ly, 'up');
-      document.getElementById('as-of').textContent = row.latest ? `Latest order in this view: ${fullDate.format(new Date(row.latest))}.` : '';
-    }
+      setKpi('kpi-aov', row.aov, (v) => money.format(v), row.aov_ly, 'up');    }
 
     function renderScope () {
       const selected = byRegion.selectedRows.map((row) => row.region);
