@@ -82,7 +82,8 @@ function drawAnnotations (chart, query, { label = String } = {}) {
 
   // The chart's own series, with what the last draw added taken off.
   const own = option.series.filter((series) => !String(series.id).startsWith('annotation:')).map((series) => ({
-    ...series, data: (series.data ?? []).map((item) => (item && typeof item === 'object' && 'anfraOwn' in item ? item.anfraOwn : item)),
+    ...series, ...series.anfraOwnLine, anfraOwnLine: null,
+    data: (series.data ?? []).map((item) => (item && typeof item === 'object' && 'anfraOwn' in item ? item.anfraOwn : item)),
   }));
   const seriesFor = (measure) => {
     const matched = own.filter((series) => (measure ? series.id === measure : measures.has(series.id)));
@@ -94,6 +95,7 @@ function drawAnnotations (chart, query, { label = String } = {}) {
     return Number(Array.isArray(value) ? value[horizontal ? 0 : 1] : value);
   };
   const styles = new Map(); // series -> index -> itemStyle
+  const focused = new Set(); // series with a focus, whose line fades
   const style = (series, index, itemStyle) => {
     if (!styles.has(series)) styles.set(series, new Map());
     styles.get(series).set(index, { ...styles.get(series).get(index), ...itemStyle });
@@ -104,9 +106,7 @@ function drawAnnotations (chart, query, { label = String } = {}) {
   const categories = [...(option[categoryAxis]?.[0]?.data ?? [])];
   const shown = categories.length;
 
-  // Marks last, so a mark's point sits over a focus's on the same row.
-  const ordered = [...query.annotations].sort((a, b) => (a.kind === 'mark') - (b.kind === 'mark'));
-  for (const annotation of ordered) {
+  for (const annotation of query.annotations) {
     const c = color(annotation.severity);
     const name = annotation.label ?? '';
     const { anchor } = annotation;
@@ -114,9 +114,9 @@ function drawAnnotations (chart, query, { label = String } = {}) {
       anchor.index.forEach((index) => tips.set(index, [...(tips.get(index) ?? []), annotation]));
       for (const series of seriesFor(anchor.measure)) {
         if (annotation.kind === 'focus') {
-          const focused = new Set(anchor.index);
-          if (series.type === 'bar') series.data.forEach((_, index) => { if (!focused.has(index)) style(series, index, { opacity: 0.35 }); });
-          else anchor.index.forEach((index) => marks.markPoint.push({ coord: at(index, valueAt(series, index)), symbol: 'circle', symbolSize: 7, itemStyle: { color: c } }));
+          // Dim every other row: a bar, or a line's point (its line fades too).
+          focused.add(series);
+          series.data.forEach((_, index) => { if (!anchor.index.includes(index)) style(series, index, { opacity: 0.25 }); });
         } else if (series.type === 'bar') {
           anchor.index.forEach((index) => style(series, index, { color: c }));
         } else {
@@ -190,6 +190,9 @@ function drawAnnotations (chart, query, { label = String } = {}) {
     series: [
       ...own.map((series) => ({
         ...series,
+        ...(focused.has(series) && series.type === 'line' ? {
+          showSymbol: true, lineStyle: { ...series.lineStyle, opacity: 0.4 }, anfraOwnLine: { showSymbol: series.showSymbol, lineStyle: { ...series.lineStyle, opacity: series.lineStyle?.opacity ?? 1 } },
+        } : {}),
         data: series.data.map((item, index) => {
           const itemStyle = styles.get(series)?.get(index);
           if (!itemStyle) return item;
