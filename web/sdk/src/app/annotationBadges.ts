@@ -71,25 +71,26 @@ export function installAnnotationBadges (kernel: FrameKernel, contentUi: Content
   }
 
   /** The badge's popover: each annotation it covers, with its actions; picking one closes it. */
-  function open (app: App, query: Query, covered: Annotation[], anchor: () => Rect | undefined): void {
+  async function open (app: App, query: Query, covered: Annotation[], anchor: () => Rect | undefined): Promise<void> {
+    // The body first, so the list is drawn as the popover opens and is placed at its full size.
+    const body = await ui();
     const opening = contentUi.popoverAt(anchor, {
       about: { app: app.index, query: query.name },
       side: 'bottom',
       dismiss: 'outside',
-      mount: (root) => {
-        void ui().then((body) => body.annotationList(
-          root,
-          covered.map((annotation) => ({ ...annotationNote(annotation), actions: actionsFor(app, query, annotation) })),
-          (action) => {
-            void opening.then((opened) => opened.close());
-            Promise.resolve().then(action.run).catch((err: unknown) => {
-              realm.console?.error('anfra: an annotation\'s action failed:', err);
-              reportError('plugin.uncaught', err);
-            });
-          },
-        ));
-      },
+      mount: (root) => body.annotationList(
+        root,
+        covered.map((annotation) => ({ ...annotationNote(annotation), actions: actionsFor(app, query, annotation) })),
+        (action) => {
+          void opening.then((opened) => opened.close());
+          Promise.resolve().then(action.run).catch((err: unknown) => {
+            realm.console?.error('anfra: an annotation\'s action failed:', err);
+            reportError('plugin.uncaught', err);
+          });
+        },
+      ),
     });
+    await opening;
   }
 
   /** What the badges drawn last showed, so a page that changes nothing about them redraws none. */
@@ -117,7 +118,12 @@ export function installAnnotationBadges (kernel: FrameKernel, contentUi: Content
             count: covered.length,
             ...(severity ? { severity } : {}),
             label: describe(covered.length, severity),
-            onOpen: (anchor) => open(app, query, covered, anchor),
+            onOpen: (anchor) => {
+              open(app, query, covered, anchor).catch((err: unknown) => {
+                realm.console?.error('anfra: the annotations popover failed to open:', err);
+                reportError('plugin.uncaught', err);
+              });
+            },
           });
         });
       }
