@@ -23,8 +23,8 @@ References, read when a step needs them:
 - [references/downloads.md](references/downloads.md): the download button for exports and pictures.
   Read it only when the agreed design lists a download.
 - [references/example.html](references/example.html): a complete app in the default look: header
-  with page controls, KPI row with delta pills, a trend beside its breakdown, a footer of
-  definitions. Start a new file from it, or from the closest app already in `apps/`.
+  with page controls, KPI row with delta pills, and a trend beside its breakdown. Start a new file
+  from it, or from the closest app already in `apps/`.
 - The SDK docs, for what these references don't cover: look it up with [](../anfra-docs/).
 
 ## 1. Learn the datasets
