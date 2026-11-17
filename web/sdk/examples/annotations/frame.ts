@@ -9,18 +9,19 @@ import type {
 /** A number as rows carry it: a string with no float noise (`55`, not `55.00000000000001`). */
 const text = (value: number): string => String(Number(value.toPrecision(12)));
 
-const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** A date, or a timestamp at its day's start (`2026-03-01T00:00:00Z`), as a date column's rows carry it. */
+const DAY = /^(\d{4})-(\d{2})-(\d{2})(T00:00:00(?:\.0+)?Z?)?$/;
 
 /**
- * The next `count` periods after the last two, when they are dates: by whole months when both are
- * on the 1st, else by the days between them. None when they aren't dates.
+ * The next `count` periods after the last two, when they are dates, written as the last one is: by
+ * whole months when both are on the 1st, else by the days between them. None when they aren't dates.
  */
 function nextPeriods (before: string, last: string, count: number): string[] {
   const a = DAY.exec(before);
   const b = DAY.exec(last);
   if (!a || !b) return [];
   const pad = (value: number) => String(value).padStart(2, '0');
-  const format = (date: Date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+  const format = (date: Date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}${b[4] ?? ''}`;
   const end = Date.UTC(+b[1], +b[2] - 1, +b[3]);
   if (a[3] === '01' && b[3] === '01') {
     const months = (+b[1] * 12 + +b[2]) - (+a[1] * 12 + +a[2]);
