@@ -125,7 +125,7 @@ func (r queryRun) lookUpInCache(ctx context.Context, st statement, truncate int)
 		return l.uncached(apperr.New(errcode.CacheDisabled, "This server keeps no query cache, so a query with cache.cached_only can't be answered."))
 	}
 	settings := qc.Settings()
-	l.duration = settings.Default.Duration
+	l.duration = r.cc.QueryDefaults.CacheDuration
 	if d, set := opts.duration(); set {
 		l.duration = d
 	}

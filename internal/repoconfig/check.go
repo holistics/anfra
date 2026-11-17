@@ -3,18 +3,14 @@ package repoconfig
 import (
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/holistics/anfra/internal/didyoumean"
 	"github.com/holistics/anfra/internal/querycache"
-	"github.com/holistics/anfra/shared/didyoumean"
 )
-
-// weekStartDays are the values input.week_start_day takes.
-var weekStartDays = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 
 // checkKeys refuses the first key in n that t, the struct n decodes into, has
 // no field for, naming its line and path, and the key meant when one is near.
@@ -96,9 +92,9 @@ func (c Config) check() error {
 		case err != nil:
 			return notDuration("query.cache.max_duration", s)
 		case d <= 0:
-			return fmt.Errorf("query.cache.max_duration in %s is %s. Use a duration from 1s to 168h (7 days). To turn the query cache off, set query.cache.enabled to false", RelPath, s)
+			return fmt.Errorf(RelPath+": query.cache.max_duration is %s. Use a duration from 1s to 168h (7 days). To turn the query cache off, set query.cache.enabled to false", s)
 		case d > querycache.MaxDuration:
-			return fmt.Errorf("query.cache.max_duration in %s is %s, but anfra caches a result for at most 168h (7 days). Use 168h or less", RelPath, s)
+			return fmt.Errorf(RelPath+": query.cache.max_duration is %s, but anfra caches a result for at most 168h (7 days). Use 168h or less", s)
 		}
 		maxDuration = d
 	}
@@ -107,39 +103,27 @@ func (c Config) check() error {
 		switch {
 		case err != nil:
 			return notDuration("query.default.cache.duration", s)
-		case d < 0:
-			return fmt.Errorf("query.default.cache.duration in %s is %s, which is negative. Use 0s or more", RelPath, s)
 		case d > maxDuration:
-			return fmt.Errorf("query.default.cache.duration in %s is %s, more than query.cache.max_duration (%s). Lower the default or raise the cap", RelPath, s, maxDurationShown(q.Cache.MaxDuration))
+			return fmt.Errorf(RelPath+": query.default.cache.duration is %s, more than query.cache.max_duration (%s). Lower the default or raise the cap", s, maxDurationShown(q.Cache.MaxDuration))
 		}
 	}
-	if s := q.Default.Input.Timezone; s != "" {
-		if _, err := time.LoadLocation(s); err != nil || s == "Local" {
-			return fmt.Errorf("query.default.input.timezone in %s is %q, which isn't an IANA time zone. Use one such as Asia/Ho_Chi_Minh or Etc/UTC", RelPath, s)
-		}
-	}
-	if s := q.Default.Input.WeekStartDay; s != "" && !slices.Contains(weekStartDays, s) {
-		return fmt.Errorf("query.default.input.week_start_day in %s is %q. Use one of %s", RelPath, s, list(weekStartDays))
+	if err := c.QueryDefaults().Check(); err != nil {
+		return fmt.Errorf("%s: %w", RelPath, err)
 	}
 	return c.checkLocks()
 }
 
-// checkLocks refuses a locked default that query.default doesn't set, or can't.
+// checkLocks refuses a lock on a default query.default doesn't set, since
+// the file says each value it locks; QueryDefaults.Check refused a path that
+// isn't a default.
 func (c Config) checkLocks() error {
 	set := defaultValues(reflect.ValueOf(c.Query.Default), "")
 	for _, path := range c.Query.LockedDefaults {
-		value, isDefault := set[path]
-		switch {
-		case isDefault && value != "":
-		case isDefault:
-			return fmt.Errorf("query.locked_defaults in %s names %s, which query.default doesn't set. Set query.default.%s, or remove it from query.locked_defaults", RelPath, path, path)
-		case isObject(path):
-			return fmt.Errorf("query.locked_defaults in %s names %s, which has fields that can't have a default. Lock its fields one by one, such as %s", RelPath, path, list(fieldsUnder(path)))
-		default:
-			return fmt.Errorf("query.locked_defaults in %s names %s, which isn't a default. The defaults are %s", RelPath, path, list(defaultPaths()))
+		if set[path] == "" {
+			return fmt.Errorf(RelPath+": query.locked_defaults names %s, which query.default doesn't set. Set query.default.%s, or remove it from query.locked_defaults", path, path)
 		}
 		if path == "cache.duration" && !c.QueryCacheEnabled() {
-			return fmt.Errorf("query.locked_defaults in %s locks cache.duration, but query.cache.enabled is false. Remove the lock, or turn the cache on", RelPath)
+			return fmt.Errorf(RelPath + ": query.locked_defaults locks cache.duration, but query.cache.enabled is false. Remove the lock, or turn the cache on")
 		}
 	}
 	return nil
@@ -166,41 +150,8 @@ func defaultValues(v reflect.Value, prefix string) map[string]string {
 	return out
 }
 
-// defaultPaths is every default's path, in the struct's order.
-func defaultPaths() []string { return leafPaths(reflect.TypeOf(Config{}.Query.Default), "") }
-
-func leafPaths(t reflect.Type, prefix string) []string {
-	var out []string
-	for f := range t.Fields() {
-		name := yamlName(f)
-		if name == "" {
-			continue
-		}
-		if f.Type.Kind() == reflect.Struct {
-			out = append(out, leafPaths(f.Type, join(prefix, name))...)
-			continue
-		}
-		out = append(out, join(prefix, name))
-	}
-	return out
-}
-
-// isObject reports whether path names an object of query.default, such as input.
-func isObject(path string) bool { return len(fieldsUnder(path)) > 0 }
-
-// fieldsUnder is the defaults under the object at path.
-func fieldsUnder(path string) []string {
-	var out []string
-	for _, p := range defaultPaths() {
-		if strings.HasPrefix(p, path+".") {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 func notDuration(setting, s string) error {
-	return fmt.Errorf("%s in %s is %q, which isn't a duration. Use one such as 30s, 10m or 2h", setting, RelPath, s)
+	return fmt.Errorf("%s: %s is %q, which isn't a duration. Use one such as 30s, 10m or 2h", RelPath, setting, s)
 }
 
 func maxDurationShown(s string) string {

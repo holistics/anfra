@@ -184,11 +184,12 @@ func TestCompileTakesQuerysParams(t *testing.T) {
 }
 
 // An answer's input is the input as the query ran: the first page made
-// explicit, the default time zone, and anfra-node's seeds.
+// explicit, and anfra-node's seeds. Its time zone and week start day were
+// filled in before it compiled (TestWithRepoSettingsDefaults).
 func TestInputAsItRan(t *testing.T) {
 	in := QueryInput{Pagination: &Pagination{PageSize: 20}}
 	got := in.filled(&anfranode.Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"})
-	want := &QueryInput{Pagination: &Pagination{Page: 1, PageSize: 20}, Timezone: "Etc/UTC", Seeds: &Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"}}
+	want := &QueryInput{Pagination: &Pagination{Page: 1, PageSize: 20}, Seeds: &Seeds{ReferenceTime: "2026-11-12T09:41:27.123Z"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ran = %+v, want %+v", got, want)
 	}

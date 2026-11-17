@@ -43,8 +43,11 @@ func (QueryDefinition) TransformSchema(_ huma.Registry, s *huma.Schema) *huma.Sc
 type QueryInput struct {
 	anfranode.QueryTransforms
 	Pagination *Pagination `json:"pagination,omitempty" doc:"which rows to return: pageSize rows, from the 1-based page; for a pivot, pageSize rows of its grid. Without it, every row."`
-	Timezone   string      `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default."`
-	Seeds      *Seeds      `json:"seeds,omitempty" doc:"values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time."`
+	Timezone   string      `json:"timezone,omitempty" doc:"the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. The repo's query.default.input.timezone by default, or else UTC."`
+	// WeekStartDay's values are anfranode.WeekStartDays: a tag can't name
+	// them, so a test holds the two the same.
+	WeekStartDay string `json:"weekStartDay,omitempty" enum:"monday,tuesday,wednesday,thursday,friday,saturday,sunday" doc:"the day weeks start on, for grouping by week, relative dates such as this week, and the day of the week's number. The repo's query.default.input.weekStartDay by default, or else monday."`
+	Seeds        *Seeds `json:"seeds,omitempty" doc:"values the server generates for each request when they're unset. Generated seeds typically change with every request, and the response returns them. Set seeds to generate the same SQL again, for example to replay a query as of a given time."`
 }
 
 // Seeds are a query's seeds: values generated for each request when unset.
@@ -68,7 +71,7 @@ type ColumnPage struct {
 
 // IsZero reports an input that changes nothing about a query.
 func (in QueryInput) IsZero() bool {
-	return in.QueryTransforms.IsZero() && in.Pagination == nil && in.Timezone == "" && in.Seeds == nil
+	return in.QueryTransforms.IsZero() && in.Pagination == nil && in.Timezone == "" && in.WeekStartDay == "" && in.Seeds == nil
 }
 
 // pageSize is the page's size, 0 without one.
@@ -79,21 +82,16 @@ func (in QueryInput) pageSize() int {
 	return in.Pagination.PageSize
 }
 
-// defaultTimezone is the time zone anfra-node compiles in when none is given.
-const defaultTimezone = "Etc/UTC"
-
-// filled is the input with every default filled in (the first page, the time
-// zone) and the seeds the query compiled with, when anfra-node returned them:
-// the input its answer returns, to send back for the same answer again.
+// filled is the input with every default filled in (the first page; the
+// time zone and the week start day were, by withRepoDefaults) and the seeds the
+// query compiled with, when anfra-node returned them: the input its answer
+// returns, to send back for the same answer again.
 func (in QueryInput) filled(seeds *anfranode.Seeds) *QueryInput {
 	out := in
 	if in.Pagination != nil {
 		p := *in.Pagination
 		p.Page = max(p.Page, 1)
 		out.Pagination = &p
-	}
-	if out.Timezone == "" {
-		out.Timezone = defaultTimezone
 	}
 	if seeds != nil {
 		out.Seeds = &Seeds{ReferenceTime: seeds.ReferenceTime}
@@ -246,6 +244,7 @@ func (in QueryRequestParams) check() error {
 			{"input", "a Query Input", !in.Input.QueryTransforms.IsZero()},
 			{in.paginationName(), "a page", in.Input.Pagination != nil},
 			{in.timezoneName(), "a time zone", in.Input.Timezone != ""},
+			{"input.weekStartDay", "a week start day", in.Input.WeekStartDay != ""},
 			{"input.seeds", "seeds", in.Input.Seeds != nil},
 		} {
 			if a.set {
@@ -281,7 +280,7 @@ func (in QueryRequestParams) check() error {
 // run is what shapes the query's run, as anfra-node takes it. A page without
 // its number is the first; the Query Input is passed through as it is.
 func (in QueryRequestParams) run() query.Run {
-	r := query.Run{Timezone: in.Input.Timezone}
+	r := query.Run{Timezone: in.Input.Timezone, WeekStartDay: in.Input.WeekStartDay}
 	if s := in.Input.Seeds; s != nil {
 		r.Seeds = &anfranode.Seeds{ReferenceTime: s.ReferenceTime}
 	}

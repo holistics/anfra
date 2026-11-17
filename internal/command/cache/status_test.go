@@ -18,9 +18,9 @@ import (
 func TestStatus(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "query")
-	qc := localquerycache.New(dir, localquerycache.Options{Namespace: "prod", Default: command.QueryCacheDefaults{Duration: time.Hour}})
+	qc := localquerycache.New(dir, localquerycache.Options{Namespace: "prod"})
 	t.Cleanup(func() { qc.Close(ctx) })
-	cc := command.CommandContext{QueryCache: qc}
+	cc := command.CommandContext{QueryCache: qc, QueryDefaults: command.QueryDefaults{CacheDuration: time.Hour}}
 
 	got, err := status(ctx, cc, CacheStatusRequestParams{})
 	if err != nil || got.Query.State != querycache.StateReady || got.Query.Folder != dir || got.Query.Contents == nil || got.Query.Contents.Entries != 0 {

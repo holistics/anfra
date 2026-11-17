@@ -17,10 +17,9 @@ type (
 	// QueryCache: its state for status, its settings, and its manager for a
 	// query. Nil: every query runs uncached, and status says nothing of one.
 	Cache = command.QueryCache
-	// Settings are how the cache answers a query that doesn't say otherwise.
+	// Settings are the cache's rules for a repo. A query's default
+	// cache.duration is the Invocation's QueryDefaults.CacheDuration.
 	Settings = command.QueryCacheSettings
-	// Defaults are the cache options of a query that sets none.
-	Defaults = command.QueryCacheDefaults
 	// Contents are what the cache holds, and where, as Cache.Contents
 	// answers for cache.status.
 	Contents = command.QueryCacheContents

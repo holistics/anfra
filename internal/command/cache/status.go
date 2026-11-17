@@ -85,7 +85,7 @@ func status(ctx context.Context, cc command.CommandContext, _ CacheStatusRequest
 		return CacheStatusResult{Query: out, Hints: hints}, nil
 	}
 	settings := qc.Settings()
-	if d, ns := settings.Default.Duration, settings.Namespace; d > 0 || ns != "" {
+	if d, ns := cc.QueryDefaults.CacheDuration, settings.Namespace; d > 0 || ns != "" {
 		out.Settings = &QueryCacheSettings{Namespace: ns}
 		if d > 0 {
 			out.Settings.DefaultDuration = d.String()

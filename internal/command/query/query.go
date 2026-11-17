@@ -31,6 +31,7 @@ Over HTTP, a request that accepts application/x-ndjson gets the result as the qu
 	Normalize: QueryRequestParams.normalize,
 	Check:     QueryRequestParams.check,
 	Errors: []apperr.AnyCode{query.QueryInvalid, errcode.QueryFailed, errcode.DataPermsUnenforceable, query.ResultTooLarge, query.PageTooLarge,
+		errcode.RepoSettingsInvalid,
 		errcode.CacheMiss, errcode.CacheDisabled, errcode.CacheUnavailable}, // the last three for cache.cached_only alone
 	Events: queryEvents,
 	Run:    newQueryRun,
@@ -44,9 +45,12 @@ var Compile = command.Define(command.Def[QueryCompileRequestParams, CompiledQuer
 	Timeout:  2 * time.Minute,
 	Needs:    func(in QueryCompileRequestParams) command.Sidecars { return command.Sidecars{Node: in.Lang != "sql"} },
 	Check:    func(in QueryCompileRequestParams) error { return in.queryParams().check() },
-	Errors:   []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable},
+	Errors:   []apperr.AnyCode{query.QueryInvalid, errcode.DataPermsUnenforceable, errcode.RepoSettingsInvalid},
 	Run: func(ctx context.Context, cc command.CommandContext, raw QueryCompileRequestParams) (CompiledQuery, error) {
-		in := raw.queryParams()
+		in, err := raw.queryParams().withRepoDefaults(cc)
+		if err != nil {
+			return CompiledQuery{}, err
+		}
 		if in.Lang == "sql" {
 			// Already the SQL that would run.
 			if err := in.checkDataSource(ctx, cc); err != nil {

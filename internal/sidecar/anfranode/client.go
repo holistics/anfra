@@ -424,13 +424,21 @@ type PivotPage struct {
 	ColumnCountColumn string `json:"columnCountColumn"`
 }
 
+// WeekStartDays are the days anfra-node takes as a week's start
+// (CompileOptions.WeekStartDay), Monday first.
+var WeekStartDays = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+
 // CompileOptions are the compile options anfra sets. TimezoneRegion is an IANA
 // zone, for relative dates and date truncation. UseV2Compiler picks the AQL v2
 // pipeline for compiling and type-checking; anfra-node defaults it to true, so
 // it is always sent.
 type CompileOptions struct {
 	TimezoneRegion string `json:"timezoneRegion,omitempty"`
-	UseV2Compiler  bool   `json:"useV2Compiler"`
+	// WeekStartDay is the day weeks start on, one of WeekStartDays. Unset,
+	// anfra-node uses each database's own week for grouping by week, but
+	// Monday for relative dates, so anfra always sets it.
+	WeekStartDay  string `json:"weekStartDay,omitempty"`
+	UseV2Compiler bool   `json:"useV2Compiler"`
 }
 
 type CompileToSQLResult struct {

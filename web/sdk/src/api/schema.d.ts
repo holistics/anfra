@@ -609,6 +609,18 @@ export interface components {
             /** @constant */
             status: 422;
         };
+        /** @description The repo's settings can't be used. */
+        ErrorBodyRepoSettingsInvalid: {
+            /** @constant */
+            code: "repo_settings_invalid";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "user";
+            /** @constant */
+            status: 500;
+        };
         /** @description The query's result is larger than this server allows. */
         ErrorBodyResultTooLarge: {
             /** @constant */
@@ -979,8 +991,13 @@ export interface components {
             seeds?: components["schemas"]["Seeds"];
             /** @description sorts by result column, replacing the query's own */
             sorts?: components["schemas"]["QuerySort"][];
-            /** @description the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. UTC by default. */
+            /** @description the IANA time zone that relative dates and date truncation use, such as Asia/Ho_Chi_Minh. The repo's query.default.input.timezone by default, or else UTC. */
             timezone?: string;
+            /**
+             * @description the day weeks start on, for grouping by week, relative dates such as this week, and the day of the week's number. The repo's query.default.input.weekStartDay by default, or else monday.
+             * @enum {string}
+             */
+            weekStartDay?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
         };
         QueryRecords: {
             /** @description one array per row, its values in fields' order, written as a page's records are */
@@ -1669,14 +1686,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description internal_server_error, cache_miss, cache_disabled, cache_unavailable */
+            /** @description internal_server_error, repo_settings_invalid, cache_miss, cache_disabled, cache_unavailable */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyCacheMiss"] | components["schemas"]["ErrorBodyCacheDisabled"] | components["schemas"]["ErrorBodyCacheUnavailable"];
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoSettingsInvalid"] | components["schemas"]["ErrorBodyCacheMiss"] | components["schemas"]["ErrorBodyCacheDisabled"] | components["schemas"]["ErrorBodyCacheUnavailable"];
                     };
                 };
             };
@@ -1737,14 +1754,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description internal_server_error */
+            /** @description internal_server_error, repo_settings_invalid */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoSettingsInvalid"];
                     };
                 };
             };
@@ -1805,14 +1822,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description internal_server_error */
+            /** @description internal_server_error, repo_settings_invalid */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoSettingsInvalid"];
                     };
                 };
             };

@@ -88,12 +88,16 @@ type CommandContext struct {
 	// over its own. Nil: the host keeps no query cache, every query runs
 	// uncached, and status says nothing of one.
 	QueryCache QueryCache
+	// QueryDefaults are what a query gets when it sets none, and which of them
+	// it can't change (docs/designs/query-settings.md). Zero: anfra's own
+	// defaults, none locked. Check them when they're set.
+	QueryDefaults QueryDefaults
 }
 
 // QueryCache is the invocation's query cache, as commands use it.
 type QueryCache interface {
 	querycache.Summarizer
-	// Settings are how the cache answers a query that doesn't say otherwise.
+	// Settings are the cache's rules for the repo.
 	Settings() QueryCacheSettings
 	// Manager is the cache's manager: its store open, its files under its
 	// namespace. An error is why the cache can't be used now: a query runs
@@ -111,13 +115,12 @@ type QueryCache interface {
 	Report(ctx context.Context, err error)
 }
 
-// QueryCacheSettings are a repo's query cache settings, as a query uses them
-// (query.cache and query.default.cache in .anfra/config.yml).
+// QueryCacheSettings are the query cache's rules for a repo (query.cache in
+// .anfra/config.yml). A query's default cache.duration is one of the repo's
+// QueryDefaults.
 type QueryCacheSettings struct {
 	// Disabled says why the cache is off for the repo; empty, it is on.
 	Disabled string
-	// Default is the repo's query.default.cache.
-	Default QueryCacheDefaults
 	// Namespace is the subfolder of canal-lake's storage the cache's files
 	// go in, as whoever runs anfra set it (ANFRA_CACHE_QUERY_NAMESPACE):
 	// empty, the storage's top level.
@@ -131,14 +134,6 @@ type QueryCacheContents struct {
 	// cache elsewhere.
 	Folder string
 	querycache.Contents
-}
-
-// QueryCacheDefaults are the cache options of a query that sets none
-// (query.default.cache in .anfra/config.yml): its cache.duration, for now.
-type QueryCacheDefaults struct {
-	// Duration is a query's cache.duration when it sets none; zero, such a
-	// query doesn't use the cache.
-	Duration time.Duration
 }
 
 // SkillsInfo is the latest anfra skills version the host knows of, and when it

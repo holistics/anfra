@@ -22,10 +22,15 @@ The repo's settings, written by hand and committed. It never holds a credential.
 |---|---|
 | `org.url` | The org `anfra publish` publishes the repo to, by its address on its server (`https://bi.example.com/o/acme`), so everyone publishes to the same org. `anfra publish --set-org` sets it, changing nothing else in the file. |
 | `apps.allow_origins` | Origins the repo's Data Apps may load scripts, styles and fonts from, and send requests to, beyond the SDK's own CDNs, as `anfra serve` runs them, each `https://<host>[:<port>]`. It's never published, since an org keeps its own list, and `anfra publish` says which of them the org doesn't allow. |
-| `query.default.cache.duration` | How old a cached result a query accepts, and how long a result it caches is kept, for every query that sets no `cache.duration` of its own: a duration such as `5m` or `1h`, at most `168h` (7 days). It applies to every caller, `anfra query` and MCP included, so an agent asking a question again gets the cached answer. To cache only a Data App's queries, set the app's own default instead, in its `createApp` (`query: { default: { cache: { duration: '5m' } } }`), which takes precedence for its queries. Default: unset, so a query uses the cache only when it, or its Data App, asks. If `config.yml` holds a key or a value anfra doesn't take, `anfra serve` logs it and uses the defaults until it's fixed. |
+| `query.default.input.timezone` | The IANA time zone an AQL query uses for relative dates and date truncation, when it sets no `input.timezone` of its own, such as `Asia/Ho_Chi_Minh`. Default: `Etc/UTC`. |
+| `query.default.input.weekStartDay` | The day weeks start on, for an AQL query that sets no `input.weekStartDay` (keys under `query.default.input` are camelCase, as a query's `input` names them): for grouping by week, relative dates such as `this week`, and the day of the week's number. One of `monday` to `sunday`, in lowercase. Default: `monday`, on every database. |
+| `query.locked_defaults` | The defaults above that a query can't change, by their path under `query.default`: `input.timezone`, `input.weekStartDay` or `cache.duration`. A query may leave a locked input out, or send the same value; any other value is refused. Each must be set under `query.default`. Default: none. |
+| `query.default.cache.duration` | How old a cached result a query accepts, and how long a result it caches is kept, for every query that sets no `cache.duration` of its own: a duration such as `5m` or `1h`, at most `168h` (7 days). It applies to every caller, `anfra query` and MCP included, so an agent asking a question again gets the cached answer. To cache only a Data App's queries, set the app's own default instead, in its `createApp` (`query: { default: { cache: { duration: '5m' } } }`), which takes precedence for its queries. Default: unset, so a query uses the cache only when it, or its Data App, asks. |
 | `query.cache.enabled` | `false` turns the query cache off for the repo: anfra keeps no store and starts no canal-lake. A query that asks for the cache runs on the warehouse, and its answer says why (`cache.warning`, `cache_disabled`); `anfra cache clean` fails. Default: `true`. `ANFRA_QUERY_CACHE_ENABLED` overrides it for one process ([below](#query-cache)). |
 
 `anfra serve` reads the `query` settings when it starts: restart it after changing them.
+
+If `config.yml` holds a key or a value anfra doesn't take, every query fails with `repo_settings_invalid` and the file's error, rather than run with defaults the repo may not mean.
 
 For example:
 
@@ -37,8 +42,13 @@ apps:
     - https://cdn.acme.com
 query:
   default:
+    input:
+      timezone: Asia/Ho_Chi_Minh
+      weekStartDay: sunday
     cache:
       duration: 5m
+  locked_defaults:
+    - input.weekStartDay
 ```
 
 ## `anfra serve`

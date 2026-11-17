@@ -147,6 +147,14 @@ type (
 	// QueryLimits. The zero value is the defaults (a million result rows).
 	QueryLimits = query.Limits
 
+	// QueryDefaults are what a repo's queries get when they set none (a time
+	// zone, a week start day, a cache duration), and which of them a query
+	// can't change, set on an Invocation as QueryDefaults. The zero value is
+	// anfra's defaults (UTC, Monday, uncached), none locked. Check them when
+	// they're saved: a query refuses defaults Check refuses, with
+	// RepoSettingsInvalid. See docs/designs/query-settings.md.
+	QueryDefaults = command.QueryDefaults
+
 	// ExportStore is where exports go, set on an Invocation as Exports: a file
 	// written once, then a link to it that expires. A host provides its own
 	// (object storage and presigned URLs, say); without one, an export fails
@@ -240,6 +248,9 @@ var (
 	// cache.cached_only, when the cache can't be used. The cause went to the
 	// cache's Report.
 	CacheUnavailable = errcode.CacheUnavailable
+	// RepoSettingsInvalid: a query, when the Invocation's QueryDefaults carry
+	// an Err, or don't pass their Check.
+	RepoSettingsInvalid = errcode.RepoSettingsInvalid
 )
 
 // Namespace is the engine's namespace, for its codes and its steps: anfra.
