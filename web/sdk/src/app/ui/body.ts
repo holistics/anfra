@@ -581,7 +581,7 @@ function badges (root: ShadowRoot, list: Badge[]): void {
 }
 
 const LIST_STYLES = `
-:host { display: block; font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); }
+:host { display: block; width: 300px; max-width: 100%; font: 13px/1.45 var(--anfra-font, system-ui, sans-serif); color: var(--anfra-color-fg, oklch(0.201 0.022 301.1)); }
 ul { margin: 0; padding: 8px; list-style: none; max-height: 60vh; overflow: auto; }
 li + li { border-top: 1px solid var(--anfra-color-border, oklch(0.201 0.022 301.1 / 0.12)); }
 .note { padding: 6px 4px; }
