@@ -1,6 +1,6 @@
 # A repo's query settings
 
-> Status: 2026-11-17. Partly built: the settings, read strictly; the time zone and week start day defaults, `input.weekStartDay`, the locks, and `query.cache.max_duration`. Not yet: `anfra init` writing the file, and the repo's info returning the settings. Replaces `cache.query.*` in `.anfra/config.yml`, which hasn't been released, so it is renamed without a deprecation.
+> Status: 2026-11-17. Partly built: the settings, read strictly; the time zone and week start day defaults, `input.weekStartDay`, the locks, and `query.cache.max_duration`. Not yet: the repo's info returning the settings. Replaces `cache.query.*` in `.anfra/config.yml`, which hasn't been released, so it is renamed without a deprecation.
 
 A repo sets how its queries run in `.anfra/config.yml`, under `query`: the values a query gets when it sets none, which of those values a query can't change, and the rules for the query cache. This doc says what each setting means, how anfra reads the file, and what `anfra init` writes.
 
@@ -129,22 +129,28 @@ The other config errors:
 
 ## What `anfra init` writes
 
-`anfra init` writes `.anfra/config.yml` with every setting at its default, so a new repo shows what it can set without anyone opening the docs. Like init's other files, it is written only when it isn't there.
+`anfra init` writes `.anfra/config.yml` with every setting at its default, so a new repo shows what it can set without anyone opening the docs. Like init's other files, it is written only when it isn't there, and not by `anfra init --data-sources`.
 
 ```yaml
-# How this repo's queries run. https://docs.anfra.ai/repo-settings
+# This repo's anfra settings: committed, and free of credentials.
 query:
-  default:            # what a query gets when it sets none
+  # What a query gets when it sets none of its own.
+  default:
     input:
       timezone: Etc/UTC
       weekStartDay: monday
     cache:
-      # duration: 10m   # cache every query's result for this long, unless it sets cache.duration
-  locked_defaults: [] # defaults a query can't change, such as input.weekStartDay
+      # duration: 10m   # cache each query's result for this long, unless it sets cache.duration
+  # Defaults a query can't change, such as input.weekStartDay.
+  locked_defaults: []
   cache:
     enabled: true
     max_duration: 168h
 ```
+
+The header is the one `anfra publish` writes when it creates the file. There is no link to the docs yet.
+
+With `--example`, init writes this file after the sample's files, and the sample's own `.anfra/config.yml`, if it has one, is taken: so a sample's settings win over the defaults. A user's own file is never replaced, by either.
 
 `cache.duration` is written as a comment, because its default is none: a new repo's queries run uncached unless they ask. Writing `0s` instead would mean the same today, but reads as a choice the repo made.
 
@@ -194,4 +200,3 @@ The repo's info, which already returns the default cache duration (`api/openapi.
 ## Open
 
 - **Syncing a repo's settings to anfra Cloud.** The plan is for `anfra publish` to send the repo's `QueryDefaults` and cache rules, typed, through Cloud's publish API, which checks them with `QueryDefaults.Check()`. Cloud never parses the file, so its format stays anfra's, and a newer CLI's setting is an API change rather than a key an older Cloud refuses. If Cloud ever reads repos without publish, such as from git, the file's reading moves to a `shared/` package, which makes the format public.
-- **The docs page** the init comment links to doesn't exist yet.

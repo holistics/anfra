@@ -10,7 +10,7 @@ A repo's config is its `.anfra/` folder, committed with it (`anfra init` creates
 |---|---|
 | `data_sources.yml` | The data sources the repo's models query, by name: a `type`, a `connection` passed to the database driver unchanged, and optional `settings` for the query engine (timeouts such as `statement_timeout_ms`, `require_ssl` and the like; see [sidecars](../designs/sidecars.md#what-canal-query-is-given)). It holds credentials, so it is git-ignored; `anfra init` also creates `data_sources.yml.example`, the same without them, to commit. Each type's connection keys are listed in the anfra skills' [data source reference](https://github.com/holistics/anfra-skills/blob/main/plugins/anfra/skills/setup-repo/references/data-sources.md). |
 | `context_sources.yml` | What `anfra ingest` reads into the local catalog that `anfra search` searches and `anfra lineage` traces through; by default, the repo's own semantic layer. |
-| `config.yml` | The repo's settings, written by hand and committed ([below](#configyml)). |
+| `config.yml` | The repo's settings, written by hand and committed ([below](#configyml)). `anfra init` creates it with every setting at its default. |
 
 anfra reads them on every command, so an edit needs no restart, except `config.yml`'s `query` settings, which `anfra serve` reads when it starts.
 
