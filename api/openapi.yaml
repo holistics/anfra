@@ -1031,6 +1031,9 @@ components:
         default_duration:
           description: the cache.duration of a query that sets none (query.default.cache.duration in .anfra/config.yml)
           type: string
+        max_duration:
+          description: the longest a query's result may be cached, when the repo sets less than 168h (query.cache.max_duration in .anfra/config.yml)
+          type: string
         namespace:
           description: the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE)
           type: string

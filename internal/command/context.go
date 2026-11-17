@@ -121,6 +121,11 @@ type QueryCache interface {
 type QueryCacheSettings struct {
 	// Disabled says why the cache is off for the repo; empty, it is on.
 	Disabled string
+	// MaxDuration is the longest a query's result may be cached, from 1s to
+	// querycache.MaxDuration: zero, querycache.MaxDuration. A query that asks
+	// for longer is refused. Check it, and the repo's default duration against
+	// it (CheckDefault), when it's set.
+	MaxDuration time.Duration
 	// Namespace is the subfolder of canal-lake's storage the cache's files
 	// go in, as whoever runs anfra set it (ANFRA_CACHE_QUERY_NAMESPACE):
 	// empty, the storage's top level.

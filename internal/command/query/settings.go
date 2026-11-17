@@ -24,11 +24,19 @@ const (
 // duration is applied where the cache is looked up.
 func (in QueryRequestParams) withRepoDefaults(cc command.CommandContext) (QueryRequestParams, error) {
 	s := cc.QueryDefaults
-	if err := cmp.Or(s.Err, s.Check()); err != nil {
+	var cache command.QueryCacheSettings
+	if cc.QueryCache != nil {
+		cache = cc.QueryCache.Settings()
+	}
+	if err := cmp.Or(s.Err, s.Check(), cache.Check(), cache.CheckDefault(s)); err != nil {
 		return in, apperr.Encapsulate(err, errcode.RepoSettingsInvalid, sentence(err.Error()))
 	}
 	if err := in.checkLockedDuration(s); err != nil {
 		return in, err
+	}
+	if d, set := in.Cache.duration(); set && d > cache.Max() {
+		return in, command.InvalidArg("cache.duration", "invalid", fmt.Sprintf("cache.duration is %s, but the repo caches a result for at most %s (query.cache.max_duration in the repo's settings). Use %s or less.",
+			in.Cache.Duration, command.FormatDuration(cache.Max()), command.FormatDuration(cache.Max())))
 	}
 	if in.Lang == "sql" {
 		return in, nil // compiled by no one: neither applies

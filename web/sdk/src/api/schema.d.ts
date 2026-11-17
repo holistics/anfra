@@ -802,6 +802,8 @@ export interface components {
         QueryCacheSettings: {
             /** @description the cache.duration of a query that sets none (query.default.cache.duration in .anfra/config.yml) */
             default_duration?: string;
+            /** @description the longest a query's result may be cached, when the repo sets less than 168h (query.cache.max_duration in .anfra/config.yml) */
+            max_duration?: string;
             /** @description the subfolder of canal-lake's storage the cache's files go in (ANFRA_CACHE_QUERY_NAMESPACE) */
             namespace?: string;
         };

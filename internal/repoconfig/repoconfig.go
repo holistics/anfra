@@ -17,7 +17,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/holistics/anfra/internal/command"
-	"github.com/holistics/anfra/internal/querycache"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/shared/repoformat"
 )
@@ -78,14 +77,12 @@ func (c Config) QueryCacheEnabled() bool {
 	return c.Query.Cache.Enabled == nil || *c.Query.Cache.Enabled
 }
 
-// QueryCacheMaxDuration is query.cache.max_duration, querycache.MaxDuration
-// when unset. Read checked it.
-func (c Config) QueryCacheMaxDuration() time.Duration {
-	if c.Query.Cache.MaxDuration == "" {
-		return querycache.MaxDuration
-	}
+// QueryCacheSettings are query.cache's rules the engine takes: its cap, zero
+// when unset. Whether the cache is off is the host's to decide, since the
+// environment can override the file. Read checked them.
+func (c Config) QueryCacheSettings() command.QueryCacheSettings {
 	d, _ := time.ParseDuration(c.Query.Cache.MaxDuration)
-	return d
+	return command.QueryCacheSettings{MaxDuration: d}
 }
 
 // QueryDefaults are query.default and query.locked_defaults, as the engine

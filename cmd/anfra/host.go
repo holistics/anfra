@@ -145,7 +145,7 @@ func newQueryCache(repo repo.Local, cfg sidecar.Config, settings repoconfig.Conf
 	dir := filepath.Join(repo.CacheDir(), "query")
 	disabled := queryCacheDisabled(settings, settingsErr)
 	o := localquerycache.Options{
-		Disabled: disabled, Namespace: os.Getenv(localquerycache.NamespaceEnv),
+		Disabled: disabled, MaxDuration: settings.QueryCacheSettings().MaxDuration, Namespace: os.Getenv(localquerycache.NamespaceEnv),
 		Report: func(ctx context.Context, err error) {
 			cfg.Logger.WarnContext(ctx, "Query ran without the cache", logkit.EventKey, eventQueryCacheUnavailable, "error", err,
 				"hint", "the query cache failed, so the query ran on the warehouse, uncached; a sidecar's lines just before this one may say why")
