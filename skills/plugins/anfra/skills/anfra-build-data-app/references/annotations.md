@@ -53,9 +53,19 @@ draws.** If a kind is listed but not drawn, the reader never sees it.
 ## The ECharts helper
 
 Write `drawAnnotations` once per app, and call it in each chart's render, right after that chart's
-`setOption`. It expects a category axis that holds one entry per result row, in row order, and
-series whose `id` is the measure's column name. It draws on the chart's own series and adds series
-of its own whose ids start with `annotation:`, so a click handler skips those. It colours each
+`setOption`. It expects one entry per result row, in row order (a category on the axis, or a pie's
+slice), and series whose `id` is the measure's column name. It draws on the chart's own series and
+adds series of its own whose ids start with `annotation:`, so a click handler skips those. What it
+draws depends on the chart:
+
+| Chart | Draws | Declare |
+| --- | --- | --- |
+| Line, or vertical bars (columns) | Every kind. A `series` is a dashed line and a band past the last row, over columns too. | `mark focus line band series` |
+| Horizontal bars (`yAxis` is the category axis) | Every kind. A `line` or `band` on the measure runs across the value axis (x); on the dimension, across the category axis (y). | `mark focus line band series` |
+| Pie | `mark` (the slice in the severity's colour, pulled out) and `focus` (the other slices dimmed). A pie has no axis for a line, a band or a series, so the badge shows those. | `mark focus` |
+
+Declare a kind only when the chart's result can carry it: a `series` needs periods to extend, so a
+chart by category leaves it out, and the badge counts one if a plugin ever sets it. It colours each
 annotation from three CSS variables. Define them in the app's styles, in hex, for light and dark,
 because ECharts can't parse `oklch`:
 
@@ -72,6 +82,7 @@ function drawAnnotations (chart, query, { label = String } = {}) {
   const css = getComputedStyle(document.documentElement);
   const color = (severity) => css.getPropertyValue(`--annotation-${severity ?? 'info'}`).trim();
   const esc = echarts.format.encodeHTML;
+  const cartesian = Boolean(option.xAxis?.length); // a pie has no axes: only mark and focus
   const horizontal = option.yAxis?.[0]?.type === 'category';
   const categoryAxis = horizontal ? 'yAxis' : 'xAxis';
   const valueAxis = horizontal ? 'xAxis' : 'yAxis';
@@ -82,7 +93,7 @@ function drawAnnotations (chart, query, { label = String } = {}) {
 
   // The chart's own series, with what the last draw added taken off.
   const own = option.series.filter((series) => !String(series.id).startsWith('annotation:')).map((series) => ({
-    ...series, ...series.anfraOwnLine, anfraOwnLine: null,
+    ...series, ...series.anfraOwnSeries, anfraOwnSeries: null,
     data: (series.data ?? []).map((item) => (item && typeof item === 'object' && 'anfraOwn' in item ? item.anfraOwn : item)),
   }));
   const seriesFor = (measure) => {
@@ -94,12 +105,14 @@ function drawAnnotations (chart, query, { label = String } = {}) {
     const value = Array.isArray(item) ? item[horizontal ? 0 : 1] : (item && typeof item === 'object' ? item.value : item);
     return Number(Array.isArray(value) ? value[horizontal ? 0 : 1] : value);
   };
-  const styles = new Map(); // series -> index -> itemStyle
-  const focused = new Set(); // series with a focus, whose line fades
-  const style = (series, index, itemStyle) => {
-    if (!styles.has(series)) styles.set(series, new Map());
-    styles.get(series).set(index, { ...styles.get(series).get(index), ...itemStyle });
+  const items = new Map(); // series -> index -> what the annotations change on that item
+  const changed = new Map(); // series -> what the annotations change on the series itself
+  const item = (series, index, change) => {
+    if (!items.has(series)) items.set(series, new Map());
+    const was = items.get(series).get(index) ?? {};
+    items.get(series).set(index, { ...was, ...change, itemStyle: { ...was.itemStyle, ...change.itemStyle } });
   };
+  const change = (series, patch) => changed.set(series, { ...changed.get(series), ...patch });
   const marks = { markLine: [], markArea: [], markPoint: [] };
   const extra = [];
   const tips = new Map(); // row index -> its annotations, for the tooltip
@@ -114,31 +127,40 @@ function drawAnnotations (chart, query, { label = String } = {}) {
       anchor.index.forEach((index) => tips.set(index, [...(tips.get(index) ?? []), annotation]));
       for (const series of seriesFor(anchor.measure)) {
         if (annotation.kind === 'focus') {
-          // Dim every other row: a bar, or a line's point (its line fades too).
-          focused.add(series);
-          series.data.forEach((_, index) => { if (!anchor.index.includes(index)) style(series, index, { opacity: 0.25 }); });
+          // Dim every other row: a bar, a slice, or a line's point (its line fades too).
+          if (series.type === 'line') change(series, { showSymbol: true, lineStyle: { ...series.lineStyle, opacity: 0.4 } });
+          series.data.forEach((_, index) => { if (!anchor.index.includes(index)) item(series, index, { itemStyle: { opacity: 0.25 } }); });
+        } else if (series.type === 'pie') {
+          // Colour the slice, and pull it out (below) unless the app selects slices itself.
+          if (!series.selectedMode) change(series, { selectedMode: 'multiple' });
+          anchor.index.forEach((index) => item(series, index, { itemStyle: { color: c }, anfraPulled: true }));
         } else if (series.type === 'bar') {
-          anchor.index.forEach((index) => style(series, index, { color: c }));
+          anchor.index.forEach((index) => item(series, index, { itemStyle: { color: c } }));
         } else {
           anchor.index.forEach((index) => marks.markPoint.push({
             coord: at(index, valueAt(series, index)), symbol: 'circle', symbolSize: 11, itemStyle: { color: c, borderColor: '#ffffff', borderWidth: 2 },
           }));
         }
       }
+    } else if (!cartesian) {
+      continue;
     } else if (annotation.kind === 'line') {
       const onDimension = anchor.column === dimension;
       const value = onDimension ? positionOf(anchor.value) : Number(anchor.value);
       if (onDimension && value < 0) continue;
       marks.markLine.push({
-        [onDimension ? categoryAxis : valueAxis]: value, lineStyle: { color: c, type: 'dashed', width: 1.5 }, label: { formatter: name, color: c, position: 'insideEndTop' },
+        [onDimension ? categoryAxis : valueAxis]: value, lineStyle: { color: c, type: 'dashed', width: 1.5 },
+        label: { formatter: name, color: c, position: 'insideEndTop' }, // inside the plot, so it never overflows
       });
     } else if (annotation.kind === 'band') {
       const onDimension = anchor.column === dimension;
       const [from, to] = onDimension ? [positionOf(anchor.from), positionOf(anchor.to)] : [Number(anchor.from), Number(anchor.to)];
       if (onDimension && (from < 0 || to < 0)) continue;
       const axis = onDimension ? categoryAxis : valueAxis;
+      // A band standing upright is labelled just above the plot, where no bar hides it.
+      const upright = onDimension !== horizontal;
       marks.markArea.push([
-        { [axis]: from, name, itemStyle: { color: c, opacity: 0.12 }, label: { color: c, position: 'insideTop' } },
+        { [axis]: from, name, itemStyle: { color: c, opacity: 0.12 }, label: { color: c, position: upright ? 'top' : 'insideTop' } },
         { [axis]: to },
       ]);
     } else if (annotation.kind === 'series') {
@@ -188,27 +210,35 @@ function drawAnnotations (chart, query, { label = String } = {}) {
   chart.setOption({
     ...update,
     series: [
-      ...own.map((series) => ({
-        ...series,
-        ...(focused.has(series) && series.type === 'line' ? {
-          showSymbol: true, lineStyle: { ...series.lineStyle, opacity: 0.4 }, anfraOwnLine: { showSymbol: series.showSymbol, lineStyle: { ...series.lineStyle, opacity: series.lineStyle?.opacity ?? 1 } },
-        } : {}),
-        data: series.data.map((item, index) => {
-          const itemStyle = styles.get(series)?.get(index);
-          if (!itemStyle) return item;
-          const base = item && typeof item === 'object' && !Array.isArray(item) ? item : { value: item };
-          return { ...base, itemStyle: { ...base.itemStyle, ...itemStyle }, anfraOwn: item };
-        }),
-      })),
-      {
+      ...own.map((series) => {
+        const patch = changed.get(series);
+        const kept = { showSymbol: series.showSymbol, lineStyle: { ...series.lineStyle, opacity: series.lineStyle?.opacity ?? 1 }, selectedMode: series.selectedMode ?? false };
+        return {
+          ...series,
+          ...(patch ? { ...patch, anfraOwnSeries: Object.fromEntries(Object.keys(patch).map((key) => [key, kept[key]])) } : {}),
+          data: series.data.map((value, index) => {
+            const patched = items.get(series)?.get(index);
+            if (!patched) return value;
+            const base = value && typeof value === 'object' && !Array.isArray(value) ? value : { value };
+            return { ...base, ...patched, itemStyle: { ...base.itemStyle, ...patched.itemStyle }, anfraOwn: value };
+          }),
+        };
+      }),
+      ...(cartesian ? [{
         id: 'annotation:marks', type: 'line', data: [], silent: true,
         markLine: { symbol: 'none', data: marks.markLine },
         markArea: { data: marks.markArea },
         markPoint: { data: marks.markPoint },
-      },
+      }] : []),
       ...extra,
     ],
   }, { replaceMerge: ['series'] });
+  // Pull a pie's marked slices out by selecting them, unless the app selects slices itself.
+  for (const series of own.filter((series) => series.type === 'pie' && !series.selectedMode)) {
+    const pulled = [...(items.get(series) ?? [])].filter(([, patch]) => patch.anfraPulled).map(([index]) => index);
+    chart.dispatchAction({ type: 'unselect', seriesId: series.id, dataIndex: series.data.map((_, index) => index) });
+    if (pulled.length) chart.dispatchAction({ type: 'select', seriesId: series.id, dataIndex: pulled });
+  }
 }
 ```
 
@@ -222,6 +252,12 @@ drawAnnotations(trendChart, trend, { label: (period) => periodLabel(period, grai
 
 - It adds a row's annotations to the chart's tooltip when the tooltip has a `formatter` function.
   Give the tooltip one, as the example's charts have.
+- It keeps a line's label inside the plot, so it never runs past the chart's edge. An upright band
+  (over a few months, or a value range on horizontal bars) is labelled just above the plot, where
+  no bar hides it: leave the grid 24px of `top` for it. A band is narrow, so plugins keep labels
+  short.
+- On a pie, a mark pulls its slice out by selecting it. When the app sets the pie's `selectedMode`
+  itself, the helper only colours the slice.
 - A right-click on a point should open the menu on its row (`query.menu`, see
   [api.md](api.md#the-menu-on-the-page)). The menu lists the row's annotations first, followed by
   the plugins' actions on them. Skip the helper's own series there: `if
@@ -231,6 +267,30 @@ drawAnnotations(trendChart, trend, { label: (period) => periodLabel(period, grai
 
 For a chart drawn by another library, write the same single helper for that library: one function,
 called after each render, that draws the kinds above with that library's own marks (its mark lines,
-areas and point styles). For hand-drawn SVG or a DOM table, restyle the elements at each `index`, as
-you would for `selectedRows`. Then list in `data-anfra-annotations` exactly the kinds the helper
-draws, and let the badge show the rest.
+areas and point styles). For hand-drawn SVG, restyle the elements at each `index`, as you would for
+`selectedRows`. Then list in `data-anfra-annotations` exactly the kinds the helper draws, and let the
+badge show the rest.
+
+A table draws `mark` and `focus` by restyling its rows, as it does for `selectedRows`, and gives a
+marked row its label as a `title`. It has no axis for the other kinds, so it declares only those two,
+and the badge shows the rest. A right-click on a row opens the menu on it, as on a chart's point:
+
+```js
+const marked = new Map(); // row index -> its mark
+const focused = new Set();
+for (const annotation of byProduct.annotations) {
+  if (annotation.kind === 'mark') annotation.anchor.index.forEach((index) => marked.set(index, annotation));
+  if (annotation.kind === 'focus') annotation.anchor.index.forEach((index) => focused.add(index));
+}
+tbody.querySelectorAll('tr').forEach((tr, index) => {
+  const mark = marked.get(index);
+  tr.dataset.mark = mark ? mark.severity ?? 'info' : ''; // styled by tr[data-mark="warning"] etc.
+  tr.title = mark?.label ?? '';
+  tr.classList.toggle('dimmed', focused.size > 0 && !focused.has(index));
+  tr.oncontextmenu = (event) => byProduct.menu(event, byProduct.result.rows[index]);
+});
+```
+
+```html
+<table data-anfra-query="byProduct" data-anfra-annotations="mark focus">…</table>
+```
