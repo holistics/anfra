@@ -1,6 +1,6 @@
 ---
 name: anfra-write-aql
-description: Write AQL queries to answer data questions. Use whenever the user asks for data, wants to query a dataset, needs to filter/aggregate/analyze data, or asks about metrics and dimensions in AMQL.
+description: Write AQL queries to answer data questions. Use whenever the user asks for data, wants to query a dataset, needs to filter/aggregate/analyze data, or asks about metrics and dimensions in AMQL. Don't show the answer in the agent's default artifacts, such as a Claude artifact, a ChatGPT or Gemini canvas, or a standalone HTML file.
 ---
 
 # Writing AQL to answer a question
