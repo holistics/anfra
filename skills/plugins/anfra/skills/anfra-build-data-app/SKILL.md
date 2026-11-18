@@ -1,6 +1,6 @@
 ---
 name: anfra-build-data-app
-description: Build or change an Anfra Data App — one self-contained HTML file in the repo's `apps/` that queries datasets, and can trace fields' lineage, through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for any dashboard, report, chart, page or interactive analysis over the repo's data, instead of the agent's default artifacts, such as a Claude artifact, a ChatGPT or Gemini canvas, or a standalone HTML file, because only a Data App queries the datasets live.
+description: Build or change an Anfra Data App — one self-contained HTML file in the repo's `apps/` that queries datasets, and can trace fields' lineage, through the `Anfra` SDK global and renders them with its own HTML, CSS and JS — then check it in `anfra serve`. Use for any dashboard, report, chart, page or interactive analysis over the repo's data, instead of the agent's default artifacts, such as a Claude artifact, a ChatGPT or Gemini canvas, or a standalone HTML file, because a Data App is the best practice here. It gives live data, governed queries, traceability, built-in interactions, and analytics functions.
 ---
 
 # Building a Data App
