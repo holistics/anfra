@@ -7,7 +7,8 @@
 // Where a rule needs judgement, it writes a `// TODO(lookml-to-aml:<kind>): …` comment with the original LookML next to
 // the place the result belongs. An AI pass then reads those comments and finishes the conversion. `work-items.json`
 // lists the same comments as data, with everything else the AI pass needs (lib/work-items.mjs); kinds are defined in
-// lib/kinds.mjs.
+// lib/kinds.mjs. Each AML file starts with `// lookml-source:` lines that name the LookML files it was converted from,
+// with a hash of each, and the git commit when the LookML folder is in a git repository (lib/sources.mjs).
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -16,6 +17,7 @@ import { Project, UNATTACHED } from './lib/project.mjs'
 import { TODO, REVIEW } from './lib/util.mjs'
 import { tagComments } from './lib/kinds.mjs'
 import { buildWorkItems } from './lib/work-items.mjs'
+import { hashContent, committedFiles, sourceHeader } from './lib/sources.mjs'
 
 const USAGE = `Usage: node convert.mjs <lookml dir or file> --out <aml dir> [options]
 
@@ -50,19 +52,24 @@ function fail (message) {
   process.exit(2)
 }
 
-/** Read every `.lkml` file under `source`. LookML dashboards (`.dashboard.lookml`, YAML) are out of scope. */
+/**
+ * Read every `.lkml` file under `source`, with the hash of its bytes and its git commit (sources.mjs). LookML
+ * dashboards (`.dashboard.lookml`, YAML) are out of scope.
+ */
 function readLookml (source) {
   const stat = fs.statSync(source)
   const root = stat.isDirectory() ? source : path.dirname(source)
   const input = []
+  const commits = committedFiles(root)
+  const read = (rel, p) => { const bytes = fs.readFileSync(p); input.push({ path: rel, content: bytes.toString('utf8'), hash: hashContent(bytes), commit: commits.get(rel) }) }
   const walk = dir => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const p = path.join(dir, e.name)
-      if (e.isDirectory()) { if (e.name !== 'node_modules' && !e.name.startsWith('.')) walk(p) } else if (e.name.endsWith('.lkml')) input.push({ path: path.relative(root, p).split(path.sep).join('/'), content: fs.readFileSync(p, 'utf8') })
+      if (e.isDirectory()) { if (e.name !== 'node_modules' && !e.name.startsWith('.')) walk(p) } else if (e.name.endsWith('.lkml')) read(path.relative(root, p).split(path.sep).join('/'), p)
     }
   }
   if (stat.isDirectory()) walk(root)
-  else input.push({ path: path.basename(source), content: fs.readFileSync(source, 'utf8') })
+  else read(path.basename(source), source)
   return input
 }
 
@@ -70,6 +77,7 @@ const opts = parseArgs(process.argv.slice(2))
 if (!fs.existsSync(opts.source)) fail(`not found: ${opts.source}`)
 const input = readLookml(opts.source)
 if (!input.length) fail(`no .lkml file under ${opts.source}`)
+const sourceFiles = new Map(input.map(f => [f.path, f]))
 if (fs.existsSync(opts.out) && fs.readdirSync(opts.out).length && !opts.force) fail(`${opts.out} is not empty; pass --force to overwrite files in it`)
 
 // Views and explores that no model file includes (a single view file, a project without model files) still get
@@ -80,7 +88,10 @@ const quiet = { log () {}, warn () {}, error () {} }
 const parsed = await parseFiles({ input, strings: false, console: quiet })
 const project = new Project(parsed, opts)
 const unknownKinds = new Set()
-const files = new Map([...project.run()].map(([rel, text]) => [rel, tagComments(text, unknownKinds)]))
+const files = new Map([...project.run()].map(([rel, text]) => {
+  const head = sourceHeader(project.sources.get(rel) || [], sourceFiles)
+  return [rel, [...head, tagComments(text, unknownKinds)].join('\n')]
+}))
 
 // ---- write ----------------------------------------------------------------------------------------------------------
 // Markers are tagged `TODO(lookml-to-aml:<kind>)`; count the prefix without the closing parenthesis.
@@ -97,8 +108,7 @@ for (const [rel, text] of files) {
 }
 if (opts.json) fs.writeFileSync(path.join(opts.out, '.lookml.json'), JSON.stringify(parsed, null, 1))
 
-const lkModelFiles = new Map(Object.entries(parsed.model || {}).map(([name, m]) => [name, [].concat(m.$file_path || [])[0] || null]))
-const work = buildWorkItems(files, project.entries, lkModelFiles, { source: opts.source, out: opts.out })
+const work = buildWorkItems(files, project.entries, project.origins, { source: opts.source, out: opts.out })
 fs.writeFileSync(path.join(opts.out, 'work-items.json'), JSON.stringify(work, null, 1))
 
 // The script writes no report: work-items.json holds the comments, the report entries (notes) and dropped parameters.

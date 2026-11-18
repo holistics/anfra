@@ -118,7 +118,8 @@ export function renderModel (conv) {
   const { lk, project } = conv
   const src = modelSource(conv)
   const label = lk.label ?? lk.view_label ?? titleCase(conv.lkName)
-  const head = [`// view: ${conv.lkName}${project.viewFile(conv.lkName) ? `  (${project.viewFile(conv.lkName)})` : ''}`]
+  // The view's LookML files are named in the `lookml-source` lines that convert.mjs writes above this.
+  const head = []
   if (lk.extends) head.push(`// extends: ${asArray(lk.extends).flat().join(', ')} — inherited fields are flattened into this model (references/extends-and-refinements.md)`)
   for (const key of ['suggestions', 'test', 'calendar_definition', 'derived_analytic_model', 'sql_analytic_model_name', 'final']) {
     if (lk[key] !== undefined) conv.report('DROPPED', null, `${key}: unsupported`)

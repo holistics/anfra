@@ -1,7 +1,7 @@
 // Project-level conversion: which views and explores exist, constants, data sources, alias models,
 // and the conversion report. References: model.md, manifest.md.
 
-import { TODO, REVIEW, amlString, toLookml, commentLines } from './util.mjs'
+import { TODO, REVIEW, asArray, amlString, toLookml, commentLines } from './util.mjs'
 import { translateValueFormat } from './format.mjs'
 import { ViewConv } from './view.mjs'
 import { renderModel, renderAlias } from './model.mjs'
@@ -11,6 +11,8 @@ import { convertExplore } from './explore.mjs'
 export const UNATTACHED = 'unattached__'
 
 const dirname = p => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
+/** The path of a LookML model file (`$file_path` lists the model file first, then the files it includes). */
+const modelFilePath = lkModel => asArray(lkModel.$file_path)[0]
 const stable = o => JSON.stringify(o, (k, v) => (k.startsWith('$') && k !== '$name' ? undefined : v))
 
 export class Project {
@@ -25,6 +27,8 @@ export class Project {
     this.views = new Map() // view name → { lk, lkModel, lkModelName, conv }
     this.aliases = new Map() // alias model name → ViewConv
     this.datasetNames = new Map()
+    this.sources = new Map() // AML file path → paths of the LookML files it was converted from (sources.mjs)
+    this.origins = new Map() // AML file path → the LookML object it was converted from, for work-items.json
     this.constants = new Map()
     this.constName = this.constName.bind(this)
     this.models = Object.entries(parsed.model || {}).sort(([a], [b]) => (a === UNATTACHED) - (b === UNATTACHED) || a.localeCompare(b))
@@ -105,6 +109,7 @@ export class Project {
     const other = this.formatConsts.get(constName)
     if (other && other !== fmt) constName = `fmt_${lkModel.$name}_${name}`
     this.formatConsts.set(constName, fmt)
+    ;(this.formatSources ||= new Set()).add(modelFilePath(lkModel))
     return constName
   }
 
@@ -137,6 +142,29 @@ export class Project {
       if (sql !== undefined) return sql
     }
     return undefined
+  }
+
+  /**
+   * Paths of the LookML files that declare or refine the `kind` (view, explore) `name`, and of the objects it extends,
+   * among the files that `lkModel` includes.
+   */
+  lookmlFiles (kind, name, lkModel, seen = new Set()) {
+    if (seen.has(name)) return []
+    seen.add(name)
+    const included = new Set(asArray(lkModel.$file_path))
+    const out = []
+    for (const file of Object.values(this.parsed.file || {})) {
+      if (!included.has(file.$file_path)) continue
+      for (const key of [name, `+${name}`]) {
+        const layers = (file[kind] || {})[key]
+        if (layers === undefined) continue
+        out.push(file.$file_path)
+        for (const layer of asArray(layers)) {
+          for (const parent of asArray(layer.extends).flat(2)) out.push(...this.lookmlFiles(kind, parent, lkModel, seen))
+        }
+      }
+    }
+    return out
   }
 
   hasView (name) { return this.views.has(name) }
@@ -184,7 +212,7 @@ export class Project {
 
   // ---- alias models (explore.md#from) ----------------------------------------------------------------------------------
 
-  alias (ref, base, { label, tableName, explore, usedBy }) {
+  alias (ref, base, { label, tableName, explore, lkModel, usedBy }) {
     const same = a => a.base === base && a.tableName === tableName
     let name = ref
     const clash = n => (this.views.has(n) && !(this.aliases.has(n))) || (this.aliases.has(n) && !same(this.aliases.get(n)))
@@ -196,12 +224,14 @@ export class Project {
       alias.label = label
       alias.tableName = tableName
       alias.usedBy = []
+      alias.explores = []
       this.aliases.set(name, alias)
       alias.convert()
     } else if (label && alias.label !== label) {
       this.report({ level: 'REVIEW', where: `alias model ${name}`, message: `${usedBy} labels the alias \`${label}\`, but it was first declared with the label \`${alias.label}\`; one model has one label` })
     }
     alias.usedBy.push(usedBy)
+    alias.explores.push({ name: explore, lkModel })
     return alias
   }
 
@@ -237,17 +267,35 @@ export class Project {
         }
         if (lkModelName === UNATTACHED && this.datasetNames.has(`${name}_dataset`)) continue // already converted in its own model file
         const ds = convertExplore(this, lkModel, lkModelName, name, ex)
-        if (ds) { files.set(ds.path, ds.text); datasets.push(ds.name) }
+        if (!ds) continue
+        files.set(ds.path, ds.text)
+        this.sources.set(ds.path, [modelFilePath(lkModel), ...this.lookmlFiles('explore', name, lkModel)])
+        this.origins.set(ds.path, { explore: name, lookmlModel: lkModelName, lookmlFile: lkModelName === UNATTACHED ? null : modelFilePath(lkModel) })
+        datasets.push(ds.name)
       }
     }
     // Models are rendered last: explores add helper dimensions (join keys) to them.
     for (const [name, v] of this.views) {
       const dir = dirname(this.viewFile(name) || '')
-      files.set(`models/${dir ? `${dir}/` : ''}${v.conv.name}.model.aml`, renderModel(v.conv))
+      const rel = `models/${dir ? `${dir}/` : ''}${v.conv.name}.model.aml`
+      files.set(rel, renderModel(v.conv))
+      this.sources.set(rel, this.lookmlFiles('view', name, v.lkModel))
+      this.origins.set(rel, { object: name, lookmlFile: this.viewFile(name) || null })
     }
-    for (const [name, alias] of this.aliases) files.set(`models/aliases/${name}.model.aml`, renderAlias(alias))
+    for (const [name, alias] of this.aliases) {
+      const rel = `models/aliases/${name}.model.aml`
+      files.set(rel, renderAlias(alias))
+      // the view it aliases, and the explores whose joins declare it (label, sql_table_name)
+      this.sources.set(rel, [
+        ...this.lookmlFiles('view', alias.base.lkName, alias.base.lkModel),
+        ...alias.explores.flatMap(e => this.lookmlFiles('explore', e.name, e.lkModel))
+      ])
+    }
     const manifest = this.renderManifest()
-    if (manifest) files.set('manifest.aml', manifest)
+    if (manifest) {
+      files.set('manifest.aml', manifest)
+      this.sources.set('manifest.aml', [...asArray((this.parsed.manifest || {}).$file_path), ...(this.formatSources || [])])
+    }
     return files
   }
 

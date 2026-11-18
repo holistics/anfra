@@ -46,6 +46,8 @@ node scripts/convert.mjs <lookml dir or file> --out <aml dir> \
 It writes `manifest.aml`, `models/**/<view>.model.aml`, `models/aliases/*.model.aml`,
 `datasets/<model file>/<explore>_dataset.dataset.aml` and `work-items.json`. It writes no report.
 Views and explores that no model file includes are converted under a model named `unattached__`.
+Each `.aml` file starts with `// lookml-source:` lines that name the LookML files it was converted from, with a hash
+of each (and the git commit, when the LookML folder is in a git repository). Keep those lines when you edit the file.
 
 **Pass 2 — you.** The script leaves two kinds of comments in the `.aml` files, each tagged with a kind
 (`TODO(lookml-to-aml:aql-ref-in-sql)`, `REVIEW(lookml-to-aml:yesno-column)`; kinds are listed in
