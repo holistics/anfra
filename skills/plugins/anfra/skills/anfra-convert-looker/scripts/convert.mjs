@@ -7,7 +7,7 @@
 // Where a rule needs judgement, it writes a `// TODO(lookml-to-aml:<kind>): …` comment with the original LookML next to
 // the place the result belongs. An AI pass then reads those comments and finishes the conversion. `work-items.json`
 // lists the same comments as data, with everything else the AI pass needs (lib/work-items.mjs); kinds are defined in
-// lib/kinds.mjs. Each AML file starts with `// lookml-source:` lines that name the LookML files it was converted from,
+// lib/kinds.mjs. Each AML file starts with `// looker-source:` lines that name the LookML files it was converted from,
 // with a hash of each, and the git commit when the LookML folder is in a git repository (lib/sources.mjs).
 
 import fs from 'node:fs'
