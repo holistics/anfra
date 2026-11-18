@@ -1,3 +1,28 @@
+## [0.22.0](https://github.com/holistics/anfra/compare/v0.21.0...v0.22.0) (2026-11-18)
+
+### Features
+
+* **cli:** send pages of repo data to a Data App in the AGENTS.md block ([4baebd4](https://github.com/holistics/anfra/commit/4baebd4cd5a0ea1e63d1b4ac38d20fd0e464fe6e))
+* **engine.query:** pick the AQL compiler per repo with aql.compiler ([c83f951](https://github.com/holistics/anfra/commit/c83f951e28ff9457888e006ef4af802c79703034))
+* **engine.validate:** pick the AQL compiler with aql.compiler.version ([4a0f6de](https://github.com/holistics/anfra/commit/4a0f6ded05575aa7185c85e35e9daffb0214a9c8))
+* **sdk:** let plugins annotate a query's result with kernel.annotate ([9898a6c](https://github.com/holistics/anfra/commit/9898a6cacd381f7b3723c07f5cd1463e69d6ca9d))
+* **sdk:** badge the annotations a chart doesn't draw, and list them in the rows menu ([59c18f4](https://github.com/holistics/anfra/commit/59c18f4752b96ad872193a05d1e007fe47e1925c))
+* **sdk:** say where a rows menu target was opened ([11a746d](https://github.com/holistics/anfra/commit/11a746d0079699153c6c1831265db39bd70e5776))
+* **skills:** teach build-data-app to draw a query's annotations ([7f3fca3](https://github.com/holistics/anfra/commit/7f3fca3bb46edb151a6601e68e4c02c7302b6ce1))
+* **skills:** draw annotations on horizontal bars, pies and tables ([5aea925](https://github.com/holistics/anfra/commit/5aea92531ccff3290cead0226478248cda309299))
+* **skills:** keep data answers out of the agent's default artifacts ([9b85408](https://github.com/holistics/anfra/commit/9b85408678dd1e3f60790426b74464a59d983164))
+
+### Bug Fixes
+
+* **cli:** name each provider's default artifacts in the AGENTS.md block ([40dc15e](https://github.com/holistics/anfra/commit/40dc15eaf987428e1d5eaac60ec8a71e2c80a893))
+* **cli:** say why a Data App beats the agent's default artifacts ([0ec0490](https://github.com/holistics/anfra/commit/0ec0490dfc23e3dda1f02cd0a50a66afe656a224))
+* **sdk:** draw the annotations popover at its full size as it opens ([567c2d4](https://github.com/holistics/anfra/commit/567c2d4c42b92d8386b5c11bd4dc3f17989beec3))
+* **sdk:** clear a query's annotations as soon as the definition updates it ([f753952](https://github.com/holistics/anfra/commit/f753952495ad536a2c7cf2cebcdce762cb116b1c))
+* **sdk:** pad the annotations example's popover and open it where asked ([41a84c5](https://github.com/holistics/anfra/commit/41a84c5c1886f989be19c6a43451126a47d7fa01))
+* **sdk:** read timestamp periods as dates in the annotations example ([2e5bd15](https://github.com/holistics/anfra/commit/2e5bd15dd638362dd78a3f22f456441cd90a94e0))
+* **skills:** say the sdk, not the host, shows the annotations badge ([ce19ade](https://github.com/holistics/anfra/commit/ce19adead4752de47a9441f6c93997ec87181dcb))
+* **skills:** say query.update clears a query's annotations at once ([0d034fe](https://github.com/holistics/anfra/commit/0d034fe74870d41c7b5aa5b83ad8e60864175493))
+* **skills:** draw a focus by dimming the other rows, on line charts too ([f1ee446](https://github.com/holistics/anfra/commit/f1ee44611c768d66a2a10bb14b67d736ecf2a9da))
 ## [0.21.0](https://github.com/holistics/anfra/compare/v0.20.0...v0.21.0) (2026-11-17)
 
 ### Features

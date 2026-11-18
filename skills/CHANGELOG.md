@@ -1,3 +1,17 @@
+## [0.22.0](https://github.com/holistics/anfra/compare/v0.21.0...v0.22.0) (2026-11-18)
+
+### Features
+
+* **skills:** teach build-data-app to draw a query's annotations ([7f3fca3](https://github.com/holistics/anfra/commit/7f3fca3bb46edb151a6601e68e4c02c7302b6ce1))
+* **skills:** draw annotations on horizontal bars, pies and tables ([5aea925](https://github.com/holistics/anfra/commit/5aea92531ccff3290cead0226478248cda309299))
+* **skills:** keep data answers out of the agent's default artifacts ([9b85408](https://github.com/holistics/anfra/commit/9b85408678dd1e3f60790426b74464a59d983164))
+
+### Bug Fixes
+
+* **cli:** say why a Data App beats the agent's default artifacts ([0ec0490](https://github.com/holistics/anfra/commit/0ec0490dfc23e3dda1f02cd0a50a66afe656a224))
+* **skills:** say the sdk, not the host, shows the annotations badge ([ce19ade](https://github.com/holistics/anfra/commit/ce19adead4752de47a9441f6c93997ec87181dcb))
+* **skills:** say query.update clears a query's annotations at once ([0d034fe](https://github.com/holistics/anfra/commit/0d034fe74870d41c7b5aa5b83ad8e60864175493))
+* **skills:** draw a focus by dimming the other rows, on line charts too ([f1ee446](https://github.com/holistics/anfra/commit/f1ee44611c768d66a2a10bb14b67d736ecf2a9da))
 ## [0.21.0](https://github.com/holistics/anfra/compare/v0.20.0...v0.21.0) (2026-11-17)
 
 ### Features
