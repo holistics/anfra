@@ -469,7 +469,7 @@ export function convertExplore (project, lkModel, lkModelName, name, ex) {
     report('SECURITY', `required_access_grants [${asArray(ex.required_access_grants).join(', ')}] is dropped: the dataset is visible to everyone it is shared with — see references/explore.md#required_access_grants`)
   }
   for (const [qname, q] of Object.entries(ex.query || {})) report('INFO', `query ${qname} (a Quick Start query) is not converted; rebuild it as a report`, { lookml: toLookml('query', qname, q) })
-  for (const [aname, agg] of Object.entries(ex.aggregate_table || {})) todo(`aggregate_table \`${aname}\` is not converted: write a PreAggregate in this Dataset — see references/aggregate-awareness.md`, toLookml('aggregate_table', aname, agg), bodyTodos)
+  for (const [aname, agg] of Object.entries(ex.aggregate_table || {})) report('DROPPED', `aggregate_table ${aname}: anfra has no pre-aggregates; queries run on the source tables and return the same numbers — see references/aggregate-awareness.md`, { lookml: toLookml('aggregate_table', aname, agg) })
   for (const key of ['persist_for', 'persist_with', 'case_sensitive', 'cancel_grouping_fields', 'sql_preamble', 'tags', 'sql_analytic_model_name', 'final']) {
     if (ex[key] !== undefined) report('DROPPED', `${key}: ${JSON.stringify(ex[key])} — unsupported on a Dataset`)
   }

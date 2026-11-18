@@ -124,7 +124,7 @@ Where the expression appears decides where the condition goes:
 | `always_filter`, `conditionally_filter`, explore `filters` | nowhere in AML: a comment and a report line for the dashboard filter | [explore.md](explore.md) |
 | `access_filter` | a Dataset `permission` | [explore.md](explore.md) |
 | `filters` of an `explore_source` | the derived table | [derived-tables.md](derived-tables.md) |
-| `filters` of an `aggregate_table` query | nowhere: a pre-aggregate has no filter; the field becomes a dimension of it | [aggregate-awareness.md](aggregate-awareness.md#filters) |
+| `filters` of an `aggregate_table` query | nowhere: the aggregate table is dropped | [aggregate-awareness.md](aggregate-awareness.md) |
 | `default_value` of a `filter` field | the default of the dashboard filter | [filter.md](filter.md#default_value) |
 
 The `default_value` of a `parameter` is a plain value, not a filter expression. Do not parse it

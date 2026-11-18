@@ -80,7 +80,7 @@ Explore parameters:
 | `sql_analytic_model_name` | unsupported | [sql_analytic_model_name](#sql_analytic_model_name) |
 | `sql_preamble` | unsupported | [sql_preamble](#sql_preamble) |
 | `symmetric_aggregates` | not needed | [symmetric_aggregates](#symmetric_aggregates) |
-| `aggregate_table` | pre-aggregate | [aggregate-awareness.md](aggregate-awareness.md) |
+| `aggregate_table` | unsupported | [aggregate-awareness.md](aggregate-awareness.md) |
 | `explore: +name`, `final` | merged into the dataset | [extends-and-refinements.md](extends-and-refinements.md) |
 
 Join parameters:
@@ -470,7 +470,7 @@ were inflated on purpose; the converted dataset returns de-duplicated numbers. R
 
 ## Aggregate table parameters
 
-`aggregate_table`: see [aggregate-awareness.md](aggregate-awareness.md).
+`aggregate_table`: unsupported. See [aggregate-awareness.md](aggregate-awareness.md).
 
 ## Refinement parameters
 

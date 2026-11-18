@@ -17,7 +17,7 @@ the conversion report (see "The conversion report" below); never invent an AML p
 | `view` | [references/view.md](references/view.md) |
 | `derived_table` (SQL and native derived tables, persistence, schedules) | [references/derived-tables.md](references/derived-tables.md) |
 | `explore`, `join` | [references/explore.md](references/explore.md) |
-| `aggregate_table` (aggregate awareness) | [references/aggregate-awareness.md](references/aggregate-awareness.md) |
+| `aggregate_table` (aggregate awareness): unsupported, dropped | [references/aggregate-awareness.md](references/aggregate-awareness.md) |
 | field parameters shared by all fields (labels, formats, drills, …) | [references/field.md](references/field.md) |
 | `dimension` | [references/dimension.md](references/dimension.md) |
 | `dimension_group` | [references/dimension-group.md](references/dimension-group.md) |
