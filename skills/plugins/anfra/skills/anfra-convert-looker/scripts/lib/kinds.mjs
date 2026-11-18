@@ -64,7 +64,6 @@ const TODO_KINDS = [
   ['join-full-outer', /full_outer is unsupported/],
   ['always-join', /^always_join/],
   ['sql-always-where', /^sql_always_where/],
-  ['aggregate-table', /^aggregate_table/],
   ['duplicate-metric', /exists in several models of this Dataset/],
   ['base-view-missing', /^base view .* is not a view of the project/],
   // last: SQL that the translator could not read, without more context

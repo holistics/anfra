@@ -301,7 +301,7 @@ see the query. `_filters['view.field']` is unsupported for the same reason.
 | `{% if f._is_filtered %} … {% else %} NULL {% endif %}` as a guard around `{% condition %}` or `{% date_start %}` | Convert the guarded branch by [filter.md](filter.md) and drop the guard. |
 | A join condition or join list that depends on `view._in_query` | Drop the Liquid. Holistics joins only the models that a report needs. A join *path* that depends on the query is unsupported; report it. |
 | A measure that changes by which dimension is in the query | AQL `case(when: is_at_level(dim), …)` — the one use with a counterpart (below). |
-| A table chosen by the query (`sql_table_name` with `{% if view.field._in_query %}`) | Unsupported. Emit the `{% else %}` table and report it — see [view.md](view.md#other-liquid). If the other table is a roll-up of the same data, model the detailed table and declare the roll-up as a [pre-aggregate](https://docs.holistics.io/reference/aml/pre-aggregate). |
+| A table chosen by the query (`sql_table_name` with `{% if view.field._in_query %}`) | Unsupported. Emit the `{% else %}` table and report it — see [view.md](view.md#other-liquid). If the other table is a roll-up of the same data, model the detailed table: results are the same, queries can be slower ([aggregate-awareness.md](aggregate-awareness.md)). |
 | A dimension that changes column by the query | Unsupported. Emit the `{% else %}` branch and report it. |
 | The boolean itself as a field value | Unsupported. Drop the field and report it. |
 | In `label`, `html`, `link` | Unsupported. See [Liquid in presentation parameters](#liquid-in-presentation-parameters). |

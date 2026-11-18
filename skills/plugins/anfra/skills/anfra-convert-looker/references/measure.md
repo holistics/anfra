@@ -786,7 +786,8 @@ Not needed. Drop it.
 
 Looker: [`allow_approximate_optimization`](https://docs.cloud.google.com/looker/docs/reference/param-field-allow-approximate-optimization)
 
-Drop it on the measure. It only matters for aggregate tables; see [aggregate-awareness.md](aggregate-awareness.md).
+Drop it on the measure. It only matters for aggregate tables, which are unsupported; see
+[aggregate-awareness.md](aggregate-awareness.md).
 
 ### `precision`
 
