@@ -1,9 +1,9 @@
 // The LookML files an AML file was converted from, written as comment lines at the top of the AML file, followed by an
 // empty line:
 //
-//   // lookml-source: The LookML files this file was converted from. Keep these lines.
-//   // lookml-source: path=views/base.view.lkml hash=91c4d2e0 commit=6f1e0c2a9b3d
-//   // lookml-source: path=views/tracks.view.lkml hash=3f2a9c0d commit=6f1e0c2a9b3d
+//   // looker-source: The LookML files this file was converted from. Keep these lines.
+//   // looker-source: path=views/base.view.lkml hash=91c4d2e0 commit=6f1e0c2a9b3d
+//   // looker-source: path=views/tracks.view.lkml hash=3f2a9c0d commit=6f1e0c2a9b3d
 //
 // One line per file, sorted by path:
 //   path    the file's path relative to the LookML folder given to convert.mjs, with `/` separators. A path with a space
@@ -17,7 +17,7 @@
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 
-const PREFIX = '// lookml-source:'
+const PREFIX = '// looker-source:'
 const NOTE = `${PREFIX} The LookML files this file was converted from. Keep these lines.`
 
 /** The hash written for a file's content (a Buffer or a string). */
