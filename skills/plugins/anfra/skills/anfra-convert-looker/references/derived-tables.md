@@ -1,8 +1,8 @@
-# LookML `derived_table` → AML query model, persistence and schedules
+# LookML `derived_table` → AML query model
 
 How to convert a LookML derived table: the SQL kind (`sql`), the native kind (`explore_source`), and the
-parameters that persist it. The sections follow the derived-table parameters of Looker's
-[`derived_table`](https://docs.cloud.google.com/looker/docs/reference/param-view-derived-table) page.
+parameters that persist it, which anfra does not support. The sections follow the derived-table parameters of
+Looker's [`derived_table`](https://docs.cloud.google.com/looker/docs/reference/param-view-derived-table) page.
 
 A view with a SQL derived table becomes a [query model](https://docs.holistics.io/reference/aml/query-model). The
 SQL is carried over as it is:
@@ -66,7 +66,7 @@ Model completed_orders {
 ```
 
 **The validator does not read SQL.** `anfra validate` checks the structure of a query model and the AQL of
-its measures. It does not check the `query` text, the model references in it, or a `custom_ddl`.
+its measures. It does not check the `query` text or the model references in it.
 
 ## Quick reference
 
@@ -83,13 +83,8 @@ its measures. It does not check the `query` text, the model references in it, or
 | `bind_filters` | `param` + a condition on it | [bind_filters](#bind_filters) |
 | `bind_all_filters` | unsupported; metrics as the closest | [bind_all_filters](#bind_all_filters) |
 | `dev_filters` | unsupported | [dev_filters](#dev_filters) |
-| `datagroup_trigger`, `sql_trigger_value`, `interval_trigger`, `persist_for` | `persistence: FullPersistence { }` + a `Schedule` | [Persistence strategy](#persistence-strategy) |
-| `increment_key`, `increment_offset` | `persistence: IncrementalPersistence { }` | [increment_key, increment_offset](#increment_key-increment_offset) |
-| `create_process`, `sql_create` | `query` + `custom_ddl` | [create_process, sql_create](#create_process-sql_create) |
-| `materialized_view` | unsupported | [materialized_view](#materialized_view) |
-| `publish_as_db_view` | `view_name` in the persistence block | [publish_as_db_view](#publish_as_db_view) |
-| `indexes`, `sortkeys`, `distribution`, `distribution_style`, `partition_keys`, `cluster_keys` | `custom_ddl` in the persistence block | [Table optimizations](#table-optimizations) |
-| `table_compression`, `table_format` | unsupported | [table_compression, table_format](#table_compression-table_format) |
+| `datagroup_trigger`, `sql_trigger_value`, `interval_trigger`, `persist_for`, `increment_key`, `increment_offset`, `materialized_view`, `publish_as_db_view`, `indexes`, `sortkeys`, `distribution`, `distribution_style`, `partition_keys`, `cluster_keys`, `table_compression`, `table_format` | unsupported | [Persistence parameters](#persistence-parameters) |
+| `create_process`, `sql_create` | `query` = the `SELECT` | [create_process, sql_create](#create_process-sql_create) |
 
 ---
 
@@ -106,13 +101,13 @@ What the block contains decides the conversion:
 |---|---|
 | `sql` | a query model — see [`sql`](#sql) |
 | `explore_source` | no single target — see [`explore_source`](#explore_source) |
-| `create_process` or `sql_create` | a query model with a custom DDL — see [`create_process`, `sql_create`](#create_process-sql_create) |
+| `create_process` or `sql_create` | a query model on the `SELECT` — see [`create_process`, `sql_create`](#create_process-sql_create) |
 
 For a query model, everything in [view.md](view.md) about the name, label, `data_source_name`, file and fields
 still applies. The model has `type: 'query'` and no `table_name`.
 
-No persistence parameter → no `persistence` block. Holistics then inserts the model's SQL into each query as a
-CTE, as Looker does with a temporary derived table.
+anfra inserts the model's SQL into each query as a CTE, as Looker does with a temporary derived table. The
+parameters that persist a derived table are dropped; see [Persistence parameters](#persistence-parameters).
 
 ## `sql`
 
@@ -237,8 +232,8 @@ Mark every such model for review. The reference does not mean the same thing in 
 - If it does not resolve: for a table view, write the table name instead of `{{ #v }}`. For a derived table, add a
   hidden dimension for the missing column to `v`, or rename the column in the SQL.
 
-A reference to a persisted model reads its persisted table. A reference to a model without persistence inlines its
-SQL. Looker makes the same split.
+A reference inlines the SQL of the referenced model. Looker read the persisted table instead when the view was
+persisted; the rows are the same unless that table was out of date.
 
 ### Liquid in the SQL
 
@@ -250,12 +245,9 @@ Holistics: [Dynamic Query Model](https://docs.holistics.io/docs/query-parameters
 | `{% condition f %} col {% endcondition %}` | `param f` + `{% filter(f) %} col {% end %}` — see [filter.md](filter.md#condition-in-a-derived-table) |
 | `{% date_start f %}`, `{% date_end f %}` | `{% filter(f) %}`, or two date params — see [filter.md](filter.md#date_start-date_end) |
 | `{% parameter p %}`, `{{ p._parameter_value }}` | `param p` + `{{ p }}` — see [parameter.md](parameter.md#in-a-derived-table) |
-| `{% incrementcondition %} … {% endincrementcondition %}` | removed — see [`increment_key`](#increment_key-increment_offset) |
+| `{% incrementcondition %} … {% endincrementcondition %}` | removed — see [Persistence parameters](#persistence-parameters) |
 | `_user_attributes['x']` | see [liquid.md](liquid.md) |
 | `{% if %}`, `{% assign %}`, `{% for %}`, `_in_query`, `_is_selected`, `_is_filtered`, `_filters[…]`, `_model._name`, `_explore._name` | Unsupported in general: a query model has no template logic and cannot see which fields a report uses. See [liquid.md](liquid.md). |
-
-A derived table that reads a filter or a parameter cannot be persisted, in either tool. Remove its persistence
-parameters and report it.
 
 ---
 
@@ -277,7 +269,7 @@ the target depends on its shape. Use the first row that matches:
 |---|---|
 | has `bind_all_filters: yes` | Unsupported. Metrics as the closest — see [`bind_all_filters`](#bind_all_filters) |
 | has `bind_filters` | a `param` and a condition on it — see [`bind_filters`](#bind_filters) |
-| is persisted, or is the base view of an explore, or has `limit`, or its rows are not one per primary key of a model | a SQL query model — see [As a SQL query model](#as-a-sql-query-model) |
+| is the base view of an explore, or has `limit`, or its rows are not one per primary key of a model | a SQL query model — see [As a SQL query model](#as-a-sql-query-model) |
 | has only dimension columns of one view, plus window `derived_column`s | a window dimension on that model — see [As a window dimension](#as-a-window-dimension) |
 | has one row per primary key of a model, with measure columns, and is joined back on that key | Dataset dimensions — see [As Dataset dimensions](#as-dataset-dimensions) |
 
@@ -318,7 +310,7 @@ Holistics: [`dimensionalize`](https://docs.holistics.io/reference/aql/dimensiona
 
 Use this when all of the following hold. Otherwise use [a SQL query model](#as-a-sql-query-model).
 
-- No `bind_filters`, `bind_all_filters`, `limit`, `derived_column`, and no persistence that must be kept.
+- No `bind_filters`, `bind_all_filters`, `limit` or `derived_column`.
 - Exactly one dimension column is the primary key of a model `E` of the dataset, or a foreign key that the explore
   joins to it. Other dimension columns, if any, are dimensions of `E`. No column is a timeframe (`created_month`).
 - Every explore joins the NDT view to `E` on that key.
@@ -402,8 +394,8 @@ Differences:
   `always_filter` apply inside it. Check that those conditions also reach the new dimensions
   (see [explore.md](explore.md#sql_always_where)).
 - **Field picker.** The fields move from the NDT view to `E`.
-- **No persistence.** The dimension is computed in every query that uses it. For a large table, a
-  [SQL query model](#as-a-sql-query-model) with persistence can be the better choice.
+- **Computed per query.** The dimension is computed in every query that uses it, where Looker could persist the
+  NDT.
 
 ### As a window dimension
 
@@ -472,8 +464,8 @@ Differences:
 Looker: [`explore_source`](https://docs.cloud.google.com/looker/docs/reference/param-view-explore-source) ·
 Holistics: [Field selection](https://docs.holistics.io/reference/aml/query-model#note-on-field-selection-syntax)
 
-The fallback for every NDT, and the only choice for a persisted one. Write the SQL that Looker would generate for
-the NDT, against the converted models, then continue as for a SQL derived table (persistence included).
+The fallback for every NDT. Write the SQL that Looker would generate for the NDT, against the converted models,
+then continue as for a SQL derived table.
 
 ```sql
 SELECT q.*, <derived_column sql> AS <derived column>          -- only with derived_columns
@@ -513,7 +505,6 @@ view: monthly_status_stats {
       column: total_amount {}
       expression_custom_filter: ${orders.amount} > 0 ;;
     }
-    datagroup_trigger: nightly
   }
 
   dimension: created_month { type: date_month }
@@ -541,10 +532,6 @@ Model monthly_status_stats {
     WHERE {{ #o.amount }} > 0
     GROUP BY 1, 2
   ;;
-
-  persistence: FullPersistence {
-    schema: 'persisted'
-  }
 
   dimension created_month {
     label: 'Created Month'
@@ -605,7 +592,6 @@ query. It behaves like `{% condition F %} T {% endcondition %}` (see [filter.md]
    - **SQL form**, when the NDT needs [a SQL query model](#as-a-sql-query-model): declare the param on the query
      model and write `WHERE {% filter(<param>) %} <T> {% end %}` in the inner query.
 4. Several `bind_filters` → one param and one condition each.
-5. Remove persistence. A table that depends on a filter cannot be persisted.
 
 ```lookml
 view: user_period_facts {
@@ -759,227 +745,49 @@ Differences:
 
 Looker: [`dev_filters`](https://docs.cloud.google.com/looker/docs/reference/param-view-explore-source#creating_filters_for_development_mode)
 
-Unsupported. Holistics builds persisted tables in production only; there is no smaller development copy. Drop it.
+Unsupported. anfra has no development copy of a derived table. Drop it.
 
 ---
 
-## Persistence strategy
+## Persistence parameters
 
-`datagroup_trigger`, `sql_trigger_value`, `interval_trigger`, `persist_for`
+`datagroup_trigger`, `sql_trigger_value`, `interval_trigger`, `persist_for`, `increment_key`, `increment_offset`,
+`materialized_view`, `publish_as_db_view`, `indexes`, `sortkeys`, `distribution`, `distribution_style`,
+`partition_keys`, `cluster_keys`, `table_compression`, `table_format`, and `distkey` on the view
 
-Looker: [`datagroup_trigger`](https://docs.cloud.google.com/looker/docs/reference/param-view-datagroup-trigger),
-[`sql_trigger_value`](https://docs.cloud.google.com/looker/docs/reference/param-view-sql-trigger-value),
-[`interval_trigger`](https://docs.cloud.google.com/looker/docs/reference/param-view-interval-trigger),
-[`persist_for`](https://docs.cloud.google.com/looker/docs/reference/param-view-persist-for-for-derived-table) ·
-Holistics: [Query Model Persistence](https://docs.holistics.io/docs/persistence),
-[AML Persistence](https://docs.holistics.io/reference/aml/persistence)
+Looker: [Persistent derived tables](https://docs.cloud.google.com/looker/docs/derived-tables#persistent_derived_tables_pdts)
 
-**Holistics persistence runs on a schedule only.** It has no trigger that reacts to data. Every Looker trigger
-becomes a cron line.
+**Unsupported.** anfra does not persist query models and has no schedules. Drop these parameters and list them in
+the conversion report, with the original LookML. Do not write a `persistence` block, a `Schedule` or a
+`schedules.aml`: `anfra validate` accepts them, but anfra never builds the table.
 
-1. Any of the four parameters → `persistence: FullPersistence { schema: '<schema>' }` on the query model
-   (`IncrementalPersistence` with [`increment_key`](#increment_key-increment_offset)).
-2. `schema` is required and is not in the LookML: Looker's scratch schema is a connection setting. Ask the user
-   for it. The Holistics connection needs write permission on that schema.
-3. Find the trigger:
-   - `datagroup_trigger: g` → the `interval_trigger` of datagroup `g`; if it has none, its `sql_trigger`. A
-     datagroup with only `max_cache_age` → no schedule; report it (see [model.md](model.md#datagroup)).
-   - `sql_trigger_value` → that SQL.
-   - `interval_trigger`, `persist_for` → the duration.
-   - If several are present, use `datagroup_trigger`, as Looker does.
-4. Turn the trigger into a cron line with the table below.
-5. Write all schedules in one constant, `const schedules = [ … ]`, in `schedules.aml` at the root of the project.
-   Emit one `Schedule` per cron line, listing all models with that cron. Keep the Looker trigger as a comment.
-
-| Trigger | Cron |
-|---|---|
-| `"N minutes"`, N divides 60 | `0,N,2N,… * * * *`. Below 5 minutes → every 5 minutes, the smallest frequency. |
-| `"N hours"`, N divides 24 | `0 0,N,2N,… * * *`; `"24 hours"` → `0 0 * * *` |
-| another duration (`"36 hours"`, `"5 hours"`) | the nearest cron; report it |
-| SQL that returns the current date (`SELECT CURRENT_DATE`, `CURDATE()`) | `0 0 * * *` |
-| SQL that returns the current hour | `0 * * * *` |
-| SQL that returns the week, month or year of the current date | `0 0 * * 1`, `0 0 1 * *`, `0 0 1 1 *` |
-| SQL that shifts the clock ("daily at 02:00") | read the offset from the SQL: `0 2 * * *` |
-| SQL that reads data (`SELECT MAX(id) FROM t`, `SELECT MAX(completed_at) FROM etl_jobs`) | Unsupported. A person must choose the cron. Emit a line with a `// TODO` comment that quotes the SQL. |
-| `SELECT COUNT(*) FROM ${upstream.SQL_TABLE_NAME}` ("rebuild after the upstream table") | no schedule of its own when a scheduled model depends on it; otherwise the cron of the upstream model |
-| a constant (`SELECT 1`): build once | the `persistence` block and no schedule; report it |
-
-Write cron fields as numbers and explicit lists (`0 0,6,12,18 * * *`, `0 8 * * 1`). Do not use names (`MON`).
-
-**Chains.** A scheduled model also rebuilds the persisted models that it reads. For a chain of derived tables with
-one datagroup, schedule only the models that no other persisted model of the group reads. Give a parent its own
-schedule and `on_cascade: 'reuse'` only when its Looker trigger was slower than the child's.
-
-```lookml
-datagroup: ecommerce_etl {
-  sql_trigger: SELECT MAX(completed_at) FROM etl.jobs ;;
-  max_cache_age: "24 hours"
-}
-
-view: user_order_facts {
-  derived_table: {
-    sql: … ;;
-    datagroup_trigger: ecommerce_etl
-  }
-}
-
-view: active_users {
-  derived_table: {
-    sql: SELECT id, email FROM public.users WHERE deleted_at IS NULL ;;
-    interval_trigger: "6 hours"
-  }
-
-  dimension: id { primary_key: yes  type: number  sql: ${TABLE}.id ;; }
-  dimension: email { type: string  sql: ${TABLE}.email ;; }
-}
-```
-```aml
-Model active_users {
-  type: 'query'
-  label: 'Active Users'
-  data_source_name: 'demodb'
-  models: []
-
-  query: @sql SELECT id, email FROM public.users WHERE deleted_at IS NULL ;;
-
-  persistence: FullPersistence {
-    schema: 'persisted'
-  }
-
-  dimension id {
-    label: 'Id'
-    type: 'number'
-    primary_key: true
-    definition: @sql {{ #SOURCE.id }};;
-  }
-  dimension email {
-    label: 'Email'
-    type: 'text'
-    definition: @sql {{ #SOURCE.email }};;
-  }
-}
-```
-
-`user_order_facts` gets the same `persistence` block. Then, in `schedules.aml`:
-
-```aml
-const schedules = [
-  // TODO: set the time. Looker: datagroup ecommerce_etl, sql_trigger: SELECT MAX(completed_at) FROM etl.jobs
-  Schedule { cron: '0 5 * * *', models: [user_order_facts] },
-
-  // Looker: interval_trigger "6 hours"
-  Schedule { cron: '0 0,6,12,18 * * *', models: [active_users] }
-]
-```
-
-Differences:
-
-- **Trigger and clock.** "Rebuild when the data changed" cannot be expressed. A cron rebuilds whether or not
-  anything changed, and it can run before the load has finished.
-- **`persist_for`.** Looker rebuilds the table when a user queries it and it is older than the duration. A cron
-  rebuilds it on time, used or not.
-- **Failure.** When a build fails, Holistics runs the model's SQL live. Looker keeps serving the previous table.
-- **Time zone.** Looker's time-based triggers follow the database time zone. The time zone of Holistics cron lines
-  is not documented. Mark for review.
-- **Cache.** `max_cache_age` and the cache part of a datagroup are not converted here
-  (see [model.md](model.md#persist_for-persist_with)).
-
-## `increment_key`, `increment_offset`
-
-Looker: [`increment_key`](https://docs.cloud.google.com/looker/docs/reference/param-view-increment-key),
-[`increment_offset`](https://docs.cloud.google.com/looker/docs/reference/param-view-increment-offset),
-[Incremental PDTs](https://docs.cloud.google.com/looker/docs/incremental-pdts) ·
-Holistics: [Incremental Persistence](https://docs.holistics.io/docs/persistence#incremental-persistence)
-
-1. `increment_key: "k"` → `persistence: IncrementalPersistence { incremental_column: '<column>' }`. `<column>`
-   is the result column behind dimension `k` of the view. For a timeframe (`session_date`), it is the column of
-   its dimension group.
-2. Remove `{% incrementcondition %} … {% endincrementcondition %}` from the SQL, with the `WHERE` or `AND` that
-   it leaves behind. Holistics adds its own filter around the whole query.
-3. `primary_key: '<column>'` → the key column of the table, if the view declares one. For a table with one row per
-   increment value (daily totals), use the increment column.
-4. `increment_offset` → Unsupported. Drop it and report it.
-5. The schedule comes from the trigger, as in [Persistence strategy](#persistence-strategy).
-
-```lookml
-view: daily_revenue {
-  derived_table: {
-    sql:
-      SELECT created_at::date AS order_date, COUNT(*) AS orders, SUM(amount) AS revenue
-      FROM public.orders
-      WHERE {% incrementcondition %} created_at {% endincrementcondition %}
-      GROUP BY 1 ;;
-    sql_trigger_value: SELECT CURRENT_DATE ;;
-    increment_key: "order_date"
-    increment_offset: 3
-  }
-
-  dimension: order_date { primary_key: yes  type: date  sql: ${TABLE}.order_date ;; }
-  dimension: revenue { type: number  sql: ${TABLE}.revenue ;; }
-}
-```
-```aml
-Model daily_revenue {
-  type: 'query'
-  label: 'Daily Revenue'
-  data_source_name: 'demodb'
-  models: []
-
-  query: @sql
-    SELECT created_at::date AS order_date, COUNT(*) AS orders, SUM(amount) AS revenue
-    FROM public.orders
-    GROUP BY 1
-  ;;
-
-  persistence: IncrementalPersistence {
-    schema: 'persisted'
-    incremental_column: 'order_date'
-    primary_key: 'order_date'
-  }
-
-  dimension order_date {
-    label: 'Order Date'
-    type: 'date'
-    primary_key: true
-    definition: @sql {{ #SOURCE.order_date }};;
-  }
-  dimension revenue {
-    label: 'Revenue'
-    type: 'number'
-    definition: @sql {{ #SOURCE.revenue }};;
-  }
-}
-```
-
-Mark every incremental model for review. The two tools do not use the same method:
-
-| | Looker | Holistics |
-|---|---|---|
-| Rows rebuilt on each run | from the start of the latest period in the table, minus `increment_offset` periods | only rows with `incremental_column` greater than the current maximum |
-| The latest, unfinished period | rebuilt on every run | not visited again: a daily row first written at 10:00 keeps its 10:00 totals |
-| Late data in older periods | covered by `increment_offset` | not covered |
-| Where the filter applies | inside the SQL, before aggregation | around the finished query, after aggregation |
-
-So incremental persistence is safe only in two cases: the cron runs after each period is complete and the query
-excludes the current period; or the increment column is a row-level timestamp that only grows (`updated_at`),
-with a real `primary_key`. In every other case, emit `FullPersistence` and report the change.
+- **Results do not change.** The query model's SQL runs as a CTE inside every query that uses it, as Looker does
+  with a temporary derived table.
+- **Queries can be slower,** and the database runs the SQL on every query. For a derived table that is expensive
+  to compute, the user can build the table outside anfra (the tool that loads the warehouse, a scheduled SQL job)
+  and replace the query model with a table model on it. Report each persisted derived table with its trigger, so
+  that the user can decide.
+- **`increment_key`:** also remove `{% incrementcondition %} … {% endincrementcondition %}` from the SQL, with the
+  `WHERE` or `AND` that it leaves behind. The query then reads all rows.
+- **`publish_as_db_view: yes`:** the database view that Looker kept is gone. Report that other tools that read it
+  must be repointed.
+- **`materialized_view: yes`:** either create the materialized view in the database and use a table model on it,
+  or keep the SQL in the query model. Report the choice.
 
 ## `create_process`, `sql_create`
 
 Looker: [`create_process`](https://docs.cloud.google.com/looker/docs/reference/param-view-create-process),
-[`sql_create`](https://docs.cloud.google.com/looker/docs/reference/param-view-sql-create) ·
-Holistics: [Custom Persistence DDL](https://docs.holistics.io/docs/persistence#custom-persistence-ddl)
+[`sql_create`](https://docs.cloud.google.com/looker/docs/reference/param-view-sql-create)
 
-Both give Looker the statements that build the table `${SQL_TABLE_NAME}`. A query model always needs a `query`;
-`custom_ddl` is a template around it, with the variables `{{ persisted_table }}`, `{{ parsed_query }}` and
-`{{ index_name }}`.
+Both give Looker the statements that build the table `${SQL_TABLE_NAME}`. A query model needs only a `SELECT`, in
+`query`:
 
 | LookML statements | Conversion |
 |---|---|
-| one `CREATE TABLE ${SQL_TABLE_NAME} AS <select>` | `query` = the `<select>`, with plain `FullPersistence` |
-| `CREATE TABLE ${SQL_TABLE_NAME} (…)` + `INSERT INTO ${SQL_TABLE_NAME} <select>` | `query` = the `<select>`; `custom_ddl` = `CREATE TABLE {{ persisted_table }} (…); INSERT INTO {{ persisted_table }} {{ parsed_query }};` |
-| more statements on the table (`CREATE INDEX`, `ANALYZE`, `GRANT`, `ALTER TABLE`) | append them to `custom_ddl`; `${SQL_TABLE_NAME}` → `{{ persisted_table }}`, index names → `{{ index_name }}` |
-| statements that create something else (a BigQuery ML model, a function, a staging table) | Unsupported. Build it in the database and use a table model on the result. |
+| `CREATE TABLE ${SQL_TABLE_NAME} AS <select>` | `query` = the `<select>` |
+| `CREATE TABLE ${SQL_TABLE_NAME} (…)` + `INSERT INTO ${SQL_TABLE_NAME} <select>` | `query` = the `<select>`. The column types of the `CREATE TABLE` are lost; report them |
+| more statements on the table (`CREATE INDEX`, `ANALYZE`, `GRANT`, `ALTER TABLE`) | drop them and report them |
+| statements that create something else (a BigQuery ML model, a function, a staging table) | Unsupported. Build it in the database and use a table model on the result |
 
 ```lookml
 view: order_totals {
@@ -1012,14 +820,6 @@ Model order_totals {
     GROUP BY 1
   ;;
 
-  persistence: FullPersistence {
-    schema: 'persisted'
-    custom_ddl: @sql
-      CREATE TABLE {{ persisted_table }} AS {{ parsed_query }};
-      CREATE INDEX {{ index_name }} ON {{ persisted_table }} (user_id);
-    ;;
-  }
-
   dimension user_id {
     label: 'User Id'
     type: 'number'
@@ -1034,119 +834,4 @@ Model order_totals {
 }
 ```
 
-Mark for review; the DDL is not validated. `custom_ddl` works on BigQuery, ClickHouse, MySQL, PostgreSQL,
-Redshift, Snowflake and SQL Server only.
-
-## `materialized_view`
-
-Looker: [`materialized_view`](https://docs.cloud.google.com/looker/docs/reference/param-view-materialized-view)
-
-Unsupported. The database refreshes a materialized view, not the tool. Either create the materialized view in the
-database and use a table model on it, or emit `FullPersistence` with a schedule. Report the choice.
-
-## `publish_as_db_view`
-
-Looker: [`publish_as_db_view`](https://docs.cloud.google.com/looker/docs/reference/param-view-publish-as-db-view) ·
-Holistics: [AML Persistence](https://docs.holistics.io/reference/aml/persistence)
-
-`publish_as_db_view: yes` → `view_name: '<view name>'` in the persistence block. Holistics then keeps a database
-view with that name on the latest persisted table.
-
-```aml
-persistence: FullPersistence {
-  schema: 'persisted'
-  view_name: 'user_order_facts'
-}
-```
-
-Difference: the name of the view changes. Looker names it
-`<scratch schema>.<connection key>_<model name>_<view name>`; Holistics names it `<schema>.<view_name>`. Report
-that other tools that read the Looker view must be repointed.
-
-## Table optimizations
-
-`indexes`, `sortkeys`, `distribution`, `distribution_style`, `partition_keys`, `cluster_keys`
-
-Looker: [`indexes`](https://docs.cloud.google.com/looker/docs/reference/param-view-indexes),
-[`sortkeys`](https://docs.cloud.google.com/looker/docs/reference/param-view-sortkeys),
-[`distribution`](https://docs.cloud.google.com/looker/docs/reference/param-view-distribution),
-[`distribution_style`](https://docs.cloud.google.com/looker/docs/reference/param-view-distribution-style),
-[`partition_keys`](https://docs.cloud.google.com/looker/docs/reference/param-view-partition-keys),
-[`cluster_keys`](https://docs.cloud.google.com/looker/docs/reference/param-view-cluster-keys) ·
-Holistics: [Persistence Table Optimizations](https://docs.holistics.io/docs/persistence#persistence-table-optimizations)
-
-These apply to persisted tables only. Write them as a `custom_ddl` in the persistence block, in the dialect of the
-connection. Without a persistence strategy, drop them.
-
-| LookML | Redshift | BigQuery | Snowflake | PostgreSQL, MySQL, SQL Server |
-|---|---|---|---|---|
-| `distribution: "c"` | `DISTKEY (c)` | — | — | — |
-| `distribution_style: all` / `even` | `DISTSTYLE ALL` / `DISTSTYLE EVEN` | — | — | — |
-| `sortkeys: ["a", "b"]` | `SORTKEY (a, b)` | — | — | — |
-| `indexes: ["a", "b"]` | `INTERLEAVED SORTKEY (a, b)` | — | — | one `CREATE INDEX` statement per column, after the `CREATE TABLE` |
-| `partition_keys: ["d"]` | — | `PARTITION BY d` for a date column; `PARTITION BY DATE(d)` for a timestamp | — | — |
-| `cluster_keys: ["a", "b"]` | — | `CLUSTER BY a, b` | `CLUSTER BY (a, b)` | — |
-
-"—" means that the parameter has no effect on that dialect. Drop it.
-
-```lookml
-derived_table: {
-  sql: … ;;
-  datagroup_trigger: ecommerce_etl
-  distribution: "user_id"
-  sortkeys: ["user_id", "first_order_at"]
-}
-```
-
-Redshift:
-
-```aml
-persistence: FullPersistence {
-  schema: 'persisted'
-  custom_ddl: @sql
-    CREATE TABLE {{ persisted_table }}
-    DISTKEY (user_id)
-    SORTKEY (user_id, first_order_at)
-    AS {{ parsed_query }};
-  ;;
-}
-```
-
-BigQuery, with `partition_keys: ["session_date"]` and `cluster_keys: ["session_date"]`:
-
-```aml
-persistence: FullPersistence {
-  schema: 'persisted'
-  custom_ddl: @sql
-    CREATE TABLE {{ persisted_table }}
-    PARTITION BY session_date
-    CLUSTER BY session_date
-    AS {{ parsed_query }};
-  ;;
-}
-```
-
-PostgreSQL, with `indexes: ["created_month"]`:
-
-```aml
-persistence: FullPersistence {
-  schema: 'persisted'
-  custom_ddl: @sql
-    CREATE TABLE {{ persisted_table }} AS {{ parsed_query }};
-    CREATE INDEX {{ index_name }} ON {{ persisted_table }} (created_month);
-  ;;
-}
-```
-
-Mark for review:
-
-- The DDL text is not validated. Run it once on the target database.
-- On an incremental persistence, `custom_ddl` runs for the first build only.
-- These parameters change performance only. Dropping them never changes a result.
-
-## `table_compression`, `table_format`
-
-Looker: [`table_compression`](https://docs.cloud.google.com/looker/docs/reference/param-view-table-compression),
-[`table_format`](https://docs.cloud.google.com/looker/docs/reference/param-view-table-format)
-
-Unsupported. They apply to Presto and Athena, where Holistics has no `custom_ddl`. Drop them and report them.
+Report: the `CREATE INDEX` statement and `sql_trigger_value` were dropped.

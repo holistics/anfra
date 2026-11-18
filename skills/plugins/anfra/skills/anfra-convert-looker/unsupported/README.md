@@ -9,3 +9,4 @@ When anfra supports a feature, move its page back to `references/`, replace the 
 | Page | Holistics feature | Short page |
 |---|---|---|
 | [aggregate-awareness.md](aggregate-awareness.md) | `PreAggregate`, `PreAggregateSchedule` | [references/aggregate-awareness.md](../references/aggregate-awareness.md) |
+| [derived-table-persistence.md](derived-table-persistence.md) | query model `persistence`, `Schedule` | [references/derived-tables.md](../references/derived-tables.md#persistence-parameters) |

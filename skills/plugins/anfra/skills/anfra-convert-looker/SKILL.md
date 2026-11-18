@@ -15,7 +15,7 @@ the conversion report (see "The conversion report" below); never invent an AML p
 |---|---|
 | model file (`*.model.lkml`) | [references/model.md](references/model.md) |
 | `view` | [references/view.md](references/view.md) |
-| `derived_table` (SQL and native derived tables, persistence, schedules) | [references/derived-tables.md](references/derived-tables.md) |
+| `derived_table` (SQL and native derived tables; persistence is unsupported, dropped) | [references/derived-tables.md](references/derived-tables.md) |
 | `explore`, `join` | [references/explore.md](references/explore.md) |
 | `aggregate_table` (aggregate awareness): unsupported, dropped | [references/aggregate-awareness.md](references/aggregate-awareness.md) |
 | field parameters shared by all fields (labels, formats, drills, …) | [references/field.md](references/field.md) |
@@ -40,11 +40,11 @@ there is nothing to install.
 ```sh
 node scripts/convert.mjs <lookml dir or file> --out <aml dir> \
   [--data-source <lookml connection>=<holistics data source>]… [--default-data-source <name>] \
-  [--persist-schema <schema>] [--force]
+  [--force]
 ```
 
 It writes `manifest.aml`, `models/**/<view>.model.aml`, `models/aliases/*.model.aml`,
-`datasets/<model file>/<explore>_dataset.dataset.aml`, `schedules.aml` and `work-items.json`. It writes no report.
+`datasets/<model file>/<explore>_dataset.dataset.aml` and `work-items.json`. It writes no report.
 Views and explores that no model file includes are converted under a model named `unattached__`.
 
 **Pass 2 — you.** The script leaves two kinds of comments in the `.aml` files, each tagged with a kind
@@ -112,7 +112,7 @@ If your runtime has no subagents, follow the same phases yourself, one file set 
    `duplicate-metric`), read the reference and two or three instances, then write the decision in
    `<aml dir>/decisions.md`: the kind, the rule you apply, why (cite the reference), and the exceptions that need a
    case-by-case look. Ask the user what only they know: warehouse column types, the dev/prod schema names, primary
-   keys of views without one (`no-pk`), the persistence schema.
+   keys of views without one (`no-pk`).
 3. **Apply the decisions in bulk** where the rule is mechanical: a script or `sed` over
    `grep -rln '<LEVEL>(lookml-to-aml:<kind>)'`, deleting the comments it resolves. Leave the exceptions for phase 1.
 4. Keep the `SECURITY` and `INFO` notes for the conversion report. Do not delegate them.

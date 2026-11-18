@@ -21,12 +21,8 @@ const TODO_KINDS = [
   ['liquid-table-name', /^Liquid in sql_table_name/],
   ['table-name-expression', /^sql_table_name is not a table name/],
   ['table-override-derived', /sql_table_name override on a derived-table view/],
-  ['persist-schema', /^persistence schema/],
   ['ndt', /^native derived table/],
   ['create-process', /create_process|sql_create/],
-  ['table-optimizations', /^table optimizations/],
-  ['incremental', /^increment_key/],
-  ['schedule', /^schedule \(|has no exact cron|^the trigger is SQL|^datagroup \S+ is not defined|is not a duration this script reads/],
   ['query-missing-view', /^the query references .* which is not a view/],
   // fields
   ['measure-to-aql', /^translate this measure to AQL/],
@@ -112,7 +108,6 @@ const REVIEW_KINDS = [
   ['incrementcondition', /incrementcondition/],
   ['table-and-derived', /both sql_table_name and derived_table/],
   ['dev-prod-switch', /switches dev \/ prod/],
-  ['schedule-chain', /scheduled model also rebuilds/],
   ['override-required', /override_required/],
   ['relationship-match', /^(many-to-many|range) relationship; from \/ to are the primary keys/],
   ['join-key-sql', /kept as SQL in the hidden dimension/],
@@ -144,7 +139,7 @@ const NOTE_KINDS = [
   ['fields-list', /`fields` → a Dataset `view`/],
   ['data-source-mapping', /no Holistics data source was given/],
   ['default-schema', /no sql_table_name|unqualified table name/],
-  ['persistence', /derived table|publish_as_db_view|datagroup|sql_trigger_value/],
+  ['persistence', /derived table|publish_as_db_view|materialized_view|datagroup|sql_trigger_value/],
   ['location', /type: location/],
   ['imported-project', /cannot import a project/]
 ]

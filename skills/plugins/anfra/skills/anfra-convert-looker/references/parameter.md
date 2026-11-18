@@ -466,8 +466,8 @@ query model and write `{{ p }}` where the SQL had `{% parameter p %}`.
 3. `{% if p._parameter_value == 'v' %} … {% endif %}` in derived-table SQL → `CASE {{ p }} WHEN 'v' THEN … END`,
    when every branch is valid SQL at the same time. A branch that changes the structure of the query (another
    `FROM`, another `GROUP BY`) is unsupported; report it.
-4. Remove persistence settings from the model and report it. Neither tool persists a table whose SQL depends on a
-   parameter.
+4. Persistence settings are dropped like on any derived table
+   (see [derived-tables.md](derived-tables.md#persistence-parameters)).
 
 ```lookml
 view: customer_spend {
