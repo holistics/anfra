@@ -26,7 +26,8 @@ This is an anfra repo.
   accurately and efficiently with them than from memory.
 - Answer a question about this repo's data in chat, or, when it needs a page (a dashboard, a report, a chart),
   build an anfra Data App with the ` + "`anfra-build-data-app`" + ` skill. Don't build that page as one of the agent's default artifacts,
-  such as a Claude artifact, a ChatGPT or Gemini canvas, or a standalone HTML file, because only a Data App queries the repo's datasets live.
+  such as a Claude artifact, a ChatGPT or Gemini canvas, or a standalone HTML file, because a Data App is the best practice here.
+  It gives live data, governed queries, traceability, built-in interactions, and analytics functions.
 - Check a command with ` + "`anfra <command> --help`" + ` rather than guessing; ` + "`anfra --help`" + ` lists the commands.
   Before scripting a call or reading its result, ` + "`--schema`" + ` gives its exact input and output
   (` + "`--schema --jq '.output | del(.. | .description?)'`" + `: the output alone, without descriptions).
