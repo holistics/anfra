@@ -180,7 +180,8 @@ its own fields. See the example at the top of this page.
   ([derived-tables.md](derived-tables.md)).
 - **No table anywhere in the chain:** the table name defaults to the child's view name. This is usually a mistake
   in the LookML. Convert it as written and list it in the conversion report.
-- **A child of a persisted derived table** gets its own copy of the query and its own persistence, as in Looker.
+- **A child of a derived table** gets its own copy of the query, as in Looker. Persistence is dropped
+  ([derived-tables.md](derived-tables.md#persistence-parameters)).
 
 Two parents and a chain:
 

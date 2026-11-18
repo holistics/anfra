@@ -3,7 +3,7 @@
 //
 //   node convert.mjs <lookml dir or file> --out <aml dir> [options]
 //
-// The script writes the structure (models, datasets, constants, schedules) by the rules in ../references/.
+// The script writes the structure (models, datasets, constants) by the rules in ../references/.
 // Where a rule needs judgement, it writes a `// TODO(lookml-to-aml:<kind>): …` comment with the original LookML next to
 // the place the result belongs. An AI pass then reads those comments and finishes the conversion. `work-items.json`
 // lists the same comments as data, with everything else the AI pass needs (lib/work-items.mjs); kinds are defined in
@@ -23,7 +23,6 @@ Options:
   --out <dir>                    where the AML project is written (required)
   --data-source <conn>=<name>    Holistics data source for a Looker connection (repeatable)
   --default-data-source <name>   data source for every connection without a --data-source entry
-  --persist-schema <schema>      schema Holistics may write persisted query models to
   --force                        write into a folder that is not empty (existing files are overwritten)
   --json                         also write the parsed LookML to <out>/.lookml.json (for debugging)
 `
@@ -36,7 +35,6 @@ function parseArgs (argv) {
     const value = () => { if (i + 1 >= argv.length) fail(`${a} needs a value`); return argv[++i] }
     if (a === '--out') opts.out = value()
     else if (a === '--data-source') { const v = value(); const at = v.indexOf('='); if (at < 1) fail('--data-source expects <connection>=<data source>'); opts.dataSources.set(v.slice(0, at), v.slice(at + 1)) } else if (a === '--default-data-source') opts.defaultDataSource = value()
-    else if (a === '--persist-schema') opts.persistSchema = value()
     else if (a === '--force') opts.force = true
     else if (a === '--json') opts.json = true
     else if (a === '-h' || a === '--help') { process.stdout.write(USAGE); process.exit(0) } else if (a.startsWith('--')) fail(`unknown option ${a}`)

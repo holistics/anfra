@@ -624,7 +624,7 @@ occurs:
 | `sql_trigger_value` | dropped with the trigger (see [derived-tables.md](derived-tables.md)) |
 | `sql_table_name` | a view over another view's table (see [view.md](view.md#sql_table_name)) |
 | the `sql` of a dimension or measure, or `sql_always_where`, in a subquery `(SELECT … FROM ${v.SQL_TABLE_NAME})` | Unsupported: `{{ #model }}` exists only in a query model. Manual: when `v` is a table view, write its table name; otherwise make the subquery a query model and join it. Report it. |
-| `${SQL_TABLE_NAME}` (the view's own table, in `sql_create` or `create_process`) | `{{ persisted_table }}` in `custom_ddl`, or dropped (see [derived-tables.md](derived-tables.md)) |
+| `${SQL_TABLE_NAME}` (the view's own table, in `sql_create` or `create_process`) | dropped with the statement that holds it (see [derived-tables.md](derived-tables.md#create_process-sql_create)) |
 
 ```lookml
 view: user_order_facts {

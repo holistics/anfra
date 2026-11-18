@@ -1,5 +1,5 @@
-// Project-level conversion: which views and explores exist, constants, data sources, alias models, schedules,
-// and the conversion report. References: model.md, manifest.md, derived-tables.md#persistence-strategy.
+// Project-level conversion: which views and explores exist, constants, data sources, alias models,
+// and the conversion report. References: model.md, manifest.md.
 
 import { TODO, REVIEW, amlString, toLookml, commentLines } from './util.mjs'
 import { translateValueFormat } from './format.mjs'
@@ -16,7 +16,7 @@ const stable = o => JSON.stringify(o, (k, v) => (k.startsWith('$') && k !== '$na
 export class Project {
   /**
    * @param parsed  result of lookml-parser `parseFiles` (model assembly and extends / refinements applied)
-   * @param opts    { dataSources: Map<connection, data source>, defaultDataSource, persistSchema }
+   * @param opts    { dataSources: Map<connection, data source>, defaultDataSource }
    */
   constructor (parsed, opts = {}) {
     this.parsed = parsed
@@ -24,7 +24,6 @@ export class Project {
     this.entries = []
     this.views = new Map() // view name → { lk, lkModel, lkModelName, conv }
     this.aliases = new Map() // alias model name → ViewConv
-    this.schedules = []
     this.datasetNames = new Map()
     this.constants = new Map()
     this.constName = this.constName.bind(this)
@@ -214,55 +213,6 @@ export class Project {
     return name
   }
 
-  // ---- schedules (derived-tables.md#persistence-strategy) --------------------------------------------------------------
-
-  schedule (conv, dt, trigger) {
-    const durationCron = text => {
-      const m = String(text).trim().match(/^(\d+)\s*(second|minute|hour|day|week)s?$/i)
-      if (!m) return null
-      const n = Number(m[1]); const unit = m[2].toLowerCase()
-      const list = (step, max) => Array.from({ length: Math.floor(max / step) }, (x, i) => i * step).join(',')
-      if (unit === 'second') return { cron: `${list(5, 60)} * * * *`, note: 'below 5 minutes → every 5 minutes, the smallest frequency' }
-      if (unit === 'minute') {
-        if (n < 5) return { cron: `${list(5, 60)} * * * *`, note: 'below 5 minutes → every 5 minutes, the smallest frequency' }
-        if (n === 60) return { cron: '0 * * * *' }
-        if (60 % n === 0) return { cron: `${list(n, 60)} * * * *` }
-      }
-      if (unit === 'hour') {
-        if (n === 1) return { cron: '0 * * * *' }
-        if (n === 24) return { cron: '0 0 * * *' }
-        if (24 % n === 0) return { cron: `0 ${list(n, 24)} * * *` }
-      }
-      if (unit === 'day' && n === 1) return { cron: '0 0 * * *' }
-      if (unit === 'week' && n === 1) return { cron: '0 0 * * 1' }
-      return { cron: '0 0 * * *', todo: `"${text}" has no exact cron; choose the nearest one` }
-    }
-    const sqlCron = sql => {
-      const s = String(sql).replace(/\s+/g, ' ').trim().replace(/;$/, '').toUpperCase()
-      if (/^SELECT (CURRENT_DATE(\(\))?|CURDATE\(\)|DATE\((NOW\(\)|GETDATE\(\)|CURRENT_TIMESTAMP(\(\))?)\))$/.test(s)) return { cron: '0 0 * * *' }
-      if (/^SELECT \d+$/.test(s)) return { none: 'a constant trigger builds the table once: the persistence block is kept, with no schedule' }
-      return { cron: '0 0 * * *', todo: 'the trigger is SQL that no rule covers (it may read data, shift the clock, or follow an upstream table). A person must choose the cron; `0 0 * * *` is a placeholder — see references/derived-tables.md#persistence-strategy' }
-    }
-    let origin; let result
-    if (trigger === 'datagroup_trigger') {
-      const dg = (conv.lkModel.datagroup || {})[dt.datagroup_trigger]
-      origin = `datagroup ${dt.datagroup_trigger}`
-      if (!dg) result = { cron: '0 0 * * *', todo: `datagroup \`${dt.datagroup_trigger}\` is not defined in the model file` }
-      else if (dg.interval_trigger !== undefined) { origin += `, interval_trigger ${JSON.stringify(dg.interval_trigger)}`; result = durationCron(dg.interval_trigger) }
-      else if (dg.sql_trigger !== undefined) { origin += `, sql_trigger: ${String(dg.sql_trigger).replace(/\s+/g, ' ').trim()}`; result = sqlCron(dg.sql_trigger) }
-      else result = { none: `datagroup \`${dt.datagroup_trigger}\` has only max_cache_age: no schedule` }
-    } else if (trigger === 'sql_trigger_value') {
-      origin = `sql_trigger_value: ${String(dt.sql_trigger_value).replace(/\s+/g, ' ').trim()}`
-      result = sqlCron(dt.sql_trigger_value)
-    } else {
-      origin = `${trigger} ${JSON.stringify(dt[trigger])}`
-      result = durationCron(dt[trigger]) || { cron: '0 0 * * *', todo: `"${dt[trigger]}" is not a duration this script reads` }
-    }
-    if (result.none) { conv.report('INFO', 'derived_table', `${origin}: ${result.none}`); return }
-    if (result.todo) conv.report('TODO', 'derived_table', `schedule (${origin}): ${result.todo}`)
-    this.schedules.push({ model: conv.name, origin, ...result })
-  }
-
   // ---- run -----------------------------------------------------------------------------------------------------------
 
   /** Convert everything. Returns Map<path, text> of the AML files. */
@@ -298,8 +248,6 @@ export class Project {
     for (const [name, alias] of this.aliases) files.set(`models/aliases/${name}.model.aml`, renderAlias(alias))
     const manifest = this.renderManifest()
     if (manifest) files.set('manifest.aml', manifest)
-    const schedules = this.renderSchedules()
-    if (schedules) files.set('schedules.aml', schedules)
     return files
   }
 
@@ -312,7 +260,7 @@ export class Project {
     if (lk.fiscal_month_offset !== undefined) r('INFO', `fiscal_month_offset: ${lk.fiscal_month_offset} is compiled into the fiscal dimensions of this model file's views`)
     if (lk.case_sensitive === false) r('INFO', '`case_sensitive: no`: converted measure filters use lower() / ilike; filters typed in the Holistics UI are not affected')
     for (const key of ['persist_for', 'persist_with']) if (lk[key] !== undefined) r('INFO', `${key}: ${JSON.stringify(lk[key])} — no cache setting in models or datasets; set the cache duration per dashboard — see references/model.md#persist_for-persist_with`)
-    for (const [g, body] of Object.entries(lk.datagroup || {})) r('INFO', `datagroup ${g} is not an AML object; derived tables that name it get a schedule (max_cache_age: ${body.max_cache_age ?? '—'})`)
+    for (const [g, body] of Object.entries(lk.datagroup || {})) r('INFO', `datagroup ${g} is not an AML object, and anfra has no schedules: derived tables that name it are not persisted (max_cache_age: ${body.max_cache_age ?? '—'}) — see references/model.md#datagroup`)
     for (const [g, body] of Object.entries(lk.access_grant || {})) r('SECURITY', `access_grant ${g} is unsupported: nothing hides an explore, view or field by user attribute — see references/model.md#access_grant`, { lookml: toLookml('access_grant', g, body) })
     for (const [t, body] of Object.entries(lk.test || {})) r('DROPPED', `test ${t}: AML has no data tests; re-create the assertion elsewhere`, { lookml: toLookml('test', t, body) })
     for (const [m] of Object.entries(lk.map_layer || {})) r('DROPPED', `map_layer ${m}: custom maps are uploaded by an admin in the Holistics UI`)
@@ -350,25 +298,6 @@ export class Project {
     for (const [name, fmt] of this.formatConsts || []) lines.push(`const ${name} = '${fmt}'`, '')
     if (!lines.length) return null
     return ['// Constants: LookML `constant` (manifest.lkml) and `named_value_format` (model files).', '', ...lines].join('\n')
-  }
-
-  renderSchedules () {
-    if (!this.schedules.length) return null
-    const groups = new Map()
-    for (const s of this.schedules) {
-      const key = `${s.cron}|${s.origin}`
-      if (!groups.has(key)) groups.set(key, { ...s, models: [] })
-      groups.get(key).models.push(s.model)
-    }
-    const items = [...groups.values()]
-    const lines = ['// Persistence schedules of the query models. Holistics persistence runs on a schedule only: every Looker trigger', '// became a cron line (references/derived-tables.md#persistence-strategy).', `// ${REVIEW}: a scheduled model also rebuilds the persisted models it reads; in a chain, schedule only the models that no`, '// other persisted model reads. The time zone of the cron lines is not documented.', 'const schedules = [']
-    items.forEach((s, i) => {
-      if (s.todo) lines.push(`  // ${TODO}: ${s.todo}`)
-      lines.push(`  // Looker: ${s.origin}${s.note ? ` (${s.note})` : ''}`, `  Schedule { cron: '${s.cron}', models: [${s.models.join(', ')}] }${i < items.length - 1 ? ',' : ''}`, '')
-    })
-    if (lines[lines.length - 1] === '') lines.pop()
-    lines.push(']', '')
-    return lines.join('\n')
   }
 }
 

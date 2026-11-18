@@ -199,8 +199,8 @@ Looker: [`datagroup`](https://docs.cloud.google.com/looker/docs/reference/param-
 
 Unsupported as an object: AML has no named caching policy. Emit nothing for the block itself.
 
-- A derived table or aggregate table that names the datagroup takes a refresh schedule from the datagroup's
-  trigger. See [derived-tables.md](derived-tables.md).
+- A derived table or aggregate table that names the datagroup loses its persistence: anfra has no schedules. See
+  [derived-tables.md](derived-tables.md#persistence-parameters).
 - `max_cache_age` has no place in models or datasets. See [`persist_for`, `persist_with`](#persist_for-persist_with).
 
 ### `fiscal_month_offset`

@@ -380,7 +380,7 @@ Holistics: [Pre-aggregate Persistence](https://docs.holistics.io/docs/aggregate-
 [AML Persistence](https://docs.holistics.io/reference/aml/persistence)
 
 An aggregate table is a persistent derived table, and its `materialization` parameters are the derived-table ones.
-Convert them as in [derived-tables.md](../references/derived-tables.md), with the changes below.
+Convert them as in [derived-table-persistence.md](derived-table-persistence.md), with the changes below.
 
 ### Persistence strategy
 
@@ -394,8 +394,8 @@ Holistics: [Schedule for PreAggregate Persistence](https://docs.holistics.io/ref
 1. `persistence: FullPersistence { schema: '<schema>' }` inside the `PreAggregate`. `schema` is required and is
    not in the LookML; ask the user for it, as for derived tables.
 2. Turn the trigger into a cron line by the rules and the table in
-   [derived-tables.md, Persistence strategy](../references/derived-tables.md#persistence-strategy). Holistics has no trigger that
-   reacts to data; a trigger that reads data needs a cron chosen by a person.
+   [derived-table-persistence.md, Persistence strategy](derived-table-persistence.md#persistence-strategy).
+   Holistics has no trigger that reacts to data; a trigger that reads data needs a cron chosen by a person.
 3. Emit a `PreAggregateSchedule { cron, object: <dataset>, pre_aggregates: ['<name>', …] }` in the same
    `const schedules = [ … ]` as the `Schedule` entries of query models. Put the pre-aggregates of one dataset that
    share a cron in one entry. Keep the Looker trigger as a comment.
@@ -434,8 +434,8 @@ const schedules = [
 ]
 ```
 
-The differences listed in [derived-tables.md](../references/derived-tables.md#persistence-strategy) apply: a cron rebuilds on
-time, whether or not the data changed.
+The differences listed in [derived-table-persistence.md](derived-table-persistence.md#persistence-strategy)
+apply: a cron rebuilds on time, whether or not the data changed.
 
 Not generated: `persistence: ExternalPersistence { table_name: '<schema>.<table>' }` maps a pre-aggregate to a
 table that another tool builds. Looker always builds its aggregate tables itself. Mention it to a user who already
@@ -474,7 +474,7 @@ Mark every incremental pre-aggregate for review:
 - Looker rebuilds the latest period, and `increment_offset` more periods, on every run. Holistics "appends new
   records and updates existing ones" by `primary_key`. Whether the latest, unfinished period is computed again on
   each run is not stated. See the table in
-  [derived-tables.md](../references/derived-tables.md#increment_key-increment_offset).
+  [derived-table-persistence.md](derived-table-persistence.md#increment_key-increment_offset).
 - A pre-aggregate with several dimensions has many rows per date, so the date column is not unique. Whether
   Holistics then replaces all rows of that date is not stated.
 - Late data in older periods, which `increment_offset` covered, is not picked up.
@@ -486,7 +486,8 @@ If the user cannot confirm the behaviour, emit `FullPersistence` and report the 
 Looker: [`publish_as_db_view`](https://docs.cloud.google.com/looker/docs/reference/param-explore-aggregate-table#publish_as_db_view)
 
 `publish_as_db_view: yes` → `view_name: '<aggregate table name>'` in the persistence block. The name of the
-database view differs from Looker's; see [derived-tables.md](../references/derived-tables.md#publish_as_db_view).
+database view differs from Looker's; see
+[derived-table-persistence.md](derived-table-persistence.md#publish_as_db_view).
 
 ```aml
 persistence: FullPersistence {
@@ -502,8 +503,8 @@ persistence: FullPersistence {
 Looker: [`materialization`](https://docs.cloud.google.com/looker/docs/reference/param-explore-aggregate-table#materialization)
 
 → `custom_ddl` in the persistence block, by the dialect table in
-[derived-tables.md, Table optimizations](../references/derived-tables.md#table-optimizations). Replace each column name by the
-name of the pre-aggregate column (`<model>__<field>`).
+[derived-table-persistence.md, Table optimizations](derived-table-persistence.md#table-optimizations). Replace
+each column name by the name of the pre-aggregate column (`<model>__<field>`).
 
 BigQuery, with `partition_keys: ["created_date"]` and `cluster_keys: ["status"]`:
 

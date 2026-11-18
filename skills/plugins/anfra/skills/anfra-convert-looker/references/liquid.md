@@ -44,7 +44,7 @@ For each Liquid usage:
 | `_model._name`, `_view._name`, `_explore._name`, `_field._name` | the literal name | [Names](#_model_name-_view_name-_explore_name-_field_name) |
 | `_explore._dashboard_url`, `_query._query_timezone` | unsupported | [Unsupported uses](#unsupported-uses) |
 | `view._in_query`, `view.field._in_query`, `._is_selected`, `._is_filtered` | unsupported, with two exceptions | [Reading the query](#_in_query-_is_selected-_is_filtered) |
-| `{% incrementcondition %}` | removed; `IncrementalPersistence` | [derived-tables.md](derived-tables.md#increment_key-increment_offset) |
+| `{% incrementcondition %}` | removed; persistence is unsupported | [derived-tables.md](derived-tables.md#persistence-parameters) |
 | `{% if %}`, `{% assign %}`, `{% case %}`, `{% unless %}`, `{% for %}` | by what they read | [Liquid tags](#liquid-tags) |
 | Liquid filters: `\| url_encode`, `\| round`, `\| date: …` | unsupported | [Presentation parameters](#liquid-in-presentation-parameters) |
 | `-- if dev --`, `-- if prod --` (not Liquid, but often next to it) | AML `if` on `H.git.is_production` | [view.md](view.md#development-and-production-tables) |
@@ -133,8 +133,6 @@ Model orders {
 
 Differences:
 
-- A model with a dynamic schema or data source cannot use query model persistence. Remove the persistence settings
-  and report it.
 - A Looker attribute can have a default value. A Holistics attribute without a value gives an invalid table name.
   The attribute must hold exactly one value.
 

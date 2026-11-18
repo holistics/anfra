@@ -212,8 +212,8 @@ Applies to `derived_table.sql` and to a subquery in `sql_table_name`, which both
 2. Declare `param f` on that query model.
 3. If `f` is a **dimension**, not a filter field: declare a param with the dimension's name and type. Report that a
    dashboard filter on the dimension must also be mapped to the param.
-4. Remove persistence settings from the model and report it. Neither tool persists a table whose SQL depends on a
-   filter.
+4. Persistence settings are dropped like on any derived table
+   (see [derived-tables.md](derived-tables.md#persistence-parameters)).
 
 The headline example at the top of this page shows the result. Several filters work the same way:
 

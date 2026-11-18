@@ -341,8 +341,7 @@ Model activity {
 }
 ```
 
-When many views use the same schema expression, declare the constant once and reuse it. A model with a dynamic
-schema cannot be used with query model persistence.
+When many views use the same schema expression, declare the constant once and reuse it.
 
 #### Other Liquid
 
