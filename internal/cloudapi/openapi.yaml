@@ -2014,6 +2014,8 @@ components:
         revision:
           description: The published revision the repo's values come from; absent when its .anfra/config.yml sets nothing.
           type: string
+        schema:
+          description: "The settings file's JSON Schema, as this server's anfra checks it: each setting's title, description, type, default and allowed values, under the mappings it sits in. A setting's key is its path through the properties. Rules across settings aren't in it: a change that breaks one is refused, saying why."
         settings:
           description: Every setting anfra knows, in .anfra/config.yml's order, but org.url, which the organization ignores.
           items:
@@ -2021,6 +2023,7 @@ components:
           type: array
       required:
         - settings
+        - schema
       type: object
     IdentitiesOut:
       additionalProperties: false

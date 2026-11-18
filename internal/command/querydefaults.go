@@ -34,6 +34,13 @@ type QueryDefaults struct {
 	Err error
 }
 
+// anfra's own defaults for a query's input, when neither the query nor the
+// repo sets them.
+const (
+	DefaultTimezone     = "Etc/UTC"
+	DefaultWeekStartDay = "monday"
+)
+
 // LockablePaths are the defaults Locked may name, as the repo's settings
 // name them.
 var LockablePaths = []string{"input.timezone", "input.weekStartDay", "cache.duration"}
