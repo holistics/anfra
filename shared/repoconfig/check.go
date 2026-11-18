@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -28,8 +29,8 @@ func (c Config) Check() error {
 // checkValues refuses a value anfra doesn't take, each judged alone, so a
 // Config with one setting set fails only for that setting.
 func (c Config) checkValues() error {
-	if v := c.AQL.Compiler.Version; v != "" && v != "v1" && v != "v2" {
-		return fmt.Errorf("aql.compiler.version is %q. Use v1 or v2", v)
+	if v := c.AQL.Compiler.Version; v != "" && !slices.Contains(compilerVersions, v) {
+		return fmt.Errorf("aql.compiler.version is %q. Use %s", v, orList(compilerVersions))
 	}
 	q := c.Query
 	if s := q.Cache.MaxDuration; s != "" {
@@ -95,26 +96,29 @@ func Diff(a, b Config) []Key {
 	return out
 }
 
-// meaning is what f, the setting k, means: its value with anfra's default in
-// place of unset, durations as durations, and an empty list as none.
+// meaning is what f, the setting k, means: its value, or its Spec's default
+// when unset, with durations as durations and an empty list as none.
 func meaning(k Key, f reflect.Value) any {
-	switch k.String() {
-	case "query.default.input.timezone":
-		return orDefault(f.String(), "Etc/UTC")
-	case "query.default.input.weekStartDay":
-		return orDefault(f.String(), "monday")
-	case "query.default.cache.duration":
+	spec := specs[k]
+	if f.IsZero() && spec.Default != nil {
+		if b, err := jsonkit.Marshal(spec.Default); err == nil {
+			v := reflect.New(f.Type()).Elem()
+			if setJSON(v, b) == nil {
+				f = v
+			}
+		}
+	}
+	if f.Kind() == reflect.Pointer {
+		if f.IsNil() {
+			return nil
+		}
+		f = f.Elem()
+	}
+	switch {
+	case spec.Format == FormatDuration:
 		d, _ := time.ParseDuration(f.String())
 		return d
-	case "query.cache.max_duration":
-		d, _ := time.ParseDuration(orDefault(f.String(), "168h"))
-		return d
-	case "query.cache.enabled":
-		return f.IsNil() || f.Elem().Bool()
-	case "aql.compiler.version":
-		return orDefault(f.String(), "v1")
-	}
-	if f.Kind() == reflect.Slice {
+	case f.Kind() == reflect.Slice:
 		if f.Len() == 0 {
 			return []string(nil)
 		}
@@ -123,11 +127,12 @@ func meaning(k Key, f reflect.Value) any {
 	return f.Interface()
 }
 
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
+// orList is values as a sentence offers them: "a or b", or "a, b, or c".
+func orList(values []string) string {
+	if len(values) < 3 {
+		return strings.Join(values, " or ")
 	}
-	return s
+	return strings.Join(values[:len(values)-1], ", ") + ", or " + values[len(values)-1]
 }
 
 // Get is k's value in c, as JSON, as a file would hold it: nil when c leaves it

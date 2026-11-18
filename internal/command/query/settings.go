@@ -11,12 +11,6 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// The input's defaults when the repo sets none.
-const (
-	defaultTimezone     = "Etc/UTC"
-	defaultWeekStartDay = "monday"
-)
-
 // withRepoDefaults is in with the repo's defaults filled in: an AQL query's
 // time zone and week start day, the repo's or else anfra's. It refuses a query
 // that changes a default the repo locks, and every query when the repo's
@@ -41,11 +35,11 @@ func (in QueryRequestParams) withRepoDefaults(cc command.CommandContext) (QueryR
 	if in.Lang == "sql" {
 		return in, nil // compiled by no one: neither applies
 	}
-	tz, err := lockedOrDefault(s, "input.timezone", in.timezoneName(), in.Input.Timezone, cmp.Or(s.Timezone, defaultTimezone))
+	tz, err := lockedOrDefault(s, "input.timezone", in.timezoneName(), in.Input.Timezone, cmp.Or(s.Timezone, command.DefaultTimezone))
 	if err != nil {
 		return in, err
 	}
-	day, err := lockedOrDefault(s, "input.weekStartDay", "input.weekStartDay", in.Input.WeekStartDay, cmp.Or(s.WeekStartDay, defaultWeekStartDay))
+	day, err := lockedOrDefault(s, "input.weekStartDay", "input.weekStartDay", in.Input.WeekStartDay, cmp.Or(s.WeekStartDay, command.DefaultWeekStartDay))
 	if err != nil {
 		return in, err
 	}
