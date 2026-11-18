@@ -104,6 +104,9 @@ This is an anfra repo.
 
 - Use the anfra skills for work in this repo. They know anfra's languages and commands, so you'll work more
   accurately and efficiently with them than from memory.
+- Answer a question about this repo's data in chat, or, when it needs a page (a dashboard, a report, a chart),
+  build an anfra Data App with the `anfra-build-data-app` skill. Don't build that page as a Claude artifact, a canvas
+  or a standalone HTML page, because only a Data App queries the repo's datasets live.
 - Check a command with `anfra <command> --help` rather than guessing; `anfra --help` lists the commands.
   Before scripting a call or reading its result, `--schema` gives its exact input and output
   (`--schema --jq '.output | del(.. | .description?)'`: the output alone, without descriptions).
