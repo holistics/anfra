@@ -9,15 +9,6 @@ import { TAGGED, kindOf, DEFAULT_REFERENCE } from './kinds.mjs'
 const DECL = /^\s*(?:\/\/\s*)?(dimension|measure|param|metric|Model|Dataset)\s+(\w+)\s*\{/
 const REF = /see (references\/[\w.-]+\.md(?:#[\w-]+)?)/
 
-/** Where a file comes from, read from its first line (written by model.mjs / explore.mjs). */
-function header (lines, lkModelFiles) {
-  const view = lines[0].match(/^\/\/ view: (\w+)\s+\((.+)\)/)
-  if (view) return { object: view[1], lookmlFile: view[2] }
-  const ex = lines[0].match(/^\/\/ explore: (\w+)\s+\(model file: ([^)]+)\)/)
-  if (ex) return { explore: ex[1], lookmlModel: ex[2], lookmlFile: lkModelFiles.get(ex[2]) || null }
-  return {}
-}
-
 /** The AML declaration a comment belongs to: the next `dimension x {` etc. before other code. */
 function target (lines, i) {
   for (let j = i + 1; j < Math.min(lines.length, i + 60); j++) {
@@ -32,16 +23,17 @@ function target (lines, i) {
 /**
  * @param files Map<relative path, AML text> (already tagged)
  * @param entries the report entries of the project ({ level, where, message })
- * @param lkModelFiles Map<LookML model name, model file path>
+ * @param origins Map<relative path, { object | explore, lookmlModel, lookmlFile }>: the LookML object of a model or
+ *        dataset file (Project.origins)
  */
-export function buildWorkItems (files, entries, lkModelFiles, meta) {
+export function buildWorkItems (files, entries, origins, meta) {
   const items = []
   const fileInfo = {}
   for (const [rel, text] of files) {
     if (!rel.endsWith('.aml')) continue
     const lines = text.split('\n')
     const scope = rel.startsWith('models/') ? 'model' : rel.startsWith('datasets/') ? 'dataset' : 'project'
-    const info = { scope, ...header(lines, lkModelFiles), todos: 0, reviews: 0 }
+    const info = { scope, ...origins.get(rel), todos: 0, reviews: 0 }
     const own = lines.map(l => l.match(/^(Model|Dataset)\s+(\w+)\s*\{/)).find(Boolean)
     if (own) info.object = own[2]
     if (scope === 'model') {

@@ -30,7 +30,7 @@ export function convertExplore (project, lkModel, lkModelName, name, ex) {
     const base = project.viewConv(viewName)
     if (!base) return null
     let conv = base
-    if (ref !== viewName || tableName !== undefined) conv = project.alias(ref, base, { label: label || titleCase(ref), tableName, explore: name, usedBy: `${join ? `join ${ref}` : 'base view'} of explore ${name}` })
+    if (ref !== viewName || tableName !== undefined) conv = project.alias(ref, base, { label: label || titleCase(ref), tableName, explore: name, lkModel, usedBy: `${join ? `join ${ref}` : 'base view'} of explore ${name}` })
     const m = { ref, aml: conv.name, conv, join, isAlias: conv !== base, viewLabel: label }
     members.set(ref, m)
     return m
