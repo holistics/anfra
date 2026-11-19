@@ -47,6 +47,24 @@ export interface DatasetDescriptor {
     label?: string;
     type: string;
   }[];
+  /** The relationships between the dataset's models, inactive ones included. */
+  relationships?: DatasetRelationship[];
+}
+
+/** A relationship between two of a dataset's models: the field of one that joins to the field of the other. */
+export interface DatasetRelationship {
+  /** Its name, when the AML names it. */
+  name?: string;
+  /** The field it starts from, as `<model>.<field>`. */
+  from: string;
+  /** The field it points to, as `<model>.<field>`. */
+  to: string;
+  /** How many rows of each side match: `many_to_one` when many rows of `from` match one row of `to`. */
+  type: 'one_to_one' | 'many_to_one' | 'range' | 'many_to_many';
+  /** Whether a query joins through it by default. */
+  active: boolean;
+  /** Which way a filter passes through it: from the one side to the many side only, or both ways. */
+  direction: 'one_way' | 'two_way';
 }
 
 /**
@@ -327,6 +345,17 @@ export interface ColumnMeta {
   adhoc: boolean;
   isMeasure: boolean;
   aggregation?: string;
+  /**
+   * The models a measure aggregates, as the dataset names them: `['orders']` for
+   * `sum(orders.amount)`, `['orders', 'users']` for a ratio of a count of each. A model only joined
+   * on or only filtered by isn't one. Absent for a dimension.
+   */
+  models?: string[];
+  /**
+   * A measure as AQL, as the query wrote it: `sum(orders.amount)`, or a metric's name. A metric
+   * the query declares itself compiles only with the query's declarations. Absent for a dimension.
+   */
+  expression?: string;
   /**
    * What the column's values mean: decide by it, never by `typeof`. A `number` column's values are
    * strings with every digit (`"9007199254740993"`, `"12345.67"`, `"NaN"`). `unknown` when the

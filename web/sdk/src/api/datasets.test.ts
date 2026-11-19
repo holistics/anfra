@@ -21,6 +21,10 @@ const sales: ShowDataset = {
     ],
   }],
   metrics: [{ fqn: 'shop.sales.revenue', name: 'revenue', label: 'Revenue', role: 'metric', type: 'number', hidden: false }],
+  relationships: [
+    { name: 'buyer', from: 'shop.orders.user_id', to: 'shop.users.id', type: 'many_to_one', active: true, direction: 'one_way' },
+    { from: 'shop.orders.id', to: 'shop.refunds.order_id', type: 'one_to_one', active: false, direction: 'two_way' },
+  ],
 };
 
 describe('toDescriptor', () => {
@@ -40,6 +44,10 @@ describe('toDescriptor', () => {
         ],
       }],
       metrics: [{ name: 'revenue', label: 'Revenue', type: 'number' }],
+      relationships: [
+        { name: 'buyer', from: 'shop.orders.user_id', to: 'shop.users.id', type: 'many_to_one', active: true, direction: 'one_way' },
+        { from: 'shop.orders.id', to: 'shop.refunds.order_id', type: 'one_to_one', active: false, direction: 'two_way' },
+      ],
     });
   });
 

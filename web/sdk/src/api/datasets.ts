@@ -35,6 +35,14 @@ export function toDescriptor (dataset: ShowDataset): DatasetDescriptor {
       ...(metric.label ? { label: metric.label } : {}),
       type: metric.type,
     })),
+    relationships: (dataset.relationships ?? []).map((relationship) => ({
+      ...(relationship.name ? { name: relationship.name } : {}),
+      from: relationship.from,
+      to: relationship.to,
+      type: relationship.type,
+      active: relationship.active,
+      direction: relationship.direction,
+    })),
   };
 }
 
