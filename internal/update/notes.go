@@ -20,9 +20,13 @@ import (
 const ReleasesURL = "https://github.com/" + repoSlug + "/releases"
 
 // ChangelogURL is where CHANGELOG.md is as of version's release: its notes, and
-// every release's before it.
+// every release's before it. Each release uploads it beside its binaries
+// (build_release.yml), rather than anfra reading it at the release's tag: a
+// release tags the commit of the release candidate it was made from, whose
+// CHANGELOG.md has that candidate's notes, under the candidate's version
+// (docs/designs/release-candidates.md).
 func ChangelogURL(version string) string {
-	return fmt.Sprintf("%s/%s/blob/v%s/CHANGELOG.md", webBase, repoSlug, url.PathEscape(tagVersion(version)))
+	return fmt.Sprintf("%s/%s/releases/download/v%s/CHANGELOG.md", webBase, repoSlug, url.PathEscape(tagVersion(version)))
 }
 
 // Notes is what one release changed, from its notes on GitHub.
@@ -49,11 +53,11 @@ const maxChangelog = 4 << 20
 // including to, newest first: everything an update from one to the other
 // brings, the releases it skips included.
 //
-// It reads them from CHANGELOG.md at to's tag, of which each release's notes
-// are a section (scripts/release-notes.sh), rather than from GitHub's API,
-// which allows 60 anonymous calls an hour (see Latest).
+// It reads them from to's CHANGELOG.md (ChangelogURL), of which each release's
+// notes are a section (scripts/release-notes.sh), rather than from GitHub's
+// API, which allows 60 anonymous calls an hour (see Latest).
 func ReleaseNotes(ctx context.Context, from, to string) ([]Notes, error) {
-	resp, err := get(ctx, fmt.Sprintf("%s/%s/v%s/CHANGELOG.md", rawBase, repoSlug, url.PathEscape(tagVersion(to))), lookupTimeout)
+	resp, err := get(ctx, ChangelogURL(to), lookupTimeout)
 	if err != nil {
 		return nil, clierr.Unreachablef(clierr.GitHub, err, "fetch the changelog: %v", err)
 	}

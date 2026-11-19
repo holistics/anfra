@@ -33,7 +33,7 @@ To cut a release, on a branch:
 3. **The sidecars:** the pinned releases' binaries, downloaded from their repositories (a cross-repository read token, `ANFRA_DIST_TOKEN`).
 4. **Every target,** cross-built on one runner (anfra is pure Go): each target's sidecars copied into the embed assets, `go build -tags embed_sidecar` with the version injected, then gzipped. Only the `.gz` is published, as a transport compression: the sidecars embedded in the binary stay uncompressed, so the binary itself stays delta-friendly.
 5. **The image,** below.
-6. **The GitHub Release,** created (or, on a re-run, edited) with the binaries.
+6. **The GitHub Release,** created (or, on a re-run, edited) with the binaries and `CHANGELOG.md`, which `anfra update` reads its notes from ([Updates](#updates)).
 7. **The SDK,** once the release is out: below.
 
 **Release notes** are the version's section of `CHANGELOG.md`, under "Changelog", followed by GitHub's own generated notes: the pull requests, new contributors and compare link (`scripts/release-notes.sh`, which also previews them locally). So a release says what the changelog says, and a re-run brings its notes back in line.
@@ -43,7 +43,7 @@ To cut a release, on a branch:
 `ghcr.io/holistics/anfra`, built by `build_release.yml` from the `Dockerfile` at the root; how to run it is in [usage/docker.md](../usage/docker.md).
 
 - **The release's own binaries.** The Linux binaries built above are laid out by platform as the build context (`image/<os>/<arch>/anfra`), so the image runs exactly what the release downloads.
-- **One name for every platform.** Built for linux/amd64 and linux/arm64 at once, each tag is a multi-platform index; Docker pulls the build matching the machine. Tags are the version, its major.minor, and `latest`. A release pushes them; any other build only builds the image, so a broken Dockerfile shows before a release does.
+- **One name for every platform.** Built for linux/amd64 and linux/arm64 at once, each tag is a multi-platform index; Docker pulls the build matching the machine. Tags are the version, its major.minor, and `latest`; a prerelease takes only its version, so the other two stay the latest release's. A release pushes them; any other build only builds the image, so a broken Dockerfile shows before a release does.
 - **No emulation.** Everything that needs a shell (CA certificates, the user, tini) is prepared in a stage on the builder's own platform; the final stage only copies files. So building for another architecture needs no QEMU or Rosetta.
 - **Debian trixie,** because the sidecars anfra unpacks need its glibc.
 - **tini as PID 1** (Debian's static build, for the target architecture). It reaps orphans, forwards signals, and keeps anfra from being PID 1, which a sidecar could read as anfra having died ([sidecars.md](sidecars.md)).
@@ -56,7 +56,7 @@ To cut a release, on a branch:
 `@holistics/anfra-sdk` (`web/sdk`), published by `build_release.yml`'s `sdk` job; what it holds is in [data-apps.md](data-apps.md).
 
 - **The release's version.** The SDK's API client is generated from this release's `api/openapi.yaml`, so the two go out together, at one version, even when the SDK did not change. `pnpm bump` sets both; CI fails a pull request in which they differ, and a release refuses to go out.
-- **Published once.** A re-run skips a version npm already has. A prerelease version (`1.2.0-rc.1`) is published under the `next` dist-tag, so `npm install` never picks it.
+- **Published once.** A re-run skips a version npm already has. A prerelease version (`1.2.0-rc.1`) is published under the `next` dist-tag, so `npm install` never picks it. A release moves `next` to itself, when the package has one, so `next` is never older than `latest`.
 - **Trusted publishing.** npm takes the publish from the workflow over OIDC, with no token, and records the package's provenance. It is configured on the package's settings on npmjs.com, naming this repository and a workflow. npm checks the workflow that started the run: `build_release.yml`, which a tag push starts. There is no npm token, and the package's settings disallow tokens, so only this workflow, or a maintainer with two-factor authentication, can publish.
 - **Any other build** packs it without publishing, so a broken package shows before a release does.
 
@@ -68,6 +68,7 @@ The anfra skills' source is `skills/`; `build_release.yml`'s `skills` job publis
 - **Their changelog,** `skills/CHANGELOG.md`, gets an entry from `pnpm bump` when a commit since the last release changed `skills/`, and is published with them.
 - **The build writes the versions.** The manifests' versions and each skill's stamp come from the build (`skills/scripts/build.mjs`), not from `skills/`, so `pnpm bump` doesn't touch the skills.
 - **A GitHub App** with Contents: write on the facade, allowed past its branch protection, does the push, with a token the job makes from `ANFRA_SKILLS_DEPLOYER_APP_ID` and `ANFRA_SKILLS_DEPLOYER_KEY`.
+- **A prerelease doesn't publish them,** because `anfra update` checks their version on the facade, and they would reach everyone before the release does.
 - **Any other build** reports what a release would publish, without pushing.
 
 ## Versions
@@ -80,8 +81,10 @@ Build metadata leaves the version's order alone, and a release never carries any
 
 `anfra update` replaces the running binary with the latest release, and anfra notices newer ones in the background: a cached check at most hourly, 10 minutes apart after one fails, a notice on an interactive terminal, an announcement from `serve` (`internal/update`, `cmd/anfra/update.go`). `ANFRA_NO_UPDATE_NOTIFIER` turns the notices off; `ANFRA_AUTO_UPDATE` applies updates in the background instead.
 
+The latest release is the one GitHub's `/releases/latest` names, which skips a release marked as a prerelease. `build_release.yml` marks any version with a `-` as one, such as `0.23.0-rc.1`. `install.sh` follows the same link.
+
 A running `anfra serve` keeps the version it started with, and so do the commands forwarded to it, until it is restarted. The CLI warns of one with a `server_version_mismatch` warning: a command forwarded to it before its answer, `anfra version`, which is never forwarded and reports the CLI's own version, and `anfra update` at its end, for each server still running another version ([cli-vs-warm-server.md](cli-vs-warm-server.md#version-mismatch)). An MCP client, which talks to the server alone, gets no such warning.
 
-After an update, or before one with `anfra update check`, `anfra update` prints what the new version brings: the changelog of each release since the running one, the skipped ones included, read from `CHANGELOG.md` at the new version's tag, of which each release's notes are a section, rather than from GitHub's rate-limited API (`internal/update/notes.go`). It shows the newest three and links to the rest. The notes are best-effort: when they can't be fetched, it prints a link to the releases instead, and the update still succeeds.
+After an update, or before one with `anfra update check`, `anfra update` prints what the new version brings: the changelog of each release since the running one, the skipped ones included, read from the `CHANGELOG.md` the new version's release uploaded, of which each release's notes are a section, rather than from GitHub's rate-limited API (`internal/update/notes.go`). It isn't read at the release's tag, because a release made from a release candidate tags the candidate's commit, whose `CHANGELOG.md` has the candidate's notes ([release-candidates.md](release-candidates.md)). It shows the newest three and links to the rest. The notes are best-effort: when they can't be fetched, it prints a link to the releases instead, and the update still succeeds.
 
 None of this applies to a build from source: it was built on purpose, and a release would replace it with something else. It is never told of updates, and `anfra update` refuses to replace it.

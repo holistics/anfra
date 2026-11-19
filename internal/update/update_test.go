@@ -60,10 +60,10 @@ func TestTagVersion(t *testing.T) {
 	}
 }
 
-// A changelog's link is CHANGELOG.md at the release's tag, from a version or
-// a tag.
+// A changelog's link is the CHANGELOG.md the release uploaded, from a version
+// or a tag.
 func TestChangelogURL(t *testing.T) {
-	want := "https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md"
+	want := "https://github.com/holistics/anfra/releases/download/v0.16.0/CHANGELOG.md"
 	for _, v := range []string{"0.16.0", "v0.16.0"} {
 		if got := ChangelogURL(v); got != want {
 			t.Errorf("ChangelogURL(%q) = %q, want %q", v, got, want)

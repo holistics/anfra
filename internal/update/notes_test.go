@@ -1,6 +1,9 @@
 package update
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -117,5 +120,42 @@ func TestNotesBetween(t *testing.T) {
 	n := notesBetween(changes, "0.11.1", "0.12.0")
 	if len(n) != 1 || !slices.Equal(n[0].Changelog, changelog(section0120)) || n[0].URL != webBase+"/"+repoSlug+"/releases/tag/v0.12.0" {
 		t.Errorf("0.11.1 -> 0.12.0: %+v", n)
+	}
+}
+
+// ReleaseNotes reads the CHANGELOG.md that to's release uploaded, following
+// GitHub's redirect to where the file is stored, not CHANGELOG.md at to's tag.
+func TestReleaseNotesFromTheRelease(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/holistics/anfra/releases/download/v0.12.0/CHANGELOG.md":
+			http.Redirect(w, r, srv.URL+"/stored/CHANGELOG.md", http.StatusFound)
+		case "/stored/CHANGELOG.md":
+			_, _ = w.Write([]byte(changes))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	setBases(t, srv.URL)
+
+	n, err := ReleaseNotes(context.Background(), "0.11.0", "0.12.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(n) != 2 || n[0].Version != "0.12.0" || n[1].Version != "0.11.1" {
+		t.Errorf("got %+v, want 0.12.0 and 0.11.1", n)
+	}
+}
+
+// A release without an uploaded CHANGELOG.md, such as one made before
+// releases uploaded it, fails, so the caller falls back to the releases' page.
+func TestReleaseNotesWithoutTheFile(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	setBases(t, srv.URL)
+	if _, err := ReleaseNotes(context.Background(), "0.11.0", "0.12.0"); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Errorf("got %v, want GitHub's 404", err)
 	}
 }
