@@ -225,6 +225,45 @@ func TestContextAllowOrigins(t *testing.T) {
 	}
 }
 
+// The plugins are core's and those the merged settings leave on: config.yml, with the member's
+// config.local.yml over it. Settings it cannot use leave core's alone.
+func TestContextPlugins(t *testing.T) {
+	dir := repo(t)
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, ".anfra", name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plugins := func() string {
+		t.Helper()
+		var got Context
+		if err := jsonkit.UnmarshalRead(get(New(Options{RepoDir: dir}), "/appserve/context").Body, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Plugins == nil {
+			t.Fatal("plugins: null")
+		}
+		return strings.Join(got.Plugins, " ")
+	}
+
+	if got := plugins(); got != "inspect lineage view-underlying-data render export" {
+		t.Errorf("no settings: %s", got)
+	}
+	write("config.yml", "apps:\n  plugins:\n    render:\n      enabled: false\n    lineage:\n      enabled: false\n")
+	if got := plugins(); got != "inspect view-underlying-data export" {
+		t.Errorf("off in config.yml: %s", got)
+	}
+	write("config.local.yml", "apps:\n  plugins:\n    render:\n      enabled: true\n    export:\n      enabled: false\n")
+	if got := plugins(); got != "inspect view-underlying-data render" {
+		t.Errorf("with config.local.yml: %s", got)
+	}
+	write("config.local.yml", "apps:\n  plugins:\n    charts:\n      enabled: true\n")
+	if got := plugins(); got != "" {
+		t.Errorf("unusable settings: %s", got)
+	}
+}
+
 func TestUnknownRoutes(t *testing.T) {
 	s := New(Options{RepoDir: repo(t)})
 	for _, path := range []string{"/appserve/nosuch", "/appserve/events"} { // events: no live reload

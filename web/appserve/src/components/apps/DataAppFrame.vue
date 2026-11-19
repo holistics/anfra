@@ -5,9 +5,7 @@ import type {
   DatasetDescriptor, ThemeInput, User,
 } from '@holistics/anfra-sdk/common';
 import { createHost, type Host, type MountedDataApp } from '@holistics/anfra-sdk/host';
-import {
-  corePlugin, exportPlugin, inspectPlugin, lineagePlugin, renderPlugin, viewUnderlyingDataPlugin,
-} from '@holistics/anfra-sdk/plugins';
+import { installedPlugins } from '@/lib/plugins';
 import { api, definition, report } from '@/lib/server';
 
 const props = defineProps<{
@@ -15,6 +13,8 @@ const props = defineProps<{
   datasets: Record<string, DatasetDescriptor>,
   reader: User,
   allowOrigins: string[],
+  // The plugins the repo's settings leave on, beside core.
+  plugins: string[],
   // Whether to send this Data App's reports to anfra.log (not with ANFRA_NO_APP_LOGS).
   appLogs: boolean,
   theme: ThemeInput,
@@ -30,19 +30,21 @@ const emit = defineEmits<{
 const container = ref<HTMLElement>();
 let mounted: MountedDataApp | undefined;
 
-// The page's host runtime: every plugin anfra has, over the core API, under the repo's allowed
-// origins. Made again when the datasets are (a semantic layer change), since the Backend resolves
-// fields against them, or the origins are.
-let host: { datasets: Record<string, DatasetDescriptor>, origins: string, runtime: Host } | undefined;
-function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: string[]): Host {
+// The page's host runtime: core and the plugins the repo's settings leave on, over the core API,
+// under the repo's allowed origins. Made again when the datasets are (a semantic layer change), since
+// the Backend resolves fields against them, or the origins or the plugins are.
+let host: { datasets: Record<string, DatasetDescriptor>, origins: string, plugins: string, runtime: Host } | undefined;
+function hostFor (datasets: Record<string, DatasetDescriptor>, allowOrigins: string[], on: string[]): Host {
   const origins = allowOrigins.join(' ');
-  if (host?.datasets !== datasets || host.origins !== origins) {
+  const plugins = on.join(' ');
+  if (host?.datasets !== datasets || host.origins !== origins || host.plugins !== plugins) {
     const backend = coreApiBackend(api, { datasets });
     host = {
       datasets,
       origins,
+      plugins,
       runtime: createHost({
-        plugins: [corePlugin(backend), exportPlugin(backend), lineagePlugin(backend), renderPlugin(), inspectPlugin(), viewUnderlyingDataPlugin()],
+        plugins: installedPlugins(on, backend),
         allowOrigins,
         theme: props.theme,
         // anfra serve is a development tool, even released: the author's console lines are theirs
@@ -60,7 +62,7 @@ onMounted(async () => {
   try {
     const html = await definition(props.path);
     if (!container.value) return;
-    const runtime = hostFor(props.datasets, props.allowOrigins);
+    const runtime = hostFor(props.datasets, props.allowOrigins, props.plugins);
     runtime.setTheme(props.theme);
     mounted = runtime.mount({
       container: container.value,

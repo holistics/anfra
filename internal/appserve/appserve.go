@@ -119,13 +119,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Context is what the frontend starts from: the repo, who reads it, whether it live-reloads, the
 // origins its Data Apps may load from beyond the SDK's own (.anfra/config.yml apps.allow_origins),
-// and the problems reading those settings, which the frontend shows with the repo's others.
+// the SDK plugins they get beyond core (apps.plugins), and the problems reading those settings,
+// which the frontend shows with the repo's others.
 type Context struct {
-	Repo         RepoInfo  `json:"repo"`
-	Reader       Reader    `json:"reader"`
-	Watch        bool      `json:"watch"`
-	AllowOrigins []string  `json:"allowOrigins"`
-	Problems     []Problem `json:"problems"`
+	Repo         RepoInfo `json:"repo"`
+	Reader       Reader   `json:"reader"`
+	Watch        bool     `json:"watch"`
+	AllowOrigins []string `json:"allowOrigins"`
+	// Plugins are the names of the SDK plugins the Data Apps get beside core, which they always do:
+	// those the settings leave on, config.local.yml's laid over config.yml's.
+	Plugins  []string  `json:"plugins"`
+	Problems []Problem `json:"problems"`
 	// AppLogs says whether the page sends its Data Apps' reports to anfra.log (POST /appserve/log).
 	AppLogs bool `json:"appLogs"`
 }
@@ -140,17 +144,20 @@ type RepoInfo struct {
 }
 
 // context reads the repo's settings on every request, so an edit to them applies at the next load.
-// Settings it cannot use are a problem, and leave the Data Apps the SDK's own origins only.
+// Settings it cannot use are a problem, and leave the Data Apps the SDK's own origins only, and the
+// core plugin only.
 func (s *Server) context(w http.ResponseWriter) {
 	ctx := Context{
 		Repo: RepoInfo{Name: filepath.Base(s.opts.RepoDir)}, Reader: LocalReader(), Watch: s.opts.Watch,
-		AllowOrigins: []string{}, Problems: []Problem{}, AppLogs: s.opts.AppLogger != nil,
+		AllowOrigins: []string{}, Plugins: []string{}, Problems: []Problem{}, AppLogs: s.opts.AppLogger != nil,
 	}
 	conf, err := repoconfig.Read(s.opts.RepoDir)
 	if origins := conf.AllowedOrigins(); err == nil && origins != nil {
 		ctx.AllowOrigins = origins
 	}
-	if err != nil {
+	if err == nil {
+		ctx.Plugins = conf.EnabledPlugins()
+	} else {
 		ctx.Problems = append(ctx.Problems, Problem{Message: err.Error()})
 	}
 	writeJSON(w, ctx)

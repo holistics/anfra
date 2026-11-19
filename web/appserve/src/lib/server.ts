@@ -10,13 +10,16 @@ export const api = coreClient('/api');
 
 /**
  * What the frontend starts from: the repo, who reads it, whether it live-reloads, the origins its
- * Data Apps may load from beyond the SDK's own, and the problems reading those settings.
+ * Data Apps may load from beyond the SDK's own, the SDK plugins they get beside core, and the
+ * problems reading those settings.
  */
 export interface Context {
   repo: { name: string };
   reader: User;
   watch: boolean;
   allowOrigins: string[];
+  /** The SDK plugins the repo's settings leave on, by name: core is always installed, so never here. */
+  plugins: string[];
   problems: AmlProblem[];
   /** Whether to send the Data Apps' reports to anfra.log: not with `ANFRA_NO_APP_LOGS`. */
   appLogs: boolean;
