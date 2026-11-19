@@ -1,0 +1,95 @@
+# anfra's telemetry stack: an OpenTelemetry collector, receiving what anfra
+# records, and ClickHouse, keeping it for three days, for anfra to query
+# (docs/usage/telemetry.md). Written by `anfra telemetry init` for one repo, for
+# anfra {{.Version}}.
+#
+#   docker compose -f compose.yaml up -d    start it; Docker restarts it with itself
+#   docker compose -f compose.yaml stop     pause it, keeping the traces
+#   docker compose -f compose.yaml down -v  remove it, deleting every trace
+#
+# Then point the repo's commands at it, in the .env at the repo's root:
+#
+#   OTEL_EXPORTER_OTLP_ENDPOINT={{.Endpoint}}
+#
+# After upgrading anfra, run `anfra telemetry init` again in the repo, then
+# `up -d`: init writes this file again, keeping its ports, so other edits to it
+# are lost. The traces live in the Docker volume {{.Name}}_clickhouse-data,
+# which outlives ~/.anfra: before deleting ~/.anfra, run `down -v`. Every port
+# listens on this machine only. Another container reaches the collector on the
+# {{.Name}} network, at http://otel-collector:4318.
+name: {{.Name}}
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otelcol/config.yaml", "--config=/etc/otelcol/clickhouse.yaml"]
+    # To see what arrives without storing it: debug.yaml in clickhouse.yaml's
+    # place, then `docker compose logs otel-collector`.
+    configs:
+      - source: collector-config
+        target: /etc/otelcol/config.yaml
+      - source: collector-clickhouse
+        target: /etc/otelcol/clickhouse.yaml
+      - source: collector-debug
+        target: /etc/otelcol/debug.yaml
+    # The collector's files keep anfra Cloud's defaults; these are this stack's.
+    environment:
+      CLICKHOUSE_TTL: 72h
+      CLICKHOUSE_DATABASE: anfra_traces
+      CLICKHOUSE_USERNAME: anfra
+      CLICKHOUSE_PASSWORD: anfra
+    ports:
+      - "127.0.0.1:{{.Ports.OTLPHTTP}}:4318"
+      - "127.0.0.1:{{.Ports.OTLPGRPC}}:4317"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [{{.Name}}]
+
+  # Query it through anfra, as a data source on port {{.Ports.ClickHouse}} (user anfra, password
+  # anfra, database anfra_traces), with a model over otel_traces
+  # (docs/usage/telemetry.md).
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.36.3
+    environment:
+      CLICKHOUSE_USER: anfra
+      CLICKHOUSE_PASSWORD: anfra   # the ports are this machine's only
+      CLICKHOUSE_DB: anfra_traces
+    volumes: ["clickhouse-data:/var/lib/clickhouse"]
+    configs:
+      - source: clickhouse-no-system-logs
+        target: /etc/clickhouse-server/config.d/no-system-logs.xml
+    ports:
+      - "127.0.0.1:{{.Ports.ClickHouseHTTP}}:8123"
+      - "127.0.0.1:{{.Ports.ClickHouse}}:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8123/ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    networks: [{{.Name}}]
+
+networks:
+  {{.Name}}:
+    name: {{.Name}}
+
+volumes:
+  clickhouse-data:
+
+# The collector's configuration (otel-collector/ in anfra's repo, as anfra-cloud
+# has it), inline so this one file is the whole stack. $$ is a $ to compose.
+configs:
+  collector-config:
+    content: |
+{{.Config | indent}}
+  collector-clickhouse:
+    content: |
+{{.ClickHouse | indent}}
+  collector-debug:
+    content: |
+{{.Debug | indent}}
+  clickhouse-no-system-logs:
+    content: |
+{{.NoSystemLogs | indent}}

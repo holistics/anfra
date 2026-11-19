@@ -26,6 +26,7 @@ import (
 	"github.com/holistics/anfra/internal/publish"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoconfig"
+	"github.com/holistics/anfra/internal/repoenv"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
@@ -139,7 +140,7 @@ func newInitCmd() *cobra.Command {
 			"  .anfra/context_sources.yml       what anfra ingest reads for anfra search\n" +
 			"  .anfra/config.yml                the repo's settings, such as its queries' defaults, each at anfra's own\n" +
 			"  models/, datasets/, apps/        AML models, AML datasets, Data Apps\n" +
-			"  .gitignore                       + .anfra/data_sources.yml, .anfra/config.local.yml\n" +
+			"  .gitignore                       + .anfra/data_sources.yml, .env, .anfra/config.local.yml\n" +
 			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
 			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
 			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n" +
@@ -252,8 +253,11 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 	}
 	ignored := []ignoreEntry{{sources, "data source credentials"}}
 	if !opts.dataSourcesOnly {
-		// A member's own settings, laid over the repo's on their machine only.
-		ignored = append(ignored, ignoreEntry{filepath.ToSlash(filepath.Join(config, "config.local.yml")), "this machine's own settings"})
+		// A member's own variables, such as where traces go (docs/usage/configs.md),
+		// and their own settings, laid over the repo's on their machine only.
+		ignored = append(ignored,
+			ignoreEntry{repoenv.FileName, "each person's settings, which anfra reads"},
+			ignoreEntry{filepath.ToSlash(filepath.Join(config, "config.local.yml")), "this machine's own settings"})
 	}
 	steps = append(steps, initStep{".gitignore", ignoreLines(ignored)})
 	if !opts.dataSourcesOnly {

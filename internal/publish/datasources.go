@@ -15,6 +15,7 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/telemetry/stack"
 )
 
 // offerDataSourcesToOrg adds to the org the data sources this repo uses here
@@ -29,8 +30,9 @@ import (
 // separate connections per environment are the point of keeping them out of the
 // repo. A type that differs is said, since the two compile to different SQL.
 //
-// Never offered: a DuckDB one (localOnly), whose database is a file on this
-// machine. At a terminal, copying the file to the person's MotherDuck account is
+// Never offered: the local trace store's (stack.DataSource), which is this
+// machine's own and runs on it alone; and a DuckDB one (localOnly), whose
+// database is a file on this machine. At a terminal, copying the file to the person's MotherDuck account is
 // offered instead, and the org given a data source on the copy (mdCopy); else
 // what to do is said.
 //
@@ -71,6 +73,9 @@ func offerDataSourcesToOrg(ctx context.Context, m *mdCopy, dir string, create bo
 	var skipped []string
 	for _, name := range slices.Sorted(maps.Keys(local)) {
 		l := local[name]
+		if name == stack.DataSource {
+			continue
+		}
 		if r, ok := byName[name]; ok {
 			if r.Type != l.DBType && !sameSQL[[2]string{l.DBType, r.Type}] {
 				t.Warn("data_source_type_differs", "Data source %s is %s here and %s on the org: the org's models compile to %s's SQL.", name, l.DBType, r.Type, r.Type)

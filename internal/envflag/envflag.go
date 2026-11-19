@@ -11,6 +11,8 @@ package envflag
 import (
 	"fmt"
 	"os"
+
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // The switches. Each is off by default, but LogStderr, which is on for
@@ -30,15 +32,36 @@ const (
 
 var all = []string{LogStderr, SidecarStdout, NoUpdateNotifier, AutoUpdate, HideErrorCauses, NoAppLogs, QueryCacheEnabled}
 
+// TracePayloads is the switch the telemetry data settings replaced. Set, it is
+// refused, naming them (RetiredError).
+const TracePayloads = "ANFRA_TRACE_PAYLOADS"
+
 // Validate refuses a switch set to anything but 1 or 0, naming it and the value
-// it has. Call it once, before anything reads a switch.
+// it has, and a telemetry setting set to a value it doesn't take
+// (telemetry.InvalidSettingError). Call it once, before anything reads one.
 func Validate() error {
 	for _, name := range all {
 		if _, err := parse(name); err != nil {
 			return err
 		}
 	}
-	return nil
+	if v := os.Getenv(TracePayloads); v != "" {
+		return &RetiredError{Name: TracePayloads, Value: v}
+	}
+	_, err := telemetry.Resolve(os.Getenv)
+	return err
+}
+
+// RetiredError is a setting anfra no longer reads, set: refused, so it doesn't
+// silently stop doing what it did.
+type RetiredError struct {
+	Name  string
+	Value string
+}
+
+func (e *RetiredError) Error() string {
+	return fmt.Sprintf("%s is no longer read. Set ANFRA_TRACE_INPUTS=raw and ANFRA_TRACE_OUTPUTS=raw instead, "+
+		"and ANFRA_TRACE_SQL=raw for the SQL as sent.", e.Name)
 }
 
 // On reports whether the switch is on: 1. Unset, empty, 0, or (after Validate

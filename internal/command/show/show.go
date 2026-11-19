@@ -13,6 +13,8 @@ import (
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/apptracing"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // Show shows the repo, or a dataset in full.
@@ -41,6 +43,7 @@ var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 		fqn, typ := in.Fqn, ""
 		if fqn != "" {
 			typ = in.Type
+			apptracing.SetAttributes(ctx, telemetry.Target.Is(fqn))
 		}
 		sources, err := cc.ResolveDataSources()
 		if err != nil {

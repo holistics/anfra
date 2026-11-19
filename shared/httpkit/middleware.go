@@ -10,11 +10,12 @@ import (
 
 	"github.com/holistics/anfra/shared/apperr"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/holistics/anfra/shared/requestid"
+	"github.com/holistics/anfra/shared/telemetry"
 
 	"github.com/holistics/anfra/shared/logkit"
 )
@@ -46,7 +47,7 @@ func assignRequestID(next http.Handler) http.Handler {
 // our trace ids and sampling. It is kept as a link.
 func traceRequests(next http.Handler, trusted bool) http.Handler {
 	tagged := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("h.request.id", requestid.From(r.Context())))
+		apptracing.SetAttributes(r.Context(), telemetry.RequestID.Is(requestid.From(r.Context())))
 		next.ServeHTTP(w, r)
 	})
 	traced := otelhttp.NewHandler(tagged, "",
@@ -80,7 +81,7 @@ func Routed(ctx context.Context, op, route string) {
 	}
 	span := trace.SpanFromContext(ctx)
 	span.SetName(http.MethodPost + " " + route)
-	span.SetAttributes(semconv.HTTPRoute(route))
+	apptracing.SetAttributes(ctx, telemetry.HTTPRoute.Is(route))
 	if l, ok := otelhttp.LabelerFromContext(ctx); ok {
 		l.Add(semconv.HTTPRoute(route))
 	}

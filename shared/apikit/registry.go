@@ -21,6 +21,7 @@ import (
 type Registry[Call, Caller any] struct {
 	ns       apperr.Namespace
 	params   func(Call) []any
+	callCtx  func(context.Context, Call) context.Context
 	executor Executor[Caller]
 	ops      []Op[Call]
 	byName   map[string]Op[Call]
@@ -34,6 +35,11 @@ type RegistryConfig[Call, Caller any] struct {
 	// StepParams are an op step's parameters for a call — who called, in which
 	// org — for its log entry and span. Nil: none.
 	StepParams func(call Call) []any
+	// CallContext is the context an op runs in for a call, from the one it was
+	// called with: the host's place to name the call's caller for telemetry
+	// (shared/telemetry.WithAttributes), before the op's span starts. Nil: the
+	// context as called.
+	CallContext func(ctx context.Context, call Call) context.Context
 	// Executor executes the runs of the registry's ops, mounted ones included.
 	// Nil: each run is executed now, in its call.
 	Executor Executor[Caller]
@@ -44,7 +50,7 @@ func NewRegistry[Call, Caller any](c RegistryConfig[Call, Caller]) *Registry[Cal
 	if c.Namespace.String() == "" {
 		panic("apikit: a registry needs its host's namespace")
 	}
-	return &Registry[Call, Caller]{ns: c.Namespace, params: c.StepParams, executor: c.Executor,
+	return &Registry[Call, Caller]{ns: c.Namespace, params: c.StepParams, callCtx: c.CallContext, executor: c.Executor,
 		byName: map[string]Op[Call]{}, groups: map[string]string{}}
 }
 

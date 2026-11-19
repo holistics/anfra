@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/json/jsontext"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/envflag"
+	"github.com/holistics/anfra/internal/repoenv"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -110,5 +113,27 @@ func TestConsoleAllPretty(t *testing.T) {
 	run(t.Context(), []string{"version", "--yaml"}, &out, &errOut, runOptions{inConsole: true})
 	if !strings.HasPrefix(out.String(), "version: ") {
 		t.Errorf("version --yaml in a console: %q", &out)
+	}
+}
+
+// A bad switch set in the repo's .env is refused naming the file and line, so
+// the user knows where to fix it.
+func TestABadSwitchInTheRepoEnvNamesItsLine(t *testing.T) {
+	r := inRepo(t)
+	t.Setenv(envflag.NoAppLogs, "")
+	_ = os.Unsetenv(envflag.NoAppLogs)
+	if err := os.WriteFile(filepath.Join(r.Dir, repoenv.FileName), []byte("# switches\nANFRA_NO_APP_LOGS=yes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repoenv.Load(r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv(envflag.NoAppLogs) })
+	err := settingRefused(envflag.Validate())
+	if err == nil || !strings.Contains(err.Error(), ".env line 2") {
+		t.Fatalf("err = %v, want one naming .env line 2", err)
+	}
+	if v, ok := apperr.From(err).Details.(apperr.Violations); !ok || len(v.Violations) != 1 || !strings.Contains(v.Violations[0].Message, "Fix it in .env line 2") {
+		t.Errorf("the violation doesn't say where to fix it: %+v", apperr.From(err).Details)
 	}
 }

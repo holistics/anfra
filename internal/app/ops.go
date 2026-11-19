@@ -11,13 +11,22 @@ import (
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // NewRegistry is every command as an op, core.<command>, admitted from the
 // command.CommandContext a host passes with each request: `anfra serve` passes its own,
 // the one-shot CLI one over the sidecars it spawned.
 func NewRegistry() *apikit.Registry[command.CommandContext, command.CommandContext] {
-	reg := apikit.NewRegistry(apikit.RegistryConfig[command.CommandContext, command.CommandContext]{Namespace: errcode.NS})
+	reg := apikit.NewRegistry(apikit.RegistryConfig[command.CommandContext, command.CommandContext]{
+		Namespace: errcode.NS,
+		// The invocation's Attribution goes on every span and log record of its op,
+		// and its spans record the user's data as its TraceData says
+		// (docs/designs/telemetry.md).
+		CallContext: func(ctx context.Context, cc command.CommandContext) context.Context {
+			return telemetry.WithAttributes(telemetry.WithSettings(ctx, cc.TraceData), cc.Attribution)
+		},
+	})
 	reg.Group("core", "anfra core's commands: query a dataset of the semantic layer, compile or validate a query, "+
 		"validate the repo, and build its catalog, search it and trace lineage through it.")
 	for _, c := range Commands {

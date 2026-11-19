@@ -272,6 +272,17 @@ func Codes(ns Namespace) []Code {
 	return out
 }
 
+// IsPublicName reports whether name is the name (Code.String) of a public
+// code of any namespace: text that holds no data, since code chose it.
+func IsPublicName(name string) bool {
+	for _, c := range registered {
+		if c.IsPublic() && c.c.name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Generic is the namespace of the codes generic to any host, whose names no
 // other namespace may define.
 var Generic = DefineNamespace("apperr")

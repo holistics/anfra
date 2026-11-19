@@ -7,25 +7,35 @@ import (
 
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
+
+const canalQueryEnv = "ANFRA_CANAL_QUERY_ENV_"
 
 // clearEnv unsets every variable Setup reads, restoring them after the test.
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
-		"OTEL_SDK_DISABLED", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_SDK_DISABLED", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
 		"H_OTEL_ENABLED", "H_OTEL_INTERNAL_EXPORTER_URL", "H_OTEL_TRACES_EXPORTER",
+		"OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_TIMEOUT", "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT", "OTEL_BSP_EXPORT_TIMEOUT",
+		canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT", canalQueryEnv + "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		canalQueryEnv + "OTEL_EXPORTER_OTLP_PROTOCOL", canalQueryEnv + "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+		canalQueryEnv + "OTEL_EXPORTER_OTLP_TIMEOUT", canalQueryEnv + "OTEL_METRICS_EXPORTER", canalQueryEnv + "OTEL_LOGS_EXPORTER",
 	} {
 		t.Setenv(k, "")
 		_ = os.Unsetenv(k)
 	}
+	t.Setenv("ANFRA_HOME", t.TempDir()) // no machine settings file
 	before := otel.GetTracerProvider()
 	t.Cleanup(func() { otel.SetTracerProvider(before) })
 }
 
 func setup(t *testing.T) bool {
 	t.Helper()
-	shutdown, err := Setup(context.Background(), "anfra", "test")
+	shutdown, err := Setup(context.Background(), "anfra", "test", caller.Defaults())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +63,9 @@ func TestIdsWithoutAnEndpoint(t *testing.T) {
 	}
 	if os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL") != "" {
 		t.Error("anfra-node was given an exporter URL with no endpoint set")
+	}
+	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT"); got != "" {
+		t.Errorf("canal-query was given endpoint %q with no endpoint set", got)
 	}
 }
 
@@ -86,6 +99,18 @@ func TestExportsToTheEndpoint(t *testing.T) {
 			if got := os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL"); got != c.node {
 				t.Errorf("H_OTEL_INTERNAL_EXPORTER_URL = %q, want %q", got, c.node)
 			}
+			// canal-query: the same collector, over HTTP, traces only.
+			for name, want := range map[string]string{
+				"OTEL_EXPORTER_OTLP_ENDPOINT": c.node,
+				"OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+				"OTEL_METRICS_EXPORTER":       "none",
+				"OTEL_LOGS_EXPORTER":          "none",
+				"OTEL_EXPORTER_OTLP_TIMEOUT":  "1500",
+			} {
+				if got := os.Getenv(canalQueryEnv + name); got != want {
+					t.Errorf("canal-query's %s = %q, want %q", name, got, want)
+				}
+			}
 		})
 	}
 }
@@ -100,5 +125,49 @@ func TestKeepsAnfraNodesOwnSettings(t *testing.T) {
 	}
 	if got := os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL"); got != "" {
 		t.Errorf("H_OTEL_INTERNAL_EXPORTER_URL = %q, want it left unset", got)
+	}
+}
+
+// canal-query exporting over gRPC, set with its prefix, is left as it is.
+func TestKeepsCanalQuerysOwnSettings(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+	t.Setenv(canalQueryEnv+"OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+	setup(t)
+	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT"); got != "http://localhost:4317" {
+		t.Errorf("canal-query's endpoint = %q, want its own kept", got)
+	}
+	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_PROTOCOL"); got != "" {
+		t.Errorf("canal-query's protocol = %q, want it left unset, for its gRPC default", got)
+	}
+}
+
+// Every sidecar this process spawns is told the data settings, even at their
+// defaults, since one without them records everything as it is.
+func TestTheSidecarsAreToldTheDataSettings(t *testing.T) {
+	clearEnv(t)
+	for _, k := range []string{"H_OTEL_DATA_INPUTS", "H_OTEL_DATA_OUTPUTS", "H_OTEL_DATA_ERRORS"} {
+		t.Setenv(k, "")
+	}
+	setup(t)
+	for k, want := range map[string]string{"H_OTEL_DATA_INPUTS": "off", "H_OTEL_DATA_OUTPUTS": "off", "H_OTEL_DATA_ERRORS": "masked"} {
+		if got := os.Getenv(k); got != want {
+			t.Errorf("by default, %s = %q, want %q", k, got, want)
+		}
+	}
+
+	r, err := caller.Resolve(func(k string) string {
+		return map[string]string{"ANFRA_TRACE_DATA": "off", "ANFRA_TRACE_ERRORS": "raw"}[k]
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shutdown, err := Setup(context.Background(), "anfra", "test", r.Settings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+	if got := os.Getenv("H_OTEL_DATA_ERRORS"); got != "off" {
+		t.Errorf("with ANFRA_TRACE_DATA=off, H_OTEL_DATA_ERRORS = %q, want off", got)
 	}
 }

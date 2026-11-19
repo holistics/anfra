@@ -1,6 +1,6 @@
 # Configuring anfra
 
-How to configure an anfra setup: the repo, `anfra serve`, and the environment.
+How to configure an anfra setup: the repo, your own settings for it, where a setting goes, `anfra serve`, telemetry, and the environment.
 
 ## The repo: `.anfra/`
 
@@ -76,6 +76,41 @@ aql:
     version: v2
 ```
 
+## Your settings: `.env`
+
+Your own settings for a repo go in `.env` at its root, beside `.anfra/`. It is optional. You write it, by hand or through your agent; anfra never does. Each line is a variable, as you would set it in the environment:
+
+```sh
+# .env
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   # where this repo's traces go (telemetry.md)
+ANFRA_TRACE_OUTPUTS=raw
+```
+
+- **Only its `ANFRA_*` and `OTEL_*` names are read,** as if they were in the environment. Other names belong to your other tools, such as an app that shares the folder, and anfra leaves them alone. The format is dotenv's: `NAME=value` lines, `#` comments, optional quotes, nothing expanded.
+- **The environment wins,** name by name.
+- **It is yours.** `anfra init` adds `.env` to `.gitignore`, so your settings never reach a teammate, and `anfra publish` never sends it.
+- **A `.env` that Git tracks is never read,** since anyone who clones the repo would get its settings, including where its traces go. anfra warns when such a file sets an `ANFRA_*` or `OTEL_*` name.
+- **The sidecars get its `OTEL_*` names as they get the environment's.** The sidecar prefixes, `ANFRA_NODE_ENV_*`, `ANFRA_CANAL_QUERY_ENV_*` and `ANFRA_CANAL_LAKE_ENV_*` ([below](#sidecars)), aren't read from it, so set them in the environment.
+
+anfra reads it when a command starts, so an edit applies to the next command. A running `anfra serve` reads it when it starts: restart it after an edit. A bad value for one of anfra's switches is refused, naming the line.
+
+## Where a setting goes
+
+A setting goes where the person who decides it can set it:
+
+| Where | What goes there | Who sets it |
+|---|---|---|
+| The repo's `.anfra/` | What describes the repo, and is the same for everyone who clones it | The repo's authors, through Git |
+| The repo's `.anfra/config.local.yml` | Your own values for the repo's settings, on this machine | You, or your agent, by editing the file |
+| The repo's `.env` | Your choices for this repo, which have to reach your agents too | You, or your agent, by editing the file |
+| The environment | Choices for one process or deployment: a container, a service, CI, or `anfra serve` run for others | Whoever starts the process |
+
+When a setting can come from more than one place, the first one set wins: the environment, then the repo's `.env`, then `.anfra/config.local.yml`, then `.anfra/config.yml`. `anfra status` shows where the telemetry endpoint came from.
+
+Your `.env` wins over the committed `.anfra/config.yml`. A repo is often someone else's work, and anfra doesn't ask whether you trust it. So a committed file can only make a security setting stricter, never looser. Telemetry's settings never come from it: a repo can never choose where your traces go, or what they record.
+
+A setting belongs in `.env` when it has to reach agents: an agent can edit a file, but it can't change the environment its own commands run in.
+
 ## `anfra serve`
 
 `anfra serve` serves everything unless turned off (`anfra serve --help`, `cmd/anfra/serve.go`):
@@ -87,9 +122,40 @@ aql:
 | `--no-apps` | Without the Data Apps (`/`, `/apps/…`). |
 | `--no-watch` | The Data Apps without live reload. |
 
+## Telemetry
+
+anfra can record each command's trace and send it, over OTLP/HTTP, to an OpenTelemetry endpoint you choose ([telemetry](telemetry.md)). Nothing is recorded until an endpoint is set, and nothing is ever sent to Holistics. Telemetry is experimental, so these settings may change in a minor release.
+
+Each variable below can be set in the environment or in the repo's [`.env`](#your-settings-env). **On your machine,** set the endpoint in the repo's `.env`. Every anfra command in the repo reads it, including the ones your agents run:
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+**In a container, a service or CI,** set it in the environment instead, which wins over the file.
+
+| Variable | Effect |
+|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP: the collector's base URL, e.g. `http://localhost:4318`. anfra points anfra-node and canal-query at it too. Default: none, so nothing is exported. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | anfra sends over HTTP only, and warns when this is `grpc`. Point the endpoint at an HTTP receiver (usually port 4318). |
+| `ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT` | Another endpoint for canal-query's traces, instead of anfra's. It exports over gRPC then, unless `ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`. Default: anfra's endpoint, over HTTP. |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_TRACES_TIMEOUT`, `OTEL_BSP_EXPORT_TIMEOUT` | How long one export may take, in milliseconds. Default: 1500, so a collector that is down delays a command by no more than that. |
+| `ANFRA_TRACE_INPUTS` | What a command asked for: its arguments, its op's input, and the names of the dataset, data source and files it ran on. These can hold your filter values. `off` or `raw`. Default: `off`. |
+| `ANFRA_TRACE_OUTPUTS` | An op's answer, without a query's rows, and a result's columns. `off` or `raw`. Default: `off`. |
+| `ANFRA_TRACE_SQL` | The SQL anfra sends to the warehouse. `masked` replaces each literal with `?`; `raw` is as sent. `off`, `masked` or `raw`. Default: `masked`. |
+| `ANFRA_TRACE_ERRORS` | An error's message. `masked` replaces quoted strings and numbers with `?`, best effort; `raw` adds the stack. `off`, `masked` or `raw`. Default: `masked`. |
+| `ANFRA_TRACE_DATA` | `off` keeps all four above off, whatever each says. |
+| `ANFRA_TRACE_PAYLOAD_LIMIT` | The bytes kept of each input, answer and query; a longer one is cut and marked. A whole number. Default: `16384`. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | The traces endpoint alone, a full URL ending in `/v1/traces`, instead of the base URL. |
+| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TRACES_HEADERS` | Headers sent with each export, such as a hosted backend's API key, as `key=value,key=value`. In the repo's `.env`, they reach your agents' commands too ([telemetry](telemetry.md#a-backend-that-needs-a-key)). Default: none, which is what the telemetry stack needs. |
+| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Label anfra's traces, in OpenTelemetry's format (`key=value,key=value` for the attributes). Default service name: `anfra`. The sidecars don't inherit them; set theirs with `ANFRA_CANAL_QUERY_ENV_` or `ANFRA_NODE_ENV_` (above). |
+| `OTEL_SDK_DISABLED` | `true` exports nothing, whatever else is set. |
+
 ## Environment
 
-Set these in the environment anfra runs in: the shell, a container's environment, a service's unit file. With `anfra serve` running, CLI commands in that repo run on the server, so it's the server's environment that counts for them.
+Set these in the environment anfra runs in (the shell, a container's environment, a service's unit file), or in the repo's [`.env`](#your-settings-env). With `anfra serve` running, CLI commands in that repo run on the server, so it's the server's environment that counts for them.
+
+Telemetry's variables are listed in [Telemetry](#telemetry).
 
 anfra's on/off switches take `1` (on) or `0` (off); unset means off. Any other value is refused when anfra starts, naming the variable, so a mistyped switch never silently does the opposite. Standard variables (`CI`, the `OTEL_*` ones) keep their own conventions.
 
@@ -172,19 +238,6 @@ If several anfras write to one canal-lake storage, replicas included, give each 
 | Variable | Effect |
 |---|---|
 | `ANFRA_HIDE_ERROR_CAUSES` | `1`: hide errors' causes from clients, showing only their message. Default: causes shown, since anfra's user is usually its operator. Set it when `anfra serve` serves other people: a cause can carry SQL, database errors and paths. It hides them at the terminal too; every cause is still in `anfra.log`. |
-
-### Telemetry
-
-anfra exports traces over OTLP/HTTP when an endpoint is set, through the standard OpenTelemetry variables (`internal/telemetry`). Default: no endpoint, nothing exported.
-
-| Variable | Effect |
-|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP, for anfra and anfra-node: the collector's base URL, e.g. `http://localhost:4318`. anfra points anfra-node at it. |
-| `ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC, for canal-query: the collector's gRPC receiver, e.g. `http://localhost:4317`. |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | The traces endpoint alone, a full URL ending in `/v1/traces`, instead of the base URL. |
-| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Label anfra's traces, in OpenTelemetry's format (`key=value,key=value` for the attributes). Default service name: `anfra`. The sidecars don't inherit them; set theirs with `ANFRA_CANAL_QUERY_ENV_` or `ANFRA_NODE_ENV_` (above). |
-| `OTEL_SDK_DISABLED` | `true` exports nothing, whatever else is set. |
-| `H_OTEL_ENABLED`, `H_OTEL_INTERNAL_EXPORTER_URL` | anfra-node's own tracing settings (`1`; a base URL). anfra sets them from the endpoint above, unless they are set already. |
 
 ### Profiling
 

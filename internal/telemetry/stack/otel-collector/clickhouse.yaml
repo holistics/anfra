@@ -1,0 +1,33 @@
+# The ClickHouse exporter, laid over config.yaml: traces, metrics and logs into
+# the exporter's own tables (otel_traces, otel_metrics_*, otel_logs), which it
+# creates on first use, the database too.
+#
+# Its defaults are compose.yaml's ClickHouse.
+
+exporters:
+  clickhouse:
+    endpoint: ${env:CLICKHOUSE_ENDPOINT:-tcp://clickhouse:9000}
+    database: ${env:CLICKHOUSE_DATABASE:-otel}
+    username: ${env:CLICKHOUSE_USERNAME:-otel}
+    password: ${env:CLICKHOUSE_PASSWORD:-otel}
+    # How long rows are kept: none, unset. The local stack keeps three days.
+    ttl: ${env:CLICKHOUSE_TTL:-0}
+    timeout: 10s
+    # In memory: a restart loses what is queued.
+    sending_queue:
+      enabled: true
+      queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  pipelines:
+    traces:
+      exporters: [clickhouse]
+    metrics:
+      exporters: [clickhouse]
+    logs:
+      exporters: [clickhouse]

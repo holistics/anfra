@@ -1,6 +1,11 @@
 package envflag
 
-import "testing"
+import (
+	"errors"
+	"testing"
+
+	"github.com/holistics/anfra/shared/telemetry"
+)
 
 func TestOn(t *testing.T) {
 	for v, want := range map[string]bool{"": false, "0": false, "1": true, "true": false} {
@@ -44,5 +49,27 @@ func TestValidate(t *testing.T) {
 		if want := HideErrorCauses + ` must be 1 or 0, not "` + bad + `"`; err == nil || err.Error() != want {
 			t.Errorf("%s=%q: %v, want %q", HideErrorCauses, bad, err, want)
 		}
+	}
+}
+
+// The telemetry data settings are checked too, and the switch they replaced
+// is refused, naming them.
+func TestValidateChecksTheTelemetrySettings(t *testing.T) {
+	for _, name := range all {
+		t.Setenv(name, "")
+	}
+	t.Setenv("ANFRA_TRACE_SQL", "raw")
+	t.Setenv(TracePayloads, "")
+	if err := Validate(); err != nil {
+		t.Fatalf("ANFRA_TRACE_SQL=raw: %v", err)
+	}
+	t.Setenv("ANFRA_TRACE_INPUTS", "masked")
+	if _, ok := errors.AsType[*telemetry.InvalidSettingError](Validate()); !ok {
+		t.Errorf("ANFRA_TRACE_INPUTS=masked: %v, want it refused", Validate())
+	}
+	t.Setenv("ANFRA_TRACE_INPUTS", "")
+	t.Setenv(TracePayloads, "1")
+	if _, ok := errors.AsType[*RetiredError](Validate()); !ok {
+		t.Errorf("%s=1: %v, want it refused as retired", TracePayloads, Validate())
 	}
 }

@@ -276,14 +276,14 @@ func (r queryRun) execute(ctx context.Context, truncate int, s sink) (_ ran, err
 		return ran{}, err
 	}
 	// What runs, and what describes it: the SQL as written, or as compiled.
-	sql, dataSource := r.in.Query, r.in.DataSource
+	sql, dataSource, dbType := r.in.Query, r.in.DataSource, r.sql.DBType()
 	var (
 		aql, compilerKey, dataset string
 		input                     *QueryInput
 		columns                   []anfranode.ExploreColumn
 	)
 	if compiled != nil {
-		sql, dataSource = compiled.SQL, compiled.DataSource.Name
+		sql, dataSource, dbType = compiled.SQL, compiled.DataSource.Name, compiled.DataSource.DBType
 		aql, compilerKey, dataset = compiled.AQL, compiled.CacheKey, r.in.Dataset
 		input, columns = r.in.Input.filled(compiled.Seeds), compiled.Columns
 	}
@@ -293,7 +293,7 @@ func (r queryRun) execute(ctx context.Context, truncate int, s sink) (_ ran, err
 	if err := s.compiled(sql, aql, input); err != nil {
 		return ran{}, err
 	}
-	o.compiled(ctx, dataSource, dataset, aql, sql)
+	o.compiled(ctx, command.CompiledQuery{DataSource: dataSource, DataSourceType: dbType, Dataset: dataset, AQL: aql, SQL: sql})
 
 	dq, err := r.inDataSource(ctx, compiled)
 	if err != nil {
@@ -331,10 +331,11 @@ func observe(cc command.CommandContext, t *tracker) *observation {
 	return &observation{obs: cc.QueryObserver(), id: command.NewQueryID(), t: t}
 }
 
-// compiled tells the observer the query is about to be sent: from aql, for
-// AQL; sql as written, for SQL.
-func (o *observation) compiled(ctx context.Context, dataSource, dataset, aql, sql string) {
-	o.obs.QueryCompiled(ctx, command.CompiledQuery{ID: o.id, DataSource: dataSource, Dataset: dataset, AQL: aql, SQL: sql})
+// compiled tells the observer the query q, its id aside, is about to be sent:
+// from its AQL, for AQL; its SQL as written, for SQL.
+func (o *observation) compiled(ctx context.Context, q command.CompiledQuery) {
+	q.ID = o.id
+	o.obs.QueryCompiled(ctx, q)
 	o.sent = true
 }
 

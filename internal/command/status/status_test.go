@@ -156,3 +156,58 @@ func TestVersionRefusesWhatIsntAVersion(t *testing.T) {
 		}
 	}
 }
+
+// Failing telemetry adds a hint: where traces go, how to turn it off, and the
+// log file that holds the failed exports, when there is one. So does the host,
+// with hints of its own about where traces go.
+func TestTelemetryHints(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		info  command.TelemetryInfo
+		logs  string
+		wants []string
+	}{
+		{name: "off", info: command.TelemetryInfo{State: command.TelemetryOff}},
+		{name: "on", info: command.TelemetryInfo{State: command.TelemetryOn, Endpoint: "http://localhost:4318", SetBy: "OTEL_EXPORTER_OTLP_ENDPOINT"}},
+		{
+			name:  "the host's own",
+			info:  command.TelemetryInfo{State: command.TelemetryOn, Endpoint: "https://otel.example.com", SetBy: "OTEL_EXPORTER_OTLP_ENDPOINT in .env", Hints: []string{"Traces go to otel.example.com"}},
+			wants: []string{"Traces go to otel.example.com"},
+		},
+		{
+			name: "failing", logs: "/home/u/.anfra/repos/r/logs/anfra.log",
+			info:  command.TelemetryInfo{State: command.TelemetryFailing, Endpoint: "http://localhost:4318", SetBy: "OTEL_EXPORTER_OTLP_ENDPOINT"},
+			wants: []string{"Telemetry is failing", "http://localhost:4318", "unset OTEL_EXPORTER_OTLP_ENDPOINT", "logged in /home/u/.anfra/repos/r/logs/anfra.log"},
+		},
+		{
+			name:  "failing, no log file",
+			info:  command.TelemetryInfo{State: command.TelemetryFailing, Endpoint: "http://localhost:4318", SetBy: "OTEL_EXPORTER_OTLP_ENDPOINT"},
+			wants: []string{"Telemetry is failing"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cc := command.CommandContext{Telemetry: func() *command.TelemetryInfo { return &tc.info }}
+			got, hints := telemetryOf(cc, tc.logs, nil)
+			if got.State != tc.info.State {
+				t.Errorf("state = %q, want %q", got.State, tc.info.State)
+			}
+			if len(tc.wants) == 0 {
+				if len(hints) != 0 {
+					t.Errorf("hints = %q, want none", hints)
+				}
+				return
+			}
+			if len(hints) != 1 {
+				t.Fatalf("hints = %q, want one", hints)
+			}
+			for _, w := range tc.wants {
+				if !strings.Contains(hints[0], w) {
+					t.Errorf("hint %q lacks %q", hints[0], w)
+				}
+			}
+			if tc.logs == "" && strings.Contains(hints[0], "logged in") {
+				t.Errorf("hint %q names a log file, with none", hints[0])
+			}
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -368,6 +369,15 @@ func shaped(over map[string]any) map[string]any {
 // one-shot CLI does, for the whole test.
 func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) command.Clients {
 	t.Helper()
+	clients, stop := startSidecarsUntil(ctx, t, r)
+	t.Cleanup(stop)
+	return clients
+}
+
+// startSidecarsUntil is startSidecars, stopping them when stop is called, for
+// a test that needs them stopped before it ends.
+func startSidecarsUntil(ctx context.Context, t *testing.T, r repo.Repo) (_ command.Clients, stop func()) {
+	t.Helper()
 	local, ok := r.Local()
 	if !ok {
 		t.Fatalf("startSidecars spawns sidecars for a local repo, not %s", r)
@@ -377,13 +387,20 @@ func startSidecars(ctx context.Context, t *testing.T, r repo.Repo) command.Clien
 	if err := node.Start(ctx); err != nil {
 		t.Fatalf("start anfra-node: %v", err)
 	}
-	t.Cleanup(func() { node.Close(context.WithoutCancel(ctx)) })
 	canal := canalquery.New(cfg)
 	if err := canal.Start(ctx); err != nil {
+		node.Close(context.WithoutCancel(ctx))
 		t.Fatalf("start canal-query: %v", err)
 	}
-	t.Cleanup(func() { canal.Close(context.WithoutCancel(ctx)) })
-	return command.Clients{Node: node.Client(), CanalQuery: canal.Client()}
+	var once sync.Once
+	stop = func() {
+		once.Do(func() {
+			node.Close(context.WithoutCancel(ctx))
+			canal.Close(context.WithoutCancel(ctx))
+		})
+	}
+	t.Cleanup(stop)
+	return command.Clients{Node: node.Client(), CanalQuery: canal.Client()}, stop
 }
 
 // brokenCopy is the fixture plus a model that does not parse.

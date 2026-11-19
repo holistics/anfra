@@ -1,0 +1,18 @@
+# The exporter to debug with, laid over config.yaml in clickhouse.yaml's place:
+# every span, metric and log line the collector receives, written to its own
+# output (`docker compose logs otel-collector`). Nothing is stored.
+#
+# OTEL_DEBUG_VERBOSITY=detailed prints each item in full; basic, a count per batch.
+
+exporters:
+  debug:
+    verbosity: ${env:OTEL_DEBUG_VERBOSITY:-basic}
+
+service:
+  pipelines:
+    traces:
+      exporters: [debug]
+    metrics:
+      exporters: [debug]
+    logs:
+      exporters: [debug]

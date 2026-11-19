@@ -102,6 +102,26 @@ scripts/sqlc.sh generate    # each store's gen/, from its queries.sql and migrat
 
 Commit it. CI refuses stale code (`scripts/sqlc.sh diff`).
 
+## Telemetry
+
+What a trace records, and what may leave the user's machine, is set out in [telemetry](docs/designs/telemetry.md). This section is what to do when you change it.
+
+**To see your build's traces,** run `bin/anfra telemetry init` in a test repo, start the compose file its hint names, and put its endpoint line in the repo's `.env`. Run `bin/anfra`, not the `anfra` on your `PATH`, or the traces come from the installed release.
+
+**A new op needs no tracing code.** `shared/apikit` gives each op its span, `anfra.op.<op>`, with `anfra.op`, `error.type`, the caller's attributes, and its input and answer as payload events.
+
+**When you add to a trace:**
+
+- **An answer that holds rows or SQL** implements `apptracing.Payloader`, so its payload leaves them out (`internal/command/query/result.go`).
+- **An attribute or event** is declared in `shared/telemetry/keys.go`, and set with `apptracing.SetAttributes(ctx, telemetry.X.Is(v))`. Lint refuses setting one on a span directly. Name it by the [naming rules](docs/designs/telemetry.md#what-an-ops-span-records), and give it a category by [how to classify one](docs/designs/telemetry.md#data-in-spans). Declare it `meta` only when no value it can hold comes from the user: nothing downstream catches that mistake, so a reviewer checks every new `meta(...)`.
+- **A span** is named for its step or route, never for a value such as a dataset, a file or a path: the filter doesn't change span names.
+- **A stable span or attribute** is added to `StableSpans` (`shared/telemetry/stable.go`), and to the tables in the design and the [usage page](docs/usage/telemetry.md#names-you-can-rely-on). A test fails until the three match. Renaming one is a change users see: say so in the commit, for the changelog ([stable names](docs/designs/telemetry.md#stable-span-names-and-attributes)).
+
+**Before you finish:**
+
+- `go test ./shared/telemetry/ ./cmd/anfra/` checks the registry, the docs' tables and the root span. The registry test runs only the commands it lists, so add yours there when it sets new attributes (`TestEveryRecordedKeyIsDeclared`).
+- `make test-sidecars` runs `TestNoDataLeavesInTraces`: a canary value through anfra and the real sidecars, which must not be exported with data off or at the defaults, and the stable spans' attributes with data raw. CI doesn't run it, so run it after changing what a query records, and before pinning a new sidecar release.
+
 ## Commits and releases
 
 Commit messages are checked by commitlint, in a git hook and in CI: the rules, types and scopes are in `commitlint.config.mjs`. `pnpm commit` writes one interactively.
@@ -152,7 +172,7 @@ Use the cloud's public origin (Vite in local development), not `localhost` for H
 ## Debugging
 
 - **Logs:** each repo's go to `<ANFRA_HOME>/repos/<repo id>/logs/anfra.log` (`~/.anfra` by default; `anfra status` in the repo prints the path), anfra's records and the sidecars' stderr together. `anfra serve` also writes them to stderr, and `ANFRA_LOG_STDERR` changes that for any command (`1` on, `0` off); `LOG_LEVEL` sets the level. A Data App open in `anfra serve` adds its runtime errors and console warnings there too, as `"service":"app"` lines with the app's path (`ANFRA_NO_APP_LOGS=1` turns that off); see [errors in a Data App](docs/designs/errors/data-apps.md#where-they-go-per-host).
-- **Traces:** set `OTEL_EXPORTER_OTLP_ENDPOINT` to a collector's OTLP/HTTP receiver. One command or request becomes one trace, through to anfra-node.
+- **Traces:** set `OTEL_EXPORTER_OTLP_ENDPOINT` to a collector's OTLP/HTTP receiver. One command or request becomes one trace, through to anfra-node. See [telemetry](#telemetry).
 - **Versions:** a build from source reports `<release>+<commit>[.dirty]` (`anfra version`), so a log or trace says which source it came from.
 
 See [configs](docs/usage/configs.md) for every setting.

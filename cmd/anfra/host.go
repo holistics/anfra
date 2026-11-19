@@ -9,6 +9,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/envflag"
@@ -19,8 +20,10 @@ import (
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/internal/sidecar/canallake"
+	"github.com/holistics/anfra/internal/telemetry"
 
 	"github.com/holistics/anfra/shared/logkit"
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
 // commandContext is the CommandContext both surfaces run commands with — the
@@ -28,8 +31,12 @@ import (
 // anfra at, so no data restrictions apply. That is stated rather than
 // defaulted: a zero dataperm.Set is refused, not treated as permissive.
 //
-// No Attribution: there is one user and they are reading their own logs. One
-// tenant, LocalTenant, for the same reason.
+// Its Attribution names the repo, so traces of several repos in one backend
+// can be told apart (repoAttribution). One tenant, LocalTenant: there is one
+// user, reading their own logs.
+//
+// Each query is written onto its span (telemetry.Queries), and the user's data
+// recorded as the ANFRA_TRACE_* settings say (docs/designs/telemetry.md).
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
 	cc := command.CommandContext{
 		Clients:       clients,
@@ -38,16 +45,32 @@ func (h hostContext) commandContext(clients command.Clients) command.CommandCont
 		QueryCache:    h.queryCache,
 		QueryDefaults: h.queryDefaults,
 		TenantID:      LocalTenant,
+		Attribution:   repoAttribution(h.repo),
 		DataPerms:     dataperm.Ungoverned(),
 		// anfra core serves the directory it was pointed at: the local repo is the
 		// point, not a mistake.
 		AllowLocalRepo: true,
+		Observers:      command.Observers{Queries: telemetry.Queries{}},
+		TraceData:      traceData.Settings(),
+		Telemetry:      telemetryInfo,
 	}
 	if !updateNotifyDisabled() {
 		cc.Update = knownUpdate
 		cc.Skills = knownSkills
 	}
 	return cc
+}
+
+// repoAttribution names the repo on every span and log record of a command in
+// it (docs/designs/telemetry.md, the caller): its repo id, the folder name and
+// a hash of its path, which names its state folder and tells two checkouts
+// apart. Never its path, which often holds the user's name. Nothing for a
+// folder that isn't a repo.
+func repoAttribution(r repo.Local) attribution.Fields {
+	if !r.IsRepo() {
+		return nil
+	}
+	return attribution.Fields{caller.RepoID.String(): r.ID}
 }
 
 // LocalTenant is the one tenant anfra's CLI and serve run for.
@@ -90,9 +113,7 @@ func withRepo(ctx context.Context, logStderr bool, fn func(ctx context.Context, 
 	}
 	defer lg.Close()
 	// The exporter's failures (a collector down) go to the log, not the terminal.
-	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		lg.Logger.Warn("Telemetry failed", logkit.EventKey, eventTelemetryFailed, "error", err)
-	}))
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) { reportTelemetryFailure(lg.Logger, err) }))
 
 	cfg := sidecar.Config{
 		RepoID:           repo.ID,

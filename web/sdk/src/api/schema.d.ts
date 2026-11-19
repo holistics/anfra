@@ -1266,6 +1266,7 @@ export interface components {
             hints?: string[];
             repo: components["schemas"]["RepoStatus"];
             server: components["schemas"]["ServerStatus"];
+            telemetry?: components["schemas"]["TelemetryInfo"];
         };
         StreamEnd: {
             error?: components["schemas"]["Response"];
@@ -1318,6 +1319,50 @@ export interface components {
             state: "ready" | "incompatible" | "unavailable" | "disabled";
             /** @description the query cache's store, a file. Absent when the cache is disabled, or the server keeps its store elsewhere. */
             store?: string;
+        };
+        TelemetryData: {
+            /** @description an error's message and stack. */
+            errors: components["schemas"]["TelemetryLevel"];
+            /** @description what a command asked for: its arguments and input, and the names of the dataset, data source and files it ran on. */
+            inputs: components["schemas"]["TelemetryLevel"];
+            /** @description what came back: a command's result, without a query's rows. */
+            outputs: components["schemas"]["TelemetryLevel"];
+            /** @description the SQL anfra sends to the warehouse. */
+            sql: components["schemas"]["TelemetryLevel"];
+        };
+        /** @description Where anfra records each command's trace: the user's own telemetry, to their own endpoint, never data sent to Holistics. Under anfra serve, the server's settings, since its commands run there. Absent when the host doesn't say. Experimental: its fields may change in a minor release. */
+        TelemetryInfo: {
+            /** @description what of your data reaches a span, per category, after every rule is applied. */
+            data?: components["schemas"]["TelemetryData"];
+            /** @description the OpenTelemetry endpoint traces are sent to. Absent when off. */
+            endpoint?: string;
+            /** @description how many bytes of each input, result and query a span records, at most. A longer one is cut, and marked as cut. */
+            payload_limit?: components["schemas"]["TelemetryLimit"];
+            /** @description what set the endpoint: an OTEL_* variable, followed by 'in .env' when the repo's .env set it. When off, OTEL_SDK_DISABLED if that turned telemetry off, otherwise absent. */
+            set_by?: string;
+            /**
+             * @description "off": no endpoint is set, so nothing is sent. "on": traces are sent to the endpoint, which accepts connections. That doesn't prove it stores them. "failing": an endpoint is set but doesn't accept connections, so traces are lost.
+             * @enum {string}
+             */
+            state: "off" | "on" | "failing";
+        };
+        TelemetryLevel: {
+            /** @description what set it: its ANFRA_TRACE_* variable (followed by "in .env" when the repo's .env set it), ANFRA_TRACE_DATA when that held it off, or "default". */
+            set_by: string;
+            /**
+             * @description "off": not recorded. "masked": recorded with what you wrote replaced with ?. "raw": recorded as it is.
+             * @enum {string}
+             */
+            value: "off" | "masked" | "raw";
+        };
+        TelemetryLimit: {
+            /** @description what set it: ANFRA_TRACE_PAYLOAD_LIMIT (followed by "in .env" when the repo's .env set it), or "default". */
+            set_by: string;
+            /**
+             * Format: int64
+             * @description the limit, in bytes.
+             */
+            value: number;
         };
         TimedStep: {
             /**

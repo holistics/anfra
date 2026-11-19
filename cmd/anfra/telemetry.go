@@ -2,20 +2,167 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"slices"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
+	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoenv"
 	"github.com/holistics/anfra/internal/telemetry"
+	"github.com/holistics/anfra/shared/apptracing"
+	"github.com/holistics/anfra/shared/logkit"
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
-// tracer starts the CLI's own spans: a command's root.
-var tracer = otel.Tracer("github.com/holistics/anfra/cmd/anfra")
+// tracerName names the tracer of the CLI's own spans: a command's root. The
+// tracer is looked up when a span starts, so it is the provider installed then.
+const tracerName = "github.com/holistics/anfra/cmd/anfra"
+
+// untraced are the commands that get no root span: one that runs until it is
+// stopped, whose span would end with the process, if ever. serve's requests
+// are traces of their own, and so is each command a console runs. Neither is
+// shell completion, which runs on every Tab.
+var untraced = map[string]bool{
+	"anfra serve":                              true,
+	"anfra console":                            true,
+	"anfra " + cobra.ShellCompRequestCmd:       true,
+	"anfra " + cobra.ShellCompNoDescRequestCmd: true,
+}
+
+// traceCommands makes whichever command of root runs the root of its trace, a
+// span named for its path (anfra query, anfra publish), core and CLI-only
+// commands alike, so no command has to start one. It returns the function that
+// ends that span with the run's error once the command is done: executed is
+// the command cobra ran, or found and refused. A refusal before the command
+// ran, of a flag or an argument, still gets its span, so a trace shows every
+// call that failed.
+//
+// The repo the command runs in is named on that span and every span and log
+// record under it, from the start (repoAttribution), so a CLI-only command's
+// carry it too. The span records args, the command's arguments as given, as
+// inputs say (anfra.command.input), a sensitive flag's value redacted.
+func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end func(executed *cobra.Command, err error)) {
+	var span trace.Span
+	start := func(ctx context.Context, cmd *cobra.Command) context.Context {
+		if untraced[cmd.CommandPath()] {
+			return ctx
+		}
+		ctx = caller.WithSettings(ctx, traceData.Settings())
+		ctx, span = otel.Tracer(tracerName).Start(ctx, cmd.CommandPath()) //nolint:spancheck // ended by end, once the command returns
+		apptracing.RecordPayload(ctx, caller.CommandInput, redactArgs(cmd, args))
+		if dir, err := os.Getwd(); err == nil {
+			ctx = caller.WithAttributes(ctx, repoAttribution(repo.Resolve(dir)))
+		}
+		return ctx
+	}
+	pre := root.PersistentPreRunE
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error { //nolint:contextcheck // the command's own context, which cobra passes as cmd.Context()
+		cmd.SetContext(start(cmd.Context(), cmd))
+		if pre == nil {
+			return nil
+		}
+		return pre(cmd, args)
+	}
+	return func(executed *cobra.Command, err error) {
+		if span == nil && executed != nil && err != nil {
+			start(ctx, executed)
+		}
+		if span == nil {
+			return
+		}
+		defer span.End()
+		if _, rendered := errors.AsType[*exitCodeError](err); err == nil || rendered {
+			return // an answer that says it failed is already the command's, not a failure of it
+		}
+		// As apptracing marks a step: error.type always, an error status only
+		// when the failure is anfra's, not the caller's.
+		apptracing.MarkFailed(span, traceData.Settings(), err)
+	}
+}
+
+// sensitiveFlag is the annotation that marks a flag whose value a trace never
+// records: a secret.
+const sensitiveFlag = "anfra_sensitive"
+
+// redacted stands in for a sensitive flag's value.
+const redacted = "[redacted]"
+
+// redactArgs are args with the value of each of cmd's flags marked sensitive
+// replaced, given as --flag=value, --flag value, -f value, -fvalue, or after
+// other shorthands, as -xf value.
+func redactArgs(cmd *cobra.Command, args []string) []string {
+	out := slices.Clone(args)
+	lookup := func(name string) *pflag.Flag {
+		if f := cmd.Flags().Lookup(name); f != nil {
+			return f
+		}
+		return cmd.InheritedFlags().Lookup(name)
+	}
+	shorthand := func(c byte) *pflag.Flag {
+		if f := cmd.Flags().ShorthandLookup(string(c)); f != nil {
+			return f
+		}
+		return cmd.InheritedFlags().ShorthandLookup(string(c))
+	}
+	sensitive := func(f *pflag.Flag) bool { return f != nil && len(f.Annotations[sensitiveFlag]) > 0 }
+	for i := 0; i < len(out); i++ {
+		a := out[i]
+		if a == "--" {
+			break
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			continue
+		}
+		if strings.HasPrefix(a, "--") {
+			name, _, hasValue := strings.Cut(a[2:], "=")
+			if !sensitive(lookup(name)) {
+				continue
+			}
+			if hasValue {
+				out[i] = a[:strings.Index(a, "=")+1] + redacted
+			} else if i+1 < len(out) {
+				out[i+1] = redacted
+				i++
+			}
+			continue
+		}
+		// Shorthands, as pflag reads them: each a flag until one that takes a
+		// value, whose value is the rest of the arg, or the next arg.
+		for j := 1; j < len(a); j++ {
+			f := shorthand(a[j])
+			if f == nil || f.NoOptDefVal != "" {
+				continue // a bool, or unknown: the next character is a flag too
+			}
+			rest := strings.TrimPrefix(a[j+1:], "=")
+			if sensitive(f) {
+				if rest != "" {
+					out[i] = a[:len(a)-len(rest)] + redacted
+				} else if i+1 < len(out) {
+					out[i+1] = redacted
+				}
+			}
+			if rest == "" {
+				i++ // the next arg is this flag's value
+			}
+			break
+		}
+	}
+	return out
+}
 
 // flushTimeout bounds how long exiting waits on the last spans: a collector that
 // is down must not hold up a command that is done.
@@ -25,16 +172,108 @@ const flushTimeout = 2 * time.Second
 // the function that flushes it. Telemetry never stops a command: a setup that
 // fails is reported and the command runs untraced.
 func startTelemetry(ctx context.Context) (flush func()) {
-	shutdown, err := telemetry.Setup(ctx, "anfra", meta.Version)
+	shutdown, err := telemetry.Setup(ctx, "anfra", meta.Version, traceData.Settings())
 	if err != nil {
 		printWarning(os.Stderr, "telemetry_off", fmt.Sprintf("Telemetry is off: %v", err))
 		return func() {}
+	}
+	if w := telemetry.ProtocolWarning(); w != "" && telemetry.Installed().URL != "" {
+		printWarning(os.Stderr, "tracing_over_http", w)
+	}
+	for _, w := range telemetry.GuardWarnings(telemetry.Installed(), traceData) {
+		printWarning(os.Stderr, w.Code, w.Message)
 	}
 	return func() {
 		flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), flushTimeout)
 		defer cancel()
 		_ = shutdown(flushCtx)
 	}
+}
+
+// failureEvery is how often a failing export is logged: once for a command,
+// and once in a while for a server, not on every batch.
+const failureEvery = 10 * time.Minute
+
+var lastFailure struct {
+	sync.Mutex
+	at time.Time
+}
+
+// reportTelemetryFailure logs an export's failure, unless one was logged less
+// than failureEvery ago, saying what to do about it.
+func reportTelemetryFailure(lg *slog.Logger, err error) {
+	lastFailure.Lock()
+	if !lastFailure.at.IsZero() && time.Since(lastFailure.at) < failureEvery {
+		lastFailure.Unlock()
+		return
+	}
+	lastFailure.at = time.Now()
+	lastFailure.Unlock()
+
+	// Installed, not Current: a server reports where it sends, as it started.
+	dest := telemetry.Installed()
+	hint := "Check that the telemetry stack or collector at " + dest.Redacted() + " is running, or unset " + dest.From + " to stop sending traces."
+	lg.Warn("Telemetry failed", logkit.EventKey, eventTelemetryFailed, "error", err, "endpoint", dest.Redacted(), "hint", hint)
+}
+
+// telemetryInfo is where this process sends its traces, for status:
+// as it started, which for a server can differ from what a new command would
+// pick up.
+func telemetryInfo() *command.TelemetryInfo {
+	dest := telemetry.Installed()
+	data, limit := dataInfo()
+	if dest.URL == "" {
+		// From is set only when OTEL_SDK_DISABLED turned telemetry off, which
+		// would otherwise look the same as no endpoint at all.
+		return &command.TelemetryInfo{State: command.TelemetryOff, SetBy: dest.From, Data: data, PayloadLimit: limit}
+	}
+	state := command.TelemetryOn
+	if !dest.Answering(300 * time.Millisecond) {
+		state = command.TelemetryFailing
+	}
+	info := &command.TelemetryInfo{State: state, Endpoint: dest.Redacted(), SetBy: dest.From, Data: data, PayloadLimit: limit}
+	info.Hints = dest.StatusHints(traceData)
+	return info
+}
+
+// traceData is what of the user's data this process's spans record, as the
+// environment and the repo's .env set it, resolved once at start (main), after
+// envflag.Validate has refused a value it doesn't take.
+var traceData caller.Resolution
+
+// resolveTraceData resolves traceData. Validate has checked every value, so a
+// failure here leaves each category at its default.
+func resolveTraceData() {
+	r, err := caller.Resolve(os.Getenv)
+	if err != nil {
+		r, _ = caller.Resolve(func(string) string { return "" })
+	}
+	traceData = r
+}
+
+// dataInfo is traceData as status shows it.
+func dataInfo() (*command.TelemetryData, *command.TelemetryLimit) {
+	level := func(c caller.Category) command.TelemetryLevel {
+		v := traceData.Data[c]
+		return command.TelemetryLevel{Value: string(v.Value), SetBy: setBy(v.From)}
+	}
+	data := &command.TelemetryData{
+		Inputs:  level(caller.Inputs),
+		Outputs: level(caller.Outputs),
+		SQL:     level(caller.SQL),
+		Errors:  level(caller.Errors),
+	}
+	limit := &command.TelemetryLimit{Value: traceData.PayloadLimit.Value, SetBy: setBy(traceData.PayloadLimit.From)}
+	return data, limit
+}
+
+// setBy is the variable that set a setting as status names it: "default" for
+// none, and "in .env" after it when the repo's file set it.
+func setBy(name string) string {
+	if name == "" {
+		return "default"
+	}
+	return repoenv.Describe(name)
 }
 
 // traceSidecar traces each call to a sidecar, and carries the trace into it.

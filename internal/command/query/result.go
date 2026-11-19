@@ -61,6 +61,24 @@ type CacheWarning struct {
 	Message string `json:"message"`
 }
 
+// TracePayload is the answer as a trace records it, when outputs are on: all
+// but its rows, which are the user's data and never recorded, with their count
+// in their place, and its SQL only when sql (docs/designs/telemetry.md).
+func (r QueryResult) TracePayload(sql bool) any {
+	type rows struct {
+		Fields []string `json:"fields"`
+		Count  int      `json:"count"`
+	}
+	type traced struct {
+		QueryResult
+		Result rows `json:"result"`
+	}
+	if !sql {
+		r.SQL = ""
+	}
+	return traced{QueryResult: r, Result: rows{Fields: r.Result.Fields, Count: len(r.Result.Records)}}
+}
+
 type QueryRows struct {
 	Fields  []string         `json:"fields" pretty:"-"`
 	Records []canalquery.Row `json:"records" pretty:"Result,rowlabels=columns.label" doc:"one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are \"NaN\", \"Infinity\", and \"-Infinity\". The same holds at any depth of a list, map, or struct. A database NULL is null."`
@@ -72,6 +90,15 @@ type CompiledQuery struct {
 	AQL     string      `json:"aql,omitempty" doc:"the final AQL (with the Query Input applied). Absent for a SQL query."`
 	Input   *QueryInput `json:"input,omitempty" doc:"the query's input as it compiled, every default filled in, its seeds included. Send it back with the same query to compile it the same way again. Absent for a SQL query."`
 	Columns []Column    `json:"columns,omitempty" doc:"what each column of an explore query's result will be, with its semantic type. Absent for other queries."`
+}
+
+// TracePayload is the answer as a trace records it, when outputs are on: its
+// SQL only when sql (docs/designs/telemetry.md).
+func (q CompiledQuery) TracePayload(sql bool) any {
+	if !sql {
+		q.SQL = ""
+	}
+	return q
 }
 
 // Column is one column of a query's answer: what it draws from the dataset, as

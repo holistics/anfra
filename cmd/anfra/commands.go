@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/holistics/anfra/shared/logkit"
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
 // appCommands builds the cobra tree from the registry: one command per
@@ -195,7 +196,7 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 				values[positional.Name] = posArgs[0]
 			}
 		}
-		if err := applyStdin(args, values); err != nil {
+		if err := applyStdin(runCmd.Context(), args, values); err != nil {
 			return err
 		}
 		if err := runCommand(runCmd.Context(), c, values, d); err != nil {
@@ -374,8 +375,10 @@ func groupFlags(args []command.Arg, group string) []string {
 }
 
 // applyStdin fills a stdin arg from piped stdin when it was left unset, so
-// e.g. `cat query.aql | anfra query -d sales` works.
-func applyStdin(args []command.Arg, values map[string]any) error {
+// e.g. `cat query.aql | anfra query -d sales` works. The command's span says
+// stdin was read, not what it held, which the op's input records as inputs
+// say.
+func applyStdin(ctx context.Context, args []command.Arg, values map[string]any) error {
 	for _, a := range args {
 		if !a.Stdin {
 			continue
@@ -391,6 +394,7 @@ func applyStdin(args []command.Arg, values map[string]any) error {
 		if err != nil {
 			return fmt.Errorf("read %s from stdin: %w", a.Name, err)
 		}
+		apptracing.SetAttributes(ctx, caller.CommandStdin.Is(true))
 		if v := strings.TrimSpace(string(data)); v != "" {
 			values[a.Name] = v
 		}
@@ -403,12 +407,9 @@ func applyStdin(args []command.Arg, values map[string]any) error {
 // is one (found through its runtime file), otherwise in this process, spawning
 // only the sidecars it needs.
 //
-// The command is the root of its trace: the op's span is under it, here or on
+// The op's span is under the command's root span (traceCommands), here or on
 // the server, which continues the trace it is sent.
 func runCommand(ctx context.Context, c command.Command, args map[string]any, d delivery) error {
-	ctx, span := tracer.Start(ctx, "anfra "+c.Name())
-	defer span.End()
-
 	body, err := invoke(ctx, c, args)
 	if err != nil {
 		return err

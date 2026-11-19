@@ -4,11 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/holistics/anfra/internal/datasource"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // The repo's data sources: the host's when it supplies them; a local repo's
@@ -55,5 +57,33 @@ func TestLoadDataSources(t *testing.T) {
 		if err != nil || len(dialects) != 1 || dialects[0].Name != tc.want {
 			t.Errorf("%s: dialects %v, %v; want %s", name, dialects, err, tc.want)
 		}
+	}
+}
+
+// status's data has one field per category of the registry, in its order, and
+// each level's enum is every level a category takes.
+func TestTelemetryDataMatchesTheRegistry(t *testing.T) {
+	typ := reflect.TypeFor[TelemetryData]()
+	if typ.NumField() != len(telemetry.Categories) {
+		t.Fatalf("TelemetryData has %d fields, the registry %d categories", typ.NumField(), len(telemetry.Categories))
+	}
+	levels := map[string]bool{}
+	for i, d := range telemetry.Categories {
+		if tag := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]; tag != string(d.Name) {
+			t.Errorf("field %d is %q, want %q", i, tag, d.Name)
+		}
+		for _, l := range d.Levels {
+			levels[string(l)] = true
+		}
+	}
+	enum, _ := reflect.TypeFor[TelemetryLevel]().FieldByName("Value")
+	for _, l := range strings.Split(enum.Tag.Get("enum"), ",") {
+		if !levels[l] {
+			t.Errorf("enum has %q, which no category takes", l)
+		}
+		delete(levels, l)
+	}
+	if len(levels) > 0 {
+		t.Errorf("enum lacks %v", levels)
 	}
 }

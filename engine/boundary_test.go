@@ -56,6 +56,10 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 		// How a server runs its background routines, anfra's and an embedding
 		// platform's alike (docs/designs/background-routines.md).
 		"shared/routine": true,
+		// The caller named on every span and log record, which a platform embedding
+		// the engine installs on its own tracer provider and logger, as anfra-cloud
+		// will in place of its own (docs/designs/telemetry.md).
+		"shared/telemetry": true,
 		// The three-way merge of a repo's files, and of one file's text.
 		"shared/textmerge": true,
 		"shared/treemerge": true,
@@ -104,7 +108,7 @@ func TestOnlyTheAPIPackagesAreExported(t *testing.T) {
 	for _, pkg := range exported {
 		if !allowed[pkg] {
 			t.Errorf("package %q is importable from outside this module; "+
-				"only engine, engine/querycache, engine/querycachetest and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoconfig,repoformat,requestid,routine,textmerge,treemerge} are meant to be. Move it under internal/, "+
+				"only engine, engine/querycache, engine/querycachetest and shared/{apperr,appstep,apptracing,apikit,httpkit,jsonkit,logkit,repoconfig,repoformat,requestid,routine,telemetry,textmerge,treemerge} are meant to be. Move it under internal/, "+
 				"or add it here deliberately and accept that it is public API forever.", pkg)
 		}
 	}
