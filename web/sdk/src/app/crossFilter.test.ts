@@ -46,6 +46,7 @@ const AQL = {
   ids: markerAql('ids', 'dimensions { id: orders.id }'),
   idStatus: markerAql('idStatus', 'dimensions { id: orders.id, status: orders.status }'),
   elsewhere: markerAql('elsewhere', 'dimensions { region: users.region }'),
+  bare: markerAql('bare', 'dimensions { users.region }\nmeasures { total: orders | sum(orders.amount) }'),
 };
 
 const FIELDS: Record<string, ColumnMeta[]> = {
@@ -60,6 +61,8 @@ const FIELDS: Record<string, ColumnMeta[]> = {
   ids: [dim('id', 'orders')],
   idStatus: [{ ...dim('id', 'orders'), ...numberTypes }, dim('status', 'orders')],
   elsewhere: [dim('region', 'users')],
+  // A field the query gives bare is keyed `model->field`, in its row as in its column.
+  bare: [{ ...dim('users->region', 'users'), fieldName: 'region' }, measureCol('total')],
 };
 
 const ROWS: Record<string, unknown[][]> = {
@@ -72,6 +75,7 @@ const ROWS: Record<string, unknown[][]> = {
   ids: [[17]],
   idStatus: [['9007199254740993', 'completed'], ['9007199254740994', 'pending']],
   elsewhere: [['APAC']],
+  bare: [['APAC', 100]],
 };
 
 function markerOf (aql: string): string {
@@ -205,6 +209,16 @@ describe('deriving conditions from selected rows', () => {
       { field: 'users.region', operator: 'is', values: ['APAC'] },
     ]);
     expect(app.selection?.lossy).toBe(false);
+  });
+
+  it('conditions on a field the query gives bare, keyed model->field', async () => {
+    const { app, source } = await selecting(AQL.bare);
+
+    source.select({ 'users->region': 'APAC', total: 100 }, { fields: ['users->region'] });
+
+    expect(app.selection?.conditions).toEqual([
+      { field: 'users.region', operator: 'is', values: ['APAC'] },
+    ]);
   });
 
   it('never conditions on a measure: its value describes the bucket, it does not identify it', async () => {
