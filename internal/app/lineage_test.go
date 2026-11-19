@@ -57,15 +57,17 @@ func lineageContext(node *anfranode.Client) command.CommandContext {
 	}
 }
 
-// Each field goes to anfra-node by its parent and child, trimmed, and comes
-// back as it was asked, in the order asked, a field that failed among them.
-func TestLineageTracesEachField(t *testing.T) {
+// Each target goes to anfra-node by its parent and child, trimmed, or by its
+// parent alone, and comes back as it was asked, in the order asked, a target
+// that failed among them.
+func TestLineageTracesEachTarget(t *testing.T) {
 	node, got := fakeLineageNode(t, `{"results":[`+
-		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","diagram":{"version":2,"query":"needed_by:(fqn:ecommerce.revenue)","total":0,"matched":[],"schema":{"edges":{},"types":{}},"layers":[],"cards":[]}},`+
-		`{"target":{"parent":"orders","child":"amount"},"query":"needed_by:(fqn:orders.amount)","error":"boom"}]}`)
+		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(id:\"aml.metric:revenue\")","diagram":{"version":2,"query":"needed_by:(id:\"aml.metric:revenue\")","total":0,"matched":[],"schema":{"edges":{},"types":{}},"layers":[],"cards":[]}},`+
+		`{"target":{"parent":"orders","child":"amount"},"query":"","error":"parent \"orders\" has no child \"amount\""},`+
+		`{"target":{"parent":"customers"},"query":"needed_by:(id:\"aml.model:customers\")","error":"boom"}]}`)
 	cc := lineageContext(node)
 
-	out, err := Invoke(context.Background(), cc, "lineage", []byte(`{"targets":[{"parent":" ecommerce ","child":"revenue "},{"parent":"orders","child":"amount"}],"limit":5,"offset":10}`))
+	out, err := Invoke(context.Background(), cc, "lineage", []byte(`{"targets":[{"parent":" ecommerce ","child":"revenue "},{"parent":"orders","child":"amount"},{"parent":"customers "}],"limit":5,"offset":10}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +75,7 @@ func TestLineageTracesEachField(t *testing.T) {
 		Context: anfranode.CatalogContext{
 			RepoRef: anfranode.RepoRef{RepoID: "repo-1", RepoPath: "/repo"}, CanalQueryBaseURL: "http://127.0.0.1:9000",
 		},
-		Targets: []anfranode.LineageTarget{{Parent: "ecommerce", Child: "revenue"}, {Parent: "orders", Child: "amount"}},
+		Targets: []anfranode.LineageTarget{{Parent: "ecommerce", Child: "revenue"}, {Parent: "orders", Child: "amount"}, {Parent: "customers"}},
 		Limit:   5, Offset: 10,
 	}
 	if !reflect.DeepEqual(*got, want) {
@@ -81,15 +83,16 @@ func TestLineageTracesEachField(t *testing.T) {
 	}
 	res := out.(catalog.LineageResult)
 	asked := anfranode.LineageTarget{Parent: " ecommerce ", Child: "revenue "}
-	if len(res.Results) != 2 || res.Results[0].Target != asked || res.Results[0].Diagram == nil ||
-		res.Results[1].Target != want.Targets[1] || res.Results[1].Error != "boom" || res.Results[1].Diagram != nil {
+	if len(res.Results) != 3 || res.Results[0].Target != asked || res.Results[0].Diagram == nil ||
+		res.Results[1].Target != want.Targets[1] || res.Results[1].Error != `parent "orders" has no child "amount"` || res.Results[1].Diagram != nil ||
+		res.Results[2].Target != (anfranode.LineageTarget{Parent: "customers "}) || res.Results[2].Error != "boom" {
 		t.Errorf("answer = %+v", res)
 	}
 }
 
-// An answer for another field than the one asked, in its place, is an error,
-// not that field's lineage.
-func TestLineageRefusesAnAnswerForAnotherField(t *testing.T) {
+// An answer for another target than the one asked, in its place, is an error,
+// not that target's lineage.
+func TestLineageRefusesAnAnswerForAnotherTarget(t *testing.T) {
 	node, _ := fakeLineageNode(t, `{"results":[`+
 		`{"target":{"parent":"orders","child":"amount"},"query":"needed_by:(fqn:orders.amount)","error":"boom"},`+
 		`{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","error":"boom"}]}`)
@@ -100,19 +103,22 @@ func TestLineageRefusesAnAnswerForAnotherField(t *testing.T) {
 	}
 }
 
-// A field without a parent or a child is refused, by the arg, before anfra-node
-// is called.
-func TestLineageRefusesWhatIsNotAField(t *testing.T) {
+// A target without a parent, or with a blank child, is refused, by the arg,
+// before anfra-node is called.
+func TestLineageRefusesWhatIsNotATarget(t *testing.T) {
 	node, got := fakeLineageNode(t, `{"results":[]}`)
 	cc := lineageContext(node)
-	for _, input := range []string{`{}`, `{"targets":[]}`, `{"targets":[{"parent":" ","child":"amount"}]}`} {
+	for _, input := range []string{
+		`{}`, `{"targets":[]}`, `{"targets":[{"parent":" ","child":"amount"}]}`, `{"targets":[{"parent":" "}]}`,
+		`{"targets":[{"parent":"orders","child":" "}]}`,
+	} {
 		_, err := Invoke(context.Background(), cc, "lineage", []byte(input))
 		if !errors.Is(err, apperr.ValidationFailed) {
 			t.Errorf("%s: got %v, want validation_failed", input, err)
 		}
 	}
-	// The schema refuses a field that is not an object of both, and a limit of
-	// no entities.
+	// The schema refuses a target that is not an object with a parent, an
+	// empty child, and a limit of no entities.
 	for _, input := range []string{
 		`{"targets":["orders.amount"]}`, `{"targets":[{"child":"amount"}]}`, `{"targets":[{"parent":"orders","child":""}]}`,
 		`{"targets":[{"parent":"orders","child":"amount"}],"limit":0}`,

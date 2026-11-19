@@ -187,6 +187,8 @@ one you expect:
 anfra lineage --targets '[{"parent":"<dataset fqn>","child":"<metric>"}]'
 ```
 
+Leave out `child` to trace a whole model or dataset: `[{"parent":"<dataset fqn>"}]`.
+
 ## 4. Write the file
 
 One self-contained `.html` file in `apps/` (subfolders group apps in the list), with a `<title>` the
@@ -320,8 +322,8 @@ rest of the log.
 The same errors are in the panel's Overview, under Problems. Read errors against
 [references/api.md](references/api.md#errors), by `code`: a `declaration_invalid` error
 (`ValidationError`) names a declaring line; `invalid_request` names a call made wrong (an
-`Anfra.lineage` call with an empty or malformed target list; an unknown field comes back as that
-target's `error` or an empty diagram); `query_invalid` carries anfra's diagnostics for the AQL, with
+`Anfra.lineage` call with an empty or malformed target list, while an unknown parent or child
+comes back as that target's `error`); `query_invalid` carries anfra's diagnostics for the AQL, with
 their lines, and `validation_failed` names the bad entry a control or cross-filter added
 (`input.filters[0].field`: a `mapControl` typo, an unsupported operator, a drill on a field no
 dimension is built on). Compare a misbehaving query's `executedAql` with what you meant, and fix the

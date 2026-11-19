@@ -858,16 +858,16 @@ components:
       properties:
         diagram:
           $ref: "#/components/schemas/Diagram"
-          description: the field's lineage. Absent when error is set.
+          description: the target's lineage. Absent when error is set.
         error:
-          description: why the field's lineage could not be traced
+          description: why the target's lineage could not be traced, such as a parent that does not exist, or a parent without that child
           type: string
         query:
-          description: the search query that finds the field's lineage, which the search command also takes. Empty when the field could not be searched for.
+          description: the search query that finds the target's lineage, which the search command also takes. Empty when the target could not be searched for.
           type: string
         target:
           $ref: "#/components/schemas/LineageTarget"
-          description: the field, as asked
+          description: the field or parent, as asked
       required:
         - target
         - query
@@ -883,7 +883,7 @@ components:
       additionalProperties: false
       properties:
         limit:
-          description: the most upstream entities to return per field, all of them by default
+          description: the most upstream entities to return per target, all of them by default
           format: int64
           minimum: 1
           type: integer
@@ -893,7 +893,7 @@ components:
           minimum: 0
           type: integer
         targets:
-          description: "the fields to trace, each by its parent and its name in it: {\"parent\": \"orders\", \"child\": \"amount\"}"
+          description: "the fields or parents to trace. Name a field by its parent and its name in it: {\"parent\": \"orders\", \"child\": \"amount\"}. Name a parent alone to trace it with every field in it: {\"parent\": \"orders\"}"
           items:
             $ref: "#/components/schemas/LineageTarget"
           type: array
@@ -912,7 +912,7 @@ components:
       additionalProperties: false
       properties:
         child:
-          description: "the field's name in its parent: a dimension, a measure or a metric"
+          description: "the field's name in its parent: a dimension, a measure or a metric. Leave it out to trace the parent and every field in it."
           minLength: 1
           type: string
         parent:
@@ -921,7 +921,6 @@ components:
           type: string
       required:
         - parent
-        - child
       type: object
     NoInput:
       additionalProperties: false
@@ -2326,7 +2325,7 @@ paths:
       x-read-only: false
   /core.lineage:
     post:
-      description: Trace each field through the local catalog to the fields, models, and sources it is built from. Return each field's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.
+      description: Trace each field through the local catalog to the fields, models, and sources it is built from. Name a field by its parent (a model or a dataset) and its name in it. Leave out the name to trace the whole model or dataset, with every field in it. Return each target's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.
       operationId: core.lineage
       requestBody:
         content:
