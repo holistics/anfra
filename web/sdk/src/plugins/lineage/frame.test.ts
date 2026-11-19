@@ -37,8 +37,16 @@ describe('Anfra.lineage', () => {
     expect(stub.calls[0].request).not.toHaveProperty('limit');
   });
 
+  it('takes a parent alone, sending no child', async () => {
+    const { stub, sdk: anfra } = sdk();
+    await anfra.lineage!([{ parent: 'orders' }, amount]);
+    // Strict, so a `child: undefined` key fails it.
+    expect(stub.calls[0].request).toStrictEqual({ targets: [{ parent: 'orders' }, amount] });
+  });
+
   it.each([
-    [[]], ['orders.amount'], [['orders.amount']], [{ parent: 'orders' }], [[amount, { parent: 'orders', child: ' ' }]],
+    [[]], ['orders.amount'], [['orders.amount']], [{ child: 'amount' }], [{ parent: ' ' }],
+    [[amount, { parent: 'orders', child: ' ' }]], [{ parent: 'orders', child: null }],
   ])('refuses %j, asking nothing', async (targets) => {
     const { stub, sdk: anfra } = sdk();
     await expect(anfra.lineage!(targets as never)).rejects.toMatchObject({ code: 'invalid_request', scope: 'client' });

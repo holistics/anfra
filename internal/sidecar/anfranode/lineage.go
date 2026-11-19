@@ -3,7 +3,8 @@ package anfranode
 import "context"
 
 // CatalogLineageRequest mirrors anfra-node's catalog.lineage params: the
-// catalog's context, the fields to trace, and the page of what each one needs.
+// catalog's context, the fields or parents to trace, and the page of what each
+// one needs.
 type CatalogLineageRequest struct {
 	Context CatalogContext  `json:"context"`
 	Targets []LineageTarget `json:"targets"`
@@ -11,10 +12,19 @@ type CatalogLineageRequest struct {
 	Offset  int             `json:"offset,omitzero"`
 }
 
-// LineageTarget is one field to trace: its parent, and its name in it.
+// LineageTarget is one thing to trace: a field, by its parent and its name in
+// it, or a whole parent, without a child.
 type LineageTarget struct {
 	Parent string `json:"parent" minLength:"1" doc:"the fqn of what holds the field: a model, or a dataset"`
-	Child  string `json:"child" minLength:"1" doc:"the field's name in its parent: a dimension, a measure or a metric"`
+	Child  string `json:"child,omitempty" minLength:"1" doc:"the field's name in its parent: a dimension, a measure or a metric. Leave it out to trace the parent and every field in it."`
+}
+
+// String is the target's fqn: <parent>.<child>, or <parent> for a whole parent.
+func (t LineageTarget) String() string {
+	if t.Child == "" {
+		return t.Parent
+	}
+	return t.Parent + "." + t.Child
 }
 
 // CatalogLineageResult is catalog.lineage's answer: one per target, in the
@@ -31,7 +41,8 @@ type TargetDiagram struct {
 	Error   string        `json:"error,omitempty"`
 }
 
-// CatalogLineage traces fields through the catalog of the request's context.
+// CatalogLineage traces fields or parents through the catalog of the request's
+// context.
 func (c *Client) CatalogLineage(ctx context.Context, req CatalogLineageRequest) (CatalogLineageResult, error) {
 	var res CatalogLineageResult
 	if err := req.Context.check(); err != nil {

@@ -983,7 +983,7 @@ export interface FieldSuggestionsRequest {
   q: string;
 }
 
-/** What `Anfra.lineage()` takes besides its fields. Every field is optional. */
+/** What `Anfra.lineage()` takes besides its targets. Every option is optional. */
 export interface LineageOptions {
   /** At most this many upstream entities per field. All of them unless given. */
   limit?: number;
@@ -993,16 +993,16 @@ export interface LineageOptions {
   signal?: AbortSignal;
 }
 
-/** A field to trace: its parent, and its name in it. */
+/** What to trace: a field, by its parent and its name in it, or a whole parent, without a child. */
 export type LineageTarget = Schemas['LineageTarget'];
 
-/** A lineage call: the fields to trace, and the page of what each is built from. */
+/** A lineage call: the fields or parents to trace, and the page of what each is built from. */
 export type BackendLineageRequest = Omit<Schemas['LineageInput'], 'targets'> & { targets: LineageTarget[] };
 
-/** Each field's lineage, in the order asked. */
+/** Each target's lineage, in the order asked. */
 export type LineageResult = Schemas['LineageResult'];
 
-/** One field's lineage, or why it could not be traced: exactly one of `diagram` and `error`. */
+/** One target's lineage, or why it could not be traced: exactly one of `diagram` and `error`. */
 export type FieldLineage = Schemas['FieldLineage'];
 
 /**
