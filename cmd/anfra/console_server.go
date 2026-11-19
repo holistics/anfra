@@ -11,6 +11,7 @@ import (
 
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/repoenv"
 )
 
 // A console's server is the repo's warm anfra serve
@@ -95,6 +96,7 @@ func (cs *consoleServer) ensure(ctx context.Context) {
 	}
 	cmd := exec.Command(exe, "serve", "--idle-timeout", consoleServerIdle.String()) //nolint:gosec // our own binary, fixed args
 	cmd.Dir = cs.repoDir
+	cmd.Env = repoenv.Environ()                       // it reads the repo's .env itself, so its status says what came from there
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil // it logs to the repo's log
 	detachProcess(cmd)
 	if err := cmd.Start(); err != nil {

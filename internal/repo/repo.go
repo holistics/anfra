@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 
@@ -38,6 +39,13 @@ type Local struct {
 	ID        string // stable: <basename>-<sha8(realpath(dir))>
 	DataDir   string // its state on this machine: <anfra home>/repos/<id> (internal/home)
 	ConfigDir string // its config (data_sources.yml, ...): <repo>/.anfra
+}
+
+// IsRepo reports whether the directory is an anfra repo: it has its config
+// folder. anfra init makes one.
+func (p Local) IsRepo() bool {
+	info, err := os.Stat(p.ConfigDir)
+	return err == nil && info.IsDir()
 }
 
 func (p Local) LogsDir() string    { return filepath.Join(p.DataDir, "logs") }

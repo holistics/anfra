@@ -48,3 +48,15 @@ func TestChildEnv(t *testing.T) {
 		t.Errorf("childEnv without a prefix:\n got %q\nwant %q", got, want)
 	}
 }
+
+// The data setting anfra sets in its environment reaches each sidecar, and a
+// sidecar's prefix changes it for that sidecar alone.
+func TestTheDataSettingReachesTheSidecar(t *testing.T) {
+	environ := []string{"H_OTEL_DATA=0", "ANFRA_NODE_ENV_H_OTEL_DATA=1"}
+	if got, want := childEnv(environ, "ANFRA_NODE_ENV_", nil, nil), []string{"H_OTEL_DATA=1"}; !slices.Equal(got, want) {
+		t.Errorf("anfra-node:\n got %q\nwant %q", got, want)
+	}
+	if got, want := childEnv(environ, "ANFRA_CANAL_QUERY_ENV_", nil, nil), []string{"H_OTEL_DATA=0"}; !slices.Equal(got, want) {
+		t.Errorf("canal-query:\n got %q\nwant %q", got, want)
+	}
+}

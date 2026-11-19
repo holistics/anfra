@@ -11,6 +11,8 @@ package envflag
 import (
 	"fmt"
 	"os"
+
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // The switches. Each is off by default, but LogStderr, which is on for
@@ -31,14 +33,16 @@ const (
 var all = []string{LogStderr, SidecarStdout, NoUpdateNotifier, AutoUpdate, HideErrorCauses, NoAppLogs, QueryCacheEnabled}
 
 // Validate refuses a switch set to anything but 1 or 0, naming it and the value
-// it has. Call it once, before anything reads a switch.
+// it has, and a telemetry setting set to a value it doesn't take
+// (telemetry.InvalidSettingError). Call it once, before anything reads one.
 func Validate() error {
 	for _, name := range all {
 		if _, err := parse(name); err != nil {
 			return err
 		}
 	}
-	return nil
+	_, err := telemetry.Resolve(os.Getenv)
+	return err
 }
 
 // On reports whether the switch is on: 1. Unset, empty, 0, or (after Validate

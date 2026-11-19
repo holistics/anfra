@@ -7,8 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
 	"slices"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/shared/apperr"
@@ -68,6 +72,16 @@ func NewClient(org Org, opts ClientOptions) *Client {
 	// jar could otherwise combine browser sessions with the selected bearer.
 	client.Jar = nil
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	// Each call is a span in the command's trace, named for its op, not its URL,
+	// which has the org in it. The trace stays the user's: none of it is sent to
+	// the org's server.
+	rt := client.Transport
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	client.Transport = otelhttp.NewTransport(rt,
+		otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator()),
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string { return "org " + path.Base(r.URL.Path) }))
 	opts.HTTP = &client
 	return &Client{org: org, opts: opts}
 }

@@ -55,7 +55,10 @@ type QueryID string
 type CompiledQuery struct {
 	ID         QueryID
 	DataSource string // its name
-	Dataset    string // the AQL dataset it was compiled from; "" for SQL against a data source
+	// DataSourceType is the data source's type, as data_sources.yml names it:
+	// postgresql, bigquery, duckdb.
+	DataSourceType string
+	Dataset        string // the AQL dataset it was compiled from; "" for SQL against a data source
 	// AQL is the AQL that runs: the query with its Query Input applied, as the
 	// compiled event carries it; "" for SQL.
 	AQL string

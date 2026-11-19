@@ -14,6 +14,7 @@ import (
 
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/shared/logkit"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // Logging is the host's logging setup:
@@ -97,7 +98,7 @@ func Setup(logsDir, repo string, toStderr bool) (*Logging, error) {
 		},
 	})
 	service := func(name string) *slog.Logger {
-		return slog.New(logkit.TraceHandler(handler)).With(
+		return slog.New(telemetry.LogHandler(logkit.TraceHandler(handler))).With(
 			"service", name,
 			"repo", repo,
 			"pid", os.Getpid(),

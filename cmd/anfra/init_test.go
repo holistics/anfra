@@ -68,8 +68,9 @@ func TestInitSetsUpARepo(t *testing.T) {
 	if info, _ := os.Stat(filepath.Join(dir, ".anfra/data_sources.yml")); info.Mode().Perm() != 0o600 {
 		t.Errorf("data_sources.yml is %v, want 0600", info.Mode().Perm())
 	}
+	// So does each person's .env, which anfra reads.
 	ignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
-	if !strings.Contains(string(ignore), "\n.anfra/data_sources.yml\n") {
+	if !strings.Contains(string(ignore), "\n.anfra/data_sources.yml\n") || !strings.Contains(string(ignore), "\n.env\n") {
 		t.Errorf(".gitignore: %q", ignore)
 	}
 }

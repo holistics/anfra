@@ -18,6 +18,7 @@ package apptracing
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // tracer follows the global provider, including one installed after this
@@ -34,9 +36,10 @@ var tracer = otel.Tracer("github.com/holistics/anfra/shared/apptracing")
 
 // Span is one running step.
 type Span struct {
-	step  appstep.Step
-	span  trace.Span
-	ended bool
+	step     appstep.Step
+	span     trace.Span
+	settings telemetry.Settings // the data settings of the context it started in
+	ended    bool
 }
 
 // Start starts a step of def. Its End must be deferred with a pointer to the
@@ -58,7 +61,7 @@ func Start(ctx context.Context, def appstep.Def, kv ...any) (context.Context, *S
 	// Ended by the caller, through Span.End: spancheck checks each caller instead
 	// (extra-start-span-signatures in .golangci.yml).
 	ctx, span := tracer.Start(ctx, step.Name(), trace.WithAttributes(attrs...)) //nolint:spancheck // see above
-	return ctx, &Span{step: step, span: span}
+	return ctx, &Span{step: step, span: span, settings: telemetry.SettingsOf(ctx)}
 }
 
 // End ends the step. If the function is failing, the step is added to its
@@ -74,8 +77,8 @@ func (s *Span) End(errp *error) {
 	// recover works only when called directly by the deferred function, which
 	// End is in the supported form; keep it here, not in a helper.
 	if p := recover(); p != nil {
-		s.span.RecordError(fmt.Errorf("panic: %v", p), trace.WithStackTrace(true))
-		s.span.SetStatus(codes.Error, "panic")
+		telemetry.RecordError(s.span, s.settings, fmt.Errorf("panic: %v", p), true)
+		s.span.SetStatus(codes.Error, telemetry.PanicStatus)
 		s.span.End()
 		panic(p)
 	}
@@ -84,14 +87,27 @@ func (s *Span) End(errp *error) {
 		return
 	}
 	*errp = apperr.WithStep(*errp, s.step)
+	// err.Error() is the log form: sensitive parameters already redacted.
+	MarkFailed(s.span, s.settings, *errp)
+}
 
-	code := apperr.From(*errp).Code
-	s.span.SetAttributes(attribute.String("error.type", code.String()))
+// MarkFailed marks span as failing with err: error.type, its code, always; and
+// an error status and the error, its message recorded as settings' errors say
+// (docs/designs/telemetry.md), only when the failure is anfra's, not the
+// caller's.
+func MarkFailed(span trace.Span, settings telemetry.Settings, err error) {
+	code := apperr.From(err).Code
+	span.SetAttributes(attribute.String(telemetry.ErrorType.String(), code.String()))
 	if code.Public().Scope() == apperr.Server {
-		// err.Error() is the log form: sensitive parameters already redacted.
-		s.span.RecordError(*errp)
-		s.span.SetStatus(codes.Error, code.Public().String())
+		telemetry.RecordError(span, settings, err, false)
+		span.SetStatus(codes.Error, code.Public().String())
 	}
+}
+
+// AddEvent adds the event name, at, to the span current in ctx: a step of
+// what it did, such as a query's, which holds no data.
+func AddEvent(ctx context.Context, name string, at time.Time) {
+	trace.SpanFromContext(ctx).AddEvent(name, trace.WithTimestamp(at))
 }
 
 // attr is v as an attribute, keeping the types OpenTelemetry has and rendering
@@ -111,4 +127,35 @@ func attr(k string, v any) attribute.KeyValue {
 	default:
 		return attribute.String(k, fmt.Sprint(v))
 	}
+}
+
+// SetAttributes adds kv to the span current in ctx: what an op knows only as
+// it runs, such as the rows a query read. Each key is declared in
+// shared/telemetry, as data or metadata, and data is set only when data is
+// recorded (docs/designs/telemetry.md). A pair whose value is nil, or a nil
+// *int64, is left out, so an optional value needs no check.
+func SetAttributes(ctx context.Context, kv ...telemetry.KeyValue) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+	settings := telemetry.SettingsOf(ctx)
+	var attrs []attribute.KeyValue
+	for _, p := range kv {
+		v := p.Value
+		if ptr, isPtr := v.(*int64); isPtr {
+			if ptr == nil {
+				continue
+			}
+			v = *ptr
+		}
+		if v == nil {
+			continue
+		}
+		if p.Key.IsData() && !settings.RecordsData() {
+			continue
+		}
+		attrs = append(attrs, attr(p.Key.String(), v))
+	}
+	span.SetAttributes(attrs...)
 }

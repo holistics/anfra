@@ -1292,6 +1292,7 @@ export interface components {
             hints?: string[];
             repo: components["schemas"]["RepoStatus"];
             server: components["schemas"]["ServerStatus"];
+            telemetry?: components["schemas"]["TelemetryInfo"];
         };
         StreamEnd: {
             error?: components["schemas"]["Response"];
@@ -1344,6 +1345,37 @@ export interface components {
             state: "ready" | "incompatible" | "unavailable" | "disabled";
             /** @description the query cache's store, a file. Absent when the cache is disabled, or the server keeps its store elsewhere. */
             store?: string;
+        };
+        TelemetryData: {
+            /** @description whether a span records your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack. */
+            on: boolean;
+            /** @description what set it: ANFRA_EXPERIMENTAL_TRACE_DATA (followed by "in .env" when the repo's .env set it), or "default". */
+            set_by: string;
+        };
+        /** @description Where anfra records each command's trace: the user's own telemetry, to their own endpoint, never data sent to Holistics. Under anfra serve, the server's settings, since its commands run there. Absent when the host doesn't say. Experimental: its fields may change in a minor release. */
+        TelemetryInfo: {
+            /** @description whether your data reaches a span, and what set it. */
+            data?: components["schemas"]["TelemetryData"];
+            /** @description the OpenTelemetry endpoint traces are sent to. Absent when off. */
+            endpoint?: string;
+            /** @description how many bytes of each input, result and query a span records, at most. A longer one is cut, and marked as cut. */
+            payload_limit?: components["schemas"]["TelemetryLimit"];
+            /** @description what set the endpoint: an OTEL_* variable, followed by 'in .env' when the repo's .env set it. When off, OTEL_SDK_DISABLED if that turned telemetry off, otherwise absent. */
+            set_by?: string;
+            /**
+             * @description "off": no endpoint is set, so nothing is sent. "on": traces are sent to the endpoint, which accepts connections. That doesn't prove it stores them. "failing": an endpoint is set but doesn't accept connections, so traces are lost.
+             * @enum {string}
+             */
+            state: "off" | "on" | "failing";
+        };
+        TelemetryLimit: {
+            /** @description what set it: ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT (followed by "in .env" when the repo's .env set it), or "default". */
+            set_by: string;
+            /**
+             * Format: int64
+             * @description the limit, in bytes.
+             */
+            value: number;
         };
         TimedStep: {
             /**

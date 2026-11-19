@@ -1,0 +1,89 @@
+# The telemetry stack's pipeline: what its OpenTelemetry collector receives,
+# and how it handles it before exporting (docs/designs/telemetry.md). Ported
+# from anfra-cloud's otel-collector/, so both products' collectors read the same
+# files and write the same tables.
+#
+# Where it goes is not here: an exporter file laid over this one names the
+# exporters and puts them in each pipeline. The collector merges the files in the
+# order given, maps key by key, lists replaced whole:
+#
+#   otelcol-contrib --config=config.yaml --config=debug.yaml
+#
+# This file alone does not start: a pipeline needs an exporter.
+#
+# Plain collector configuration, so compose, the upstream chart and anything a
+# customer runs read the same file. Settings that vary by installation are
+# ${env:...}, with the default development wants.
+
+extensions:
+  # GET :13133/ answers 200 once the pipelines run: the probe for compose and the
+  # chart.
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  # OTLP over HTTP, which anfra and anfra-node export, and gRPC, which
+  # canal-query and anfra-cloud's services export.
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # First in every pipeline: past its limit, the collector refuses data, and the
+  # services' exporters retry, rather than it running out of memory. A share of
+  # the memory it is given (the container's limit), so it needs no number per
+  # installation.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  batch: {}
+
+  # Finer rules than anfra's data switch (docs/usage/telemetry.md): uncomment
+  # it, and add redaction to the traces pipeline below, after memory_limiter.
+  # It keeps only the attributes allowed_keys names, so a key a new release
+  # adds is dropped, not leaked, and masks each value that matches
+  # blocked_values. allowed_keys holds what anfra records with data off, then
+  # the data it records with ANFRA_EXPERIMENTAL_TRACE_DATA=1 that you keep.
+  #
+  # redaction:
+  #   allow_all_keys: false
+  #   allowed_keys:
+  #     - anfra.op
+  #     - anfra.repo.id
+  #     - anfra.query.id
+  #     - anfra.query.kind
+  #     - anfra.warehouse.query_id
+  #     - anfra.query.bytes_scanned
+  #     - anfra.problem_count
+  #     - db.system.name
+  #     - db.response.returned_rows
+  #     - error.type
+  #     - exception.type
+  #     # With data on:
+  #     - anfra.dataset
+  #     - anfra.data_source
+  #     - db.query.text
+  #     - exception.message
+  #   blocked_values:
+  #     - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}" # an email
+  #   summary: info
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch] # [memory_limiter, redaction, batch]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+    # Nothing sends logs over OTLP today: anfra logs to anfra.log. Here for a
+    # process that does.
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]

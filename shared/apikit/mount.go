@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // OpRef names an op with its input type: what a host mounts an op by, so that
@@ -103,7 +104,7 @@ func Mount[Call, Caller, BoundCall, In any](into *Registry[Call, Caller], from O
 		// describes it itself.
 		into.groups[group] = from.GroupSummary(group)
 	}
-	into.add(&mounted[Call, Caller, BoundCall, In]{inner: inner, m: m, meta: meta, step: stepFor(into.ns, ref.Name), params: into.params, executor: into.executor})
+	into.add(&mounted[Call, Caller, BoundCall, In]{inner: inner, m: m, meta: meta, step: stepFor(into.ns, ref.Name), params: into.params, callCtx: into.callCtx, executor: into.executor})
 }
 
 // preparable is an op whose input can be prepared apart from running it, which
@@ -138,6 +139,7 @@ type mounted[Call, Caller, BoundCall, In any] struct {
 	meta     Meta
 	step     appstep.Def
 	params   func(Call) []any
+	callCtx  func(context.Context, Call) context.Context
 	executor Executor[Caller]
 }
 
@@ -164,12 +166,15 @@ func (o *mounted[Call, Caller, BoundCall, In]) InvokeStream(ctx context.Context,
 }
 
 func (o *mounted[Call, Caller, BoundCall, In]) invoke(ctx context.Context, rt *Runtime, call Call, raw []byte, emit func(any) error) (_ any, err error) {
+	ctx = callContext(ctx, o.callCtx, call)
 	var params []any
 	if o.params != nil {
 		params = o.params(call)
 	}
 	ctx, span := apptracing.Start(ctx, o.step, params...)
 	defer span.End(&err)
+	apptracing.SetAttributes(ctx, telemetry.Op.Is(o.meta.Name))
+	apptracing.RecordPayload(ctx, telemetry.OpInput, raw)
 
 	caller, err := o.m.Admit(ctx, call)
 	if err != nil {
@@ -195,7 +200,7 @@ func (o *mounted[Call, Caller, BoundCall, In]) invoke(ctx context.Context, rt *R
 	if o.meta.Timeout != 0 {
 		ctx = withHostTimeout(ctx, o.meta.Timeout)
 	}
-	return o.inner.invokePrepared(ctx, rt, bound, in, emit)
+	return recordOutput(ctx, emit)(o.inner.invokePrepared(ctx, rt, bound, in, emit))
 }
 
 type hostTimeoutKey struct{}

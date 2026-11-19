@@ -61,6 +61,21 @@ type CacheWarning struct {
 	Message string `json:"message"`
 }
 
+// TracePayload is the answer as a trace records it, when data is on: all but
+// its rows, which are never recorded, with their count in their place
+// (docs/designs/telemetry.md).
+func (r QueryResult) TracePayload() any {
+	type rows struct {
+		Fields []string `json:"fields"`
+		Count  int      `json:"count"`
+	}
+	type traced struct {
+		QueryResult
+		Result rows `json:"result"`
+	}
+	return traced{QueryResult: r, Result: rows{Fields: r.Result.Fields, Count: len(r.Result.Records)}}
+}
+
 type QueryRows struct {
 	Fields  []string         `json:"fields" pretty:"-"`
 	Records []canalquery.Row `json:"records" pretty:"Result,rowlabels=columns.label" doc:"one array per row, its values in fields' order. Read each value by its column's types. Every number is a string with all its digits, because a JSON number loses some in JavaScript. A float's NaN and infinities are \"NaN\", \"Infinity\", and \"-Infinity\". The same holds at any depth of a list, map, or struct. A database NULL is null."`

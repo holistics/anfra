@@ -182,17 +182,18 @@ func Register[Call, Caller, In, Out any](reg *Registry[Call, Caller], adm Admiss
 	frozen := *d
 	frozen.Errors = slices.Clone(d.Errors)
 	frozen.Events = slices.Clone(d.Events)
-	reg.add(&registered[Call, Caller, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params, events: events, executor: reg.executor})
+	reg.add(&registered[Call, Caller, In, Out]{decl: &frozen, adm: adm, step: stepFor(reg.ns, d.Name), params: reg.params, callCtx: reg.callCtx, events: events, executor: reg.executor})
 }
 
 // registered is a registered op: the frozen copy of its declaration, its
 // admission, and its private step.
 type registered[Call, Caller, In, Out any] struct {
-	decl   *Def[Caller, In, Out]
-	adm    Admission[Call, Caller]
-	step   appstep.Def
-	params func(Call) []any
-	events []reflect.Type
+	decl    *Def[Caller, In, Out]
+	adm     Admission[Call, Caller]
+	step    appstep.Def
+	params  func(Call) []any
+	callCtx func(context.Context, Call) context.Context
+	events  []reflect.Type
 	// executor is the registry's, for the op's runs (nil: each run now).
 	executor Executor[Caller]
 }

@@ -151,6 +151,7 @@ Develop analytics with Anfra.
 | `anfra-build-data-app` | Build a Data App (one HTML file in `apps/`) on the repo's datasets, and check it in `anfra serve`. |
 | `anfra-publish` | Publish the repo to its org, and pull what others published to it, resolving conflicts. |
 | `anfra-read-logs` | Read anfra's log to find out why something went wrong: the query cache, a sidecar, a Data App's errors. |
+| `anfra-telemetry` | Set up the repo's local telemetry stack, so each anfra command it runs is recorded. |
 | `anfra-docs` | Look up the anfra and AMQL docs, for what the other skills don't cover. |
 
 | Agent | What it does |

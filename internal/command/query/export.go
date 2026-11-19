@@ -144,7 +144,7 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 			return QueryExportResult{}, err
 		}
 		name = in.DataSource
-		o.compiled(ctx, in.DataSource, "", "", in.Query)
+		o.compiled(ctx, command.CompiledQuery{DataSource: in.DataSource, DataSourceType: sql.DBType(), SQL: in.Query})
 		st = statement{query: sql.DataSourceQuery}
 	} else {
 		aql, limit, err := in.aql()
@@ -168,7 +168,8 @@ func runExport(ctx context.Context, cc command.CommandContext, in QueryExportReq
 		}
 		name, described = in.Dataset, compiled.Columns
 		p = newPageReading(in.Input.Pagination, &compiled)
-		o.compiled(ctx, compiled.DataSource.Name, in.Dataset, compiled.AQL, compiled.SQL)
+		o.compiled(ctx, command.CompiledQuery{DataSource: compiled.DataSource.Name, DataSourceType: compiled.DataSource.DBType,
+			Dataset: in.Dataset, AQL: compiled.AQL, SQL: compiled.SQL})
 		dq, err := query.InDataSource(ctx, src.DataSources, compiled)
 		if err != nil {
 			return QueryExportResult{}, asQueryFailed(err)

@@ -8,8 +8,8 @@ var (
 		"A command run here failed: its code, its scope and its whole chain, at its scope's level.",
 		"command", "code", "scope", "internal_code", "error")
 	eventTelemetryFailed = logkit.DefineEvent("telemetry.failed",
-		"OpenTelemetry failed, such as an export to a collector that is down.",
-		"error")
+		"OpenTelemetry failed, such as an export to a collector that is down. Logged once in a while, not on every failure.",
+		"error", "endpoint", "hint")
 
 	eventServeListening = logkit.DefineEvent("serve.listening",
 		"anfra serve is listening.",

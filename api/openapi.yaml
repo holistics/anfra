@@ -1916,6 +1916,8 @@ components:
           $ref: "#/components/schemas/RepoStatus"
         server:
           $ref: "#/components/schemas/ServerStatus"
+        telemetry:
+          $ref: "#/components/schemas/TelemetryInfo"
       required:
         - repo
         - server
@@ -2000,6 +2002,59 @@ components:
           type: string
       required:
         - state
+      type: object
+    TelemetryData:
+      additionalProperties: false
+      properties:
+        "on":
+          description: "whether a span records your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack."
+          type: boolean
+        set_by:
+          description: "what set it: ANFRA_EXPERIMENTAL_TRACE_DATA (followed by \"in .env\" when the repo's .env set it), or \"default\"."
+          type: string
+      required:
+        - "on"
+        - set_by
+      type: object
+    TelemetryInfo:
+      additionalProperties: false
+      description: "Where anfra records each command's trace: the user's own telemetry, to their own endpoint, never data sent to Holistics. Under anfra serve, the server's settings, since its commands run there. Absent when the host doesn't say. Experimental: its fields may change in a minor release."
+      properties:
+        data:
+          $ref: "#/components/schemas/TelemetryData"
+          description: whether your data reaches a span, and what set it.
+        endpoint:
+          description: the OpenTelemetry endpoint traces are sent to. Absent when off.
+          type: string
+        payload_limit:
+          $ref: "#/components/schemas/TelemetryLimit"
+          description: how many bytes of each input, result and query a span records, at most. A longer one is cut, and marked as cut.
+        set_by:
+          description: "what set the endpoint: an OTEL_* variable, followed by 'in .env' when the repo's .env set it. When off, OTEL_SDK_DISABLED if that turned telemetry off, otherwise absent."
+          type: string
+        state:
+          description: "\"off\": no endpoint is set, so nothing is sent. \"on\": traces are sent to the endpoint, which accepts connections. That doesn't prove it stores them. \"failing\": an endpoint is set but doesn't accept connections, so traces are lost."
+          enum:
+            - "off"
+            - "on"
+            - failing
+          type: string
+      required:
+        - state
+      type: object
+    TelemetryLimit:
+      additionalProperties: false
+      properties:
+        set_by:
+          description: "what set it: ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT (followed by \"in .env\" when the repo's .env set it), or \"default\"."
+          type: string
+        value:
+          description: the limit, in bytes.
+          format: int64
+          type: integer
+      required:
+        - value
+        - set_by
       type: object
     TimedStep:
       additionalProperties: false

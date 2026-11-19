@@ -7,25 +7,35 @@ import (
 
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
+
+const canalQueryEnv = "ANFRA_CANAL_QUERY_ENV_"
 
 // clearEnv unsets every variable Setup reads, restoring them after the test.
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
-		"OTEL_SDK_DISABLED", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_SDK_DISABLED", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
 		"H_OTEL_ENABLED", "H_OTEL_INTERNAL_EXPORTER_URL", "H_OTEL_TRACES_EXPORTER",
+		"OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_TIMEOUT", "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT", "OTEL_BSP_EXPORT_TIMEOUT",
+		canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT", canalQueryEnv + "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		canalQueryEnv + "OTEL_EXPORTER_OTLP_PROTOCOL", canalQueryEnv + "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+		canalQueryEnv + "OTEL_EXPORTER_OTLP_TIMEOUT", canalQueryEnv + "OTEL_METRICS_EXPORTER", canalQueryEnv + "OTEL_LOGS_EXPORTER",
 	} {
 		t.Setenv(k, "")
 		_ = os.Unsetenv(k)
 	}
+	t.Setenv("ANFRA_HOME", t.TempDir()) // no machine settings file
 	before := otel.GetTracerProvider()
 	t.Cleanup(func() { otel.SetTracerProvider(before) })
 }
 
 func setup(t *testing.T) bool {
 	t.Helper()
-	shutdown, err := Setup(context.Background(), "anfra", "test")
+	shutdown, err := Setup(context.Background(), "anfra", "test", caller.Defaults())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +63,9 @@ func TestIdsWithoutAnEndpoint(t *testing.T) {
 	}
 	if os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL") != "" {
 		t.Error("anfra-node was given an exporter URL with no endpoint set")
+	}
+	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT"); got != "" {
+		t.Errorf("canal-query was given endpoint %q with no endpoint set", got)
 	}
 }
 
@@ -86,6 +99,18 @@ func TestExportsToTheEndpoint(t *testing.T) {
 			if got := os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL"); got != c.node {
 				t.Errorf("H_OTEL_INTERNAL_EXPORTER_URL = %q, want %q", got, c.node)
 			}
+			// canal-query: the same collector, over HTTP, traces only.
+			for name, want := range map[string]string{
+				"OTEL_EXPORTER_OTLP_ENDPOINT": c.node,
+				"OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+				"OTEL_METRICS_EXPORTER":       "none",
+				"OTEL_LOGS_EXPORTER":          "none",
+				"OTEL_EXPORTER_OTLP_TIMEOUT":  "1500",
+			} {
+				if got := os.Getenv(canalQueryEnv + name); got != want {
+					t.Errorf("canal-query's %s = %q, want %q", name, got, want)
+				}
+			}
 		})
 	}
 }
@@ -100,5 +125,38 @@ func TestKeepsAnfraNodesOwnSettings(t *testing.T) {
 	}
 	if got := os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL"); got != "" {
 		t.Errorf("H_OTEL_INTERNAL_EXPORTER_URL = %q, want it left unset", got)
+	}
+}
+
+// canal-query exporting over gRPC, set with its prefix, is left as it is.
+func TestKeepsCanalQuerysOwnSettings(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+	t.Setenv(canalQueryEnv+"OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+	setup(t)
+	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT"); got != "http://localhost:4317" {
+		t.Errorf("canal-query's endpoint = %q, want its own kept", got)
+	}
+	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_PROTOCOL"); got != "" {
+		t.Errorf("canal-query's protocol = %q, want it left unset, for its gRPC default", got)
+	}
+}
+
+// Every sidecar this process spawns is told the data setting, even at its
+// default, since one without it records everything as it is.
+func TestTheSidecarsAreToldTheDataSetting(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("H_OTEL_DATA", "")
+	setup(t)
+	if got := os.Getenv("H_OTEL_DATA"); got != "0" {
+		t.Errorf("by default, H_OTEL_DATA = %q, want 0", got)
+	}
+	shutdown, err := Setup(context.Background(), "anfra", "test", caller.NewSettings(true, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+	if got := os.Getenv("H_OTEL_DATA"); got != "1" {
+		t.Errorf("with data on, H_OTEL_DATA = %q, want 1", got)
 	}
 }

@@ -1,6 +1,11 @@
 package envflag
 
-import "testing"
+import (
+	"errors"
+	"testing"
+
+	"github.com/holistics/anfra/shared/telemetry"
+)
 
 func TestOn(t *testing.T) {
 	for v, want := range map[string]bool{"": false, "0": false, "1": true, "true": false} {
@@ -44,5 +49,20 @@ func TestValidate(t *testing.T) {
 		if want := HideErrorCauses + ` must be 1 or 0, not "` + bad + `"`; err == nil || err.Error() != want {
 			t.Errorf("%s=%q: %v, want %q", HideErrorCauses, bad, err, want)
 		}
+	}
+}
+
+// The telemetry data settings are checked too.
+func TestValidateChecksTheTelemetrySettings(t *testing.T) {
+	for _, name := range all {
+		t.Setenv(name, "")
+	}
+	t.Setenv("ANFRA_EXPERIMENTAL_TRACE_DATA", "1")
+	if err := Validate(); err != nil {
+		t.Fatalf("ANFRA_EXPERIMENTAL_TRACE_DATA=1: %v", err)
+	}
+	t.Setenv("ANFRA_EXPERIMENTAL_TRACE_DATA", "raw")
+	if _, ok := errors.AsType[*telemetry.InvalidSettingError](Validate()); !ok {
+		t.Errorf("ANFRA_EXPERIMENTAL_TRACE_DATA=raw: %v, want it refused", Validate())
 	}
 }

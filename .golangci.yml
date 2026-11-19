@@ -8,6 +8,7 @@ linters:
     - contextcheck
     - depguard
     - dupl
+    - forbidigo
     - gocritic
     - gosec
     - importas
@@ -67,6 +68,19 @@ linters:
               desc: read and write JSON with shared/jsonkit (docs/designs/json.md)
             - pkg: encoding/json/v2$
               desc: read and write JSON with shared/jsonkit (docs/designs/json.md)
+    forbidigo:
+      # Every attribute and event a span records is declared in shared/telemetry,
+      # with its category, and set through shared/apptracing, which applies the
+      # data settings (docs/designs/telemetry.md, data in spans). Setting one on
+      # a span directly would skip both.
+      analyze-types: true
+      forbid:
+        - pattern: ^trace\.Span\.(SetAttributes|AddEvent|RecordError)$
+          pkg: ^go\.opentelemetry\.io/otel/trace$
+          msg: set it with shared/apptracing, its key declared in shared/telemetry (docs/designs/telemetry.md)
+        - pattern: ^attribute\.(String|Int|Int64|Bool|Float64|StringSlice|IntSlice|Int64Slice|BoolSlice|Float64Slice|Stringer)$
+          pkg: ^go\.opentelemetry\.io/otel/attribute$
+          msg: set it with shared/apptracing, its key declared in shared/telemetry (docs/designs/telemetry.md)
     revive:
       rules:
         # A long positional parameter list invites passing arguments in the wrong
@@ -107,6 +121,17 @@ linters:
       - path: '(.+)_test\.go'
         linters:
           - dupl
+          - forbidigo
+      # Where spans are written: the registry, and the package that sets keys
+      # through it.
+      - path: shared/(telemetry|apptracing)/
+        linters:
+          - forbidigo
+      # A metric's labels, not a span's.
+      - path: shared/routine/
+        linters:
+          - forbidigo
+        text: attribute\.
     paths:
       - third_party$
       - builtin$

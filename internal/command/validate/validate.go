@@ -21,7 +21,9 @@ import (
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/holistics/anfra/shared/repoformat"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // Validate checks the AML repo, optionally scoped to file globs.
@@ -56,6 +58,11 @@ var Validate = command.Define(command.Def[ValidateInput, aml.RepoValidation]{
 		if err := unmatched(in.Globs, res.Unmatched, apps, isLocal); err != nil {
 			return aml.RepoValidation{}, err
 		}
+		var target any
+		if len(in.Globs) > 0 {
+			target = strings.Join(in.Globs, ",")
+		}
+		apptracing.SetAttributes(ctx, telemetry.Target.Is(target), telemetry.ProblemCount.Is(len(res.Diagnostics)+len(res.Reports)))
 		return res, nil
 	},
 	Valid: func(r aml.RepoValidation) bool { return r.Valid },

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/holistics/anfra/internal/clierr"
+	"github.com/holistics/anfra/internal/telemetry/stack"
 )
 
 // localSources is a data_sources.yml with warehouse and dev, which the org lacks,
@@ -97,6 +98,25 @@ func TestPublishWarnsAboutDuckDB(t *testing.T) {
 		if !strings.Contains(errOut, "data_source_local_file: Data source local (duckdb) uses a local file") ||
 			!strings.Contains(errOut, "Queries on the models using local fail until the org has them") {
 			t.Errorf("create=%v: said %q", create, errOut)
+		}
+	}
+}
+
+// The local trace store's data source is never offered, nor sent with
+// --create-data-sources, nor said: it is this machine's own, and the org has no
+// use for it.
+func TestPublishSkipsTheTraceStore(t *testing.T) {
+	for _, create := range []bool{false, true} {
+		s, url := newServer(t)
+		dir := t.TempDir()
+		write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": "data_sources:\n" + stack.DataSourceYAML(stack.DefaultPorts)})
+		ask := &script{t: t} // asks nothing
+		_, errOut, err := run(t, dir, Options{SetOrg: url, CreateDataSources: create}, ask.ask)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ask.asked) != 0 || s.tested != 0 || len(s.created) != 0 || strings.Contains(errOut, stack.DataSource) {
+			t.Errorf("create=%v: asked %q, tested %d, created %v, said %q; want none of it", create, ask.asked, s.tested, s.created, errOut)
 		}
 	}
 }

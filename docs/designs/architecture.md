@@ -83,6 +83,7 @@ Two places, with different owners.
 ├── .anfra/                    the repo's config: always this name (internal/repo/repo.go)
 │   ├── data_sources.yml       warehouse connections, with credentials: git-ignored
 │   └── context_sources.yml    what `anfra ingest` indexes for `anfra search`
+├── .env                       each person's settings, read as environment variables: git-ignored (internal/repoenv)
 ├── models/, datasets/         the semantic layer (AML by default)
 └── apps/                      Data App definitions
 ```
@@ -100,7 +101,8 @@ Two places, with different owners.
     │   ├── compile-cache/     anfra-node's compile cache
     │   └── query/             the query cache: its store (store.sqlite) and canal-lake's files (lake/)
     ├── runtime/serve.json     the running server, while there is one
-    └── catalog/               the local search catalog
+    ├── catalog/               the local search catalog
+    └── telemetry/compose.yaml its telemetry stack: an OpenTelemetry collector and ClickHouse; written by `anfra experimental telemetry init` (internal/telemetry/stack)
 ```
 
 Keeping state out of the repo means a repo never fills with generated files, and the same repo checked out twice gets separate state. A unix socket path has a short length limit, so the sidecars' sockets go in the system temp folder instead, each in a private directory with a random name ([sidecars.md](sidecars.md#sockets-and-ports)).
@@ -109,7 +111,7 @@ Keeping state out of the repo means a repo never fills with generated files, and
 
 **Logs.** anfra writes structured JSON records to the repo's `anfra.log`, with each sidecar's stderr folded in (`internal/logging`). What a record carries, and the events that alerts and dashboards rely on: [logs](logs.md).
 
-**Traces.** When an OTLP endpoint is configured, anfra installs OpenTelemetry (`internal/telemetry`). A CLI command is the root of its trace; the op, each call to a sidecar and, under `serve`, the HTTP request are spans under it. anfra passes its trace to anfra-node with each call (W3C `traceparent`), and points anfra-node's exporter at the same collector, so one trace runs from the CLI through anfra-node's compile (`cmd/anfra/telemetry.go`). A CLI call forwarded to `serve` carries its trace along, which the server continues when it listens on loopback.
+**Traces.** When an OTLP endpoint is configured, by an `OTEL_*` variable in the environment or the repo's `.env`, anfra exports its traces (`internal/telemetry`). A CLI command is the root of its trace; the op, each call to a sidecar and, under `serve`, the HTTP request are spans under it. The op's span says what it did: each op's name, a query's row count from the query observer, and its steps as span events. The invocation's `Attribution`, which identifies the repo, is on every span and log record (`shared/telemetry`). The user's data, names included, goes on a span only as its [category's setting](telemetry.md#data-in-spans) allows. See [telemetry](telemetry.md) and [telemetry](../usage/telemetry.md). anfra passes its trace to anfra-node with each call (W3C `traceparent`), and points anfra-node's exporter at the same collector, so one trace runs from the CLI through anfra-node's compile (`cmd/anfra/telemetry.go`). A CLI call forwarded to `serve` carries its trace along, which the server continues when it listens on loopback.
 
 ## Further reading
 

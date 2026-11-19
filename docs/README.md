@@ -37,6 +37,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [init sample](designs/init-sample.md) | `anfra init --example`: the e-commerce sample from its own public repo, asked in a terminal and offered to agents. |
 | [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
+| [telemetry](designs/telemetry.md) | Proposal: what traces, metrics and logs are for (agent sessions, slow queries, server health), what is built, and the next steps: session ids, op spans, a local collector and ClickHouse stack, and anonymous usage stats sent to Holistics as a separate pipeline. |
 | [readable prose](designs/readable-prose.md) | How to write error messages, notices, help and docs that a person or an agent can read and act on. |
 
 ## Research

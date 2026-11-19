@@ -15,10 +15,12 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/repoenv"
 
 	"github.com/holistics/anfra/internal/agents"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/shared/apperr"
+	caller "github.com/holistics/anfra/shared/telemetry"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +31,10 @@ type exitCodeError struct{ code int }
 func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 func main() {
+	// The repo's .env, before anything reads a setting: each name in it applies
+	// as if it were in the environment, which wins (internal/repoenv).
+	loadRepoEnv()
+
 	// anfra's switches are 1 or 0. Refuse any other value before anything reads
 	// one, so a typo stops the command instead of silently meaning the opposite.
 	if err := envflag.Validate(); err != nil {
@@ -36,6 +42,9 @@ func main() {
 		printError(os.Stderr, settingRefused(err), "") // the user's setting, said as it is: not anfra's failure
 		os.Exit(1)
 	}
+
+	// What of the user's data spans record, read once (docs/designs/telemetry.md).
+	resolveTraceData()
 
 	// The CLI and `anfra serve` are usually local: their user is the operator, who
 	// needs an error's cause where the error shows, not only in a log. An anfra
@@ -51,6 +60,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	// Traces, when an OTEL_* endpoint asks for them; flushed before any exit below.
+	// Its warnings come before run reads the flags, so --json is looked for here.
+	output.json = output.json || jsonAsked(os.Args[1:])
 	flush := startTelemetry(ctx)
 	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr, runOptions{})
 	flush()
@@ -75,9 +86,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runO
 	root.SetArgs(args)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
+	endTrace := traceCommands(ctx, root, args)
 	// ExecuteContextC sets that root context and returns the command that actually
 	// ran, so we get the real subcommand name (handles flags/args/aliases).
 	executed, err := root.ExecuteContextC(ctx)
+	if _, rendered := errors.AsType[*exitCodeError](err); err != nil && !rendered {
+		err = runError(ctx, err)
+	}
+	endTrace(executed, err)
 	// After the command runs, surface a cached "update available" notice (and, if
 	// opted in, kick a background update). Best-effort; never affects exit status.
 	// Not after a failure: the error, or the invalid answer, is what to read, and
@@ -95,7 +111,6 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runO
 	}
 	output.json = output.json || jsonAsked(args) // flags that failed to parse set nothing
 	output.yaml = output.yaml || flagAsked(args, "--yaml")
-	err = runError(ctx, err)
 	printError(stderr, err, failureHint(err))
 	if apperr.From(err).Code == clierr.Interrupted.Code() {
 		return 130 // as a shell exits on an interrupt
@@ -121,16 +136,60 @@ func runError(ctx context.Context, err error) error {
 	return err
 }
 
-// settingRefused is an invalid switch as a violation of the variable that holds
-// it, as a refused arg is one of its flag.
+// loadRepoEnv loads the .env of the repo anfra runs in, the current
+// directory. A file it can't read stops the command, as a bad switch does: a
+// setting the user wrote must not be silently dropped. A file Git tracks is
+// never read, and a warning says so when it sets anfra's or OpenTelemetry's
+// names.
+func loadRepoEnv() {
+	dir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	loaded, err := repoenv.Load(dir)
+	if err != nil {
+		output.json = jsonAsked(os.Args[1:])
+		printError(os.Stderr, apperr.New(apperr.ValidationFailed, fmt.Sprintf("Can't read the repo's settings: %v.", err)), "")
+		os.Exit(1)
+	}
+	if len(loaded.Ignored) == 0 {
+		return
+	}
+	output.json = jsonAsked(os.Args[1:])
+	names := strings.Join(loaded.Ignored, ", ")
+	if loaded.Tracked {
+		printWarning(os.Stderr, "env_file_tracked", fmt.Sprintf(
+			"The repo's %s is tracked by Git, so anfra doesn't read it, and %s don't apply. "+
+				"A file everyone clones must not choose where your traces go. "+
+				"To use it, untrack it with `git rm --cached %s` and add it to .gitignore.",
+			repoenv.FileName, names, repoenv.FileName))
+		return
+	}
+	printWarning(os.Stderr, "env_file_unchecked", fmt.Sprintf(
+		"The repo is in a Git work tree, but Git couldn't say whether it tracks %s, so anfra doesn't read it, and %s don't apply. "+
+			"Set them in the environment instead, or make git work here: install it, or trust the folder with `git config --global --add safe.directory`.",
+		repoenv.FileName, names))
+}
+
+// settingRefused is an invalid setting as a violation of the variable that
+// holds it, as a refused arg is one of its flag: a switch that isn't 1 or 0, or
+// a telemetry setting it doesn't take.
 func settingRefused(err error) error {
-	e, ok := errors.AsType[*envflag.InvalidError](err)
-	if !ok {
+	var name, msg, code string
+	if e, ok := errors.AsType[*envflag.InvalidError](err); ok {
+		name, msg, code = e.Name, "Must be 1 or 0, not "+strconv.Quote(e.Value)+".", "invalid"
+	} else if e, ok := errors.AsType[*caller.InvalidSettingError](err); ok {
+		name, msg, code = e.Name, "Must be "+e.Want+", not "+strconv.Quote(e.Value)+".", "invalid"
+	} else {
 		return err
 	}
-	msg := "Must be 1 or 0, not " + strconv.Quote(e.Value) + "."
-	return apperr.NewWith(apperr.ValidationFailed, e.Error(),
-		apperr.Violate(apperr.Violation{Field: e.Name, Code: "invalid", Message: msg}))
+	summary := err.Error()
+	if line, ok := repoenv.Origin(name); ok {
+		summary += ", set in " + repoenv.FileName + " " + line
+		msg += " Fix it in " + repoenv.FileName + " " + line + "."
+	}
+	return apperr.NewWith(apperr.ValidationFailed, summary,
+		apperr.Violate(apperr.Violation{Field: name, Code: code, Message: msg}))
 }
 
 func newRootCmd() *cobra.Command {
@@ -161,7 +220,7 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(serve, newOpenAPICmd())
 	root.AddCommand(update, updateCheck)
-	root.AddCommand(agent, skills, initCmd)
+	root.AddCommand(agent, skills, initCmd, newExperimentalCmd())
 	root.AddCommand(publish, newPullCmd(), newAuthCmd())
 	root.AddCommand(newLogsCmd())
 	core := appCommands() // ping, query, … generated from the registry

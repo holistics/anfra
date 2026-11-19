@@ -11,6 +11,7 @@ import (
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/apptracing"
+	"github.com/holistics/anfra/shared/telemetry"
 
 	"github.com/holistics/anfra/shared/apikit/internal/decode"
 )
@@ -39,12 +40,15 @@ func (o *registered[Call, Caller, In, Out]) InvokeStream(ctx context.Context, rt
 
 // invoke runs the op; with emit, streaming its Run.
 func (o *registered[Call, Caller, In, Out]) invoke(ctx context.Context, rt *Runtime, r Call, raw []byte, emit func(any) error) (_ any, err error) {
+	ctx = callContext(ctx, o.callCtx, r)
 	var params []any
 	if o.params != nil {
 		params = o.params(r)
 	}
 	ctx, span := apptracing.Start(ctx, o.step, params...)
 	defer span.End(&err)
+	apptracing.SetAttributes(ctx, telemetry.Op.Is(o.decl.Name))
+	apptracing.RecordPayload(ctx, telemetry.OpInput, raw)
 
 	c, err := o.adm.Admit(ctx, r)
 	if err != nil {
@@ -54,7 +58,7 @@ func (o *registered[Call, Caller, In, Out]) invoke(ctx context.Context, rt *Runt
 	if err != nil {
 		return nil, err
 	}
-	return o.run(ctx, rt, r, c, in, emit)
+	return recordOutput(ctx, emit)(o.run(ctx, rt, r, c, in, emit))
 }
 
 // invokePrepared runs the op on an input prepare answered, for a host that
@@ -64,18 +68,44 @@ func (o *registered[Call, Caller, In, Out]) invokePrepared(ctx context.Context, 
 	if emit != nil && o.events == nil {
 		return nil, fmt.Errorf("op %q does not stream: it returns no Run", o.decl.Name)
 	}
+	ctx = callContext(ctx, o.callCtx, r)
 	var params []any
 	if o.params != nil {
 		params = o.params(r)
 	}
 	ctx, span := apptracing.Start(ctx, o.step, params...)
 	defer span.End(&err)
+	apptracing.SetAttributes(ctx, telemetry.Op.Is(o.decl.Name))
 
 	c, err := o.adm.Admit(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 	return o.run(ctx, rt, r, c, in.(In), emit)
+}
+
+// An op's span is named by telemetry.Op, and its payloads are recorded as the
+// span events telemetry.OpInput, its input as sent, and telemetry.OpOutput,
+// its answer, as a Payloader says when it is one, each only when data is on. A
+// streamed answer isn't recorded.
+
+// recordOutput passes an op's answer through, recording it when it answered
+// one, not a stream.
+func recordOutput(ctx context.Context, emit func(any) error) func(any, error) (any, error) {
+	return func(out any, err error) (any, error) {
+		if err == nil && emit == nil && out != nil {
+			apptracing.RecordPayload(ctx, telemetry.OpOutput, out)
+		}
+		return out, err
+	}
+}
+
+// callContext is ctx as the host gives it to an op for call (CallContext).
+func callContext[Call any](ctx context.Context, fn func(context.Context, Call) context.Context, call Call) context.Context {
+	if fn == nil {
+		return ctx
+	}
+	return fn(ctx, call)
 }
 
 func (o *registered[Call, Caller, In, Out]) inType() reflect.Type { return reflect.TypeFor[In]() }

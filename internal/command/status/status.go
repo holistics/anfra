@@ -123,6 +123,7 @@ var Status = command.Define(command.Def[command.NoInput, StatusResult]{
 			r.Hints = append(r.Hints, "Run `anfra logs` to see why "+r.Server.Sidecars.failing()+" answering.")
 		}
 		r.Cache, r.Hints = cacheStatus(ctx, cc.QueryCache, r.Hints)
+		r.Telemetry, r.Hints = telemetryOf(cc, r.Repo.Logs, r.Hints)
 		return r, nil
 	},
 	Valid: func(r StatusResult) bool { return r.Server.State == StateHealthy },
@@ -171,6 +172,9 @@ type StatusResult struct {
 	Server ServerStatus `json:"server"`
 	// Cache is the repo's caches; absent when the host keeps none.
 	Cache *CacheStatus `json:"cache,omitempty" doc:"the repo's caches, read without changing them. Absent when the server keeps none."`
+	// Telemetry is where the command's anfra, the server's when one runs, records
+	// each command's trace; absent when the host doesn't say.
+	Telemetry *command.TelemetryInfo `json:"telemetry,omitempty"`
 	// Hints are left to the host: the CLI adds its own, such as where to see
 	// the repo's publishing.
 	Hints []string `json:"hints,omitempty" doc:"what to do next, if any"`
@@ -210,6 +214,28 @@ type ServerStatus struct {
 	InstanceID string         `json:"instance_id,omitempty"`
 	Version    string         `json:"version,omitempty"`
 	Sidecars   *SidecarHealth `json:"sidecars,omitempty"`
+}
+
+// telemetryOf is where the host records traces, and hints adding what to do
+// when telemetry is failing: where to send them, and the log file, logs, that holds
+// the failed exports (absent for a managed repo).
+func telemetryOf(cc command.CommandContext, logs string, hints []string) (*command.TelemetryInfo, []string) {
+	if cc.Telemetry == nil {
+		return nil, hints
+	}
+	t := cc.Telemetry()
+	if t != nil && t.State == command.TelemetryFailing {
+		hint := fmt.Sprintf("Telemetry is failing: %s doesn't accept connections, so traces are lost. "+
+			"Start the telemetry stack or collector there, or unset %s to turn telemetry off.", t.Endpoint, t.SetBy)
+		if logs != "" {
+			hint += " Failed exports are logged in " + logs + "."
+		}
+		hints = append(hints, hint)
+	}
+	if t != nil {
+		hints = append(hints, t.Hints...)
+	}
+	return t, hints
 }
 
 // State is the warm server's state.
