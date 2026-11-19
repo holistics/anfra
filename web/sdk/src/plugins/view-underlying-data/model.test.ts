@@ -3,7 +3,7 @@ import type { RowsTarget } from '../../common/menu';
 import type { ColumnMeta, DatasetDescriptor, QueryRequest } from '../../common/types';
 import { numberTypes, textTypes } from '../../app/testSupport';
 import {
-  aggregateFunction, candidates, NO_DATA, plan, visibleDimensions,
+  aggregateFunction, candidates, entryLabel, NO_DATA, plan, visibleDimensions,
 } from './model';
 import { preambleOf } from './aqlText';
 
@@ -48,6 +48,16 @@ const aov: ColumnMeta = {
 const ratio: ColumnMeta = {
   name: 'ratio', fieldName: 'ratio', label: 'ratio', adhoc: true, isMeasure: true, ...numberTypes,
 };
+/** A dataset metric, as anfra-node describes it: its models, and its AQL. */
+const aovMetric: ColumnMeta = { ...aov, models: ['orders'], expression: 'aov' };
+/** A ratio over two models. */
+const perUser: ColumnMeta = {
+  ...ratio, name: 'per_user', fieldName: 'per_user', label: 'Per User', models: ['orders', 'users'], expression: 'count(orders.id) * 1.0 / count(users.region)',
+};
+/** A filtered aggregate of one model field: not a plain aggregate, so its column comes back. */
+const paid: ColumnMeta = {
+  ...ratio, name: 'paid', fieldName: 'paid', label: 'paid', models: ['orders'], expression: "count(orders.id) | where(orders.status == 'paid')",
+};
 
 const target = (over: Partial<RowsTarget> = {}): RowsTarget => ({
   kind: 'rows',
@@ -91,6 +101,56 @@ describe('candidates', () => {
   it('offers nothing for a custom aggregate or a model the dataset doesn\'t have', () => {
     expect(candidates(target(), [{ ...revenue, aggregation: 'custom' }], dataset)).toEqual([]);
     expect(candidates(target(), [{ ...revenue, modelId: 'refunds' }], dataset)).toEqual([]);
+  });
+});
+
+describe('candidates of a measure that isn\'t a plain aggregate', () => {
+  it('offers a dataset metric on the model it aggregates, its AQL from expression, its column shown', () => {
+    expect(candidates(target({ measure: 'aov' }), [region, aovMetric], dataset).map((c) => [c.column.name, c.model.name, c.expression, c.showMeasure]))
+      .toEqual([['aov', 'orders', 'aov', true]]);
+  });
+
+  it('offers one candidate per model of a measure over several, in the order of its models', () => {
+    const point = target({ measure: 'per_user', rows: [{ region: 'APAC', per_user: '1.5' }] });
+    expect(candidates(point, [region, perUser], dataset).map((c) => [c.model.name, c.expression])).toEqual([
+      ['orders', 'count(orders.id) * 1.0 / count(users.region)'],
+      ['users', 'count(orders.id) * 1.0 / count(users.region)'],
+    ]);
+  });
+
+  it('offers a filtered aggregate, an adhoc measure, with its column', () => {
+    const point = target({ measure: 'paid', rows: [{ region: 'APAC', paid: '4' }] });
+    expect(candidates(point, [region, paid], dataset).map((c) => [c.model.name, c.expression, c.showMeasure]))
+      .toEqual([['orders', "count(orders.id) | where(orders.status == 'paid')", true]]);
+  });
+
+  it('keeps #38\'s path for a model measure or a plain aggregate: no measure column', () => {
+    expect(candidates(target(), [region, revenue, orders], dataset).map((c) => c.showMeasure)).toEqual([false, false]);
+    // Even when anfra-node also says its models and AQL.
+    const described = { ...revenue, models: ['orders'], expression: 'sum(orders.amount)' };
+    expect(candidates(target({ measure: 'revenue' }), [region, described], dataset).map((c) => [c.expression, c.showMeasure]))
+      .toEqual([['sum(orders.amount)', false]]);
+  });
+
+  it('offers nothing for a measure with no models, and skips a model the dataset doesn\'t have', () => {
+    expect(candidates(target({ measure: 'aov' }), [region, { ...aovMetric, models: [] }], dataset)).toEqual([]);
+    expect(candidates(target({ measure: 'aov' }), [region, { ...aovMetric, expression: undefined }], dataset)).toEqual([]);
+    const point = target({ measure: 'per_user', rows: [{ per_user: '1' }] });
+    expect(candidates(point, [{ ...perUser, models: ['refunds', 'users'] }], dataset).map((c) => c.model.name)).toEqual(['users']);
+  });
+});
+
+describe('entryLabel', () => {
+  it('is the bare entry for one candidate, names the measure among several, and the model of a measure over several', () => {
+    const point = target({ rows: [{ region: 'APAC', revenue: '10', per_user: '1.5' }] });
+    const one = candidates(target({ measure: 'revenue' }), [region, revenue], dataset);
+    expect(one.map((c) => entryLabel(c, one))).toEqual(['View underlying data']);
+    const several = candidates(point, [region, revenue, perUser], dataset);
+    expect(several.map((c) => entryLabel(c, several))).toEqual([
+      'View underlying data: revenue',
+      'View underlying data: Per User (Orders)',
+      'View underlying data: Per User (users)',
+    ]);
   });
 });
 
@@ -282,5 +342,64 @@ describe('plan', () => {
       { text: 'Region is empty' },
       { text: 'created_at in 2026-01-01 until 2026-02-01' },
     ]);
+  });
+  // The count keeps each row: an explore leaves out a row where every measure is empty, as a
+  // filtered measure is on a row its filter excludes.
+  it('shows a metric\'s column on every row, recomputed per row of its model, and keeps a row where it is empty', () => {
+    const point = target({ measure: 'aov' });
+    const [candidate] = candidates(point, [region, aovMetric], dataset);
+    const planned = plan(point, candidate, base, [region, aovMetric], dataset);
+    expect(planned.columns).toEqual([
+      { name: 'id', label: 'Id', numeric: true },
+      { name: 'status', label: 'Status', numeric: false },
+      { name: 'amount', label: 'Amount', numeric: true },
+      { name: 'aov', label: 'AOV', numeric: true },
+    ]);
+    expect(planned.request.aql).toBe([
+      'explore {',
+      '  dimensions {',
+      '    id: orders.id,',
+      '    status: orders.status,',
+      '    amount: orders.amount',
+      '  }',
+      '  measures {',
+      '    aov: aov,',
+      '    record_count: count(orders.id)',
+      '  }',
+      '}',
+    ].join('\n'));
+    expect(planned.request.input.sorts.map((sort) => sort.field)).toEqual(['id', 'status', 'amount']);
+  });
+
+  it('names the model in the title of a measure over several models', () => {
+    const point = target({ measure: 'per_user', rows: [{ region: 'APAC', per_user: '1.5' }] });
+    const [, users] = candidates(point, [region, perUser], dataset);
+    const planned = plan(point, users, base, [region, perUser], dataset);
+    expect(planned.title).toBe(`View underlying data: ${(1.5).toLocaleString()} Per User (users)`);
+    expect(planned.request.aql).toContain('    region: users.region\n  }\n  measures {\n    per_user: count(orders.id) * 1.0 / count(users.region),\n    record_count: count(users.region)\n  }');
+  });
+
+  it('drills a query-local metric: the plan keeps the declarations its expression compiles with', () => {
+    const local: ColumnMeta = {
+      ...ratio, name: 'big', fieldName: 'big', label: 'big', models: ['orders'], expression: 'big',
+    };
+    const declared = {
+      ...base,
+      aql: 'metric big = count(orders.id) | where(orders.amount > 100);\nexplore { dimensions { region: users.region } measures { big } }',
+    };
+    const point = target({ measure: 'big', rows: [{ region: 'APAC', big: '2' }] });
+    const [candidate] = candidates(point, [region, local], dataset);
+    const { aql } = plan(point, candidate, declared, [region, local], dataset).request;
+    expect(aql.startsWith('metric big = count(orders.id) | where(orders.amount > 100);\nexplore {')).toBe(true);
+    expect(aql).toContain('  measures {\n    big: big,\n    record_count: count(orders.id)\n  }');
+  });
+  it('reads a dimension the query gives bare by its model->field key, filtering by it and keeping a filter on its field', () => {
+    const bare: ColumnMeta = { ...region, name: 'users->region' };
+    const point = target({ measure: 'revenue', rows: [{ 'users->region': 'APAC', revenue: '10' }], fields: ['users->region'] });
+    const filtered = { ...base, aql: "explore { dimensions { users.region } measures { revenue: sum(orders.amount) } filters { users.region != 'EMEA' } }" };
+    const [candidate] = candidates(point, [bare, revenue], dataset);
+    const planned = plan(point, candidate, filtered, [bare, revenue], dataset);
+    expect(planned.chips).toEqual([{ text: 'Region is APAC' }]);
+    expect(planned.request.aql).toContain("  filters {\n    users.region != 'EMEA'\n  }");
   });
 });

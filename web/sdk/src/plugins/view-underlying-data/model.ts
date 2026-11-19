@@ -3,9 +3,13 @@
  * aggregates (its base model), and the query that lists that model's rows behind the point. Pure:
  * the frame half decides with it as the menu opens, and the body draws what it plans.
  *
- * A point's measure resolves when its result column names a model: a model's measure
- * (`orders.total_revenue`), or an aggregate of one model field (`sum(orders.amount)`). A dataset
- * metric or any other expression doesn't, and gets no entry.
+ * A model's measure (`orders.total_revenue`) or a plain aggregate of one model field
+ * (`sum(orders.amount)`) resolves by the model its result column names, and shows that model's rows
+ * without the measure. Any other measure (a dataset metric, a ratio, a filtered aggregate, a metric
+ * the query declares) resolves by the models anfra-node says it aggregates, one candidate per
+ * model, and shows the measure as a column, recomputed for each row: a ratio has its value per row,
+ * and a filtered measure 0 or nothing where its filter excludes the row. A measure with no models
+ * gets no entry.
  */
 import type {
   BackendCondition, BackendFilter, BackendSort, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
@@ -28,8 +32,16 @@ export const PAGE_SIZE = 100;
 export interface Candidate {
   column: ColumnMeta;
   model: Model;
-  /** The measure as AQL: the model's measure, or the aggregate rebuilt from the column. */
+  /**
+   * The measure as AQL: the model's measure or the aggregate rebuilt from the column, or else the
+   * AQL the query wrote it as.
+   */
   expression: string;
+  /**
+   * Whether the measure is a column of every row. Not for a model measure or a plain aggregate,
+   * where a row is usually one record, and a count is 1 and a sum repeats a field.
+   */
+  showMeasure: boolean;
   /** Why it can't be shown for this point, if it can't. */
   disabled?: string;
 }
@@ -93,20 +105,41 @@ export function display (value: unknown, column: ColumnMeta | undefined, format:
 /** Whether every row of the point leaves this measure empty. */
 const isEmpty = (rows: readonly Row[], measure: string) => rows.every((row) => row[measure] === null || row[measure] === undefined);
 
+/** A measure's candidates, before the point decides whether they can be shown. */
+function measureCandidates (column: ColumnMeta, dataset: DatasetDescriptor): Omit<Candidate, 'disabled'>[] {
+  const model = column.modelId ? modelOf(dataset, column.modelId) : undefined;
+  const expression = model && measureExpression(column, model);
+  if (model && expression) return [{ column, model, expression, showMeasure: false }];
+  if (!column.expression) return [];
+  const { expression: written } = column;
+  return (column.models ?? []).flatMap((name) => {
+    const of = modelOf(dataset, name);
+    return of ? [{ column, model: of, expression: written, showMeasure: true }] : [];
+  });
+}
+
 /**
- * The measures a point offers: the one the definition named, or else each the query has. Only
- * those whose column resolves to a model; empty when none does, and so no entry shows.
+ * The measures a point offers: the one the definition named, or else each the query has. Each
+ * once per model it resolves to; empty when none resolves, and so no entry shows.
  */
 export function candidates (target: RowsTarget, columns: readonly ColumnMeta[], dataset: DatasetDescriptor): Candidate[] {
   const measures = columns.filter((column) => column.isMeasure && (target.measure === undefined || column.name === target.measure));
-  return measures.flatMap((column) => {
-    const model = column.modelId ? modelOf(dataset, column.modelId) : undefined;
-    const expression = model && measureExpression(column, model);
-    if (!model || !expression) return [];
-    return [{
-      column, model, expression, ...(isEmpty(target.rows, column.name) ? { disabled: NO_DATA } : {}),
-    }];
-  });
+  return measures.flatMap((column) => measureCandidates(column, dataset).map((candidate) => ({
+    ...candidate, ...(isEmpty(target.rows, column.name) ? { disabled: NO_DATA } : {}),
+  })));
+}
+
+const LABEL = 'View underlying data';
+
+/** What a candidate is called: its measure, and its model when the measure aggregates several. */
+function nameOf (candidate: Candidate): string {
+  const measure = candidate.column.label || candidate.column.name;
+  return (candidate.column.models?.length ?? 0) > 1 ? `${measure} (${candidate.model.label || candidate.model.name})` : measure;
+}
+
+/** A candidate's menu entry: the bare entry when the point offers only it, else naming it. */
+export function entryLabel (candidate: Candidate, offered: readonly Candidate[]): string {
+  return offered.length > 1 ? `${LABEL}: ${nameOf(candidate)}` : LABEL;
 }
 
 /** The base model's fields a reader sees: its dimensions, not hidden, in the model's order. */
@@ -157,10 +190,11 @@ function asExpression (condition: SelectionCondition, columns: readonly ColumnMe
 
 /**
  * What the modal is of: the point's value and its measure (`1,234 players`), or the measure alone
- * when the point has several rows, and so no one value.
+ * when the point has several rows, and so no one value; with its model when it aggregates several.
  */
-function subjectOf (target: RowsTarget, column: ColumnMeta): string {
-  const label = column.label || column.name;
+function subjectOf (target: RowsTarget, candidate: Candidate): string {
+  const { column } = candidate;
+  const label = nameOf(candidate);
   if (target.rows.length !== 1) return label;
   const text = display(target.rows[0][column.name], column, new Intl.NumberFormat(undefined, { maximumFractionDigits: 20 }));
   return text ? `${text} ${label}` : label;
@@ -177,9 +211,10 @@ function freeAlias (wanted: string, taken: Set<string>): string {
 
 /**
  * The modal for one measure of a point: the base model's visible dimensions, grouped by them, where
- * the point's conditions and the query's own inputs hold. The measure isn't a column: a row is
- * usually one record (a visible dimension is unique), where a count is 1 and a sum repeats a field;
- * the point's value goes in the title instead. A model with no visible dimension shows the measure.
+ * the point's conditions and the query's own inputs hold. A model measure or a plain aggregate isn't
+ * a column: a row is usually one record (a visible dimension is unique), where a count is 1 and a
+ * sum repeats a field; the point's value goes in the title instead. Any other measure is a column,
+ * recomputed for each row, and so is the measure of a model with no visible dimension.
  *
  * Built on the query's request as it runs now: its declarations, its own `filters { }`, its
  * controls' filters, its selection, its timezone. A condition of its `filters` that names one of the
@@ -205,10 +240,17 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   // showed: every dimension, which the rows are grouped by. Dates go first, newest first.
   sorts.sort((a, b) => Number(b.direction === 'desc') - Number(a.direction === 'desc'));
   const measureLines: string[] = [];
-  if (!dimensionLines.length) {
+  if (candidate.showMeasure || !dimensionLines.length) {
     const alias = freeAlias(candidate.column.name, taken);
     planned.push({ name: alias, label: candidate.column.label || candidate.column.name, numeric: true });
     measureLines.push(`    ${alias}: ${candidate.expression}`);
+  }
+  if (candidate.showMeasure && dimensions.length) {
+    // An explore leaves out a row where every measure is empty, as a filtered measure is on a row
+    // its filter excludes: a count of the model's own rows keeps it. Not one of the modal's
+    // columns, though a download has it.
+    const alias = freeAlias('record_count', taken);
+    measureLines.push(`    ${alias}: count(${candidate.model.name}.${dimensions[0].name})`);
   }
   const preamble = preambleOf(base.aql);
   const aliases = new Set(columns.map((column) => column.name));
@@ -221,7 +263,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
     ...(preamble ? [preamble] : []),
     'explore {',
     ...(dimensionLines.length ? ['  dimensions {', dimensionLines.join(',\n'), '  }'] : []),
-    ...(measureLines.length ? ['  measures {', ...measureLines, '  }'] : []),
+    ...(measureLines.length ? ['  measures {', measureLines.join(',\n'), '  }'] : []),
     ...(kept.length ? ['  filters {', kept.map((condition) => `    ${condition}`).join(',\n'), '  }'] : []),
     '}',
   ].join('\n');
@@ -245,7 +287,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   dropped.forEach((condition) => chips.push({ text: `Not filtered by ${condition}`, warning: true }));
 
   return {
-    title: `View underlying data: ${subjectOf(target, candidate.column)}`,
+    title: `${LABEL}: ${subjectOf(target, candidate)}`,
     chips,
     columns: planned,
     request: {
