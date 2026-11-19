@@ -1,6 +1,6 @@
 {
   "package": "lookml-parser",
-  "version": "9.3.0",
+  "upstreamVersion": "9.3.0",
   "repository": "https://github.com/fabio-looker/node-lookml-parser",
   "commit": "fbde2fa2777c222076b7e6201eb6300467c92a8d",
   "license": "MIT",

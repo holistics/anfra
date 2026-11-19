@@ -47,7 +47,7 @@ the commit and the kind of change. Each change that is not module syntax has a
    `upstream.json`. A Node built-in (`fs`, `path`, `crypto`, ...) must not
    come in: add a shim or a stub.
 
-6. Set `version` and `commit` in `upstream.json`.
+6. Set `upstreamVersion` and `commit` in `upstream.json`.
 
 7. Do the checks. Run from `packages/semantic-catalog`:
 
