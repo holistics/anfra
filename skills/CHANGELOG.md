@@ -1,3 +1,17 @@
+## [0.23.1](https://github.com/holistics/anfra/compare/v0.23.0...v0.23.1) (2026-11-19)
+
+### Features
+
+* **skills:** looker converter ([547f001](https://github.com/holistics/anfra/commit/547f0013587bff58c015593b022c044ec7eca3ab))
+* **skills:** add comments to link lookml to aml ([67cf937](https://github.com/holistics/anfra/commit/67cf9378f779ce73340a8612795cfa5d7ccb55e6))
+* **skills:** reword from lookml to looker ([37cf71e](https://github.com/holistics/anfra/commit/37cf71ed1095d4f48229ee894e8801cc52463536))
+* **skills:** revert change ([3fcda4a](https://github.com/holistics/anfra/commit/3fcda4a38f3fb1421fcf1ce67a44e3303b443086))
+* **skills:** fix some build script ([6c00ef2](https://github.com/holistics/anfra/commit/6c00ef2a2bf323a10993cf26c27f65ba33637fbe))
+
+### Bug Fixes
+
+* **skills:** skipp aggregate awareness ([f0a316b](https://github.com/holistics/anfra/commit/f0a316bbe696d78d02339fc9b51c9c6cf6330c09))
+* **skills:** skip persistence since anfra does not support yet ([fcbb655](https://github.com/holistics/anfra/commit/fcbb655aac6880b806c3f5e8b9fc027a24ee41a0))
 ## [0.23.0](https://github.com/holistics/anfra/compare/v0.22.0...v0.23.0) (2026-11-19)
 
 ### Features
