@@ -132,6 +132,17 @@ describe('candidates of a measure that isn\'t a plain aggregate', () => {
       .toEqual([['sum(orders.amount)', false]]);
   });
 
+  it('offers a filtered aggregate written model first with its column, though its column names a field and an aggregation', () => {
+    // As anfra-node 0.16.0 describes it: the field and aggregation of the aggregate after the pipe.
+    const filtered: ColumnMeta = {
+      ...revenue, name: 'paid_revenue', label: 'paid_revenue', models: ['orders'],
+      expression: "orders | where(orders.status == 'paid') | sum(orders.amount)",
+    };
+    const point = target({ measure: 'paid_revenue', rows: [{ region: 'APAC', paid_revenue: '4' }] });
+    expect(candidates(point, [region, filtered], dataset).map((c) => [c.model.name, c.expression, c.showMeasure]))
+      .toEqual([['orders', "orders | where(orders.status == 'paid') | sum(orders.amount)", true]]);
+  });
+
   it('offers nothing for a measure with no models, and skips a model the dataset doesn\'t have', () => {
     expect(candidates(target({ measure: 'aov' }), [region, { ...aovMetric, models: [] }], dataset)).toEqual([]);
     expect(candidates(target({ measure: 'aov' }), [region, { ...aovMetric, expression: undefined }], dataset)).toEqual([]);
