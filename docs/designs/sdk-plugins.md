@@ -63,6 +63,8 @@ Either half may be missing: `core` has no frame half, and a theming plugin might
 
 The host installs plugins, and a definition can't bring its own. A definition is untrusted ([security.md](security.md)) and carries no SDK version ([data-apps.md](data-apps.md#why-one-html-file)), so letting it pick plugins would mean deciding what a definition may load and negotiating versions.
 
+The repo picks instead: its settings turn each plugin but `core` on or off (`apps.plugins.<name>.enabled` in `.anfra/config.yml`, every one on by default; [configs](../usage/configs.md#configyml)). A host installs `core` and the ones left on, as far as it can serve them. `anfra serve` reads them with `config.local.yml` laid over the file, and a platform with its own overrides laid over the published file. The setting is per plugin, not an open list, so a name anfra doesn't have is refused like any unknown key.
+
 anfra's own features are plugins too, built with the same API a host uses. That holds the API to what anfra itself needs.
 
 ## What isn't a plugin: the kernel
