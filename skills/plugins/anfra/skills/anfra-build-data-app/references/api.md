@@ -163,12 +163,16 @@ a bare dataset metric is an aggregate condition too.
 ### Result shape
 
 ```js
-query.result.columns // [{ name, fieldName, modelId?, label, adhoc, isMeasure, aggregation?, semantic_type, arrow_type, db_type }]
+query.result.columns // [{ name, fieldName, modelId?, label, adhoc, isMeasure, aggregation?, models?, expression?, semantic_type, arrow_type, db_type }]
 query.result.rows    // [{ month: '2026-01-01', total: '1234.5' }, ...]
 ```
 
 - Row keys are the **aliases your AQL declared** (`month`, `total`), matching `column.name`.
-  `column.fieldName` is the underlying field, which you only need for debugging.
+  A field you give without an alias is keyed `model->field` (`orders->status`), in the row and in
+  `column.name`, so alias every field. `column.fieldName` is the underlying field, which you only
+  need for debugging.
+- A measure's column also says which models it aggregates (`models: ['orders']`) and its AQL as
+  your query wrote it (`expression: 'sum(orders.amount)'`). A dimension has neither.
 - Values are raw, never formatted. Format numbers and dates yourself (`Intl.NumberFormat`,
   `toLocaleDateString`). Log `rows[0]` on first success to confirm the value types rather than
   guessing.
