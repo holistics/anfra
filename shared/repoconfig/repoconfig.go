@@ -114,7 +114,7 @@ func PluginKey(name string) Key { return Key("apps.plugins").child(name).child("
 // beyond core, in Plugins' order: each one its setting leaves on.
 func (c Config) EnabledPlugins() []string {
 	v := reflect.ValueOf(c)
-	var on []string
+	on := []string{}
 	for _, name := range Plugins {
 		f, _ := field(v, PluginKey(name))
 		if f.IsNil() || f.Elem().Bool() {
