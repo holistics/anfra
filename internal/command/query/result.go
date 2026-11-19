@@ -85,8 +85,8 @@ type Column struct {
 	Adhoc       bool     `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
 	IsMeasure   bool     `json:"isMeasure"`
 	Aggregation string   `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
-	Models      []string `json:"models,omitempty" doc:"the models a measure aggregates, by the names the dataset gives them, such as [orders] for sum(orders.amount), or [orders, users] for a ratio of a count of each. A model that is only joined on or only filtered by is not listed. Absent for a dimension."`
-	Expression  string   `json:"expression,omitempty" doc:"a measure as AQL, as the query wrote it, such as sum(orders.amount) or a metric's name. A metric the query declares itself compiles only with the query's declarations. Absent for a dimension."`
+	Models      []string `json:"models,omitempty" doc:"the models a measure aggregates. Absent for a dimension."`
+	Expression  string   `json:"expression,omitempty" doc:"a measure's AQL, as the query wrote it. Absent for a dimension."`
 
 	SemanticType SemanticType         `json:"semantic_type,omitempty" doc:"the column's (database-agnostic) type in the semantic layer, such as number, date, or truefalse. Read the values by it. \"bit\" is a true or false stored as a bit, written as true and false or as \"1\" and \"0\", depending on how the database produced it. \"unknown\" is a type that has no meaning in AML, such as time or duration. Absent when no AQL typed the column, as for a SQL query or AQL that isn't an explore, so read arrow_type instead."`
 	ArrowType    canalquery.ArrowType `json:"arrow_type,omitzero" doc:"the column's Arrow type, which says how its values are written. Absent before the query runs."`

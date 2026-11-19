@@ -47,23 +47,23 @@ export interface DatasetDescriptor {
     label?: string;
     type: string;
   }[];
-  /** The relationships between the dataset's models, inactive ones included. */
+  /** The relationships between its models. */
   relationships?: DatasetRelationship[];
 }
 
 /** A relationship between two of a dataset's models: the field of one that joins to the field of the other. */
 export interface DatasetRelationship {
-  /** Its name, when the AML names it. */
+  /** Its name, if the AML gives one. */
   name?: string;
-  /** The field it starts from, as `<model>.<field>`. */
+  /** One side's field, as `<model>.<field>`. */
   from: string;
-  /** The field it points to, as `<model>.<field>`. */
+  /** The other side's field, as `<model>.<field>`. */
   to: string;
-  /** How many rows of each side match: `many_to_one` when many rows of `from` match one row of `to`. */
+  /** Its cardinality, `from` side first. */
   type: 'one_to_one' | 'many_to_one' | 'range' | 'many_to_many';
-  /** Whether a query joins through it by default. */
+  /** Whether queries join through it by default. */
   active: boolean;
-  /** Which way a filter passes through it: from the one side to the many side only, or both ways. */
+  /** Which way filters pass through it. */
   direction: 'one_way' | 'two_way';
 }
 
@@ -345,16 +345,9 @@ export interface ColumnMeta {
   adhoc: boolean;
   isMeasure: boolean;
   aggregation?: string;
-  /**
-   * The models a measure aggregates, as the dataset names them: `['orders']` for
-   * `sum(orders.amount)`, `['orders', 'users']` for a ratio of a count of each. A model only joined
-   * on or only filtered by isn't one. Absent for a dimension.
-   */
+  /** The models a measure aggregates. Absent for a dimension. */
   models?: string[];
-  /**
-   * A measure as AQL, as the query wrote it: `sum(orders.amount)`, or a metric's name. A metric
-   * the query declares itself compiles only with the query's declarations. Absent for a dimension.
-   */
+  /** A measure's AQL, as the query wrote it. Absent for a dimension. */
   expression?: string;
   /**
    * What the column's values mean: decide by it, never by `typeof`. A `number` column's values are
