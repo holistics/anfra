@@ -1,9 +1,9 @@
 /**
  * `view-underlying-data`'s frame half: the "View underlying data" entry on a point's menu, and the
- * modal it opens. The entry shows for each measure of the point that resolves to a model (the one
- * the definition named with `query.menu`'s `measure`, or else each the query has); the modal lists
- * that model's rows behind the point, run as `core.submitQuery` and downloaded as `export.query`,
- * through the pipeline like any of the query's calls. The view is the plugin's body.
+ * modal it opens. The entry shows for each measure of the point that resolves to a model, once per
+ * model (the one the definition named with `query.menu`'s `measure`, or else each the query has);
+ * the modal lists that model's rows behind the point, run as `core.submitQuery` and downloaded as
+ * `export.query`, through the pipeline like any of the query's calls. The view is the plugin's body.
  */
 import type { FrameKernel } from '../../app/kernel';
 import type { App } from '../../app/app';
@@ -12,15 +12,13 @@ import { defaultExportFilename } from '../../app/execution/submitQuery';
 import type { MenuTarget, RowsTarget } from '../../common/menu';
 import type { BackendExportRequest, BackendQueryResult, ExportResult } from '../../common/types';
 import {
-  candidates, PAGE_SIZE, plan, type Candidate,
+  candidates, entryLabel, PAGE_SIZE, plan, type Candidate,
 } from './model';
 import type { ViewDeps } from './view';
 
 interface Body {
   view: (root: ShadowRoot, deps: ViewDeps) => () => void;
 }
-
-const LABEL = 'View underlying data';
 
 export default function setup (kernel: FrameKernel): void {
   const located = (target: RowsTarget): { app: App, query: Query } | undefined => {
@@ -71,7 +69,7 @@ export default function setup (kernel: FrameKernel): void {
       const { app, query } = found;
       const offered = candidates(target, query.result?.columns ?? [], query.dataset.descriptor);
       return offered.map((candidate) => ({
-        label: offered.length > 1 ? `${LABEL}: ${candidate.column.label || candidate.column.name}` : LABEL,
+        label: entryLabel(candidate, offered),
         ...(candidate.disabled
           ? { disabled: candidate.disabled }
           : { run: () => open(target, app, query, candidate) }),
