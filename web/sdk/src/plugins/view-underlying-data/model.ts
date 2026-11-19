@@ -5,7 +5,8 @@
  *
  * A model's measure (`orders.total_revenue`) or a plain aggregate of one model field
  * (`sum(orders.amount)`) resolves by the model its result column names, and shows that model's rows
- * without the measure. Any other measure (a dataset metric, a ratio, a filtered aggregate, a metric
+ * without the measure. Any other measure (a dataset metric, a ratio, a filtered aggregate written
+ * either way, `count(orders.id) | where(...)` or `orders | where(...) | count(orders.id)`, a metric
  * the query declares) resolves by the models anfra-node says it aggregates, one candidate per
  * model, and shows the measure as a column, recomputed for each row: a ratio has its value per row,
  * and a filtered measure 0 or nothing where its filter excludes the row. A measure with no models
@@ -105,11 +106,21 @@ export function display (value: unknown, column: ColumnMeta | undefined, format:
 /** Whether every row of the point leaves this measure empty. */
 const isEmpty = (rows: readonly Row[], measure: string) => rows.every((row) => row[measure] === null || row[measure] === undefined);
 
-/** A measure's candidates, before the point decides whether they can be shown. */
+/** AQL with no whitespace, to tell whether two spellings are the same. */
+const compact = (aql: string) => aql.replace(/\s+/g, '');
+
+/**
+ * A measure's candidates, before the point decides whether they can be shown. A column names a
+ * model and an aggregation for more than its plain aggregate: `orders | where(...) | count(orders.id)`
+ * names `orders.id` and `count` too. It is the plain aggregate only when the AQL the query wrote is
+ * that aggregate, or anfra-node didn't say the AQL.
+ */
 function measureCandidates (column: ColumnMeta, dataset: DatasetDescriptor): Omit<Candidate, 'disabled'>[] {
   const model = column.modelId ? modelOf(dataset, column.modelId) : undefined;
   const expression = model && measureExpression(column, model);
-  if (model && expression) return [{ column, model, expression, showMeasure: false }];
+  if (model && expression && (!column.expression || compact(column.expression) === compact(expression))) {
+    return [{ column, model, expression, showMeasure: false }];
+  }
   if (!column.expression) return [];
   const { expression: written } = column;
   return (column.models ?? []).flatMap((name) => {
