@@ -258,7 +258,8 @@ func TestRunViolation(t *testing.T) {
 // what AMQL typed it, never one guessed from its Arrow or database type.
 func TestDescribeColumns(t *testing.T) {
 	described := []anfranode.ExploreColumn{
-		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum", Type: "number"},
+		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum", Type: "number",
+			Models: []string{"orders"}, Expression: "sum(orders.amount)"},
 		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status", Type: "text"},
 		{Name: "month", FieldName: "created_at", ModelID: "orders", Label: "Month"}, // an anfra-node before 0.4.0
 	}
@@ -275,6 +276,7 @@ func TestDescribeColumns(t *testing.T) {
 	want := []Column{
 		{Name: "status", FieldName: "status", ModelID: "orders", Label: "Status", SemanticType: "text", ArrowType: utf8, DBType: "text"},
 		{Name: "total", FieldName: "amount", ModelID: "orders", Label: "Total", IsMeasure: true, Aggregation: "sum",
+			Models: []string{"orders"}, Expression: "sum(orders.amount)",
 			SemanticType: "number", ArrowType: decimal, DBType: "numeric"},
 		{Name: "month", FieldName: "created_at", ModelID: "orders", Label: "Month", ArrowType: date, DBType: "date"},
 		{Name: "ratio", FieldName: "ratio", Label: "ratio", Adhoc: true, ArrowType: float, DBType: "float8"},

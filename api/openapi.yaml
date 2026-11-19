@@ -138,6 +138,9 @@ components:
         db_type:
           description: the database's own name for the column's type, for debugging only. Don't base decisions on it, because it varies by database and driver. Absent before the query runs.
           type: string
+        expression:
+          description: a measure as AQL, as the query wrote it, such as sum(orders.amount) or a metric's name. A metric the query declares itself compiles only with the query's declarations. Absent for a dimension.
+          type: string
         fieldName:
           description: the field it draws, or for an adhoc column, its name
           type: string
@@ -148,6 +151,11 @@ components:
         modelId:
           description: the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column.
           type: string
+        models:
+          description: the models a measure aggregates, by the names the dataset gives them, such as [orders] for sum(orders.amount), or [orders, users] for a ratio of a count of each. A model that is only joined on or only filtered by is not listed. Absent for a dimension.
+          items:
+            type: string
+          type: array
         name:
           description: the column's key, as in fields
           type: string
@@ -1711,6 +1719,11 @@ components:
           type: array
         name:
           type: string
+        relationships:
+          description: the relationships between the dataset's models, inactive ones included. Absent when the dataset is shown in outline.
+          items:
+            $ref: "#/components/schemas/ShowRelationship"
+          type: array
       required:
         - kind
         - fqn
@@ -1792,6 +1805,42 @@ components:
         - fqn
         - name
         - fields
+      type: object
+    ShowRelationship:
+      additionalProperties: false
+      properties:
+        active:
+          description: whether a query joins through the relationship by default. A query can still use an inactive one by naming it.
+          type: boolean
+        direction:
+          description: "which way a filter passes through the relationship: one_way, from the one side to the many side only, or two_way, both ways"
+          enum:
+            - one_way
+            - two_way
+          type: string
+        from:
+          description: the field the relationship starts from, as <model fqn>.<field>
+          type: string
+        name:
+          description: the relationship's name, when the AML names it
+          type: string
+        to:
+          description: the field the relationship points to, as <model fqn>.<field>
+          type: string
+        type:
+          description: "how many rows of each side match: many_to_one when many rows of from match one row of to"
+          enum:
+            - one_to_one
+            - many_to_one
+            - range
+            - many_to_many
+          type: string
+      required:
+        - from
+        - to
+        - type
+        - active
+        - direction
       type: object
     ShowRepo:
       additionalProperties: false

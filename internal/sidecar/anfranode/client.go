@@ -468,13 +468,15 @@ type CompileToSQLResult struct {
 // anfra-node describes an explore query's; the core API passes them through in
 // these names, amql's and the Anfra SDK's.
 type ExploreColumn struct {
-	Name        string `json:"name" doc:"the column's key, as in fields"`
-	FieldName   string `json:"fieldName" doc:"the field it draws, or for an adhoc column, its name"`
-	ModelID     string `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column."`
-	Label       string `json:"label"`
-	Adhoc       bool   `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
-	IsMeasure   bool   `json:"isMeasure"`
-	Aggregation string `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
+	Name        string   `json:"name" doc:"the column's key, as in fields"`
+	FieldName   string   `json:"fieldName" doc:"the field it draws, or for an adhoc column, its name"`
+	ModelID     string   `json:"modelId,omitempty" doc:"the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column."`
+	Label       string   `json:"label"`
+	Adhoc       bool     `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
+	IsMeasure   bool     `json:"isMeasure"`
+	Aggregation string   `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
+	Models      []string `json:"models,omitempty" doc:"the models a measure aggregates, by the names the dataset gives them. A model that is only joined on or only filtered by is not listed. Absent for a dimension, and from an anfra-node before 0.16.0."`
+	Expression  string   `json:"expression,omitempty" doc:"a measure as AQL, as the query wrote it. A metric the query declares itself compiles only with the query's declarations. Absent for a dimension, and from an anfra-node before 0.16.0."`
 	// Type is the AMQL type the type checker gives the column's expression
 	// (number, text, date, ...), not the type its field declares: a count of a
 	// text field is a number. Absent from an anfra-node before 0.4.0.

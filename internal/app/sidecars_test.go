@@ -181,6 +181,7 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 			{Name: "name", FieldName: "name", ModelID: "products", Label: r.Columns[0].Label, SemanticType: "text",
 				ArrowType: r.Columns[0].ArrowType, DBType: r.Columns[0].DBType},
 			{Name: "n", FieldName: "id", ModelID: "products", Label: r.Columns[1].Label, IsMeasure: true, Aggregation: "count",
+				Models: []string{"products"}, Expression: "count(products.id)",
 				SemanticType: "number", ArrowType: r.Columns[1].ArrowType, DBType: r.Columns[1].DBType},
 		}
 		if !reflect.DeepEqual(r.Columns, want) {
