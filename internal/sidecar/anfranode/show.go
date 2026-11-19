@@ -91,13 +91,25 @@ type ShowRepo struct {
 // write a query against it or read a query's result, nothing of how it is
 // built.
 type ShowDataset struct {
-	Kind        string      `json:"kind" enum:"dataset"`
-	Fqn         string      `json:"fqn" doc:"the dataset's fully qualified name, as AQL and the catalog name it"`
-	Name        string      `json:"name"`
-	Label       string      `json:"label,omitempty"`
-	Description string      `json:"description,omitempty"`
-	Models      []ShowModel `json:"models,omitempty" doc:"the models the dataset uses. Absent when the dataset is shown in outline."`
-	Metrics     []ShowField `json:"metrics,omitempty" doc:"the dataset's metrics. Absent when the dataset is shown in outline."`
+	Kind          string             `json:"kind" enum:"dataset"`
+	Fqn           string             `json:"fqn" doc:"the dataset's fully qualified name, as AQL and the catalog name it"`
+	Name          string             `json:"name"`
+	Label         string             `json:"label,omitempty"`
+	Description   string             `json:"description,omitempty"`
+	Models        []ShowModel        `json:"models,omitempty" doc:"the models the dataset uses. Absent when the dataset is shown in outline."`
+	Metrics       []ShowField        `json:"metrics,omitempty" doc:"the dataset's metrics. Absent when the dataset is shown in outline."`
+	Relationships []ShowRelationship `json:"relationships,omitempty" doc:"the relationships between the dataset's models, inactive ones included. Absent when the dataset is shown in outline."`
+}
+
+// ShowRelationship is a relationship between two of a dataset's models: the
+// field of one that joins to the field of the other.
+type ShowRelationship struct {
+	Name      string `json:"name,omitempty" doc:"the relationship's name, when the AML names it"`
+	From      string `json:"from" doc:"the field the relationship starts from, as <model fqn>.<field>"`
+	To        string `json:"to" doc:"the field the relationship points to, as <model fqn>.<field>"`
+	Type      string `json:"type" enum:"one_to_one,many_to_one,range,many_to_many" doc:"how many rows of each side match: many_to_one when many rows of from match one row of to"`
+	Active    bool   `json:"active" doc:"whether a query joins through the relationship by default. A query can still use an inactive one by naming it."`
+	Direction string `json:"direction" enum:"one_way,two_way" doc:"which way a filter passes through the relationship: one_way, from the one side to the many side only, or two_way, both ways"`
 }
 
 // ShowModel is a model as a dataset uses it, with the fields AQL can
