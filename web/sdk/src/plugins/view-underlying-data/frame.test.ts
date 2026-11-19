@@ -20,10 +20,12 @@ const region: ColumnMeta = {
   name: 'region', modelId: 'users', fieldName: 'region', label: 'Region', adhoc: false, isMeasure: false, ...textTypes,
 };
 const total: ColumnMeta = {
-  name: 'total', modelId: 'orders', fieldName: 'amount', label: 'total', adhoc: false, isMeasure: true, aggregation: 'sum', ...numberTypes,
+  name: 'total', modelId: 'orders', fieldName: 'amount', label: 'total', adhoc: false, isMeasure: true, aggregation: 'sum',
+  models: ['orders'], expression: 'sum(orders.amount)', ...numberTypes,
 };
 const count: ColumnMeta = {
-  name: 'n', modelId: 'orders', fieldName: 'id', label: 'n', adhoc: false, isMeasure: true, aggregation: 'count', ...numberTypes,
+  name: 'n', modelId: 'orders', fieldName: 'id', label: 'n', adhoc: false, isMeasure: true, aggregation: 'count',
+  models: ['orders'], expression: 'count(orders.id)', ...numberTypes,
 };
 
 const aql = 'explore { dimensions { region: users.region } measures { total: sum(orders.amount), n: count(orders.id) } }';
@@ -34,10 +36,11 @@ function page (size: number, hasMore: boolean): BackendQueryResult {
     { name: 'id', modelId: 'orders', fieldName: 'id', label: 'Id', adhoc: false, isMeasure: false, ...numberTypes },
     { name: 'amount', modelId: 'orders', fieldName: 'amount', label: 'Amount', adhoc: false, isMeasure: false, ...numberTypes },
     { name: 'status', modelId: 'orders', fieldName: 'status', label: 'Status', adhoc: false, isMeasure: false, ...textTypes },
+    { ...total, name: 'total' },
   ];
   return {
     columns,
-    values: Array.from({ length: size }, (_, i) => [String(i + 1), String(1000 + i), i === 0 ? null : 'paid']),
+    values: Array.from({ length: size }, (_, i) => [String(i + 1), String(1000 + i), i === 0 ? null : 'paid', String(10 * (i + 1))]),
     meta: { hasMore },
   };
 }
@@ -130,7 +133,7 @@ describe('the modal', () => {
     expect(uiRoot()!.querySelector('[role="dialog"] h2')!.textContent).toBe(`View underlying data: ${(1500).toLocaleString()} total`);
     const root = content()!;
     expect(root.querySelector('[data-testid="vud-conditions"]')!.textContent).toBe('Region is APAC');
-    expect([...root.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Id', 'Amount', 'Status', 'Created At']);
+    expect([...root.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Id', 'Amount', 'Status', 'Created At', 'total']);
     expect(underlying[0]).toEqual({
       dataset: 'sales',
       aql: expect.stringContaining('amount: orders.amount'),
@@ -142,8 +145,8 @@ describe('the modal', () => {
     });
     const rows = () => [...root.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((td) => td.textContent));
     expect(rows()).toEqual([
-      ['1', (1000).toLocaleString(), '', ''],
-      ['2', (1001).toLocaleString(), 'paid', ''],
+      ['1', (1000).toLocaleString(), '', '', '10'],
+      ['2', (1001).toLocaleString(), 'paid', '', '20'],
     ]);
     expect(root.querySelector('[data-testid="vud-count"]')!.textContent).toBe('Showing the first 2 rows');
 
@@ -185,9 +188,9 @@ describe('the modal', () => {
     const first = content()!.querySelector('tbody tr')!;
     const cells = [...first.querySelectorAll('td')];
     expect(cells[1].textContent).toBe((1000).toLocaleString());
-    expect(cells.map((cell) => cell.classList.contains('number'))).toEqual([true, true, false, false]);
+    expect(cells.map((cell) => cell.classList.contains('number'))).toEqual([true, true, false, false, true]);
     // `status` is null in the first row, and the result has no `created_at`: both empty.
-    expect(cells.map((cell) => cell.classList.contains('empty'))).toEqual([false, false, true, true]);
+    expect(cells.map((cell) => cell.classList.contains('empty'))).toEqual([false, false, true, true, false]);
   });
 
   it('downloads every row as a CSV through export.query', async () => {

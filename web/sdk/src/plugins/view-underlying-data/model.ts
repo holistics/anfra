@@ -3,14 +3,10 @@
  * aggregates (its base model), and the query that lists that model's rows behind the point. Pure:
  * the frame half decides with it as the menu opens, and the body draws what it plans.
  *
- * A model's measure (`orders.total_revenue`) or a plain aggregate of one model field
- * (`sum(orders.amount)`) resolves by the model its result column names, and shows that model's rows
- * without the measure. Any other measure (a dataset metric, a ratio, a filtered aggregate written
- * either way, `count(orders.id) | where(...)` or `orders | where(...) | count(orders.id)`, a metric
- * the query declares) resolves by the models anfra-node says it aggregates, one candidate per
- * model, and shows the measure as a column, recomputed for each row: a ratio has its value per row,
- * and a filtered measure 0 or nothing where its filter excludes the row. A measure with no models
- * gets no entry.
+ * Every measure resolves the same way: by the models anfra-node says it aggregates, one candidate
+ * per model, with the AQL the query wrote it as. Its rows show the measure as a column, recomputed
+ * for each: a ratio has its value per row, and a filtered measure nothing where its filter excludes
+ * the row. A measure with no models gets no entry.
  */
 import type {
   BackendCondition, BackendFilter, BackendSort, ColumnMeta, DatasetDescriptor, QueryRequest, Row, SelectionCondition,
@@ -33,16 +29,8 @@ export const PAGE_SIZE = 100;
 export interface Candidate {
   column: ColumnMeta;
   model: Model;
-  /**
-   * The measure as AQL: the model's measure or the aggregate rebuilt from the column, or else the
-   * AQL the query wrote it as.
-   */
+  /** The measure as AQL, as the query wrote it. */
   expression: string;
-  /**
-   * Whether the measure is a column of every row. Not for a model measure or a plain aggregate,
-   * where a row is usually one record, and a count is 1 and a sum repeats a field.
-   */
-  showMeasure: boolean;
   /** Why it can't be shown for this point, if it can't. */
   disabled?: string;
 }
@@ -73,23 +61,7 @@ export interface Plan {
 
 export const NO_DATA = 'No data is available for this point';
 
-/** `count distinct` → `count_distinct`: an aggregation's name as an AQL function, the reverse of anfra-node's naming. */
-export function aggregateFunction (aggregation: string): string | undefined {
-  const name = aggregation.trim().toLowerCase().replace(/\s+/g, '_');
-  return /^[a-z][a-z0-9_]*$/.test(name) && name !== 'custom' ? name : undefined;
-}
-
 const modelOf = (dataset: DatasetDescriptor, name: string) => dataset.data_models.find((model) => model.name === name);
-
-/** The measure as AQL, when its column names a model: the model's own measure, or the aggregate of one of its fields. */
-function measureExpression (column: ColumnMeta, model: Model): string | undefined {
-  const field = model.fields.find((candidate) => candidate.name === column.fieldName);
-  if (!field || field.is_param) return undefined;
-  const ref = `${model.name}.${field.name}`;
-  if (field.is_custom_measure) return ref;
-  const fn = column.aggregation ? aggregateFunction(column.aggregation) : undefined;
-  return fn ? `${fn}(${ref})` : undefined;
-}
 
 /** A value as the reader reads it: a number in their locale, anything else as the result has it. */
 export function display (value: unknown, column: ColumnMeta | undefined, format: Intl.NumberFormat): string {
@@ -106,26 +78,13 @@ export function display (value: unknown, column: ColumnMeta | undefined, format:
 /** Whether every row of the point leaves this measure empty. */
 const isEmpty = (rows: readonly Row[], measure: string) => rows.every((row) => row[measure] === null || row[measure] === undefined);
 
-/** AQL with no whitespace, to tell whether two spellings are the same. */
-const compact = (aql: string) => aql.replace(/\s+/g, '');
-
-/**
- * A measure's candidates, before the point decides whether they can be shown. A column names a
- * model and an aggregation for more than its plain aggregate: `orders | where(...) | count(orders.id)`
- * names `orders.id` and `count` too. It is the plain aggregate only when the AQL the query wrote is
- * that aggregate, or anfra-node didn't say the AQL.
- */
+/** A measure's candidates, before the point decides whether they can be shown: one per model it aggregates. */
 function measureCandidates (column: ColumnMeta, dataset: DatasetDescriptor): Omit<Candidate, 'disabled'>[] {
-  const model = column.modelId ? modelOf(dataset, column.modelId) : undefined;
-  const expression = model && measureExpression(column, model);
-  if (model && expression && (!column.expression || compact(column.expression) === compact(expression))) {
-    return [{ column, model, expression, showMeasure: false }];
-  }
-  if (!column.expression) return [];
-  const { expression: written } = column;
+  const { expression } = column;
+  if (!expression) return [];
   return (column.models ?? []).flatMap((name) => {
-    const of = modelOf(dataset, name);
-    return of ? [{ column, model: of, expression: written, showMeasure: true }] : [];
+    const model = modelOf(dataset, name);
+    return model ? [{ column, model, expression }] : [];
   });
 }
 
@@ -222,10 +181,7 @@ function freeAlias (wanted: string, taken: Set<string>): string {
 
 /**
  * The modal for one measure of a point: the base model's visible dimensions, grouped by them, where
- * the point's conditions and the query's own inputs hold. A model measure or a plain aggregate isn't
- * a column: a row is usually one record (a visible dimension is unique), where a count is 1 and a
- * sum repeats a field; the point's value goes in the title instead. Any other measure is a column,
- * recomputed for each row, and so is the measure of a model with no visible dimension.
+ * the point's conditions and the query's own inputs hold, with the measure recomputed for each row.
  *
  * Built on the query's request as it runs now: its declarations, its own `filters { }`, its
  * controls' filters, its selection, its timezone. A condition of its `filters` that names one of the
@@ -250,13 +206,10 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
   // Pages are LIMIT and OFFSET, so the order must be total, or a page may repeat rows another
   // showed: every dimension, which the rows are grouped by. Dates go first, newest first.
   sorts.sort((a, b) => Number(b.direction === 'desc') - Number(a.direction === 'desc'));
-  const measureLines: string[] = [];
-  if (candidate.showMeasure || !dimensionLines.length) {
-    const alias = freeAlias(candidate.column.name, taken);
-    planned.push({ name: alias, label: candidate.column.label || candidate.column.name, numeric: true });
-    measureLines.push(`    ${alias}: ${candidate.expression}`);
-  }
-  if (candidate.showMeasure && dimensions.length) {
+  const measureAlias = freeAlias(candidate.column.name, taken);
+  planned.push({ name: measureAlias, label: candidate.column.label || candidate.column.name, numeric: true });
+  const measureLines = [`    ${measureAlias}: ${candidate.expression}`];
+  if (dimensions.length) {
     // An explore leaves out a row where every measure is empty, as a filtered measure is on a row
     // its filter excludes: a count of the model's own rows keeps it. Not one of the modal's
     // columns, though a download has it.
@@ -274,7 +227,7 @@ export function plan (target: RowsTarget, candidate: Candidate, base: QueryReque
     ...(preamble ? [preamble] : []),
     'explore {',
     ...(dimensionLines.length ? ['  dimensions {', dimensionLines.join(',\n'), '  }'] : []),
-    ...(measureLines.length ? ['  measures {', measureLines.join(',\n'), '  }'] : []),
+    '  measures {', measureLines.join(',\n'), '  }',
     ...(kept.length ? ['  filters {', kept.map((condition) => `    ${condition}`).join(',\n'), '  }'] : []),
     '}',
   ].join('\n');
