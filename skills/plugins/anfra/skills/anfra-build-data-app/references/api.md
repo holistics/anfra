@@ -50,7 +50,10 @@ that plugin:
 | `lineage` | `Anfra.lineage(targets, options?)`: what fields are built from | [plugins/lineage.md](plugins/lineage.md) |
 | `inspect` | Nothing for the app: the host's Inspect panel reads the app's [structure](#structure) through it. | |
 
-`anfra serve` installs all four. Another host may install fewer, or plugins of its own.
+`anfra serve` installs all four unless the repo turns one off: each plugin but `core` has a setting
+in `.anfra/config.yml` (`apps.plugins.<name>.enabled`, on by default), and an org can turn one off
+for its readers. So a plugin may be missing even on a host that has it: always check
+`Anfra.plugins.has(name)`. Another host may install fewer, or plugins of its own.
 
 ## Field references
 
