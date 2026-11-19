@@ -83,6 +83,15 @@ func TestJSONSchema(t *testing.T) {
 	if origins["type"] != "array" || origins["maxItems"] != float64(MaxOrigins) || items["x-anfra-format"] != FormatOrigin {
 		t.Errorf("allow_origins: %v", origins)
 	}
+	for _, name := range Plugins {
+		e := at("apps", "plugins", name, "enabled")
+		if e["type"] != "boolean" || e["default"] != true || e["title"] == "" || e["description"] == "" {
+			t.Errorf("apps.plugins.%s.enabled: %v", name, e)
+		}
+	}
+	if _, ok := at("apps", "plugins")["properties"].(map[string]any)["core"]; ok {
+		t.Error("core has a key, but it's always installed")
+	}
 	if at("aql")["title"] != "AQL" {
 		t.Errorf("aql's title: %v", at("aql")["title"])
 	}
@@ -121,6 +130,7 @@ func TestGroupOf(t *testing.T) {
 		"query.cache.enabled":          "query.cache",
 		"aql.compiler.version":         "aql.compiler",
 		"apps.allow_origins":           "apps",
+		"apps.plugins.render.enabled":  "apps.plugins",
 	} {
 		if got := GroupOf(k); got != want {
 			t.Errorf("GroupOf(%s) = %s, want %s", k, got, want)

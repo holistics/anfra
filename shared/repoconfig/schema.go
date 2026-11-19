@@ -70,6 +70,31 @@ var specs = map[Key]Spec{
 		Format:      FormatOrigin,
 		MaxItems:    MaxOrigins,
 	},
+	PluginKey("inspect"): {
+		Label:       "Inspect",
+		Description: "A panel that shows what a data app runs: its queries, the data they return, and its structure",
+		Default:     true,
+	},
+	PluginKey("lineage"): {
+		Label:       "Lineage",
+		Description: "Data apps can trace a field to the models and tables it comes from, and the panel draws where each number comes from",
+		Default:     true,
+	},
+	PluginKey("view-underlying-data"): {
+		Label:       "View underlying data",
+		Description: "Readers can list the rows behind a point on a chart, from its menu",
+		Default:     true,
+	},
+	PluginKey("render"): {
+		Label:       "Render",
+		Description: "Data apps can save a picture of themselves, or of a part, as a PNG or PDF file for the reader",
+		Default:     true,
+	},
+	PluginKey("export"): {
+		Label:       "Export",
+		Description: "Data apps can save a query's whole result as a file for the reader",
+		Default:     true,
+	},
 	"query.default.input.timezone": {
 		Label:       "Time zone",
 		Description: "For relative dates and date truncation, in a query that sets none",
@@ -119,6 +144,7 @@ var specs = map[Key]Spec{
 var groups = map[Key]string{
 	"org":                 "Publishing",
 	"apps":                "Data apps",
+	"apps.plugins":        "Plugins",
 	"query":               "Queries",
 	"query.default":       "Defaults",
 	"query.default.input": "Input",
