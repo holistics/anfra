@@ -63,6 +63,7 @@ func TestPublishWarnsOfOverriddenChangesAndLocalSettings(t *testing.T) {
 		{Key: "query.cache.enabled", Value: true, Source: "override", Override: &cloudapi.RepoOverride{Value: true, UpdatedBy: "ada@acme.com"}, Editable: true},
 		{Key: "query.cache.max_duration", Value: "1h", Source: "override", Repo: "24h", Override: &cloudapi.RepoOverride{Value: "1h"}, Editable: true},
 		{Key: "aql.compiler.version", Source: "default", Editable: true},
+		{Key: "apps.plugins.export.enabled", Value: true, Source: "override", Override: &cloudapi.RepoOverride{Value: true, UpdatedBy: "ada@acme.com"}, Editable: true},
 		{Key: "query.default.input.timezone", Value: "Etc/UTC", Source: "repo", Repo: "Etc/UTC", Editable: true},
 	}}
 	const published = "query:\n  default:\n    input:\n      timezone: Etc/UTC\n  cache:\n    max_duration: 24h\n"
@@ -74,15 +75,16 @@ func TestPublishWarnsOfOverriddenChangesAndLocalSettings(t *testing.T) {
 	if _, said, err := run(t, dir, Options{SetOrg: url}, never(t)); err != nil {
 		t.Fatalf("%v\n%s", err, said)
 	}
-	// Then this publish turns the cache off, which the org overrides, and
-	// leaves the cap as published, which it overrides too.
-	write(t, dir, map[string]string{repoformat.ConfigFile: published + "    enabled: false\norg:\n  url: " + url + "\n"})
+	// Then this publish turns the cache and the export plugin off, which the
+	// org overrides, and leaves the cap as published, which it overrides too.
+	write(t, dir, map[string]string{repoformat.ConfigFile: published + "    enabled: false\norg:\n  url: " + url + "\napps:\n  plugins:\n    export:\n      enabled: false\n"})
 	_, said, err := run(t, dir, Options{}, never(t))
 	if err != nil {
 		t.Fatalf("%v\n%s", err, said)
 	}
 	for _, want := range []string{
 		"settings_overridden: This publish changes query.cache.enabled, but " + url + " keeps it at true, because ada@acme.com overrides it there.",
+		"settings_overridden: This publish changes apps.plugins.export.enabled, but " + url + " keeps it at true, because ada@acme.com overrides it there.",
 		"settings_local: .anfra/config.local.yml sets aql.compiler.version to v2 on this machine, but the org uses anfra's default.",
 	} {
 		if !strings.Contains(said, want) {

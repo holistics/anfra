@@ -18,6 +18,11 @@ func TestKeys(t *testing.T) {
 	want := []string{
 		"org.url",
 		"apps.allow_origins",
+		"apps.plugins.inspect.enabled",
+		"apps.plugins.lineage.enabled",
+		"apps.plugins.view-underlying-data.enabled",
+		"apps.plugins.render.enabled",
+		"apps.plugins.export.enabled",
 		"query.default.input.timezone",
 		"query.default.input.weekStartDay",
 		"query.default.cache.duration",
@@ -282,5 +287,44 @@ func TestGetAndEqual(t *testing.T) {
 		if got := Equal(tc.key, a, b); got != tc.want {
 			t.Errorf("Equal(%s, %s, %s) = %v, want %v", tc.key, tc.a, tc.b, got, tc.want)
 		}
+	}
+}
+
+// Every SDK plugin but core is on unless a layer turns it off, and the later
+// layer wins: a member's own file turns back on what the repo turned off.
+func TestEnabledPlugins(t *testing.T) {
+	all := []string{"inspect", "lineage", "view-underlying-data", "render", "export"}
+	if got := (Config{}).EnabledPlugins(); strings.Join(got, " ") != strings.Join(all, " ") {
+		t.Errorf("defaults: %v, want %v", got, all)
+	}
+	if strings.Join(Plugins, " ") != strings.Join(all, " ") {
+		t.Errorf("Plugins = %v", Plugins)
+	}
+	repo, err := ParseSettings(FilePath, []byte("apps:\n  plugins:\n    render:\n      enabled: false\n    export:\n      enabled: false\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := []Setting{{Key: PluginKey("export"), Value: jsontext.Value("true")}}
+	c, broken := Layer(repo, local)
+	if len(broken) > 0 {
+		t.Fatal(broken)
+	}
+	if got := strings.Join(c.EnabledPlugins(), " "); got != "inspect lineage view-underlying-data export" {
+		t.Errorf("layered: %s", got)
+	}
+}
+
+// A plugin anfra doesn't have, core included, is refused like any unknown key.
+func TestUnknownPluginIsRefused(t *testing.T) {
+	for _, name := range []string{"core", "chart", "renderr"} {
+		_, err := Parse(FilePath, []byte("apps:\n  plugins:\n    "+name+":\n      enabled: false\n"))
+		u, ok := AsUnknownKey(err)
+		if !ok || u.Key != Key("apps.plugins."+name) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	_, err := Parse(FilePath, []byte("apps:\n  plugins:\n    renderr:\n      enabled: false\n"))
+	if !strings.Contains(err.Error(), "Did you mean render?") {
+		t.Errorf("renderr: %v", err)
 	}
 }

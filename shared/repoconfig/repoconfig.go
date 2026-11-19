@@ -12,6 +12,7 @@ package repoconfig
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/holistics/anfra/internal/command"
@@ -44,6 +45,16 @@ type Config struct {
 		// the SDK's own CDNs, each passing repoformat.CheckOrigin, at most
 		// MaxOrigins.
 		AllowOrigins []string `yaml:"allow_origins"`
+		// Plugins are the SDK plugins the repo's Data Apps get, one mapping per
+		// plugin a repo may turn off: core, always installed, has none. A
+		// plugin's own settings, if one ever has any, go beside its Enabled.
+		Plugins struct {
+			Inspect            Plugin `yaml:"inspect"`
+			Lineage            Plugin `yaml:"lineage"`
+			ViewUnderlyingData Plugin `yaml:"view-underlying-data"`
+			Render             Plugin `yaml:"render"`
+			Export             Plugin `yaml:"export"`
+		} `yaml:"plugins"`
 	} `yaml:"apps"`
 	// Query is how the repo's queries run (docs/designs/query-settings.md).
 	Query struct {
@@ -83,6 +94,34 @@ type Config struct {
 			Version string `yaml:"version"`
 		} `yaml:"compiler"`
 	} `yaml:"aql"`
+}
+
+// Plugin is one SDK plugin's settings, under apps.plugins.<name>.
+type Plugin struct {
+	// Enabled installs the plugin in the repo's Data Apps. Unset is on.
+	Enabled *bool `yaml:"enabled"`
+}
+
+// Plugins are the names of the SDK plugins a repo's settings turn on or off,
+// in Config's order: every built-in plugin but core. No name holds a ".".
+var Plugins = yamlNames(reflect.TypeOf(Config{}.Apps.Plugins))
+
+// PluginKey is the setting that turns the plugin name on or off:
+// apps.plugins.<name>.enabled.
+func PluginKey(name string) Key { return Key("apps.plugins").child(name).child("enabled") }
+
+// EnabledPlugins are the names of the SDK plugins the repo's Data Apps get
+// beyond core, in Plugins' order: each one its setting leaves on.
+func (c Config) EnabledPlugins() []string {
+	v := reflect.ValueOf(c)
+	var on []string
+	for _, name := range Plugins {
+		f, _ := field(v, PluginKey(name))
+		if f.IsNil() || f.Elem().Bool() {
+			on = append(on, name)
+		}
+	}
+	return on
 }
 
 // QueryCacheEnabled is query.cache.enabled: on unless the repo sets false.
