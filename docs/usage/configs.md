@@ -28,6 +28,7 @@ The repo's settings, written by hand and committed. It never holds a credential.
 |---|---|
 | `org.url` | The org `anfra publish` publishes the repo to, by its address on its server (`https://bi.example.com/o/acme`), so everyone publishes to the same org. `anfra publish --set-org` sets it, changing nothing else in the file. |
 | `apps.allow_origins` | Origins the repo's Data Apps may load scripts, styles and fonts from, and send requests to, beyond the SDK's own CDNs, as `anfra serve` runs them, each `https://<host>[:<port>]`. It's never published, since an org keeps its own list, and `anfra publish` says which of them the org doesn't allow. |
+| `apps.plugins.<name>.enabled` | Whether the repo's Data Apps get the SDK plugin `<name>`: `inspect` (the panel's tabs for what an app runs), `lineage` (`Anfra.lineage` and the Lineage tab), `view-underlying-data` (the rows behind a chart's point), `render` (a PNG or PDF of the app, `Anfra.render`) and `export` (a query's result as a file, `query.export`). `false` leaves the plugin out, so an app that checks `Anfra.plugins.has(name)` hides what it would offer. `core`, which runs the queries, is always installed and has no setting; a name anfra doesn't have is refused. `anfra serve` reads them on every page load. Default: `true` for each. |
 | `query.default.input.timezone` | The IANA time zone an AQL query uses for relative dates and date truncation, when it sets no `input.timezone` of its own, such as `Asia/Ho_Chi_Minh`. Default: `Etc/UTC`. |
 | `query.default.input.weekStartDay` | The day weeks start on, for an AQL query that sets no `input.weekStartDay` (keys under `query.default.input` are camelCase, as a query's `input` names them): for grouping by week, relative dates such as `this week`, and the day of the week's number. One of `monday` to `sunday`, in lowercase. Default: `monday`, on every database. |
 | `query.locked_defaults` | The defaults above that a query can't change, by their path under `query.default`: `input.timezone`, `input.weekStartDay` or `cache.duration`. A query may leave a locked input out, or send the same value; any other value is refused. Each must be set under `query.default`. Default: none. |
@@ -48,6 +49,9 @@ org:
 apps:
   allow_origins:
     - https://cdn.acme.com
+  plugins:
+    render:
+      enabled: false
 query:
   default:
     input:
