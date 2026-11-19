@@ -75,10 +75,10 @@ type CommandContext struct {
 	// Attribution names the caller for logs and audit. Never read by a command,
 	// and never by the query layer — see internal/attribution.
 	Attribution attribution.Fields
-	// TraceData says what of the user's data the invocation's spans record, per
-	// category: an op's input and answer, a query's SQL, an error's message
-	// (docs/designs/telemetry.md). Zero: each category at its default. A query's
-	// rows are never recorded.
+	// TraceData says whether the invocation's spans record the user's data: an
+	// op's input and answer, a query's SQL, an error's message
+	// (docs/designs/telemetry.md). Zero: none. A query's rows are never
+	// recorded.
 	TraceData telemetry.Settings
 	// Server is the warm server the command runs in, for status to report: nil
 	// one-shot, and in a host that embeds the engine.
@@ -198,7 +198,7 @@ type TelemetryInfo struct {
 	State    TelemetryState `json:"state" enum:"off,on,failing" doc:"\"off\": no endpoint is set, so nothing is sent. \"on\": traces are sent to the endpoint, which accepts connections. That doesn't prove it stores them. \"failing\": an endpoint is set but doesn't accept connections, so traces are lost."`
 	Endpoint string         `json:"endpoint,omitempty" doc:"the OpenTelemetry endpoint traces are sent to. Absent when off."`
 	SetBy    string         `json:"set_by,omitempty" doc:"what set the endpoint: an OTEL_* variable, followed by 'in .env' when the repo's .env set it. When off, OTEL_SDK_DISABLED if that turned telemetry off, otherwise absent."`
-	Data     *TelemetryData `json:"data,omitempty" doc:"what of your data reaches a span, per category, after every rule is applied."`
+	Data     *TelemetryData `json:"data,omitempty" doc:"whether your data reaches a span, and what set it."`
 	// PayloadLimit is how many bytes of each payload a span records.
 	PayloadLimit *TelemetryLimit `json:"payload_limit,omitempty" doc:"how many bytes of each input, result and query a span records, at most. A longer one is cut, and marked as cut."`
 	// Hints are what the host says to check about where traces go, which
@@ -207,25 +207,16 @@ type TelemetryInfo struct {
 	Hints []string `json:"-"`
 }
 
-// TelemetryData is how each category of the user's data is recorded: one
-// field per category of shared/telemetry's registry, which a test checks.
+// TelemetryData is whether spans record the user's data, and what set it.
 type TelemetryData struct {
-	Inputs  TelemetryLevel `json:"inputs" doc:"what a command asked for: its arguments and input, and the names of the dataset, data source and files it ran on."`
-	Outputs TelemetryLevel `json:"outputs" doc:"what came back: a command's result, without a query's rows."`
-	SQL     TelemetryLevel `json:"sql" doc:"the SQL anfra sends to the warehouse."`
-	Errors  TelemetryLevel `json:"errors" doc:"an error's message and stack."`
-}
-
-// TelemetryLevel is one category's level, and what set it.
-type TelemetryLevel struct {
-	Value string `json:"value" enum:"off,masked,raw" doc:"\"off\": not recorded. \"masked\": recorded with what you wrote replaced with ?. \"raw\": recorded as it is."`
-	SetBy string `json:"set_by" doc:"what set it: its ANFRA_TRACE_* variable (followed by \"in .env\" when the repo's .env set it), ANFRA_TRACE_DATA when that held it off, or \"default\"."`
+	On    bool   `json:"on" doc:"whether a span records your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack."`
+	SetBy string `json:"set_by" doc:"what set it: ANFRA_EXPERIMENTAL_TRACE_DATA (followed by \"in .env\" when the repo's .env set it), or \"default\"."`
 }
 
 // TelemetryLimit is the payload limit, and what set it.
 type TelemetryLimit struct {
 	Value int    `json:"value" doc:"the limit, in bytes."`
-	SetBy string `json:"set_by" doc:"what set it: ANFRA_TRACE_PAYLOAD_LIMIT (followed by \"in .env\" when the repo's .env set it), or \"default\"."`
+	SetBy string `json:"set_by" doc:"what set it: ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT (followed by \"in .env\" when the repo's .env set it), or \"default\"."`
 }
 
 // TransformSchema describes TelemetryInfo wherever it appears, so what it is and

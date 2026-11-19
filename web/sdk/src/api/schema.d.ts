@@ -1321,18 +1321,14 @@ export interface components {
             store?: string;
         };
         TelemetryData: {
-            /** @description an error's message and stack. */
-            errors: components["schemas"]["TelemetryLevel"];
-            /** @description what a command asked for: its arguments and input, and the names of the dataset, data source and files it ran on. */
-            inputs: components["schemas"]["TelemetryLevel"];
-            /** @description what came back: a command's result, without a query's rows. */
-            outputs: components["schemas"]["TelemetryLevel"];
-            /** @description the SQL anfra sends to the warehouse. */
-            sql: components["schemas"]["TelemetryLevel"];
+            /** @description whether a span records your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack. */
+            on: boolean;
+            /** @description what set it: ANFRA_EXPERIMENTAL_TRACE_DATA (followed by "in .env" when the repo's .env set it), or "default". */
+            set_by: string;
         };
         /** @description Where anfra records each command's trace: the user's own telemetry, to their own endpoint, never data sent to Holistics. Under anfra serve, the server's settings, since its commands run there. Absent when the host doesn't say. Experimental: its fields may change in a minor release. */
         TelemetryInfo: {
-            /** @description what of your data reaches a span, per category, after every rule is applied. */
+            /** @description whether your data reaches a span, and what set it. */
             data?: components["schemas"]["TelemetryData"];
             /** @description the OpenTelemetry endpoint traces are sent to. Absent when off. */
             endpoint?: string;
@@ -1346,17 +1342,8 @@ export interface components {
              */
             state: "off" | "on" | "failing";
         };
-        TelemetryLevel: {
-            /** @description what set it: its ANFRA_TRACE_* variable (followed by "in .env" when the repo's .env set it), ANFRA_TRACE_DATA when that held it off, or "default". */
-            set_by: string;
-            /**
-             * @description "off": not recorded. "masked": recorded with what you wrote replaced with ?. "raw": recorded as it is.
-             * @enum {string}
-             */
-            value: "off" | "masked" | "raw";
-        };
         TelemetryLimit: {
-            /** @description what set it: ANFRA_TRACE_PAYLOAD_LIMIT (followed by "in .env" when the repo's .env set it), or "default". */
+            /** @description what set it: ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT (followed by "in .env" when the repo's .env set it), or "default". */
             set_by: string;
             /**
              * Format: int64

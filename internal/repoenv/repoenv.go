@@ -1,7 +1,7 @@
 // Package repoenv reads a repo's root .env: each person's settings for the
 // repo, below the environment (docs/designs/telemetry.md, setting storages).
 //
-// Only anfra's names are read (loaded): telemetry's OTEL_* and ANFRA_TRACE_*, and
+// Only anfra's names are read (loaded): telemetry's OTEL_* and ANFRA_EXPERIMENTAL_TRACE_*, and
 // anfra's other switches. The file may be an app's too, and its other names are
 // that app's: read, an app's PGPASSWORD would reach canal-query, which inherits
 // anfra's environment, and PATH would choose the git anfra runs. The sidecar

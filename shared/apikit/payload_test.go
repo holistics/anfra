@@ -96,21 +96,20 @@ func TestAPayloadOverTheLimitIsCutAndMarked(t *testing.T) {
 	}
 }
 
-// With inputs raw and outputs off, only the input is recorded.
-func TestEachPayloadFollowsItsCategory(t *testing.T) {
+// With data off, no payload is recorded.
+func TestNoPayloadWithDataOff(t *testing.T) {
 	rec := record(t)
 	o := one(t, greet("greetings.create"))
-	ctx := telemetry.WithSettings(context.Background(), telemetry.NewSettings(map[telemetry.Category]telemetry.Level{telemetry.Inputs: telemetry.Raw}, 0))
+	ctx := telemetry.WithSettings(context.Background(), telemetry.Defaults())
 	if _, err := o.Invoke(ctx, runtime(), request{user: "ann"}, []byte(`{"name":"Zed"}`)); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := events(t, rec)
-	if got[telemetry.OpInput.String()] == "" || got[telemetry.OpOutput.String()] != "" {
-		t.Errorf("with inputs raw and outputs off, payloads = %v, want the input only", got)
+	if got, _ := events(t, rec); got[telemetry.OpInput.String()] != "" || got[telemetry.OpOutput.String()] != "" {
+		t.Errorf("with data off, payloads = %v, want none", got)
 	}
 }
 
-// raw is inputs and outputs raw, each payload cut at limit bytes.
+// raw is data on, each payload cut at limit bytes.
 func raw(limit int) telemetry.Settings {
-	return telemetry.NewSettings(map[telemetry.Category]telemetry.Level{telemetry.Inputs: telemetry.Raw, telemetry.Outputs: telemetry.Raw}, limit)
+	return telemetry.NewSettings(true, limit)
 }

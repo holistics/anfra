@@ -1957,23 +1957,15 @@ components:
     TelemetryData:
       additionalProperties: false
       properties:
-        errors:
-          $ref: "#/components/schemas/TelemetryLevel"
-          description: an error's message and stack.
-        inputs:
-          $ref: "#/components/schemas/TelemetryLevel"
-          description: "what a command asked for: its arguments and input, and the names of the dataset, data source and files it ran on."
-        outputs:
-          $ref: "#/components/schemas/TelemetryLevel"
-          description: "what came back: a command's result, without a query's rows."
-        sql:
-          $ref: "#/components/schemas/TelemetryLevel"
-          description: the SQL anfra sends to the warehouse.
+        "on":
+          description: "whether a span records your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack."
+          type: boolean
+        set_by:
+          description: "what set it: ANFRA_EXPERIMENTAL_TRACE_DATA (followed by \"in .env\" when the repo's .env set it), or \"default\"."
+          type: string
       required:
-        - inputs
-        - outputs
-        - sql
-        - errors
+        - "on"
+        - set_by
       type: object
     TelemetryInfo:
       additionalProperties: false
@@ -1981,7 +1973,7 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/TelemetryData"
-          description: what of your data reaches a span, per category, after every rule is applied.
+          description: whether your data reaches a span, and what set it.
         endpoint:
           description: the OpenTelemetry endpoint traces are sent to. Absent when off.
           type: string
@@ -2001,28 +1993,11 @@ components:
       required:
         - state
       type: object
-    TelemetryLevel:
-      additionalProperties: false
-      properties:
-        set_by:
-          description: "what set it: its ANFRA_TRACE_* variable (followed by \"in .env\" when the repo's .env set it), ANFRA_TRACE_DATA when that held it off, or \"default\"."
-          type: string
-        value:
-          description: "\"off\": not recorded. \"masked\": recorded with what you wrote replaced with ?. \"raw\": recorded as it is."
-          enum:
-            - "off"
-            - masked
-            - raw
-          type: string
-      required:
-        - value
-        - set_by
-      type: object
     TelemetryLimit:
       additionalProperties: false
       properties:
         set_by:
-          description: "what set it: ANFRA_TRACE_PAYLOAD_LIMIT (followed by \"in .env\" when the repo's .env set it), or \"default\"."
+          description: "what set it: ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT (followed by \"in .env\" when the repo's .env set it), or \"default\"."
           type: string
         value:
           description: the limit, in bytes.

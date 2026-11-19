@@ -15,10 +15,8 @@ import (
 	"github.com/holistics/anfra/shared/telemetry"
 )
 
-// levels is settings with the levels given, the rest at their defaults.
-func levels(l map[telemetry.Category]telemetry.Level) telemetry.Settings {
-	return telemetry.NewSettings(l, 0)
-}
+// on is settings with data on.
+var on = telemetry.NewSettings(true, 0)
 
 // filtered is the one span a span with every kind of key ends as, through
 // Filter with fallback, started in ctx.
@@ -63,92 +61,59 @@ func eventNames(s sdktrace.ReadOnlySpan) []string {
 	return n
 }
 
-// By default, inputs and outputs are left out, SQL and errors masked, a
-// left-out key never recorded, anfra's own keys kept, and an undeclared key or
-// event left out, its name recorded.
+// By default the user's data is left out, a left-out key never recorded,
+// anfra's own keys kept, and an undeclared key or event left out, its name
+// recorded. That the span failed is kept, but not its message.
 func TestFilterAppliesTheDefaults(t *testing.T) {
 	s := filtered(t, context.Background(), telemetry.Defaults())
 	got := attrNames(s.Attributes())
 	if got["anfra.op"] != "core.query" {
 		t.Errorf("anfra's own key was dropped: %v", got)
 	}
-	if _, ok := got["some.new.key"]; ok {
-		t.Error("an undeclared key was recorded")
-	}
 	if d := got["anfra.telemetry.dropped_keys"]; d != `["some.new.event","some.new.key"]` {
 		t.Errorf("anfra.telemetry.dropped_keys = %s, want the undeclared key and event", d)
 	}
-	if _, ok := got["anfra.dataset"]; ok {
-		t.Error("anfra.dataset recorded with inputs off")
+	for _, k := range []string{"some.new.key", "anfra.dataset", "client.address", "server.address", "error.message", "db.query.text"} {
+		if _, ok := got[k]; ok {
+			t.Errorf("%s recorded by default", k)
+		}
 	}
-	if _, ok := got["client.address"]; ok {
-		t.Error("client.address recorded")
+	if n := eventNames(s); len(n) != 0 {
+		t.Errorf("events = %v, want none", n)
 	}
-	if _, ok := got["server.address"]; ok {
-		t.Error("server.address, which can name the org, recorded with inputs off")
-	}
-	if got["error.message"] != "invalid date '?'" {
-		t.Errorf("error.message = %q, want it masked as exception.message is", got["error.message"])
-	}
-	if got["db.query.text"] != "SELECT * FROM t WHERE email = ?" {
-		t.Errorf("db.query.text = %q, want it masked", got["db.query.text"])
-	}
-	if n := eventNames(s); !slices.Equal(n, []string{"exception"}) {
-		t.Errorf("events = %v, want the exception alone", n)
-	}
-	exc := attrNames(s.Events()[0].Attributes)
-	if exc["exception.message"] != "invalid date '?'" {
-		t.Errorf("exception.message = %q, want it masked", exc["exception.message"])
-	}
-	if _, ok := exc["exception.stacktrace"]; ok {
-		t.Error("a masked error kept its stack")
-	}
-	if d := s.Status().Description; d != "connect to ? failed" {
-		t.Errorf("status = %q, want it masked", d)
+	if s.Status().Code != codes.Error || s.Status().Description != "" {
+		t.Errorf("status = %+v, want an error without its message", s.Status())
 	}
 }
 
-// Raw records each category as it is; a left-out key still isn't.
-func TestFilterRecordsRawAsItIs(t *testing.T) {
-	all := levels(map[telemetry.Category]telemetry.Level{
-		telemetry.Inputs: telemetry.Raw, telemetry.Outputs: telemetry.Raw, telemetry.SQL: telemetry.Raw, telemetry.Errors: telemetry.Raw,
-	})
-	s := filtered(t, context.Background(), all)
+// Data on records each data key as it is; a left-out key still isn't.
+func TestFilterRecordsDataWhenOn(t *testing.T) {
+	s := filtered(t, context.Background(), on)
 	got := attrNames(s.Attributes())
-	if got["anfra.dataset"] != "ecommerce" || got["db.query.text"] != "SELECT * FROM t WHERE email = 'a@b.c'" {
-		t.Errorf("raw: %v", got)
+	if got["anfra.dataset"] != "ecommerce" || got["db.query.text"] != "SELECT * FROM t WHERE email = 'a@b.c'" || got["error.message"] != "invalid date '2024-13-01'" {
+		t.Errorf("data on: %v", got)
 	}
 	if _, ok := got["some.new.key"]; ok {
-		t.Error("an undeclared key was recorded with everything raw")
+		t.Error("an undeclared key was recorded with data on")
 	}
 	if _, ok := got["client.address"]; ok {
-		t.Error("client.address recorded with everything raw")
+		t.Error("client.address recorded with data on")
 	}
 	if n := eventNames(s); !slices.Equal(n, []string{"anfra.op.input", "anfra.op.output", "exception"}) {
 		t.Errorf("events = %v", n)
 	}
 	if exc := attrNames(s.Events()[2].Attributes); exc["exception.stacktrace"] == "" {
-		t.Error("a raw error lost its stack")
+		t.Error("an error lost its stack")
+	}
+	if d := s.Status().Description; d != "connect to 10.0.0.1 failed" {
+		t.Errorf("status = %q, want the message", d)
 	}
 }
 
-// Off leaves the category out, an error's whole exception event included, but
-// keeps that it failed; anfra's own status text, a public code, is always kept.
-func TestFilterLeavesOffOut(t *testing.T) {
-	off := levels(map[telemetry.Category]telemetry.Level{telemetry.SQL: telemetry.Off, telemetry.Errors: telemetry.Off})
-	s := filtered(t, context.Background(), off)
-	if _, ok := attrNames(s.Attributes())["db.query.text"]; ok {
-		t.Error("db.query.text recorded with SQL off")
-	}
-	if n := eventNames(s); slices.Contains(n, "exception") {
-		t.Errorf("errors off: events = %v, want no exception", n)
-	}
-	if s.Status().Description != "" {
-		t.Errorf("status = %q, want none", s.Status().Description)
-	}
-
+// anfra's own status text, a public code, is kept with data off.
+func TestAPublicCodesStatusIsKept(t *testing.T) {
 	rec := tracetest.NewSpanRecorder()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.Filter(rec, off)))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.Filter(rec, telemetry.Defaults())))
 	_, span := tp.Tracer("test").Start(context.Background(), "op")
 	span.SetStatus(codes.Error, "internal_server_error")
 	span.End()
@@ -158,7 +123,7 @@ func TestFilterLeavesOffOut(t *testing.T) {
 }
 
 // A status text that only looks like a code, a table's name say, is a
-// message: masked as errors say, not kept as a code is.
+// message: left out with data off, not kept as a code is.
 func TestAStatusThatIsNoCodeIsAMessage(t *testing.T) {
 	for status, want := range map[string]string{
 		"analytics.customers":   "",
@@ -166,12 +131,12 @@ func TestAStatusThatIsNoCodeIsAMessage(t *testing.T) {
 		telemetry.PanicStatus:   telemetry.PanicStatus,
 	} {
 		rec := tracetest.NewSpanRecorder()
-		tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.Filter(rec, levels(map[telemetry.Category]telemetry.Level{telemetry.Errors: telemetry.Off}))))
+		tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.Filter(rec, telemetry.Defaults())))
 		_, span := tp.Tracer("test").Start(context.Background(), "op")
 		span.SetStatus(codes.Error, status)
 		span.End()
 		if d := rec.Ended()[0].Status().Description; d != want {
-			t.Errorf("status %q, errors off: recorded %q, want %q", status, d, want)
+			t.Errorf("status %q, data off: recorded %q, want %q", status, d, want)
 		}
 	}
 }
@@ -179,34 +144,34 @@ func TestAStatusThatIsNoCodeIsAMessage(t *testing.T) {
 // A span follows the settings of the context it started in, over the
 // fallback.
 func TestFilterFollowsTheContextsSettings(t *testing.T) {
-	ctx := telemetry.WithSettings(context.Background(), levels(map[telemetry.Category]telemetry.Level{telemetry.Inputs: telemetry.Raw}))
+	ctx := telemetry.WithSettings(context.Background(), on)
 	if got := attrNames(filtered(t, ctx, telemetry.Defaults()).Attributes()); got["anfra.dataset"] != "ecommerce" {
-		t.Errorf("with the context's inputs raw, anfra.dataset = %q", got["anfra.dataset"])
+		t.Errorf("with the context's data on, anfra.dataset = %q", got["anfra.dataset"])
 	}
 }
 
-// RecordError records an error as errors says, before any processor: off
-// records no event.
+// RecordError records an error, with its stack, only when data is on.
 func TestRecordErrorFollowsErrors(t *testing.T) {
-	for level, want := range map[telemetry.Level]string{telemetry.Raw: "bad '1'", telemetry.Masked: "bad '?'", telemetry.Off: ""} {
+	for _, dataOn := range []bool{true, false} {
 		rec := tracetest.NewSpanRecorder()
 		tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
 		_, span := tp.Tracer("test").Start(context.Background(), "op")
-		telemetry.RecordError(span, levels(map[telemetry.Category]telemetry.Level{telemetry.Errors: level}), errors.New("bad '1'"), true)
+		s := telemetry.Defaults()
+		if dataOn {
+			s = on
+		}
+		telemetry.RecordError(span, s, errors.New("bad '1'"), true)
 		span.End()
 		events := rec.Ended()[0].Events()
-		if level == telemetry.Off {
+		if !dataOn {
 			if len(events) != 0 {
 				t.Errorf("off: events = %v, want none", events)
 			}
 			continue
 		}
 		exc := attrNames(events[0].Attributes)
-		if exc["exception.message"] != want {
-			t.Errorf("%s: exception.message = %q, want %q", level, exc["exception.message"], want)
-		}
-		if _, ok := exc["exception.stacktrace"]; ok != (level == telemetry.Raw) {
-			t.Errorf("%s: stack recorded = %v", level, ok)
+		if exc["exception.message"] != "bad '1'" || exc["exception.stacktrace"] == "" {
+			t.Errorf("on: exception = %v, want its message and stack", exc)
 		}
 	}
 }

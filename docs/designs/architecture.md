@@ -102,7 +102,7 @@ Two places, with different owners.
     │   └── query/             the query cache: its store (store.sqlite) and canal-lake's files (lake/)
     ├── runtime/serve.json     the running server, while there is one
     ├── catalog/               the local search catalog
-    └── telemetry/compose.yaml its telemetry stack: an OpenTelemetry collector and ClickHouse; written by `anfra telemetry init` (internal/telemetry/stack)
+    └── telemetry/compose.yaml its telemetry stack: an OpenTelemetry collector and ClickHouse; written by `anfra experimental telemetry init` (internal/telemetry/stack)
 ```
 
 Keeping state out of the repo means a repo never fills with generated files, and the same repo checked out twice gets separate state. A unix socket path has a short length limit, so the sidecars' sockets go in the system temp folder instead, each in a private directory with a random name ([sidecars.md](sidecars.md#sockets-and-ports)).

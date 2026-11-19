@@ -36,7 +36,7 @@ import (
 // user, reading their own logs.
 //
 // Each query is written onto its span (telemetry.Queries), and the user's data
-// recorded as the ANFRA_TRACE_* settings say (docs/designs/telemetry.md).
+// recorded as the ANFRA_EXPERIMENTAL_TRACE_* settings say (docs/designs/telemetry.md).
 func (h hostContext) commandContext(clients command.Clients) command.CommandContext {
 	cc := command.CommandContext{
 		Clients:       clients,

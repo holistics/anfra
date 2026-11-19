@@ -12,7 +12,7 @@ import (
 )
 
 // Payloads are a command's arguments, an op's whole input and answer, and a
-// query's SQL: each recorded as its category says (shared/telemetry), because
+// query's SQL: each recorded only when data is on (shared/telemetry), because
 // they can hold the user's data (docs/designs/telemetry.md). Each is cut at
 // the payload limit, and marked when it is.
 
@@ -20,18 +20,17 @@ import (
 const cutMark = "…"
 
 // Payloader is an answer that says what of it a trace may record, when that is
-// less than all of it: a query's answer is recorded without its rows. sql is
-// whether the SQL in it may be recorded: only when SQL is raw.
+// less than all of it: a query's answer is recorded without its rows.
 type Payloader interface {
-	TracePayload(sql bool) any
+	TracePayload() any
 }
 
 // RecordPayload records v as the span event on ctx's span, as JSON, cut at the
-// limit, when the event's category is recorded: []byte as it is (an op's
+// limit, when data is recorded: []byte as it is (an op's
 // input, as sent), a Payloader as its TracePayload, anything else encoded.
 func RecordPayload(ctx context.Context, event telemetry.Key, v any) {
 	settings := telemetry.SettingsOf(ctx)
-	if c := event.Category(); c != "" && settings.Level(c) == telemetry.Off {
+	if event.IsData() && !settings.RecordsData() {
 		return
 	}
 	span := trace.SpanFromContext(ctx)
@@ -44,7 +43,7 @@ func RecordPayload(ctx context.Context, event telemetry.Key, v any) {
 		text = string(v)
 	default:
 		if p, ok := v.(Payloader); ok {
-			v = p.TracePayload(settings.Level(telemetry.SQL) == telemetry.Raw)
+			v = p.TracePayload()
 		}
 		b, err := jsonkit.Marshal(v)
 		if err != nil {

@@ -1,7 +1,7 @@
 # anfra's telemetry stack: an OpenTelemetry collector, receiving what anfra
 # records, and ClickHouse, keeping it for three days, for anfra to query
-# (docs/usage/telemetry.md). Written by `anfra telemetry init` for one repo, for
-# anfra {{.Version}}.
+# (docs/usage/telemetry.md). Written by `anfra experimental telemetry init`
+# for one repo, for anfra {{.Version}}.
 #
 #   docker compose -f compose.yaml up -d    start it; Docker restarts it with itself
 #   docker compose -f compose.yaml stop     pause it, keeping the traces
@@ -11,9 +11,9 @@
 #
 #   OTEL_EXPORTER_OTLP_ENDPOINT={{.Endpoint}}
 #
-# After upgrading anfra, run `anfra telemetry init` again in the repo, then
-# `up -d`: init writes this file again, keeping its ports, so other edits to it
-# are lost. The traces live in the Docker volume {{.Name}}_clickhouse-data,
+# After upgrading anfra, run `anfra experimental telemetry init` again in the
+# repo, then `up -d`: init writes this file again, keeping its ports, so other
+# edits to it are lost. The traces live in the Docker volume {{.Name}}_clickhouse-data,
 # which outlives ~/.anfra: before deleting ~/.anfra, run `down -v`. Every port
 # listens on this machine only. Another container reaches the collector on the
 # {{.Name}} network, at http://otel-collector:4318.

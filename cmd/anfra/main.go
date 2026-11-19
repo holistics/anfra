@@ -172,16 +172,14 @@ func loadRepoEnv() {
 }
 
 // settingRefused is an invalid setting as a violation of the variable that
-// holds it, as a refused arg is one of its flag: a switch that isn't 1 or 0, a
-// telemetry setting it doesn't take, or one anfra no longer reads.
+// holds it, as a refused arg is one of its flag: a switch that isn't 1 or 0, or
+// a telemetry setting it doesn't take.
 func settingRefused(err error) error {
 	var name, msg, code string
 	if e, ok := errors.AsType[*envflag.InvalidError](err); ok {
 		name, msg, code = e.Name, "Must be 1 or 0, not "+strconv.Quote(e.Value)+".", "invalid"
 	} else if e, ok := errors.AsType[*caller.InvalidSettingError](err); ok {
-		name, msg, code = e.Name, "Must be "+strings.Join(e.Want, ", ")+"; not "+strconv.Quote(e.Value)+".", "invalid"
-	} else if e, ok := errors.AsType[*envflag.RetiredError](err); ok {
-		name, msg, code = e.Name, "No longer read. Set ANFRA_TRACE_INPUTS=raw and ANFRA_TRACE_OUTPUTS=raw instead, and ANFRA_TRACE_SQL=raw for the SQL as sent.", "retired"
+		name, msg, code = e.Name, "Must be "+e.Want+", not "+strconv.Quote(e.Value)+".", "invalid"
 	} else {
 		return err
 	}
@@ -222,7 +220,7 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(serve, newOpenAPICmd())
 	root.AddCommand(update, updateCheck)
-	root.AddCommand(agent, skills, initCmd, newTelemetryCmd())
+	root.AddCommand(agent, skills, initCmd, newExperimentalCmd())
 	root.AddCommand(publish, newPullCmd(), newAuthCmd())
 	root.AddCommand(newLogsCmd())
 	core := appCommands() // ping, query, … generated from the registry

@@ -39,15 +39,14 @@ const canary = "anfracanary7f3a"
 const leakTestChild = "ANFRA_LEAK_TEST_CHILD"
 
 // What of the user's data reaches the collector, from anfra and from each
-// sidecar it spawns, as each data setting says: none with everything off,
-// none unmasked with the defaults. Raw, it does, which proves the test sees a
-// leak when there is one. It looks for the canary in every string exported,
+// sidecar it spawns, as the data setting says: none at the default, off. With
+// data on, it does, which proves the test sees a leak
+// when there is one. It looks for the canary in every string exported,
 // whatever holds it (an attribute, an event, a status, a span's name), so a
 // key no one classified is caught too, and so are the sidecars, which filter
 // their own spans out of reach of anfra's Filter.
 //
-// The canary is a value, as a filter's or a literal is: an identifier, such
-// as a table's name, is the query's shape, which masked SQL keeps.
+// The canary is a value, as a filter's or a literal is.
 //
 // It needs the sidecars and the dev warehouse, as TestCommandsAgainstRealSidecars
 // does, and is skipped without them.
@@ -77,29 +76,21 @@ func TestNoDataLeavesInTraces(t *testing.T) {
 	defer cancel()
 	// One provider for the process, as in anfra: apptracing binds its tracer
 	// to the first. Each case's settings go with its calls (cc.TraceData) and
-	// to the sidecars it starts (their H_OTEL_DATA_* variables).
+	// to the sidecars it starts (their H_OTEL_DATA variable).
 	shutdown := setupTracing(ctx, t, collector.URL)
 	defer func() { _ = shutdown(context.WithoutCancel(ctx)) }()
 
-	all := func(l caller.Level) map[caller.Category]caller.Level {
-		m := map[caller.Category]caller.Level{}
-		for _, c := range caller.Categories {
-			m[c.Name] = l
-		}
-		return m
-	}
 	for _, tc := range []struct {
-		name   string
-		levels map[caller.Category]caller.Level
-		leaks  bool
+		name  string
+		data  bool
+		leaks bool
 	}{
-		{"everything off", all(caller.Off), false},
-		{"the defaults", nil, false},
-		{"everything raw", all(caller.Raw), true},
+		{"the defaults, data off", false, false},
+		{"data on", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			settings := caller.NewSettings(tc.levels, 0)
+			settings := caller.NewSettings(tc.data, 0)
 			for _, kv := range caller.SidecarEnv(settings) {
 				name, value, _ := strings.Cut(kv, "=")
 				t.Setenv(name, value)
@@ -123,14 +114,6 @@ func TestNoDataLeavesInTraces(t *testing.T) {
 			if leaked := len(leaks) > 0; leaked != tc.leaks {
 				t.Errorf("the canary in the traces: %v, want %v: %s", leaked, tc.leaks, strings.Join(leaks, "\n"))
 			}
-			// With everything raw, each stable span anfra's ops record holds
-			// each of its stable attributes, on one of its spans at least: the
-			// failed query's error.type, the AQL query's dataset.
-			if tc.leaks {
-				for _, m := range collector.missingStable() {
-					t.Errorf("a stable span lost a stable attribute: %s", m)
-				}
-			}
 		})
 	}
 }
@@ -149,7 +132,7 @@ func setupTracing(ctx context.Context, t *testing.T, endpoint string) func(conte
 	}
 	// What Setup sets, for the sidecars to inherit: unset, so restored after.
 	for _, name := range []string{"H_OTEL_ENABLED", "H_OTEL_INTERNAL_EXPORTER_URL", "H_OTEL_TRACES_EXPORTER",
-		"H_OTEL_DATA_INPUTS", "H_OTEL_DATA_OUTPUTS", "H_OTEL_DATA_ERRORS"} {
+		"H_OTEL_DATA"} {
 		t.Setenv(name, "")
 		_ = os.Unsetenv(name)
 	}
@@ -282,51 +265,6 @@ func (c *collector) look() (services, leaks []string) {
 		}
 	}
 	return services, leaks
-}
-
-// missingStable is each stable attribute (caller.StableSpans) that no span of
-// anfra's ops exported holds, "span: attribute", and each stable span of an
-// op that none was exported for. The command's root span isn't one an op
-// records: cmd/anfra checks it.
-func (c *collector) missingStable() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	held := map[string]map[string]bool{} // by stable span, the attributes seen
-	for _, req := range c.reqs {
-		for _, rs := range req.GetResourceSpans() {
-			for _, ss := range rs.GetScopeSpans() {
-				for _, s := range ss.GetSpans() {
-					for _, st := range caller.StableSpans {
-						if !st.Matches(s.GetName()) {
-							continue
-						}
-						if held[st.Name] == nil {
-							held[st.Name] = map[string]bool{}
-						}
-						for _, a := range s.GetAttributes() {
-							held[st.Name][a.GetKey()] = true
-						}
-					}
-				}
-			}
-		}
-	}
-	var missing []string
-	for _, st := range caller.StableSpans {
-		if strings.HasPrefix(st.Name, "anfra ") {
-			continue
-		}
-		if held[st.Name] == nil {
-			missing = append(missing, st.Name+": no span exported")
-			continue
-		}
-		for _, k := range st.Attributes {
-			if !held[st.Name][k.String()] {
-				missing = append(missing, st.Name+": "+k.String())
-			}
-		}
-	}
-	return missing
 }
 
 // checkAttrs checks each attribute's value, as text, with check.

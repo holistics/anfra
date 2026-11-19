@@ -166,18 +166,46 @@ func TestHeadersInTheRepoEnvGoWithEachExport(t *testing.T) {
 	}
 }
 
-// A category .env sets to record data, raw or masked, with traces leaving the
-// machine, is warned of, naming both; so is plain http:// to another machine.
-// Nothing is said for a loopback endpoint, a category .env turns off, or a
-// setting from the environment.
+// Data on by default, with traces leaving the machine, is warned of, naming
+// the host and how to choose; setting the switch, either way, stops it, and a
+// loopback endpoint needs none.
+func TestDataByDefaultIsWarnedOfForAnotherMachine(t *testing.T) {
+	remote := Destination{URL: "https://otel.example.com", From: "OTEL_EXPORTER_OTLP_ENDPOINT"}
+	codes := func(dest Destination, env map[string]string) []string {
+		data, err := caller.Resolve(func(k string) string { return env[k] })
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c []string
+		for _, w := range GuardWarnings(dest, data) {
+			c = append(c, w.Code)
+			if w.Code == "data_by_default" && (!strings.Contains(w.Message, "otel.example.com") || !strings.Contains(w.Message, "ANFRA_EXPERIMENTAL_TRACE_DATA=0")) {
+				t.Errorf("message = %q, want the host and the switch", w.Message)
+			}
+		}
+		return c
+	}
+	if got := codes(remote, nil); !slices.Equal(got, []string{"data_by_default"}) {
+		t.Errorf("by default, remote: %v", got)
+	}
+	for _, v := range []string{"0", "1"} {
+		if got := codes(remote, map[string]string{"ANFRA_EXPERIMENTAL_TRACE_DATA": v}); len(got) != 0 {
+			t.Errorf("set to %s, remote: %v, want none", v, got)
+		}
+	}
+	if got := codes(Destination{URL: "http://localhost:4318", From: "OTEL_EXPORTER_OTLP_ENDPOINT"}, nil); len(got) != 0 {
+		t.Errorf("by default, loopback: %v, want none", got)
+	}
+}
+
+// Data .env turns on, with traces leaving the machine, is warned of, naming
+// both; so is plain http:// to another machine. Nothing is said for a
+// loopback endpoint.
 func TestGuardWarnings(t *testing.T) {
 	clearEnv(t)
-	for _, n := range []string{"ANFRA_TRACE_INPUTS", "ANFRA_TRACE_ERRORS", "ANFRA_TRACE_OUTPUTS"} {
-		t.Setenv(n, "")
-		_ = os.Unsetenv(n) // unset, so the file sets it
-	}
-	loadRepoEnv(t, "ANFRA_TRACE_INPUTS=raw\nANFRA_TRACE_ERRORS=masked\nANFRA_TRACE_OUTPUTS=off\n")
-	t.Setenv("ANFRA_TRACE_SQL", "raw") // from the environment: not warned of
+	t.Setenv("ANFRA_EXPERIMENTAL_TRACE_DATA", "")
+	_ = os.Unsetenv("ANFRA_EXPERIMENTAL_TRACE_DATA") // unset, so the file sets it
+	loadRepoEnv(t, "ANFRA_EXPERIMENTAL_TRACE_DATA=1\n")
 	data, err := caller.Resolve(os.Getenv)
 	if err != nil {
 		t.Fatal(err)
@@ -186,8 +214,7 @@ func TestGuardWarnings(t *testing.T) {
 		var c []string
 		for _, w := range GuardWarnings(dest, data) {
 			c = append(c, w.Code)
-			if w.Code == "data_from_env_file" && (!strings.Contains(w.Message, "ANFRA_TRACE_INPUTS=raw") || !strings.Contains(w.Message, "ANFRA_TRACE_ERRORS=masked") ||
-				strings.Contains(w.Message, "ANFRA_TRACE_OUTPUTS") || strings.Contains(w.Message, "ANFRA_TRACE_SQL") || !strings.Contains(w.Message, "otel.example.com")) {
+			if w.Code == "data_from_env_file" && (!strings.Contains(w.Message, "ANFRA_EXPERIMENTAL_TRACE_DATA=1") || !strings.Contains(w.Message, "otel.example.com")) {
 				t.Errorf("message = %q, want the file's setting and the host", w.Message)
 			}
 		}
@@ -254,32 +281,27 @@ func TestANumberIsNotALocalName(t *testing.T) {
 	}
 }
 
-// A category recording data raw, with traces leaving the machine, gets a hint
-// naming what set it, from the environment as from the file; none for
-// loopback, or with nothing raw.
-func TestStatusHintsOnRawData(t *testing.T) {
+// Data on, with traces leaving the machine, gets a hint naming what set it,
+// from the environment as from the file; none for loopback, or with data off.
+func TestStatusHintsOnData(t *testing.T) {
 	clearEnv(t)
-	for _, n := range []string{"ANFRA_TRACE_INPUTS", "ANFRA_TRACE_OUTPUTS", "ANFRA_TRACE_SQL", "ANFRA_TRACE_ERRORS"} {
-		t.Setenv(n, "")
-		_ = os.Unsetenv(n)
-	}
-	t.Setenv("ANFRA_TRACE_INPUTS", "raw") // the environment's
+	t.Setenv("ANFRA_EXPERIMENTAL_TRACE_DATA", "1") // the environment's
 	data, err := caller.Resolve(os.Getenv)
 	if err != nil {
 		t.Fatal(err)
 	}
 	remote := Destination{URL: "https://otel.example.com", From: "OTEL_EXPORTER_OTLP_ENDPOINT"}
-	if h := strings.Join(remote.StatusHints(data), ""); !strings.Contains(h, "ANFRA_TRACE_INPUTS") || !strings.Contains(h, "otel.example.com") {
-		t.Errorf("raw, remote: hints = %q", h)
+	if h := strings.Join(remote.StatusHints(data), ""); !strings.Contains(h, "ANFRA_EXPERIMENTAL_TRACE_DATA") || !strings.Contains(h, "otel.example.com") {
+		t.Errorf("on, remote: hints = %q", h)
 	}
 	if h := (Destination{URL: "http://localhost:4318", From: "OTEL_EXPORTER_OTLP_ENDPOINT"}).StatusHints(data); len(h) > 0 {
-		t.Errorf("raw, loopback: hints = %q, want none", h)
+		t.Errorf("on, loopback: hints = %q, want none", h)
 	}
-	t.Setenv("ANFRA_TRACE_INPUTS", "off")
+	t.Setenv("ANFRA_EXPERIMENTAL_TRACE_DATA", "0")
 	if data, err = caller.Resolve(os.Getenv); err != nil {
 		t.Fatal(err)
 	}
 	if h := remote.StatusHints(data); len(h) > 0 {
-		t.Errorf("nothing raw: hints = %q, want none", h)
+		t.Errorf("nothing on: hints = %q, want none", h)
 	}
 }

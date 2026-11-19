@@ -7,13 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -53,8 +50,8 @@ var untraced = map[string]bool{
 //
 // The repo the command runs in is named on that span and every span and log
 // record under it, from the start (repoAttribution), so a CLI-only command's
-// carry it too. The span records args, the command's arguments as given, as
-// inputs say (anfra.command.input), a sensitive flag's value redacted.
+// carry it too. The span records args, the command's arguments as given, when
+// data is on (anfra.command.input).
 func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end func(executed *cobra.Command, err error)) {
 	var span trace.Span
 	start := func(ctx context.Context, cmd *cobra.Command) context.Context {
@@ -63,7 +60,7 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 		}
 		ctx = caller.WithSettings(ctx, traceData.Settings())
 		ctx, span = otel.Tracer(tracerName).Start(ctx, cmd.CommandPath()) //nolint:spancheck // ended by end, once the command returns
-		apptracing.RecordPayload(ctx, caller.CommandInput, redactArgs(cmd, args))
+		apptracing.RecordPayload(ctx, caller.CommandInput, args)
 		if dir, err := os.Getwd(); err == nil {
 			ctx = caller.WithAttributes(ctx, repoAttribution(repo.Resolve(dir)))
 		}
@@ -92,76 +89,6 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 		// when the failure is anfra's, not the caller's.
 		apptracing.MarkFailed(span, traceData.Settings(), err)
 	}
-}
-
-// sensitiveFlag is the annotation that marks a flag whose value a trace never
-// records: a secret.
-const sensitiveFlag = "anfra_sensitive"
-
-// redacted stands in for a sensitive flag's value.
-const redacted = "[redacted]"
-
-// redactArgs are args with the value of each of cmd's flags marked sensitive
-// replaced, given as --flag=value, --flag value, -f value, -fvalue, or after
-// other shorthands, as -xf value.
-func redactArgs(cmd *cobra.Command, args []string) []string {
-	out := slices.Clone(args)
-	lookup := func(name string) *pflag.Flag {
-		if f := cmd.Flags().Lookup(name); f != nil {
-			return f
-		}
-		return cmd.InheritedFlags().Lookup(name)
-	}
-	shorthand := func(c byte) *pflag.Flag {
-		if f := cmd.Flags().ShorthandLookup(string(c)); f != nil {
-			return f
-		}
-		return cmd.InheritedFlags().ShorthandLookup(string(c))
-	}
-	sensitive := func(f *pflag.Flag) bool { return f != nil && len(f.Annotations[sensitiveFlag]) > 0 }
-	for i := 0; i < len(out); i++ {
-		a := out[i]
-		if a == "--" {
-			break
-		}
-		if !strings.HasPrefix(a, "-") || a == "-" {
-			continue
-		}
-		if strings.HasPrefix(a, "--") {
-			name, _, hasValue := strings.Cut(a[2:], "=")
-			if !sensitive(lookup(name)) {
-				continue
-			}
-			if hasValue {
-				out[i] = a[:strings.Index(a, "=")+1] + redacted
-			} else if i+1 < len(out) {
-				out[i+1] = redacted
-				i++
-			}
-			continue
-		}
-		// Shorthands, as pflag reads them: each a flag until one that takes a
-		// value, whose value is the rest of the arg, or the next arg.
-		for j := 1; j < len(a); j++ {
-			f := shorthand(a[j])
-			if f == nil || f.NoOptDefVal != "" {
-				continue // a bool, or unknown: the next character is a flag too
-			}
-			rest := strings.TrimPrefix(a[j+1:], "=")
-			if sensitive(f) {
-				if rest != "" {
-					out[i] = a[:len(a)-len(rest)] + redacted
-				} else if i+1 < len(out) {
-					out[i+1] = redacted
-				}
-			}
-			if rest == "" {
-				i++ // the next arg is this flag's value
-			}
-			break
-		}
-	}
-	return out
 }
 
 // flushTimeout bounds how long exiting waits on the last spans: a collector that
@@ -242,27 +169,18 @@ func telemetryInfo() *command.TelemetryInfo {
 var traceData caller.Resolution
 
 // resolveTraceData resolves traceData. Validate has checked every value, so a
-// failure here leaves each category at its default.
+// failure here leaves data off, the safe value.
 func resolveTraceData() {
 	r, err := caller.Resolve(os.Getenv)
 	if err != nil {
-		r, _ = caller.Resolve(func(string) string { return "" })
+		r = caller.Resolution{PayloadLimit: caller.Resolved[int]{Value: caller.DefaultPayloadLimit}}
 	}
 	traceData = r
 }
 
 // dataInfo is traceData as status shows it.
 func dataInfo() (*command.TelemetryData, *command.TelemetryLimit) {
-	level := func(c caller.Category) command.TelemetryLevel {
-		v := traceData.Data[c]
-		return command.TelemetryLevel{Value: string(v.Value), SetBy: setBy(v.From)}
-	}
-	data := &command.TelemetryData{
-		Inputs:  level(caller.Inputs),
-		Outputs: level(caller.Outputs),
-		SQL:     level(caller.SQL),
-		Errors:  level(caller.Errors),
-	}
+	data := &command.TelemetryData{On: traceData.Data.Value, SetBy: setBy(traceData.Data.From)}
 	limit := &command.TelemetryLimit{Value: traceData.PayloadLimit.Value, SetBy: setBy(traceData.PayloadLimit.From)}
 	return data, limit
 }

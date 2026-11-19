@@ -43,12 +43,12 @@ processors:
 
   batch: {}
 
-  # Finer rules than anfra's data settings (docs/usage/telemetry.md): uncomment
+  # Finer rules than anfra's data switch (docs/usage/telemetry.md): uncomment
   # it, and add redaction to the traces pipeline below, after memory_limiter.
   # It keeps only the attributes allowed_keys names, so a key a new release
   # adds is dropped, not leaked, and masks each value that matches
-  # blocked_values. allowed_keys holds what anfra records with every setting
-  # at its default; add the keys you turn on, such as anfra.dataset.
+  # blocked_values. allowed_keys holds what anfra records with data off, then
+  # the data it records with ANFRA_EXPERIMENTAL_TRACE_DATA=1 that you keep.
   #
   # redaction:
   #   allow_all_keys: false
@@ -61,10 +61,13 @@ processors:
   #     - anfra.query.bytes_scanned
   #     - anfra.problem_count
   #     - db.system.name
-  #     - db.query.text
   #     - db.response.returned_rows
   #     - error.type
   #     - exception.type
+  #     # With data on:
+  #     - anfra.dataset
+  #     - anfra.data_source
+  #     - db.query.text
   #     - exception.message
   #   blocked_values:
   #     - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}" # an email

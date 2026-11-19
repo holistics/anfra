@@ -14,15 +14,14 @@ import (
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/telemetry/stack"
 	"github.com/holistics/anfra/shared/apperr"
-	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
-// runTelemetryInit runs `anfra telemetry init`, answering its result.
+// runTelemetryInit runs `anfra experimental telemetry init`, answering its result.
 func runTelemetryInit(t *testing.T) (telemetryInitResult, error) {
 	t.Helper()
 	t.Cleanup(resetOutput)
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"telemetry", "init", "--yaml"})
+	cmd.SetArgs([]string{"experimental", "telemetry", "init", "--yaml"})
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
@@ -138,19 +137,5 @@ func TestTelemetryInitLeavesSomeoneElsesFile(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(theirs); string(b) != "services: {}\n" {
 		t.Errorf("their file changed: %q", b)
-	}
-}
-
-// telemetry's help says what each data setting records, for every category
-// the registry has.
-func TestTelemetryHelpDescribesEveryDataSetting(t *testing.T) {
-	help := traceSettingsHelp()
-	for _, d := range caller.Categories {
-		if categoryHelp[d.Name] == "" {
-			t.Errorf("categoryHelp has no description of %s", d.Name)
-		}
-		if !strings.Contains(help, d.Var) {
-			t.Errorf("the help doesn't list %s", d.Var)
-		}
 	}
 }

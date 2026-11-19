@@ -109,11 +109,11 @@ func Setup(ctx context.Context, service, version string, data caller.Settings) (
 	return tp.Shutdown, nil
 }
 
-// configureData tells the sidecars this process spawns what of the user's data
-// their spans record, as variables they inherit (H_OTEL_DATA_INPUTS, ...): set
-// even at their defaults, since a sidecar without them records everything as
-// it is. A sidecar's prefix (ANFRA_NODE_ENV_, ANFRA_CANAL_QUERY_ENV_) sets one
-// for that sidecar alone, over this (internal/sidecar, childEnv).
+// configureData tells the sidecars this process spawns whether their spans
+// record the user's data, as a variable they inherit (H_OTEL_DATA): set even
+// at its default, since a sidecar without it records everything as it is. A
+// sidecar's prefix (ANFRA_NODE_ENV_, ANFRA_CANAL_QUERY_ENV_) sets it for that
+// sidecar alone, over this (internal/sidecar, childEnv).
 func configureData(data caller.Settings) {
 	for _, kv := range caller.SidecarEnv(data) {
 		name, value, _ := strings.Cut(kv, "=")

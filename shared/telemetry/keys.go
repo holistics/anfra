@@ -1,16 +1,16 @@
 package telemetry
 
 // Every attribute and span event anfra's spans can carry is declared here
-// once, with its category, or as metadata (no category), which is always
-// recorded: anfra's own, and the keys the libraries it uses add. A key that
-// isn't declared is never exported (Filter), and the test that records real
-// runs fails on it, so a new one is classified before it ships
-// (docs/designs/telemetry.md, how to classify a new attribute's category).
+// once, as the user's data, recorded only when data is, or as metadata, which
+// is always recorded: anfra's own, and the keys the libraries it uses add. A
+// key that isn't declared is never exported (Filter), and the test that
+// records real runs fails on it, so a new one is classified before it ships
+// (docs/designs/telemetry.md, data in spans).
 //
 // Metadata is recorded whatever the user's settings, so declaring a key meta
 // is the one mistake here that leaks: declare a key meta only when no value it
 // can hold comes from the user's data, repo, warehouse, org or machine. When
-// unsure, give it a category.
+// unsure, declare it data.
 
 // Key is a declared attribute or span event.
 type Key struct{ name string }
@@ -18,8 +18,9 @@ type Key struct{ name string }
 // String is the key's name, as it is recorded.
 func (k Key) String() string { return k.name }
 
-// Category is the key's category; "" for metadata.
-func (k Key) Category() Category { return registry[k.name].category }
+// IsData reports whether the key can hold the user's data, so is recorded only
+// when data is.
+func (k Key) IsData() bool { return registry[k.name].data }
 
 // Is is the key with a value, to set on a span (apptracing.SetAttributes).
 func (k Key) Is(v any) KeyValue { return KeyValue{Key: k, Value: v} }
@@ -32,13 +33,9 @@ type KeyValue struct {
 
 // keyDef is how a declared key is treated.
 type keyDef struct {
-	category Category
-	leftOut  bool // never recorded, whatever the settings
-	event    bool // a span event's name, not an attribute's
-	// mask is the value as its category's masked level records it, for the
-	// warehouse system (db.system.name) the span ran on. nil when the key has
-	// no masked form, so masked leaves it out.
-	mask func(value, system string) string
+	data    bool // the user's data: recorded only when data is
+	leftOut bool // never recorded, whatever the settings
+	event   bool // a span event's name, not an attribute's
 }
 
 var registry = map[string]keyDef{}
@@ -52,17 +49,10 @@ func declare(name string, d keyDef) Key {
 }
 
 // meta declares a key that is always recorded: see the rule above.
-func meta(name string) Key              { return declare(name, keyDef{}) }
-func data(name string, c Category) Key  { return declare(name, keyDef{category: c}) }
-func event(name string, c Category) Key { return declare(name, keyDef{category: c, event: true}) }
-func leftOut(name string) Key           { return declare(name, keyDef{leftOut: true}) }
-func masked(name string, c Category, mask func(value, system string) string) Key {
-	return declare(name, keyDef{category: c, mask: mask})
-}
-
-// maskError is MaskError as a key's mask: an error's message is masked the
-// same on every warehouse.
-func maskError(msg, _ string) string { return MaskError(msg) }
+func meta(name string) Key             { return declare(name, keyDef{}) }
+func data(name string) Key             { return declare(name, keyDef{data: true}) }
+func event(name string, data bool) Key { return declare(name, keyDef{data: data, event: true}) }
+func leftOut(name string) Key          { return declare(name, keyDef{leftOut: true}) }
 func declareAll(f func(string) Key, names ...string) {
 	for _, n := range names {
 		f(n)
@@ -76,15 +66,15 @@ var (
 	RepoID             = meta("anfra.repo.id")
 	QueryID            = meta("anfra.query.id")
 	QueryKind          = meta("anfra.query.kind")
-	Dataset            = data("anfra.dataset", Inputs)
-	DataSource         = data("anfra.data_source", Inputs)
+	Dataset            = data("anfra.dataset")
+	DataSource         = data("anfra.data_source")
 	DBSystem           = meta("db.system.name")
 	WarehouseQueryID   = meta("anfra.warehouse.query_id")
 	ReturnedRows       = meta("db.response.returned_rows")
 	BytesScanned       = meta("anfra.query.bytes_scanned")
-	QueryText          = masked("db.query.text", SQL, MaskSQL)
+	QueryText          = data("db.query.text")
 	QueryTextTruncated = meta("anfra.query.text_truncated")
-	Target             = data("anfra.target", Inputs)
+	Target             = data("anfra.target")
 	ProblemCount       = meta("anfra.problem_count")
 	CommandStdin       = meta("anfra.command.stdin")
 	RequestID          = meta("h.request.id")
@@ -101,42 +91,41 @@ var (
 const PanicStatus = "panic"
 
 // The payload events, and the attributes each carries: the payload, its whole
-// size, and whether it was cut. The event's category covers its payload.
+// size, and whether it was cut. The event is data, which covers its payload.
 var (
-	CommandInput     = event("anfra.command.input", Inputs)
-	OpInput          = event("anfra.op.input", Inputs)
-	OpOutput         = event("anfra.op.output", Outputs)
+	CommandInput     = event("anfra.command.input", true)
+	OpInput          = event("anfra.op.input", true)
+	OpOutput         = event("anfra.op.output", true)
 	Payload          = meta("anfra.payload")
 	PayloadSize      = meta("anfra.payload.size")
 	PayloadTruncated = meta("anfra.payload.truncated")
 )
 
-// An error's event, as OpenTelemetry records it, is Errors: none when errors
-// are off, and a masked error keeps its message, masked, without its stack.
-// The span's error.type, the code, is recorded whatever errors say.
+// An error's event, as OpenTelemetry records it, is data: none when data is
+// off. The span's error.type, the code, is always recorded.
 var (
-	Exception           = event("exception", Errors)
-	ExceptionMessage    = masked("exception.message", Errors, maskError)
-	ExceptionStacktrace = data("exception.stacktrace", Errors)
+	Exception           = event("exception", true)
+	ExceptionMessage    = data("exception.message")
+	ExceptionStacktrace = data("exception.stacktrace")
 	ExceptionType       = meta("exception.type")
 	ExceptionEscaped    = meta("exception.escaped")
 	// ErrorMessage is the semantic conventions' error.message, which a
-	// library may set in place of an exception event: the same text, so the
-	// same category and masking.
-	ErrorMessage = masked("error.message", Errors, maskError)
+	// library may set in place of an exception event: the same text, so data
+	// too.
+	ErrorMessage = data("error.message")
 )
 
 // A query's steps, as span events at the time each started: compiling, and
 // canal-query's.
 var QuerySteps = []Key{
-	event("compiling_query", ""), event("connecting_to_dw", ""), event("executing_query", ""),
-	event("fetching_query_result", ""), event("retrying_query", ""),
+	event("compiling_query", false), event("connecting_to_dw", false), event("executing_query", false),
+	event("fetching_query_result", false), event("retrying_query", false),
 }
 
 // A step's parameters (apptracing.Start), h.step.<key>.
 var (
-	StepOrigin  = data("h.step.origin", Inputs)
-	StepOrg     = data("h.step.org", Inputs)
+	StepOrigin  = data("h.step.origin")
+	StepOrg     = data("h.step.org")
 	StepSidecar = meta("h.step.sidecar")
 )
 
@@ -152,7 +141,7 @@ func init() {
 	)
 	// The org calls' URLs name the org, in their host too, and a query string
 	// can hold what the caller sent.
-	declareAll(func(n string) Key { return data(n, Inputs) }, "url.full", "url.query", "server.address")
+	declareAll(data, "url.full", "url.query", "server.address")
 	// The caller's address is a person's IP when serve serves others.
 	declareAll(leftOut, "client.address", "network.peer.address")
 }

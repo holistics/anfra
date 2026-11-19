@@ -39,24 +39,24 @@ func unset(t *testing.T, names ...string) {
 // already; the last line of a name given twice wins; and each says where it
 // came from.
 func TestLoadSetsWhatTheEnvironmentDoesnt(t *testing.T) {
-	unset(t, "OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_TRACE_INPUTS")
+	unset(t, "OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_EXPERIMENTAL_TRACE_DATA")
 	t.Setenv("ANFRA_LOG_STDERR", "0")
 	dir := repoWith(t, "# telemetry\n"+
 		"OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318\n"+
-		"export ANFRA_TRACE_INPUTS=off\n"+
-		"ANFRA_TRACE_INPUTS=raw\n"+
+		"export ANFRA_EXPERIMENTAL_TRACE_DATA=0\n"+
+		"ANFRA_EXPERIMENTAL_TRACE_DATA=1\n"+
 		"ANFRA_LOG_STDERR=1\n")
 	l, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_TRACE_INPUTS"}; !slices.Equal(l.Set, want) {
+	if want := []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_EXPERIMENTAL_TRACE_DATA"}; !slices.Equal(l.Set, want) {
 		t.Errorf("Set = %v, want %v", l.Set, want)
 	}
 	for name, want := range map[string]string{
-		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
-		"ANFRA_TRACE_INPUTS":          "raw",
-		"ANFRA_LOG_STDERR":            "0",
+		"OTEL_EXPORTER_OTLP_ENDPOINT":   "http://localhost:4318",
+		"ANFRA_EXPERIMENTAL_TRACE_DATA": "1",
+		"ANFRA_LOG_STDERR":              "0",
 	} {
 		if got := os.Getenv(name); got != want {
 			t.Errorf("%s = %q, want %q", name, got, want)
@@ -65,7 +65,7 @@ func TestLoadSetsWhatTheEnvironmentDoesnt(t *testing.T) {
 	if got := Describe("OTEL_EXPORTER_OTLP_ENDPOINT"); got != "OTEL_EXPORTER_OTLP_ENDPOINT in .env" {
 		t.Errorf("Describe = %q", got)
 	}
-	if line, ok := Origin("ANFRA_TRACE_INPUTS"); !ok || line != "line 4" {
+	if line, ok := Origin("ANFRA_EXPERIMENTAL_TRACE_DATA"); !ok || line != "line 4" {
 		t.Errorf("Origin = %q, %v; want line 4", line, ok)
 	}
 	if got := Describe("ANFRA_LOG_STDERR"); got != "ANFRA_LOG_STDERR" {
@@ -83,8 +83,8 @@ func TestLoadSetsWhatTheEnvironmentDoesnt(t *testing.T) {
 // anfra nor a sidecar, which inherits anfra's environment.
 func TestLoadReadsOnlyAnfrasNames(t *testing.T) {
 	others := []string{"PGPASSWORD", "PATH_EXTRA", "ANFRA_NODE_ENV_NODE_OPTIONS", "ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_CANAL_LAKE_ENV_GOMEMLIMIT"}
-	unset(t, append([]string{"ANFRA_TRACE_SQL"}, others...)...)
-	dir := repoWith(t, "ANFRA_TRACE_SQL=raw\n"+
+	unset(t, append([]string{"ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT"}, others...)...)
+	dir := repoWith(t, "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100\n"+
 		"PGPASSWORD=secret\n"+
 		"PATH_EXTRA=/tmp/evil\n"+
 		"ANFRA_NODE_ENV_NODE_OPTIONS=--require=/tmp/evil.js\n"+
@@ -94,7 +94,7 @@ func TestLoadReadsOnlyAnfrasNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"ANFRA_TRACE_SQL"}; !slices.Equal(l.Set, want) {
+	if want := []string{"ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT"}; !slices.Equal(l.Set, want) {
 		t.Errorf("Set = %v, want %v", l.Set, want)
 	}
 	for _, n := range others {
@@ -131,8 +131,8 @@ func TestATrackedFileIsNotRead(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
-	unset(t, "OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_TRACE_INPUTS", "NODE_ENV")
-	dir := repoWith(t, "OTEL_EXPORTER_OTLP_ENDPOINT=http://attacker:4318\nANFRA_TRACE_INPUTS=raw\nNODE_ENV=dev\n")
+	unset(t, "OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_EXPERIMENTAL_TRACE_DATA", "NODE_ENV")
+	dir := repoWith(t, "OTEL_EXPORTER_OTLP_ENDPOINT=http://attacker:4318\nANFRA_EXPERIMENTAL_TRACE_DATA=1\nNODE_ENV=dev\n")
 	for _, args := range [][]string{{"init", "-q"}, {"add", FileName}} {
 		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil { //nolint:gosec // G204: the test's own folder and arguments
 			t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -142,7 +142,7 @@ func TestATrackedFileIsNotRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !l.Tracked || len(l.Set) > 0 || !slices.Equal(l.Ignored, []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_TRACE_INPUTS"}) {
+	if !l.Tracked || len(l.Set) > 0 || !slices.Equal(l.Ignored, []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "ANFRA_EXPERIMENTAL_TRACE_DATA"}) {
 		t.Errorf("Load = %+v", l)
 	}
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv("NODE_ENV") != "" {
@@ -154,17 +154,17 @@ func TestATrackedFileIsNotRead(t *testing.T) {
 // and nothing in the file is set.
 func TestABadLineOfAnfrasIsRefused(t *testing.T) {
 	for name, content := range map[string]string{
-		"no =":           "ANFRA_TRACE_SQL=raw\nOTEL_EXPORTER_OTLP_ENDPOINT http://x:4318\n",
-		"unclosed quote": "ANFRA_TRACE_SQL=raw\nANFRA_TRACE_INPUTS=\"open\n",
-		"after quote":    "ANFRA_TRACE_SQL=raw\nANFRA_TRACE_INPUTS='x' y\n",
+		"no =":           "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100\nOTEL_EXPORTER_OTLP_ENDPOINT http://x:4318\n",
+		"unclosed quote": "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100\nANFRA_EXPERIMENTAL_TRACE_DATA=\"open\n",
+		"after quote":    "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100\nANFRA_EXPERIMENTAL_TRACE_DATA='x' y\n",
 	} {
 		t.Run(name, func(t *testing.T) {
-			unset(t, "ANFRA_TRACE_SQL", "ANFRA_TRACE_INPUTS", "OTEL_EXPORTER_OTLP_ENDPOINT")
+			unset(t, "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT", "ANFRA_EXPERIMENTAL_TRACE_DATA", "OTEL_EXPORTER_OTLP_ENDPOINT")
 			_, err := Load(repoWith(t, content))
 			if err == nil || !strings.Contains(err.Error(), ".env") || !strings.Contains(err.Error(), "line 2") {
 				t.Errorf("err = %v, want one naming .env line 2", err)
 			}
-			if os.Getenv("ANFRA_TRACE_SQL") != "" {
+			if os.Getenv("ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT") != "" {
 				t.Error("a file with a bad line was partly read")
 			}
 		})
@@ -174,17 +174,17 @@ func TestABadLineOfAnfrasIsRefused(t *testing.T) {
 // The file may be an app's, in its own tool's dialect: a line anfra can't
 // read that isn't anfra's is skipped, and anfra's names are still read.
 func TestAnotherToolsLinesAreSkipped(t *testing.T) {
-	unset(t, "ANFRA_TRACE_SQL", "OTEL_EXPORTER_OTLP_ENDPOINT", "PRIVATE_KEY", "B")
+	unset(t, "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT", "OTEL_EXPORTER_OTLP_ENDPOINT", "PRIVATE_KEY", "B")
 	dir := repoWith(t, "spring.datasource.url=jdbc:postgresql://db/app\n"+
 		"PRIVATE_KEY=\"-----BEGIN KEY-----\nOTEL_EXPORTER_OTLP_ENDPOINT=http://inside-the-key\n-----END KEY-----\"\n"+
 		"B='x' y\n"+
 		"not a setting\n"+
-		"ANFRA_TRACE_SQL=raw\n")
+		"ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100\n")
 	l, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"ANFRA_TRACE_SQL"}; !slices.Equal(l.Set, want) {
+	if want := []string{"ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT"}; !slices.Equal(l.Set, want) {
 		t.Errorf("Set = %v, want %v", l.Set, want)
 	}
 	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
@@ -213,17 +213,17 @@ func TestAFileWithoutAnfrasNamesIsNotChecked(t *testing.T) {
 // Environ leaves out what the file set, so another anfra started in the repo
 // reads the file itself and knows where its settings came from.
 func TestEnvironLeavesOutTheFile(t *testing.T) {
-	unset(t, "ANFRA_TRACE_SQL")
-	t.Setenv("ANFRA_TRACE_INPUTS", "masked")
-	if _, err := Load(repoWith(t, "ANFRA_TRACE_SQL=raw\nANFRA_TRACE_INPUTS=raw\n")); err != nil {
+	unset(t, "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT")
+	t.Setenv("ANFRA_EXPERIMENTAL_TRACE_DATA", "0")
+	if _, err := Load(repoWith(t, "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100\nANFRA_EXPERIMENTAL_TRACE_DATA=1\n")); err != nil {
 		t.Fatal(err)
 	}
 	env := Environ()
-	if slices.Contains(env, "ANFRA_TRACE_SQL=raw") {
-		t.Error("Environ kept the file's ANFRA_TRACE_SQL")
+	if slices.Contains(env, "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT=100") {
+		t.Error("Environ kept the file's ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT")
 	}
-	if !slices.Contains(env, "ANFRA_TRACE_INPUTS=masked") {
-		t.Error("Environ dropped the environment's ANFRA_TRACE_INPUTS")
+	if !slices.Contains(env, "ANFRA_EXPERIMENTAL_TRACE_DATA=0") {
+		t.Error("Environ dropped the environment's ANFRA_EXPERIMENTAL_TRACE_DATA")
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/appstep"
 	"github.com/holistics/anfra/shared/apptracing"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 var ns = appstep.DefineNamespace("test")
@@ -166,8 +167,8 @@ func TestSpanRedactsSensitiveParams(t *testing.T) {
 	}
 }
 
-// Only a server-scope failure marks a span as errored; every failure names its
-// code.
+// Only a server-scope failure marks a span as errored, and records the error
+// when data is on; every failure names its code.
 func TestSpanStatusFollowsScope(t *testing.T) {
 	for _, tc := range []struct {
 		err    error
@@ -179,7 +180,7 @@ func TestSpanStatusFollowsScope(t *testing.T) {
 		{errBoom, codes.Error, "internal_server_error"},
 	} {
 		spans(t)
-		_ = parse(context.Background(), tc.err)
+		_ = parse(telemetry.WithSettings(context.Background(), telemetry.NewSettings(true, 0)), tc.err)
 		s := spans(t)["test.parse_file"]
 		if s.Status().Code != tc.status || attrs(s)["error.type"] != tc.typ {
 			t.Errorf("%v: status %v, error.type %q", tc.err, s.Status(), attrs(s)["error.type"])

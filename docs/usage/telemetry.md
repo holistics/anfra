@@ -1,8 +1,8 @@
 # Telemetry
 
-> **Experimental.** The `anfra telemetry` command, the telemetry settings, the `telemetry` section of `anfra status`, and what a trace records may change in a minor release. The changelog says when they do.
+> **Experimental.** The `anfra experimental telemetry` command, its `ANFRA_EXPERIMENTAL_TRACE_*` settings, the `telemetry` section of `anfra status`, and what a trace records may change in a minor release. The changelog says when they do.
 
-anfra can record what each command does, so you or your agent can look back at it: each command's steps, how long each took, and each query's row count, and, if you [turn inputs on](#what-a-trace-holds), its dataset and data source. The records go where you send them. Nothing is sent to Holistics.
+anfra can record what each command does, so you or your agent can look back at it: each command's steps and how long each took, what it asked for and got back, and each query's SQL and row count ([what a trace holds](#what-a-trace-holds)). The records go where you send them. Nothing is sent to Holistics.
 
 Today anfra records traces. Metrics and logs are planned, sent to the same place. anfra has no dashboards or alerts of its own: the records are OpenTelemetry traces, so any tool that reads OpenTelemetry can show them. If you don't have one, anfra gives you a local telemetry stack to run with Docker.
 
@@ -20,9 +20,9 @@ The local telemetry stack is two containers that receive a repo's traces and kee
 - its name, when it started and how long it took;
 - whether it failed, and the error's code;
 - what anfra knows about it: the op's name, and for a query its warehouse type and row count;
-- a query's SQL, with its values masked.
+- your data, unless you [turn it off](#what-a-trace-holds): what the command asked for, the SQL it ran, what came back, and an error's message.
 
-It keeps nothing you typed, such as filter values, and no answers, unless you [turn them on](#what-a-trace-holds). Query rows are never kept.
+Query rows are never kept.
 
 **For how long.** Three days. Then ClickHouse deletes them.
 
@@ -33,7 +33,7 @@ It keeps nothing you typed, such as filter values, and no answers, unless you [t
 Three steps, in the repo's folder: write the repo's local telemetry stack's compose file, start the stack, and point the repo at it.
 
 ```sh
-anfra telemetry init
+anfra experimental telemetry init
 ```
 
 This writes the stack's compose file to the repo's folder in anfra's own, `~/.anfra/repos/<repo id>/telemetry/compose.yaml`, for this anfra version. Nothing is written in the repo. It starts nothing and changes no setting. Its hints give the file's path and what to do next.
@@ -61,56 +61,30 @@ The stack listens on this machine only. The first time init runs in a repo, it p
 
 ## What a trace holds
 
-By default, a trace holds what anfra knows (each step's name and timing, whether it failed and its error code, counts such as the rows read), and each query's SQL and error message with their values masked. It holds nothing you typed, no answers and no rows.
+A trace holds what anfra knows, such as each step's name and timing, whether it failed and its error code, and counts such as the rows read. By default it also holds your data, so you or your agent can see what each command did:
 
-Each kind is set by a variable, in the environment or the repo's `.env`:
+- what each command asked for: its arguments (`anfra.command.input`) and its op's input (`anfra.op.input`), and the names of the dataset, data source and files it ran on;
+- the SQL anfra sends to the warehouse (`db.query.text`);
+- what came back: an op's answer (`anfra.op.output`) and a result's columns;
+- an error's message and stack.
 
-| Variable | What it records | Values | Default |
-|---|---|---|---|
-| `ANFRA_TRACE_INPUTS` | What a command asked for: its arguments (`anfra.command.input`), its op's input (`anfra.op.input`), and the names of the dataset, data source and files it ran on | `off`, `raw` | `off` |
-| `ANFRA_TRACE_OUTPUTS` | What came back: an op's answer (`anfra.op.output`) without a query's rows, and a result's columns | `off`, `raw` | `off` |
-| `ANFRA_TRACE_SQL` | The SQL anfra sends to the warehouse (`db.query.text`). `masked` replaces each literal with `?`. | `off`, `masked`, `raw` | `masked` |
-| `ANFRA_TRACE_ERRORS` | An error's message and stack. `masked` replaces quoted strings and numbers with `?`, and leaves out the stack. | `off`, `masked`, `raw` | `masked` |
-
-`ANFRA_TRACE_DATA=off` keeps them all off, whatever each says.
-
-To see what each command asked for, and group traces by dataset and data source, turn inputs on:
+To leave your data out, in the environment or the repo's `.env`:
 
 ```sh
-ANFRA_TRACE_INPUTS=raw
-```
-
-To also see answers and the SQL as sent, for debugging:
-
-```sh
-ANFRA_TRACE_INPUTS=raw ANFRA_TRACE_OUTPUTS=raw ANFRA_TRACE_SQL=raw anfra query …
+ANFRA_EXPERIMENTAL_TRACE_DATA=0
 ```
 
 - **A query's rows are never recorded,** whatever you set.
-- **SQL you write is an input,** such as a query run with `--lang sql`, so `ANFRA_TRACE_INPUTS` sets it. The SQL in an answer, such as `query`'s and `compile`'s, follows `ANFRA_TRACE_SQL`: the answer is recorded without it unless SQL is `raw`.
-- **Masked errors are best effort.** A warehouse can word a value so the masker misses it, such as a table path without quotes. The full message is always in `anfra.log`.
-- **Each input, answer and query is cut at 16 KiB,** or at `ANFRA_TRACE_PAYLOAD_LIMIT` bytes, and marked when cut (`anfra.payload.truncated`).
+- **Your data can include personal data,** such as an email in a filter, a SQL literal or an error message. anfra doesn't mask it.
+- **With data off, a failed step keeps its error code,** not its message. The full message is always in `anfra.log`.
+- **Each input, answer and query is cut at 16 KiB,** or at `ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT` bytes, and marked when cut (`anfra.payload.truncated`).
 - **`anfra.telemetry.dropped_keys` lists attributes anfra left out of a span,** because it doesn't know whether they hold your data. Their values never leave your machine. A span with it is a bug in anfra, so please report the names it lists.
 
-Inputs, answers and raw SQL can hold your data, such as the values in a filter. Turn them on only when you run the endpoint yourself, as you do the local telemetry stack. anfra warns on every command when the repo's `.env` sets one to `raw` and the endpoint is on another machine, since an agent can write that file too. It also warns when traces go over plain `http://` to a machine outside your own network. This machine, a private address, and a name without a dot, such as the stack's collector on its Docker network, count as your own network. When traces go to another machine, `anfra status` says so if the repo's `.env` set the endpoint, or if any kind of data is recorded `raw`, however it was set. Check that you meant both.
+**When traces go to another machine,** anfra warns on every command while data is on by default, so you choose: `0` keeps your data out, `1` sends it and stops the warning. It also warns when the repo's `.env` sets it to `1`, since an agent can write that file too, and when traces go over plain `http://` to a machine outside your own network. This machine, a private address, and a name without a dot, such as the stack's collector on its Docker network, count as your own network. `anfra status` says so too, if the repo's `.env` set the endpoint, or if data is on.
 
 For finer rules, such as masking emails or keeping only the attributes you list, use your collector's `redaction` processor. The local telemetry stack's compose file has a commented-out example, in its collector's configuration.
 
 To keep a setting for the repo, put it in its `.env`. With `anfra serve` running, commands run on the server, so its settings apply: restart it after you change the file.
-
-## Names you can rely on
-
-These span names and attributes keep their names and meanings across releases, so queries, dashboards and alerts built on them keep working. Any other span or attribute may change in any release, noted in the changelog. While telemetry is experimental, these may change too, in a minor release, with the old and new names in the changelog.
-
-| Span | Stable attributes |
-|---|---|
-| `anfra <command path>`, each command, such as `anfra query` | `anfra.repo.id` |
-| `anfra.op.<op>`, each op a command runs, such as `anfra.op.core.query` | `anfra.op`, `error.type`, `anfra.repo.id` |
-| `anfra.op.core.query`, in addition | `anfra.query.id`, `anfra.query.kind`, `anfra.dataset`, `anfra.data_source`, `db.system.name`, `db.query.text` |
-
-- **Group spans by `anfra.op`,** not by parsing the span's name.
-- **An attribute is there only when it applies:** `anfra.repo.id` in a repo, `error.type` when the op failed, `anfra.dataset` for an AQL query.
-- **An attribute a [setting](#what-a-trace-holds) records,** such as `anfra.dataset` or `db.query.text`, is there only when the setting records it.
 
 ## Record to a tool you already use
 
@@ -140,7 +114,7 @@ The file is git-ignored, as `.anfra/data_sources.yml` is, which holds your wareh
 
 ## In a container
 
-anfra's Docker image can't run Docker, so start the repo's stack on the host. With anfra installed there, run `anfra telemetry init` in the repo, and start the file its hint names. The compose file's `name:` is the stack's network, `anfra-telemetry-<repo id>`.
+anfra's Docker image can't run Docker, so start the repo's stack on the host. With anfra installed there, run `anfra experimental telemetry init` in the repo, and start the file its hint names. The compose file's `name:` is the stack's network, `anfra-telemetry-<repo id>`.
 
 Then join anfra's container to that network, and point it at the collector there. Inside a container, `localhost` is the container itself. Set the endpoint in the container's environment: the image has no Git, so in a Git repo it can't tell whether Git tracks `.env`, and doesn't read it.
 

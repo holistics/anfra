@@ -1,6 +1,6 @@
 ---
 name: anfra-telemetry
-description: Set up telemetry for an Anfra repo on this machine — write the repo's local telemetry stack with `anfra telemetry init`, start it with Docker, point the repo's commands at it in `.env`, and check it with `anfra status`. Use when the user asks to trace, record or look back at what anfra commands (theirs or an agent's) did.
+description: Set up telemetry for an Anfra repo on this machine — write the repo's local telemetry stack with `anfra experimental telemetry init`, start it with Docker, point the repo's commands at it in `.env`, and check it with `anfra status`. Use when the user asks to trace, record or look back at what anfra commands (theirs or an agent's) did.
 ---
 
 # Setting up telemetry for a repo
@@ -12,7 +12,7 @@ user runs with Docker, one per repo. Nothing is sent to Holistics.
 Done means: `anfra status` shows the repo's `telemetry` as `on`.
 
 Only set it up when the user asks. Never point the repo at an endpoint the user didn't give you,
-and never turn on more data than they asked for: the settings decide where the user's data goes.
+and never set ANFRA_EXPERIMENTAL_TRACE_DATA for them: the settings decide where the user's data goes.
 
 ## 1. Check Docker
 
@@ -27,7 +27,7 @@ If it fails, Docker isn't installed or isn't running. Tell the user, and stop: t
 From the repo's folder:
 
 ```sh
-anfra telemetry init
+anfra experimental telemetry init
 ```
 
 It writes the compose file and starts nothing. Its `hints` give the command that starts the
@@ -57,22 +57,17 @@ anfra status
 Its `telemetry` section should be `state: on`, `set_by: OTEL_EXPORTER_OTLP_ENDPOINT in .env`. If
 it says `failing`, the stack isn't running: check `docker compose ... ps` with the file from step 2.
 
-## Recording more
+## The user's data
 
-By default a trace holds none of what a command asked for or answered, and masks SQL and error
-messages. `anfra telemetry --help` lists each setting and its values; `anfra status`'s `data`
-section shows what applies to the repo.
+By default a trace holds the user's data: what each command asked for, the SQL it ran, what it
+answered, and an error's message. Never a query's rows. `anfra status`'s `data` section shows
+whether it is on for the repo.
 
-- **Turn a setting up only when the user asks,** in the same `.env`. Inputs, answers and raw SQL
-  can hold their data, such as filter values.
-- **To group traces by dataset and data source,** or see what each command asked for, inputs is
-  the one to turn on: `ANFRA_TRACE_INPUTS=raw`.
-- **Never turn one up when the endpoint isn't on this machine.** anfra warns when that happens;
-  tell the user rather than ignore it.
+- **To leave it out,** set `ANFRA_EXPERIMENTAL_TRACE_DATA=0` in the same `.env`.
+- **If anfra warns that traces record data and go to another machine,** tell the user and ask
+  which they want: `0` keeps their data out, `1` sends it. Never choose for them.
 
 ## More
 
-* `anfra telemetry --help`, for what a trace holds and each setting.
-* `anfra telemetry init --help`, for what init writes.
-* [](../anfra-docs/), the telemetry page: which span names and attributes stay the same across
-  releases. Build queries and Data Apps over traces on those.
+* `anfra experimental telemetry --help`, for what a trace holds and how to record your data.
+* `anfra experimental telemetry init --help`, for what init writes.

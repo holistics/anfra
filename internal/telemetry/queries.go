@@ -20,8 +20,8 @@ type Queries struct{}
 
 var _ command.QueryObserver = Queries{}
 
-// QueryCompiled names the query, and with inputs on its data source and
-// dataset, and its SQL, masked or as sent, as SQL says.
+// QueryCompiled names the query, and with data on its data source, dataset
+// and SQL.
 func (Queries) QueryCompiled(ctx context.Context, q command.CompiledQuery) {
 	kind := "sql"
 	if q.Dataset != "" || q.AQL != "" {
@@ -38,16 +38,10 @@ func (Queries) QueryCompiled(ctx context.Context, q command.CompiledQuery) {
 		caller.DataSource.Is(q.DataSource),
 		caller.DBSystem.Is(q.DataSourceType),
 	)
-	sql := q.SQL
-	switch caller.SettingsOf(ctx).Level(caller.SQL) {
-	case caller.Off:
+	if !caller.SettingsOf(ctx).RecordsData() {
 		return
-	case caller.Masked:
-		// Masked here, not only by the span processor, so a host that installs
-		// none still records it masked.
-		sql = caller.MaskSQL(sql, q.DataSourceType)
 	}
-	sql, wasCut := apptracing.CutPayload(ctx, sql)
+	sql, wasCut := apptracing.CutPayload(ctx, q.SQL)
 	apptracing.SetAttributes(ctx, caller.QueryText.Is(sql))
 	if wasCut {
 		apptracing.SetAttributes(ctx, caller.QueryTextTruncated.Is(true))

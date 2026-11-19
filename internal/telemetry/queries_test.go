@@ -38,14 +38,13 @@ func attrs(s sdktrace.ReadOnlySpan) map[string]string {
 	return m
 }
 
-// with is ctx with the levels given, the others at their defaults, and payloads
-// cut at limit bytes.
-func with(levels map[caller.Category]caller.Level, limit int) context.Context {
-	return caller.WithSettings(context.Background(), caller.NewSettings(levels, limit))
+// with is ctx with data on or off, and payloads cut at limit bytes.
+func with(data bool, limit int) context.Context {
+	return caller.WithSettings(context.Background(), caller.NewSettings(data, limit))
 }
 
 func TestAQueryIsWrittenOntoItsSpan(t *testing.T) {
-	s := observe(t, with(map[caller.Category]caller.Level{caller.Inputs: caller.Raw}, 0), command.CompiledQuery{ID: "q-1", DataSource: "demo", DataSourceType: "postgresql",
+	s := observe(t, with(true, 0), command.CompiledQuery{ID: "q-1", DataSource: "demo", DataSourceType: "postgresql",
 		Dataset: "ecommerce", AQL: "ecommerce | select(x)", SQL: "SELECT 'secret'"})
 	got := attrs(s)
 	want := map[string]string{
@@ -61,8 +60,8 @@ func TestAQueryIsWrittenOntoItsSpan(t *testing.T) {
 	if v, ok := got["db.response.returned_rows"]; ok {
 		t.Errorf("a failed query recorded db.response.returned_rows = %s", v)
 	}
-	if got["db.query.text"] != "SELECT ?" {
-		t.Errorf("db.query.text = %q, want it masked by default", got["db.query.text"])
+	if got["db.query.text"] != "SELECT 'secret'" {
+		t.Errorf("db.query.text = %q, want it as sent with data on", got["db.query.text"])
 	}
 	var steps []string
 	for _, e := range s.Events() {
@@ -94,20 +93,21 @@ func TestAQuerysNamesFollowInputs(t *testing.T) {
 	got := attrs(observe(t, context.Background(), command.CompiledQuery{ID: "q-4", DataSource: "demo", Dataset: "ecommerce", SQL: "SELECT 1"}))
 	for _, k := range []string{"anfra.dataset", "anfra.data_source"} {
 		if _, ok := got[k]; ok {
-			t.Errorf("%s recorded with inputs off", k)
+			t.Errorf("%s recorded with data off", k)
 		}
 	}
 	if got["anfra.query.id"] != "q-4" {
-		t.Errorf("anfra.query.id = %q, want it whatever inputs say", got["anfra.query.id"])
+		t.Errorf("anfra.query.id = %q, want it whatever data says", got["anfra.query.id"])
 	}
 }
 
-func TestTheSQLFollowsItsSetting(t *testing.T) {
-	got := attrs(observe(t, with(map[caller.Category]caller.Level{caller.SQL: caller.Raw}, 8), command.CompiledQuery{ID: "q-3", DataSource: "demo", SQL: "SELECT 1234567"}))
+// The SQL is data: recorded, cut at the limit, only when data is.
+func TestTheSQLFollowsInputs(t *testing.T) {
+	got := attrs(observe(t, with(true, 8), command.CompiledQuery{ID: "q-3", DataSource: "demo", SQL: "SELECT 1234567"}))
 	if got["db.query.text"] != "SELECT 1…" || got["anfra.query.text_truncated"] != "true" {
-		t.Errorf("raw: got %v", got)
+		t.Errorf("data on: got %v", got)
 	}
-	got = attrs(observe(t, with(map[caller.Category]caller.Level{caller.SQL: caller.Off}, 0), command.CompiledQuery{ID: "q-5", DataSource: "demo", SQL: "SELECT 1"}))
+	got = attrs(observe(t, with(false, 0), command.CompiledQuery{ID: "q-5", DataSource: "demo", SQL: "SELECT 1"}))
 	if _, ok := got["db.query.text"]; ok {
 		t.Errorf("off: db.query.text = %q", got["db.query.text"])
 	}

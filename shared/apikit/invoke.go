@@ -86,7 +86,7 @@ func (o *registered[Call, Caller, In, Out]) invokePrepared(ctx context.Context, 
 
 // An op's span is named by telemetry.Op, and its payloads are recorded as the
 // span events telemetry.OpInput, its input as sent, and telemetry.OpOutput,
-// its answer, as a Payloader says when it is one, each as its category says. A
+// its answer, as a Payloader says when it is one, each only when data is on. A
 // streamed answer isn't recorded.
 
 // recordOutput passes an op's answer through, recording it when it answered

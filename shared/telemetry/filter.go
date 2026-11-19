@@ -2,7 +2,6 @@ package telemetry
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"sync"
 
@@ -19,15 +18,13 @@ import (
 // own spans and a library's. Each span follows the settings of the context it
 // was started in (WithSettings), or fallback, the host's, when that has none.
 //
-// Each declared attribute and event is recorded as its category's level says:
-// left out when off, masked by its key's mask when masked (a key with none,
-// such as a stack, is left out), and as it is when raw. A key declared as
-// left out never is. A key that isn't declared is left out too, and named in
+// A declared attribute or event that is data is recorded only when data is. A
+// key declared as left out never is. A key that isn't declared is left out too, and named in
 // anfra.telemetry.dropped_keys: the registry test fails on it before it
 // ships, and one it misses fails safe. A span's error status keeps its text
 // only when that is a public error code or PanicStatus.
 //
-// The code that records a payload checks its category first too, so a payload
+// The code that records a payload checks the settings first too, so a payload
 // that is off is never encoded (apptracing.RecordPayload). Filter is what
 // makes the settings hold for every attribute, however it was set.
 func Filter(next sdktrace.SpanProcessor, fallback Settings) sdktrace.SpanProcessor {
@@ -62,35 +59,33 @@ func (f *filter) ForceFlush(ctx context.Context) error { return f.next.ForceFlus
 
 // Apply is s as settings let it be recorded.
 func Apply(s sdktrace.ReadOnlySpan, settings Settings) sdktrace.ReadOnlySpan {
-	attrs := s.Attributes()
-	system := ""
-	for _, a := range attrs {
-		if string(a.Key) == DBSystem.String() {
-			system = a.Value.AsString()
-		}
-	}
 	var dropped []string
-	out := filtered{ReadOnlySpan: s, attrs: applyAttrs(attrs, settings, system, &dropped), status: s.Status()}
+	out := filtered{ReadOnlySpan: s, attrs: applyAttrs(s.Attributes(), settings, &dropped), status: s.Status()}
 	for _, e := range s.Events() {
 		d, ok := classify(e.Name)
 		if !ok {
 			dropped = append(dropped, e.Name)
 			continue
 		}
-		if d.leftOut || (d.category != "" && settings.Level(d.category) == Off) {
+		if !records(d, settings) {
 			continue
 		}
-		e.Attributes = applyAttrs(e.Attributes, settings, system, &dropped)
+		e.Attributes = applyAttrs(e.Attributes, settings, &dropped)
 		out.events = append(out.events, e)
 	}
 	if len(dropped) > 0 {
 		slices.Sort(dropped)
 		out.attrs = append(out.attrs, attribute.StringSlice(DroppedKeys.String(), slices.Compact(dropped)))
 	}
-	if out.status.Code == codes.Error && !holdsNoData(out.status.Description) {
-		out.status.Description = applyText(out.status.Description, settings.Level(Errors), MaskError)
+	if out.status.Code == codes.Error && !holdsNoData(out.status.Description) && !settings.RecordsData() {
+		out.status.Description = ""
 	}
 	return out
+}
+
+// records reports whether a declared key is recorded under settings.
+func records(d keyDef, settings Settings) bool {
+	return !d.leftOut && (!d.data || settings.RecordsData())
 }
 
 // holdsNoData reports whether a status text is one code chose: a public error
@@ -101,43 +96,19 @@ func holdsNoData(status string) bool {
 
 // applyAttrs is attrs as settings let them be recorded, adding the name of
 // each undeclared key it leaves out to dropped.
-func applyAttrs(attrs []attribute.KeyValue, settings Settings, system string, dropped *[]string) []attribute.KeyValue {
+func applyAttrs(attrs []attribute.KeyValue, settings Settings, dropped *[]string) []attribute.KeyValue {
 	out := make([]attribute.KeyValue, 0, len(attrs))
 	for _, a := range attrs {
-		name := string(a.Key)
-		d, ok := classify(name)
-		switch {
-		case !ok:
-			*dropped = append(*dropped, name)
-			continue
-		case d.leftOut:
-			continue
-		case d.category == "":
-			out = append(out, a)
+		d, ok := classify(string(a.Key))
+		if !ok {
+			*dropped = append(*dropped, string(a.Key))
 			continue
 		}
-		switch settings.Level(d.category) {
-		case Raw:
+		if records(d, settings) {
 			out = append(out, a)
-		case Masked:
-			if d.mask != nil {
-				out = append(out, attribute.String(name, d.mask(a.Value.AsString(), system)))
-			}
 		}
-		// Off, or masked with no mask for the key (a stack): left out.
 	}
 	return out
-}
-
-// applyText is text as level records it, with mask for masked.
-func applyText(text string, level Level, mask func(string) string) string {
-	switch level {
-	case Raw:
-		return text
-	case Masked:
-		return mask(text)
-	}
-	return ""
 }
 
 // filtered is a span with what the settings leave of its attributes, events
@@ -153,20 +124,11 @@ func (s filtered) Attributes() []attribute.KeyValue { return s.attrs }
 func (s filtered) Events() []sdktrace.Event         { return s.events }
 func (s filtered) Status() sdktrace.Status          { return s.status }
 
-// RecordError records err on span as an exception event, as s's errors level
-// says: nothing when off, its message masked and no stack when masked, and its
-// message, and its stack when stack is set, when raw. The status is the
-// caller's to set.
+// RecordError records err on span as an exception event when s records data,
+// with its stack when stack is set. The status is the caller's to set.
 func RecordError(span trace.Span, s Settings, err error, stack bool) {
-	if err == nil || !span.IsRecording() {
+	if err == nil || !span.IsRecording() || !s.RecordsData() {
 		return
 	}
-	switch s.Level(Errors) {
-	case Raw:
-		span.RecordError(err, trace.WithStackTrace(stack))
-	case Masked:
-		span.AddEvent(Exception.String(), trace.WithAttributes(
-			attribute.String(ExceptionType.String(), fmt.Sprintf("%T", err)),
-			attribute.String(ExceptionMessage.String(), MaskError(err.Error()))))
-	}
+	span.RecordError(err, trace.WithStackTrace(stack))
 }

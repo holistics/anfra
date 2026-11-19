@@ -142,32 +142,21 @@ func TestKeepsCanalQuerysOwnSettings(t *testing.T) {
 	}
 }
 
-// Every sidecar this process spawns is told the data settings, even at their
-// defaults, since one without them records everything as it is.
-func TestTheSidecarsAreToldTheDataSettings(t *testing.T) {
+// Every sidecar this process spawns is told the data setting, even at its
+// default, since one without it records everything as it is.
+func TestTheSidecarsAreToldTheDataSetting(t *testing.T) {
 	clearEnv(t)
-	for _, k := range []string{"H_OTEL_DATA_INPUTS", "H_OTEL_DATA_OUTPUTS", "H_OTEL_DATA_ERRORS"} {
-		t.Setenv(k, "")
-	}
+	t.Setenv("H_OTEL_DATA", "")
 	setup(t)
-	for k, want := range map[string]string{"H_OTEL_DATA_INPUTS": "off", "H_OTEL_DATA_OUTPUTS": "off", "H_OTEL_DATA_ERRORS": "masked"} {
-		if got := os.Getenv(k); got != want {
-			t.Errorf("by default, %s = %q, want %q", k, got, want)
-		}
+	if got := os.Getenv("H_OTEL_DATA"); got != "0" {
+		t.Errorf("by default, H_OTEL_DATA = %q, want 0", got)
 	}
-
-	r, err := caller.Resolve(func(k string) string {
-		return map[string]string{"ANFRA_TRACE_DATA": "off", "ANFRA_TRACE_ERRORS": "raw"}[k]
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	shutdown, err := Setup(context.Background(), "anfra", "test", r.Settings())
+	shutdown, err := Setup(context.Background(), "anfra", "test", caller.NewSettings(true, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
-	if got := os.Getenv("H_OTEL_DATA_ERRORS"); got != "off" {
-		t.Errorf("with ANFRA_TRACE_DATA=off, H_OTEL_DATA_ERRORS = %q, want off", got)
+	if got := os.Getenv("H_OTEL_DATA"); got != "1" {
+		t.Errorf("with data on, H_OTEL_DATA = %q, want 1", got)
 	}
 }

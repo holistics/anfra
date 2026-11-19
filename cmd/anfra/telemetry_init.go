@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,9 +17,19 @@ import (
 	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
-// experimental is said in each telemetry command's help: its command, settings,
-// names and tables may change in a minor release (docs/designs/telemetry.md).
-const experimental = "Experimental: this command, the telemetry settings, and what a trace records may change in a minor release."
+// newExperimentalCmd groups the commands that may change, or go, in a minor
+// release, and that a release's changelog notes when they do. Leaving the group
+// is a rename: the old name then stays, hidden, for a release.
+func newExperimentalCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "experimental",
+		Short: "Commands that may change, or go, in a minor release",
+		Long: "Commands that may change, or go, in a minor release, with their settings (ANFRA_EXPERIMENTAL_*).\n" +
+			"The changelog says when one does.",
+	}
+	cmd.AddCommand(newTelemetryCmd())
+	return cmd
+}
 
 // newTelemetryCmd groups the commands for recording what anfra does in the
 // user's own endpoint (docs/designs/telemetry.md). CLI commands only, never ops.
@@ -31,45 +40,18 @@ func newTelemetryCmd() *cobra.Command {
 		Long: "Record what each anfra command does, to your own OpenTelemetry endpoint, so you or your agent can look back at it:\n" +
 			"each command's steps, how long each took, and each query's row count. Nothing is sent to Holistics.\n\n" +
 			"To turn it on, in the repo's folder:\n" +
-			"  1. anfra telemetry init               writes the repo's local telemetry stack's compose file\n" +
+			"  1. anfra experimental telemetry init  writes the repo's local telemetry stack's compose file\n" +
 			"  2. docker compose -f <file> up -d     starts the stack: the file init's hint names\n" +
 			"  3. OTEL_EXPORTER_OTLP_ENDPOINT=<url>  in the .env at the repo's root: the line init's hint gives\n" +
 			"To record to a collector you already run, skip 1 and 2, and give its endpoint.\n\n" +
-			"What a trace holds of your data, each set in the environment or the .env, which the environment wins over:\n" +
-			traceSettingsHelp() + "\n" +
-			"`anfra status` shows where anfra records, whether the endpoint answers, and each setting with what set it.\n\n" +
-			experimental,
+			"A trace holds your data: what a command asked for, the SQL it ran, what came back (never a query's rows),\n" +
+			"and an error's message and stack. " + caller.DataVar + "=0, in the environment or the .env, which\n" +
+			"the environment wins over, leaves it out. anfra warns when it is on by default and the endpoint is on\n" +
+			"another machine.\n\n" +
+			"`anfra status` shows where anfra records, whether the endpoint answers, and each setting with what set it.",
 	}
 	cmd.AddCommand(newTelemetryInitCmd())
 	return cmd
-}
-
-// categoryHelp is what each category of user data records, for
-// traceSettingsHelp.
-var categoryHelp = map[caller.Category]string{
-	caller.Inputs:  "what a command asked for, such as a filter's values",
-	caller.Outputs: "what came back, never a query's rows",
-	caller.SQL:     "the SQL sent to the warehouse",
-	caller.Errors:  "an error's message",
-}
-
-// traceSettingsHelp lists the data settings, from the registry: each one's
-// variable, what it records, and its values, its default marked.
-func traceSettingsHelp() string {
-	var b strings.Builder
-	for _, d := range caller.Categories {
-		var levels []string
-		for _, l := range d.Levels {
-			v := string(l)
-			if l == d.Default {
-				v += " (default)"
-			}
-			levels = append(levels, v)
-		}
-		fmt.Fprintf(&b, "  %-21s %s: %s\n", d.Var, categoryHelp[d.Name], strings.Join(levels, ", "))
-	}
-	fmt.Fprintf(&b, "  %-21s holds them all off\n", caller.DataVar+"=off")
-	return b.String()
 }
 
 // telemetryInitResult is what init wrote, and what is left to do.
@@ -98,8 +80,7 @@ func newTelemetryInitCmd() *cobra.Command {
 			"ports. If a compose.yaml that anfra didn't write is there, init leaves it alone and fails.\n\n" +
 			"Its result opens with message, the outcome; then files, each with whether init created, updated or\n" +
 			"left it; and hints, last, what to do next.\n\n" +
-			"`anfra telemetry --help` says what a trace holds of your data, and how to set it.\n\n" +
-			experimental,
+			"`anfra experimental telemetry --help` says what a trace holds of your data, and how to set it.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
@@ -108,14 +89,14 @@ func newTelemetryInitCmd() *cobra.Command {
 			}
 			if info, err := os.Stat(filepath.Join(cwd, repo.ConfigDirName)); err != nil || !info.IsDir() {
 				return clierr.Precondition("This folder isn't an anfra repo, and each repo has its own telemetry stack. " +
-					"Run `anfra telemetry init` in the repo's folder, or `anfra init` first.")
+					"Run `anfra experimental telemetry init` in the repo's folder, or `anfra init` first.")
 			}
 			r := repo.Resolve(cwd)
 			dir := filepath.Join(r.DataDir, "telemetry")
 			w, err := stack.Write(dir, stack.Spec{Version: meta.Version, Name: stack.Name(r.ID), Taken: otherStacksPorts(dir)})
 			if errors.Is(err, stack.ErrNotOurs) {
 				return clierr.Precondition("%s is a compose file that anfra didn't write, so init leaves it alone. "+
-					"Move it elsewhere, then run `anfra telemetry init` again.", home.Shown(w.Path))
+					"Move it elsewhere, then run `anfra experimental telemetry init` again.", home.Shown(w.Path))
 			}
 			if err != nil {
 				return commandFailedWith(fmt.Sprintf("Can't write the compose file in %s: %v.", home.Shown(dir), err), nil)

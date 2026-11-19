@@ -126,8 +126,10 @@ type Warning struct {
 // told by a doc or a query result to edit the file could send the user's data
 // to someone else's endpoint (docs/designs/telemetry.md, setting storages).
 //
-//   - data_from_env_file: .env sets a category to record data (masked or
-//     raw), and traces leave this machine.
+//   - data_by_default: data is on because nothing set it, and traces leave
+//     this machine. Setting it, to 0 or 1, is the user's choice, and stops
+//     the warning.
+//   - data_from_env_file: .env turns data on, and traces leave this machine.
 //   - telemetry_unencrypted: traces go over plain http:// to a machine named
 //     on the internet. A name without a dot, such as the telemetry stack's
 //     collector on its Docker network (stack.CollectorInNetwork), or a
@@ -141,18 +143,17 @@ func GuardWarnings(dest Destination, data caller.Resolution) []Warning {
 		return nil
 	}
 	var warnings []Warning
-	var fromFile []string
-	for _, d := range caller.Categories {
-		r := data.Data[d.Name]
-		if _, inFile := repoenv.Origin(r.From); inFile && r.Value != caller.Off {
-			fromFile = append(fromFile, r.From+"="+string(r.Value))
-		}
+	if data.Data.Value && data.Data.From == "" {
+		warnings = append(warnings, Warning{Code: "data_by_default", Message: fmt.Sprintf(
+			"Traces record your data, such as filter values and SQL, and go to %s, which is not on this machine (set by %s). "+
+				"Set %s=0 to keep your data out of them, or %s=1 to send it and stop this warning.",
+			u.Host, dest.From, caller.DataVar, caller.DataVar)})
 	}
-	if len(fromFile) > 0 {
+	if _, inFile := repoenv.Origin(data.Data.From); inFile && data.Data.Value {
 		warnings = append(warnings, Warning{Code: "data_from_env_file", Message: fmt.Sprintf(
-			"The repo's %s sets %s, so your data goes to %s, which is not on this machine. "+
-				"If you didn't set them, remove them from %s, and check %s there.",
-			repoenv.FileName, strings.Join(fromFile, ", "), u.Host, repoenv.FileName, dest.From)})
+			"The repo's %s sets %s=1, so your data goes to %s, which is not on this machine. "+
+				"If you didn't set it, remove it from %s, and check %s there.",
+			repoenv.FileName, caller.DataVar, u.Host, repoenv.FileName, dest.From)})
 	}
 	if u.Scheme == "http" && !isLocalNetwork(u.Hostname()) {
 		warnings = append(warnings, Warning{Code: "telemetry_unencrypted", Message: fmt.Sprintf(
@@ -167,9 +168,9 @@ func GuardWarnings(dest Destination, data caller.Resolution) []Warning {
 // setup the docs recommend (docs/designs/telemetry.md, setting storages).
 //
 //   - The repo's .env set the endpoint: an agent can edit the file to send
-//     traces elsewhere, and even the defaults send masked SQL and errors.
-//   - A category records data raw, the user's data as it is, set in the
-//     environment or the file.
+//     traces elsewhere, and even the defaults send the repo's id and each
+//     step's name and timing.
+//   - The user's data is on, set in the environment or the file.
 func (d Destination) StatusHints(data caller.Resolution) []string {
 	if d.URL == "" {
 		return nil
@@ -183,15 +184,9 @@ func (d Destination) StatusHints(data caller.Resolution) []string {
 		hints = append(hints, fmt.Sprintf("Traces go to %s, which is not on this machine, because the repo's %s sets %s on %s. "+
 			"If you didn't set it there, remove that line.", u.Host, repoenv.FileName, d.variable, d.fileLine))
 	}
-	var raw []string
-	for _, c := range caller.Categories {
-		if r := data.Data[c.Name]; r.Value == caller.Raw {
-			raw = append(raw, repoenv.Describe(r.From))
-		}
-	}
-	if len(raw) > 0 {
-		hints = append(hints, fmt.Sprintf("Traces record your data as it is, set raw by %s, and go to %s, which is not on this machine. "+
-			"Unless you run that endpoint yourself, set each to off, or to masked for ANFRA_TRACE_SQL and ANFRA_TRACE_ERRORS.", strings.Join(raw, ", "), u.Host))
+	if data.Data.Value {
+		hints = append(hints, fmt.Sprintf("Traces record your data, turned on by %s, and go to %s, which is not on this machine. "+
+			"Unless you run that endpoint yourself, set it to 0.", repoenv.Describe(data.Data.From), u.Host))
 	}
 	return hints
 }

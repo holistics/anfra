@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -89,13 +88,13 @@ func TestEveryCommandIsTheRootOfItsTrace(t *testing.T) {
 	}
 
 	// A CLI-only command, which is no op, has its root too.
-	r = roots(runArgs("telemetry", "init", "--yaml"))
-	if len(r) != 1 || r[0].Name() != "anfra telemetry init" {
-		t.Fatalf("telemetry init's roots = %v, want one, anfra telemetry init", names(r))
+	r = roots(runArgs("experimental", "telemetry", "init", "--yaml"))
+	if len(r) != 1 || r[0].Name() != "anfra experimental telemetry init" {
+		t.Fatalf("telemetry init's roots = %v, want one, anfra experimental telemetry init", names(r))
 	}
 
 	// The caller's mistake: its code, no error status.
-	r = roots(runArgs("telemetry", "init", "extra"))
+	r = roots(runArgs("experimental", "telemetry", "init", "extra"))
 	if len(r) != 1 {
 		t.Fatalf("a refused telemetry init's roots = %v, want one", names(r))
 	}
@@ -109,11 +108,11 @@ func TestEveryCommandIsTheRootOfItsTrace(t *testing.T) {
 }
 
 // Every span of a command in a repo names the repo by its repo id, the name of
-// its state folder, with inputs on or off, never by its path, from the root on,
+// its state folder, with data on or off, never by its path, from the root on,
 // a CLI-only command's included; a command outside a repo names none.
 func TestTheRepoIsOnEverySpan(t *testing.T) {
 	t.Setenv("ANFRA_NO_UPDATE_NOTIFIER", "1")
-	withTraceData(t, map[string]string{"ANFRA_TRACE_INPUTS": "raw"})
+	withTraceData(t, map[string]string{"ANFRA_EXPERIMENTAL_TRACE_DATA": "1"})
 	rec := tracetest.NewSpanRecorder()
 	prev := otel.GetTracerProvider()
 	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(caller.Spans{}), sdktrace.WithSpanProcessor(caller.Filter(rec, caller.Defaults()))))
@@ -135,7 +134,7 @@ func TestTheRepoIsOnEverySpan(t *testing.T) {
 	}
 
 	r := inRepo(t)
-	attrs := rootAttrs("telemetry", "init", "--yaml")
+	attrs := rootAttrs("experimental", "telemetry", "init", "--yaml")
 	if attrs["anfra.repo.id"] != r.ID || filepath.Base(r.DataDir) != r.ID || attrs["anfra.repo.name"] != "" {
 		t.Errorf("in a repo, the root's attributes = %v, want the repo id %s, its state folder's name", attrs, r.ID)
 	}
@@ -145,52 +144,14 @@ func TestTheRepoIsOnEverySpan(t *testing.T) {
 		}
 	}
 
-	withTraceData(t, nil)
-	if attrs := rootAttrs("telemetry", "init", "--yaml"); attrs["anfra.repo.id"] != r.ID {
-		t.Errorf("with inputs off, the root's attributes = %v, want the repo id all the same", attrs)
+	withTraceData(t, map[string]string{"ANFRA_EXPERIMENTAL_TRACE_DATA": "0"})
+	if attrs := rootAttrs("experimental", "telemetry", "init", "--yaml"); attrs["anfra.repo.id"] != r.ID {
+		t.Errorf("with data off, the root's attributes = %v, want the repo id all the same", attrs)
 	}
 
 	t.Chdir(t.TempDir())
-	if attrs := rootAttrs("telemetry", "init", "--yaml"); attrs["anfra.repo.id"] != "" {
+	if attrs := rootAttrs("experimental", "telemetry", "init", "--yaml"); attrs["anfra.repo.id"] != "" {
 		t.Errorf("outside a repo, the root's attributes = %v, want no repo", attrs)
-	}
-}
-
-// A command's root span, in a repo, is stable (caller.StableSpans), and holds
-// each of its stable attributes with inputs off, so a dashboard built on them
-// keeps working.
-func TestTheRootSpanKeepsItsStableAttributes(t *testing.T) {
-	t.Setenv("ANFRA_NO_UPDATE_NOTIFIER", "1")
-	withTraceData(t, nil)
-	rec := tracetest.NewSpanRecorder()
-	prev := otel.GetTracerProvider()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(caller.Spans{}), sdktrace.WithSpanProcessor(caller.Filter(rec, caller.Defaults()))))
-	t.Cleanup(func() { otel.SetTracerProvider(prev) })
-	inRepo(t)
-	t.Cleanup(resetOutput)
-	run(t.Context(), []string{"telemetry", "init", "--yaml"}, &bytes.Buffer{}, &bytes.Buffer{}, runOptions{})
-
-	var root sdktrace.ReadOnlySpan
-	for _, s := range rec.Ended() {
-		if !s.Parent().IsValid() {
-			root = s
-		}
-	}
-	if root == nil {
-		t.Fatal("no root span")
-	}
-	stable := caller.StableAttributes(root.Name())
-	if len(stable) == 0 {
-		t.Fatalf("the root span %q isn't a stable span", root.Name())
-	}
-	has := map[string]bool{}
-	for _, a := range root.Attributes() {
-		has[string(a.Key)] = true
-	}
-	for _, k := range stable {
-		if !has[k.String()] {
-			t.Errorf("the root span %q lost its stable attribute %s", root.Name(), k)
-		}
 	}
 }
 
@@ -234,9 +195,9 @@ func withTraceData(t *testing.T, env map[string]string) {
 	traceData = r
 }
 
-// A command's arguments are on its root span with inputs on, a refused run's
-// included, a sensitive flag's value redacted; with inputs off, they aren't.
-func TestTheRootRecordsTheArgumentsWithInputsOn(t *testing.T) {
+// A command's arguments are on its root span with data on, a refused run's
+// included; with data off, they aren't.
+func TestTheRootRecordsTheArgumentsWithDataOn(t *testing.T) {
 	t.Setenv("ANFRA_HOME", t.TempDir())
 	t.Setenv("ANFRA_NO_UPDATE_NOTIFIER", "1")
 	rec := tracetest.NewSpanRecorder()
@@ -265,42 +226,26 @@ func TestTheRootRecordsTheArgumentsWithInputsOn(t *testing.T) {
 		return ""
 	}
 
-	withTraceData(t, nil)
+	withTraceData(t, map[string]string{"ANFRA_EXPERIMENTAL_TRACE_DATA": "0"})
 	if got := input("version", "--yaml"); got != "" {
-		t.Errorf("with inputs off, anfra.command.input = %s", got)
+		t.Errorf("with data off, anfra.command.input = %s", got)
 	}
-	withTraceData(t, map[string]string{"ANFRA_TRACE_INPUTS": "raw"})
+	withTraceData(t, map[string]string{"ANFRA_EXPERIMENTAL_TRACE_DATA": "1"})
 	if got := input("version", "--yaml"); got != `["version","--yaml"]` {
 		t.Errorf("anfra.command.input = %s", got)
 	}
-	if got := input("telemetry", "init", "--no-such-flag"); got != `["telemetry","init","--no-such-flag"]` {
+	if got := input("experimental", "telemetry", "init", "--no-such-flag"); got != `["experimental","telemetry","init","--no-such-flag"]` {
 		t.Errorf("a refused run's anfra.command.input = %s", got)
 	}
 }
 
-// A flag marked sensitive has its value redacted, however it is given.
-func TestRedactArgsHidesSensitiveValues(t *testing.T) {
-	cmd := &cobra.Command{Use: "x"}
-	cmd.Flags().StringP("token", "t", "", "")
-	cmd.Flags().StringP("name", "n", "", "")
-	cmd.Flags().BoolP("verbose", "v", false, "")
-	_ = cmd.Flags().SetAnnotation("token", sensitiveFlag, []string{"true"})
-	got := redactArgs(cmd, []string{"--token", "s1", "--token=s2", "-t", "s3", "-ts4", "-t=s5", "-vts6", "-vt", "s7",
-		"--name", "n", "-n", "-t", "--", "--token", "kept"})
-	want := []string{"--token", redacted, "--token=" + redacted, "-t", redacted, "-t" + redacted, "-t=" + redacted, "-vt" + redacted, "-vt", redacted,
-		"--name", "n", "-n", "-t", "--", "--token", "kept"}
-	if !slices.Equal(got, want) {
-		t.Errorf("redactArgs = %v, want %v", got, want)
-	}
-}
-
 // Every attribute and event the CLI's spans carry is declared in the registry
-// (shared/telemetry), with everything recorded raw, so a new key, anfra's or a
+// (shared/telemetry), with everything recorded, so a new key, anfra's or a
 // library's, fails here until someone classifies it.
 func TestEveryRecordedKeyIsDeclared(t *testing.T) {
 	t.Setenv("ANFRA_HOME", t.TempDir())
 	t.Setenv("ANFRA_NO_UPDATE_NOTIFIER", "1")
-	withTraceData(t, map[string]string{"ANFRA_TRACE_INPUTS": "raw", "ANFRA_TRACE_OUTPUTS": "raw", "ANFRA_TRACE_SQL": "raw", "ANFRA_TRACE_ERRORS": "raw"})
+	withTraceData(t, map[string]string{"ANFRA_EXPERIMENTAL_TRACE_DATA": "1"})
 	rec := tracetest.NewSpanRecorder()
 	prev := otel.GetTracerProvider()
 	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(caller.Spans{}), sdktrace.WithSpanProcessor(rec)))
@@ -309,8 +254,8 @@ func TestEveryRecordedKeyIsDeclared(t *testing.T) {
 	for _, args := range [][]string{
 		{"version", "--yaml"},
 		{"status", "--yaml"},
-		{"telemetry", "init", "--yaml"},
-		{"telemetry", "init", "extra"},
+		{"experimental", "telemetry", "init", "--yaml"},
+		{"experimental", "telemetry", "init", "extra"},
 		{"no-such-command"},
 	} {
 		run(t.Context(), args, &bytes.Buffer{}, &bytes.Buffer{}, runOptions{})

@@ -49,18 +49,14 @@ func TestChildEnv(t *testing.T) {
 	}
 }
 
-// The data settings anfra sets in its environment reach each sidecar, and a
-// sidecar's prefix changes one for that sidecar alone.
-func TestTheDataSettingsReachTheSidecar(t *testing.T) {
-	environ := []string{
-		"H_OTEL_DATA_INPUTS=off",
-		"H_OTEL_DATA_ERRORS=masked",
-		"ANFRA_NODE_ENV_H_OTEL_DATA_ERRORS=raw",
-	}
-	if got, want := childEnv(environ, "ANFRA_NODE_ENV_", nil, nil), []string{"H_OTEL_DATA_INPUTS=off", "H_OTEL_DATA_ERRORS=raw"}; !slices.Equal(got, want) {
+// The data setting anfra sets in its environment reaches each sidecar, and a
+// sidecar's prefix changes it for that sidecar alone.
+func TestTheDataSettingReachesTheSidecar(t *testing.T) {
+	environ := []string{"H_OTEL_DATA=0", "ANFRA_NODE_ENV_H_OTEL_DATA=1"}
+	if got, want := childEnv(environ, "ANFRA_NODE_ENV_", nil, nil), []string{"H_OTEL_DATA=1"}; !slices.Equal(got, want) {
 		t.Errorf("anfra-node:\n got %q\nwant %q", got, want)
 	}
-	if got, want := childEnv(environ, "ANFRA_CANAL_QUERY_ENV_", nil, nil), []string{"H_OTEL_DATA_INPUTS=off", "H_OTEL_DATA_ERRORS=masked"}; !slices.Equal(got, want) {
+	if got, want := childEnv(environ, "ANFRA_CANAL_QUERY_ENV_", nil, nil), []string{"H_OTEL_DATA=0"}; !slices.Equal(got, want) {
 		t.Errorf("canal-query:\n got %q\nwant %q", got, want)
 	}
 }

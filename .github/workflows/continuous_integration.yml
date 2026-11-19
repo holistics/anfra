@@ -108,7 +108,7 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
 
-  # The telemetry stack's compose file, as `anfra telemetry init` writes it, on
+  # The telemetry stack's compose file, as `anfra experimental telemetry init` writes it, on
   # Docker: it starts, and a span anfra exports lands in its ClickHouse
   # (docs/designs/telemetry.md).
   telemetry-stack:

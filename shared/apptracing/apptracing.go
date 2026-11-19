@@ -131,7 +131,7 @@ func attr(k string, v any) attribute.KeyValue {
 
 // SetAttributes adds kv to the span current in ctx: what an op knows only as
 // it runs, such as the rows a query read. Each key is declared in
-// shared/telemetry, with its category, and is set only when its category is
+// shared/telemetry, as data or metadata, and data is set only when data is
 // recorded (docs/designs/telemetry.md). A pair whose value is nil, or a nil
 // *int64, is left out, so an optional value needs no check.
 func SetAttributes(ctx context.Context, kv ...telemetry.KeyValue) {
@@ -152,7 +152,7 @@ func SetAttributes(ctx context.Context, kv ...telemetry.KeyValue) {
 		if v == nil {
 			continue
 		}
-		if c := p.Key.Category(); c != "" && settings.Level(c) == telemetry.Off {
+		if p.Key.IsData() && !settings.RecordsData() {
 			continue
 		}
 		attrs = append(attrs, attr(p.Key.String(), v))
