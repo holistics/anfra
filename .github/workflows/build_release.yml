@@ -13,6 +13,13 @@
 # A release also publishes the SDK and the design package to npm, as @holistics/anfra-sdk and
 # @holistics/anfra-design at the same version (the sdk job), and the anfra skills to their
 # facade, holistics/anfra-skills, when they changed (the skills job).
+#
+# A prerelease, a version with a `-` such as 0.23.0-rc.1, is published so it can be installed
+# by its version, but nothing that finds the latest version picks it: its GitHub release is
+# marked as a prerelease, which `anfra update` and install.sh skip (they follow
+# /releases/latest), its image takes only its own tag, its npm packages go under `next`, and the
+# skills, whose version `anfra update` checks, aren't published
+# (docs/designs/release-candidates.md).
 name: Build anfra release
 
 on:
@@ -35,6 +42,7 @@ jobs:
     env:
       TAG: ${{ github.ref_name }}
       IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
+      IS_PRERELEASE: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0; on a tag push this is the tag's commit (manifest pinned there)
 
@@ -131,7 +139,8 @@ jobs:
           ls -la release
 
       # The image: anfra serve on the release's own Linux binaries, for amd64 and arm64
-      # (Dockerfile). A release pushes it as <version>, <major>.<minor> and latest; any other
+      # (Dockerfile). A release pushes it as <version>, <major>.<minor> and latest, and a
+      # prerelease as <version> only, so the other two stay the latest release's. Any other
       # build only builds it, so a broken Dockerfile shows before a release.
       #
       # Built for both platforms at once, each tag is a multi-platform index: one name for
@@ -146,8 +155,10 @@ jobs:
           {
             echo "tags<<EOF"
             echo "$repo:$VERSION"
-            echo "$repo:${VERSION%.*}"
-            echo "$repo:latest"
+            if [ "$IS_PRERELEASE" != true ]; then
+              echo "$repo:${VERSION%.*}"
+              echo "$repo:latest"
+            fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -169,6 +180,9 @@ jobs:
       # The release's notes are its section of CHANGELOG.md, as `pnpm bump` wrote it in the release
       # commit, then GitHub's: the pull requests, new contributors and compare link
       # (scripts/release-notes.sh). A re-run brings an existing release's notes back in line.
+      #
+      # CHANGELOG.md is uploaded beside the binaries: `anfra update` prints the notes of the
+      # releases it brings from it (internal/update/notes.go).
       - name: Publish release
         if: ${{ env.IS_RELEASE == 'true' }}
         env:
@@ -177,12 +191,15 @@ jobs:
         run: |
           gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body > "$RUNNER_TEMP/generated.md"
           scripts/release-notes.sh "$VERSION" "$RUNNER_TEMP/generated.md" > "$RUNNER_TEMP/notes.md"
+          # A prerelease is marked as one, which /releases/latest skips.
+          prerelease=()
+          if [ "$IS_PRERELEASE" = true ]; then prerelease=(--prerelease); fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${prerelease[@]}"
           else
-            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${prerelease[@]}"
           fi
-          gh release upload "$TAG" release/anfra-* --clobber
+          gh release upload "$TAG" release/anfra-* CHANGELOG.md --clobber
 
       - name: Upload artifacts
         if: ${{ env.IS_RELEASE != 'true' }}
@@ -235,6 +252,11 @@ jobs:
               tag=latest
               case "$version" in *-*) tag=next ;; esac
               npm publish --tag "$tag"
+              # A release moves `next` too, if the package has it, so `next` is never older
+              # than `latest`.
+              if [ "$tag" = latest ] && [ -n "$(npm view "$name" dist-tags.next 2>/dev/null)" ]; then
+                npm dist-tag add "$name@$version" next
+              fi
             )
           done
 
@@ -252,6 +274,7 @@ jobs:
       contents: read
     env:
       IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
+      IS_PRERELEASE: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -259,7 +282,7 @@ jobs:
           node-version-file: .nvmrc
       # A release pushes as the App; any other build only reads the public repo.
       - id: deployer
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
           app-id: ${{ secrets.ANFRA_SKILLS_DEPLOYER_APP_ID }}
@@ -272,10 +295,12 @@ jobs:
           path: facade
           fetch-depth: 1
           token: ${{ steps.deployer.outputs.token || github.token }}
+      # A prerelease doesn't publish them: `anfra update` checks the skills' version on the
+      # facade, so they would reach everyone before the release does.
       - name: Publish the skills, or report what a release would publish
         run: |
           version="$(yq '.version' manifest.yml)"
-          if [ "$IS_RELEASE" != true ]; then
+          if [ "$IS_RELEASE" != true ] || [ "$IS_PRERELEASE" = true ]; then
             bash skills/scripts/publish.sh facade "$version" "$GITHUB_SHA"; exit 0
           fi
           git -C facade config user.name "anfra release"

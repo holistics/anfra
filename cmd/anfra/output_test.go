@@ -226,7 +226,7 @@ func TestJSONRemoteErrorKeepsTheShape(t *testing.T) {
 func TestWriteStructured(t *testing.T) {
 	t.Cleanup(resetOutput)
 	res := updateResult{Message: "anfra 0.16.0 is available (you have 0.15.0).", Version: "0.15.0", Update: command.UpdateInfo{Latest: "0.16.0", Available: true},
-		Changelog: "https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md"}
+		Changelog: "https://github.com/holistics/anfra/releases/download/v0.16.0/CHANGELOG.md"}
 	var out bytes.Buffer
 	if err := writeStructured(&out, res); err != nil {
 		t.Fatal(err)
@@ -236,7 +236,7 @@ func TestWriteStructured(t *testing.T) {
 		"update:\n" +
 		"  latest: 0.16.0\n" +
 		"  available: true\n" +
-		"changelog: https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md\n"
+		"changelog: https://github.com/holistics/anfra/releases/download/v0.16.0/CHANGELOG.md\n"
 	if out.String() != want {
 		t.Errorf("YAML:\n%s\nwant\n%s", out.String(), want)
 	}
@@ -249,7 +249,7 @@ func TestWriteStructured(t *testing.T) {
 		t.Fatal(err)
 	}
 	want = `{"message":"Updated anfra 0.15.0 → 0.16.0.","version":"0.16.0","update":{"latest":"0.16.0","available":false},"previous":"0.15.0",` +
-		`"changelog":"https://github.com/holistics/anfra/blob/v0.16.0/CHANGELOG.md","hints":["Restart it."]}` + "\n"
+		`"changelog":"https://github.com/holistics/anfra/releases/download/v0.16.0/CHANGELOG.md","hints":["Restart it."]}` + "\n"
 	if out.String() != want {
 		t.Errorf("JSON:\n%s\nwant\n%s", out.String(), want)
 	}
