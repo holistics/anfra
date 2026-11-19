@@ -1,3 +1,8 @@
+## [0.23.0](https://github.com/holistics/anfra/compare/v0.22.0...v0.23.0) (2026-11-19)
+
+### Features
+
+* **skills:** say a measure column's models and AQL, and a bare field's row key ([68fb305](https://github.com/holistics/anfra/commit/68fb305a504ff5238f94682351177e0ac69a62cc))
 ## [0.22.0](https://github.com/holistics/anfra/compare/v0.21.0...v0.22.0) (2026-11-18)
 
 ### Features

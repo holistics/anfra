@@ -1,3 +1,16 @@
+## [0.23.0](https://github.com/holistics/anfra/compare/v0.22.0...v0.23.0) (2026-11-19)
+
+### Features
+
+* **engine:** describe a measure's models and AQL, and a dataset's relationships ([c2b53e5](https://github.com/holistics/anfra/commit/c2b53e5913026bb79b3929bb811b70c08ad17748))
+* **sdk:** carry a measure's models and AQL, and a dataset's relationships ([649cd70](https://github.com/holistics/anfra/commit/649cd7041c8b54f9a3384f922541bacd7277a620))
+* **sdk:** view underlying data of a dataset metric, a ratio or a filtered measure ([3919f91](https://github.com/holistics/anfra/commit/3919f914d3965de36161b3eb4458d5eaa9479885))
+* **sdk:** view underlying data of every measure by its models and AQL, with its column ([9bbdf90](https://github.com/holistics/anfra/commit/9bbdf9033f8f1cb05bd9e104115253588c4b6153))
+* **skills:** say a measure column's models and AQL, and a bare field's row key ([68fb305](https://github.com/holistics/anfra/commit/68fb305a504ff5238f94682351177e0ac69a62cc))
+
+### Bug Fixes
+
+* **sdk:** view underlying data of a filtered aggregate written model first ([2d058ca](https://github.com/holistics/anfra/commit/2d058ca08ee30c4f557afdcfc16cb584fb6cd36c))
 ## [0.22.0](https://github.com/holistics/anfra/compare/v0.21.0...v0.22.0) (2026-11-18)
 
 ### Features
