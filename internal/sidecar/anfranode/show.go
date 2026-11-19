@@ -98,18 +98,18 @@ type ShowDataset struct {
 	Description   string             `json:"description,omitempty"`
 	Models        []ShowModel        `json:"models,omitempty" doc:"the models the dataset uses. Absent when the dataset is shown in outline."`
 	Metrics       []ShowField        `json:"metrics,omitempty" doc:"the dataset's metrics. Absent when the dataset is shown in outline."`
-	Relationships []ShowRelationship `json:"relationships,omitempty" doc:"the relationships between the dataset's models, inactive ones included. Absent when the dataset is shown in outline."`
+	Relationships []ShowRelationship `json:"relationships,omitempty" doc:"the relationships between its models. Absent if the dataset failed to load."`
 }
 
 // ShowRelationship is a relationship between two of a dataset's models: the
 // field of one that joins to the field of the other.
 type ShowRelationship struct {
-	Name      string `json:"name,omitempty" doc:"the relationship's name, when the AML names it"`
-	From      string `json:"from" doc:"the field the relationship starts from, as <model fqn>.<field>"`
-	To        string `json:"to" doc:"the field the relationship points to, as <model fqn>.<field>"`
-	Type      string `json:"type" enum:"one_to_one,many_to_one,range,many_to_many" doc:"how many rows of each side match: many_to_one when many rows of from match one row of to"`
-	Active    bool   `json:"active" doc:"whether a query joins through the relationship by default. A query can still use an inactive one by naming it."`
-	Direction string `json:"direction" enum:"one_way,two_way" doc:"which way a filter passes through the relationship: one_way, from the one side to the many side only, or two_way, both ways"`
+	Name      string `json:"name,omitempty" doc:"its name, if the AML gives one"`
+	From      string `json:"from" doc:"one side's field, as <model fqn>.<field>"`
+	To        string `json:"to" doc:"the other side's field, as <model fqn>.<field>"`
+	Type      string `json:"type" enum:"one_to_one,many_to_one,range,many_to_many" doc:"its cardinality, from side first"`
+	Active    bool   `json:"active" doc:"whether queries join through it by default"`
+	Direction string `json:"direction" enum:"one_way,two_way" doc:"which way filters pass through it"`
 }
 
 // ShowModel is a model as a dataset uses it, with the fields AQL can

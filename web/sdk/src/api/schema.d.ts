@@ -348,7 +348,7 @@ export interface components {
             };
             /** @description the database's own name for the column's type, for debugging only. Don't base decisions on it, because it varies by database and driver. Absent before the query runs. */
             db_type?: string;
-            /** @description a measure as AQL, as the query wrote it, such as sum(orders.amount) or a metric's name. A metric the query declares itself compiles only with the query's declarations. Absent for a dimension. */
+            /** @description a measure's AQL, as the query wrote it. Absent for a dimension. */
             expression?: string;
             /** @description the field it draws, or for an adhoc column, its name */
             fieldName: string;
@@ -356,7 +356,7 @@ export interface components {
             label: string;
             /** @description the model of fieldName, as the dataset names it. Absent for a dataset metric or an adhoc column. */
             modelId?: string;
-            /** @description the models a measure aggregates, by the names the dataset gives them, such as [orders] for sum(orders.amount), or [orders, users] for a ratio of a count of each. A model that is only joined on or only filtered by is not listed. Absent for a dimension. */
+            /** @description the models a measure aggregates. Absent for a dimension. */
             models?: string[];
             /** @description the column's key, as in fields */
             name: string;
@@ -1199,7 +1199,7 @@ export interface components {
             /** @description the models the dataset uses. Absent when the dataset is shown in outline. */
             models?: components["schemas"]["ShowModel"][];
             name: string;
-            /** @description the relationships between the dataset's models, inactive ones included. Absent when the dataset is shown in outline. */
+            /** @description the relationships between its models. Absent if the dataset failed to load. */
             relationships?: components["schemas"]["ShowRelationship"][];
         };
         ShowField: {
@@ -1242,21 +1242,21 @@ export interface components {
             name: string;
         };
         ShowRelationship: {
-            /** @description whether a query joins through the relationship by default. A query can still use an inactive one by naming it. */
+            /** @description whether queries join through it by default */
             active: boolean;
             /**
-             * @description which way a filter passes through the relationship: one_way, from the one side to the many side only, or two_way, both ways
+             * @description which way filters pass through it
              * @enum {string}
              */
             direction: "one_way" | "two_way";
-            /** @description the field the relationship starts from, as <model fqn>.<field> */
+            /** @description one side's field, as <model fqn>.<field> */
             from: string;
-            /** @description the relationship's name, when the AML names it */
+            /** @description its name, if the AML gives one */
             name?: string;
-            /** @description the field the relationship points to, as <model fqn>.<field> */
+            /** @description the other side's field, as <model fqn>.<field> */
             to: string;
             /**
-             * @description how many rows of each side match: many_to_one when many rows of from match one row of to
+             * @description its cardinality, from side first
              * @enum {string}
              */
             type: "one_to_one" | "many_to_one" | "range" | "many_to_many";

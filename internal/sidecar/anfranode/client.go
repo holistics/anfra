@@ -475,8 +475,8 @@ type ExploreColumn struct {
 	Adhoc       bool     `json:"adhoc" doc:"a query-local expression, not a field the dataset defines"`
 	IsMeasure   bool     `json:"isMeasure"`
 	Aggregation string   `json:"aggregation,omitempty" doc:"an aggregated field's aggregation, such as sum or count distinct"`
-	Models      []string `json:"models,omitempty" doc:"the models a measure aggregates, by the names the dataset gives them. A model that is only joined on or only filtered by is not listed. Absent for a dimension, and from an anfra-node before 0.16.0."`
-	Expression  string   `json:"expression,omitempty" doc:"a measure as AQL, as the query wrote it. A metric the query declares itself compiles only with the query's declarations. Absent for a dimension, and from an anfra-node before 0.16.0."`
+	Models      []string `json:"models,omitempty" doc:"the models a measure aggregates. Absent for a dimension."`
+	Expression  string   `json:"expression,omitempty" doc:"a measure's AQL, as the query wrote it. Absent for a dimension."`
 	// Type is the AMQL type the type checker gives the column's expression
 	// (number, text, date, ...), not the type its field declares: a count of a
 	// text field is a number. Absent from an anfra-node before 0.4.0.
