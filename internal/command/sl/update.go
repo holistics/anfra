@@ -23,12 +23,14 @@ var Update = command.Define(command.Def[UpdateInput, Result]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return Result{}, err
 		}
+
 		file, err := cc.Clients.Node.SLUpdate(ctx, anfranode.SLUpdateRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), ModelName: in.ModelName,
 		})
 		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"modelName": "model_name"}); ok {
 			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}
+
 		return newResult(file, true), err
 	},
 })
@@ -42,6 +44,7 @@ func (in UpdateInput) check() error {
 	if strings.TrimSpace(in.ModelName) == "" || strings.ContainsRune(in.ModelName, '\x00') {
 		return command.InvalidArg("model_name", "required", "Name the AML table model to update.")
 	}
+
 	return nil
 }
 

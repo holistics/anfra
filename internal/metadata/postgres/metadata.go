@@ -65,6 +65,7 @@ func Read(ctx context.Context, query func(context.Context, string) ([]Row, error
 			return SchemaSnapshot{}, err
 		}
 	}
+
 	return parse(rows[0], rows[1], rows[2], rows[3]), nil
 }
 
@@ -76,30 +77,36 @@ func parse(tables, columns, primaryKeys, foreignKeys []Row) SchemaSnapshot {
 			keys[columnIdentity(row)] = true
 		}
 	}
+
 	for _, row := range tables {
 		if !valid(row, "table", &snapshot.Warnings, "database_name", "schema_name", "table_name") {
 			continue
 		}
+
 		id := tableIdentity(row)
 		snapshot.Tables = append(snapshot.Tables, Table{
 			TableIdentity: id, Description: text(row, "description"),
 			RelationName: quote(id.DatabaseName) + "." + quote(id.SchemaName) + "." + quote(id.TableName),
 		})
 	}
+
 	for _, row := range columns {
 		if !valid(row, "column", &snapshot.Warnings, "database_name", "schema_name", "table_name", "column_name", "data_type") {
 			continue
 		}
+
 		id := columnIdentity(row)
 		snapshot.Columns = append(snapshot.Columns, Column{
 			ColumnIdentity: id, DataType: text(row, "data_type"),
 			Description: text(row, "description"), IsPrimaryKey: keys[id],
 		})
 	}
+
 	for _, row := range foreignKeys {
 		if !valid(row, "foreign key", &snapshot.Warnings, "database_name", "schema_name", "table_name", "column_name", "ref_schema_name", "ref_table_name", "ref_column_name") {
 			continue
 		}
+
 		from := columnIdentity(row)
 		snapshot.ForeignKeys = append(snapshot.ForeignKeys, ForeignKey{
 			ConstraintName: text(row, "constraint_name"), From: from,
@@ -109,6 +116,7 @@ func parse(tables, columns, primaryKeys, foreignKeys []Row) SchemaSnapshot {
 			},
 		})
 	}
+
 	return snapshot
 }
 
@@ -133,14 +141,17 @@ func valid(row Row, kind string, warnings *[]string, fields ...string) bool {
 		if text(row, field) != "" {
 			continue
 		}
+
 		parts := []string{}
 		for _, key := range []string{"schema_name", "table_name", "column_name"} {
 			if value := text(row, key); value != "" {
 				parts = append(parts, value)
 			}
 		}
+
 		*warnings = append(*warnings, fmt.Sprintf("Skipped %s row %q because %q must be a non-empty string.", kind, strings.Join(parts, "."), field))
 		ok = false
 	}
+
 	return ok
 }

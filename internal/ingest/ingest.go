@@ -26,6 +26,7 @@ func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, 
 		Source:  source,
 	}
 	req.Context.Metadata = metadata
+
 	if err := node.IngestCatalog(ctx, req); err != nil {
 		return "", err
 	}

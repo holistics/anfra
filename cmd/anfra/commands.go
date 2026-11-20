@@ -82,9 +82,11 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: name, Short: c.Short(), Long: c.Long(), Args: cobra.NoArgs}
 	annotate(cmd, opAnnotation, c.Name())
 	markStructuredOutput(cmd) // its op's answer
+
 	if writesSLFiles(c.Name()) {
 		markPrettyOutput(cmd)
 	}
+
 	if prettyViews[c.Name()] {
 		annotate(cmd, prettyView, "true")
 	}
@@ -417,11 +419,13 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 	if err != nil {
 		return err
 	}
+
 	if writesSLFiles(c.Name()) {
 		if err := writeSLResult(c.Name(), body); err != nil {
 			return err
 		}
 	}
+
 	return deliver(ctx, c, body, d)
 }
 

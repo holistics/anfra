@@ -25,6 +25,7 @@ func (c *Client) SLAdd(ctx context.Context, req SLAddRequest) (SLResult, error) 
 	if err := req.Context.check(); err != nil {
 		return result, err
 	}
+
 	err := c.Call(ctx, "sl.add", req, &result)
 	return result, err
 }
@@ -41,6 +42,7 @@ func (c *Client) SLUpdate(ctx context.Context, req SLUpdateRequest) (SLResult, e
 	if err := req.Context.check(); err != nil {
 		return result, err
 	}
+
 	err := c.Call(ctx, "sl.update", req, &result)
 	return result, err
 }

@@ -24,10 +24,12 @@ func TestSLAddUsesManagedCatalogWithoutAConnection(t *testing.T) {
 		Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
 		Repo:    managedRepo(t), DataPerms: dataperm.Ungoverned(),
 	}
+
 	result, err := Invoke(context.Background(), cc, "sl.add", []byte(`{"table":"public.orders","data_source":"warehouse"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	file, ok := result.(sl.Result)
 	if !ok || file.ModelName != want.ModelName || file.Content != want.Content {
 		t.Fatalf("file = %+v", result)
@@ -35,6 +37,7 @@ func TestSLAddUsesManagedCatalogWithoutAConnection(t *testing.T) {
 	if len(node.calls) != 1 || node.calls[0] != "sl.add" {
 		t.Fatalf("calls = %v", node.calls)
 	}
+
 	params := node.params[0]
 	ctx := params["context"].(map[string]any)
 	if params["table"] != "public.orders" || params["dataSource"] != "warehouse" || ctx["revision"] == nil || ctx["metadata"] != nil {
@@ -51,8 +54,11 @@ func TestSLAddMapsMissingEntityToItsArgument(t *testing.T) {
 				}})
 			}))
 			defer srv.Close()
+
 			cc := command.CommandContext{Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)}, Repo: managedRepo(t), DataPerms: dataperm.Ungoverned()}
+
 			_, err := Invoke(context.Background(), cc, "sl.add", []byte(`{"table":"public.orders","data_source":"warehouse"}`))
+
 			details, ok := apperr.DetailsOf(err, apperr.ValidationFailed)
 			if !ok || len(details.Violations) != 1 || details.Violations[0].Field != field {
 				t.Fatalf("error = %v", err)
@@ -67,10 +73,12 @@ func TestSLUpdateUsesManagedSourceAndMapsItsArgument(t *testing.T) {
 	want := anfranode.SLResult{ModelName: "sales.orders", Path: "models/orders.model.aml", Content: "Model orders {}", Changed: &changed}
 	srv := node.serve(t, want)
 	cc := command.CommandContext{Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)}, Repo: managedRepo(t), DataPerms: dataperm.Ungoverned()}
+
 	result, err := Invoke(context.Background(), cc, "sl.update", []byte(`{"model_name":"sales::orders"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	file, ok := result.(sl.Result)
 	if !ok || file.Changed == nil || *file.Changed || file.Content != want.Content {
 		t.Fatalf("file = %+v", result)
@@ -88,8 +96,10 @@ func TestSLUpdateUsesManagedSourceAndMapsItsArgument(t *testing.T) {
 		}})
 	}))
 	defer failed.Close()
+
 	cc.Clients.Node = anfranode.NewClientHTTP(failed.URL)
 	_, err = Invoke(context.Background(), cc, "sl.update", []byte(`{"model_name":"sales.orders"}`))
+
 	details, ok := apperr.DetailsOf(err, apperr.ValidationFailed)
 	if !ok || len(details.Violations) != 1 || details.Violations[0].Field != "model_name" {
 		t.Fatalf("error = %v", err)
@@ -104,6 +114,7 @@ func TestIngestContinuesWhenPostgresCannotBeRead(t *testing.T) {
 		Repo:    managedRepo(t), DataPerms: dataperm.Governed(nil),
 		DataSources: datasource.Set{"warehouse": {Name: "warehouse", DBType: "postgresql"}},
 	}
+
 	result, err := Invoke(context.Background(), cc, "ingest", []byte(`{"source":"aml"}`))
 	if err != nil || result != "ingest complete" {
 		t.Fatalf("ingest = %v, %v", result, err)

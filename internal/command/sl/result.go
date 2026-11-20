@@ -27,10 +27,12 @@ func newResult(file anfranode.SLResult, update bool) Result {
 			message = fmt.Sprintf("Model %q is up to date.", file.ModelName)
 		}
 	}
+
 	warnings := file.Warnings
 	if warnings == nil {
 		warnings = []string{}
 	}
+
 	return Result{Message: message, ModelName: file.ModelName, Path: file.Path, WarningList: warnings, Changed: file.Changed, Content: file.Content}
 }
 
@@ -40,5 +42,6 @@ func (r Result) Warnings() []command.AnswerWarning {
 	for i, message := range r.WarningList {
 		warnings[i] = command.AnswerWarning{Code: "sl_warning", Message: message}
 	}
+
 	return warnings
 }

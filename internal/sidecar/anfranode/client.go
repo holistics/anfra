@@ -608,6 +608,7 @@ type CatalogIngestRequest struct {
 type CatalogContext struct {
 	RepoRef
 	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
+
 	// Metadata is supplied only by ingest. Other catalog calls use the kept catalog.
 	Metadata *CatalogMetadata `json:"metadata,omitempty"`
 }

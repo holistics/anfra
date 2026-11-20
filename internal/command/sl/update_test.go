@@ -11,6 +11,7 @@ func TestUpdateValidatesBeforeStartingNode(t *testing.T) {
 			t.Errorf("invalid input starts sidecars: %s", input)
 		}
 	}
+
 	for _, input := range []string{`{"model_name":"sales.orders"}`, `{"model_name":"sales::orders"}`} {
 		if err := Update.Check([]byte(input)); err != nil {
 			t.Fatal(err)

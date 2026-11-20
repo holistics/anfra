@@ -25,12 +25,14 @@ var Add = command.Define(command.Def[AddInput, Result]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return Result{}, err
 		}
+
 		result, err := cc.Clients.Node.SLAdd(ctx, anfranode.SLAddRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), Table: in.Table, DataSource: in.DataSource,
 		})
 		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"table": "table", "dataSource": "data_source"}); ok {
 			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}
+
 		return newResult(result, false), err
 	},
 })
@@ -46,9 +48,11 @@ func (in AddInput) check() error {
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" || strings.ContainsAny(in.Table, "\"\x00") {
 		return command.InvalidArg("table", "invalid", "Name one table as schema.table, without SQL identifier quotes.")
 	}
+
 	if strings.TrimSpace(in.DataSource) == "" {
 		return command.InvalidArg("data_source", "required", "Name the Postgres data source that was ingested.")
 	}
+
 	return nil
 }
 

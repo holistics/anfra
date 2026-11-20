@@ -28,13 +28,16 @@ var Ingest = command.Define(command.Def[IngestInput, string]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true, CanalQuery: true}); err != nil {
 			return "", err
 		}
+
 		metadata, err := loadMetadata(ctx, cc)
 		if err != nil {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
 			}
+
 			slog.WarnContext(ctx, "Postgres source left out of the catalog", logkit.EventKey, eventMetadataSkipped, "error", err.Error())
 		}
+
 		return ingest.Run(ctx, cc.Clients.Node, cc.Clients.CanalQuery, cc.Repo, in.Source, metadata)
 	},
 })

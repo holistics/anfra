@@ -33,10 +33,12 @@ func TestRunPassesSourceAndMetadataToRPC(t *testing.T) {
 			t.Fatalf("method = %q, want catalog.ingest", req.Method)
 		}
 		captured = req.Params
+
 		wire, err := jsonkit.Marshal(req.Params)
 		if err != nil || !strings.Contains(string(wire), `"metadata":{"postgres":{"sourceKey":"warehouse","snapshot":`) {
 			t.Fatalf("metadata envelope = %s, %v", wire, err)
 		}
+
 		_ = jsonkit.MarshalWrite(w, map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
@@ -51,6 +53,7 @@ func TestRunPassesSourceAndMetadataToRPC(t *testing.T) {
 		DataDir:   filepath.Join(t.TempDir(), "repos", "repo-123"),
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
 	}.Repo()
+
 	metadata := &anfranode.CatalogMetadata{Postgres: &anfranode.PostgresMetadata{
 		SourceKey: "warehouse",
 		Snapshot: postgres.SchemaSnapshot{
@@ -61,6 +64,7 @@ func TestRunPassesSourceAndMetadataToRPC(t *testing.T) {
 			Columns: []postgres.Column{}, ForeignKeys: []postgres.ForeignKey{},
 		},
 	}}
+
 	res, err := Run(context.Background(),
 		anfranode.NewClientHTTP(node.URL),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),

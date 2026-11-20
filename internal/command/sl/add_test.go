@@ -13,6 +13,7 @@ func TestAddValidatesBeforeStartingNode(t *testing.T) {
 			t.Errorf("invalid input starts sidecars: %s", input)
 		}
 	}
+
 	input := []byte(`{"table":"Sales.Orders","data_source":"pg"}`)
 	if err := Add.Check(input); err != nil {
 		t.Fatal(err)

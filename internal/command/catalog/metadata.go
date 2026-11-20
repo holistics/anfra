@@ -22,14 +22,17 @@ func loadMetadata(ctx context.Context, cc command.CommandContext) (*anfranode.Ca
 	if err != nil {
 		return nil, err
 	}
+
 	dialects, err := sources.Dialects(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	for _, dialect := range dialects {
 		if dialect.DBType != "postgresql" {
 			continue
 		}
+
 		// TODO: support more than the first Postgres source when the catalog can
 		// bind a plugin to multiple sources. Keep the host's ordering here.
 		snapshot, err := postgres.Read(ctx, func(ctx context.Context, sql string) ([]postgres.Row, error) {
@@ -38,10 +41,12 @@ func loadMetadata(ctx context.Context, cc command.CommandContext) (*anfranode.Ca
 		if err != nil {
 			return nil, fmt.Errorf("read metadata for data source %q: %w", dialect.Name, err)
 		}
+
 		return &anfranode.CatalogMetadata{
 			Postgres: &anfranode.PostgresMetadata{SourceKey: dialect.Name, Snapshot: snapshot},
 		}, nil
 	}
+
 	return nil, nil
 }
 
@@ -50,8 +55,10 @@ func readPostgresRows(ctx context.Context, cc command.CommandContext, sources da
 	if err != nil {
 		return nil, err
 	}
+
 	observer, id, started := cc.QueryObserver(), command.NewQueryID(), time.Now()
 	observer.QueryCompiled(ctx, command.CompiledQuery{ID: id, DataSource: name, SQL: sql})
+
 	var fields []string
 	var rows []postgres.Row
 	err = q.Stream(ctx, cc.Clients.CanalQuery.ForTenant(cc.TenantID), query.Bounded(query.NoLimit, cc.QueryLimits), canalquery.Handler{
@@ -67,20 +74,24 @@ func readPostgresRows(ctx context.Context, cc command.CommandContext, sources da
 			if len(cells) != len(fields) {
 				return fmt.Errorf("metadata row has %d cells for %d fields", len(cells), len(fields))
 			}
+
 			values := make(postgres.Row, len(fields))
 			for i, field := range fields {
 				values[field] = cells[i]
 			}
 			rows = append(rows, values)
+
 			return nil
 		},
 		Progress: func(progress canalquery.Progress) error {
 			if progress.Kind == "dw_query_id" {
 				observer.QueryOnWarehouse(ctx, id, progress.DwQueryID)
 			}
+
 			return nil
 		},
 	})
 	observer.QueryFinished(ctx, id, command.FinishedQuery{Rows: len(rows), Err: err, Timings: command.Timings{EndMs: time.Since(started).Milliseconds()}})
+
 	return rows, err
 }

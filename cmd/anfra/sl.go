@@ -22,9 +22,11 @@ func writeSLResult(name string, body []byte) error {
 	if err := jsonkit.Unmarshal(body, &result); err != nil {
 		return fmt.Errorf("decode the generated model: %w", err)
 	}
+
 	if err := writeSLFile(".", name, result); err != nil {
 		return fmt.Errorf("write model %q to %q: %w", result.ModelName, result.Path, err)
 	}
+
 	return nil
 }
 
@@ -32,6 +34,7 @@ func writeSLFile(dir, name string, result sl.Result) error {
 	if !filepath.IsLocal(result.Path) || !strings.HasSuffix(result.Path, ".aml") || strings.TrimSpace(result.Content) == "" {
 		return fmt.Errorf("the generated model must have a repo-relative AML path and nonempty content")
 	}
+
 	if name == "sl.update" {
 		if result.Changed == nil {
 			return fmt.Errorf("the model update did not report whether its content changed")
@@ -40,15 +43,18 @@ func writeSLFile(dir, name string, result sl.Result) error {
 			return nil
 		}
 	}
+
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+
 	if name == "sl.add" {
 		if err := root.MkdirAll(filepath.Dir(result.Path), 0o755); err != nil {
 			return err
 		}
+
 		file, err := root.OpenFile(result.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
 			if os.IsExist(err) {
@@ -56,12 +62,15 @@ func writeSLFile(dir, name string, result sl.Result) error {
 			}
 			return err
 		}
+
 		if err := writeAML(file, result.Content); err != nil {
 			_ = root.Remove(result.Path)
 			return err
 		}
+
 		return nil
 	}
+
 	info, err := root.Lstat(result.Path)
 	if err != nil {
 		return err
@@ -69,6 +78,7 @@ func writeSLFile(dir, name string, result sl.Result) error {
 	if !info.Mode().IsRegular() {
 		return clierr.Precondition("The model's path must be a regular file, not a directory or symlink.")
 	}
+
 	return replaceAMLFile(root, result.Path, result.Content, info.Mode().Perm())
 }
 
@@ -80,13 +90,16 @@ func replaceAMLFile(root *os.Root, path, content string, mode fs.FileMode) error
 		return err
 	}
 	defer func() { _ = root.Remove(temporary) }()
+
 	if err := file.Chmod(mode); err != nil {
 		_ = file.Close()
 		return err
 	}
+
 	if err := writeAML(file, content); err != nil {
 		return err
 	}
+
 	return root.Rename(temporary, path)
 }
 
@@ -96,5 +109,6 @@ func writeAML(file *os.File, content string) error {
 	if err != nil {
 		return err
 	}
+
 	return closeErr
 }
