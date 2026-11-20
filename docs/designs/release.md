@@ -138,7 +138,7 @@ Once an rc is out, its build runs `scripts/release-pr.sh --release <rc>`, which 
 
 ### Tagging
 
-`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`, one run at a time, in the order of the pushes. If the version has no tag yet, it tags it:
+`tag_and_release.yml` runs as the last job of CI on a push to `main`, once every check has passed on the pushed commit, and only when that push changed `manifest.yml`'s version ([CI](ci.md)). So an rc is tagged only on a commit that passed as merged. If its CI fails, fix `main` and cut another rc. Run by hand, it tags `main`'s HEAD, if CI passed on it. If the version has no tag yet, it tags it:
 
 ```mermaid
 flowchart TD

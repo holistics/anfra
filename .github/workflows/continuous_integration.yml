@@ -361,3 +361,18 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: commitlint, lint, go, api, api-breaking, web, manifest, release, skills, dependency-review
+
+  # On a push to main, once every check passed on the pushed commit: tag the rc or release when
+  # the push changed manifest.yml's version (tag_and_release.yml). So an rc is tagged only on a
+  # commit that passed as merged.
+  tag:
+    needs: ci_passed
+    if: github.event_name == 'push' && needs.ci_passed.result == 'success'
+    uses: ./.github/workflows/tag_and_release.yml
+    with:
+      before: ${{ github.event.before }}
+    secrets:
+      ANFRA_DEPLOY_KEY: ${{ secrets.ANFRA_DEPLOY_KEY }} # pushes the tag; the only secret it gets
+    permissions:
+      contents: read
+      actions: read

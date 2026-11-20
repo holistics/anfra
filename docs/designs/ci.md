@@ -1,6 +1,6 @@
 # CI
 
-Status: parts 1 to 3 of the plan are on the branch; 4 and 5 are to do.
+Status: parts 1 to 4 of the plan are on the branch; 5 is to do.
 
 CI runs only the checks a change can affect, and still makes sure `main` passes before a release is tagged. A docs change takes seconds, an rc or release PR about a minute, and a hotfix runs its checks once, in its pull request.
 
@@ -110,5 +110,5 @@ The bookkeeping costs a few seconds per run: one lookup per job, and one artifac
 1. **Areas on pull requests.** Done (`e3ddf06d`).
 2. **Each job through `make ci-<area>`, and `make ci`.** Done (`2c9604d7`).
 3. **Area hashes.** Each file job records and looks up `passed-<area>-<hash>`; the base checks are PR-only jobs (`api-breaking`, `release`, `dependency-review`, commitlint); CI runs on push to `main`; CI's own files are in every area, and a file in no area runs everything. Done.
-4. **Tag only a commit that passed on `main`.**
+4. **Tag only a commit that passed on `main`.** Done: `tag_and_release.yml` is the last job of CI on a push to `main`, after `ci_passed`, when the push changed the version.
 5. **Hourly full runs, and the Slack channel.**
