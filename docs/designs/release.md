@@ -27,7 +27,7 @@ The build takes the version from the tag, not from `manifest.yml`: a release's t
 
 Two pull requests make a release:
 
-- **The rc PR,** `release: 0.23.0-rc.1`, cuts an rc. The daily job (`release_pr.yml`) opens it, and merging it tags the rc.
+- **The rc PR,** `release: 0.23.0-rc.1`, cuts an rc. The daily job (`release_candidate_pr.yml`) opens it, and merging it tags the rc.
 - **The release PR,** `release: 0.23.0`, releases an rc. The rc's build opens it, and merging it tags the rc's commit as the release.
 
 For `0.23.0`, after `0.22.0`:
@@ -41,12 +41,12 @@ For `0.23.0`, after `0.22.0`:
 
 ### The rc PR
 
-`release_pr.yml` opens it Monday to Saturday at 05:00 UTC: it runs `pnpm bump <rc>` on a branch fresh from `main`, commits `release: <rc>`, and opens the pull request. The workflow only sets up and calls `scripts/release-pr.sh`, which `--dry-run` runs locally: everything but the push and the pull request, which it prints.
+`release_candidate_pr.yml` opens it Monday to Saturday at 05:00 UTC: it runs `pnpm bump <rc>` on a branch fresh from `main`, commits `release: <rc>`, and opens the pull request. The workflow only sets up and calls `scripts/release-pr.sh`, which `--dry-run` runs locally: everything but the push and the pull request, which it prints.
 
 - **The version** is the next rc of the release the conventional commits since the last release call for (`scripts/next-version.mjs`), read as the changelog reads them: conventional-recommended-bump with the changelog's preset and types (`conventional-changelog.config.mjs`). A breaking change bumps the major, or the minor while below 1.0; a `feat` the minor; any other type the changelog shows (`fix`, `perf`, `build`, `security`) the patch. A type the changelog hides is not releasable; with only those since the last release, there is nothing to release. The rc's number is one more than the highest rc of that release tagged yet. `pnpm next-version` prints it; `pnpm bump next` bumps to it. `scripts/lib/versions.mjs` reads the tags for all of the release scripts: the last release, the rcs of a release, and the rc waiting for its release.
 - **Its notes** are its section of `CHANGELOG.md`, `## [0.23.0-rc.1]`, with the commits since the newest tag, rc or release, and of `skills/CHANGELOG.md` when one of them changed the skills. Edit them in the rc PR. A later rc adds its own section, and leaves the earlier ones as they are ([Release notes](#release-notes)).
 - **One pull request, always current.** It lives on one branch, `release/rc`, which each run rebuilds from `main` and force-pushes, closing the open pull request and opening a new one: GitHub notifies no one of an edit to a pull request, but a new one notifies its watchers. A run that finds `release/rc` holding this rc of the current `main` already changes nothing. So there is never more than one open, and it is never more than a day behind `main`. Edits to its notes are lost at the next run, so merge it the day you edit it. When there is nothing to release, the run closes it.
-- **By hand,** from the Actions tab or `gh workflow run release_pr.yml`, with an optional `version` to cut instead of the computed rc, and an optional `branch`. A run by hand cuts the next rc even while one waits.
+- **By hand,** from the Actions tab or `gh workflow run release_candidate_pr.yml`, with an optional `version` to cut instead of the computed rc, and an optional `branch`. A run by hand cuts the next rc even while one waits.
 - **An rc that needs commits of its own,** sidecar pins say: run it with a new `branch` (`-f branch=release/0.19.0-rc.1`), which must not exist yet, and push them there. `release/rc` is the workflow's own: commits pushed onto it are lost at the next run.
 - **CI does not start on its own** on the pull request, for now: the workflow opens it with its own `GITHUB_TOKEN`, and GitHub starts no workflow for what that token does. Approve its workflows, with the button GitHub shows on the pull request, to run CI; again after each run replaces it. A GitHub App's token would fix it; the workflow's header has the TODO. The same goes for the release PR.
 

@@ -13,7 +13,7 @@
 #   (scripts/changelog-merge.mjs). It merges them as they are at the rc's tag, as the release's
 #   build does, so main's changelogs say what the release does.
 #
-# release_pr.yml cuts the rcs, and build_release.yml opens each rc's release PR; run it yourself
+# release_candidate_pr.yml cuts the rcs, and build_release.yml opens each rc's release PR; run it yourself
 # only for a release by hand.
 #
 # Usage: pnpm bump <version> [rc]   e.g. pnpm bump 0.23.0-rc.1, pnpm bump 0.23.0

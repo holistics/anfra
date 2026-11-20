@@ -2,7 +2,7 @@
 # Open, replace or close the pull requests that make an anfra release (docs/designs/release.md):
 #
 # - The rc PR cuts a release candidate (rc): `pnpm bump <rc>` on a branch fresh from main,
-#   committed as `release: <rc>`. release_pr.yml runs this daily, and by hand.
+#   committed as `release: <rc>`. release_candidate_pr.yml runs this daily, and by hand.
 # - The release PR (--release <rc>) releases an rc: `pnpm bump <release> <rc>`, committed as
 #   `release: <release>`. build_release.yml runs this once the rc is out.
 #
@@ -70,7 +70,7 @@ fi
 comment_waiting() {
   local rc="$1" pr preview tagged days body marker="<!-- release-pr: waiting -->"
   pr="$(open_pr "$RELEASE_BRANCH")"
-  [ -n "$pr" ] || fail "$rc waits for its release, but no release PR is open on $RELEASE_BRANCH. Cut the next rc by hand (run Release PR with no inputs), or reopen the release PR."
+  [ -n "$pr" ] || fail "$rc waits for its release, but no release PR is open on $RELEASE_BRANCH. Cut the next rc by hand (run Release candidate PR with no inputs), or reopen the release PR."
 
   # What main holds back, as the changelog would list it: the changes since the newest tag.
   git checkout --quiet --detach "$base"
@@ -87,7 +87,7 @@ comment_waiting() {
 
 $preview
 
-Merge this PR once anfra Cloud runs \`$rc\`. To ship the changes above first, cut the next rc by hand: run [Release PR]($(repo_url)/actions/workflows/release_pr.yml) with no inputs."
+Merge this PR once anfra Cloud runs \`$rc\`. To ship the changes above first, cut the next rc by hand: run [Release candidate PR]($(repo_url)/actions/workflows/release_candidate_pr.yml) with no inputs."
   if $dry_run; then
     printf '(dry run) comment on #%s:\n\n%s\n' "$pr" "$body"
     return
@@ -203,7 +203,7 @@ fi
     if [ "$branch" = "$RC_BRANCH" ]; then
       echo
       echo "> [!NOTE]"
-      echo "> Opened by [Release PR]($(repo_url)/actions/workflows/release_pr.yml): it rebuilds \`$branch\` from $BASE every day except Sunday and force-pushes it, so commits pushed here are lost, edits to the notes included. Merge it, or edit it, the day it opens. A release that needs commits of its own (sidecar pins, say): run the workflow with a new \`branch\`, and push them there."
+      echo "> Opened by [Release candidate PR]($(repo_url)/actions/workflows/release_candidate_pr.yml): it rebuilds \`$branch\` from $BASE every day except Sunday and force-pushes it, so commits pushed here are lost, edits to the notes included. Merge it, or edit it, the day it opens. A release that needs commits of its own (sidecar pins, say): run the workflow with a new \`branch\`, and push them there."
     fi
   fi
   echo

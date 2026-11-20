@@ -25,7 +25,7 @@
 # (continuous_integration.yml, and its required ci_passed) does not run on the pull request
 # until someone approves it, with the button GitHub shows on the pull request; on each new
 # pull request a run opens.
-name: Release PR
+name: Release candidate PR
 
 on:
   schedule:
@@ -46,7 +46,7 @@ permissions:
   pull-requests: write # open and close its pull request, and comment on the release PR
 
 concurrency:
-  group: release-pr
+  group: release-candidate-pr
   cancel-in-progress: false
 
 env:
