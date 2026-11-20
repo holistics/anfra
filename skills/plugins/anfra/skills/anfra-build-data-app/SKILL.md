@@ -253,6 +253,10 @@ for it:
   and control draws into. Every query and control sits in a block: a standalone control gets a
   block of its own, a chart's own control goes in the chart's block. The host reads these marks to
   find each part and give the user a handle to it. Mark every part, since each takes one attribute.
+- To let a reader open the host's Inspect panel at a chart's query, wire a button or menu of your
+  own to `query.inspect()` (`control.inspect()` for a control), called from its click. The menu
+  on a block or a chart's point already offers "Inspect". See
+  [references/api.md](references/api.md#opening-the-panel-at-a-query).
 
 Render a selection without rebuilding the chart. A query that drives a cross-filter is not re-run
 by its own selection, so its result is unchanged when the reader clicks: restyle the marks it

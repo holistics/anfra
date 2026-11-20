@@ -162,6 +162,7 @@ a bare dataset metric is an aggregate condition too.
 | `query.update(changes)` / `query.remove()` | Edits the query in place, or takes it out with its edges. See [Changing the app while it runs](#changing-the-app-while-it-runs). |
 | `query.subscribe(fn)` | Change listener for just this query. |
 | `query.locate()` | Scrolls to the elements marked `data-anfra-query` with this query's name and shows them for a moment. See [Structure](#structure). |
+| `await query.inspect({ tab? })` | Opens the host's Inspect panel at this query, for a button of your own. Call it from a click. See [Opening the panel at a query](#opening-the-panel-at-a-query). |
 
 ### Result shape
 
@@ -267,7 +268,8 @@ const tier = app.createFilter('tier', { type: 'string', options: ['Gold', 'Silve
 Always pass `dataset:` alongside `field:`. It is only optional when the reader can see exactly one
 dataset, which is rare.
 
-A filter, like a date drill, has `locate()` too: see [Structure](#structure).
+A filter, like a date drill, has `locate()` too: see [Structure](#structure). It has `inspect()`
+too: see [Opening the panel at a query](#opening-the-panel-at-a-query).
 
 Set a filter's value with a **condition**, then call `execute()`:
 
@@ -392,6 +394,35 @@ chart.on('contextmenu', (p) => {
   itself, such as a canvas the reader draws on.
 - The menu, and any modal it opens, draw over the page in the host's theme. Don't style or hide
   them.
+- The menu already offers "Inspect" where the host has its panel: on a marked block it opens the
+  panel at the block's first query, and on a chart's point at the point's query. Don't add your
+  own menu entry for it.
+
+## Opening the panel at a query
+
+The host's Inspect panel shows each query's rows, its AQL and what filters it. To let a reader
+open it from the place they are looking at, such as a button on a chart, a trust badge or a "…"
+menu of your own, call `query.inspect()` or `control.inspect()` from that element's click:
+
+```js
+document.querySelector('#trend .inspect-button').addEventListener('click', async () => {
+  const opened = await byMonth.inspect();
+  // false: no panel on this host. Leave the button as it is, or hide it.
+});
+```
+
+- Call it only from a reader's click (or a key press). Called without one, such as on load or
+  in a render, it opens nothing, resolves `false`, and reports a `call.inspect` problem that says
+  it needs a reader's click.
+- It resolves `true` when the panel opened, and `false` when the host has no panel to open. It
+  never rejects for that, and the SDK draws no button of its own.
+- A query opens on the panel's Data tab, which shows its rows, and a control on Queries, which
+  shows what it filters. The host may choose other tabs. To pick one yourself, pass its full id:
+  `query.inspect({ tab: 'inspect.queries' })` to show the query's AQL and requests. A tab the
+  host doesn't have opens the host's own choice instead, and reports a `call.inspect` problem
+  that names the tab.
+- Calling it again while the panel is open brings the query into view again. It never closes the
+  panel.
 
 ## Errors
 
@@ -439,6 +470,7 @@ else draw(query.result);
 Never throw from a `subscribe()` listener, and guard a library that may load late. What you don't
 handle is still seen: every failed query (`call.query`), call you leave unhandled
 (`call.fetch_more`, `call.export`), uncaught error or unhandled rejection (`app.uncaught`), and
-listener exception (`app.listener`) is reported to the host, which on `anfra serve` lists it in the
+listener exception (`app.listener`), and `inspect()` call the panel couldn't honor as asked
+(`call.inspect`) is reported to the host, which on `anfra serve` lists it in the
 panel's Problems and writes it to its log (see the skill's "Run and check it"). An error you catch
 yourself (a `fetchMore` or export) is not reported: show it.
