@@ -203,10 +203,6 @@ function install (plugins: readonly Plugin[]): Map<string, Answer> {
 
 const isIndex = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
-/**
- * A frame's stamp, if it is one: an app's index, a query's name, and maybe the query's id and the
- * variant of the query it is. The frame is untrusted.
- */
 /** A reveal as the frame asks for it: an entity by app and name, and maybe the tab to open. */
 function checkReveal (request: unknown): { target: RevealTarget, tab?: string } {
   const {
@@ -218,6 +214,10 @@ function checkReveal (request: unknown): { target: RevealTarget, tab?: string } 
   return { target: { entity, app, name }, ...(tab !== undefined ? { tab } : {}) };
 }
 
+/**
+ * A frame's stamp, if it is one: an app's index, a query's name, and maybe the query's id and the
+ * variant of the query it is. The frame is untrusted.
+ */
 function checkStamp (stamp: unknown): QueryStamp | undefined {
   if (typeof stamp !== 'object' || stamp === null) return undefined;
   const {

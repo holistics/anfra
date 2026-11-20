@@ -9,7 +9,7 @@ import type { InspectedApp } from '../../common/types';
 import { createRequestLog, type RequestLog, type RequestRecorder } from './model/requests';
 import { entityGone, hasEntity } from './model/entities';
 import {
-  DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type LinkTarget, type QueriesFilter, type RevealTarget,
+  DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type InspectLink, type LinkTarget, type QueriesFilter,
 } from './model/types';
 
 /** A runtime error as the panel keeps it: the same one again counts up instead of filling the list. */
@@ -42,9 +42,9 @@ export interface InspectState {
   /** Data's open tables, `<app>/<name>`. */
   data: { open: Set<string> };
   /** The last link followed, for the tab it opened to bring into view; a new nonce repeats it. */
-  readonly revealed: { target: RevealTarget, nonce: number } | undefined;
+  readonly revealed: { target: InspectLink, nonce: number } | undefined;
   /** Follow a link: open its tab, set what the tab shows, and say what to bring into view. */
-  reveal: (panel: Panel, target: RevealTarget) => void;
+  reveal: (panel: Panel, target: InspectLink) => void;
   /**
    * Keep what the tabs hold in step with the panel's snapshots: what they kept of a query or a
    * control the app removed is forgotten, so one made again by its name starts afresh. Once per
