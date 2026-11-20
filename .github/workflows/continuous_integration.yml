@@ -1,15 +1,19 @@
 # PR CI: conventional-commit lint, golangci-lint, build/vet/test, the core API's
-# contract, and the SDK and frontend (web). Mirrors canal's
-# continuous_integration.yml + test.yml, flattened (anfra is a single Go module). `ci_passed` is the one required status check (via alls-green).
+# contract, the SDK and frontend (web), the skills, the release manifest, and the
+# dependencies a PR changes. Mirrors canal's continuous_integration.yml + test.yml,
+# flattened (anfra is a single Go module). `ci_passed` is the one required status
+# check (via alls-green).
+#
+# Each job runs only when its area of the repo changed (scripts/ci-areas.sh, which
+# says what each area holds): a docs change runs commitlint alone, and an rc or
+# release PR, a version bump, runs the manifest job alone. Skipping the rest is
+# sound because the base passed them, with the same files.
 #
 # It also runs in the merge queue (merge_group), on the queue's commit: the PR
 # rebased onto main and any PRs ahead of it. The repo merges by rebase, so the
 # queue replays the PR's commits unchanged; the jobs that judge only the PR's own
-# commits and diff (commitlint, dependency-review) ran on the PR and are skipped
-# there.
-#
-# A change only to skills/ runs only the skills' checks (the skills job): the
-# Go, API and web jobs are skipped, since nothing they check changed.
+# commits and diff (commitlint, dependency-review, the release PR check) ran on
+# the PR and are skipped there.
 name: Continuous Integration
 
 on:
@@ -27,28 +31,28 @@ permissions:
   contents: read
 
 jobs:
-  # Whether the change touches anything outside skills/: the code the lint,
-  # test, api and web jobs check. On a PR, against its base branch; in the merge
-  # queue, against the queue's base commit.
+  # The areas the change touches (scripts/ci-areas.sh). On a PR, against its base
+  # branch: the merge commit's first parent; in the merge queue, against the
+  # queue's base commit.
   changes:
     runs-on: ubuntu-latest
     outputs:
-      code: ${{ steps.filter.outputs.code_any_changed }}
+      lint: ${{ steps.areas.outputs.lint }}
+      test: ${{ steps.areas.outputs.test }}
+      api: ${{ steps.areas.outputs.api }}
+      web: ${{ steps.areas.outputs.web }}
+      skills: ${{ steps.areas.outputs.skills }}
+      manifest: ${{ steps.areas.outputs.manifest }}
+      dependencies: ${{ steps.areas.outputs.dependencies }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0 # the base commit, for the diff
-      - uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
-        id: filter
-        with:
-          files_yaml: |
-            code:
-              - '**'
-              - '!skills/**'
-      - name: Show changes
-        run: echo "$OUTPUTS"
+          # A PR's merge commit and its base; the queue's commit and its base, PRs back.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+      - id: areas
         env:
-          OUTPUTS: ${{ toJSON(steps.filter.outputs) }}
+          BASE: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || 'HEAD^1' }}
+        run: scripts/ci-areas.sh "$BASE" | tee -a "$GITHUB_OUTPUT"
 
   commitlint:
     # PR only: the queue rebases the PR's commits unchanged, so they were linted
@@ -64,7 +68,7 @@ jobs:
 
   lint:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -89,7 +93,7 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -113,7 +117,7 @@ jobs:
   # commit (`feat!:`, or a `BREAKING CHANGE:` footer). See scripts/openapi.sh.
   api:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -144,7 +148,7 @@ jobs:
   # release embeds, and the SDK's API types fresh from api/openapi.yaml.
   web:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -153,14 +157,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - name: the SDK's and the design package's versions are the release's
-        run: |
-          release="$(yq .version manifest.yml)"
-          for pkg in web/sdk web/design; do
-            version="$(jq -r .version "$pkg/package.json")"
-            test "$version" = "$release" \
-              || { echo "$pkg/package.json version $version != manifest.yml version $release: pnpm bump sets them all" >&2; exit 1; }
-          done
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @holistics/anfra-sdk typecheck
       - name: build, as a release does
@@ -172,19 +168,37 @@ jobs:
           git diff --exit-code -- web/sdk/src/api/schema.d.ts \
             || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter @holistics/anfra-sdk generate" >&2; exit 1; }
 
-  # A PR that changes manifest.yml's version (scripts/check-release-pr.sh): an rc PR's release
-  # isn't out yet, and a release PR is exactly what the bot generates, so main's changelogs say what
-  # the release does. PR only: the queue rebases the PR's commits unchanged, and the check judges
-  # the PR's own change.
-  release:
-    if: github.event_name == 'pull_request'
+  # The release manifest, and what a version bump can break: the versions agree, the cloud
+  # servers a release embeds parse (scripts/cloud-url), and a PR that changes manifest.yml's
+  # version passes scripts/check-release-pr.sh: an rc PR's release isn't out yet, and a release PR
+  # is exactly what the bot generates, so main's changelogs say what the release does. An rc or
+  # release PR runs this job alone.
+  manifest:
+    needs: changes
+    if: needs.changes.outputs.manifest == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # the base, and the tags of the rcs and releases
           fetch-tags: true
+      - name: the SDK's and the design package's versions are the release's
+        run: |
+          release="$(yq .version manifest.yml)"
+          for pkg in web/sdk web/design; do
+            version="$(jq -r .version "$pkg/package.json")"
+            test "$version" = "$release" \
+              || { echo "$pkg/package.json version $version != manifest.yml version $release: pnpm bump sets them all" >&2; exit 1; }
+          done
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: the cloud servers parse
+        run: go test -count=1 ./scripts/cloud-url
+      # PR only: the queue rebases the PR's commits unchanged, and the check judges the PR's own
+      # change.
       - name: Whether the version changes
+        if: github.event_name == 'pull_request'
         id: version
         run: |
           version() { git show "$1:manifest.yml" | sed -n 's/^version: *//p'; }
@@ -202,8 +216,10 @@ jobs:
         run: scripts/check-release-pr.sh
 
   # The anfra skills: their front matter and links, the hook's tests, and the facade's build and
-  # publish (docs/designs/agent-setup.md#releasing-the-skills). Runs on every change.
+  # publish (docs/designs/agent-setup.md#releasing-the-skills).
   skills:
+    needs: changes
+    if: needs.changes.outputs.skills == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -222,7 +238,8 @@ jobs:
   dependency-review:
     # PR only: it judges the PR's own dependency changes, already reviewed on the
     # PR, and comments on the PR, which a merge group has none of.
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.dependencies == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -286,22 +303,14 @@ jobs:
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [changes, commitlint, lint, test, api, web, release, skills, dependency-review]
+    needs: [changes, commitlint, lint, test, api, web, manifest, skills, dependency-review]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
-      - id: skips
-        env:
-          EVENT: ${{ github.event_name }}
-          CODE: ${{ needs.changes.outputs.code }}
-        run: |
-          skips=()
-          # Skipped in the merge queue: they judged the PR already.
-          if [ "$EVENT" = merge_group ]; then skips+=(commitlint release dependency-review); fi
-          # Skipped when only skills/ changed.
-          if [ "$CODE" = false ]; then skips+=(lint test api web); fi
-          echo "list=$(IFS=,; echo "${skips[*]}")" >> "$GITHUB_OUTPUT"
+      # Every job but changes may skip: each skips only when its area didn't change, or in the
+      # merge queue, when it judged the PR already. changes must pass, so a change whose areas
+      # can't be told fails rather than skipping everything.
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: ${{ steps.skips.outputs.list }}
+          allowed-skips: commitlint, lint, test, api, web, manifest, skills, dependency-review
