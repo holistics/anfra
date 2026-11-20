@@ -12,8 +12,7 @@ import type { MenuTarget, MenuTargetKind } from '../common/menu';
 
 /**
  * What a `{ panel }` command does to the panel: `pick` turns pick mode on, or off again; `reveal`,
- * for a menu target, reveals the rows' query, or selects the node and reveals the first query at or
- * below it, on the host's tab for a query.
+ * for a rows target, reveals the rows' query on the host's tab for a query.
  */
 export type PanelVerb = 'pick' | 'reveal';
 
@@ -27,13 +26,6 @@ export type CommandRun =
   | { panel: PanelVerb };
 
 const PANEL_VERBS: ReadonlySet<string> = new Set<PanelVerb>(['pick', 'reveal']);
-
-/** The kinds of menu target a command is for: none for one of the host's chrome. */
-export function targetKinds (command: { target?: MenuTargetKind | readonly MenuTargetKind[] }): readonly MenuTargetKind[] {
-  const { target } = command;
-  if (target === undefined) return [];
-  return typeof target === 'string' ? [target] : target;
-}
 
 /** How a command shows right now. */
 export interface CommandState {
@@ -66,12 +58,11 @@ export interface CommandContribution {
   run: CommandRun;
   /**
    * Set, the command is for the menu on the page's content instead of the host's chrome: on a marked
-   * block (`node`) or on a query's rows (`rows`, from the definition's `query.menu`), or on either.
-   * It runs with that target: a call gets it as `target` in its request, a tab is opened with the
-   * node selected, or with the rows' query revealed. A menu on rows, which also offers its block's
-   * entries, shows a command for both kinds once, for the rows.
+   * block (`node`) or on a query's rows (`rows`, from the definition's `query.menu`). It runs with
+   * that target: a call gets it as `target` in its request, a tab is opened with the node selected,
+   * or with the rows' query revealed.
    */
-  target?: MenuTargetKind | readonly MenuTargetKind[];
+  target?: MenuTargetKind;
   /**
    * For a command with a `target`: whether it applies to this one. The target comes from the frame
    * and is checked only for its shape: decide on it, never trust it.
@@ -190,8 +181,8 @@ export function installContributions (
     if ('panel' in command.run && !PANEL_VERBS.has(command.run.panel)) {
       throw new Error(`Command '${command.id}' runs '${String(command.run.panel)}' on the panel, which it can't do.`);
     }
-    if ('panel' in command.run && command.run.panel === 'reveal' && !targetKinds(command).length) {
-      throw new Error(`Command '${command.id}' reveals in the panel, so it needs a menu target ('rows' or 'node') to reveal.`);
+    if ('panel' in command.run && command.run.panel === 'reveal' && command.target !== 'rows') {
+      throw new Error(`Command '${command.id}' reveals the rows' query in the panel, so it needs the 'rows' menu target.`);
     }
   }
   for (const tab of own.tabs ?? []) {
