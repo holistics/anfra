@@ -24,9 +24,10 @@ While you work, run Go checks on the packages you changed, one command at a time
 Run what CI runs before you finish:
 
 ```sh
-make check      # lint, type-check, the API contract
-make test
+make ci         # the checks CI would run for your branch's changes
 ```
+
+`make check` (every static check) and `make test` (every build and test) run everything, whatever changed.
 
 If you changed a command's input or answer, regenerate the API contract and the SDK's types, and commit both:
 

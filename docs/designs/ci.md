@@ -11,7 +11,7 @@ The repo is split into **areas**, one for each CI job, and each area lists the f
 | Job | Checks | Its area, roughly |
 |---|---|---|
 | `lint` | golangci-lint | Go files, the Go modules, `.golangci.yml` |
-| `test` | tidy, generated SQL code, build, vet, the Go tests | the Go folders whole (`cmd/`, `internal/`, `engine/`, `shared/`), the Go modules |
+| `go` | tidy, generated SQL code, vet, build, the Go tests | the Go folders whole (`cmd/`, `internal/`, `engine/`, `shared/`), the Go modules |
 | `api` | the API contract is fresh, and a breaking change is declared | Go files, `api/` |
 | `web` | the SDK, the design package and the frontend | `web/`, the pnpm workspace, `api/openapi.yaml` |
 | `skills` | `pnpm skills:check` | `skills/`, the pnpm workspace |
@@ -26,6 +26,12 @@ Two rules make a release fast:
 - **A change to CI itself touches every area.** That covers the workflow and `scripts/ci-areas.sh`, so a CI change is proven on every job.
 
 An area is the files a job *reads*, not only those it's named for. For example, a Go test reads the testdata beside it, and the SDK's types come from `api/openapi.yaml`. When a job starts reading a file outside its area, add the file to the area in `scripts/ci-areas.sh`. A missing file is how a change passes without the check that would catch it, which is why `main` also gets a full run (below).
+
+## Locally
+
+Each job runs a make target, `make ci-<area>`, so a job's checks are written once and CI and a local run can't drift apart. `make ci` runs the areas your branch changed since `origin/main`, uncommitted changes included, as CI would. `make check` runs every area's static checks, and `make test` every area's builds and tests. Only `lint` calls its tool through an action instead, so that its findings annotate the pull request.
+
+What only CI can check stays in the workflow: commitlint, the dependency review, and whether a release PR is the bot's.
 
 ## Why skipping is safe: `main` passes
 
@@ -54,4 +60,4 @@ It compares git trees, not the areas, since the full run is there to catch the a
 2. **Push CI on `main`.** Reuse a tree that passed, or else check what changed since the last commit that passed.
 3. **Tag only a commit that passed.** `tag_and_release.yml` runs when push CI passes on a version change, rather than on the push.
 4. **Hourly full runs.** The check that starts `Full CI`, and the Slack channel.
-5. **Locally: `make ci`.** Runs the checks for the areas a branch changed, compared with `origin/main`, uncommitted changes included. Each area's commands live in one Makefile target, which both `make ci` and the CI jobs run, so the two can't drift apart.
+5. **Locally: `make ci`, and `make ci-<area>` run by the CI jobs.** Done.

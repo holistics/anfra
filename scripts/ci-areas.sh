@@ -3,7 +3,8 @@
 # (.github/workflows/continuous_integration.yml): CI runs a job only when its area
 # changed. Prints one `<area>=true|false` line per area, for $GITHUB_OUTPUT.
 #
-#   scripts/ci-areas.sh <base> [head]   the change from base to head (default HEAD)
+#   scripts/ci-areas.sh <base> [head]   the change from base to head; without head, to the
+#                                       working tree, uncommitted and untracked files included
 #
 # An area is the files its job reads, not only the ones it is named for: a Go test
 # reads the testdata beside it, the SDK's types come from api/openapi.yaml. A file
@@ -18,13 +19,17 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 base="${1:?usage: scripts/ci-areas.sh <base> [head]}"
-head="${2:-HEAD}"
+head="${2:-}" # empty: the working tree
 
 # Whether a package.json changed only in its `version`.
 version_only() {
   local before after
   before="$(git show "$base:$1" 2>/dev/null | jq -S 'del(.version)')" || return 1
-  after="$(git show "$head:$1" 2>/dev/null | jq -S 'del(.version)')" || return 1
+  if [ -n "$head" ]; then
+    after="$(git show "$head:$1" 2>/dev/null | jq -S 'del(.version)')" || return 1
+  else
+    after="$(jq -S 'del(.version)' "$1" 2>/dev/null)" || return 1
+  fi
   [ -n "$before" ] && [ "$before" = "$after" ]
 }
 
@@ -42,7 +47,7 @@ in_area() {
     *.go | go.mod | go.sum | tools/go.mod | tools/go.sum | .golangci.yml) return 0 ;;
     esac
     ;;
-  test) # tidy, the generated SQL code, build, vet, the Go tests
+  go) # tidy, the generated SQL code, vet, build, the Go tests
     case "$file" in
     # The Go folders whole: testdata, embedded files, queries.sql and migrations,
     # internal/cloudapi's openapi.yaml.
@@ -82,7 +87,7 @@ in_area() {
   return 1
 }
 
-areas=(lint test api web skills manifest dependencies)
+areas=(lint go api web skills manifest dependencies)
 declare -A touched=()
 
 while IFS= read -r file; do
@@ -97,7 +102,14 @@ while IFS= read -r file; do
   for area in "${areas[@]}"; do
     in_area "$area" "$file" && touched[$area]=true
   done
-done < <(git diff --name-only --no-renames "$base" "$head")
+done < <(
+  if [ -n "$head" ]; then
+    git diff --name-only --no-renames "$base" "$head"
+  else
+    git diff --name-only --no-renames "$base"
+    git ls-files --others --exclude-standard
+  fi
+)
 
 for area in "${areas[@]}"; do
   echo "$area=${touched[$area]:-false}"
