@@ -6,13 +6,38 @@ Each release starts as a release candidate (rc), such as `0.23.0-rc.1`. anfra Cl
 
 ## Why releases start as rcs
 
-anfra Cloud runs anfra core as a Go module, and its web app uses anfra's SDK and design packages from npm. All three come from an anfra release, so a new anfra feature reaches anfra Cloud only after anfra has released it. Users have the release by then, because `anfra update` installs it as soon as it's out, so they could run a feature that anfra Cloud doesn't have yet.
+anfra Cloud runs anfra core as a Go module, and its web app uses anfra's SDK and design packages from npm. All three come from an anfra release, so a new anfra feature reaches anfra Cloud only after anfra has released it. Users have the release by then, because `anfra update` installs it as soon as it's out, so they could run a feature that anfra Cloud doesn't have yet:
 
-An rc reverses the order. anfra Cloud gets the feature first, and users get it once anfra Cloud can handle it. That takes three rules, which the rest of this doc follows:
+```mermaid
+sequenceDiagram
+    title Without rcs
+    participant A as anfra
+    participant U as Users
+    participant C as anfra Cloud
+    A->>U: release 0.23.0, which anfra update installs
+    A->>C: 0.23.0 is out, so anfra Cloud bumps to it
+    Note over U,C: Users run 0.23.0's features,<br/>which anfra Cloud doesn't have yet
+    C->>C: release, roll out
+```
 
-- **Updates skip rcs.** An rc is published much as a release is, so anyone can install one by its version, but `anfra update` and its version checks never pick one ([Updates](#updates)).
-- **The release is the rc's commit.** If the release held commits merged after the rc, users would get features anfra Cloud doesn't have. The repo requires a linear history, so a commit made after the rc can't hold the rc's code. So the release tags the rc's own commit: `v0.23.0` and `v0.23.0-rc.1` point at the same commit.
-- **One release at a time.** While an rc waits for its release, no other rc is cut on its own, so anfra Cloud has one rc to catch up with, not a moving target.
+An rc reverses the order. anfra Cloud gets the feature first, and users get it once anfra Cloud can handle it:
+
+```mermaid
+sequenceDiagram
+    title With rcs
+    participant A as anfra
+    participant C as anfra Cloud
+    participant U as Users
+    A->>C: rc 0.23.0-rc.1, which anfra update skips
+    C->>C: release, roll out, check
+    A->>U: release 0.23.0, the rc's code
+```
+
+That takes three rules, which the rest of this doc follows:
+
+- **Updates skip rcs** ([Updates](#updates)).
+- **The release is the rc's commit** ([Tagging](#tagging)).
+- **One release at a time** ([While an rc waits](#while-an-rc-waits)).
 
 ## `manifest.yml`, the single source
 
@@ -39,6 +64,39 @@ For `0.23.0`, after `0.22.0`:
 5. **`tag_and_release.yml` tags the rc's commit `v0.23.0`,** and `build_release.yml` publishes the release. Users get it from `anfra update`, and anfra Cloud supports it already.
 6. **The daily job starts again,** from the commits since `v0.23.0`. anfra Cloud can move its pin to `0.23.0` at any time, which changes no code.
 
+```mermaid
+sequenceDiagram
+    participant D as Daily job
+    participant M as main
+    participant T as tag_and_release.yml
+    participant B as build_release.yml
+    actor P as Person
+    participant C as anfra Cloud
+    participant U as Users
+
+    D->>M: rc PR "release: 0.23.0-rc.1", on release/rc
+    P->>M: edit the notes if they need it, and merge
+    M->>T: manifest.yml changed
+    T->>B: tag v0.23.0-rc.1 on HEAD
+    B->>B: publish a prerelease, which anfra update skips
+    B->>M: release PR "release: 0.23.0", on release/next
+    P->>C: make bump-anfra REF=0.23.0-rc.1, release, roll out, check
+    Note over D,M: While the rc waits, the daily job cuts no rc,<br/>and comments on the release PR instead
+    P->>M: merge the release PR, once anfra Cloud runs the rc
+    M->>T: manifest.yml changed
+    T->>B: tag v0.23.0 on the rc's commit
+    B->>U: publish the release, which anfra update installs
+```
+
+### A feature's lifecycle
+
+Features keep merging to `main` while an rc waits. Which release a feature goes out in depends on when it merges, not on when the release PR merges. Here, feat A merges before the rc PR, and feat B while the rc waits. Each column is a lane, named in the top row, and each row comes after the one above it. Each box is what a step produces: a commit on a branch, a tag, or a published release. The thick grey line in `main` is its history, oldest first: it shows the order the commits land in, and nothing flows along it.
+
+![A feature's lifecycle, in lanes for main, release/rc, release/next, tag and release: feat A goes out in 0.23.0-rc.1 and 0.23.0, and feat B, merged while the rc waits, doesn't](release-lifecycle.svg)
+
+- **feat A** is in the rc, so anfra Cloud runs it first, and users get it in 0.23.0.
+- **feat B** misses the rc. It's on `main` before the release PR merges, but `v0.23.0` is on the rc's commit, so 0.23.0 doesn't have it ([Tagging](#tagging)). It goes out in the next rc, and reaches users in the release after. To get it into 0.23.0 instead, cut `0.23.0-rc.2` by hand. That rc holds everything on `main`, B included, anfra Cloud checks it again, and its release PR replaces rc.1's ([While an rc waits](#while-an-rc-waits)).
+
 ### The rc PR
 
 `release_candidate_pr.yml` opens it Monday to Saturday at 05:00 UTC: it runs `pnpm bump <rc>` on a branch fresh from `main`, commits `release: <rc>`, and opens the pull request. The workflow only sets up and calls `scripts/release-pr.sh`, which `--dry-run` runs locally: everything but the push and the pull request, which it prints.
@@ -52,7 +110,20 @@ For `0.23.0`, after `0.22.0`:
 
 ### While an rc waits
 
-An rc waits for its release while the highest `v*` tag is an rc. Then the daily job cuts no rc: changes merged in the meantime haven't been through anfra Cloud, so they wait for the next rc, after the release. Without the pause, the daily job would cut a new rc whenever `main` has something releasable, and anfra Cloud would have to bump, release, roll out and check each one before the release could merge. On an active `main`, users would never get the release.
+An rc waits for its release while the highest `v*` tag is an rc.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "No rc waiting: the daily job opens or refreshes the rc PR" as idle
+    state "An rc waits: the daily job comments on the release PR" as waiting
+    [*] --> idle
+    idle --> waiting: the rc PR merges, and the rc is tagged
+    waiting --> waiting: the next rc, cut by hand, is tagged
+    waiting --> idle: the release PR merges, and the release is tagged
+```
+
+While an rc waits, the daily job cuts no rc: changes merged in the meantime haven't been through anfra Cloud, so they wait for the next rc, after the release. Without the pause, the daily job would cut a new rc whenever `main` has something releasable, and anfra Cloud would have to bump, release, roll out and check each one before the release could merge. On an active `main`, users would never get the release.
 
 - **A change that has to ship before the release** goes out in the next rc, cut by hand. It comes from `main`, so it includes everything merged since the rc, and anfra Cloud has to check all of it. Its build replaces the release PR with one for the new rc. If `main`'s commits now call for a bigger release, such as a `feat` after an rc of `0.22.1`, the next rc is `0.23.0-rc.1`, and `0.22.1` is never released.
 - **Each daily run comments on the release PR,** when `main` has changes the changelog lists since the rc: which rc waits and since when, the changes it holds back, and what to do. A new comment notifies the pull request's watchers, which an edit wouldn't, and the run hides its comment of the day before as outdated.
@@ -67,10 +138,19 @@ Once an rc is out, its build runs `scripts/release-pr.sh --release <rc>`, which 
 
 ### Tagging
 
-`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`, one run at a time, in the order of the pushes. If the version has no tag yet:
+`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`, one run at a time, in the order of the pushes. If the version has no tag yet, it tags it:
 
-- **An rc** is tagged on `main`'s HEAD. It refuses an rc of a release that's out.
-- **A release** is tagged on the commit of the rc that `promoted_from` names, so the release is exactly the code anfra Cloud ran. It refuses a release without `promoted_from`, and one whose rc isn't the newest of that release: the message says to merge the release PR of the newest rc.
+```mermaid
+flowchart TD
+    V{"manifest.yml's version"} -->|"an rc, such as 0.23.0-rc.1"| RO{"Is 0.23.0 out?"}
+    RO -->|no| TH["tag v0.23.0-rc.1 on main's HEAD"]
+    RO -->|yes| X1["refuse, and say to cut an rc of a later release"]
+    V -->|"a release, such as 0.23.0"| PF{"Does promoted_from name<br/>the newest rc of 0.23.0?"}
+    PF -->|yes| TR["tag v0.23.0 on that rc's commit"]
+    PF -->|"no, or it's missing"| X2["refuse, and say to merge the newest rc's release PR,<br/>or to cut an rc first"]
+```
+
+**A release is tagged on its rc's commit, not on `main`'s HEAD.** The release PR merges once anfra Cloud runs the rc, which takes days, and other PRs keep merging meanwhile. They land between the rc PR's commit and the release PR's commit, so `main`'s HEAD holds code anfra Cloud never ran. The rc's commit holds exactly what it ran, so `v0.23.0` and `v0.23.0-rc.1` point at the same commit. The release PR's commit only records the release on `main`: its version, `promoted_from`, and the merged changelog.
 
 It pushes the tag with a deploy key (`ANFRA_DEPLOY_KEY`), and the push triggers `build_release.yml`. The deploy key is needed twice over: the repository's tag ruleset blocks creating release tags, and the workflow's own token cannot bypass it, while a deploy key can; and a tag pushed with the workflow's own token would not trigger another workflow. `build_release.yml` also runs on a tag pushed by hand, and on `workflow_dispatch`: dispatched on a tag (`gh workflow run build_release.yml --ref v<version>`), it releases that tag again; dispatched on a branch, it is a test build, which uploads artifacts and publishes nothing.
 
@@ -83,6 +163,17 @@ The release PR merges every rc section above the last release's into the release
 - **Lines are kept as written.** Each `###` group (Features, Bug Fixes and so on) becomes one, with the rcs' lines under it, newest rc first, and the groups ordered as the changelog's config lists their types, breaking changes first. Any text an rc section has outside a group goes above the groups, newest rc first too.
 - **The heading** links to the comparison with the last release, and takes the newest rc's date: the date of its code, the same whenever and wherever the merge runs.
 - **It merges the sections as they are at the rc's tag,** not on `main`, and so does the release's build, on the rc's commit, before anything reads the changelogs. So the release PR, the release's build and its GitHub release all get the same notes from the same input.
+
+```mermaid
+flowchart LR
+    R1["rc.1 PR: section 0.23.0-rc.1,<br/>the commits since v0.22.0"] --> T1[tag v0.23.0-rc.1]
+    T1 --> R2["rc.2 PR: section 0.23.0-rc.2,<br/>the commits since rc.1"] --> T2[tag v0.23.0-rc.2]
+    T2 --> MP["changelog-merge.mjs on the changelogs at v0.23.0-rc.2"]
+    MP --> PR["release PR: section 0.23.0, on main"]
+    MP --> BL["release build: section 0.23.0, in its checkout"]
+    BL --> GH["the GitHub release's notes, its CHANGELOG.md for anfra update, and the skills' changelog"]
+    CI["CI: the release PR is what the bot generates"] -.-> PR
+```
 
 A release's GitHub release shows its section of `CHANGELOG.md`, under "Changelog", followed by GitHub's own generated notes: the pull requests, new contributors and compare link (`scripts/release-notes.sh`, which also previews them locally). So a release says what the changelog says, and a re-run brings its notes back in line. The build uploads `CHANGELOG.md` too, which `anfra update` reads ([Updates](#updates)).
 

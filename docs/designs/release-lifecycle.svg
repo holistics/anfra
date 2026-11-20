@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" width="1120" height="620" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">
+  <title>A feature's lifecycle: feat A goes out in 0.23.0-rc.1 and 0.23.0; feat B, merged while the rc waits, doesn't</title>
+  <!--
+    The diagram in docs/designs/release.md, "A feature's lifecycle", drawn by hand. Columns are
+    lanes, 220 wide, centred at x = 130, 350, 570, 790 and 1010. Rows are steps, oldest first, 90
+    high, centred at y = 105, 195, 285, 375, 465 and 555. To add a row, shift the rows below it.
+    The thick line in main is its history, oldest first: it shows order, and nothing flows along it.
+  -->
+  <style>
+    :root { --ink: #24292f; --muted: #57606a; --grid: #d0d7de; --box: #ffffff; --bg: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink: #e6edf3; --muted: #9198a1; --grid: #3d444d; --box: #151b23; --bg: #0d1117; }
+    }
+    .grid { stroke: var(--grid); stroke-dasharray: 6 6; }
+    .lane { fill: var(--ink); font-weight: 600; font-size: 15px; text-anchor: middle; }
+    .box { fill: var(--box); stroke: var(--ink); stroke-width: 1.2; }
+    .text { fill: var(--ink); text-anchor: middle; dominant-baseline: middle; }
+    .file { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: middle; }
+    .arrow { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+    .arrow.dashed { stroke-dasharray: 6 5; }
+    .head { fill: var(--muted); }
+    .history { fill: none; stroke: var(--grid); stroke-width: 4; stroke-linecap: round; }
+    .history-head { fill: var(--grid); }
+    .label { fill: var(--muted); font-size: 13px; text-anchor: middle; dominant-baseline: middle;
+             paint-order: stroke; stroke: var(--bg); stroke-width: 6px; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="head" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <marker id="history-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+      <path class="history-head" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- Lanes -->
+  <g class="grid">
+    <line x1="240" y1="10" x2="240" y2="610"/>
+    <line x1="460" y1="10" x2="460" y2="610"/>
+    <line x1="680" y1="10" x2="680" y2="610"/>
+    <line x1="900" y1="10" x2="900" y2="610"/>
+    <line x1="20" y1="60" x2="1100" y2="60"/>
+  </g>
+  <text class="lane" x="130" y="40">main</text>
+  <text class="lane" x="350" y="40">release/rc</text>
+  <text class="lane" x="570" y="40">release/next</text>
+  <text class="lane" x="790" y="40">tag</text>
+  <text class="lane" x="1010" y="40">release</text>
+
+  <!-- main's history, oldest first -->
+  <path class="history" marker-end="url(#history-head)" d="M130,133 L130,252"/>
+  <path class="history" marker-end="url(#history-head)" d="M130,313 L130,432"/>
+  <path class="history" marker-end="url(#history-head)" d="M130,493 L130,514"/>
+
+  <!-- Arrows, under the boxes -->
+  <path class="arrow" marker-end="url(#head)" d="M200,130 L330,170"/>
+  <path class="arrow" marker-end="url(#head)" d="M330,220 L210,260"/>
+  <text class="label" x="268" y="240">approve</text>
+  <path class="arrow" marker-end="url(#head)" d="M228,285 L690,285"/>
+  <path class="arrow" marker-end="url(#head)" d="M888,285 L910,285"/>
+  <path class="arrow" marker-end="url(#head)" d="M200,310 L470,360"/>
+  <path class="arrow" marker-end="url(#head)" d="M540,408 L232,526"/>
+  <text class="label" x="385" y="466">approve</text>
+  <path class="arrow dashed" marker-end="url(#head)" d="M232,555 L690,555"/>
+  <text class="label" x="460" y="555">triggers</text>
+  <path class="arrow" marker-end="url(#head)" d="M790,310 L790,528"/>
+  <text class="label" x="790" y="420">same commit</text>
+  <path class="arrow" marker-end="url(#head)" d="M888,555 L910,555"/>
+
+  <!-- main -->
+  <rect class="box" x="32" y="80" width="196" height="50" rx="10"/>
+  <text class="text" x="130" y="105">feat A</text>
+  <rect class="box" x="32" y="260" width="196" height="50" rx="10"/>
+  <text class="file" x="130" y="274">manifest.yml</text>
+  <text class="text" x="130" y="293">version: 0.23.0-rc.1</text>
+  <rect class="box" x="32" y="440" width="196" height="50" rx="10"/>
+  <text class="text" x="130" y="465">feat B</text>
+  <rect class="box" x="28" y="522" width="204" height="66" rx="10"/>
+  <text class="file" x="130" y="536">manifest.yml</text>
+  <text class="text" x="130" y="555">version: 0.23.0</text>
+  <text class="text" x="130" y="573">promoted_from: 0.23.0-rc.1</text>
+
+  <!-- release/rc -->
+  <rect class="box" x="252" y="170" width="196" height="50" rx="10"/>
+  <text class="file" x="350" y="184">manifest.yml</text>
+  <text class="text" x="350" y="203">version: 0.23.0-rc.1</text>
+
+  <!-- release/next -->
+  <rect class="box" x="468" y="342" width="204" height="66" rx="10"/>
+  <text class="file" x="570" y="356">manifest.yml</text>
+  <text class="text" x="570" y="375">version: 0.23.0</text>
+  <text class="text" x="570" y="393">promoted_from: 0.23.0-rc.1</text>
+
+  <!-- tag -->
+  <rect class="box" x="692" y="260" width="196" height="50" rx="10"/>
+  <text class="text" x="790" y="285">v0.23.0-rc.1</text>
+  <rect class="box" x="692" y="530" width="196" height="50" rx="10"/>
+  <text class="text" x="790" y="555">v0.23.0</text>
+
+  <!-- release -->
+  <rect class="box" x="912" y="260" width="196" height="50" rx="10"/>
+  <text class="text" x="1010" y="285">0.23.0-rc.1</text>
+  <rect class="box" x="912" y="530" width="196" height="50" rx="10"/>
+  <text class="text" x="1010" y="555">0.23.0</text>
+</svg>
