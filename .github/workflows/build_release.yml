@@ -357,7 +357,7 @@ jobs:
       contents: write # push release/next
       pull-requests: write # open its pull request, and close the one it replaces
     env:
-      # TODO: a GitHub App's token, and its bot as GIT_BOT, as release_pr.yml's.
+      # TODO: a GitHub App's token, and its bot as GIT_BOT, as release_candidate_pr.yml's.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GIT_BOT: github-actions[bot]
     steps:
