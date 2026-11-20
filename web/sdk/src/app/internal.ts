@@ -47,6 +47,8 @@ export interface AppContext {
   fetchPage (query: Query): Promise<void>;
   /** Brings an entity's marked elements into view; false when none is on the page. */
   locate (kind: LocateKind, name: string): boolean;
+  /** Asks the host to open its panel at an entity, on `tab` if it shows it; whether the panel opened. */
+  inspect (entity: 'query' | 'control', name: string, tab?: string): Promise<boolean>;
   /** Opens the content menu on these rows of this query, for the event; whether one opens. */
   menu (query: Query, event: Event, rows: readonly Row[], fields?: readonly string[], measure?: string): boolean;
 }

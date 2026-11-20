@@ -110,4 +110,55 @@ describe('the panel', () => {
     panel.toggle();
     expect(panel.open).toBe(false);
   });
+  describe('reveal', () => {
+    const marked = {
+      apps: [],
+      structure: {
+        nodes: [{
+          key: '0', kind: 'block', problems: [], children: [
+            { key: '0.0', kind: 'query', name: 'revenue', app: 0, problems: [], children: [] },
+          ],
+        }],
+        usage: {},
+      },
+    };
+
+    it('keeps a one-shot reveal, with a new nonce for each, and never closes the panel', () => {
+      const panel = mount();
+      panel.show(undefined, { entity: 'query', app: 0, name: 'revenue' });
+      expect(panel.open).toBe(true);
+      const first = panel.revealed!;
+      expect(first).toMatchObject({ entity: 'query', app: 0, name: 'revenue' });
+      panel.show(undefined, { entity: 'query', app: 0, name: 'revenue' });
+      expect(panel.open).toBe(true);
+      expect(panel.revealed!.nonce).toBeGreaterThan(first.nonce);
+      panel.hide();
+      expect(panel.revealed).toBeUndefined();
+    });
+
+    it('selects a marked entity it reveals, once a snapshot has it', () => {
+      const panel = mount();
+      panel.show(undefined, { entity: 'query', app: 0, name: 'revenue' });
+      expect(panel.selection).toBeNull();
+      fromFrame(event('anfra.snapshot', { apps: [] }));
+      expect(panel.selection).toBeNull();
+      fromFrame(event('anfra.snapshot', marked));
+      expect(panel.selection).toBe('0.0');
+      // Selected once: the reader may select something else.
+      panel.select('0');
+      fromFrame(event('anfra.snapshot', marked));
+      expect(panel.selection).toBe('0');
+      // Already in the snapshot: selected at once.
+      panel.show(undefined, { entity: 'query', app: 0, name: 'revenue' });
+      expect(panel.selection).toBe('0.0');
+    });
+
+    it('lets a selection made after it win over the reveal still waiting', () => {
+      const panel = mount();
+      panel.show(undefined, { entity: 'query', app: 0, name: 'revenue' });
+      panel.select('0');
+      fromFrame(event('anfra.snapshot', marked));
+      expect(panel.selection).toBe('0');
+    });
+  });
 });

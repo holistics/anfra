@@ -89,6 +89,18 @@ export abstract class Control extends Observable {
     return this.app.locate('control', this.name);
   }
 
+  /**
+   * Opens the host's panel at this control, as a reader asked to inspect it: wire it to your own
+   * button, badge or menu. `tab` names the panel's tab by its full id (`inspect.queries`); left out,
+   * or one the host doesn't show, the host picks its own (Queries, which shows what it filters unless it set another).
+   * Call it from a reader's click: without one it opens nothing and reports a problem. Resolves
+   * true when the panel opened.
+   */
+  async inspect (options: { tab?: string } = {}): Promise<boolean> {
+    this.assertLive();
+    return this.app.inspect('control', this.name, options.tab);
+  }
+
   /** False once `remove()` took it out of its app. */
   get isRemoved (): boolean {
     return this.removed;

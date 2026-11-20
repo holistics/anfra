@@ -281,6 +281,23 @@ describe('the menu on a query\'s rows', () => {
     expect(run).toHaveBeenCalledWith(expect.objectContaining({ annotations: [expect.objectContaining({ label: 'Spike', plugin: 'notes' })] }));
   });
 
+  it("shows a host command for both kinds once, for the rows, and runs it with them", async () => {
+    const f = frame(undefined, {
+      'anfra.menu': (target: { kind: string }) => [{ id: 'inspect.reveal', label: 'Inspect' }, ...(target.kind === 'node' ? [{ id: 'ask.ask', label: 'Ask AI' }] : [])],
+      'anfra.run': () => null,
+    });
+    f.emit('anfra.menu', { kinds: ['rows', 'node'] });
+    await flush();
+    const query = f.anfra.createApp().createQuery('revenue', { dataset: 'sales', aql: 'explore {}' });
+    document.getElementById('inside')!.addEventListener('contextmenu', (e) => { query.menu(e, { region: 'APAC' }); }, { once: true });
+    rightClick('inside');
+    await settle();
+    expect(entries().map((entry) => entry.textContent)).toEqual(['Inspect', 'Ask AI']);
+    entries()[0].click();
+    await settle();
+    expect(f.calls.find((call) => call.name === 'anfra.run')!.request).toMatchObject({ id: 'inspect.reveal', target: { kind: 'rows', query: 'revenue' } });
+  });
+
   it('opens on annotated rows with no item for them, to show the annotations', async () => {
     let kernel!: FrameKernel;
     const f = frame((k) => { kernel = k; }, {

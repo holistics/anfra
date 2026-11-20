@@ -14,6 +14,7 @@ import { Control } from './controls';
 import { installCore } from './core';
 import { installInspection } from './inspection';
 import { installContentUi } from './menu';
+import { installReveal } from './reveal';
 import { installAnnotationBadges } from './annotationBadges';
 import { themeLayer } from './layer';
 import { resolveTheme } from '../common/theme';
@@ -103,6 +104,7 @@ export function bootstrap (win: Window, setups: readonly PluginSetup[] = []): vo
   // `core`'s frame side: the host's refresh.
   installCore(createKernel('core', shared, { Query, Control }));
   shared.contentUi = installContentUi(own);
+  installReveal(own);
   installAnnotationBadges(own, shared.contentUi);
   own.on('theme', (theme: unknown) => {
     const resolved = resolveTheme(theme);
