@@ -88,27 +88,95 @@ build-dev:
 # anfra-canal (or canal-query alone); make test-sidecars runs them against the pinned releases.
 REAL_SIDECARS = $(and $(ANFRA_NODE_BIN),$(or $(ANFRA_CANAL_BIN),$(ANFRA_CANAL_QUERY_BIN)))
 
-test: ## Run the Go, SDK, frontend and skills tests
-	$(if $(REAL_SIDECARS),scripts/sidecars.sh check)
-	go test ./...
-	pnpm test:web
-	pnpm skills:check
-	$(if $(REAL_SIDECARS),,@echo "WARNING: the real-sidecar tests were skipped: ANFRA_NODE_BIN and ANFRA_CANAL_BIN are not both set. make test-sidecars runs them.")
-
 test-sidecars: ## Run the Go tests, those against real sidecars too (needs the dev warehouse: DEVELOPMENT.md)
 	scripts/sidecars.sh check
 	go test ./...
 
-# The SDK's type declarations, which the frontend's typecheck reads (web/sdk/dist), are the one
-# thing make check builds.
-check: ## Lint and type-check everything, and check the API contract and generated SQL code are fresh, as CI does
-	go mod tidy --diff
+# What CI checks (docs/designs/ci.md), by CI job: make ci-<area> runs what that job runs, and CI's
+# job runs it too, so the two can't drift. Each area's checks are in two halves: <area>-static
+# (lint, type-checks, generated files fresh) and <area>-runtime (builds and tests). make check runs
+# every static half, make test every runtime half, and make ci the areas your branch changed.
+#
+# What only CI can check stays in the workflow: commitlint, the dependency review, and whether a
+# release PR is the bot's.
+.PHONY: ci ci-lint ci-go ci-api ci-web ci-skills ci-manifest
+.PHONY: lint-static go-static go-runtime api-static web-static web-runtime skills-runtime manifest-static manifest-runtime
+
+CI_AREAS := lint go api web skills manifest
+
+# The branch a change lands on, which make ci and the API's breaking-change check compare with.
+CI_BASE ?= origin/main
+
+# The Go tests' flags. CI's are the same: -race finds data races the tests run into.
+GO_TEST_FLAGS ?= -race
+
+ci: ## Run the checks CI would for your branch: the areas it changed since origin/main, uncommitted changes included
+	@base="$$(git merge-base $(CI_BASE) HEAD)" && \
+		areas="$$(scripts/ci-areas.sh "$$base" | sed -n 's/=true$$//p')" && \
+		run="" && skipped="" && \
+		for area in $(CI_AREAS); do \
+			if echo "$$areas" | grep -qx "$$area"; then run="$${run:+$$run }$$area"; else skipped="$${skipped:+$$skipped }$$area"; fi; \
+		done && \
+		echo "Compared with $(CI_BASE) (merge base $$(git rev-parse --short "$$base")), uncommitted changes included:" && \
+		echo "  run:     $${run:-none}" && \
+		echo "  skipped: $${skipped:-none}" && \
+		echo "  CI only: commitlint, dependency review, the release PR check" && \
+		for area in $$run; do $(MAKE) --no-print-directory ci-$$area || exit 1; done
+
+ci-lint: lint-static ## Run CI's lint job: golangci-lint
+ci-go: go-static go-runtime ## Run CI's go job: tidy, generated SQL code, vet, build, the Go tests
+ci-api: api-static ## Run CI's api job: the API contract is fresh, and a breaking change is declared
+ci-web: web-static web-runtime ## Run CI's web job: the SDK's types, typechecks, the build, the tests
+ci-skills: skills-runtime ## Run CI's skills job: front matter, links, the hook's tests, the facade
+ci-manifest: manifest-static manifest-runtime ## Run CI's manifest job: the versions agree, the cloud servers parse
+
+check: lint-static go-static api-static web-static manifest-static ## Run every static check CI runs: lint, vet, type-checks, generated files fresh, versions agree
+
+test: go-runtime web-runtime skills-runtime manifest-runtime ## Run every build and test CI runs: Go, SDK, frontend, skills
+	$(if $(REAL_SIDECARS),,@echo "WARNING: the real-sidecar tests were skipped: ANFRA_NODE_BIN and ANFRA_CANAL_BIN are not both set. make test-sidecars runs them.")
+
+lint-static:
 	$(TOOL) golangci-lint run ./...
-	scripts/openapi.sh diff
+
+go-static:
+	go mod tidy --diff
 	scripts/sqlc.sh diff
+	go vet ./...
+
+go-runtime:
+	$(if $(REAL_SIDECARS),scripts/sidecars.sh check)
+	go build ./...
+	go test $(GO_TEST_FLAGS) ./...
+
+api-static:
+	scripts/openapi.sh diff
+	scripts/openapi.sh declared "$$(git merge-base $(CI_BASE) HEAD)"
+
+# The SDK's type declarations, which the frontend's typecheck reads (web/sdk/dist), are the one
+# thing the static half builds.
+web-static:
 	pnpm --filter @holistics/anfra-sdk generate >/dev/null
 	@git diff --exit-code --quiet -- web/sdk/src/api/schema.d.ts \
 		|| { echo "web/sdk/src/api/schema.d.ts was stale: it is regenerated now, commit it"; exit 1; }
 	pnpm --filter @holistics/anfra-sdk typecheck
 	pnpm build:sdk >/dev/null
 	pnpm --filter anfra-appserve typecheck
+
+# The build a release embeds, then the tests: the frontend's import the built SDK.
+web-runtime:
+	pnpm build:web
+	pnpm test:web
+
+skills-runtime:
+	pnpm skills:check
+
+manifest-static:
+	@release="$$(sed -n 's/^version: *//p' manifest.yml)" && \
+		for pkg in web/sdk web/design; do \
+			version="$$(jq -r .version "$$pkg/package.json")"; \
+			test "$$version" = "$$release" \
+				|| { echo "$$pkg/package.json version $$version != manifest.yml version $$release: pnpm bump sets them all" >&2; exit 1; }; \
+		done
+
+manifest-runtime:
+	go test -count=1 ./scripts/cloud-url

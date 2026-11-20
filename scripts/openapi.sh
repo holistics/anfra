@@ -8,6 +8,7 @@
 #   scripts/openapi.sh generate          write it (`anfra openapi`: no repo or sidecars)
 #   scripts/openapi.sh diff              fail if the committed document is stale
 #   scripts/openapi.sh breaking <base>   fail if api/openapi.yaml breaks the base document
+#   scripts/openapi.sh declared <commit> fail if it breaks <commit>'s, and no commit since declares it
 #
 # A breaking change reaches every client of the core API — Data Apps on either
 # host, the core SDK — so it is refused unless it is declared: CI accepts one in
@@ -42,8 +43,27 @@ breaking)
   go run "$oasdiff" breaking --fail-on ERR \
     --severity-levels api/oasdiff-severity-levels.txt "$base" "$spec"
   ;;
+declared)
+  # The branch the change lands on: on a PR, its base; in the merge queue, the queue's base
+  # commit; locally (make ci-api), origin/main.
+  base=${2:?usage: scripts/openapi.sh declared <base commit>}
+  if ! git cat-file -e "$base:$spec" 2>/dev/null; then
+    echo "$base has no $spec yet: nothing to compare"
+    exit 0
+  fi
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  git show "$base:$spec" > "$tmp/base.yaml"
+  if "$0" breaking "$tmp/base.yaml"; then exit 0; fi
+  if git log --format=%B "$base..HEAD" | grep -Eq '^[a-z]+(\([^)]*\))?!:|^BREAKING CHANGE:'; then
+    echo "breaking, and declared by a commit: ok"
+    exit 0
+  fi
+  echo "a breaking change to the core API, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
+  exit 1
+  ;;
 *)
-  echo "usage: scripts/openapi.sh generate|diff|breaking <base spec>" >&2
+  echo "usage: scripts/openapi.sh generate|diff|breaking <base spec>|declared <base commit>" >&2
   exit 2
   ;;
 esac
