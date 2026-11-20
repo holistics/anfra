@@ -1,3 +1,15 @@
+## [0.24.0-rc.1](https://github.com/holistics/anfra/compare/v0.23.1...v0.24.0-rc.1) (2026-11-20)
+
+### Features
+
+* **skills:** document that an empty group gives null, not 0 ([9002a02](https://github.com/holistics/anfra/commit/9002a0248a8a60d65739dff32b63cf8389e2d91d))
+* **skills:** document how + - * / handle a null operand ([7804584](https://github.com/holistics/anfra/commit/780458484ae570e27b372be4abbbdd8a0aac3df9))
+* **skills:** say a repo may turn a data app plugin off ([b5234de](https://github.com/holistics/anfra/commit/b5234de94cd075ed02a3aadcd0a88259dc8ba2e6))
+* **skills:** teach query.inspect() and control.inspect(), and the menu's inspect ([0e10c6c](https://github.com/holistics/anfra/commit/0e10c6c0f5078ded870b3935681242c18938a337))
+
+### Bug Fixes
+
+* **skills:** the menu offers Inspect on a chart's point, not on a block ([3fd413a](https://github.com/holistics/anfra/commit/3fd413a1dfd44f2b880f31fd5d575031a4eab705))
 ## [0.23.1](https://github.com/holistics/anfra/compare/v0.23.0...v0.23.1) (2026-11-19)
 
 ### Features

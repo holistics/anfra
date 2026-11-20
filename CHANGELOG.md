@@ -1,3 +1,23 @@
+## [0.24.0-rc.1](https://github.com/holistics/anfra/compare/v0.23.1...v0.24.0-rc.1) (2026-11-20)
+
+### Features
+
+* **appserve:** install only the plugins the repo's settings leave on ([bcb8a5b](https://github.com/holistics/anfra/commit/bcb8a5beffb5cf9952b767d5f82909b4dd272227))
+* **appserve:** bring the sidebar in line with Cloud's ([508131f](https://github.com/holistics/anfra/commit/508131f1a7a9a32dddb01da5b505420f906c5765))
+* **design:** mark the current nav item with the neutral fill ([d106820](https://github.com/holistics/anfra/commit/d106820e107683942f89e7c01bf56749bf0d3340))
+* **sdk:** reveal a query or control in the panel, from query.inspect() or a menu command ([55e4b0b](https://github.com/holistics/anfra/commit/55e4b0bee2de50eefe809cf17e75897e69f67775))
+* **sdk:** inspect honors the panel's reveal, and offers Inspect in the menu ([e174f10](https://github.com/holistics/anfra/commit/e174f102078d95818a36b14795b8babd51846ef3))
+* **shared:** add apps.plugins settings for the sdk plugins ([9d61867](https://github.com/holistics/anfra/commit/9d61867da43093e0fd1fa4af8fe1816d2a68ee82))
+* **skills:** document that an empty group gives null, not 0 ([9002a02](https://github.com/holistics/anfra/commit/9002a0248a8a60d65739dff32b63cf8389e2d91d))
+* **skills:** document how + - * / handle a null operand ([7804584](https://github.com/holistics/anfra/commit/780458484ae570e27b372be4abbbdd8a0aac3df9))
+* **skills:** say a repo may turn a data app plugin off ([b5234de](https://github.com/holistics/anfra/commit/b5234de94cd075ed02a3aadcd0a88259dc8ba2e6))
+* **skills:** teach query.inspect() and control.inspect(), and the menu's inspect ([0e10c6c](https://github.com/holistics/anfra/commit/0e10c6c0f5078ded870b3935681242c18938a337))
+
+### Bug Fixes
+
+* **appserve:** keep the peek's theme menu inside it, steady the edges ([5ea765f](https://github.com/holistics/anfra/commit/5ea765f95b6d2cf35cedf860ea50ba1f028baac6))
+* **sdk:** offer Inspect on a chart's rows only, never on a block ([6df2cda](https://github.com/holistics/anfra/commit/6df2cda8e1647cf5b90aa10c6d31897fcb44c5c0))
+* **skills:** the menu offers Inspect on a chart's point, not on a block ([3fd413a](https://github.com/holistics/anfra/commit/3fd413a1dfd44f2b880f31fd5d575031a4eab705))
 ## [0.23.1](https://github.com/holistics/anfra/compare/v0.23.0...v0.23.1) (2026-11-19)
 
 ### Features
