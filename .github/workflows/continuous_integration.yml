@@ -29,13 +29,16 @@ on:
   push:
     branches: [main]
   merge_group: {}
+  # A full run: every job, whatever changed. full_ci.yml starts one hourly when main changed,
+  # to catch what the areas miss; a Slack channel subscribes to these runs.
+  workflow_dispatch: {}
 
 concurrency:
   # One group per PR (refs/pull/<n>/merge): a push cancels the PR's older run.
-  # A merge group's ref (gh-readonly-queue/main/pr-<n>-<sha>) is its own, so
-  # queued runs never cancel each other. On main, each commit's run finishes:
-  # a release waits on its commit's.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Every other run is its own group, and always finishes: a group holds only one
+  # waiting run, so on main a third push would cancel the second's, and a release
+  # waits on its commit's.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -70,7 +73,27 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 2 # a PR's merge commit and its base
+          # A PR's merge commit and its base; a full run, the commits since the previous one.
+          fetch-depth: ${{ github.event_name != 'workflow_dispatch' && 2 || 0 }}
+          filter: blob:none
+      - name: The commits since the previous full run
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous="$(gh run list --workflow continuous_integration.yml --event workflow_dispatch --branch main \
+            --json databaseId,headSha --jq "[.[] | select(.databaseId != $GITHUB_RUN_ID)][0].headSha // \"\"")"
+          {
+            echo "## Full run of $(git log -1 --format='%h %s' HEAD)"
+            echo
+            if [ -n "$previous" ] && git cat-file -e "$previous" 2>/dev/null; then
+              echo "Commits since the previous full run, on $(git log -1 --format=%h "$previous"):"
+              echo
+              git log --first-parent --format='- %h %s (%an)' "$previous..HEAD"
+            else
+              echo "No previous full run to compare with."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - id: files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,7 +106,10 @@ jobs:
           scripts/ci-areas.sh hashes HEAD | while IFS='=' read -r key hash; do
             area="${key%_hash}"
             echo "${area}_hash=$hash" >> "$GITHUB_OUTPUT"
-            if [ "$(passed "passed-$area-$hash")" = true ]; then
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+              echo "$area: runs (a full run)"
+              echo "$area=true" >> "$GITHUB_OUTPUT"
+            elif [ "$(passed "passed-$area-$hash")" = true ]; then
               echo "$area: these files passed before, skipped"
               echo "$area=false" >> "$GITHUB_OUTPUT"
             else
