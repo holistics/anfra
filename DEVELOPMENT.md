@@ -60,7 +60,7 @@ CI (`.github/workflows/continuous_integration.yml`) runs one job per area of the
 
 ```sh
 make ci           # the checks CI would run for your branch: the areas it changed since origin/main
-make ci-<area>    # one CI job: lint, go, api, web, skills or manifest
+make ci-<area>    # one CI job: lint, go, api, api-breaking, web, skills or manifest
 make check        # every static check: lint, vet, type-checks, generated files fresh, versions agree
 make test         # every build and test: Go (with -race), the SDK, the frontend, the skills
 ```
