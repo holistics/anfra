@@ -52,12 +52,10 @@ describe('inspect', () => {
     };
     const card = (root: ShadowRoot, name: string) => byTestId(root, `table-0/${name}`)!.querySelector('details')!;
 
-    it('is offered once on a rows menu and on a block', async () => {
+    it("is offered on a chart's rows, and not on a block", async () => {
       harness = await inspect();
-      const rowsMenu = await harness.frameCall('anfra.menu', rows);
-      const nodeMenu = await harness.frameCall('anfra.menu', block);
-      expect(rowsMenu).toEqual([{ id: 'inspect.reveal', label: 'Inspect' }]);
-      expect(nodeMenu).toEqual([{ id: 'inspect.reveal', label: 'Inspect' }]);
+      expect(await harness.frameCall('anfra.menu', rows)).toEqual([{ id: 'inspect.reveal', label: 'Inspect' }]);
+      expect(await harness.frameCall('anfra.menu', block)).toEqual([]);
     });
 
     it("reveals the rows' query on Data", async () => {
@@ -69,14 +67,6 @@ describe('inspect', () => {
       const { root } = await harness.tab('inspect.data');
       expect(card(root, 'orders').open).toBe(true);
       await vi.waitFor(() => expect(card(root, 'orders').classList.contains('flash')).toBe(true));
-    });
-
-    it('selects a block, and reveals the first query in it on Data', async () => {
-      harness = await inspect();
-      await harness.frameCall('anfra.run', { id: 'inspect.reveal', target: block });
-      expect(harness.mounted.panel).toMatchObject({ tab: 'inspect.data', selection: '0', revealed: { entity: 'query', name: 'revenue' } });
-      const { root } = await harness.tab('inspect.data');
-      expect(card(root, 'revenue').open).toBe(true);
     });
   });
 });

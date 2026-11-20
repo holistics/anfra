@@ -394,35 +394,19 @@ describe('menu commands', () => {
     const rows = {
       kind: 'rows', app: 0, query: 'revenue', rows: [{ region: 'EU' }], fields: ['region'], conditions: [],
     };
-    const block = {
-      ...node,
-      node: {
-        ...node.node,
-        children: [
-          { key: '0.0', kind: 'control', name: 'region', app: 0, problems: [], children: [] },
-          { key: '0.1', kind: 'query', name: 'revenue', app: 0, problems: [], children: [] },
-        ],
-      },
-    };
     const tab = (id: string) => ({ id, title: id, mount: () => {} });
     const look = definePlugin({
       name: 'inspect',
       version: '1',
       host: {
         commands: [
-          { id: 'reveal', title: 'Inspect', target: ['rows', 'node'], run: { panel: 'reveal' } },
+          { id: 'reveal', title: 'Inspect', target: 'rows', run: { panel: 'reveal' } },
           { id: 'show', title: 'Other', target: 'rows', run: { tab: 'inspect.other' } },
         ],
         tabs: [tab('data'), tab('other')],
       },
     });
     const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
-
-    it('tell a ready frame of each kind of target they are for', () => {
-      const { posted, fromFrame } = mountWith(look);
-      fromFrame({ type: 'anfra:ready' });
-      expect(posted).toContainEqual({ type: 'anfra:event', name: 'anfra.menu', payload: { kinds: ['rows', 'node'] } });
-    });
 
     it("reveal the rows' query on the fallback tab", async () => {
       const { fromFrame } = mountWith(look);
@@ -431,16 +415,12 @@ describe('menu commands', () => {
       expect(mounted!.panel).toMatchObject({ open: true, tab: 'inspect.data', revealed: { entity: 'query', app: 0, name: 'revenue' } });
     });
 
-    it('select a node and reveal the first query at or below it', async () => {
+    it('refuse a block', async () => {
       const { fromFrame } = mountWith(look);
-      fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.run', request: { id: 'inspect.reveal', target: block } });
+      fromFrame({ type: 'anfra:call', id: 1, name: 'anfra.run', request: { id: 'inspect.reveal', target: node } });
       await settle();
-      expect(mounted!.panel).toMatchObject({
-        tab: 'inspect.data', selection: '0', revealed: { entity: 'query', name: 'revenue' },
-      });
-      // A snapshot that has the query marked leaves the node selected.
-      fromFrame({ type: 'anfra:event', name: 'anfra.snapshot', payload: { apps: [], structure: { nodes: [block.node], usage: {} } } });
-      expect(mounted!.panel.selection).toBe('0');
+      expect(mounted!.panel.revealed).toBeUndefined();
+      await expect(mounted!.run('inspect.reveal')).rejects.toThrow('with a rows target');
     });
 
     it("reveal the rows' query on a tab command's own tab", async () => {
@@ -460,9 +440,10 @@ describe('menu commands', () => {
       expect(mounted.commandState('inspect.reveal').disabled).toBeTruthy();
     });
 
-    it('need a menu target', () => {
-      const bad = definePlugin({ name: 'bad', version: '1', host: { commands: [{ id: 'x', title: 'X', run: { panel: 'reveal' } }] } });
-      expect(() => createHost({ plugins: [core(), bad], frameScript: 'x' })).toThrow(/menu target/);
+    it('need the rows target', () => {
+      const bad = (target?: 'node') => definePlugin({ name: 'bad', version: '1', host: { commands: [{ id: 'x', title: 'X', target, run: { panel: 'reveal' } }] } });
+      expect(() => createHost({ plugins: [core(), bad()], frameScript: 'x' })).toThrow(/'rows' menu target/);
+      expect(() => createHost({ plugins: [core(), bad('node')], frameScript: 'x' })).toThrow(/'rows' menu target/);
     });
   });
 });

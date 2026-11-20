@@ -19,12 +19,10 @@ import { checkTarget, type MenuEntry, type MenuTarget } from '../common/menu';
 import { definitionStack, provisionFrame, type DefinitionLines } from './provision';
 import { contentPolicy } from './policy';
 import { createPanel, type Panel, type RevealTarget } from './panel';
-import type { NodeTarget } from '../common/menu';
-import type { StructureNode } from '../common/types';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
 import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
 import {
-  commandState, installContributions, targetKinds, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
+  commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
 } from './contributions';
 
@@ -311,7 +309,7 @@ export function createHost (options: HostOptions): Host {
   const selectionTabIds = tabs.filter((tab) => tab.selection).map((tab) => tab.id);
   const pickTabIds = tabs.filter((tab) => tab.selection === 'pick').map((tab) => tab.id);
   // Which kinds of target the host's own menu commands are for: the frame listens only when asked.
-  const menuKinds = [...new Set(commands.flatMap((command) => targetKinds(command)))];
+  const menuKinds = [...new Set(commands.flatMap((command) => (command.target ? [command.target] : [])))];
   // The chrome's commands by shortcut: a menu command runs only with its target, so has none.
   const byShortcut = new Map<string, string>();
   for (const command of commands) {
@@ -591,8 +589,7 @@ export function createHost (options: HostOptions): Host {
        */
       const runCommand = async (id: string, target?: MenuTarget, from: 'host' | 'menu' | 'key' = 'host'): Promise<unknown> => {
         const command = commandOf(id);
-        const kinds = targetKinds(command);
-        if (kinds.length && (!target || !kinds.includes(target.kind))) throw invalidRequest(`'${id}' runs from the menu on the page, with a ${kinds.join(' or ')} target.`);
+        if (command.target && target?.kind !== command.target) throw invalidRequest(`'${id}' runs from the menu on the page, with a ${command.target} target.`);
         const { disabled, pressed } = stateOf(command, target);
         if (disabled) throw forbidden(disabled);
         if ('tab' in command.run) {
@@ -610,7 +607,7 @@ export function createHost (options: HostOptions): Host {
           return null;
         }
         if ('panel' in command.run && command.run.panel === 'reveal') {
-          if (target) revealOn(target);
+          if (target?.kind === 'rows') revealIn({ entity: 'query', app: target.app, name: target.query });
           return null;
         }
         if ('panel' in command.run) {
@@ -646,41 +643,6 @@ export function createHost (options: HostOptions): Host {
         return true;
       };
       reveals.set(context, revealIn);
-      /** A node, as the snapshot has it whole, or as the target has it (its children's children left out). */
-      const wholeNode = (target: NodeTarget): StructureNode => {
-        const find = (nodes: readonly StructureNode[]): StructureNode | undefined => {
-          for (const node of nodes) {
-            if (node.key === target.node.key) return node;
-            const inner = find(node.children);
-            if (inner) return inner;
-          }
-          return undefined;
-        };
-        return find(panelState.panel.snapshot?.structure.nodes ?? []) ?? target.node;
-      };
-      const firstQuery = (node: StructureNode): StructureNode | undefined => {
-        if (node.kind === 'query' && node.name !== undefined) return node;
-        for (const child of node.children) {
-          const found = firstQuery(child);
-          if (found) return found;
-        }
-        return undefined;
-      };
-      /**
-       * A `reveal` command on its target, on the host's tab for a query: the rows' query, or the
-       * node selected, with the first query at or below it revealed.
-       */
-      const revealOn = (target: MenuTarget) => {
-        if (target.kind === 'rows') {
-          revealIn({ entity: 'query', app: target.app, name: target.query });
-          return;
-        }
-        const query = firstQuery(wholeNode(target));
-        if (query) {
-          revealIn({ entity: 'query', app: query.app ?? 0, name: query.name! });
-          panelState.panel.select(target.node.key);
-        } else panelState.panel.show(revealTabs.query, target.node.key);
-      };
       /** How a command shows: its own state, and a `reveal` one disabled with no tab to reveal on. */
       const stateOf = (command: Command, target?: MenuTarget): CommandState => {
         if ('panel' in command.run && command.run.panel === 'reveal' && !tabIds.includes(revealTabs.query)) {
@@ -698,7 +660,7 @@ export function createHost (options: HostOptions): Host {
       });
       /** The host's menu commands that apply to a target, as the frame's menu shows them. */
       const menuFor = (target: MenuTarget): MenuEntry[] => commands.flatMap((command) => {
-        if (!targetKinds(command).includes(target.kind)) return [];
+        if (command.target !== target.kind) return [];
         try {
           if (command.when && !command.when(target, stateContext)) return [];
         } catch {
