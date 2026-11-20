@@ -8,7 +8,7 @@ import (
 
 // A diagram as anfra-node formats it reads and writes back unchanged, so the
 // core API passes it through whole: a link has props only when its edge has
-// some.
+// some, and a target has a child only when it names a field.
 func TestDiagramRoundTrips(t *testing.T) {
 	const diagram = `{"results":[{"target":{"parent":"ecommerce","child":"revenue"},"query":"needed_by:(fqn:ecommerce.revenue)","diagram":{` +
 		`"version":2,"query":"needed_by:(fqn:ecommerce.revenue)","total":2,"matched":["aml.dimension:orders.amount","aml.model:orders"],` +
@@ -19,7 +19,8 @@ func TestDiagramRoundTrips(t *testing.T) {
 		`{"id":"aml.model:orders","type":"aml.model","label":"Orders","tags":["Endorsed"],"props":{"table_name":"public.orders"},` +
 		`"sections":[{"type":"aml.dimension","nodes":[{"id":"aml.dimension:orders.amount","type":"aml.dimension","label":"Amount"}]}],"layer":0},` +
 		`{"id":"aml.metric:revenue","type":"aml.metric","label":"Revenue","links":[{"type":"refers","to":"aml.dimension:orders.amount"},{"type":"refers","to":"aml.model:orders","props":{"via":"join"}}],"layer":1,"detached":true}` +
-		`]}},{"target":{"parent":"ecommerce","child":"nosuch"},"query":"needed_by:(fqn:ecommerce.nosuch)","error":"no such field"}]}`
+		`]}},{"target":{"parent":"ecommerce","child":"nosuch"},"query":"","error":"parent \"ecommerce\" has no child \"nosuch\""},` +
+		`{"target":{"parent":"nosuch"},"query":"","error":"parent \"nosuch\" not found"}]}`
 
 	var res CatalogLineageResult
 	if err := jsonkit.Unmarshal([]byte(diagram), &res); err != nil {

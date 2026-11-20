@@ -91,7 +91,8 @@ global. A plugin's members are typed as optional: check the member itself (`if (
 
 `Anfra.lineage({ parent: 'orders', child: 'amount' })` (the `lineage` plugin) traces fields through the repo's catalog, each named
 by its parent and its name in it: what each is built from, as a diagram to draw (`results[i].diagram`), or
-why it could not be (`results[i].error`). It reads the catalog the host last ingested (`anfra ingest`).
+why it could not be (`results[i].error`, such as a parent or child that does not exist). A parent alone,
+`{ parent: 'orders' }`, traces the whole model or dataset. It reads the catalog the host last ingested (`anfra ingest`).
 
 A definition can mark its parts, so a host's inspect panel can show them as a tree and find them on
 the page:

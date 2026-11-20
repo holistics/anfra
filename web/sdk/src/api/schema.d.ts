@@ -76,7 +76,7 @@ export interface paths {
         put?: never;
         /**
          * Trace fields through the local catalog to what each one is built from
-         * @description Trace each field through the local catalog to the fields, models, and sources it is built from. Return each field's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.
+         * @description Trace each field through the local catalog to the fields, models, and sources it is built from. Name a field by its parent (a model or a dataset) and its name in it. Leave out the name to trace the whole model or dataset, with every field in it. Return each target's lineage as a diagram to draw, with cards in layers from upstream to downstream, and the links between them.
          */
         post: operations["core.lineage"];
         delete?: never;
@@ -685,13 +685,13 @@ export interface components {
             header?: "labels" | "names" | "none";
         };
         FieldLineage: {
-            /** @description the field's lineage. Absent when error is set. */
+            /** @description the target's lineage. Absent when error is set. */
             diagram?: components["schemas"]["Diagram"];
-            /** @description why the field's lineage could not be traced */
+            /** @description why the target's lineage could not be traced, such as a parent that does not exist, or a parent without that child */
             error?: string;
-            /** @description the search query that finds the field's lineage, which the search command also takes. Empty when the field could not be searched for. */
+            /** @description the search query that finds the target's lineage, which the search command also takes. Empty when the target could not be searched for. */
             query: string;
-            /** @description the field, as asked */
+            /** @description the field or parent, as asked */
             target: components["schemas"]["LineageTarget"];
         };
         IngestInput: {
@@ -701,7 +701,7 @@ export interface components {
         LineageInput: {
             /**
              * Format: int64
-             * @description the most upstream entities to return per field, all of them by default
+             * @description the most upstream entities to return per target, all of them by default
              */
             limit?: number;
             /**
@@ -709,15 +709,15 @@ export interface components {
              * @description skip this many upstream entities first, to page with limit
              */
             offset?: number;
-            /** @description the fields to trace, each by its parent and its name in it: {"parent": "orders", "child": "amount"} */
+            /** @description the fields or parents to trace. Name a field by its parent and its name in it: {"parent": "orders", "child": "amount"}. Name a parent alone to trace it with every field in it: {"parent": "orders"} */
             targets?: components["schemas"]["LineageTarget"][];
         };
         LineageResult: {
             results: components["schemas"]["FieldLineage"][];
         };
         LineageTarget: {
-            /** @description the field's name in its parent: a dimension, a measure or a metric */
-            child: string;
+            /** @description the field's name in its parent: a dimension, a measure or a metric. Leave it out to trace the parent and every field in it. */
+            child?: string;
             /** @description the fqn of what holds the field: a model, or a dataset */
             parent: string;
         };
