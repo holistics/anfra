@@ -5,16 +5,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/metadata/postgres"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func TestRunPassesSourceToRPC(t *testing.T) {
+func TestRunPassesSourceAndMetadataToRPC(t *testing.T) {
 	var captured anfranode.CatalogIngestRequest
 	node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rpc" {
@@ -31,6 +33,10 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 			t.Fatalf("method = %q, want catalog.ingest", req.Method)
 		}
 		captured = req.Params
+		wire, err := jsonkit.Marshal(req.Params)
+		if err != nil || !strings.Contains(string(wire), `"metadata":{"postgres":{"sourceKey":"warehouse","snapshot":`) {
+			t.Fatalf("metadata envelope = %s, %v", wire, err)
+		}
 		_ = jsonkit.MarshalWrite(w, map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
@@ -45,11 +51,22 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 		DataDir:   filepath.Join(t.TempDir(), "repos", "repo-123"),
 		ConfigDir: filepath.Join(repoDir, ".anfra"),
 	}.Repo()
+	metadata := &anfranode.CatalogMetadata{Postgres: &anfranode.PostgresMetadata{
+		SourceKey: "warehouse",
+		Snapshot: postgres.SchemaSnapshot{
+			Tables: []postgres.Table{{
+				TableIdentity: postgres.TableIdentity{DatabaseName: "analytics", SchemaName: "public", TableName: "orders"},
+				RelationName:  `"analytics"."public"."orders"`,
+			}},
+			Columns: []postgres.Column{}, ForeignKeys: []postgres.ForeignKey{},
+		},
+	}}
 	res, err := Run(context.Background(),
 		anfranode.NewClientHTTP(node.URL),
 		canalquery.NewClient("http://127.0.0.1:9000/", false),
 		r,
 		"warehouse",
+		metadata,
 	)
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
@@ -61,8 +78,9 @@ func TestRunPassesSourceToRPC(t *testing.T) {
 	want := anfranode.CatalogContext{
 		RepoRef:           anfranode.RepoRef{RepoID: "repo-123", RepoPath: repoDir},
 		CanalQueryBaseURL: "http://127.0.0.1:9000",
+		Metadata:          metadata,
 	}
-	if captured.Context != want {
+	if !reflect.DeepEqual(captured.Context, want) {
 		t.Fatalf("context = %+v, want %+v", captured.Context, want)
 	}
 	if res != "ingest complete" {
@@ -76,6 +94,7 @@ func TestRunRequiresCanalQueryClient(t *testing.T) {
 		nil,
 		repo.Repo{},
 		"",
+		nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "canal-query sidecar") {
 		t.Fatalf("error = %v, want clear missing canal-query error", err)

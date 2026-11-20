@@ -17,6 +17,21 @@ components:
         - message
         - severity
       type: object
+    AddInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the Postgres data source that was ingested
+          minLength: 1
+          type: string
+        table:
+          description: the table as schema.table, using its exact name without SQL identifier quotes
+          minLength: 1
+          type: string
+      required:
+        - table
+        - data_source
+      type: object
     CacheCleanRequestParams:
       additionalProperties: false
       properties:
@@ -111,6 +126,34 @@ components:
       required:
         - code
         - message
+      type: object
+    CatalogEntity:
+      additionalProperties: false
+      properties:
+        display_name:
+          description: the entity's display name, when available
+          type:
+            - string
+            - "null"
+        entity_id:
+          description: the entity's stable catalog identity
+          type: string
+        properties:
+          additionalProperties: {}
+          description: the entity's source metadata
+          type: object
+        source:
+          description: the source that supplied the entity
+          type: string
+        type:
+          description: the catalog entity type
+          type: string
+      required:
+        - entity_id
+        - type
+        - source
+        - display_name
+        - properties
       type: object
     Column:
       additionalProperties: false
@@ -2835,6 +2878,74 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Show the repo's datasets, or one dataset, with their models, fields, and metrics
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.sl.add:
+    post:
+      description: |-
+        Read a Postgres table's catalog entity. This step does not create an AML model.
+
+        Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
+      operationId: core.sl.add
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogEntity"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
+      summary: Read a Postgres table from the catalog
       x-destructive: false
       x-idempotent: true
       x-read-only: true

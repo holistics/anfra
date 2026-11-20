@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/metadata/postgres"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/shared/apperr"
@@ -590,7 +591,7 @@ func (c *Client) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (Vali
 
 // CatalogIngestRequest mirrors anfra-node's catalog.ingest params: the
 // catalog's context, and optionally the one context source to ingest.
-// anfra-node owns source parsing and ingestion internals.
+// anfra-node loads file-backed sources and indexes the supplied source metadata.
 type CatalogIngestRequest struct {
 	Context CatalogContext `json:"context"`
 	Source  string         `json:"source,omitempty"`
@@ -607,6 +608,19 @@ type CatalogIngestRequest struct {
 type CatalogContext struct {
 	RepoRef
 	CanalQueryBaseURL string `json:"canalQueryBaseUrl"`
+	// Metadata is supplied only by ingest. Other catalog calls use the kept catalog.
+	Metadata *CatalogMetadata `json:"metadata,omitempty"`
+}
+
+// CatalogMetadata holds source metadata collected by Go, grouped by source type.
+type CatalogMetadata struct {
+	Postgres *PostgresMetadata `json:"postgres,omitempty"`
+}
+
+// PostgresMetadata is one Postgres source's metadata, without its connection.
+type PostgresMetadata struct {
+	SourceKey string                  `json:"sourceKey"`
+	Snapshot  postgres.SchemaSnapshot `json:"snapshot"`
 }
 
 // CatalogContextOf is r's catalog context, its context sources reached through

@@ -43,6 +43,7 @@ func TestCommandsRefuseWithoutTheirSidecars(t *testing.T) {
 		"validate": `{}`,
 		"query":    `{"query":"q","dataset":"d"}`,
 		"show":     `{"fqn":"ecommerce"}`,
+		"sl.add":   `{"table":"public.orders","data_source":"warehouse"}`,
 	} {
 		if _, err := Invoke(context.Background(), cc, cmd, []byte(input)); !errors.Is(err, errcode.SidecarUnavailable) {
 			t.Errorf("%s: got %v, want sidecar_unavailable", cmd, err)

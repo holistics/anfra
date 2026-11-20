@@ -202,6 +202,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/core.sl.add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a Postgres table from the catalog
+         * @description Read a Postgres table's catalog entity. This step does not create an AML model.
+         *
+         *     Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
+         */
+        post: operations["core.sl.add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core.status": {
         parameters: {
             query?: never;
@@ -275,6 +297,12 @@ export interface components {
             message: string;
             severity: string;
         };
+        AddInput: {
+            /** @description the Postgres data source that was ingested */
+            data_source: string;
+            /** @description the table as schema.table, using its exact name without SQL identifier quotes */
+            table: string;
+        };
         CacheCleanRequestParams: {
             /** @description the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the query cache is removed. Without query, every cache of the repo is cleaned, which today is the query cache alone. */
             query?: components["schemas"]["QueryCacheSelector"];
@@ -331,6 +359,20 @@ export interface components {
              */
             code: "cache_unavailable" | "cache_disabled";
             message: string;
+        };
+        CatalogEntity: {
+            /** @description the entity's display name, when available */
+            display_name: string | null;
+            /** @description the entity's stable catalog identity */
+            entity_id: string;
+            /** @description the entity's source metadata */
+            properties: {
+                [key: string]: unknown;
+            };
+            /** @description the source that supplied the entity */
+            source: string;
+            /** @description the catalog entity type */
+            type: string;
         };
         Column: {
             /** @description a query-local expression, not a field the dataset defines */
@@ -2043,6 +2085,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShowResult"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.sl.add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogEntity"];
                 };
             };
             /** @description invalid_request */

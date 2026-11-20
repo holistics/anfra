@@ -74,6 +74,7 @@ func appCommands() []*cobra.Command {
 // subcommands': their one-line help.
 var groups = map[string]string{
 	"cache": "Manage the repo's caches",
+	"sl":    "Work with the repo's semantic layer",
 }
 
 func buildCobraCommand(c command.Command) *cobra.Command {

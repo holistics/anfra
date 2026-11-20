@@ -6,6 +6,7 @@ import (
 	"github.com/holistics/anfra/internal/command/catalog"
 	"github.com/holistics/anfra/internal/command/query"
 	"github.com/holistics/anfra/internal/command/show"
+	"github.com/holistics/anfra/internal/command/sl"
 	"github.com/holistics/anfra/internal/command/status"
 	"github.com/holistics/anfra/internal/command/validate"
 )
@@ -24,6 +25,7 @@ var Commands = []command.Command{
 	catalog.Ingest,
 	catalog.Search,
 	catalog.Lineage,
+	sl.Add,
 	show.Show,
 	validate.Validate,
 	cache.Status,
