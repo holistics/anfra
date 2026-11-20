@@ -15,8 +15,8 @@ import { isCurrent, queryOf, type RequestEntry } from '../model/requests';
 import {
   appTrust, LEVELS, TRUST_LEVELS, type Trust,
 } from '../model/trust';
-import { QUERIES_TAB, type QueriesFilter, type RevealTarget } from '../model/types';
-import { stateOf } from '../state';
+import { QUERIES_TAB, type LinkTarget, type QueriesFilter } from '../model/types';
+import { follow, stateOf } from '../state';
 import { PLUGIN_VERSION } from '../../version';
 import {
   type Children, badge, collapsible, control, drawTab, fields, h, icon, link, note, popover, trustBars,
@@ -89,7 +89,7 @@ export default function overviewTab (root: ShadowRoot, context: TabContext): () 
   let allProblems = false;
   /** The runtime problems opened to their detail, by message. */
   const opened = new Set<string>();
-  const reveal = (target: RevealTarget) => state.reveal(panel, target);
+  const reveal = (target: LinkTarget) => follow(panel, state, target);
   const showQueries = (filter: QueriesFilter) => reveal({ tab: QUERIES_TAB, filter });
 
   /** Where this app stands and why, then every level with what it means. */

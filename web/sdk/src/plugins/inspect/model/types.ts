@@ -1,4 +1,5 @@
 /** Where a link in a tab goes: the tabs' ids, and every target a link resolves to. */
+import type { RevealTarget as EntityTarget } from '../../../host/panel';
 
 export const OVERVIEW_TAB = 'inspect.overview';
 export const DATA_TAB = 'inspect.data';
@@ -12,12 +13,15 @@ export const LINEAGE_TAB = 'lineage.lineage';
 export type QueriesFilter = 'all' | 'errors' | 'dirty';
 
 /**
- * Where a link goes. A tab, with Queries' filter; a query or control's row in Queries; a query's
- * table in Data; one of an app's checks in Declaration; a node in Structure.
+ * Where one of `inspect`'s own links goes: a tab, with Queries' filter; a query's table in Data; one
+ * of an app's checks in Declaration; a node in Structure. A query or a control is the panel's
+ * reveal instead (`LinkTarget`).
  */
 export type RevealTarget =
   | { tab: string, filter?: QueriesFilter }
-  | { entity: 'query' | 'control', app: number, name: string }
   | { table: string, app: number }
   | { check: number, app: number }
   | { node: string };
+
+/** Where any link in a tab goes: one of `inspect`'s own targets, or a query or control the panel reveals in Queries. */
+export type LinkTarget = RevealTarget | EntityTarget;

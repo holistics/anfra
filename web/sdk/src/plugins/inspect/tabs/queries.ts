@@ -8,6 +8,8 @@ import type {
   ColumnMeta, InspectedApp, InspectedControl, InspectedError, InspectedQuery, InspectedSelection, InspectedStructure, LocateKind, QueryCacheResult,
 } from '../../../common/types';
 import type { TabContext } from '../../../host/contributions';
+import type { Panel } from '../../../host/panel';
+import { hasEntity } from '../model/entities';
 import { columnKind } from '../model/columns';
 import { isChanged } from '../model/changes';
 import {
@@ -19,7 +21,7 @@ import {
 import { queryCounts } from '../model/problems';
 import { attributeRequests, type RemovedQuery, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
-import type { QueriesFilter } from '../model/types';
+import { QUERIES_TAB, type QueriesFilter } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
   badge, codeBlock, collapsible, columnIcon, control, copyIcon, drawTab, fields, filterIndicator, flash, h, icon, lineageButton, link, note, stateDot, table, trustIndicator,
@@ -39,8 +41,8 @@ const FILTERS: readonly QueriesFilter[] = ['all', 'errors', 'dirty'];
 /** Where a filter comes from, as an icon: a control, a cross-filter, or the query's own AQL. */
 const SOURCE_ICONS: Record<QueryFilterSource['kind'], IconName> = { control: 'control', crossFilter: 'filter', declared: 'code' };
 
-/** The last reveal each mount's Queries handled, so a remount of the tab doesn't flash it again. */
-const handled = new WeakMap<InspectState, number>();
+/** The last reveal each mount's Queries honored, so a remount of the tab doesn't flash it again. */
+const handled = new WeakMap<Panel, number>();
 
 const matches = (search: string, ...texts: (string | undefined)[]) => !search || texts.some((text) => text?.toLowerCase().includes(search));
 
@@ -253,7 +255,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       h(doc, 'span', {}, target.query,
         target.field && h(doc, 'span', { class: 'muted' }, ` on ${target.field}`),
         target.self && h(doc, 'span', { class: 'muted' }, ' (itself)')),
-      iconButton('query', 'Show query', () => state.reveal(panel, { entity: 'query', app, name: target.query }), { 'data-testid': 'show-query' })))), { class: 'inline' });
+      iconButton('query', 'Show query', () => panel.show(QUERIES_TAB, { entity: 'query', app, name: target.query }), { 'data-testid': 'show-query' })))), { class: 'inline' });
   }
 
   function requestList (scope: string, items: readonly Attributed[], card: boolean): Children {
@@ -349,7 +351,7 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
       h(doc, 'span', { class: 'source' },
         input.kind === 'declared' ? h(doc, 'span', { class: 'muted' }, 'query')
           : input.self ? h(doc, 'span', { class: 'muted' }, 'itself')
-            : link(doc, input.source, () => state.reveal(panel, { entity: input.kind === 'control' ? 'control' : 'query', app, name: input.source }), { 'data-testid': 'filter-source' })))))));
+            : link(doc, input.source, () => panel.show(QUERIES_TAB, { entity: input.kind === 'control' ? 'control' : 'query', app, name: input.source }), { 'data-testid': 'filter-source' })))))));
   }
 
   function queryRow (app: InspectedApp, index: number, name: string, query: InspectedQuery, requests: readonly Attributed[], structure: InspectedStructure | undefined): HTMLElement {
@@ -556,15 +558,21 @@ export default function queriesTab (root: ShadowRoot, context: TabContext): () =
   }, { head, also: [state.subscribe] });
   root.append(h(doc, 'style', {}, CSS));
 
-  // A link followed to a query or control: bring its row into view once it is drawn.
+  // The panel's reveal of a query or control: open its row, clear what hides it, and bring it into
+  // view, once a snapshot has it.
   const reveal = () => {
-    const revealed = state.revealed;
-    if (!revealed || handled.get(state) === revealed.nonce || !('entity' in revealed.target)) return;
-    const key = entityKey(revealed.target.entity, revealed.target.app, revealed.target.name);
+    const revealed = panel.revealed;
+    if (!revealed || revealed.tab !== context.tab || handled.get(panel) === revealed.nonce) return;
+    if (!panel.snapshot || !hasEntity(panel.snapshot.apps, revealed.entity, revealed.app, revealed.name)) return;
+    handled.set(panel, revealed.nonce);
+    const key = entityKey(revealed.entity, revealed.app, revealed.name);
+    view.open.add(key);
+    view.closed.delete(`${revealed.app}:${revealed.entity === 'query' ? 'queries' : 'controls'}`);
+    view.search = '';
+    view.filter = 'all';
+    tab.redraw();
     const row = [...root.querySelectorAll<HTMLElement>('details[data-key]')].find((element) => element.dataset.key === key);
-    if (!row) return;
-    handled.set(state, revealed.nonce);
-    flash(row);
+    if (row) flash(row);
   };
   reveal();
   const stops = [state.subscribe(reveal), panel.subscribe(reveal)];

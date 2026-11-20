@@ -5,11 +5,14 @@
  */
 import type { ColumnMeta, InspectedApp, InspectedQuery } from '../../../common/types';
 import type { TabContext } from '../../../host/contributions';
+import type { Panel } from '../../../host/panel';
+import { hasEntity } from '../model/entities';
 import { columnKind } from '../model/columns';
 import { entityNodeKey, formatAgo, plural } from '../model/format';
 import { declaredFilters, isActive, queryInputs } from '../model/inputs';
 import { attributeRequests, type RequestEntry } from '../model/requests';
 import { queryTrust } from '../model/trust';
+import { QUERIES_TAB } from '../model/types';
 import { stateOf, type InspectState } from '../state';
 import {
   badge, collapsible, columnIcon, control, drawTab, filterIndicator, flash, h, icon, lineageButton, note, table, trustIndicator,
@@ -75,8 +78,12 @@ export function latestRows (requests: readonly { entry: RequestEntry }[] | undef
     && (entry.input?.pagination?.page ?? 1) === 1)?.entry;
 }
 
-/** Which reveal each mount's Data tab has brought into view, so a tab switched back to doesn't flash it again. */
+/**
+ * Which of `inspect`'s table links, and of the panel's reveals, each mount's Data tab has brought
+ * into view, so a tab switched back to doesn't flash it again.
+ */
 const handled = new WeakMap<InspectState, number>();
+const handledReveal = new WeakMap<Panel, number>();
 
 export default function dataTab (root: ShadowRoot, context: TabContext): () => void {
   const doc = context.document;
@@ -172,7 +179,7 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
           // In the summary: the click would also open or close the card.
           event.preventDefault();
           event.stopPropagation();
-          state.reveal(panel, { entity: 'query', app: index, name });
+          panel.show(QUERIES_TAB, { entity: 'query', app: index, name });
         },
       }, icon(doc, 'query')),
     ], () => body(name, query, latest), {
@@ -203,21 +210,31 @@ export default function dataTab (root: ShadowRoot, context: TabContext): () => v
   }, { head, also: [state.subscribe] });
   root.append(h(doc, 'style', {}, CSS));
 
-  // A link to a table: bring its card into view and flash it, once per link followed.
-  const reveal = () => {
-    const revealed = state.revealed;
-    if (!revealed || !('table' in revealed.target) || handled.get(state) === revealed.nonce) return;
-    // Held until the tables are there to find: a link can land before the snapshot.
-    if (!panel.snapshot) return;
-    handled.set(state, revealed.nonce);
-    // A search that would hide it goes.
+  /** Open a query's card, clear a search that would hide it, and flash it. */
+  const bringIntoView = (app: number, name: string) => {
+    state.data.open.add(`${app}/${name}`);
     if (search) setSearch('');
-    const key = `table:${revealed.target.app}/${revealed.target.table}`;
+    else tab.redraw();
+    const key = `table:${app}/${name}`;
     // After the redraws the same link sets off, which would replace the card.
     queueMicrotask(() => {
       const found = [...root.querySelectorAll<HTMLElement>('details[data-key]')].find((element) => element.dataset.key === key);
       if (found) flash(found);
     });
+  };
+  // A link to a table, or the panel's reveal of a query, once each: held until a snapshot has the
+  // tables to find, since either can land before one.
+  const reveal = () => {
+    const linked = state.revealed;
+    if (linked && 'table' in linked.target && handled.get(state) !== linked.nonce && panel.snapshot) {
+      handled.set(state, linked.nonce);
+      bringIntoView(linked.target.app, linked.target.table);
+    }
+    const revealed = panel.revealed;
+    if (!revealed || revealed.entity !== 'query' || revealed.tab !== context.tab || handledReveal.get(panel) === revealed.nonce) return;
+    if (!panel.snapshot || !hasEntity(panel.snapshot.apps, 'query', revealed.app, revealed.name)) return;
+    handledReveal.set(panel, revealed.nonce);
+    bringIntoView(revealed.app, revealed.name);
   };
   reveal();
   const stops = [panel.subscribe(reveal), state.subscribe(reveal)];

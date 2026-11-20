@@ -9,6 +9,7 @@ import {
   type Check, type CheckLevel, controlMappings, crossFilters, wiringChecks,
 } from '../model/checks';
 import type { InspectState } from '../state';
+import { QUERIES_TAB } from '../model/types';
 import { stateOf } from '../state';
 import {
   collapsible, copyIcon, drawTab, flash, h, icon, jsonView, link, note, popover, type Children,
@@ -92,7 +93,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
               'data-tip': `Show ${check.about.name} in Queries`,
               'data-key': `check:${index}:${i}`,
               'data-testid': `check-${index}-${i}`,
-              onclick: () => state.reveal(panel, { entity: check.about.entity, app: index, name: check.about.name }),
+              onclick: () => panel.show(QUERIES_TAB, { entity: check.about.entity, app: index, name: check.about.name }),
             },
             h(doc, 'span', { class: `mark ${tone}`, role: 'img', 'aria-label': label }, mark),
             h(doc, 'span', {}, named(check.message, entityNames(app)))));
@@ -121,7 +122,7 @@ export default function declarationTab (root: ShadowRoot, context: TabContext): 
     const controls = [...Object.keys(app.declaration.filters), ...Object.keys(app.declaration.dateDrills)];
     const mappings = controlMappings(app);
     const crosses = crossFilters(app);
-    const entity = (kind: 'query' | 'control', name: string) => link(doc, name, () => state.reveal(panel, { entity: kind, app: index, name }), {
+    const entity = (kind: 'query' | 'control', name: string) => link(doc, name, () => panel.show(QUERIES_TAB, { entity: kind, app: index, name }), {
       'data-tip': `Show ${name} in Queries`, 'data-testid': `wiring-${kind}-${name}`,
     });
     return collapsible(doc, `wiring:${index}`, ['Wiring', hint('Which controls and cross-filters feed which queries, as declared by the app.')], () => h(doc, 'div', { class: 'table-wrap', 'data-testid': `wiring-${index}` },

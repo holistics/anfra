@@ -88,7 +88,7 @@ describe('Overview', () => {
     expect(byTestId(root, 'stat-last-duration')?.querySelector('.stat-detail')?.textContent).toBe('from database');
     card.click();
     expect(harness!.mounted.panel.tab).toBe('inspect.queries');
-    expect(harness!.state.queries.open.has('query:0/revenue')).toBe(true);
+    expect(harness!.mounted.panel.revealed).toMatchObject({ entity: 'query', app: 0, name: 'revenue' });
   });
 
   it('lists the problems, errors first, five until "Show all"', async () => {
@@ -162,7 +162,7 @@ describe('Overview', () => {
     expect(harness!.posted).toContainEqual({ type: 'anfra:event', name: 'anfra.locate', payload: { app: 0, kind: 'control', name: 'region' } });
     byTestId(change, 'change-show')!.click();
     expect(harness!.mounted.panel.tab).toBe('inspect.queries');
-    expect(harness!.state.queries.open.has('control:0/region')).toBe(true);
+    expect(harness!.mounted.panel.revealed).toMatchObject({ entity: 'control', app: 0, name: 'region' });
   });
 
   it('says when no control changed', async () => {

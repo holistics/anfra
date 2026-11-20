@@ -161,7 +161,44 @@ describe('Data', () => {
     const { root } = await harness.tab(DATA_TAB);
     byTestId(cardOf(root, 'revenue')!, 'show-query')!.click();
     expect(harness.mounted.panel.tab).toBe('inspect.queries');
-    expect(harness.state.queries.open.has('query:0/revenue')).toBe(true);
+    expect(harness.mounted.panel.revealed).toMatchObject({ entity: 'query', app: 0, name: 'revenue' });
+  });
+
+  it("expands, clears the search from, and flashes the query the panel reveals, again on each reveal", async () => {
+    harness = await inspect({ tab: DATA_TAB });
+    const { root } = await harness.tab(DATA_TAB);
+    const input = byTestId<HTMLInputElement>(root, 'data-search')!;
+    input.value = 'rev';
+    input.dispatchEvent(new Event('input'));
+    harness.mounted.panel.show(DATA_TAB, { entity: 'query', app: 0, name: 'orders' });
+    expect(input.value).toBe('');
+    expect(cardOf(root, 'orders')!.open).toBe(true);
+    await vi.waitFor(() => expect(cardOf(root, 'orders')!.classList.contains('flash')).toBe(true));
+    cardOf(root, 'orders')!.classList.remove('flash');
+    harness.mounted.panel.show(DATA_TAB, { entity: 'query', app: 0, name: 'orders' });
+    await vi.waitFor(() => expect(cardOf(root, 'orders')!.classList.contains('flash')).toBe(true));
+  });
+
+  it('applies a reveal made before the query is in a snapshot once it arrives', async () => {
+    const app = salesApp();
+    delete app.queries.orders;
+    delete app.declaration.queries.orders;
+    harness = await inspect({ tab: DATA_TAB, snapshot: salesSnapshot([app]) });
+    const { root } = await harness.tab(DATA_TAB);
+    harness.mounted.panel.show(DATA_TAB, { entity: 'query', app: 0, name: 'orders' });
+    expect(cardOf(root, 'orders')).toBeNull();
+    harness.post(salesSnapshot());
+    expect(cardOf(root, 'orders')!.open).toBe(true);
+    await vi.waitFor(() => expect(cardOf(root, 'orders')!.classList.contains('flash')).toBe(true));
+  });
+
+  it('ignores a control the panel reveals, and a reveal shown at another tab', async () => {
+    harness = await inspect({ tab: DATA_TAB });
+    harness.mounted.panel.show('inspect.queries', { entity: 'query', app: 0, name: 'orders' });
+    harness.mounted.panel.show(DATA_TAB);
+    const { root } = await harness.tab(DATA_TAB);
+    await Promise.resolve();
+    expect(cardOf(root, 'orders')!.open).toBe(false);
   });
 
   it('offers no download when the reader may not export', async () => {

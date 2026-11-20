@@ -6,7 +6,7 @@ import type { InspectedApp, StructureNode } from '../../../common/types';
 import type { Snapshot } from '../../../host/panel';
 import { type Check, wiringChecks } from './checks';
 import { handleFor } from './format';
-import type { RevealTarget } from './types';
+import type { LinkTarget } from './types';
 import type { RuntimeEntry } from '../state';
 import type { AppErrorKind } from '../../../common/runtimeErrors';
 
@@ -14,7 +14,7 @@ export interface Problem {
   level: 'error' | 'warn';
   message: string;
   /** Where it is; a runtime error with nowhere to go shows `detail` instead. */
-  target?: RevealTarget;
+  target?: LinkTarget;
   /** A runtime error's stack, the call that failed, its request id. */
   detail?: string;
   /** How many times a runtime error happened. */
