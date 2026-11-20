@@ -37,13 +37,14 @@ func TestSearchDeclaresRequiredSidecars(t *testing.T) {
 func TestCommandsRefuseWithoutTheirSidecars(t *testing.T) {
 	cc := command.CommandContext{DataPerms: dataperm.Ungoverned()}
 	for cmd, input := range map[string]string{
-		"ingest":   `{}`,
-		"search":   `{"query":["revenue"]}`,
-		"lineage":  `{"targets":[{"parent":"orders","child":"amount"}]}`,
-		"validate": `{}`,
-		"query":    `{"query":"q","dataset":"d"}`,
-		"show":     `{"fqn":"ecommerce"}`,
-		"sl.add":   `{"table":"public.orders","data_source":"warehouse"}`,
+		"ingest":    `{}`,
+		"search":    `{"query":["revenue"]}`,
+		"lineage":   `{"targets":[{"parent":"orders","child":"amount"}]}`,
+		"validate":  `{}`,
+		"query":     `{"query":"q","dataset":"d"}`,
+		"show":      `{"fqn":"ecommerce"}`,
+		"sl.add":    `{"table":"public.orders","data_source":"warehouse"}`,
+		"sl.update": `{"model_name":"public_orders"}`,
 	} {
 		if _, err := Invoke(context.Background(), cc, cmd, []byte(input)); !errors.Is(err, errcode.SidecarUnavailable) {
 			t.Errorf("%s: got %v, want sidecar_unavailable", cmd, err)

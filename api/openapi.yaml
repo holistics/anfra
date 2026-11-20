@@ -127,34 +127,6 @@ components:
         - code
         - message
       type: object
-    CatalogEntity:
-      additionalProperties: false
-      properties:
-        display_name:
-          description: the entity's display name, when available
-          type:
-            - string
-            - "null"
-        entity_id:
-          description: the entity's stable catalog identity
-          type: string
-        properties:
-          additionalProperties: {}
-          description: the entity's source metadata
-          type: object
-        source:
-          description: the source that supplied the entity
-          type: string
-        type:
-          description: the catalog entity type
-          type: string
-      required:
-        - entity_id
-        - type
-        - source
-        - display_name
-        - properties
-      type: object
     Column:
       additionalProperties: false
       properties:
@@ -1677,6 +1649,41 @@ components:
         - message
         - request_id
       type: object
+    Result:
+      additionalProperties: false
+      properties:
+        changed:
+          description: whether the content differs from the existing file. Present for sl.update.
+          type: boolean
+        content:
+          description: the complete AML file content, validated in memory
+          type: string
+        hints:
+          description: what to do next, if any
+          items:
+            type: string
+          type: array
+        message:
+          description: what was generated or whether the model is already up to date
+          type: string
+        model_name:
+          description: the model's fully qualified name
+          type: string
+        path:
+          description: the AML file's path relative to the repo
+          type: string
+        warnings:
+          description: source metadata or fields that need attention
+          items:
+            type: string
+          type: array
+      required:
+        - message
+        - model_name
+        - path
+        - warnings
+        - content
+      type: object
     ResultLimit:
       additionalProperties: false
       properties:
@@ -2083,6 +2090,16 @@ components:
       required:
         - latest
         - available
+      type: object
+    UpdateInput:
+      additionalProperties: false
+      properties:
+        model_name:
+          description: "the AML table model's name, with dots or :: separating namespaces"
+          minLength: 1
+          type: string
+      required:
+        - model_name
       type: object
     ValidateInput:
       additionalProperties: false
@@ -2884,7 +2901,7 @@ paths:
   /core.sl.add:
     post:
       description: |-
-        Read a Postgres table's catalog entity. This step does not create an AML model.
+        Generate an AML table model from the catalog. The CLI writes it under models without replacing an existing file. Other callers receive the content.
 
         Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
       operationId: core.sl.add
@@ -2899,7 +2916,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CatalogEntity"
+                $ref: "#/components/schemas/Result"
           description: OK
         "400":
           content:
@@ -2945,7 +2962,75 @@ paths:
                   - error
                 type: object
           description: sidecar_unavailable
-      summary: Read a Postgres table from the catalog
+      summary: Create an AML model from a Postgres table
+      x-destructive: false
+      x-idempotent: true
+      x-read-only: true
+  /core.sl.update:
+    post:
+      description: |-
+        Update a table model using metadata already in the catalog. Keep custom fields, comments and user properties. The CLI writes the file only when it changes. Other callers receive the content.
+
+        Run ingest against the same running server first to load the current database schema.
+      operationId: core.sl.update
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
+      summary: Update an AML model from its Postgres table
       x-destructive: false
       x-idempotent: true
       x-read-only: true

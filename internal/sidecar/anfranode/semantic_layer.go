@@ -2,13 +2,13 @@ package anfranode
 
 import "context"
 
-// CatalogEntity is a semantic catalog record, with its source's properties.
-type CatalogEntity struct {
-	EntityID    string         `json:"entity_id" doc:"the entity's stable catalog identity"`
-	Type        string         `json:"type" doc:"the catalog entity type"`
-	Source      string         `json:"source" doc:"the source that supplied the entity"`
-	DisplayName *string        `json:"display_name" nullable:"true" doc:"the entity's display name, when available"`
-	Properties  map[string]any `json:"properties" doc:"the entity's source metadata"`
+// ModelFile is generated AML. Only the CLI writes it to the local repo.
+type ModelFile struct {
+	ModelName string   `json:"modelName"`
+	Path      string   `json:"path"`
+	Content   string   `json:"content"`
+	Warnings  []string `json:"warnings"`
+	Changed   *bool    `json:"changed,omitempty"`
 }
 
 // AddTableRequest selects a Postgres table from the repo's catalog.
@@ -18,12 +18,28 @@ type AddTableRequest struct {
 	DataSource string         `json:"dataSource"`
 }
 
-// AddTable returns the table's catalog entity. AML generation comes later.
-func (c *Client) AddTable(ctx context.Context, req AddTableRequest) (CatalogEntity, error) {
-	var result CatalogEntity
+// AddTable generates a table model from catalog metadata.
+func (c *Client) AddTable(ctx context.Context, req AddTableRequest) (ModelFile, error) {
+	var result ModelFile
 	if err := req.Context.check(); err != nil {
 		return result, err
 	}
 	err := c.Call(ctx, "sl.add", req, &result)
+	return result, err
+}
+
+// UpdateModelRequest identifies an existing table model, using dots or :: in its FQN.
+type UpdateModelRequest struct {
+	Context   CatalogContext `json:"context"`
+	ModelName string         `json:"modelName"`
+}
+
+// UpdateModel generates updated AML without writing the repo.
+func (c *Client) UpdateModel(ctx context.Context, req UpdateModelRequest) (ModelFile, error) {
+	var result ModelFile
+	if err := req.Context.check(); err != nil {
+		return result, err
+	}
+	err := c.Call(ctx, "sl.update", req, &result)
 	return result, err
 }

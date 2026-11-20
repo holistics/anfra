@@ -11,27 +11,27 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Add returns a Postgres table entity. It does not yet generate an AML model.
-var Add = command.Define(command.Def[AddInput, anfranode.CatalogEntity]{
+// Add generates an AML table model from Postgres catalog metadata.
+var Add = command.Define(command.Def[AddInput, Result]{
 	Name:  "sl.add",
-	Short: "Read a Postgres table from the catalog",
-	Long: "Read a Postgres table's catalog entity. This step does not create an AML model.\n\n" +
+	Short: "Create an AML model from a Postgres table",
+	Long: "Generate an AML table model from the catalog. The CLI writes it under models without replacing an existing file. Other callers receive the content.\n\n" +
 		"Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Needs:      func(AddInput) command.Sidecars { return command.Sidecars{Node: true} },
 	Check:      AddInput.check,
-	Run: func(ctx context.Context, cc command.CommandContext, in AddInput) (anfranode.CatalogEntity, error) {
+	Run: func(ctx context.Context, cc command.CommandContext, in AddInput) (Result, error) {
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
-			return anfranode.CatalogEntity{}, err
+			return Result{}, err
 		}
 		result, err := cc.Clients.Node.AddTable(ctx, anfranode.AddTableRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), Table: in.Table, DataSource: in.DataSource,
 		})
 		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"table": "table", "dataSource": "data_source"}); ok {
-			return result, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
+			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}
-		return result, err
+		return modelResult(result, false), err
 	},
 })
 

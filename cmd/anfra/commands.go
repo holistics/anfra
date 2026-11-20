@@ -82,6 +82,9 @@ func buildCobraCommand(c command.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: name, Short: c.Short(), Long: c.Long(), Args: cobra.NoArgs}
 	annotate(cmd, opAnnotation, c.Name())
 	markStructuredOutput(cmd) // its op's answer
+	if isModelCommand(c.Name()) {
+		markPrettyOutput(cmd)
+	}
 	if prettyViews[c.Name()] {
 		annotate(cmd, prettyView, "true")
 	}
@@ -414,6 +417,11 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 	if err != nil {
 		return err
 	}
+	if isModelCommand(c.Name()) {
+		if err := writeModelResult(c.Name(), body); err != nil {
+			return err
+		}
+	}
 	return deliver(ctx, c, body, d)
 }
 
@@ -548,7 +556,7 @@ func isExportLink(t reflect.Type) bool {
 // them already.
 func deliver(ctx context.Context, c command.Command, body []byte, d delivery) error {
 	downloaded := presentationOf(c) == presentDownload && !d.link
-	if !downloaded && !wantsPretty(prettyViews[c.Name()]) {
+	if !downloaded && !prettyCommand(c.Name()) {
 		return presentTo(c, body, d.stdout)
 	}
 	defer printAnswerWarnings(c, body, d.stderr)
@@ -652,7 +660,7 @@ func presentTo(c command.Command, body []byte, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if wantsPretty(prettyViews[c.Name()]) {
+	if prettyCommand(c.Name()) {
 		// Its pretty view reads its type's hints: the answer, its JSON, as
 		// that type again, though a server answered it.
 		v := reflect.New(c.Output())

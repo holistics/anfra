@@ -212,12 +212,34 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Read a Postgres table from the catalog
-         * @description Read a Postgres table's catalog entity. This step does not create an AML model.
+         * Create an AML model from a Postgres table
+         * @description Generate an AML table model from the catalog. The CLI writes it under models without replacing an existing file. Other callers receive the content.
          *
          *     Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
          */
         post: operations["core.sl.add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core.sl.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update an AML model from its Postgres table
+         * @description Update a table model using metadata already in the catalog. Keep custom fields, comments and user properties. The CLI writes the file only when it changes. Other callers receive the content.
+         *
+         *     Run ingest against the same running server first to load the current database schema.
+         */
+        post: operations["core.sl.update"];
         delete?: never;
         options?: never;
         head?: never;
@@ -359,20 +381,6 @@ export interface components {
              */
             code: "cache_unavailable" | "cache_disabled";
             message: string;
-        };
-        CatalogEntity: {
-            /** @description the entity's display name, when available */
-            display_name: string | null;
-            /** @description the entity's stable catalog identity */
-            entity_id: string;
-            /** @description the entity's source metadata */
-            properties: {
-                [key: string]: unknown;
-            };
-            /** @description the source that supplied the entity */
-            source: string;
-            /** @description the catalog entity type */
-            type: string;
         };
         Column: {
             /** @description a query-local expression, not a field the dataset defines */
@@ -1191,6 +1199,22 @@ export interface components {
             /** Format: int64 */
             status?: number;
         };
+        Result: {
+            /** @description whether the content differs from the existing file. Present for sl.update. */
+            changed?: boolean;
+            /** @description the complete AML file content, validated in memory */
+            content: string;
+            /** @description what to do next, if any */
+            hints?: string[];
+            /** @description what was generated or whether the model is already up to date */
+            message: string;
+            /** @description the model's fully qualified name */
+            model_name: string;
+            /** @description the AML file's path relative to the repo */
+            path: string;
+            /** @description source metadata or fields that need attention */
+            warnings: string[];
+        };
         ResultLimit: {
             /** Format: int64 */
             max_bytes?: number;
@@ -1408,6 +1432,10 @@ export interface components {
         UpdateInfo: {
             available: boolean;
             latest: string;
+        };
+        UpdateInput: {
+            /** @description the AML table model's name, with dots or :: separating namespaces */
+            model_name: string;
         };
         ValidateInput: {
             /** @description globs of the files to report diagnostics for, every file by default */
@@ -2152,7 +2180,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CatalogEntity"];
+                    "application/json": components["schemas"]["Result"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.sl.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"];
                 };
             };
             /** @description invalid_request */
