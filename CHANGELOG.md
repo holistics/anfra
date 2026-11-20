@@ -1,3 +1,12 @@
+## [0.24.0](https://github.com/holistics/anfra/compare/v0.23.1...v0.24.0) (2026-11-20)
+
+### Features
+
+* **appserve:** install only the plugins the repo's settings leave on ([bcb8a5b](https://github.com/holistics/anfra/commit/bcb8a5beffb5cf9952b767d5f82909b4dd272227))
+* **shared:** add apps.plugins settings for the sdk plugins ([9d61867](https://github.com/holistics/anfra/commit/9d61867da43093e0fd1fa4af8fe1816d2a68ee82))
+* **skills:** document that an empty group gives null, not 0 ([9002a02](https://github.com/holistics/anfra/commit/9002a0248a8a60d65739dff32b63cf8389e2d91d))
+* **skills:** document how + - * / handle a null operand ([7804584](https://github.com/holistics/anfra/commit/780458484ae570e27b372be4abbbdd8a0aac3df9))
+* **skills:** say a repo may turn a data app plugin off ([b5234de](https://github.com/holistics/anfra/commit/b5234de94cd075ed02a3aadcd0a88259dc8ba2e6))
 ## [0.23.1](https://github.com/holistics/anfra/compare/v0.23.0...v0.23.1) (2026-11-19)
 
 ### Features
