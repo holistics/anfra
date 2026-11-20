@@ -13,22 +13,22 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func isModelCommand(name string) bool { return name == "sl.add" || name == "sl.update" }
+func writesSLFiles(name string) bool { return name == "sl.add" || name == "sl.update" }
 
-// writeModelResult is CLI delivery, after a local or forwarded core operation.
+// writeSLResult is CLI delivery, after a local or forwarded core operation.
 // Neither the engine nor the sidecar writes the repo for an API caller.
-func writeModelResult(name string, body []byte) error {
+func writeSLResult(name string, body []byte) error {
 	var result sl.Result
 	if err := jsonkit.Unmarshal(body, &result); err != nil {
 		return fmt.Errorf("decode the generated model: %w", err)
 	}
-	if err := writeModelFile(".", name, result); err != nil {
+	if err := writeSLFile(".", name, result); err != nil {
 		return fmt.Errorf("write model %q to %q: %w", result.ModelName, result.Path, err)
 	}
 	return nil
 }
 
-func writeModelFile(dir, name string, result sl.Result) error {
+func writeSLFile(dir, name string, result sl.Result) error {
 	if !filepath.IsLocal(result.Path) || !strings.HasSuffix(result.Path, ".aml") || strings.TrimSpace(result.Content) == "" {
 		return fmt.Errorf("the generated model must have a repo-relative AML path and nonempty content")
 	}
@@ -69,11 +69,11 @@ func writeModelFile(dir, name string, result sl.Result) error {
 	if !info.Mode().IsRegular() {
 		return clierr.Precondition("The model's path must be a regular file, not a directory or symlink.")
 	}
-	return replaceModelFile(root, result.Path, result.Content, info.Mode().Perm())
+	return replaceAMLFile(root, result.Path, result.Content, info.Mode().Perm())
 }
 
 // The temporary file is on the destination filesystem, so rename is atomic.
-func replaceModelFile(root *os.Root, path, content string, mode fs.FileMode) error {
+func replaceAMLFile(root *os.Root, path, content string, mode fs.FileMode) error {
 	temporary := filepath.Join(filepath.Dir(path), ".sl-"+rand.Text())
 	file, err := root.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

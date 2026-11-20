@@ -7,7 +7,8 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 )
 
-// Result is a generated model file. The core never writes it to the repo.
+// Result is the generated AML and warnings from a semantic-layer operation.
+// The core never writes it to the repo.
 type Result struct {
 	Message     string   `json:"message" doc:"what was generated or whether the model is already up to date"`
 	ModelName   string   `json:"model_name" doc:"the model's fully qualified name"`
@@ -18,7 +19,7 @@ type Result struct {
 	Hints       []string `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
-func modelResult(file anfranode.ModelFile, update bool) Result {
+func newResult(file anfranode.SLResult, update bool) Result {
 	message := fmt.Sprintf("Generated AML for model %q.", file.ModelName)
 	if update {
 		message = fmt.Sprintf("Generated updated AML for model %q.", file.ModelName)

@@ -2901,7 +2901,7 @@ paths:
   /core.sl.add:
     post:
       description: |-
-        Generate an AML table model from the catalog. The CLI writes it under models without replacing an existing file. Other callers receive the content.
+        Add a Postgres table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file. Other callers receive the content.
 
         Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
       operationId: core.sl.add
@@ -2962,14 +2962,14 @@ paths:
                   - error
                 type: object
           description: sidecar_unavailable
-      summary: Create an AML model from a Postgres table
+      summary: Add a Postgres table to the semantic layer
       x-destructive: false
       x-idempotent: true
       x-read-only: true
   /core.sl.update:
     post:
       description: |-
-        Update a table model using metadata already in the catalog. Keep custom fields, comments and user properties. The CLI writes the file only when it changes. Other callers receive the content.
+        Update an AML table model in the semantic layer using Postgres metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes. Other callers receive the content.
 
         Run ingest against the same running server first to load the current database schema.
       operationId: core.sl.update
@@ -3030,7 +3030,7 @@ paths:
                   - error
                 type: object
           description: sidecar_unavailable
-      summary: Update an AML model from its Postgres table
+      summary: Update the semantic layer from Postgres metadata
       x-destructive: false
       x-idempotent: true
       x-read-only: true

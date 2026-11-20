@@ -16,9 +16,9 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func TestAddTableUsesManagedCatalogWithoutAConnection(t *testing.T) {
+func TestSLAddUsesManagedCatalogWithoutAConnection(t *testing.T) {
 	var node fakeNode
-	want := anfranode.ModelFile{ModelName: "public_orders", Path: "models/public_orders.model.aml", Content: "Model public_orders {}", Warnings: []string{}}
+	want := anfranode.SLResult{ModelName: "public_orders", Path: "models/public_orders.model.aml", Content: "Model public_orders {}", Warnings: []string{}}
 	srv := node.serve(t, want)
 	cc := command.CommandContext{
 		Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
@@ -42,7 +42,7 @@ func TestAddTableUsesManagedCatalogWithoutAConnection(t *testing.T) {
 	}
 }
 
-func TestAddTableMapsMissingEntityToItsArgument(t *testing.T) {
+func TestSLAddMapsMissingEntityToItsArgument(t *testing.T) {
 	for param, field := range map[string]string{"dataSource": "data_source", "table": "table"} {
 		t.Run(field, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -61,10 +61,10 @@ func TestAddTableMapsMissingEntityToItsArgument(t *testing.T) {
 	}
 }
 
-func TestUpdateModelUsesManagedSourceAndMapsItsArgument(t *testing.T) {
+func TestSLUpdateUsesManagedSourceAndMapsItsArgument(t *testing.T) {
 	var node fakeNode
 	changed := false
-	want := anfranode.ModelFile{ModelName: "sales.orders", Path: "models/orders.model.aml", Content: "Model orders {}", Changed: &changed}
+	want := anfranode.SLResult{ModelName: "sales.orders", Path: "models/orders.model.aml", Content: "Model orders {}", Changed: &changed}
 	srv := node.serve(t, want)
 	cc := command.CommandContext{Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)}, Repo: managedRepo(t), DataPerms: dataperm.Ungoverned()}
 	result, err := Invoke(context.Background(), cc, "sl.update", []byte(`{"model_name":"sales::orders"}`))

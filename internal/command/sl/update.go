@@ -10,11 +10,11 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Update generates updates to an existing table model using catalog metadata.
+// Update updates the semantic layer by generating AML from catalog metadata.
 var Update = command.Define(command.Def[UpdateInput, Result]{
 	Name:       "sl.update",
-	Short:      "Update an AML model from its Postgres table",
-	Long:       "Update a table model using metadata already in the catalog. Keep custom fields, comments and user properties. The CLI writes the file only when it changes. Other callers receive the content.\n\nRun ingest against the same running server first to load the current database schema.",
+	Short:      "Update the semantic layer from Postgres metadata",
+	Long:       "Update an AML table model in the semantic layer using Postgres metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes. Other callers receive the content.\n\nRun ingest against the same running server first to load the current database schema.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Needs:      func(UpdateInput) command.Sidecars { return command.Sidecars{Node: true} },
@@ -23,13 +23,13 @@ var Update = command.Define(command.Def[UpdateInput, Result]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return Result{}, err
 		}
-		file, err := cc.Clients.Node.UpdateModel(ctx, anfranode.UpdateModelRequest{
+		file, err := cc.Clients.Node.SLUpdate(ctx, anfranode.SLUpdateRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), ModelName: in.ModelName,
 		})
 		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"modelName": "model_name"}); ok {
 			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}
-		return modelResult(file, true), err
+		return newResult(file, true), err
 	},
 })
 

@@ -11,11 +11,11 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
-// Add generates an AML table model from Postgres catalog metadata.
+// Add adds to the semantic layer by generating AML from catalog metadata.
 var Add = command.Define(command.Def[AddInput, Result]{
 	Name:  "sl.add",
-	Short: "Create an AML model from a Postgres table",
-	Long: "Generate an AML table model from the catalog. The CLI writes it under models without replacing an existing file. Other callers receive the content.\n\n" +
+	Short: "Add a Postgres table to the semantic layer",
+	Long: "Add a Postgres table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file. Other callers receive the content.\n\n" +
 		"Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.",
 	ReadOnly:   true,
 	Idempotent: true,
@@ -25,13 +25,13 @@ var Add = command.Define(command.Def[AddInput, Result]{
 		if err := command.RequireSidecars(cc, command.Sidecars{Node: true}); err != nil {
 			return Result{}, err
 		}
-		result, err := cc.Clients.Node.AddTable(ctx, anfranode.AddTableRequest{
+		result, err := cc.Clients.Node.SLAdd(ctx, anfranode.SLAddRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), Table: in.Table, DataSource: in.DataSource,
 		})
 		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"table": "table", "dataSource": "data_source"}); ok {
 			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
 		}
-		return modelResult(result, false), err
+		return newResult(result, false), err
 	},
 })
 

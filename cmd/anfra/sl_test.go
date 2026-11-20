@@ -12,15 +12,15 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func TestModelFilesCreateUpdateAndNoop(t *testing.T) {
+func TestSLFilesAddUpdateAndNoop(t *testing.T) {
 	dir := t.TempDir()
 	result := sl.Result{ModelName: "public_orders", Path: "models/public_orders.model.aml", Content: "Model public_orders {}\n"}
-	if err := writeModelFile(dir, "sl.add", result); err != nil {
+	if err := writeSLFile(dir, "sl.add", result); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, result.Path)
 	before, _ := os.ReadFile(path)
-	if err := writeModelFile(dir, "sl.add", result); err == nil {
+	if err := writeSLFile(dir, "sl.add", result); err == nil {
 		t.Fatal("overwrote an existing model")
 	}
 	if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
@@ -32,7 +32,7 @@ func TestModelFilesCreateUpdateAndNoop(t *testing.T) {
 	changed := true
 	result.Changed = &changed
 	result.Content = "// updated\n" + result.Content
-	if err := writeModelFile(dir, "sl.update", result); err != nil {
+	if err := writeSLFile(dir, "sl.update", result); err != nil {
 		t.Fatal(err)
 	}
 	info, _ := os.Stat(path)
@@ -45,7 +45,7 @@ func TestModelFilesCreateUpdateAndNoop(t *testing.T) {
 		t.Fatal(err)
 	}
 	changed = false
-	if err := writeModelFile(dir, "sl.update", result); err != nil {
+	if err := writeSLFile(dir, "sl.update", result); err != nil {
 		t.Fatal(err)
 	}
 	info, _ = os.Stat(path)
@@ -58,7 +58,7 @@ func TestModelFilesCreateUpdateAndNoop(t *testing.T) {
 	}
 }
 
-func TestModelFilesRefuseUnsafePathsAndSymlinks(t *testing.T) {
+func TestSLFilesRefuseUnsafePathsAndSymlinks(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "outside.aml"), []byte("original"), 0o600); err != nil {
@@ -74,7 +74,7 @@ func TestModelFilesRefuseUnsafePathsAndSymlinks(t *testing.T) {
 	for _, name := range []string{"sl.add", "sl.update"} {
 		for _, path := range []string{"../escape.aml", filepath.Join(outside, "absolute.aml"), "linked/outside.aml", "file.aml"} {
 			result := sl.Result{Path: path, Content: "replacement", Changed: &changed}
-			if err := writeModelFile(dir, name, result); err == nil {
+			if err := writeSLFile(dir, name, result); err == nil {
 				t.Errorf("%s accepted %s", name, path)
 			}
 		}
@@ -85,7 +85,7 @@ func TestModelFilesRefuseUnsafePathsAndSymlinks(t *testing.T) {
 	}
 }
 
-func TestModelOutputAndSchema(t *testing.T) {
+func TestSLOutputAndSchema(t *testing.T) {
 	t.Cleanup(func() { resetOutput(); output.pretty = false })
 	t.Chdir(t.TempDir())
 	changed := false

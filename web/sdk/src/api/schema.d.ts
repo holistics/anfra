@@ -212,8 +212,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create an AML model from a Postgres table
-         * @description Generate an AML table model from the catalog. The CLI writes it under models without replacing an existing file. Other callers receive the content.
+         * Add a Postgres table to the semantic layer
+         * @description Add a Postgres table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file. Other callers receive the content.
          *
          *     Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
          */
@@ -234,8 +234,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Update an AML model from its Postgres table
-         * @description Update a table model using metadata already in the catalog. Keep custom fields, comments and user properties. The CLI writes the file only when it changes. Other callers receive the content.
+         * Update the semantic layer from Postgres metadata
+         * @description Update an AML table model in the semantic layer using Postgres metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes. Other callers receive the content.
          *
          *     Run ingest against the same running server first to load the current database schema.
          */
