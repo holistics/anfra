@@ -394,9 +394,9 @@ chart.on('contextmenu', (p) => {
   itself, such as a canvas the reader draws on.
 - The menu, and any modal it opens, draw over the page in the host's theme. Don't style or hide
   them.
-- The menu already offers "Inspect" where the host has its panel: on a marked block it opens the
-  panel at the block's first query, and on a chart's point at the point's query. Don't add your
-  own menu entry for it.
+- The menu on a chart's point already offers "Inspect" where the host has its panel: it opens the
+  panel at the point's query. Don't add your own menu entry for it. A block's menu offers no
+  "Inspect": for a block with no chart menu, put a button on it that calls `query.inspect()`.
 
 ## Opening the panel at a query
 
