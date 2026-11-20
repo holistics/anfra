@@ -18,11 +18,13 @@ import { builtFrameScript, builtUiBody } from './frameScript';
 import { checkTarget, type MenuEntry, type MenuTarget } from '../common/menu';
 import { definitionStack, provisionFrame, type DefinitionLines } from './provision';
 import { contentPolicy } from './policy';
-import { createPanel, type Panel } from './panel';
+import { createPanel, type Panel, type RevealTarget } from './panel';
+import type { NodeTarget } from '../common/menu';
+import type { StructureNode } from '../common/types';
 import { applyTheme, resolveTheme, type Theme, type ThemeInput } from '../common/theme';
 import { eventShortcut, isTyping, normalizeShortcut } from '../common/shortcut';
 import {
-  commandState, installContributions, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
+  commandState, installContributions, targetKinds, type Command, type CommandContribution, type CommandState, type Contribution, type Tab,
   type TabContribution,
 } from './contributions';
 
@@ -54,6 +56,13 @@ export interface HostOptions {
    * can draw its own UI on them instead.
    */
   contributions?: (contribution: Contribution) => boolean;
+  /**
+   * The tab a reveal of each kind opens when its call names no tab the host shows: the definition's
+   * `query.inspect()` and `control.inspect()`, and the "Inspect" item in the menu. Unless given,
+   * `inspect.data` for a query and `inspect.queries` for a control. A kind set to a tab the host
+   * doesn't show opens nothing.
+   */
+  revealTabs?: Partial<RevealTabs>;
   /** The theme plugin UI follows: tabs, and frame halves in the plugin layer. Light defaults unless given. */
   theme?: ThemeInput;
   /**
@@ -63,6 +72,14 @@ export interface HostOptions {
    */
   captureConsole?: boolean;
 }
+
+/** The tab a reveal opens for each kind of entity, when its call names none. */
+export interface RevealTabs {
+  query: string;
+  control: string;
+}
+
+export const DEFAULT_REVEAL_TABS: RevealTabs = { query: 'inspect.data', control: 'inspect.queries' };
 
 declare const process: { env: { NODE_ENV?: string } };
 
@@ -190,6 +207,17 @@ const isIndex = (value: unknown): value is number => typeof value === 'number' &
  * A frame's stamp, if it is one: an app's index, a query's name, and maybe the query's id and the
  * variant of the query it is. The frame is untrusted.
  */
+/** A reveal as the frame asks for it: an entity by app and name, and maybe the tab to open. */
+function checkReveal (request: unknown): { target: RevealTarget, tab?: string } {
+  const {
+    app, entity, name, tab,
+  } = (typeof request === 'object' && request !== null ? request : {}) as { app?: unknown, entity?: unknown, name?: unknown, tab?: unknown };
+  if (entity !== 'query' && entity !== 'control') throw invalidRequest('Only a query or a control can be revealed.');
+  if (!isIndex(app) || typeof name !== 'string' || !name || name.length > 512) throw invalidRequest(`Name the ${entity} to reveal by its app's index and its name.`);
+  if (tab !== undefined && (typeof tab !== 'string' || tab.length > 256)) throw invalidRequest("A reveal's tab is a tab's full id, such as 'inspect.data'.");
+  return { target: { entity, app, name }, ...(tab !== undefined ? { tab } : {}) };
+}
+
 function checkStamp (stamp: unknown): QueryStamp | undefined {
   if (typeof stamp !== 'object' || stamp === null) return undefined;
   const {
@@ -246,6 +274,20 @@ export function createHost (options: HostOptions): Host {
     plugin: 'anfra',
     definition: { frame: true, handler: (request: unknown, { mount }) => menuOf(mount).entries(targetOf(request)) },
   });
+  // The kernel's reveal: the definition's `inspect()`, answered with whether the panel opened.
+  const reveals = new WeakMap<MountContext, (target: RevealTarget, tab?: string) => boolean>();
+  answers.set('anfra.reveal', {
+    plugin: 'anfra',
+    definition: {
+      frame: true,
+      handler: (request: unknown, { mount }) => {
+        const revealIn = mount && reveals.get(mount);
+        if (!revealIn) throw invalidRequest('A reveal is for a mounted Data App.');
+        const { target, tab } = checkReveal(request);
+        return revealIn(target, tab);
+      },
+    },
+  });
   answers.set('anfra.run', {
     plugin: 'anfra',
     definition: {
@@ -265,10 +307,11 @@ export function createHost (options: HostOptions): Host {
   let theme = resolveTheme(options.theme);
   const themeListeners = new Set<(next: Theme) => void>();
   const tabIds = tabs.map((tab) => tab.id);
+  const revealTabs: RevealTabs = { ...DEFAULT_REVEAL_TABS, ...options.revealTabs };
   const selectionTabIds = tabs.filter((tab) => tab.selection).map((tab) => tab.id);
   const pickTabIds = tabs.filter((tab) => tab.selection === 'pick').map((tab) => tab.id);
   // Which kinds of target the host's own menu commands are for: the frame listens only when asked.
-  const menuKinds = [...new Set(commands.flatMap((command) => (command.target ? [command.target] : [])))];
+  const menuKinds = [...new Set(commands.flatMap((command) => targetKinds(command)))];
   // The chrome's commands by shortcut: a menu command runs only with its target, so has none.
   const byShortcut = new Map<string, string>();
   for (const command of commands) {
@@ -548,16 +591,26 @@ export function createHost (options: HostOptions): Host {
        */
       const runCommand = async (id: string, target?: MenuTarget, from: 'host' | 'menu' | 'key' = 'host'): Promise<unknown> => {
         const command = commandOf(id);
-        if (command.target && target?.kind !== command.target) throw invalidRequest(`'${id}' runs from the menu on the page, with a ${command.target} target.`);
-        const { disabled, pressed } = commandState(command, stateContext, target);
+        const kinds = targetKinds(command);
+        if (kinds.length && (!target || !kinds.includes(target.kind))) throw invalidRequest(`'${id}' runs from the menu on the page, with a ${kinds.join(' or ')} target.`);
+        const { disabled, pressed } = stateOf(command, target);
         if (disabled) throw forbidden(disabled);
         if ('tab' in command.run) {
-          const node = target ? (target.kind === 'node' ? target : target.node)?.node.key : undefined;
+          // On rows, their query is revealed on the tab.
+          if (target?.kind === 'rows') {
+            panelState.panel.show(command.run.tab, { entity: 'query', app: target.app, name: target.query });
+            return null;
+          }
+          const node = target?.node.key;
           const selected = node ?? command.run.target;
           if (selected !== undefined) panelState.panel.show(command.run.tab, selected);
           // A toggle: pressed, it closes the panel, whichever of its tabs shows.
           else if (pressed) panelState.panel.hide();
           else panelState.panel.show(command.run.tab);
+          return null;
+        }
+        if ('panel' in command.run && command.run.panel === 'reveal') {
+          if (target) revealOn(target);
           return null;
         }
         if ('panel' in command.run) {
@@ -567,6 +620,73 @@ export function createHost (options: HostOptions): Host {
         const request = target ? { ...(command.run.request as object | undefined ?? {}), target } : command.run.request ?? null;
         const callers: Caller[] = from === 'host' ? callersOf(command.plugin) : [{ kind: 'frame' }, ...callersOf(command.plugin)];
         return call(command.run.call, request, callers, context, { asOrigin: from === 'key' });
+      };
+      /**
+       * Open the panel at `tab`, revealing `target` there, if the host shows that tab; else at the
+       * host's tab for the kind, saying so when a tab was named. False when neither is shown.
+       */
+      const revealIn = (target: RevealTarget, tab?: string): boolean => {
+        const fallback = revealTabs[target.entity];
+        const shown = (id: string | undefined): id is string => id !== undefined && tabIds.includes(id);
+        const chosen = shown(tab) ? tab : shown(fallback) ? fallback : undefined;
+        if (tab !== undefined && chosen !== tab) {
+          reportError({
+            kind: 'call.inspect',
+            message: chosen
+              ? `This host has no tab '${tab}' to inspect ${target.entity} '${target.name}' on, so the panel opened at '${chosen}' instead. Name one of the host's tabs, or leave the tab out.`
+              : `This host has no tab '${tab}' to inspect ${target.entity} '${target.name}' on, so the panel didn't open. Name one of the host's tabs, or leave the tab out.`,
+            entity: target.name,
+            at: new Date().toISOString(),
+            mount: mountInfo.id,
+            ...(mountInfo.title !== undefined ? { title: mountInfo.title } : {}),
+          });
+        }
+        if (chosen === undefined) return false;
+        panelState.panel.show(chosen, target);
+        return true;
+      };
+      reveals.set(context, revealIn);
+      /** A node, as the snapshot has it whole, or as the target has it (its children's children left out). */
+      const wholeNode = (target: NodeTarget): StructureNode => {
+        const find = (nodes: readonly StructureNode[]): StructureNode | undefined => {
+          for (const node of nodes) {
+            if (node.key === target.node.key) return node;
+            const inner = find(node.children);
+            if (inner) return inner;
+          }
+          return undefined;
+        };
+        return find(panelState.panel.snapshot?.structure.nodes ?? []) ?? target.node;
+      };
+      const firstQuery = (node: StructureNode): StructureNode | undefined => {
+        if (node.kind === 'query' && node.name !== undefined) return node;
+        for (const child of node.children) {
+          const found = firstQuery(child);
+          if (found) return found;
+        }
+        return undefined;
+      };
+      /**
+       * A `reveal` command on its target, on the host's tab for a query: the rows' query, or the
+       * node selected, with the first query at or below it revealed.
+       */
+      const revealOn = (target: MenuTarget) => {
+        if (target.kind === 'rows') {
+          revealIn({ entity: 'query', app: target.app, name: target.query });
+          return;
+        }
+        const query = firstQuery(wholeNode(target));
+        if (query) {
+          revealIn({ entity: 'query', app: query.app ?? 0, name: query.name! });
+          panelState.panel.select(target.node.key);
+        } else panelState.panel.show(revealTabs.query, target.node.key);
+      };
+      /** How a command shows: its own state, and a `reveal` one disabled with no tab to reveal on. */
+      const stateOf = (command: Command, target?: MenuTarget): CommandState => {
+        if ('panel' in command.run && command.run.panel === 'reveal' && !tabIds.includes(revealTabs.query)) {
+          return { disabled: 'This host has no tab to show the query on.' };
+        }
+        return commandState(command, stateContext, target);
       };
       menus.set(context, {
         entries: (target) => menuFor(target),
@@ -578,13 +698,13 @@ export function createHost (options: HostOptions): Host {
       });
       /** The host's menu commands that apply to a target, as the frame's menu shows them. */
       const menuFor = (target: MenuTarget): MenuEntry[] => commands.flatMap((command) => {
-        if (command.target !== target.kind) return [];
+        if (!targetKinds(command).includes(target.kind)) return [];
         try {
           if (command.when && !command.when(target, stateContext)) return [];
         } catch {
           return [];
         }
-        const { disabled } = commandState(command, stateContext, target);
+        const { disabled } = stateOf(command, target);
         return [{ id: command.id, label: command.title, ...(disabled ? { disabled } : {}) }];
       });
 
@@ -594,7 +714,7 @@ export function createHost (options: HostOptions): Host {
         emit: context.emit,
         on: context.on,
         panel: panelState.panel,
-        commandState: (id) => commandState(commandOf(id), stateContext),
+        commandState: (id) => stateOf(commandOf(id)),
         run: (id) => runCommand(id),
         onCommandsChange: (listener) => listen(commandListeners, listener),
         handleKeydown (event) {

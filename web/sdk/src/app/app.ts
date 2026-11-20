@@ -14,6 +14,7 @@ import {
 import { withSuggestion } from './suggest';
 import { deriveSelection } from './selection';
 import { openRowsMenu } from './menu';
+import type { RevealRequest } from './reveal';
 import { rowMatches } from './annotations';
 import type { RowsTarget } from '../common/menu';
 import { applyExtensions, type EntityExtensions } from './extensions';
@@ -967,6 +968,20 @@ export class App extends Observable implements AppContext {
         ? { appliedSelection: inspectSelection(this._appliedSelection) }
         : {}),
     };
+  }
+
+  /** @internal The frame's reveal, set by its bootstrap; absent outside a frame. */
+  revealer?: (request: RevealRequest) => Promise<boolean>;
+
+  /**
+   * @internal Backs `query.inspect()` and `control.inspect()`: ask the host to open its panel at
+   * the entity. False outside a frame.
+   */
+  inspect (entity: 'query' | 'control', name: string, tab?: string): Promise<boolean> {
+    if (!this.revealer) return Promise.resolve(false);
+    return this.revealer({
+      app: this.index, entity, name, ...(tab !== undefined ? { tab } : {}),
+    });
   }
 
   /**

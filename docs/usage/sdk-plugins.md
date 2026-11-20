@@ -102,7 +102,7 @@ host: {
 },
 ```
 
-- A tab draws into `root`, a shadow root, with any framework or none, and returns what takes it down. `context.panel` has the frame's snapshot, the node selected (shared with every other tab), and highlight, locate and pick; `context.call` makes calls as the plugin.
+- A tab draws into `root`, a shadow root, with any framework or none, and returns what takes it down. `context.panel` has the frame's snapshot, the node selected (shared with every other tab), the last reveal (`panel.revealed`, a query or control to bring into view, honored once per `nonce`), and highlight, locate and pick; `context.call` makes calls as the plugin.
 - Style it with the host's theme, `var(--anfra-color-bg)` and the rest (see [designs/sdk-plugins.md](../designs/sdk-plugins.md#plugin-ui)), so it looks right in every host.
 - A command runs a call (`run: { call: 'notes.export' }`) or opens a tab. Give it `state` when it can be on or off, or can't run: `{ disabled: 'Sign in to export notes' }` always says why. Call `mount.commandsChanged()` when that changes.
 - To run every query of a Data App again from the host, call `core.refresh` (`mounted.call('core.refresh')`), as `core`'s Refresh command does. It runs `app.refresh()` on every app in the frame, so each query reruns with the reader's current inputs. One runs at a time per mount: a second is refused with `A refresh is running already.` The frame can call neither `core.refresh` nor the frame's own `core.execute`; a definition refreshes its own app with `app.refresh()`.

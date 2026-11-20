@@ -183,6 +183,8 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
 
   /** A menu's entries for one target, and what each runs. */
   type Entries = { entries: MenuEntry[], run: Map<string, () => unknown> };
+  /** A target's entries, with the host's command behind each of the host's, by entry. */
+  type Found = Entries & { hosts: Map<string, string> };
 
   /** The frame's items that apply to one target, decided now, while the event can still be kept. */
   function frameEntries (target: MenuTarget): Entries {
@@ -215,9 +217,10 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
   }
 
   /** The entries for one target: the frame's items, then the host's. */
-  async function entriesFor (target: MenuTarget, own: Entries): Promise<Entries> {
+  async function entriesFor (target: MenuTarget, own: Entries): Promise<Found> {
     const run = new Map(own.run);
     const entries = [...own.entries];
+    const hosts = new Map<string, string>();
     if (hostKinds.has(target.kind)) {
       try {
         const answered = await kernel.call<MenuEntry[]>('anfra.menu', forHost(target));
@@ -226,10 +229,11 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
           const key = `host:${entry.id}:${target.kind}`;
           entries.push({ id: key, label: entry.label, ...(typeof entry.disabled === 'string' ? { disabled: entry.disabled } : {}) });
           run.set(key, () => kernel.call('anfra.run', { id: entry.id, target: forHost(target) }));
+          hosts.set(key, entry.id);
         }
       } catch { /* the host's entries are left out; the frame's still show */ }
     }
-    return { entries, run };
+    return { entries, run, hosts };
   }
 
   /** Open the menu on these targets (the rows first, then their node), for the event. */
@@ -247,7 +251,15 @@ export function installContentUi (kernel: FrameKernel): ContentUi {
     const y = typeof point.clientY === 'number' ? point.clientY : 0;
     void (async () => {
       const [body, ...found] = await Promise.all([ui(), ...relevant.map(({ target, own }) => entriesFor(target, own))]);
-      const groups = found.map((group) => group.entries).filter((group) => group.length);
+      // A host command for both kinds shows once, for the first target (the rows).
+      const shown = new Set<string>();
+      const groups = found.map((group) => group.entries.filter((entry) => {
+        const command = group.hosts.get(entry.id);
+        if (command === undefined) return true;
+        if (shown.has(command)) return false;
+        shown.add(command);
+        return true;
+      })).filter((group) => group.length);
       if (!groups.length && !notes.length) return;
       closeCurrent();
       const close = body.menu(root(), {

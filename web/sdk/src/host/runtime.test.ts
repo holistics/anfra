@@ -553,3 +553,90 @@ describe('runtime errors', () => {
     expect(provisioned().captureConsole).toBe(true);
   });
 });
+
+describe('a reveal the frame asks for', () => {
+  const tab = (id: string) => ({ id, title: id, mount: () => {} });
+  const tabs = definePlugin({ name: 'inspect', version: '1', host: { tabs: [tab('data'), tab('queries'), tab('other')] } });
+  const result = (id: number) => replies.find((reply) => reply.type === 'anfra:result' && reply.id === id);
+  const revenue = { app: 0, entity: 'query', name: 'revenue' };
+
+  function reveal (options: Partial<HostOptions> = {}, middleware: Middleware[] = []) {
+    mount([corePlugin(backend()), tabs], middleware, options);
+    const errors: unknown[] = [];
+    mounted!.on('anfra.error', (event) => errors.push(event));
+    return errors;
+  }
+
+  it('lands a query on Data and a control on Queries, with no tab named', async () => {
+    reveal();
+    call(1, 'anfra.reveal', revenue);
+    await settle();
+    expect(result(1)).toEqual({ type: 'anfra:result', id: 1, ok: true, result: true });
+    expect(mounted!.panel).toMatchObject({ open: true, tab: 'inspect.data', revealed: { entity: 'query', app: 0, name: 'revenue' } });
+    call(2, 'anfra.reveal', { app: 0, entity: 'control', name: 'region' });
+    await settle();
+    expect(mounted!.panel).toMatchObject({ tab: 'inspect.queries', revealed: { entity: 'control', name: 'region' } });
+  });
+
+  it('opens the tab the definition names, if the host has it', async () => {
+    reveal();
+    call(1, 'anfra.reveal', { ...revenue, tab: 'inspect.other' });
+    await settle();
+    expect(mounted!.panel.tab).toBe('inspect.other');
+  });
+
+  it('falls back by kind to the host\'s setting', async () => {
+    reveal({ revealTabs: { query: 'inspect.other' } });
+    call(1, 'anfra.reveal', revenue);
+    call(2, 'anfra.reveal', { app: 0, entity: 'control', name: 'region' });
+    await settle();
+    expect(mounted!.panel.tab).toBe('inspect.queries');
+    call(3, 'anfra.reveal', revenue);
+    await settle();
+    expect(mounted!.panel.tab).toBe('inspect.other');
+  });
+
+  it('falls back from a tab the host lacks or filtered out, and says which it opened instead', async () => {
+    const errors = reveal({ contributions: (c) => c.kind !== 'tab' || c.tab.id !== 'inspect.other' });
+    call(1, 'anfra.reveal', { ...revenue, tab: 'inspect.other' });
+    call(2, 'anfra.reveal', { ...revenue, tab: 'lineage.lineage' });
+    await settle();
+    expect(result(1)).toMatchObject({ ok: true, result: true });
+    expect(mounted!.panel.tab).toBe('inspect.data');
+    expect(errors).toEqual([
+      expect.objectContaining({ kind: 'call.inspect', entity: 'revenue', message: expect.stringMatching(/'inspect\.other'.*'inspect\.data'/) }),
+      expect.objectContaining({ kind: 'call.inspect', entity: 'revenue', message: expect.stringMatching(/'lineage\.lineage'.*'inspect\.data'/) }),
+    ]);
+  });
+
+  it('opens nothing, and answers false, when no tab it may use is there', async () => {
+    const errors = reveal({ contributions: (c) => c.kind !== 'tab' || c.tab.id !== 'inspect.data' });
+    call(1, 'anfra.reveal', revenue);
+    call(2, 'anfra.reveal', { ...revenue, tab: 'lineage.lineage' });
+    await settle();
+    expect(result(1)).toMatchObject({ ok: true, result: false });
+    expect(result(2)).toMatchObject({ ok: true, result: false });
+    expect(mounted!.panel.open).toBe(false);
+    expect(errors).toEqual([expect.objectContaining({ kind: 'call.inspect', message: expect.stringContaining("'lineage.lineage'") })]);
+  });
+
+  it('goes through middleware, which may change its tab', async () => {
+    const repoint: Middleware = {
+      name: 'repoint', match: 'anfra.reveal', handle: (request, _context, next) => next({ ...(request as object), tab: 'inspect.other' }),
+    };
+    reveal({}, [repoint]);
+    call(1, 'anfra.reveal', revenue);
+    await settle();
+    expect(mounted!.panel.tab).toBe('inspect.other');
+  });
+
+  it('refuses what is not a query or a control', async () => {
+    reveal();
+    call(1, 'anfra.reveal', { app: 0, entity: 'block', name: 'x' });
+    call(2, 'anfra.reveal', { app: -1, entity: 'query', name: 'x' });
+    call(3, 'anfra.reveal', { ...revenue, tab: 3 });
+    await settle();
+    for (const id of [1, 2, 3]) expect(result(id)).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+    expect(mounted!.panel.open).toBe(false);
+  });
+});

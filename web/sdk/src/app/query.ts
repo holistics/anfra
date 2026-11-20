@@ -373,6 +373,18 @@ export class Query extends Observable {
   }
 
   /**
+   * Opens the host's panel at this query, as a reader asked to inspect it: wire it to your own
+   * button, badge or menu. `tab` names the panel's tab by its full id (`inspect.queries`); left out,
+   * or one the host doesn't show, the host picks its own (Data, which shows its rows unless it set another).
+   * Call it from a reader's click: without one it opens nothing and reports a problem. Resolves
+   * true when the panel opened.
+   */
+  async inspect (options: { tab?: string } = {}): Promise<boolean> {
+    this.assertLive();
+    return this.app.inspect('query', this.name, options.tab);
+  }
+
+  /**
    * Opens the menu on these rows of this query: the items plugins and the host offer for a point
    * of data, such as "View underlying data". Call it from your chart's own right-click handler,
    * with the event and the rows under the pointer, as for `select`; `fields` narrows the dimensions

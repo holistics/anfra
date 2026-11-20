@@ -4,7 +4,7 @@
  * side it needs (`anfra.*`), so every host's panel has them whatever plugins it installs. The host
  * draws the panel's chrome itself; plugins add its tabs (docs/designs/sdk-plugins.md, The panel).
  */
-import type { InspectedApp, InspectedStructure, LocateTarget } from '../common/types';
+import type { InspectedApp, InspectedStructure, LocateTarget, StructureNode } from '../common/types';
 import type { MountContext } from './plugin';
 
 /** What the frame says while the panel is open: every app's state, and the page's structure. No rows. */
@@ -39,6 +39,31 @@ export function checkPicked (payload: unknown): { node: string | null } | undefi
   return { node: payload.node };
 }
 
+/** A query or a control, by its app's index and its name: what a reveal brings into view. */
+export interface RevealTarget {
+  entity: 'query' | 'control';
+  app: number;
+  name: string;
+}
+
+/**
+ * The panel's last reveal: what a tab that can show the entity brings into view, once. A new nonce
+ * asks again, for the same entity too; a tab remembers the last nonce it honored.
+ */
+export interface Reveal extends RevealTarget {
+  nonce: number;
+}
+
+/** The key of the first node marked with the entity, if the structure has one. */
+export function entityNode (nodes: readonly StructureNode[], target: RevealTarget): string | undefined {
+  for (const node of nodes) {
+    if (node.kind === target.entity && node.name === target.name && (node.app ?? 0) === target.app) return node.key;
+    const inner = entityNode(node.children, target);
+    if (inner !== undefined) return inner;
+  }
+  return undefined;
+}
+
 /** One mounted Data App's panel. Read its state, change it, and subscribe to hear of each change. */
 export interface Panel {
   /** Whether the panel is open. The frame posts snapshots only while it is. */
@@ -49,10 +74,19 @@ export interface Panel {
   readonly selection: string | null;
   /** The frame's last snapshot while open; undefined until it reports, and once closed. */
   readonly snapshot: Snapshot | undefined;
+  /**
+   * The last query or control the panel was asked to bring into view, until the panel closes.
+   * Each tab that can show it honors it once per nonce; one that can't ignores it.
+   */
+  readonly revealed: Reveal | undefined;
   /** Whether pick mode is on: pointing at the page outlines marked elements, and a click selects one. */
   readonly picking: boolean;
-  /** Open the panel, at `tab` if given (else the last one), with `target` selected if given. */
-  show: (tab?: string, target?: string | null) => void;
+  /**
+   * Open the panel, at `tab` if given (else the last one). `target` is a node's key to select, or
+   * a query or control to reveal: a tab brings it into view, and its node, if it is marked, is
+   * selected, once a snapshot has it. Shown again, it reveals again; it never closes the panel.
+   */
+  show: (tab?: string, target?: string | null | RevealTarget) => void;
   /** Close the panel: ends pick mode and clears the selection. */
   hide: () => void;
   /** Open the panel at `tab`, or close it when it is already open there (or anywhere, with no tab). */
@@ -106,6 +140,10 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
   let selection: string | null = null;
   let snapshot: Snapshot | undefined;
   let picking = false;
+  let revealed: Reveal | undefined;
+  // The node of the last reveal is still to be selected, once a snapshot has it.
+  let selectRevealed = false;
+  let nonce = 0;
   const listeners = new Set<() => void>();
   const changed = () => listeners.forEach((listener) => {
     try { listener(); } catch { /* one listener must not stop the others */ }
@@ -124,7 +162,17 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
       setPicking(false);
       selection = null;
       snapshot = undefined;
+      revealed = undefined;
+      selectRevealed = false;
     }
+  };
+  // The revealed entity's node, selected once the snapshot has it marked.
+  const selectReveal = () => {
+    if (!selectRevealed || !revealed || !snapshot) return;
+    const key = entityNode(snapshot.structure.nodes, revealed);
+    if (key === undefined) return;
+    selection = key;
+    selectRevealed = false;
   };
   // A tab the host knows of, or the first one, so an open panel always shows something it has.
   const known = (id: string | undefined) => {
@@ -138,10 +186,18 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
     get selection () { return selection; },
     get snapshot () { return snapshot; },
     get picking () { return picking; },
+    get revealed () { return revealed; },
     show (next, target) {
       setOpen(true);
       tab = known(next);
-      if (target !== undefined) {
+      if (typeof target === 'object' && target !== null) {
+        revealed = {
+          entity: target.entity, app: target.app, name: target.name, nonce: ++nonce,
+        };
+        selectRevealed = true;
+        selectReveal();
+      } else if (target !== undefined) {
+        selectRevealed = false;
         selection = target;
         if (target !== null) mount.emit('anfra.locate', { node: target });
       }
@@ -159,6 +215,7 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
     },
     select (node) {
       selection = node;
+      selectRevealed = false;
       setPicking(false);
       changed();
     },
@@ -194,6 +251,7 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
       const checked = checkSnapshot(payload);
       if (!checked) return;
       snapshot = checked;
+      selectReveal();
       changed();
     },
     picked (payload) {
@@ -203,7 +261,10 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
       // A pick selects the node and ends pick mode; Escape only ends it (the frame has left it
       // already). Either way the outline the pick left goes.
       setPicking(false);
-      if (checked.node !== null) selection = checked.node;
+      if (checked.node !== null) {
+        selection = checked.node;
+        selectRevealed = false;
+      }
       mount.emit('anfra.highlight', null);
       changed();
     },
