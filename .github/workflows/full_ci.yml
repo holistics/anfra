@@ -1,0 +1,45 @@
+# Start a full run of CI (continuous_integration.yml, by workflow_dispatch) every hour that main
+# changed: every job, whatever changed. CI otherwise skips a job whose area of the repo didn't
+# change, and trusts the areas' lists of files; a full run catches what they miss, such as a job
+# that starts reading a file from another area. It blocks nothing (docs/designs/ci.md).
+#
+# "Changed" compares the files (git trees) of main's HEAD and of the last full run's commit,
+# whether that run passed or failed: a failure is reported once, not every hour. To retry one,
+# start a full run by hand: gh workflow run continuous_integration.yml --ref main.
+#
+# The full runs are what a Slack channel watches:
+#   /github subscribe holistics/anfra workflows:{name:"Continuous Integration" event:"workflow_dispatch" branch:"main"}
+name: Full CI hourly
+
+on:
+  schedule:
+    - cron: "17 * * * *" # :17, not :00, when GitHub's scheduler is busiest and runs start late
+  workflow_dispatch: {}
+
+permissions:
+  contents: read # main's HEAD and the last full run's commit
+  actions: write # start the full run
+
+concurrency:
+  group: full-ci-hourly
+  cancel-in-progress: false
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start a full run if main changed since the last one
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tree() { gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .commit.tree.sha; }
+          head="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          # The newest full run, whatever its status: one still running counts, so two never overlap.
+          last="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow continuous_integration.yml \
+            --event workflow_dispatch --branch main --limit 1 --json headSha --jq '.[0].headSha // ""')"
+          if [ -n "$last" ] && [ "$(tree "$last")" = "$(tree "$head")" ]; then
+            echo "main's files are what the last full run checked, on ${last:0:8}: nothing to do."
+            exit 0
+          fi
+          gh workflow run continuous_integration.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "Started a full run of main, at ${head:0:8} (the last one was on ${last:0:8})."

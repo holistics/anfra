@@ -56,14 +56,20 @@ cd <repo> && <path to>/bin/anfra show
 
 ## Checks
 
-What CI runs (`.github/workflows/continuous_integration.yml`), in two commands:
+CI (`.github/workflows/continuous_integration.yml`) runs one job per area of the repo, and only the jobs whose area a change touches ([CI](docs/designs/ci.md)). Each job runs a make target, so you can run the same checks:
 
 ```sh
-make check      # lint, type-check, and check the API contract is fresh: no tests, no build
-make test       # the Go tests, then the web workspace's, then the skills'
+make ci           # the checks CI would run for your branch: the areas it changed since origin/main
+make ci-<area>    # one CI job: lint, go, api, api-breaking, web, skills or manifest
+make check        # every static check: lint, vet, type-checks, generated files fresh, versions agree
+make test         # every build and test: Go (with -race), the SDK, the frontend, the skills
 ```
 
-`make check` runs golangci-lint at the version `tools/go.mod` pins, which must match the one CI's workflow pins; `go mod tidy --diff`; `scripts/openapi.sh diff`; the SDK's generated types against the spec; and both web packages' typechecks. It builds the SDK's type declarations, which the frontend's typecheck reads, and nothing else. CI also builds the frontend (`pnpm build:web`) and checks that a breaking change to the API is declared by a commit.
+`make ci` starts by saying which areas it runs and which it skips. Commit lint, the dependency review, and the check that a release PR is the bot's run only in CI.
+
+CI also runs every job on `main` each hour that `main` changed, whatever the change (`full_ci.yml`), to catch what the areas miss. To start one by hand, for example to retry after a fix: `gh workflow run continuous_integration.yml --ref main`.
+
+golangci-lint and sqlc run at the versions `tools/go.mod` pins, as CI's do. The Go tests run with `-race`, as CI's do. `GO_TEST_FLAGS=` turns it off, for a faster run that misses data races.
 
 Some Go tests run commands against real sidecars (`internal/app/sidecars_test.go`), and the dev warehouse (`docker compose -f docker-compose.dev.yml up -d postgres`). They skip themselves unless `ANFRA_NODE_BIN` and `ANFRA_CANAL_QUERY_BIN` are both set, and `make test` then says so. `make test-sidecars` runs the Go tests with them, against the pinned sidecars or your own; `make test` runs them too when `.env.local` names both, after checking their versions.
 

@@ -1,54 +1,127 @@
-# PR CI: conventional-commit lint, golangci-lint, build/vet/test, the core API's
-# contract, and the SDK and frontend (web). Mirrors canal's
-# continuous_integration.yml + test.yml, flattened (anfra is a single Go module). `ci_passed` is the one required status check (via alls-green).
+# CI, on each pull request and each push to main: conventional-commit lint,
+# golangci-lint, build/vet/test, the core API's contract, the SDK and frontend
+# (web), the skills, the release manifest, and the dependencies a PR changes.
+# Mirrors canal's continuous_integration.yml + test.yml, flattened (anfra is a
+# single Go module). `ci_passed` is the one required status check (via
+# alls-green). See docs/designs/ci.md.
+#
+# Each job reads an area of the repo (scripts/ci-areas.sh says which files):
+#
+# - A job whose result depends on its files alone (lint, go, api, web, skills,
+#   manifest) records its pass as an artifact, passed-<area>-<hash>, and skips
+#   when its area's hash already passed. So a pull request merged by rebase, the
+#   same files as a new commit, passes on main without running again, and a docs
+#   change runs none of them.
+# - A check that judges the change against its base (commitlint, api-breaking,
+#   release, dependency-review) runs on pull requests only, when its area changed
+#   from the PR's base.
+#
+# On main, it checks each commit as merged: two PRs that each passed can still
+# break main together, and a release is tagged only on a commit that passed.
 #
 # It also runs in the merge queue (merge_group), on the queue's commit: the PR
-# rebased onto main and any PRs ahead of it. The repo merges by rebase, so the
-# queue replays the PR's commits unchanged; the jobs that judge only the PR's own
-# commits and diff (commitlint, dependency-review) ran on the PR and are skipped
-# there.
-#
-# A change only to skills/ runs only the skills' checks (the skills job): the
-# Go, API and web jobs are skipped, since nothing they check changed.
+# rebased onto main and any PRs ahead of it. The base checks ran on the PR and
+# are skipped there.
 name: Continuous Integration
 
 on:
   pull_request: {}
+  push:
+    branches: [main]
   merge_group: {}
+  # A full run: every job, whatever changed. full_ci.yml starts one hourly when main changed,
+  # to catch what the areas miss; a Slack channel subscribes to these runs.
+  workflow_dispatch: {}
 
 concurrency:
   # One group per PR (refs/pull/<n>/merge): a push cancels the PR's older run.
-  # A merge group's ref (gh-readonly-queue/main/pr-<n>-<sha>) is its own, so
-  # queued runs never cancel each other.
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Every other run is its own group, and always finishes: a group holds only one
+  # waiting run, so on main a third push would cancel the second's, and a release
+  # waits on its commit's.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  # Whether the change touches anything outside skills/: the code the lint,
-  # test, api and web jobs check. On a PR, against its base branch; in the merge
-  # queue, against the queue's base commit.
+  # Which jobs run (scripts/ci-areas.sh). A file job runs unless its area's hash
+  # already passed, in a run from this repo: a fork's pull request runs its own
+  # copy of this workflow, and could record a pass it never checked. A base check
+  # runs on a pull request when its area changed from the PR's base.
   changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # the artifacts that record the passes
     outputs:
-      code: ${{ steps.filter.outputs.code_any_changed }}
+      lint: ${{ steps.files.outputs.lint }}
+      lint_hash: ${{ steps.files.outputs.lint_hash }}
+      go: ${{ steps.files.outputs.go }}
+      go_hash: ${{ steps.files.outputs.go_hash }}
+      api: ${{ steps.files.outputs.api }}
+      api_hash: ${{ steps.files.outputs.api_hash }}
+      web: ${{ steps.files.outputs.web }}
+      web_hash: ${{ steps.files.outputs.web_hash }}
+      skills: ${{ steps.files.outputs.skills }}
+      skills_hash: ${{ steps.files.outputs.skills_hash }}
+      manifest: ${{ steps.files.outputs.manifest }}
+      manifest_hash: ${{ steps.files.outputs.manifest_hash }}
+      api-breaking: ${{ steps.base.outputs.api-breaking }}
+      release: ${{ steps.base.outputs.release }}
+      dependencies: ${{ steps.base.outputs.dependencies }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0 # the base commit, for the diff
-      - uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
-        id: filter
-        with:
-          files_yaml: |
-            code:
-              - '**'
-              - '!skills/**'
-      - name: Show changes
-        run: echo "$OUTPUTS"
+          # A PR's merge commit and its base; a full run, the commits since the previous one.
+          fetch-depth: ${{ github.event_name != 'workflow_dispatch' && 2 || 0 }}
+          filter: blob:none
+      - name: The commits since the previous full run
+        if: github.event_name == 'workflow_dispatch'
         env:
-          OUTPUTS: ${{ toJSON(steps.filter.outputs) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous="$(gh run list --workflow continuous_integration.yml --event workflow_dispatch --branch main \
+            --json databaseId,headSha --jq "[.[] | select(.databaseId != $GITHUB_RUN_ID)][0].headSha // \"\"")"
+          {
+            echo "## Full run of $(git log -1 --format='%h %s' HEAD)"
+            echo
+            if [ -n "$previous" ] && git cat-file -e "$previous" 2>/dev/null; then
+              echo "Commits since the previous full run, on $(git log -1 --format=%h "$previous"):"
+              echo
+              git log --first-parent --format='- %h %s (%an)' "$previous..HEAD"
+            else
+              echo "No previous full run to compare with."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$1&per_page=100" --jq '
+              [.artifacts[] | select(.expired | not)
+                | select(.workflow_run.head_repository_id == .workflow_run.repository_id)] | length > 0'
+          }
+          scripts/ci-areas.sh hashes HEAD | while IFS='=' read -r key hash; do
+            area="${key%_hash}"
+            echo "${area}_hash=$hash" >> "$GITHUB_OUTPUT"
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+              echo "$area: runs (a full run)"
+              echo "$area=true" >> "$GITHUB_OUTPUT"
+            elif [ "$(passed "passed-$area-$hash")" = true ]; then
+              echo "$area: these files passed before, skipped"
+              echo "$area=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "$area: runs"
+              echo "$area=true" >> "$GITHUB_OUTPUT"
+            fi
+          done
+      - id: base
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            scripts/ci-areas.sh changed HEAD^1 HEAD | grep -E '^(api-breaking|release|dependencies)=' | tee -a "$GITHUB_OUTPUT"
+          fi
 
   commitlint:
     # PR only: the queue rebases the PR's commits unchanged, so they were linted
@@ -64,7 +137,7 @@ jobs:
 
   lint:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,18 +151,24 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
-      # golangci-lint at the version tools/go.mod pins, the one `make check` runs:
-      # one pin, so CI and a local run cannot lint with different versions.
+      # golangci-lint at the version tools/go.mod pins, the one `make ci-lint` runs:
+      # one pin, so CI and a local run cannot lint with different versions. The
+      # action, not `make ci-lint`, so its findings annotate the PR's lines.
       - name: Build golangci-lint, as tools/go.mod pins it
         run: go build -modfile=tools/go.mod -o "$(go env GOPATH)/bin/golangci-lint" github.com/golangci/golangci-lint/v2/cmd/golangci-lint
       - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
           install-mode: none # the binary built above
           args: -v --timeout=10m
+      - uses: ./.github/actions/record-pass
+        with:
+          area: lint
+          hash: ${{ needs.changes.outputs.lint_hash }}
 
-  test:
+  # Tidy, the generated SQL code (sqlc at the version tools/go.mod pins), vet, build, the Go tests.
+  go:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -99,52 +178,50 @@ jobs:
       - name: the Go this builds with (go.mod's toolchain line)
         run: go version
       - run: go mod download
-      - name: go.mod is tidy
-        run: go mod tidy --diff
-      # sqlc at the version tools/go.mod pins: the committed gen/ code is what the queries generate.
-      - name: the generated SQL code is fresh
-        run: scripts/sqlc.sh diff
-      - run: go build -v ./...
-      - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      - run: make ci-go
+      - uses: ./.github/actions/record-pass
+        with:
+          area: go
+          hash: ${{ needs.changes.outputs.go_hash }}
 
   # The core API's contract: the committed api/openapi.yaml is what the registry
-  # publishes, and a breaking change against the base branch is declared by a
-  # commit (`feat!:`, or a `BREAKING CHANGE:` footer). See scripts/openapi.sh.
+  # publishes. See scripts/openapi.sh.
   api:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - run: make ci-api
+      - uses: ./.github/actions/record-pass
+        with:
+          area: api
+          hash: ${{ needs.changes.outputs.api_hash }}
+
+  # A breaking change to the contract, against the PR's base, is declared by a commit
+  # (`feat!:`, or a `BREAKING CHANGE:` footer). A base check: PR only.
+  api-breaking:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.api-breaking == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0 # the base branch's spec, and the PR's commits
+          fetch-depth: 0 # the base's spec, and the PR's commits
+          filter: blob:none
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - name: the contract is fresh
-        run: scripts/openapi.sh diff
-      - name: no undeclared breaking change
-        env:
-          # The branch the change lands on: a PR's base, or the merge group's base commit.
-          BASE: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.base_ref) }}
-        run: |
-          if ! git cat-file -e "$BASE:api/openapi.yaml" 2>/dev/null; then
-            echo "the base branch has no api/openapi.yaml yet: nothing to compare"; exit 0
-          fi
-          git show "$BASE:api/openapi.yaml" > "$RUNNER_TEMP/base.yaml"
-          if scripts/openapi.sh breaking "$RUNNER_TEMP/base.yaml"; then exit 0; fi
-          if git log --format=%B "$BASE..HEAD" | grep -Eq '^[a-z]+(\([^)]*\))?!:|^BREAKING CHANGE:'; then
-            echo "breaking, and declared by a commit: ok"; exit 0
-          fi
-          echo "a breaking change to the core API, not declared: mark the commit (feat!: …) or a BREAKING CHANGE: footer" >&2
-          exit 1
+      - run: make ci-api-breaking CI_BASE=HEAD^1
 
   # The Anfra SDK and the appserve frontend (the pnpm workspace): typecheck, tests, the build a
   # release embeds, and the SDK's API types fresh from api/openapi.yaml.
   web:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -153,31 +230,37 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - name: the SDK's and the design package's versions are the release's
-        run: |
-          release="$(yq .version manifest.yml)"
-          for pkg in web/sdk web/design; do
-            version="$(jq -r .version "$pkg/package.json")"
-            test "$version" = "$release" \
-              || { echo "$pkg/package.json version $version != manifest.yml version $release: pnpm bump sets them all" >&2; exit 1; }
-          done
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @holistics/anfra-sdk typecheck
-      - name: build, as a release does
-        run: pnpm build:web # the SDK, then the frontend, type-checked (vue-tsc)
-      - run: pnpm test:web # after the build: the frontend's tests import the built SDK
-      - name: the SDK's API types are fresh
-        run: |
-          pnpm --filter @holistics/anfra-sdk generate
-          git diff --exit-code -- web/sdk/src/api/schema.d.ts \
-            || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter @holistics/anfra-sdk generate" >&2; exit 1; }
+      - run: make ci-web
+      - uses: ./.github/actions/record-pass
+        with:
+          area: web
+          hash: ${{ needs.changes.outputs.web_hash }}
 
-  # A PR that changes manifest.yml's version (scripts/check-release-pr.sh): an rc PR's release
-  # isn't out yet, and a release PR is exactly what the bot generates, so main's changelogs say what
-  # the release does. PR only: the queue rebases the PR's commits unchanged, and the check judges
-  # the PR's own change.
+  # The release manifest, and what a version bump can break: the versions agree, and the cloud
+  # servers a release embeds parse (scripts/cloud-url). An rc or release PR runs this job, and
+  # release, alone.
+  manifest:
+    needs: changes
+    if: needs.changes.outputs.manifest == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - run: make ci-manifest
+      - uses: ./.github/actions/record-pass
+        with:
+          area: manifest
+          hash: ${{ needs.changes.outputs.manifest_hash }}
+
+  # A PR that changes manifest.yml's version passes scripts/check-release-pr.sh: an rc PR's
+  # release isn't out yet, and a release PR is exactly what the bot generates, so main's
+  # changelogs say what the release does. A base check: PR only.
   release:
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -202,8 +285,10 @@ jobs:
         run: scripts/check-release-pr.sh
 
   # The anfra skills: their front matter and links, the hook's tests, and the facade's build and
-  # publish (docs/designs/agent-setup.md#releasing-the-skills). Runs on every change.
+  # publish (docs/designs/agent-setup.md#releasing-the-skills).
   skills:
+    needs: changes
+    if: needs.changes.outputs.skills == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -213,7 +298,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm skills:check
+      - run: make ci-skills
+      - uses: ./.github/actions/record-pass
+        with:
+          area: skills
+          hash: ${{ needs.changes.outputs.skills_hash }}
 
   # Dependencies this PR adds or changes (Go + pnpm), via GitHub's dependency graph;
   # config in .github/dependency-review-config.yml. The action runs twice so the
@@ -222,7 +311,8 @@ jobs:
   dependency-review:
     # PR only: it judges the PR's own dependency changes, already reviewed on the
     # PR, and comments on the PR, which a merge group has none of.
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.dependencies == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -286,22 +376,29 @@ jobs:
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [changes, commitlint, lint, test, api, web, release, skills, dependency-review]
+    needs: [changes, commitlint, lint, go, api, api-breaking, web, manifest, release, skills, dependency-review]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
-      - id: skips
-        env:
-          EVENT: ${{ github.event_name }}
-          CODE: ${{ needs.changes.outputs.code }}
-        run: |
-          skips=()
-          # Skipped in the merge queue: they judged the PR already.
-          if [ "$EVENT" = merge_group ]; then skips+=(commitlint release dependency-review); fi
-          # Skipped when only skills/ changed.
-          if [ "$CODE" = false ]; then skips+=(lint test api web); fi
-          echo "list=$(IFS=,; echo "${skips[*]}")" >> "$GITHUB_OUTPUT"
+      # Every job but changes may skip: a file job when its files passed before, a base check
+      # when its area didn't change from the PR's base, or off a PR. changes must pass, so a run
+      # that can't tell which jobs to run fails rather than skipping everything.
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: ${{ steps.skips.outputs.list }}
+          allowed-skips: commitlint, lint, go, api, api-breaking, web, manifest, release, skills, dependency-review
+
+  # On a push to main, once every check passed on the pushed commit: tag the rc or release when
+  # the push changed manifest.yml's version (tag_and_release.yml). So an rc is tagged only on a
+  # commit that passed as merged.
+  tag:
+    needs: ci_passed
+    if: github.event_name == 'push' && needs.ci_passed.result == 'success'
+    uses: ./.github/workflows/tag_and_release.yml
+    with:
+      before: ${{ github.event.before }}
+    secrets:
+      ANFRA_DEPLOY_KEY: ${{ secrets.ANFRA_DEPLOY_KEY }} # pushes the tag; the only secret it gets
+    permissions:
+      contents: read
+      actions: read

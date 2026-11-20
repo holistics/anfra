@@ -2,6 +2,11 @@
 # `version` that has no tag yet; the tag push then triggers build_release.yml, which assembles +
 # publishes (docs/designs/release.md).
 #
+# It runs as the last job of CI on a push to main (continuous_integration.yml), once every check
+# passed on the pushed commit, and only when that push changed manifest.yml's version. So an rc
+# is tagged only on a commit that passed as merged (docs/designs/ci.md). If its CI fails, fix main
+# and cut another rc. Run by hand (workflow_dispatch), it tags main's HEAD, if CI passed on it.
+#
 # - An rc (`version: 0.23.0-rc.1`): tags main's HEAD. It refuses an rc of a release that's out.
 # - A release (`version: 0.23.0`): tags the commit of the rc that `promoted_from` names, so the
 #   release is exactly the code the rc was checked as. It refuses a release without an rc, and one
@@ -13,36 +18,64 @@
 # - a GITHUB_TOKEN-pushed tag wouldn't trigger build_release.yml's `on: push: tags`
 #   (GitHub blocks recursive runs); a deploy-key push does.
 #
-# Runs one at a time, in the order of the pushes, so an rc is always tagged before a release that
-# a later push asks for.
+# Runs one at a time. An rc and the release PR that releases it are days apart, so the rc is
+# tagged before the release asks for it.
 name: Tag & release anfra
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - manifest.yml
-  workflow_dispatch: # manual re-run
-
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
+  workflow_call:
+    inputs:
+      before:
+        description: The commit main was at before the push, to tell whether the push changed the version.
+        type: string
+        required: true
+    secrets:
+      ANFRA_DEPLOY_KEY:
+        description: The deploy key that pushes the tag. The only secret this workflow gets from its caller.
+        required: true
+  workflow_dispatch: # by hand: main's HEAD, if CI passed on it
 
 permissions:
   contents: read # the tag is pushed with the deploy key, not GITHUB_TOKEN
+  actions: read # by hand: whether CI passed on the commit
 
 jobs:
   tag:
     runs-on: ubuntu-latest
+    concurrency:
+      group: tag-and-release
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ssh-key: ${{ secrets.ANFRA_DEPLOY_KEY }} # git pushes over SSH as the deploy key
-          fetch-depth: 0 # the tags, and the rc's commit to tag a release on
+          fetch-depth: 0 # the tags, the commit before the push, and the rc's commit to tag a release on
           fetch-tags: true
 
+      - name: Whether to tag
+        id: should
+        env:
+          BEFORE: ${{ inputs.before }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            passed="$(gh run list --workflow continuous_integration.yml --commit "$GITHUB_SHA" --event push \
+              --status success --json databaseId --jq length)"
+            if [ "$passed" -eq 0 ]; then
+              echo "::error::CI hasn't passed on $GITHUB_SHA, main's HEAD: wait for it, or fix main"
+              exit 1
+            fi
+          else
+            version() { git show "$1:manifest.yml" | sed -n 's/^version: *//p'; }
+            if [ "$(version "$BEFORE")" = "$(version HEAD)" ]; then
+              echo "This push didn't change manifest.yml's version: nothing to tag."
+              exit 0
+            fi
+          fi
+          echo "tag=true" >> "$GITHUB_OUTPUT"
+
       - name: Create the tag if new
+        if: steps.should.outputs.tag == 'true'
         run: |
           fail() { echo "::error::$*"; exit 1; }
           version="$(yq '.version' manifest.yml)"

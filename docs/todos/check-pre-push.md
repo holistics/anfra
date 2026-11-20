@@ -39,4 +39,4 @@ The hook is installed like the existing commit-msg hook: husky sets up `.husky/`
 
 1. Add `.husky/pre-push` (above); mention it in DEVELOPMENT.md's Checks and in AGENTS.md.
 2. Test it against a scratch remote, not GitHub: a docs-only push (skips), a mixed push (runs), a new branch (diffs from its merge base with main), deleting a branch (skips), and pushing several refs at once.
-3. Decide whether CI should skip its jobs on docs-only changes too. Not with `paths-ignore`: `ci_passed` is the required check, and a workflow that doesn't run leaves it pending forever, blocking the merge. Instead, a first step that detects docs-only changes and lets the other jobs skip themselves, so `ci_passed` still reports. Only worth it if CI time on docs PRs bothers anyone.
+3. ~~Decide whether CI should skip its jobs on docs-only changes too.~~ Done: CI runs each job only when its area changed (`scripts/ci-areas.sh`), and `ci_passed` still reports. The hook could ask the same script which checks a push needs, rather than detecting docs-only pushes itself.

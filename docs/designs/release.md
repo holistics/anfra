@@ -134,11 +134,11 @@ While an rc waits, the daily job cuts no rc: changes merged in the meantime have
 
 Once an rc is out, its build runs `scripts/release-pr.sh --release <rc>`, which runs `pnpm bump <release> <rc>` on a branch fresh from `main`, `release/next`, and opens the pull request, closing the one it replaces. It sets the three versions to the release, sets `promoted_from` to the rc, and replaces the rc sections of both changelogs with the release's ([Release notes](#release-notes)).
 
-**It is exactly what the bot generates.** CI checks it (`scripts/check-release-pr.sh`, in the `release` job): it runs the same bump on the pull request's base, and fails unless the pull request's change is the generated one. That catches any other change: an unrelated file, a version edited by hand, or a reworded line in the merged notes, which would land on `main` but not in the release, whose build merges the notes from the rc's tag. Edit an rc's notes in its rc PR, or cut another rc. The check also fails once a newer rc of the release is out, since that rc's release PR replaces it. On an rc PR, it checks that the release isn't out yet, since a release that's out takes no more rcs.
+**It is exactly what the bot generates.** CI checks it (`scripts/check-release-pr.sh`, in the `manifest` job): it runs the same bump on the pull request's base, and fails unless the pull request's change is the generated one. That catches any other change: an unrelated file, a version edited by hand, or a reworded line in the merged notes, which would land on `main` but not in the release, whose build merges the notes from the rc's tag. Edit an rc's notes in its rc PR, or cut another rc. The check also fails once a newer rc of the release is out, since that rc's release PR replaces it. On an rc PR, it checks that the release isn't out yet, since a release that's out takes no more rcs.
 
 ### Tagging
 
-`tag_and_release.yml` runs on a push to `main` that changes `manifest.yml`, one run at a time, in the order of the pushes. If the version has no tag yet, it tags it:
+`tag_and_release.yml` runs as the last job of CI on a push to `main`, once every check has passed on the pushed commit, and only when that push changed `manifest.yml`'s version ([CI](ci.md)). So an rc is tagged only on a commit that passed as merged. If its CI fails, fix `main` and cut another rc. Run by hand, it tags `main`'s HEAD, if CI passed on it. If the version has no tag yet, it tags it:
 
 ```mermaid
 flowchart TD
