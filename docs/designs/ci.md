@@ -1,6 +1,6 @@
 # CI
 
-Status: parts 1 to 4 of the plan are on the branch; 5 is to do.
+Status: the plan is on the branch. The Slack channel and its subscription are set up by hand.
 
 CI runs only the checks a change can affect, and still makes sure `main` passes before a release is tagged. A docs change takes seconds, an rc or release PR about a minute, and a hotfix runs its checks once, in its pull request.
 
@@ -62,9 +62,17 @@ The same workflow runs on every push to `main`, on the commit as merged:
 
 ### Hourly full runs
 
-Every hour, a scheduled workflow checks whether `main` changed since the last full run. If it did, it starts `Full CI`, which runs every job with no skipping. A Slack channel subscribed to `Full CI` reports each run, with the commits since the previous one.
+Every hour, `full_ci.yml` checks whether `main`'s files changed since the last full run. If they did, it starts a full run: CI started by hand (`workflow_dispatch`), which runs every job with no skipping. Its summary lists the commits since the previous full run.
 
 It catches what the area lists miss, such as a job that starts reading a file from another area. It blocks nothing.
+
+It compares with the last full run whether that run passed or failed, so a failure is reported once, not every hour. To retry after a fix, start one by hand: `gh workflow run continuous_integration.yml --ref main`.
+
+A Slack channel reports every full run, through the GitHub app's subscription to CI's dispatched runs:
+
+```
+/github subscribe holistics/anfra workflows:{name:"Continuous Integration" event:"workflow_dispatch" branch:"main"}
+```
 
 ### Locally
 
@@ -111,4 +119,4 @@ The bookkeeping costs a few seconds per run: one lookup per job, and one artifac
 2. **Each job through `make ci-<area>`, and `make ci`.** Done (`2c9604d7`).
 3. **Area hashes.** Each file job records and looks up `passed-<area>-<hash>`; the base checks are PR-only jobs (`api-breaking`, `release`, `dependency-review`, commitlint); CI runs on push to `main`; CI's own files are in every area, and a file in no area runs everything. Done.
 4. **Tag only a commit that passed on `main`.** Done: `tag_and_release.yml` is the last job of CI on a push to `main`, after `ci_passed`, when the push changed the version.
-5. **Hourly full runs, and the Slack channel.**
+5. **Hourly full runs, and the Slack channel.** Done: `full_ci.yml`, and CI's `workflow_dispatch` runs everything. The channel is to set up.

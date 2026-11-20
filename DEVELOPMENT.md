@@ -67,6 +67,8 @@ make test         # every build and test: Go (with -race), the SDK, the frontend
 
 `make ci` starts by saying which areas it runs and which it skips. Commit lint, the dependency review, and the check that a release PR is the bot's run only in CI.
 
+CI also runs every job on `main` each hour that `main` changed, whatever the change (`full_ci.yml`), to catch what the areas miss. To start one by hand, for example to retry after a fix: `gh workflow run continuous_integration.yml --ref main`.
+
 golangci-lint and sqlc run at the versions `tools/go.mod` pins, as CI's do. The Go tests run with `-race`, as CI's do. `GO_TEST_FLAGS=` turns it off, for a faster run that misses data races.
 
 Some Go tests run commands against real sidecars (`internal/app/sidecars_test.go`), and the dev warehouse (`docker compose -f docker-compose.dev.yml up -d postgres`). They skip themselves unless `ANFRA_NODE_BIN` and `ANFRA_CANAL_QUERY_BIN` are both set, and `make test` then says so. `make test-sidecars` runs the Go tests with them, against the pinned sidecars or your own; `make test` runs them too when `.env.local` names both, after checking their versions.
