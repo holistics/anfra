@@ -24,7 +24,7 @@ const ReleasesURL = "https://github.com/" + repoSlug + "/releases"
 // (build_release.yml), rather than anfra reading it at the release's tag: a
 // release tags the commit of the release candidate it was made from, whose
 // CHANGELOG.md has that candidate's notes, under the candidate's version
-// (docs/designs/release-candidates.md).
+// (docs/designs/release.md).
 func ChangelogURL(version string) string {
 	return fmt.Sprintf("%s/%s/releases/download/v%s/CHANGELOG.md", webBase, repoSlug, url.PathEscape(tagVersion(version)))
 }

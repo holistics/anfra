@@ -1,6 +1,11 @@
-# Cut an anfra release. When manifest.yml lands on main with a `version` that has
-# no matching tag yet, create `v<version>`; the tag push then triggers
-# build_release.yml, which assembles + publishes.
+# Tag an anfra release candidate (rc) or release, when manifest.yml lands on main with a
+# `version` that has no tag yet; the tag push then triggers build_release.yml, which assembles +
+# publishes (docs/designs/release.md).
+#
+# - An rc (`version: 0.23.0-rc.1`): tags main's HEAD. It refuses an rc of a release that's out.
+# - A release (`version: 0.23.0`): tags the commit of the rc that `promoted_from` names, so the
+#   release is exactly the code the rc was checked as. It refuses a release without an rc, and one
+#   whose rc isn't the newest of that release.
 #
 # The tag is pushed with a deploy key (ANFRA_DEPLOY_KEY), not GITHUB_TOKEN:
 # - the "release tags" ruleset blocks creating tags, and GITHUB_TOKEN can't be a
@@ -8,8 +13,8 @@
 # - a GITHUB_TOKEN-pushed tag wouldn't trigger build_release.yml's `on: push: tags`
 #   (GitHub blocks recursive runs); a deploy-key push does.
 #
-# Flow to cut a release: bump `version` (and sidecar pins) in manifest.yml in a PR
-# -> merge to main -> this tags -> build_release.yml publishes.
+# Runs one at a time, in the order of the pushes, so an rc is always tagged before a release that
+# a later push asks for.
 name: Tag & release anfra
 
 on:
@@ -19,6 +24,10 @@ on:
     paths:
       - manifest.yml
   workflow_dispatch: # manual re-run
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions:
   contents: read # the tag is pushed with the deploy key, not GITHUB_TOKEN
@@ -30,16 +39,36 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ssh-key: ${{ secrets.ANFRA_DEPLOY_KEY }} # git pushes over SSH as the deploy key
+          fetch-depth: 0 # the tags, and the rc's commit to tag a release on
+          fetch-tags: true
 
-      - name: Create tag if new
+      - name: Create the tag if new
         run: |
+          fail() { echo "::error::$*"; exit 1; }
           version="$(yq '.version' manifest.yml)"
-          test -n "$version" && test "$version" != null || { echo "no version in manifest.yml"; exit 1; }
+          promoted="$(yq '.promoted_from // ""' manifest.yml)"
+          test -n "$version" && test "$version" != null || fail "no version in manifest.yml"
           tag="v$version"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "$tag already exists — bump manifest.yml version to cut a release"
-          else
-            git tag "$tag" HEAD
-            git push origin "$tag"
-            echo "pushed $tag"
+            echo "$tag already exists: cut an rc to make a new release"
+            exit 0
           fi
+          release="${version%%-*}"
+          if [ "$version" != "$release" ]; then
+            # An rc.
+            if git rev-parse -q --verify "refs/tags/v$release" >/dev/null; then
+              fail "v$release is out already, so it takes no more rcs: cut an rc of a later version"
+            fi
+            target=HEAD
+          else
+            # A release, of the rc promoted_from names.
+            test -n "$promoted" || fail "manifest.yml releases $version without promoted_from: a release is made from an rc, so cut one first"
+            test "${promoted%%-*}" = "$version" || fail "promoted_from $promoted is not an rc of $version"
+            newest="$(node scripts/lib/versions.mjs newest-rc "$version")"
+            git rev-parse -q --verify "refs/tags/v$promoted" >/dev/null || fail "promoted_from $promoted has no tag v$promoted"
+            test "$promoted" = "$newest" || fail "promoted_from $promoted is not the newest rc of $version, which is $newest: merge the release PR for $newest"
+            target="v$promoted^{commit}"
+          fi
+          git tag "$tag" "$target"
+          git push origin "$tag"
+          echo "pushed $tag, on $(git rev-parse --short "$target")"

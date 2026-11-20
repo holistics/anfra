@@ -172,6 +172,35 @@ jobs:
           git diff --exit-code -- web/sdk/src/api/schema.d.ts \
             || { echo "web/sdk/src/api/schema.d.ts is stale: run pnpm --filter @holistics/anfra-sdk generate" >&2; exit 1; }
 
+  # A PR that changes manifest.yml's version (scripts/check-release-pr.sh): an rc PR's release
+  # isn't out yet, and a release PR is exactly what the bot generates, so main's changelogs say what
+  # the release does. PR only: the queue rebases the PR's commits unchanged, and the check judges
+  # the PR's own change.
+  release:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the base, and the tags of the rcs and releases
+          fetch-tags: true
+      - name: Whether the version changes
+        id: version
+        run: |
+          version() { git show "$1:manifest.yml" | sed -n 's/^version: *//p'; }
+          if [ "$(version HEAD^1)" != "$(version HEAD)" ]; then echo "changes=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.version.outputs.changes == 'true'
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0; the version is package.json's packageManager
+      - if: steps.version.outputs.changes == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.version.outputs.changes == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.version.outputs.changes == 'true'
+        run: scripts/check-release-pr.sh
+
   # The anfra skills: their front matter and links, the hook's tests, and the facade's build and
   # publish (docs/designs/agent-setup.md#releasing-the-skills). Runs on every change.
   skills:
@@ -257,7 +286,7 @@ jobs:
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [changes, commitlint, lint, test, api, web, skills, dependency-review]
+    needs: [changes, commitlint, lint, test, api, web, release, skills, dependency-review]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -268,7 +297,7 @@ jobs:
         run: |
           skips=()
           # Skipped in the merge queue: they judged the PR already.
-          if [ "$EVENT" = merge_group ]; then skips+=(commitlint dependency-review); fi
+          if [ "$EVENT" = merge_group ]; then skips+=(commitlint release dependency-review); fi
           # Skipped when only skills/ changed.
           if [ "$CODE" = false ]; then skips+=(lint test api web); fi
           echo "list=$(IFS=,; echo "${skips[*]}")" >> "$GITHUB_OUTPUT"

@@ -33,7 +33,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [publish and pull](designs/publish.md) | The CLI's side of publishing: `anfra pull`, publishes that name their base, the sync state, the flows, and what the CLI needs from the org's server (proposal). |
 | [treemerge](designs/treemerge.md) | Merging three versions of a repo's files, and of one file's text: what it owns, its flows, conflicts and markers, its architecture (proposal). |
 | [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
-| [release](designs/release.md) | From `manifest.yml` to a release: binaries, the Docker image, versions, updates. |
+| [release](designs/release.md) | From `manifest.yml` to a release, through a release candidate anfra Cloud runs first: binaries, the Docker image, versions, updates. |
 | [init sample](designs/init-sample.md) | `anfra init --example`: the e-commerce sample from its own public repo, asked in a terminal and offered to agents. |
 | [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
