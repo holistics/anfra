@@ -255,7 +255,7 @@ for it:
   find each part and give the user a handle to it. Mark every part, since each takes one attribute.
 - To let a reader open the host's Inspect panel at a chart's query, wire a button or menu of your
   own to `query.inspect()` (`control.inspect()` for a control), called from its click. The menu
-  on a block or a chart's point already offers "Inspect". See
+  on a chart's point (`query.menu`) already offers "Inspect"; a block's menu doesn't. See
   [references/api.md](references/api.md#opening-the-panel-at-a-query).
 
 Render a selection without rebuilding the chart. A query that drives a cross-filter is not re-run
