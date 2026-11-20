@@ -9,8 +9,10 @@
 // OTEL_EXPORTER_OTLP_ENDPOINT (or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT) turns
 // export on, over OTLP/HTTP; OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
 // label it; and OTEL_SDK_DISABLED=true turns it all off, ids included. Without
-// an endpoint, a span is sampled only when its caller's is, and nothing is
-// exported: each still has its ids, and passes them on (traceparent).
+// an endpoint, nothing is sampled, even under a sampled caller's span, and
+// nothing is exported: each span still has its ids, and passes them on
+// (traceparent). With one, a span is sampled when it has no caller's, or when
+// its caller's is.
 //
 // The repo's .env sets these variables too, below the environment, so an
 // agent's commands in the repo are traced with nothing set in their
@@ -27,7 +29,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0" // the SDK resource's own, so their schema URLs agree
 
+	"github.com/holistics/anfra/internal/sidecar/canallake"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	caller "github.com/holistics/anfra/shared/telemetry"
 )
@@ -80,8 +82,10 @@ func Setup(ctx context.Context, service, version string, data caller.Settings) (
 
 	// The caller's fields go on every span (shared/telemetry), before the batcher
 	// takes it.
+	// Exporting nothing samples nothing, even under a sampled caller's span:
+	// spans still get ids, for log records.
 	opts := []sdktrace.TracerProviderOption{
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.NeverSample())),
+		sdktrace.WithSampler(sdktrace.NeverSample()),
 		sdktrace.WithSpanProcessor(caller.Spans{}),
 	}
 	if exporting {
@@ -105,7 +109,7 @@ func Setup(ctx context.Context, service, version string, data caller.Settings) (
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{}, propagation.Baggage{}))
 	configureNode(exporting, base, traces)
-	configureCanalQuery(exporting, base, traces)
+	configureCanal()
 	return tp.Shutdown, nil
 }
 
@@ -141,34 +145,24 @@ func configureNode(exporting bool, base, traces string) {
 	_ = os.Setenv("H_OTEL_INTERNAL_EXPORTER_URL", strings.TrimSuffix(base, "/"))
 }
 
-// configureCanalQuery points the canal-query this process spawns at the same
-// collector, over OTLP/HTTP, when this process exports. It is set with
-// canal-query's own prefix (canalquery.EnvPrefix), so it reaches canal-query
-// only, and anfra's own OTEL_* variables still say what the user set. A
-// prefixed endpoint the user set wins, with its protocol: canal-query is then
-// configured already, as over gRPC to port 4317.
-//
-// canal-query exports traces only, as anfra does: its metrics and logs would be
-// refused by a backend that takes only traces. Its exports give up after
-// exportTimeout too, so stopping it never waits on a collector that is down.
-func configureCanalQuery(exporting bool, base, traces string) {
-	p := canalquery.EnvPrefix
-	if !exporting || os.Getenv(p+"OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv(p+"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" {
-		return
-	}
-	if base == "" {
-		base = strings.TrimSuffix(strings.TrimSuffix(traces, "/"), "/v1/traces")
-	}
-	for name, value := range map[string]string{
-		"OTEL_EXPORTER_OTLP_ENDPOINT":        strings.TrimSuffix(base, "/"),
-		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf",
-		"OTEL_EXPORTER_OTLP_PROTOCOL":        "http/protobuf",
-		"OTEL_EXPORTER_OTLP_TIMEOUT":         strconv.Itoa(int(exportTimeout.Milliseconds())),
-		"OTEL_METRICS_EXPORTER":              "none",
-		"OTEL_LOGS_EXPORTER":                 "none",
-	} {
-		if os.Getenv(p+name) == "" {
-			_ = os.Setenv(p+name, value)
+// configureCanal keeps the canal-query and canal-lake this process spawns
+// from exporting, each unless its own endpoint is set with its prefix
+// (canalquery.EnvPrefix, canallake.EnvPrefix). The release anfra ships
+// (manifest.yml's anfra_canal) exports traces, metrics and logs over gRPC
+// whenever OTEL_EXPORTER_OTLP_ENDPOINT is set, whatever its protocol and
+// OTEL_<SIGNAL>_EXPORTER say, so at an OTLP/HTTP collector, as the telemetry
+// stack is, it logs a failed export every few seconds. So each gets an empty
+// endpoint, set with its prefix, which wins over the one it would inherit from
+// anfra. A prefixed endpoint the user set, for a collector that takes gRPC on
+// port 4317, is left as it is. A release that exports over OTLP/HTTP can be
+// pointed at anfra's collector instead.
+func configureCanal() {
+	for _, p := range []string{canalquery.EnvPrefix, canallake.EnvPrefix} {
+		if os.Getenv(p+"OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv(p+"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" {
+			continue
+		}
+		for _, name := range []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"} {
+			_ = os.Setenv(p+name, "")
 		}
 	}
 }

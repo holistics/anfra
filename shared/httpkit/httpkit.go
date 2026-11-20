@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // Config is what a server tells the shared middleware about itself.
@@ -29,6 +31,10 @@ type Config struct {
 	// this deployment's own services. Otherwise the endpoint is public: a caller's
 	// traceparent is kept as a link, and the request starts a trace of ours.
 	TrustTraceparent bool
+	// TraceSettings are the settings whose baggage allowlist
+	// (telemetry.BaggageIncludeVar) decides which members of a caller's baggage
+	// header get in, from any caller. Zero: the default, gen_ai.conversation.id alone.
+	TraceSettings telemetry.Settings
 }
 
 // Wrap puts the shared middleware in front of h, outermost first: request id,
@@ -41,7 +47,7 @@ func Wrap(h http.Handler, cfg Config) http.Handler {
 	}
 	h = recoverPanics(h)
 	h = logRequests(h, cfg.Logger)
-	h = traceRequests(h, cfg.TrustTraceparent)
+	h = traceRequests(h, cfg.TrustTraceparent, cfg.TraceSettings)
 	h = assignRequestID(h)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), codesKey{}, cfg.Codes)))

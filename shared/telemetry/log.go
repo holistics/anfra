@@ -7,14 +7,15 @@ import (
 	"slices"
 )
 
-// LogHandler wraps h so that a record logged with a context WithAttributes
-// filled carries its fields, each under its LogKey: session.id as session_id.
+// LogHandler wraps h so that a record logged with a context that names its
+// caller (callerFields) carries its fields, each under its LogKey:
+// gen_ai.conversation.id as gen_ai_conversation_id.
 func LogHandler(h slog.Handler) slog.Handler { return logHandler{h} }
 
 type logHandler struct{ slog.Handler }
 
 func (h logHandler) Handle(ctx context.Context, r slog.Record) error {
-	if fields := attributesOf(ctx); len(fields) > 0 {
+	if fields := callerFields(ctx); len(fields) > 0 {
 		r = r.Clone()
 		for _, k := range slices.Sorted(maps.Keys(fields)) {
 			r.AddAttrs(slog.String(LogKey(k), fields[k]))

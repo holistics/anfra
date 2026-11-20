@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -96,7 +98,13 @@ func (cs *consoleServer) ensure(ctx context.Context) {
 	}
 	cmd := exec.Command(exe, "serve", "--idle-timeout", consoleServerIdle.String()) //nolint:gosec // our own binary, fixed args
 	cmd.Dir = cs.repoDir
-	cmd.Env = repoenv.Environ()                       // it reads the repo's .env itself, so its status says what came from there
+	// It reads the repo's .env itself, so its status says what came from there.
+	// It outlives the call that started the console, so it takes no caller's
+	// trace context: each request brings its own.
+	cmd.Env = slices.DeleteFunc(repoenv.Environ(), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return name == "TRACEPARENT" || name == "TRACESTATE" || name == "BAGGAGE"
+	})
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil // it logs to the repo's log
 	detachProcess(cmd)
 	if err := cmd.Start(); err != nil {

@@ -50,9 +50,7 @@ func TestTheEndpointInTheRepoEnv(t *testing.T) {
 	if got := os.Getenv("H_OTEL_INTERNAL_EXPORTER_URL"); got != "http://localhost:14318" {
 		t.Errorf("anfra-node's endpoint = %q", got)
 	}
-	if got := os.Getenv(canalQueryEnv + "OTEL_EXPORTER_OTLP_ENDPOINT"); got != "http://localhost:14318" {
-		t.Errorf("canal-query's endpoint = %q", got)
-	}
+	canalExportsNothing(t)
 	_, span := otel.Tracer("test").Start(context.Background(), "op")
 	span.End()
 	if !span.SpanContext().IsSampled() {

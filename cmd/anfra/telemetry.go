@@ -7,19 +7,26 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/holistics/anfra/internal/agentsession"
+	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoenv"
 	"github.com/holistics/anfra/internal/telemetry"
+	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/holistics/anfra/shared/logkit"
 	caller "github.com/holistics/anfra/shared/telemetry"
@@ -59,11 +66,17 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 			return ctx
 		}
 		ctx = caller.WithSettings(ctx, traceData.Settings())
-		ctx, span = otel.Tracer(tracerName).Start(ctx, cmd.CommandPath()) //nolint:spancheck // ended by end, once the command returns
-		apptracing.RecordPayload(ctx, caller.CommandInput, args)
+		ctx = caller.WithAllowedBaggage(callerTrace(ctx, os.Getenv), traceData.Settings())
 		if dir, err := os.Getwd(); err == nil {
 			ctx = caller.WithAttributes(ctx, repoAttribution(repo.Resolve(dir)))
 		}
+		session := sessionAttribution(os.Getenv)
+		// The session goes in the command's baggage too, for the calls it makes.
+		ctx = caller.WithCallerBaggage(caller.WithAttributes(ctx, session), session, traceData.Settings())
+		ctx, span = otel.Tracer(tracerName).Start(ctx, cmd.CommandPath()) //nolint:spancheck // ended by end, once the command returns
+		apptracing.SetAttributes(ctx, caller.Command.Is(true))
+		ctx = caller.WithAttributes(ctx, map[string]string{caller.CommandID.String(): span.SpanContext().SpanID().String()})
+		apptracing.RecordPayload(ctx, caller.CommandInput, args)
 		return ctx
 	}
 	pre := root.PersistentPreRunE
@@ -82,14 +95,84 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 			return
 		}
 		defer span.End()
-		if _, rendered := errors.AsType[*exitCodeError](err); err == nil || rendered {
-			return // an answer that says it failed is already the command's, not a failure of it
+		spanCtx := trace.ContextWithSpan(ctx, span)
+		code := exitCode(err)
+		apptracing.SetAttributes(spanCtx, caller.ProcessExitCode.Is(code))
+		if code == 0 {
+			return
 		}
-		// As apptracing marks a step: error.type always, an error status only
-		// when the failure is anfra's, not the caller's.
+		// OpenTelemetry's CLI spans: any exit but 0 is an error, with an error
+		// status and error.type, whoever's fault it was. error.type is the
+		// error's code; for an answer that says it failed, such as validate's
+		// problems, which has none, the exit code. An op's span inside keeps the
+		// server's rule: an error status only when the failure is anfra's.
+		if _, rendered := errors.AsType[*exitCodeError](err); rendered {
+			apptracing.SetAttributes(spanCtx, caller.ErrorType.Is(strconv.Itoa(code)))
+			span.SetStatus(otelcodes.Error, fmt.Sprintf("exit code %d", code))
+			return
+		}
 		apptracing.MarkFailed(span, traceData.Settings(), err)
+		span.SetStatus(otelcodes.Error, apperr.From(err).Code.Public().String())
 	}
 }
+
+// sessionAttribution names the session a command runs in, found in its
+// environment through getenv, on every span and log record of the command, so
+// all of one session's calls are found together (internal/agentsession): the
+// coding agent's own, with the agent's name, or else the one its launcher set.
+// Nothing outside either. anfra
+// serve is untraced, so never named: it outlives the session it was started in.
+func sessionAttribution(getenv func(string) string) attribution.Fields {
+	s, ok := agentsession.FromEnv(getenv)
+	if !ok {
+		return nil
+	}
+	return sessionFields(s)
+}
+
+// metaSession names the session of the agent that makes an MCP tool call, from
+// the call's _meta (agentsession.FromMeta), for apikit.MCP.MetaCaller.
+func metaSession(meta map[string]any) map[string]string {
+	s, ok := agentsession.FromMeta(func(key string) string {
+		v, _ := meta[key].(string)
+		return v
+	})
+	if !ok {
+		return nil
+	}
+	return sessionFields(s)
+}
+
+// sessionFields are s as a caller's fields: its id, and its agent's name when
+// a known agent gave it.
+func sessionFields(s agentsession.Session) attribution.Fields {
+	fields := attribution.Fields{caller.ConversationID.String(): s.ID}
+	if s.Agent != "" {
+		fields[caller.AgentName.String()] = s.Agent
+	}
+	return fields
+}
+
+// callerTrace is ctx under the trace its caller passed in the environment, as
+// TRACEPARENT and TRACESTATE (OpenTelemetry's environment carriers), such as
+// the span of a coding agent's tool call: the command's span then goes under
+// it. Read once, at the start.
+func callerTrace(ctx context.Context, getenv func(string) string) context.Context {
+	return otel.GetTextMapPropagator().Extract(ctx, envCarrier{getenv: getenv})
+}
+
+// envCarrier reads a trace from environment variables: a propagator's keys,
+// uppercased. It never writes one: anfra changes no process-wide state for a
+// command, and passes its trace on per call, in each request's headers.
+type envCarrier struct {
+	getenv func(string) string
+}
+
+func (c envCarrier) Get(key string) string { return c.getenv(strings.ToUpper(key)) }
+
+func (envCarrier) Set(string, string) {}
+
+func (envCarrier) Keys() []string { return []string{"TRACEPARENT", "TRACESTATE", "BAGGAGE"} }
 
 // flushTimeout bounds how long exiting waits on the last spans: a collector that
 // is down must not hold up a command that is done.
@@ -149,16 +232,17 @@ func reportTelemetryFailure(lg *slog.Logger, err error) {
 func telemetryInfo() *command.TelemetryInfo {
 	dest := telemetry.Installed()
 	data, limit := dataInfo()
+	bag := baggageInfo()
 	if dest.URL == "" {
 		// From is set only when OTEL_SDK_DISABLED turned telemetry off, which
 		// would otherwise look the same as no endpoint at all.
-		return &command.TelemetryInfo{State: command.TelemetryOff, SetBy: dest.From, Data: data, PayloadLimit: limit}
+		return &command.TelemetryInfo{State: command.TelemetryOff, SetBy: dest.From, Data: data, PayloadLimit: limit, Baggage: bag}
 	}
 	state := command.TelemetryOn
 	if !dest.Answering(300 * time.Millisecond) {
 		state = command.TelemetryFailing
 	}
-	info := &command.TelemetryInfo{State: state, Endpoint: dest.Redacted(), SetBy: dest.From, Data: data, PayloadLimit: limit}
+	info := &command.TelemetryInfo{State: state, Endpoint: dest.Redacted(), SetBy: dest.From, Data: data, PayloadLimit: limit, Baggage: bag}
 	info.Hints = dest.StatusHints(traceData)
 	return info
 }
@@ -183,6 +267,15 @@ func dataInfo() (*command.TelemetryData, *command.TelemetryLimit) {
 	data := &command.TelemetryData{On: traceData.Data.Value, SetBy: setBy(traceData.Data.From)}
 	limit := &command.TelemetryLimit{Value: traceData.PayloadLimit.Value, SetBy: setBy(traceData.PayloadLimit.From)}
 	return data, limit
+}
+
+// baggageInfo is the baggage traceData lets in, as status shows it.
+func baggageInfo() *command.TelemetryBaggage {
+	include := slices.Clone(traceData.Settings().BaggageInclude())
+	if include == nil {
+		include = []string{}
+	}
+	return &command.TelemetryBaggage{Include: include, SetBy: setBy(traceData.BaggageInclude.From)}
 }
 
 // setBy is the variable that set a setting as status names it: "default" for

@@ -335,6 +335,11 @@ type serveConfig struct {
 // (/, /apps/, /appserve/) as c says — behind the request id, root span, log line
 // and recovery, and the guards that keep a web page from using it (guard).
 func serveHandler(c serveConfig) http.Handler {
+	// On loopback, a caller is this machine's user, whose CLI or agent sends its
+	// trace along: continue it. Exposed, a caller's trace is only linked. From
+	// any caller, the baggage members the settings allow get in.
+	host, _, _ := net.SplitHostPort(c.addr.String())
+	trusted := isLoopback(host)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		id := ""
@@ -363,7 +368,7 @@ func serveHandler(c serveConfig) http.Handler {
 	}
 	if c.serveMCP {
 		mux.Handle("/mcp", apikit.MCP[command.CommandContext]{
-			Name: "anfra", Version: meta.Version, Codes: codes,
+			Name: "anfra", Version: meta.Version, Codes: codes, TrustMeta: trusted, TraceSettings: traceData.Settings(), MetaCaller: metaSession,
 			Request: func(r *http.Request) (command.CommandContext, error) { return contextFor(r), nil },
 		}.Handler(rt, reg))
 	}
@@ -373,10 +378,7 @@ func serveHandler(c serveConfig) http.Handler {
 		mux.Handle("/apps/", c.apps)
 		mux.Handle("/appserve/", c.apps)
 	}
-	// On loopback, a caller is this machine's user, whose CLI sends its trace along:
-	// continue it. Exposed, a caller's trace is only linked.
-	host, _, _ := net.SplitHostPort(c.addr.String())
-	return httpkit.Wrap(guard(mux, c.addr), httpkit.Config{Logger: c.logger, Codes: codes, TrustTraceparent: isLoopback(host)})
+	return httpkit.Wrap(guard(mux, c.addr), httpkit.Config{Logger: c.logger, Codes: codes, TrustTraceparent: trusted, TraceSettings: traceData.Settings()})
 }
 
 // coreAPI is the core API over HTTP, every op run with the server's one

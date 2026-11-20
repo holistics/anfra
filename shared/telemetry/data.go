@@ -3,7 +3,9 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"path"
 	"strconv"
+	"strings"
 )
 
 // The user's data in spans is one switch (docs/designs/telemetry.md, data in
@@ -21,6 +23,23 @@ const SidecarVar = "H_OTEL_DATA"
 // PayloadLimitVar is how many bytes of each payload a span records, at most.
 const PayloadLimitVar = "ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT"
 
+// BaggageIncludeVar names the members of a caller's baggage that get into
+// anfra, recorded as the caller's ids and sent on to its sidecars: keys, or
+// patterns with * and ?, separated by commas, such as "tenant.id,user.*", or
+// NoBaggage (AllowedBaggage).
+const BaggageIncludeVar = "ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE"
+
+// NoBaggage is BaggageIncludeVar letting no baggage in at all. Empty can't
+// say it: an empty variable is an unset one, which is the default.
+const NoBaggage = "none"
+
+// DefaultBaggageInclude is what BaggageIncludeVar is unless set: the caller's
+// session alone.
+var DefaultBaggageInclude = []string{"gen_ai.conversation.id"}
+
+// maxBaggagePatterns bounds BaggageIncludeVar.
+const maxBaggagePatterns = 16
+
 // DefaultPayloadLimit is the payload limit unless PayloadLimitVar says
 // otherwise: 16 KiB.
 const DefaultPayloadLimit = 16 << 10
@@ -29,8 +48,9 @@ const DefaultPayloadLimit = 16 << 10
 // payload. The zero Settings records none, so a host that embeds the engine and
 // sets none records no user data; the CLI and serve resolve theirs (Resolve).
 type Settings struct {
-	data         bool
-	payloadLimit int
+	data           bool
+	payloadLimit   int
+	baggageInclude []string // nil: DefaultBaggageInclude
 }
 
 // Defaults records no user data.
@@ -53,6 +73,23 @@ func (s Settings) PayloadLimit() int {
 	return DefaultPayloadLimit
 }
 
+// WithBaggageInclude is s letting in the members of a caller's baggage that
+// patterns name (BaggageIncludeVar), instead of DefaultBaggageInclude. Empty
+// patterns let none in.
+func (s Settings) WithBaggageInclude(patterns []string) Settings {
+	s.baggageInclude = append([]string{}, patterns...)
+	return s
+}
+
+// BaggageInclude is the patterns of the caller's baggage members that get in
+// (AllowedBaggage).
+func (s Settings) BaggageInclude() []string {
+	if s.baggageInclude == nil {
+		return DefaultBaggageInclude
+	}
+	return s.baggageInclude
+}
+
 // Resolved is one setting as it applies, and the variable that set it: "" for
 // the default.
 type Resolved[T any] struct {
@@ -60,21 +97,26 @@ type Resolved[T any] struct {
 	From  string
 }
 
-// Resolution is whether data is recorded, and the payload limit, with what
-// set each: Settings, explained for `anfra status`.
+// Resolution is whether data is recorded, the payload limit and the baggage
+// recorded, with what set each: Settings, explained for `anfra status`.
 type Resolution struct {
-	Data         Resolved[bool]
-	PayloadLimit Resolved[int]
+	Data           Resolved[bool]
+	PayloadLimit   Resolved[int]
+	BaggageInclude Resolved[[]string]
 }
 
 // Settings are the resolution's values.
 func (r Resolution) Settings() Settings {
-	return NewSettings(r.Data.Value, r.PayloadLimit.Value)
+	s := NewSettings(r.Data.Value, r.PayloadLimit.Value)
+	if r.BaggageInclude.From != "" {
+		s = s.WithBaggageInclude(r.BaggageInclude.Value)
+	}
+	return s
 }
 
 // Resolve reads the settings from getenv (os.Getenv): DataVar, on unless 0,
-// and PayloadLimitVar. A value it doesn't take is refused (InvalidSettingError),
-// naming the variable.
+// PayloadLimitVar and BaggageIncludeVar. A value it doesn't take is refused
+// (InvalidSettingError), naming the variable.
 func Resolve(getenv func(string) string) (Resolution, error) {
 	r := Resolution{Data: Resolved[bool]{Value: true}}
 	switch v := getenv(DataVar); v {
@@ -92,7 +134,45 @@ func Resolve(getenv func(string) string) (Resolution, error) {
 		}
 		r.PayloadLimit = Resolved[int]{Value: n, From: PayloadLimitVar}
 	}
+	r.BaggageInclude = Resolved[[]string]{Value: DefaultBaggageInclude}
+	if v, set := lookup(getenv, BaggageIncludeVar); set {
+		patterns := []string{}
+		if strings.TrimSpace(v) != NoBaggage {
+			var err error
+			if patterns, err = parseBaggageInclude(v); err != nil {
+				return Resolution{}, &InvalidSettingError{Name: BaggageIncludeVar, Value: v,
+					Want: fmt.Sprintf("%q, or at most %d keys or patterns, such as tenant.id,user.*, separated by commas", NoBaggage, maxBaggagePatterns)}
+			}
+		}
+		r.BaggageInclude = Resolved[[]string]{Value: patterns, From: BaggageIncludeVar}
+	}
 	return r, nil
+}
+
+// lookup is getenv's value for name, and whether it is set: getenv gives ""
+// for a variable that isn't, so a value that is only spaces counts as unset.
+func lookup(getenv func(string) string, name string) (string, bool) {
+	v := getenv(name)
+	return v, strings.TrimSpace(v) != ""
+}
+
+// parseBaggageInclude is BaggageIncludeVar's patterns.
+func parseBaggageInclude(v string) ([]string, error) {
+	var patterns []string
+	for p := range strings.SplitSeq(v, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, err := path.Match(p, ""); err != nil || strings.ContainsAny(p, "/[]\\ ") || p == NoBaggage {
+			return nil, fmt.Errorf("pattern %q", p)
+		}
+		patterns = append(patterns, p)
+	}
+	if len(patterns) == 0 || len(patterns) > maxBaggagePatterns {
+		return nil, fmt.Errorf("%d patterns", len(patterns))
+	}
+	return patterns, nil
 }
 
 // SidecarEnv is s as the variable a spawned sidecar reads: H_OTEL_DATA=1 or 0.

@@ -36,7 +36,7 @@ func TestEverySpanInTheContextNamesTheCaller(t *testing.T) {
 	tr := tp.Tracer("test")
 
 	ctx, root := tr.Start(context.Background(), "root")
-	ctx = telemetry.WithAttributes(ctx, map[string]string{"session.id": "s-1", "agent.name": "claude-code", "empty": ""})
+	ctx = telemetry.WithAttributes(ctx, map[string]string{"gen_ai.conversation.id": "s-1", "gen_ai.agent.name": "claude-code", "empty": ""})
 	ctx, op := tr.Start(ctx, "op")
 	_, inner := tr.Start(ctx, "inner")
 	inner.End()
@@ -49,7 +49,7 @@ func TestEverySpanInTheContextNamesTheCaller(t *testing.T) {
 	}
 	for _, s := range spans {
 		got := attrsOf(s)
-		for k, want := range map[string]string{"session.id": "s-1", "gen_ai.conversation.id": "s-1", "agent.name": "claude-code"} {
+		for k, want := range map[string]string{"gen_ai.conversation.id": "s-1", "gen_ai.agent.name": "claude-code"} {
 			if got[k] != want {
 				t.Errorf("%s: %s = %q, want %q", s.Name(), k, got[k], want)
 			}
@@ -93,23 +93,23 @@ func TestNoFieldsNoAttributes(t *testing.T) {
 	}
 }
 
-// A log record gets the fields snake_case, and only the session's one name.
+// A log record gets the fields snake_case.
 func TestLogRecordsNameTheCallerSnakeCase(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(telemetry.LogHandler(slog.NewJSONHandler(&buf, nil)))
-	ctx := telemetry.WithAttributes(context.Background(), map[string]string{"session.id": "s-1", "agent.name": "codex"})
+	ctx := telemetry.WithAttributes(context.Background(), map[string]string{"gen_ai.conversation.id": "s-1", "gen_ai.agent.name": "codex"})
 
 	log.InfoContext(ctx, "Ran")
 	log.With("k", "v").InfoContext(context.Background(), "Alone")
 
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if !strings.Contains(lines[0], `"agent_name":"codex"`) || !strings.Contains(lines[0], `"session_id":"s-1"`) {
+	if !strings.Contains(lines[0], `"gen_ai_agent_name":"codex"`) || !strings.Contains(lines[0], `"gen_ai_conversation_id":"s-1"`) {
 		t.Errorf("got %s", lines[0])
 	}
-	if strings.Contains(lines[0], "gen_ai") || strings.Contains(lines[0], "session.id") {
+	if strings.Contains(lines[0], "gen_ai.") {
 		t.Errorf("got %s", lines[0])
 	}
-	if strings.Contains(lines[1], "session_id") {
+	if strings.Contains(lines[1], "gen_ai_conversation_id") {
 		t.Errorf("a record outside the context got the fields: %s", lines[1])
 	}
 }

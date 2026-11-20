@@ -201,6 +201,8 @@ type TelemetryInfo struct {
 	Data     *TelemetryData `json:"data,omitempty" doc:"whether your data reaches a span, and what set it."`
 	// PayloadLimit is how many bytes of each payload a span records.
 	PayloadLimit *TelemetryLimit `json:"payload_limit,omitempty" doc:"how many bytes of each input, result and query a span records, at most. A longer one is cut, and marked as cut."`
+	// Baggage is the members of a caller's baggage anfra lets in.
+	Baggage *TelemetryBaggage `json:"baggage,omitempty" doc:"which members of a caller's W3C baggage anfra lets in, and what set it. What it lets in, each span records as the caller's ids, and anfra sends on to its sidecars."`
 	// Hints are what the host says to check about where traces go, which
 	// status adds to its own hints. Not part of the answer: status has said
 	// them by then.
@@ -217,6 +219,13 @@ type TelemetryData struct {
 type TelemetryLimit struct {
 	Value int    `json:"value" doc:"the limit, in bytes."`
 	SetBy string `json:"set_by" doc:"what set it: ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT (followed by \"in .env\" when the repo's .env set it), or \"default\"."`
+}
+
+// TelemetryBaggage is the members of a caller's baggage anfra lets in, and
+// what set them.
+type TelemetryBaggage struct {
+	Include []string `json:"include" doc:"the keys let in, or patterns with * and ? as wildcards, such as gen_ai.conversation.id or user.*. Empty when ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE is none: no baggage gets in."`
+	SetBy   string   `json:"set_by" doc:"what set it: ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE (followed by \"in .env\" when the repo's .env set it), or \"default\"."`
 }
 
 // TransformSchema describes TelemetryInfo wherever it appears, so what it is and

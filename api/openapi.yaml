@@ -1954,6 +1954,21 @@ components:
       required:
         - state
       type: object
+    TelemetryBaggage:
+      additionalProperties: false
+      properties:
+        include:
+          description: "the keys let in, or patterns with * and ? as wildcards, such as gen_ai.conversation.id or user.*. Empty when ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE is none: no baggage gets in."
+          items:
+            type: string
+          type: array
+        set_by:
+          description: "what set it: ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE (followed by \"in .env\" when the repo's .env set it), or \"default\"."
+          type: string
+      required:
+        - include
+        - set_by
+      type: object
     TelemetryData:
       additionalProperties: false
       properties:
@@ -1971,6 +1986,9 @@ components:
       additionalProperties: false
       description: "Where anfra records each command's trace: the user's own telemetry, to their own endpoint, never data sent to Holistics. Under anfra serve, the server's settings, since its commands run there. Absent when the host doesn't say. Experimental: its fields may change in a minor release."
       properties:
+        baggage:
+          $ref: "#/components/schemas/TelemetryBaggage"
+          description: which members of a caller's W3C baggage anfra lets in, and what set it. What it lets in, each span records as the caller's ids, and anfra sends on to its sidecars.
         data:
           $ref: "#/components/schemas/TelemetryData"
           description: whether your data reaches a span, and what set it.

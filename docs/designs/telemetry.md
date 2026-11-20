@@ -98,15 +98,16 @@ span ──► Spans{} ──► Filter ──► OTLP/HTTP ──► collector 
 
 - **Setup.** `internal/telemetry` installs a tracer provider configured by the standard `OTEL_*` variables, from the environment or the repo's `.env` ([settings](#settings)). Tracing is always on, so log records carry span ids, but spans are exported only when an endpoint is set. A setup that fails prints a warning, and the command runs untraced.
 - **Spans.**
-  - Every CLI command is the root of its trace, `anfra <command path>`, a refused one included (`traceCommands` in `cmd/anfra/telemetry.go`). `serve`, `console` and shell completion have none: each request, and each command a console runs, is its own trace, and completion runs on every Tab.
+  - Every CLI command is the root of its trace, `anfra <command path>`, a refused one included (`traceCommands` in `cmd/anfra/telemetry.go`). It records `process.exit.code`, and, when that isn't 0, `error.type` and an error status, as OpenTelemetry's CLI conventions define an error. `serve`, `console` and shell completion have none: each request, and each command a console runs, is its own trace, and completion runs on every Tab.
   - Each op is a span, `anfra.op.<op>`, such as `anfra.op.core.query` (`shared/apikit/invoke.go`), carrying [what the op did](#what-an-ops-span-records).
-  - Under `serve`, each HTTP request has a span carrying `h.request.id`.
+  - Under `serve`, each HTTP request has a span carrying `h.request.id`, named by its method and route once routed, as OpenTelemetry's HTTP conventions name it: `POST /api/core.query`, `GET /api/ops`, `POST /mcp`.
+  - Each MCP request has a span under its HTTP request's, as OpenTelemetry's MCP conventions name it: `tools/call core.query`, `tools/list`, `initialize`, with `mcp.method.name`, `mcp.session.id` and `mcp.protocol.version`, and on a tool call `gen_ai.tool.name` and `gen_ai.operation.name=execute_tool`. A tool whose result says it failed is `error.type=tool_error`. The op's span goes under it, so a CLI call reads `anfra query` → `anfra.op.core.query`, an API call `POST /api/core.query` → `anfra.op.core.query`, and an MCP call `POST /mcp` → `tools/call core.query` → `anfra.op.core.query`.
   - Each call to a sidecar has a span, and carries the trace into the sidecar.
   - Each call to an org's server, from `publish` and `pull`, has a span such as `org repos.publish`. It doesn't carry the trace, which is the user's.
   - A few named steps: sign-in, the update check, a sidecar's start, the sample's download.
 - **The caller.** Every span and log record of a command in a repo carries its repo id ([the caller](#the-caller-on-every-span-and-log-record)).
 - **User data.** The user's data is recorded only when its switch is on ([data in spans](#data-in-spans)), and `anfra status` shows whether it is.
-- **Across processes.** A CLI call forwarded to `serve` carries its trace, which the server continues on loopback. anfra points anfra-node and canal-query at the same collector, and tells every sidecar it spawns what of the user's data to record. canal-query carries the trace into canal-lake.
+- **Across processes.** A CLI call forwarded to `serve` carries its trace, which the server continues on loopback. anfra points anfra-node at the same collector, and canal-query and canal-lake at none unless one's own endpoint is set (`ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT`, `ANFRA_CANAL_LAKE_ENV_OTEL_EXPORTER_OTLP_ENDPOINT`), since the release anfra ships exports over gRPC only, and tells every sidecar it spawns what of the user's data to record. canal-query carries the trace into canal-lake.
 - **Logs.** Every record logged with a context carries `trace_id` and `span_id` (`shared/logkit/trace.go`).
 - **Errors.** Every failing span carries `error.type`, the error's code, but only a server-scope failure marks it failed. A step's sensitive parameters are redacted from span and log (`shared/appstep`).
 - **Query observers.** The engine reports each warehouse query to its host through `Observers.Queries` (`internal/command/observers.go`): its id, data source, dataset, AQL and SQL, the warehouse's query id, then rows read, bytes scanned, a timeline of steps, and the error. The CLI and `serve` write it onto the op's span.
@@ -116,7 +117,7 @@ span ──► Spans{} ──► Filter ──► OTLP/HTTP ──► collector 
 
 1. **Metrics are recorded but never exported.** `shared/routine` records `anfra.routine.*`, but no meter provider is installed.
 2. **Logs go only to the local `anfra.log`.**
-3. **canal-query's and canal-lake's spans don't reach the collector.** The `anfra-canal` release `manifest.yml` pins exports over gRPC only. canal-query flushes with a cancelled context under the CLI. canal-lake gets no endpoint of its own from anfra, so it inherits anfra's, an HTTP one, and its gRPC exports to it fail. Its log lines have no trace id ([logs](logs.md#not-yet)).
+3. **canal-query's and canal-lake's spans don't reach the collector.** The `anfra-canal` release `manifest.yml` pins exports over gRPC only. canal-query flushes with a cancelled context under the CLI. Their log lines have no trace id ([logs](logs.md#not-yet)).
 4. **The sidecars don't apply the data settings.** anfra passes them `H_OTEL_DATA`, but anfra-node records each failed call's message and stack, canal-query records raw errors, stacks, a result's column names and types, and, for MySQL, the full SQL, and canal-lake records raw errors and stacks. Once pointed at the user's collector, all of it goes there.
 5. **Nothing ties one agent's calls together.** No session id exists.
 6. **The SDK sends no `traceparent`.** A Data App's query starts a new trace at `serve`.
@@ -126,7 +127,7 @@ span ──► Spans{} ──► Filter ──► OTLP/HTTP ──► collector 
 | Phase | What it delivers | Goals it meets | Done when |
 |---|---|---|---|
 | **0. Generic tracing** | Each command's trace, from the CLI or `serve` through anfra-node, canal-query and canal-lake, saying what each op and query did, with payloads when asked for, a local stack, and a sample that reads its traces with anfra. Nothing agent-specific. | A slow or failed query can be explained (P0). Anyone can start tracing quickly (P1). | A user runs `anfra experimental telemetry init`, then a query, and finds its trace in ClickHouse with its warehouse, rows and step times, and, with data on, its dataset. |
-| **1. Agent tracing** | Every call an agent makes, grouped by the agent's session, nested in the agent's own trace. | An agent's work can be traced (P0). Agents can explain their reasoning (P1). | A coding agent runs several commands with nothing set, and one query by `session.id` returns all of them, in order. |
+| **1. Agent tracing** | Every call an agent makes, grouped by the agent's session, nested in the agent's own trace. | An agent's work can be traced (P0). Agents can explain their reasoning (P1). | A coding agent runs several commands with nothing set, and one query by `gen_ai.conversation.id` returns all of them, in order. |
 
 Phase 1 needs phase 0: a session id is worth adding only once spans say something, and it reaches them through phase 0's span processor. The rest follows by priority. A **Decide** item blocks the steps after it. Paths are where a change is expected, not a commitment.
 
@@ -154,7 +155,7 @@ An attribute is short, from a fixed set where it can be, and holds nothing from 
 |---|---|---|---|
 | Every op | `anfra.op` | The op's name, such as `core.query` | `apikit` |
 | | `error.type` | The error code, on failure | `apikit` |
-| | [The caller](#the-caller-on-every-span-and-log-record) | Such as `anfra.repo.id`, or phase 1's `session.id` | The span processor |
+| | [The caller](#the-caller-on-every-span-and-log-record) | Such as `anfra.repo.id`, or phase 1's `gen_ai.conversation.id` | The span processor |
 | `query.*` | `anfra.query.id` | The query run's id, a UUIDv7 | The query observer |
 | | `anfra.query.kind` | `aql` or `sql` | The query observer |
 | | `anfra.dataset` | The AQL dataset, unset for SQL | The query observer |
@@ -190,14 +191,14 @@ The host puts the invocation's `Attribution` in the command's context once. A sp
 - **Every log record is labelled** with the same fields.
 - **It is core's,** so a platform embedding the engine gets the same with its own fields.
 
-With `Attribution` `{"anfra.repo.id": "shop-1a2b3c4d", "session.id": "s-1"}`:
+With `Attribution` `{"anfra.repo.id": "shop-1a2b3c4d", "gen_ai.conversation.id": "s-1"}`:
 
 | What | Labelled with |
 |---|---|
-| Every span | `anfra.repo.id=shop-1a2b3c4d`, `session.id=s-1`, `gen_ai.conversation.id=s-1` |
-| Every log record | `anfra_repo_id=shop-1a2b3c4d`, `session_id=s-1` |
+| Every span | `anfra.repo.id=shop-1a2b3c4d`, `gen_ai.conversation.id=s-1` |
+| Every log record | `anfra_repo_id=shop-1a2b3c4d`, `gen_ai_conversation_id=s-1` |
 
-Keys are span attribute names, dotted as OpenTelemetry's are, since agent-tracing platforms match them exactly. Log keys are snake_case ([logs](logs.md)). The one alias is `gen_ai.conversation.id` for `session.id`, which some platforms read instead. Empty values are left out.
+Keys are span attribute names, dotted as OpenTelemetry's are, since agent-tracing platforms match them exactly. Log keys are snake_case ([logs](logs.md)). Empty values are left out.
 
 **Who fills it.** The CLI and `serve` fill `anfra.repo.id`, the [repo id](architecture.md#state-and-config) anfra names the repo's state folder by: its folder name and a hash of its path, such as `shop-1a2b3c4d`. So traces from several repos in one backend can be told apart, two checkouts of the same repo included, and a span matches the repo's logs and state folder. The folder name is recorded by default, as anfra's own name for the repo, not as an input.
 
@@ -710,7 +711,7 @@ explore {
 
 **Stable span names, later.** Users build queries, dashboards and alerts on span names and attributes, and the [trace sample](#querying-traces-through-anfra) models them. While telemetry is experimental every name may change, noted in the changelog. Before it is declared stable, anfra could list the spans users can rely on, each with its stable attributes, and a test could fail when one loses an attribute. The likely first list: each command's root (`anfra <command path>`, with `anfra.repo.id`), each op's span (`anfra.op.<op>`, with `anfra.op`, `error.type`, `anfra.repo.id`), and the query's (`anfra.op.core.query`, with `anfra.query.*`, `anfra.dataset`, `anfra.data_source`, `db.system.name`, `db.query.text`). Group by `anfra.op` rather than by parsing a span's name.
 
-**Semantic conventions.** OpenTelemetry's names where one exists (`session.id`, `error.type`, `db.*`), `anfra.` otherwise. The existing `h.step.*` and `h.request.id` stay.
+**Semantic conventions.** OpenTelemetry's names where one exists (`gen_ai.conversation.id`, `error.type`, `db.*`), `anfra.` otherwise. Where a GenAI convention covers a field, its name is the only one: an agent's session is `gen_ai.conversation.id`. The existing `h.step.*` and `h.request.id` stay.
 
 ### Implementation details
 

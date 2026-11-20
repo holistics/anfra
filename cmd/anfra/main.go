@@ -102,18 +102,28 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, opts runO
 		maybeNotifyUpdate(executed.Name())
 		agents.Succeeded() // ends a streak of failures (agents.Failed)
 	}
-	if err == nil {
-		return 0
-	}
-	var ec *exitCodeError
-	if errors.As(err, &ec) {
-		return ec.code // result already rendered; exit quietly
+	code := exitCode(err)
+	if _, rendered := errors.AsType[*exitCodeError](err); err == nil || rendered {
+		return code // a rendered result exits quietly
 	}
 	output.json = output.json || jsonAsked(args) // flags that failed to parse set nothing
 	output.yaml = output.yaml || flagAsked(args, "--yaml")
 	printError(stderr, err, failureHint(err))
+	return code
+}
+
+// exitCode is the code a run that ended with err exits with: 0 for none, the
+// code a rendered result asks for, 130 for an interrupt, as a shell exits on
+// one, and 1 for any other failure.
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if ec, ok := errors.AsType[*exitCodeError](err); ok {
+		return ec.code
+	}
 	if apperr.From(err).Code == clierr.Interrupted.Code() {
-		return 130 // as a shell exits on an interrupt
+		return 130
 	}
 	return 1
 }

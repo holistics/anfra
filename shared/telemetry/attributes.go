@@ -7,11 +7,10 @@
 // provider, and log records through LogHandler. With nothing put there, they
 // add nothing.
 //
-// A key is the span attribute's name, dotted as OpenTelemetry's conventions are
-// (session.id, agent.name). Log keys are snake_case (docs/designs/logs.md), so
-// on a log record each dot becomes an underscore: session.id is logged as
-// session_id. session.id is also written to spans as gen_ai.conversation.id,
-// the GenAI conventions' name, which some agent tracing platforms read instead.
+// A key is the span attribute's name, OpenTelemetry's where its conventions
+// name one (gen_ai.conversation.id, gen_ai.agent.name). Log keys are snake_case
+// (docs/designs/logs.md), so on a log record each dot becomes an underscore:
+// gen_ai.conversation.id is logged as gen_ai_conversation_id.
 //
 // For observation only: nothing that decides what a command does reads it.
 //
@@ -29,11 +28,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
-
-// aliases are the other span names a key is also written as.
-var aliases = map[string][]string{
-	"session.id": {"gen_ai.conversation.id"},
-}
 
 type attributesKey struct{}
 
@@ -57,6 +51,9 @@ func WithAttributes(ctx context.Context, fields map[string]string) context.Conte
 		merged = map[string]string{}
 	}
 	maps.Copy(merged, added)
+	for k := range added {
+		markCallerKey(k)
+	}
 	trace.SpanFromContext(ctx).SetAttributes(spanAttrs(added)...)
 	return context.WithValue(ctx, attributesKey{}, merged)
 }
@@ -67,14 +64,11 @@ func attributesOf(ctx context.Context) map[string]string {
 	return m
 }
 
-// spanAttrs are fields as span attributes, aliases included, in key order.
+// spanAttrs are fields as span attributes, in key order.
 func spanAttrs(fields map[string]string) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 	for _, k := range slices.Sorted(maps.Keys(fields)) {
 		attrs = append(attrs, attribute.String(k, fields[k]))
-		for _, a := range aliases[k] {
-			attrs = append(attrs, attribute.String(a, fields[k]))
-		}
 	}
 	return attrs
 }
@@ -83,16 +77,17 @@ func spanAttrs(fields map[string]string) []attribute.KeyValue {
 func LogKey(k string) string { return strings.ReplaceAll(k, ".", "_") }
 
 // Spans is the span processor that names the caller on every span started in a
-// context WithAttributes filled, whoever starts it: anfra's own spans,
-// otelhttp's and a library's. Install it on the tracer provider before its
-// exporter's batcher (sdktrace.WithSpanProcessor).
+// context WithAttributes filled, or whose baggage names it (callerBaggage),
+// whoever starts it: anfra's own spans, otelhttp's and a library's. Install it
+// on the tracer provider before its exporter's batcher
+// (sdktrace.WithSpanProcessor).
 type Spans struct{}
 
 var _ sdktrace.SpanProcessor = Spans{}
 
 // OnStart names the caller on s.
 func (Spans) OnStart(parent context.Context, s sdktrace.ReadWriteSpan) {
-	if fields := attributesOf(parent); len(fields) > 0 {
+	if fields := callerFields(parent); len(fields) > 0 {
 		s.SetAttributes(spanAttrs(fields)...)
 	}
 }

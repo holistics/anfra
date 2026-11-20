@@ -79,11 +79,39 @@ var (
 	CommandStdin       = meta("anfra.command.stdin")
 	RequestID          = meta("h.request.id")
 	HTTPRoute          = meta("http.route")
-	SessionID          = meta("session.id")
 	ConversationID     = meta("gen_ai.conversation.id")
+	AgentName          = meta("gen_ai.agent.name")
 	// DroppedKeys names the undeclared keys Filter left out of the span: key
 	// names, which code chose, never their values.
 	DroppedKeys = meta("anfra.telemetry.dropped_keys")
+)
+
+// A CLI command's span, and the command each span is part of.
+var (
+	// Command marks a call's own span, a CLI command's root, which is not
+	// always its trace's root: it goes under the caller's span when the caller
+	// passes its trace.
+	Command = meta("anfra.command")
+	// ProcessExitCode is the code a CLI command exits with, on its command
+	// span (OpenTelemetry's CLI conventions), so a caller's trace shows which
+	// of its calls failed.
+	ProcessExitCode = meta("process.exit.code")
+	// CommandID is the command a span is part of: its command span's id, on
+	// every span the command's process records, so a command's spans are found
+	// together when its trace holds other commands too.
+	CommandID = meta("anfra.command.id")
+)
+
+// An MCP request's span, as OpenTelemetry's MCP conventions name it: the
+// method, and for a tool call, the tool, an op's name or a discovery tool's.
+var (
+	MCPMethod          = meta("mcp.method.name")
+	MCPSessionID       = meta("mcp.session.id")
+	MCPProtocolVersion = meta("mcp.protocol.version")
+	ToolName           = meta("gen_ai.tool.name")
+	// GenAIOperation is execute_tool on a tool call's span, and unset on any
+	// other, as the conventions say.
+	GenAIOperation = meta("gen_ai.operation.name")
 )
 
 // PanicStatus is the status text of a span whose code panicked: like a public
@@ -147,9 +175,13 @@ func init() {
 }
 
 // classify is how the key name is treated, and whether it is declared.
+// A key anfra doesn't declare is a caller's when a host named its caller by
+// it: metadata, recorded whatever the settings (callerKey).
 func classify(name string) (keyDef, bool) {
-	d, ok := registry[name]
-	return d, ok
+	if d, ok := registry[name]; ok {
+		return d, true
+	}
+	return keyDef{}, callerKey(name)
 }
 
 // Declared reports whether name is a declared attribute or event: the

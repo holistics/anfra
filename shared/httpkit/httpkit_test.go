@@ -92,6 +92,20 @@ func TestRouted(t *testing.T) {
 	}
 }
 
+// A routed request's span is named by its own method and its route, as
+// OpenTelemetry's HTTP conventions name a server span: a GET as GET.
+func TestRoutedNamesTheSpanByItsMethod(t *testing.T) {
+	spans.Reset()
+	h := httpkit.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpkit.Routed(r.Context(), "", "/mcp")
+		w.WriteHeader(http.StatusOK)
+	}), httpkit.Config{Logger: slog.New(slog.DiscardHandler), Codes: testCodes})
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/mcp", nil))
+	if ended := spans.Ended(); len(ended) != 1 || ended[0].Name() != "GET /mcp" {
+		t.Fatalf("spans = %v, want one, GET /mcp", ended)
+	}
+}
+
 // An error is rendered with its served code's status, Retry-After from its
 // details, and logged at the level its scope sets.
 func TestWriteError(t *testing.T) {

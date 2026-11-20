@@ -93,6 +93,7 @@ linters:
       # to it, as with OpenTelemetry's own Start.
       extra-start-span-signatures:
         - "github.com/holistics/anfra/shared/apptracing.Start:opentelemetry"
+        - "github.com/holistics/anfra/shared/apptracing.StartServer:opentelemetry"
     gosec:
       excludes:
         - G115 # https://github.com/securego/gosec/issues/1212

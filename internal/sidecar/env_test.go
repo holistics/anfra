@@ -16,6 +16,8 @@ func TestChildEnv(t *testing.T) {
 		"ANFRA_CANAL_QUERY_URL=",       // anfra's own, though about the sidecar
 		"PPROF_ADDR=localhost:6060",    // per process
 		"OTEL_SERVICE_NAME=anfra-prod", // per process
+		"TRACEPARENT=00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", // the caller's call
+		"BAGGAGE=gen_ai.conversation.id=s-1",
 		"OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318",
 		"ANFRA_CANAL_QUERY_ENV_PPROF_ADDR=localhost:6061",
 		"ANFRA_CANAL_QUERY_ENV_AWS_PROFILE=warehouse",           // over the inherited one
@@ -46,6 +48,15 @@ func TestChildEnv(t *testing.T) {
 	want = []string{"HOME=/home/me", "AWS_PROFILE=prod", "OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318"}
 	if !slices.Equal(got, want) {
 		t.Errorf("childEnv without a prefix:\n got %q\nwant %q", got, want)
+	}
+}
+
+// A prefixed empty value replaces the inherited one, so it can turn off what
+// a sidecar would otherwise inherit, as canal-query's endpoint.
+func TestAnEmptyPrefixedValueWins(t *testing.T) {
+	environ := []string{"OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318", "ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT="}
+	if got, want := childEnv(environ, "ANFRA_CANAL_QUERY_ENV_", nil, nil), []string{"OTEL_EXPORTER_OTLP_ENDPOINT="}; !slices.Equal(got, want) {
+		t.Errorf("childEnv:\n got %q\nwant %q", got, want)
 	}
 }
 

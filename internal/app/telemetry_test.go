@@ -35,7 +35,7 @@ func TestAttributionIsOnEverySpanOfTheOp(t *testing.T) {
 		},
 	}))
 
-	cc := command.CommandContext{DataPerms: dataperm.Ungoverned(), Attribution: attribution.Fields{"session.id": "s-1"}}
+	cc := command.CommandContext{DataPerms: dataperm.Ungoverned(), Attribution: attribution.Fields{"gen_ai.conversation.id": "s-1"}}
 	if _, err := Dispatch(context.Background(), cc, Request{Command: "telemetry_probe"}); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestAttributionIsOnEverySpanOfTheOp(t *testing.T) {
 		for _, kv := range s.Attributes() {
 			got[string(kv.Key)] = kv.Value.String()
 		}
-		if got["session.id"] != "s-1" || got["gen_ai.conversation.id"] != "s-1" {
+		if got["gen_ai.conversation.id"] != "s-1" {
 			t.Errorf("%s: got %v", s.Name(), got)
 		}
 		if s.Name() != "inside" && got["anfra.op"] != "core.telemetry_probe" {

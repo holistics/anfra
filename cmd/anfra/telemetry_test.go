@@ -93,7 +93,8 @@ func TestEveryCommandIsTheRootOfItsTrace(t *testing.T) {
 		t.Fatalf("telemetry init's roots = %v, want one, anfra experimental telemetry init", names(r))
 	}
 
-	// The caller's mistake: its code, no error status.
+	// The caller's mistake: as any exit but 0, on a CLI span (OpenTelemetry's
+	// CLI spans), its code and an error status.
 	r = roots(runArgs("experimental", "telemetry", "init", "extra"))
 	if len(r) != 1 {
 		t.Fatalf("a refused telemetry init's roots = %v, want one", names(r))
@@ -102,8 +103,9 @@ func TestEveryCommandIsTheRootOfItsTrace(t *testing.T) {
 	for _, a := range r[0].Attributes() {
 		attrs[string(a.Key)] = a.Value.String()
 	}
-	if attrs["error.type"] == "" || r[0].Status().Code == otelcodes.Error {
-		t.Errorf("refused: error.type %q, status %v; want a code and no error status", attrs["error.type"], r[0].Status())
+	if attrs["error.type"] == "" || attrs["process.exit.code"] != "1" || r[0].Status().Code != otelcodes.Error {
+		t.Errorf("refused: error.type %q, exit code %q, status %v; want a code, 1 and an error status",
+			attrs["error.type"], attrs["process.exit.code"], r[0].Status())
 	}
 }
 
@@ -317,5 +319,29 @@ func TestStdinIsNotedNotRecorded(t *testing.T) {
 	}
 	if got := rec.Ended()[0].Attributes(); len(got) != 1 || string(got[0].Key) != caller.CommandStdin.String() {
 		t.Errorf("attributes = %v, want anfra.command.stdin alone", got)
+	}
+}
+
+// A command run by a coding agent names the agent's session; one run outside
+// any agent names none.
+func TestACommandNamesItsAgentsSession(t *testing.T) {
+	got := sessionAttribution(func(k string) string {
+		return map[string]string{"CLAUDE_CODE_SESSION_ID": "s-1"}[k]
+	})
+	if got["gen_ai.conversation.id"] != "s-1" || got["gen_ai.agent.name"] != "claude-code" {
+		t.Errorf("got %v", got)
+	}
+	if got := sessionAttribution(func(string) string { return "" }); got != nil {
+		t.Errorf("outside an agent: got %v", got)
+	}
+	got = sessionAttribution(func(k string) string {
+		return map[string]string{"ANFRA_SESSION_ID": "run-1", "CLAUDE_CODE_SESSION_ID": "s-1"}[k]
+	})
+	if got["gen_ai.conversation.id"] != "s-1" || got["gen_ai.agent.name"] != "claude-code" {
+		t.Errorf("set by the launcher, under a known agent: got %v, want the agent's", got)
+	}
+	got = sessionAttribution(func(k string) string { return map[string]string{"ANFRA_SESSION_ID": "run-1"}[k] })
+	if _, named := got["gen_ai.agent.name"]; got["gen_ai.conversation.id"] != "run-1" || named {
+		t.Errorf("set by the launcher, no known agent: got %v", got)
 	}
 }

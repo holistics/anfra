@@ -17,6 +17,9 @@ import (
 //     must not also land on a sidecar, as two pprof servers on one address or
 //     three processes' traces under one service name. A runner sets one for a
 //     sidecar with that sidecar's prefix (ProcSpec.EnvPrefix).
+//   - The caller's trace context (TRACEPARENT, TRACESTATE, BAGGAGE): the
+//     agent's call that started anfra, which a sidecar would outlive. A sidecar
+//     gets the trace of each call it serves in that call's headers instead.
 //
 // stripped lists only names that collide this way. Anything else is passed on.
 var stripped = map[string]bool{
@@ -27,6 +30,9 @@ var stripped = map[string]bool{
 	"GOMAXPROCS":               true,
 	"GOGC":                     true,
 	"NODE_OPTIONS":             true, // Node's, for anfra-node's runtime
+	"TRACEPARENT":              true, // the caller's trace context
+	"TRACESTATE":               true,
+	"BAGGAGE":                  true,
 }
 
 // childEnv is the environment a sidecar is spawned with, from environ (anfra's,

@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/holistics/anfra/shared/apperr"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/baggage"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
 
@@ -40,12 +42,14 @@ func assignRequestID(next http.Handler) http.Handler {
 // traceRequests starts the request's root span, carrying the request id as
 // h.request.id, so a request id leads to its trace in one query
 // (error_handling.md §The request id). The span is named by its method until
-// the request is routed to an op (setRoute).
+// the request is routed (Routed), then by its method and route.
 //
 // Unless trusted, the endpoint is public: a traceparent from a browser or any
 // other caller starts no trace of ours, since a caller could otherwise choose
-// our trace ids and sampling. It is kept as a link.
-func traceRequests(next http.Handler, trusted bool) http.Handler {
+// our trace ids and sampling. It is kept as a link. Of any caller's baggage,
+// only the members settings allow get in (telemetry.AllowedBaggage): what
+// the caller names itself by on our spans, and sends on to the sidecars.
+func traceRequests(next http.Handler, trusted bool, settings telemetry.Settings) http.Handler {
 	tagged := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apptracing.SetAttributes(r.Context(), telemetry.RequestID.Is(requestid.From(r.Context())))
 		next.ServeHTTP(w, r)
@@ -57,30 +61,50 @@ func traceRequests(next http.Handler, trusted bool) http.Handler {
 		// go through here, so both use the route once there is one.
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
 			if rt, _ := r.Context().Value(routeKey{}).(*string); rt != nil && *rt != "" {
-				return http.MethodPost + " " + *rt
+				return r.Method + " " + *rt
 			}
 			return r.Method
 		}),
 	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		traced.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), routeKey{}, new(string))))
+		if values := r.Header.Values("Baggage"); len(values) > 0 {
+			r = r.Clone(r.Context())
+			r.Header.Del("Baggage")
+			if b, err := baggage.Parse(strings.Join(values, ",")); err == nil {
+				if b = telemetry.AllowedBaggage(b, settings); b.Len() > 0 {
+					r.Header.Set("Baggage", b.String())
+				}
+			}
+		}
+		ctx := context.WithValue(r.Context(), routeKey{}, new(string))
+		traced.ServeHTTP(w, r.WithContext(context.WithValue(ctx, methodKey{}, r.Method)))
 	})
 }
 
-// routeKey holds the route the request was served by, once it is known.
-type routeKey struct{}
+// routeKey holds the route the request was served by, once it is known;
+// methodKey its method, which names the span with it.
+type (
+	routeKey  struct{}
+	methodKey struct{}
+)
 
 // Routed records the operation a request was routed to: op names it on the log
-// line, and route (POST-only, so "/api/<op>" or "/rpc/<name>") names the root span
-// and labels the request's metrics. An unrouted request keeps its method alone,
-// so a stream of junk paths cannot create a span name or metric series each.
+// line, and route, the pattern it matched ("/api/<op>", "/rpc/<name>", "/mcp"),
+// names the root span with the request's method, as OpenTelemetry's HTTP
+// conventions name a server span, and labels the request's metrics. An
+// unrouted request keeps its method alone, so a stream of junk paths cannot
+// create a span name or metric series each.
 func Routed(ctx context.Context, op, route string) {
 	setOp(ctx, op)
 	if rt, _ := ctx.Value(routeKey{}).(*string); rt != nil {
 		*rt = route
 	}
+	method, _ := ctx.Value(methodKey{}).(string)
+	if method == "" {
+		method = http.MethodPost
+	}
 	span := trace.SpanFromContext(ctx)
-	span.SetName(http.MethodPost + " " + route)
+	span.SetName(method + " " + route)
 	apptracing.SetAttributes(ctx, telemetry.HTTPRoute.Is(route))
 	if l, ok := otelhttp.LabelerFromContext(ctx); ok {
 		l.Add(semconv.HTTPRoute(route))

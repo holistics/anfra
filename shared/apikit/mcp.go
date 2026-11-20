@@ -3,15 +3,26 @@ package apikit
 import (
 	"context"
 	"encoding/json/jsontext"
+	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/holistics/anfra/shared/apptracing"
 	"github.com/holistics/anfra/shared/httpkit"
 	"github.com/holistics/anfra/shared/requestid"
+	"github.com/holistics/anfra/shared/telemetry"
 )
 
 // MCP serves a registry's MCP ops as tools over MCP's streamable HTTP: one named
@@ -40,11 +51,55 @@ type MCP[Call any] struct {
 	// Errors are the codes the host adds to an op (HTTP.Errors), for
 	// describe_operation.
 	Errors func(m Meta) []apperr.Code
+	// TrustMeta continues the trace a request's _meta carries (SEP-414:
+	// traceparent, tracestate), for a server whose callers are trusted, as
+	// httpkit.Config.TrustTraceparent says of the request's headers. Otherwise
+	// _meta's trace is ignored.
+	TrustMeta bool
+	// TraceSettings are the settings whose baggage allowlist
+	// (telemetry.BaggageIncludeVar) decides which members of a request's
+	// _meta.baggage get in, from any caller, as httpkit.Config.TraceSettings
+	// does of the request's header.
+	TraceSettings telemetry.Settings
+	// MetaCaller names the caller a request's _meta gives under the caller's
+	// own keys, such as a coding agent's session: recorded on every span and
+	// log record of the request, as a host names its caller
+	// (telemetry.WithAttributes), so over its baggage, and put in the call's
+	// baggage as far as TraceSettings let it in, for the sidecars the op calls
+	// (telemetry.WithCallerBaggage). Nil: none.
+	MetaCaller func(meta map[string]any) map[string]string
 }
 
 // Handler is the MCP endpoint, to mount at /mcp behind the same middleware and
-// guards as the HTTP API.
+// guards as the HTTP API. Each request is routed (httpkit.Routed) by the
+// pattern it was mounted at, /mcp unless a mux says otherwise, so its span is
+// named "POST /mcp", and each MCP request in it gets a span of its own
+// (traced).
 func (m MCP[Call]) Handler(rt *Runtime, reg OpSet[Call]) http.Handler {
+	h := m.handler(rt, reg)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpkit.Routed(r.Context(), "", mountedAt(r))
+		h.ServeHTTP(w, r)
+	})
+}
+
+// mountedAt is the pattern r was routed by, without its method or host: /mcp
+// when no mux routed it.
+func mountedAt(r *http.Request) string {
+	p := r.Pattern
+	if _, path, ok := strings.Cut(p, " "); ok {
+		p = path
+	}
+	if i := strings.IndexByte(p, '/'); i > 0 {
+		p = p[i:] // a host's pattern
+	}
+	if p == "" {
+		return "/mcp"
+	}
+	return p
+}
+
+func (m MCP[Call]) handler(rt *Runtime, reg OpSet[Call]) http.Handler {
 	if m.Request == nil {
 		panic("apikit: MCP.Request is required")
 	}
@@ -103,6 +158,7 @@ func (m MCP[Call]) server(ctx context.Context, rt *Runtime, reg OpSet[Call], req
 		return nil, err
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: m.Name, Version: m.Version}, nil)
+	s.AddReceivingMiddleware(m.traced)
 	for _, o := range ops {
 		meta := o.Meta()
 		input, err := rt.Inline(o.InSchema(rt))
@@ -222,4 +278,113 @@ func (m MCP[Call]) result(v any, isError bool) (*mcp.CallToolResult, error) {
 		StructuredContent: jsontext.Value(b),
 		IsError:           isError,
 	}, nil
+}
+
+// traced runs each MCP request in a span of its own, of kind server, as
+// OpenTelemetry's MCP conventions name it: "tools/call <tool>" for a tool call,
+// the method alone otherwise, such as "tools/list". The request's _meta is
+// read first: the caller's trace, which the span goes under when TrustMeta,
+// its baggage, and the caller MetaCaller finds there, which the span and
+// every span under it, the op's included, record.
+//
+// A failure sets error.type and an error status: the JSON-RPC error's code and
+// message, or tool_error for a tool whose result says it failed, as the
+// conventions say. An op's own span, under it, keeps apptracing's rule.
+func (m MCP[Call]) traced(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		meta := requestMeta(req)
+		ctx = m.callersTrace(ctx, meta)
+		if m.MetaCaller != nil && len(meta) > 0 {
+			fields := m.MetaCaller(meta)
+			ctx = telemetry.WithCallerBaggage(telemetry.WithAttributes(ctx, fields), fields, m.TraceSettings)
+		}
+		name := method
+		kv := []telemetry.KeyValue{telemetry.MCPMethod.Is(method)}
+		if call, ok := req.(*mcp.CallToolRequest); ok && call.Params != nil {
+			name += " " + call.Params.Name
+			kv = append(kv, telemetry.ToolName.Is(call.Params.Name), telemetry.GenAIOperation.Is("execute_tool"))
+		}
+		var version string
+		if ss, ok := req.GetSession().(*mcp.ServerSession); ok && ss != nil {
+			if id := ss.ID(); id != "" {
+				kv = append(kv, telemetry.MCPSessionID.Is(id))
+			}
+			if p := ss.InitializeParams(); p != nil {
+				version = p.ProtocolVersion
+			}
+		}
+		if init, ok := req.(*mcp.InitializeRequest); ok && init.Params != nil {
+			version = init.Params.ProtocolVersion
+		}
+		if version != "" {
+			kv = append(kv, telemetry.MCPProtocolVersion.Is(version))
+		}
+		ctx, span := apptracing.StartServer(ctx, name, kv...)
+		defer span.End()
+		res, err := next(ctx, method, req)
+		if err != nil {
+			mcpFailed(ctx, span, err)
+		} else if r, ok := res.(*mcp.CallToolResult); ok && r != nil && r.IsError {
+			apptracing.SetAttributes(ctx, telemetry.ErrorType.Is("tool_error"))
+			span.SetStatus(otelcodes.Error, "tool_error")
+		}
+		return res, err
+	}
+}
+
+// mcpFailed marks an MCP request's span as failing with err: a JSON-RPC
+// error by its code and message, any other by its apperr code.
+func mcpFailed(ctx context.Context, span trace.Span, err error) {
+	if wire, ok := errors.AsType[*jsonrpc.Error](err); ok {
+		apptracing.SetAttributes(ctx, telemetry.ErrorType.Is(strconv.FormatInt(wire.Code, 10)))
+		span.SetStatus(otelcodes.Error, wire.Message)
+		return
+	}
+	code := apperr.From(err).Code
+	apptracing.SetAttributes(ctx, telemetry.ErrorType.Is(code.String()))
+	span.SetStatus(otelcodes.Error, code.Public().String())
+}
+
+// requestMeta is req's _meta, nil for a request without params.
+func requestMeta(req mcp.Request) map[string]any {
+	p := req.GetParams()
+	if p == nil || reflect.ValueOf(p).IsNil() {
+		return nil
+	}
+	return p.GetMeta()
+}
+
+// callersTrace is ctx with what a request's _meta carries, when it carries
+// it: the request's own, which wins over the HTTP request's, since one HTTP
+// request can carry another call's. Its baggage, the members TraceSettings allow, from
+// any caller; its trace only when TrustMeta.
+func (m MCP[Call]) callersTrace(ctx context.Context, meta map[string]any) context.Context {
+	if len(meta) == 0 {
+		return ctx
+	}
+	if m.TrustMeta {
+		ctx = otel.GetTextMapPropagator().Extract(ctx, metaCarrier(meta))
+	} else {
+		ctx = propagation.Baggage{}.Extract(ctx, metaCarrier(meta))
+	}
+	return telemetry.WithAllowedBaggage(ctx, m.TraceSettings)
+}
+
+// metaCarrier reads a trace context from a request's _meta: its string
+// members, by their lowercase W3C names.
+type metaCarrier mcp.Meta
+
+func (c metaCarrier) Get(key string) string {
+	v, _ := c[key].(string)
+	return v
+}
+
+func (metaCarrier) Set(string, string) {}
+
+func (c metaCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	return keys
 }

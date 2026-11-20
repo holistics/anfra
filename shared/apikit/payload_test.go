@@ -12,11 +12,12 @@ import (
 	"github.com/holistics/anfra/shared/telemetry"
 )
 
-// recorder keeps every span that ends. It is installed once: the global
-// provider a package's tracer delegates to is the first one set.
+// recorder keeps every span that ends, named by its caller as a host's are
+// (telemetry.Spans). It is installed once: the global provider a package's
+// tracer delegates to is the first one set.
 var spanRecorder = sync.OnceValue(func() *tracetest.SpanRecorder {
 	rec := tracetest.NewSpanRecorder()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec)))
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(telemetry.Spans{}), sdktrace.WithSpanProcessor(rec)))
 	return rec
 })
 

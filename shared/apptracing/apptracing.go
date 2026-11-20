@@ -91,6 +91,17 @@ func (s *Span) End(errp *error) {
 	MarkFailed(s.span, s.settings, *errp)
 }
 
+// StartServer starts the span of a request a host serves under a protocol's
+// own conventions, such as an MCP request: named as they say, of kind server,
+// with kv, declared keys, as SetAttributes sets them. Its caller ends it.
+func StartServer(ctx context.Context, name string, kv ...telemetry.KeyValue) (context.Context, trace.Span) {
+	// Ended by the caller: spancheck checks each caller instead
+	// (extra-start-span-signatures in .golangci.yml).
+	ctx, span := tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindServer)) //nolint:spancheck // see above
+	SetAttributes(ctx, kv...)
+	return ctx, span
+}
+
 // MarkFailed marks span as failing with err: error.type, its code, always; and
 // an error status and the error, its message recorded as settings' errors say
 // (docs/designs/telemetry.md), only when the failure is anfra's, not the

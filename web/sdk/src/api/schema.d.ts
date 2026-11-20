@@ -1320,6 +1320,12 @@ export interface components {
             /** @description the query cache's store, a file. Absent when the cache is disabled, or the server keeps its store elsewhere. */
             store?: string;
         };
+        TelemetryBaggage: {
+            /** @description the keys let in, or patterns with * and ? as wildcards, such as gen_ai.conversation.id or user.*. Empty when ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE is none: no baggage gets in. */
+            include: string[];
+            /** @description what set it: ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE (followed by "in .env" when the repo's .env set it), or "default". */
+            set_by: string;
+        };
         TelemetryData: {
             /** @description whether a span records your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack. */
             on: boolean;
@@ -1328,6 +1334,8 @@ export interface components {
         };
         /** @description Where anfra records each command's trace: the user's own telemetry, to their own endpoint, never data sent to Holistics. Under anfra serve, the server's settings, since its commands run there. Absent when the host doesn't say. Experimental: its fields may change in a minor release. */
         TelemetryInfo: {
+            /** @description which members of a caller's W3C baggage anfra lets in, and what set it. What it lets in, each span records as the caller's ids, and anfra sends on to its sidecars. */
+            baggage?: components["schemas"]["TelemetryBaggage"];
             /** @description whether your data reaches a span, and what set it. */
             data?: components["schemas"]["TelemetryData"];
             /** @description the OpenTelemetry endpoint traces are sent to. Absent when off. */
