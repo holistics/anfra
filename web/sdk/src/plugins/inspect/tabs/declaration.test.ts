@@ -46,7 +46,7 @@ describe('Declaration', () => {
     expect(rows[0]?.querySelector('.mark')?.getAttribute('aria-label')).toBe('warning');
     (rows[0] as HTMLElement).click();
     expect(harness.mounted.panel.tab).toBe('inspect.queries');
-    expect(harness.state.queries.open.has('control:0/month')).toBe(true);
+    expect(harness.mounted.panel.revealed).toMatchObject({ entity: 'control', app: 0, name: 'month' });
   });
 
   it('sets apart the entities a check names, and never a name inside a field', async () => {
@@ -119,7 +119,7 @@ describe('Declaration', () => {
     expect(byTestId(root, 'wiring-by-orders')?.textContent).toBe('—');
     byTestId(root, 'wiring-query-orders')!.click();
     expect(harness.mounted.panel.tab).toBe('inspect.queries');
-    expect(harness.state.queries.open.has('query:0/orders')).toBe(true);
+    expect(harness.mounted.panel.revealed).toMatchObject({ entity: 'query', app: 0, name: 'orders' });
   });
 
   it('groups by app when there are several', async () => {
@@ -128,7 +128,7 @@ describe('Declaration', () => {
     expect(byTestId(root, 'app-0')?.querySelector('.app-title')?.textContent).toBe('App 1 · Sales');
     expect(byTestId(root, 'app-1')?.querySelector('.app-title')?.textContent).toBe('App 2 · Ops');
     byTestId(root, 'check-1-0')!.click();
-    expect(harness.state.queries.open.has('control:1/month')).toBe(true);
+    expect(harness.mounted.panel.revealed).toMatchObject({ entity: 'control', app: 1, name: 'month' });
   });
 
   it('names no app with only one', async () => {

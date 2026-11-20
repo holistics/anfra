@@ -9,7 +9,7 @@ import type { InspectedApp } from '../../common/types';
 import { createRequestLog, type RequestLog, type RequestRecorder } from './model/requests';
 import { entityGone, hasEntity } from './model/entities';
 import {
-  DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type QueriesFilter, type RevealTarget,
+  DATA_TAB, DECLARATION_TAB, QUERIES_TAB, STRUCTURE_TAB, type LinkTarget, type QueriesFilter, type RevealTarget,
 } from './model/types';
 
 /** A runtime error as the panel keeps it: the same one again counts up instead of filling the list. */
@@ -58,6 +58,12 @@ export interface InspectState {
 }
 
 const states = new WeakMap<MountContext, InspectState>();
+
+/** Follow a link: a query or a control is the panel's reveal, in Queries; the rest are `inspect`'s own. */
+export function follow (panel: Panel, state: InspectState, target: LinkTarget): void {
+  if ('entity' in target) panel.show(QUERIES_TAB, target);
+  else state.reveal(panel, target);
+}
 
 /** The mount's state, made on first use. */
 export function stateOf (mount: MountContext): InspectState {
@@ -115,14 +121,6 @@ function createState (): InspectState {
       (state as { revealed: InspectState['revealed'] }).revealed = { target, nonce: ++nonce };
       if ('node' in target) {
         panel.show(STRUCTURE_TAB, target.node);
-      } else if ('entity' in target) {
-        const key = `${target.entity}:${target.app}/${target.name}`;
-        state.queries.open.add(key);
-        state.queries.closed.delete(`${target.app}:${target.entity === 'query' ? 'queries' : 'controls'}`);
-        // Nothing that would hide it.
-        state.queries.search = '';
-        state.queries.filter = 'all';
-        panel.show(QUERIES_TAB);
       } else if ('table' in target) {
         state.data.open.add(`${target.app}/${target.table}`);
         panel.show(DATA_TAB);
@@ -153,10 +151,6 @@ function createState (): InspectState {
       for (const key of state.data.open) {
         const slash = key.indexOf('/');
         if (!hasEntity(apps, 'query', Number(key.slice(0, slash)), key.slice(slash + 1))) state.data.open.delete(key);
-      }
-      const target = state.revealed?.target;
-      if (target && 'entity' in target && !hasEntity(apps, target.entity, target.app, target.name)) {
-        (state as { revealed: InspectState['revealed'] }).revealed = undefined;
       }
     },
     subscribe (listener) {

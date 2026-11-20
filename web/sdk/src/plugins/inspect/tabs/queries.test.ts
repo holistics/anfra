@@ -95,7 +95,7 @@ describe('Queries', () => {
     const { root } = await harness.tab(QUERIES);
     await open(byTestId(root, 'query-0/revenue'));
     harness.state.data.open.add('0/revenue');
-    harness.state.reveal(harness.mounted.panel, { entity: 'query', app: 0, name: 'revenue' });
+    harness.mounted.panel.show(QUERIES, { entity: 'query', app: 0, name: 'revenue' });
     const app = salesApp();
     delete app.queries.revenue;
     delete app.declaration.queries.revenue;
@@ -104,7 +104,6 @@ describe('Queries', () => {
 
     expect(harness.state.queries.open.has('query:0/revenue')).toBe(false);
     expect(harness.state.data.open.has('0/revenue')).toBe(false);
-    expect(harness.state.revealed).toBeUndefined();
     harness.post(salesSnapshot());
     expect(byTestId<HTMLDetailsElement>(root, 'query-0/revenue')?.open).toBe(false);
   });
@@ -302,11 +301,32 @@ describe('Queries', () => {
     search(root, 'rev');
     await toggle(byTestId(root, 'section-queries-0'));
     expect(harness.state.queries.closed.has('0:queries')).toBe(true);
-    harness.state.reveal(harness.mounted.panel, { entity: 'query', app: 0, name: 'orders' });
+    harness.mounted.panel.show(QUERIES, { entity: 'query', app: 0, name: 'orders' });
     const row = byTestId<HTMLDetailsElement>(root, 'query-0/orders')!;
     expect(row.open).toBe(true);
     expect(row.classList.contains('flash')).toBe(true);
     expect(byTestId<HTMLInputElement>(root, 'queries-search')?.value).toBe('');
+  });
+
+  it("opens a revealed control's row, and again on a repeat reveal", async () => {
+    harness = await inspect({ tab: QUERIES });
+    const { root } = await harness.tab(QUERIES);
+    harness.mounted.panel.show(QUERIES, { entity: 'control', app: 0, name: 'region' });
+    const row = byTestId<HTMLDetailsElement>(root, 'control-0/region')!;
+    expect(row.open).toBe(true);
+    expect(row.classList.contains('flash')).toBe(true);
+    row.classList.remove('flash');
+    await toggle(row);
+    harness.mounted.panel.show(QUERIES, { entity: 'control', app: 0, name: 'region' });
+    const again = byTestId<HTMLDetailsElement>(root, 'control-0/region')!;
+    expect(again.open).toBe(true);
+    expect(again.classList.contains('flash')).toBe(true);
+  });
+
+  it('selects a marked query it reveals', async () => {
+    harness = await inspect({ tab: QUERIES });
+    harness.mounted.panel.show(QUERIES, { entity: 'query', app: 0, name: 'revenue' });
+    expect(harness.mounted.panel.selection).toBe('0.0');
   });
 
   it('waits for the frame', async () => {

@@ -6,7 +6,7 @@
  * See docs/designs/sdk-plugins.md.
  */
 export {
-  createHost, type Host, type HostOptions, type MountOptions, type MountedDataApp,
+  createHost, DEFAULT_REVEAL_TABS, type Host, type HostOptions, type MountOptions, type MountedDataApp, type RevealTabs,
 } from './runtime';
 export {
   definePlugin, type Plugin, type HostHalf, type FrameHalf, type CallDefinition, type CallHandler, type CallContext,
@@ -16,7 +16,7 @@ export {
   type Command, type CommandContribution, type CommandRun, type CommandState, type PanelVerb, type CommandStateContext, type Contribution, type Tab,
   type TabContribution, type TabContext,
 } from './contributions';
-export { type Panel, type Snapshot } from './panel';
+export { type Panel, type Reveal, type RevealTarget, type Snapshot } from './panel';
 export type { AppErrorEvent, AppErrorKind, AppConsoleEvent } from '../common/runtimeErrors';
 export { provisionDocument, composeFrameScript, type ProvisionOptions } from './provision';
 export { contentPolicy, checkOrigin, SCRIPT_ORIGINS } from './policy';

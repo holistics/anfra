@@ -9,7 +9,7 @@ import type { TabContext } from '../../../host/contributions';
 import {
   attributeFor, countProblems, findNode, handleFor, plural,
 } from '../model/format';
-import { LINEAGE_TAB } from '../model/types';
+import { LINEAGE_TAB, QUERIES_TAB } from '../model/types';
 import { stateOf } from '../state';
 import {
   badge, control, copyIcon, drawTab, fields, h, icon, link, note, replace,
@@ -62,7 +62,7 @@ export default function structureTab (root: ShadowRoot, context: TabContext): ()
     const name = node.name ?? '';
     return !!app && (node.kind === 'query' ? name in app.queries : name in app.controls);
   };
-  const showInQueries = (node: StructureNode) => state.reveal(panel, { entity: node.kind as 'query' | 'control', app: node.app ?? 0, name: node.name ?? '' });
+  const showInQueries = (node: StructureNode) => panel.show(QUERIES_TAB, { entity: node.kind as 'query' | 'control', app: node.app ?? 0, name: node.name ?? '' });
   const showData = (node: StructureNode) => state.reveal(panel, { table: node.name ?? '', app: node.app ?? 0 });
   // Lineage follows the selection: it pins the first card it draws under the node.
   const showInLineage = (node: StructureNode) => panel.show(LINEAGE_TAB, node.key);

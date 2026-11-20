@@ -1,7 +1,8 @@
 /**
- * `inspect`: the panel's Overview, Data, Queries, Structure and Declaration tabs, and the command
- * that opens them. What the tabs show (the frame's snapshot, pick, highlight and locate) is the
- * runtime's, on every mount's panel, so tabs from other plugins have it too. `inspect` adds a log of
+ * `inspect`: the panel's Overview, Data, Queries, Structure and Declaration tabs, the command
+ * that opens them, and Inspect in the menu on the page, which reveals a block's or a chart's query.
+ * What the tabs show (the frame's snapshot, pick, highlight and locate, the reveal) is the runtime's,
+ * on every mount's panel, so tabs from other plugins have it too. `inspect` adds a log of
  * the frame's calls, kept per mount by its middleware. The tabs load the first time a host shows one.
  */
 import type { TabContribution } from '../../host/contributions';
@@ -50,6 +51,14 @@ export function inspectPlugin (): Plugin {
         placement: 'primary',
         shortcut: 'Alt+Shift+I',
         run: { tab: OVERVIEW_TAB },
+      }, {
+        // In the menu on a block or a chart's rows: the panel's reveal of the query, on the
+        // host's tab for one (Data unless it set another).
+        id: 'reveal',
+        title: 'Inspect',
+        icon: 'inspect',
+        target: ['rows', 'node'],
+        run: { panel: 'reveal' },
       }],
       tabs: [
         tab('overview', 'Overview', 'overview', 10, () => import('./tabs/overview')),

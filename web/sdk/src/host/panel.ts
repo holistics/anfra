@@ -52,6 +52,8 @@ export interface RevealTarget {
  */
 export interface Reveal extends RevealTarget {
   nonce: number;
+  /** The tab the panel was shown at with it: a tab honors only its own, so another shown later doesn't. */
+  tab: string | undefined;
 }
 
 /** The key of the first node marked with the entity, if the structure has one. */
@@ -192,7 +194,7 @@ export function createPanel (mount: MountContext, options: PanelOptions): PanelS
       tab = known(next);
       if (typeof target === 'object' && target !== null) {
         revealed = {
-          entity: target.entity, app: target.app, name: target.name, nonce: ++nonce,
+          entity: target.entity, app: target.app, name: target.name, nonce: ++nonce, tab,
         };
         selectRevealed = true;
         selectReveal();
