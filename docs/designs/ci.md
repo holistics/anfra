@@ -1,63 +1,114 @@
 # CI
 
-CI checks each change before it lands on `main`, and checks `main` before a release is tagged. It runs only the checks a change can affect, so a docs change takes seconds, and cutting a release (or a hotfix's release) doesn't wait on checks that already passed.
+Status: parts 1 to 3 of the plan are on the branch; 4 and 5 are to do.
 
-The workflows are in `.github/workflows/`. `continuous_integration.yml` is the one a pull request runs, and `ci_passed` is its single required status check.
+CI runs only the checks a change can affect, and still makes sure `main` passes before a release is tagged. A docs change takes seconds, an rc or release PR about a minute, and a hotfix runs its checks once, in its pull request.
 
-## Areas
+## Goals
 
-The repo is split into **areas**, one for each CI job, and each area lists the files its job reads. A job runs only when a change touches its area. `scripts/ci-areas.sh <base> [head]` says which areas a change touches. Run it to see what CI will run.
+- **Run only what a change can affect.** Most changes touch one or two parts of the repo.
+- **Make a release fast.** An rc or release PR changes only versions and changelogs. A hotfix shouldn't wait on a second full round of checks after it merges.
+- **Never tag a release on a commit that wasn't checked as merged.** Two pull requests can each pass and still break `main` together.
+- **Run the same checks locally, with one command.**
+
+## Design
+
+### Areas
+
+The repo is split into **areas**, one per CI job. An area is the files its job reads. `scripts/ci-areas.sh` holds the lists.
 
 | Job | Checks | Its area, roughly |
 |---|---|---|
 | `lint` | golangci-lint | Go files, the Go modules, `.golangci.yml` |
 | `go` | tidy, generated SQL code, vet, build, the Go tests | the Go folders whole (`cmd/`, `internal/`, `engine/`, `shared/`), the Go modules |
-| `api` | the API contract is fresh, and a breaking change is declared | Go files, `api/` |
+| `api` | the API contract is fresh | Go files, `api/` |
 | `web` | the SDK, the design package and the frontend | `web/`, the pnpm workspace, `api/openapi.yaml` |
 | `skills` | `pnpm skills:check` | `skills/`, the pnpm workspace |
-| `manifest` | the versions agree, the release PR is the bot's, the cloud servers parse | `manifest.yml`, the web packages' `package.json` |
-| `dependency-review` | new dependencies' vulnerabilities and licenses | the Go modules, `package.json` files, the workflows |
+| `manifest` | the versions agree, the cloud servers parse | `manifest.yml`, the web packages' `package.json`, the release scripts |
 
-`commitlint` runs on every pull request. A file in no area, such as `docs/` or a changelog, runs nothing else.
+Three rules complete the lists:
 
-Two rules make a release fast:
+- **CI's own files are in every area:** the workflow, the `Makefile`, the `ci-*` scripts. Changing how a job runs reruns every job.
+- **A file in no area runs every job,** unless it's on a short list of files no job reads (`docs/`, the READMEs, `LICENSE`, dev tooling). A mistake in the lists then costs a full run, not a skipped check.
+- **A `package.json` whose only change is its `version` counts only for `manifest`.** So an rc or release PR runs `manifest` alone.
 
-- **A `package.json` whose only change is its `version` counts only for `manifest`.** An rc PR or a release PR changes nothing but versions and changelogs, so it runs `commitlint` and `manifest`, about a minute.
-- **A change to CI itself touches every area.** That covers the workflow and `scripts/ci-areas.sh`, so a CI change is proven on every job.
+### A job skips when its area's files already passed
 
-An area is the files a job *reads*, not only those it's named for. For example, a Go test reads the testdata beside it, and the SDK's types come from `api/openapi.yaml`. When a job starts reading a file outside its area, add the file to the area in `scripts/ci-areas.sh`. A missing file is how a change passes without the check that would catch it, which is why `main` also gets a full run (below).
+Each job's area has a hash: the paths and content hashes of its files, which git already has in the commit's tree. When a job passes, it records its area hash as an artifact, `passed-<area>-<hash>`, kept 30 days. Before it runs, it looks that name up, and skips if the record is there.
 
-## Locally
+So a job runs again only when the files it reads differ from every version that has passed. This is how Turborepo and Nx skip tasks, and how Bazel reports a test `(cached) PASSED`. The lookup is one API call per job, a few seconds in all, and needs only the commit's tree.
 
-Each job runs a make target, `make ci-<area>`, so a job's checks are written once and CI and a local run can't drift apart. `make ci` runs the areas your branch changed since `origin/main`, uncommitted changes included, as CI would. `make check` runs every area's static checks, and `make test` every area's builds and tests. Only `lint` calls its tool through an action instead, so that its findings annotate the pull request.
+Only runs from this repo count. The repo is public, and a fork's pull request runs its own copy of the workflow, so it could upload any artifact name.
 
-What only CI can check stays in the workflow: commitlint, the dependency review, and whether a release PR is the bot's.
+### Checks against the base run on pull requests only
 
-## Why skipping is safe: `main` passes
+Some checks judge a change against the branch it lands on, not its files alone. A record of passed files can't stand in for them, so they run on pull requests, against the PR's base:
 
-Skipping an unchanged area is only safe if the base already passed that area's checks. A pull request is tested on its own, so two pull requests can each pass, and still break `main` together.
+- commitlint, always;
+- the breaking-change check: when `api/openapi.yaml` changes, any break must be declared by a commit (`feat!:` or `BREAKING CHANGE:`);
+- the release PR check, when `manifest.yml`'s version changes;
+- the dependency review, when a module, `package.json`, lockfile or workflow changes.
 
-GitHub's merge queue prevents that, but it has proved unreliable here: entries stall until someone re-queues them, and it says nothing about why. At anfra's pace, about two or three merges a day, catching a break minutes after it lands costs less than putting every merge through the queue. So instead:
+They don't run on `main` or in the merge queue, since they judged the PR's own change. A PR that's behind `main` is judged against the base it had, not the `main` it lands on. That's accepted.
 
-- **CI runs on every push to `main`**, on the commit as merged.
-  - If a pull request's CI already passed on exactly these files (the same git tree), the run reuses that result and passes at once. That's the usual case when the pull request was up to date with `main`.
-  - Otherwise, it runs the areas that changed since the last commit on `main` that passed.
-- **A release is tagged only on a commit whose push CI passed.** An rc is cut from `main`, so this is the check that the code an rc ships was tested as merged. A release PR tags its rc's commit, which was checked when the rc was cut.
+### CI runs on `main` too, and a release waits for it
 
-So a hotfix runs its checks once, in its pull request. The push run on `main` and the rc's own checks take a minute or less.
+The same workflow runs on every push to `main`, on the commit as merged:
 
-`continuous_integration.yml` still handles the merge queue (`merge_group`), in case it's turned on later.
+- **When a PR was up to date with `main`,** every area matches what its PR run recorded, so every job skips. That takes under a minute.
+- **When `main` moved after the PR's run,** only the jobs whose areas differ run. That is the check that the two PRs work together.
 
-## Full runs
+`tag_and_release.yml` tags an rc only once its commit's run on `main` has passed. A release PR tags its rc's commit, which was checked when the rc was cut.
 
-Every hour, a scheduled workflow checks whether `main` has changed since the last full run, and if so, it starts `Full CI`. That runs every job, whatever changed. It catches what a gap in the areas let through, and blocks nothing. A Slack channel subscribed to `Full CI` reports every run.
+### Hourly full runs
 
-It compares git trees, not the areas, since the full run is there to catch the areas' mistakes. It compares with the last full run whether that run passed or failed, so a failure is reported once, not every hour. Start `Full CI` by hand to retry after a fix.
+Every hour, a scheduled workflow checks whether `main` changed since the last full run. If it did, it starts `Full CI`, which runs every job with no skipping. A Slack channel subscribed to `Full CI` reports each run, with the commits since the previous one.
+
+It catches what the area lists miss, such as a job that starts reading a file from another area. It blocks nothing.
+
+### Locally
+
+Each job runs a make target, so its commands are written once:
+
+- `make ci` runs the areas your branch changed since `origin/main`, uncommitted changes included, and the breaking-change check.
+- `make ci-<area>` runs one job.
+- `make check` runs every static check, and `make test` every build and test.
+
+## What it costs
+
+| Change | Runs |
+|---|---|
+| Docs only | commitlint |
+| An rc or release PR | commitlint, `manifest` |
+| A PR's merge to `main`, PR up to date | nothing (every job skips) |
+| A PR's merge to `main`, `main` moved | the jobs whose areas differ |
+| Every hour `main` changed | everything, in the background |
+
+The bookkeeping costs a few seconds per run: one lookup per job, and one artifact per passed job.
+
+## What it relies on
+
+**The area lists are complete:** a job reads only files in its area. Nothing enforces this. Bazel does, with a sandbox, but that would mean adopting Bazel. Three things limit the damage:
+
+- broad areas (whole folders);
+- a file in no area runs everything;
+- the hourly full run catches the rest within the hour.
+
+## Alternatives considered
+
+| Alternative | Why not |
+|---|---|
+| GitHub's merge queue | It stalls without saying why, and an entry has to be re-queued by hand. At about three merges a day, finding a break minutes after it lands costs less. The workflow still handles `merge_group`, in case. |
+| Full checks on every rc | It adds a second round of checks to every hotfix. |
+| Comparing with the last commit that passed (`nx-set-shas` style) | It re-runs every job a stale merge touches, even when only other areas moved. It needs the whole history, and base-relative checks end up compared against the wrong base. |
+| GitHub's record of runs, instead of artifacts | A PR's run is recorded under the PR branch's tree, not the merged files it tested. They differ whenever the branch is behind `main`, as 40% of merged PRs were. |
+| `skip-duplicate-actions`, `nx-set-shas` | They skip whole runs, not jobs. They look back by commit count, and `nx-set-shas` falls back to `HEAD~1` by default, which skips checks. |
+| Bazel, or an Nx or Turborepo workspace | They would enforce or infer the area lists, but that's a large migration for one Go module whose full CI takes about 3 minutes. |
 
 ## Plan
 
-1. **Areas on pull requests.** `scripts/ci-areas.sh`, each job gated on its area, the `manifest` job, and `ci_passed` allowing any job but `changes` to skip. Done.
-2. **Push CI on `main`.** Reuse a tree that passed, or else check what changed since the last commit that passed.
-3. **Tag only a commit that passed.** `tag_and_release.yml` runs when push CI passes on a version change, rather than on the push.
-4. **Hourly full runs.** The check that starts `Full CI`, and the Slack channel.
-5. **Locally: `make ci`, and `make ci-<area>` run by the CI jobs.** Done.
+1. **Areas on pull requests.** Done (`e3ddf06d`).
+2. **Each job through `make ci-<area>`, and `make ci`.** Done (`2c9604d7`).
+3. **Area hashes.** Each file job records and looks up `passed-<area>-<hash>`; the base checks are PR-only jobs (`api-breaking`, `release`, `dependency-review`, commitlint); CI runs on push to `main`; CI's own files are in every area, and a file in no area runs everything. Done.
+4. **Tag only a commit that passed on `main`.**
+5. **Hourly full runs, and the Slack channel.**

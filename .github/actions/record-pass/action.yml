@@ -1,0 +1,26 @@
+# Record that a CI job passed on its area's files (docs/designs/ci.md): an artifact named
+# passed-<area>-<hash>, which the changes job of a later run looks up to skip the job. The name is
+# the record; the file in it is a note for whoever looks.
+name: Record a pass
+description: Record that a CI job passed on its area's files, as an artifact.
+
+inputs:
+  area:
+    description: The job's area, as scripts/ci-areas.sh names it.
+    required: true
+  hash:
+    description: The area's hash, from the changes job.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        AREA: ${{ inputs.area }}
+      run: echo "$AREA passed at $GITHUB_SHA in run $GITHUB_RUN_ID" > "$RUNNER_TEMP/passed-$AREA.txt"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: passed-${{ inputs.area }}-${{ inputs.hash }}
+        path: ${{ runner.temp }}/passed-${{ inputs.area }}.txt
+        retention-days: 30 # older than this, the job runs again
