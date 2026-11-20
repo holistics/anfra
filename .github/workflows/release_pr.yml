@@ -1,20 +1,24 @@
-# Open the pull request that cuts the next anfra release: `pnpm bump <version>` on a fresh
-# branch from main, committed as `release: <version>`. Merging it is the release:
-# tag_and_release.yml tags it and build_release.yml publishes it.
+# Open the rc PR, which cuts anfra's next release candidate (rc): `pnpm bump <rc>` on a fresh
+# branch from main, committed as `release: <rc>`. Merging it tags the rc, which build_release.yml
+# publishes as a prerelease; the rc's build then opens the release PR, which releases it once
+# anfra Cloud runs it (docs/designs/release.md).
 #
-# Daily (Monday to Saturday), onto one branch, release/next: each run rebuilds it from main
-# and force-pushes it, and closes its one pull request and opens a new one (an edit notifies
-# no one), so there is never more than one open, and it is never more than a day behind main.
-# A run that finds release/next holding this release of the current main already changes
-# nothing. When main has nothing releasable since the last tag (scripts/next-version.mjs), it
-# closes that pull request instead.
+# Daily (Monday to Saturday), onto one branch, release/rc: each run rebuilds it from main and
+# force-pushes it, and closes its one pull request and opens a new one (an edit notifies no one),
+# so there is never more than one open, and it is never more than a day behind main. A run that
+# finds release/rc holding this rc of the current main already changes nothing. When main has
+# nothing releasable since the last release (scripts/next-version.mjs), it closes that pull
+# request instead.
+#
+# While an rc waits for its release, a daily run cuts no rc: it comments on the release PR, when
+# main has changes since the rc, and fails when no release PR is open.
 # scripts/release-pr.sh does all of it, and runs locally with --dry-run.
 #
-# By hand (workflow_dispatch): `version` names the version instead of computing it; `branch`
-# names a new branch to put it on instead of release/next, for a release that needs commits
-# of its own (sidecar pins, say): push them onto that branch. That branch must not exist yet,
-# so a run never overwrites anyone's commits; release/next is the bot's own and gets
-# overwritten every day.
+# By hand (workflow_dispatch): it cuts the next rc, even while one waits, of the same release or a
+# later one. `version` names the rc instead of computing it; `branch` names a new branch to put it
+# on instead of release/rc, for an rc that needs commits of its own (sidecar pins, say): push them
+# onto that branch. That branch must not exist yet, so a run never overwrites anyone's commits;
+# release/rc is the bot's own and gets overwritten every day.
 #
 # TODO: push and open the pull request as a GitHub App (actions/create-github-app-token)
 # instead of GITHUB_TOKEN. GitHub starts no workflow for what GITHUB_TOKEN does, so CI
@@ -29,17 +33,17 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, e.g. 0.19.0. Empty: computed from the commits since the last tag."
+        description: "The rc to cut, e.g. 0.19.0-rc.1. Empty: computed from the commits since the last release."
         required: false
         type: string
       branch:
-        description: "A new branch to open the pull request from, e.g. release/0.19.0. Empty: release/next, overwritten."
+        description: "A new branch to open the pull request from, e.g. release/0.19.0-rc.1. Empty: release/rc, overwritten."
         required: false
         type: string
 
 permissions:
   contents: write # push the release branch
-  pull-requests: write # open, edit and close its pull request
+  pull-requests: write # open and close its pull request, and comment on the release PR
 
 concurrency:
   group: release-pr
@@ -66,8 +70,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile # conventional-changelog and -recommended-bump
 
-      - name: Open, replace or close the release pull request
+      - name: Open, replace or close the rc PR, or comment on the release PR
         env:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_BRANCH: ${{ inputs.branch }}
-        run: scripts/release-pr.sh ${INPUT_VERSION:+--version "$INPUT_VERSION"} ${INPUT_BRANCH:+--branch "$INPUT_BRANCH"}
+          DAILY: ${{ github.event_name == 'schedule' }}
+        run: |
+          daily=()
+          if [ "$DAILY" = true ]; then daily=(--daily); fi
+          scripts/release-pr.sh "${daily[@]}" ${INPUT_VERSION:+--version "$INPUT_VERSION"} ${INPUT_BRANCH:+--branch "$INPUT_BRANCH"}

@@ -1,11 +1,15 @@
 #!/usr/bin/env node
-// Print the version the next release should take, from the conventional commits since the last
-// `v*` tag; print nothing when none of them is releasable. `pnpm next-version` runs it,
-// `pnpm bump next` bumps to it, and scripts/release-pr.sh picks its version with it.
+// Print the version of the next release candidate (rc), such as 0.23.0-rc.1, from the
+// conventional commits since the last release; print nothing when none of them is releasable.
+// `pnpm next-version` runs it, `pnpm bump next` bumps to it, and scripts/release-pr.sh picks its
+// version with it. A release is always made from an rc (docs/designs/release.md), so
+// this never prints a release's version.
 //
-// The commits are read as the changelog reads them: conventional-recommended-bump, with
-// conventional-changelog.config.mjs's preset (its parser, so the same breaking changes), and its
-// types (a hidden type, left out of the changelog, is not releasable either). The rule:
+// The release the rc leads to comes from the commits since the last release, not the last rc, so
+// a feat merged after an rc of 0.22.1 makes the next rc one of 0.23.0. The commits are read as the
+// changelog reads them: conventional-recommended-bump, with conventional-changelog.config.mjs's
+// preset (its parser, so the same breaking changes), and its types (a hidden type, left out of the
+// changelog, is not releasable either). The rule:
 //
 // - A breaking change (`type!:`, or a `BREAKING CHANGE:` footer) bumps the major version, or the
 //   minor while below 1.0.
@@ -16,17 +20,20 @@
 // The preset's own rule doesn't fit: it bumps the patch for any commit at all, and below 1.0
 // (its preMajor) makes a feat a patch.
 //
+// The rc's number is one more than the highest rc of that release tagged yet.
+//
 // Usage: scripts/next-version.mjs [ref]   (default HEAD)
 import { execFileSync } from 'node:child_process'
 import { Bumper } from 'conventional-recommended-bump'
 import config, { types } from '../conventional-changelog.config.mjs'
+import { lastRelease, rcs } from './lib/versions.mjs'
 
 const ref = process.argv[2] ?? 'HEAD'
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
 
 const root = git('rev-parse', '--show-toplevel')
-const last = git('describe', '--tags', '--abbrev=0', '--match', 'v*', ref)
-const [major, minor, patch] = last.slice(1).split('-')[0].split('.').map(Number)
+const last = lastRelease(ref)
+const [major, minor, patch] = last.slice(1).split('.').map(Number)
 
 const shown = new Set(types.filter((t) => !t.hidden).map((t) => t.type))
 const breaking = (commit) =>
@@ -49,11 +56,12 @@ const recommendation = await new Bumper(root)
     return { level, reason: `${commits.length} commits since ${last}` }
   })
 
-// After a prerelease (1.2.0-rc.1), the release it leads to (1.2.0), whatever the commits.
-if (recommendation.releaseType && last.includes('-')) console.log(`${major}.${minor}.${patch}`)
-else switch (recommendation.releaseType) {
-  case 'major': console.log(`${major + 1}.0.0`); break
-  case 'minor': console.log(`${major}.${minor + 1}.0`); break
-  case 'patch': console.log(`${major}.${minor}.${patch + 1}`); break
-  default: break // nothing releasable
+let release
+switch (recommendation.releaseType) {
+  case 'major': release = `${major + 1}.0.0`; break
+  case 'minor': release = `${major}.${minor + 1}.0`; break
+  case 'patch': release = `${major}.${minor}.${patch + 1}`; break
+  default: process.exit(0) // nothing releasable
 }
+const n = Math.max(0, ...rcs(release).map((v) => Number(v.split('-rc.')[1])))
+console.log(`${release}-rc.${n + 1}`)

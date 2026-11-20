@@ -6,9 +6,15 @@
 #
 # Runs on a `v*` tag push: normally the one tag_and_release.yml pushes with its
 # deploy key, or a tag pushed by hand. The manifest.yml at that commit pins the sidecar
-# releases to embed, the version baked into the binary, and the cloud servers login offers. Also runs on
+# releases to embed, and the cloud servers login offers. Also runs on
 # workflow_dispatch: on a tag it releases that tag, on a branch it's a test build
 # (artifacts only, no release).
+#
+# The version is the tag's. A release candidate (rc), such as v0.23.0-rc.1, is the version its
+# commit's manifest.yml names. A release, such as v0.23.0, tags the commit of its rc, whose
+# manifest.yml names the rc, so the build takes the release's version from the tag, and merges the
+# rc's sections of the changelogs into the release's, as the release PR did on main
+# (docs/designs/release.md). After an rc, it opens the release PR, which releases it.
 #
 # A release also publishes the SDK and the design package to npm, as @holistics/anfra-sdk and
 # @holistics/anfra-design at the same version (the sdk job), and the anfra skills to their
@@ -18,8 +24,7 @@
 # by its version, but nothing that finds the latest version picks it: its GitHub release is
 # marked as a prerelease, which `anfra update` and install.sh skip (they follow
 # /releases/latest), its image takes only its own tag, its npm packages go under `next`, and the
-# skills, whose version `anfra update` checks, aren't published
-# (docs/designs/release-candidates.md).
+# skills, whose version `anfra update` checks, aren't published.
 name: Build anfra release
 
 on:
@@ -70,23 +75,38 @@ jobs:
           pnpm build:web
           test -f internal/appserve/dist/index.html
 
+      # The version: the tag's, for a release or an rc; manifest.yml's, for a test build.
       - name: Read manifest
         id: m
         run: |
+          version="$(yq '.version' manifest.yml)"
+          if [ "$IS_RELEASE" = true ]; then version="${TAG#v}"; fi
           {
-            echo "version=$(yq '.version' manifest.yml)"
+            echo "version=$version"
             echo "node_tag=$(yq '.sidecars.anfra_node' manifest.yml)"
             echo "canal_tag=$(yq '.sidecars.anfra_canal' manifest.yml)"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Verify tag matches manifest, so does the SDK, and the changelog has its notes
+      # An rc's tag matches its commit's manifest.yml and SDK. A release's tag is on the commit of
+      # an rc of that release, whose changelog sections become the release's. Either way, the
+      # changelog has the version's notes.
+      - name: Verify the tag, and merge a release's changelog
         if: ${{ env.IS_RELEASE == 'true' }}
         env:
           VERSION: ${{ steps.m.outputs.version }}
         run: |
-          test "v$VERSION" = "$TAG" || { echo "tag $TAG != manifest version $VERSION"; exit 1; }
-          sdk="$(jq -r .version web/sdk/package.json)"
-          test "$sdk" = "$VERSION" || { echo "web/sdk/package.json version $sdk != manifest version $VERSION (pnpm bump sets both)"; exit 1; }
+          manifest="$(yq '.version' manifest.yml)"
+          if [ "$IS_PRERELEASE" = true ]; then
+            test "$manifest" = "$VERSION" || { echo "tag $TAG != manifest version $manifest"; exit 1; }
+            sdk="$(jq -r .version web/sdk/package.json)"
+            test "$sdk" = "$VERSION" || { echo "web/sdk/package.json version $sdk != manifest version $VERSION (pnpm bump sets both)"; exit 1; }
+          else
+            git fetch --quiet --tags origin
+            rc="$(node scripts/lib/versions.mjs newest-rc "$VERSION")"
+            test -n "$rc" && test "$(git rev-parse "v$rc^{commit}")" = "$(git rev-parse HEAD)" \
+              || { echo "$TAG isn't on the commit of its newest rc (${rc:-none}): a release is made from an rc, which tag_and_release.yml tags"; exit 1; }
+            node scripts/changelog-merge.mjs "$VERSION" CHANGELOG.md skills/CHANGELOG.md
+          fi
           scripts/release-notes.sh "$VERSION" > /dev/null
 
       - name: Collect sidecar binaries
@@ -236,6 +256,12 @@ jobs:
       # Trusted publishing needs npm 11.5.1 or later; Node's own may be older.
       - run: npm install -g npm@11
       - run: pnpm install --frozen-lockfile
+      # A release's version is its tag's: its commit is its rc's, which names the rc. Set before
+      # the dist-tag is chosen below, which goes by this version.
+      - name: Set the packages' version
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          for pkg in web/sdk web/design; do (cd "$pkg" && npm pkg set version="${GITHUB_REF_NAME#v}"); done
       - run: pnpm build:sdk
       - name: Publish the SDK and the design package, or pack them
         run: |
@@ -277,9 +303,12 @@ jobs:
       IS_PRERELEASE: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0; the version is package.json's packageManager
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile # scripts/changelog-merge.mjs reads the changelog's config
       # A release pushes as the App; any other build only reads the public repo.
       - id: deployer
         if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
@@ -297,9 +326,15 @@ jobs:
           token: ${{ steps.deployer.outputs.token || github.token }}
       # A prerelease doesn't publish them: `anfra update` checks the skills' version on the
       # facade, so they would reach everyone before the release does.
+      # A release publishes at its tag's version, with its section of skills/CHANGELOG.md merged
+      # from its rc's, as the assemble job merges them.
       - name: Publish the skills, or report what a release would publish
         run: |
           version="$(yq '.version' manifest.yml)"
+          if [ "$IS_RELEASE" = true ]; then version="${GITHUB_REF_NAME#v}"; fi
+          if [ "$IS_RELEASE" = true ] && [ "$IS_PRERELEASE" != true ]; then
+            node scripts/changelog-merge.mjs "$version" CHANGELOG.md skills/CHANGELOG.md
+          fi
           if [ "$IS_RELEASE" != true ] || [ "$IS_PRERELEASE" = true ]; then
             bash skills/scripts/publish.sh facade "$version" "$GITHUB_SHA"; exit 0
           fi
@@ -309,3 +344,32 @@ jobs:
           if git -C facade rev-parse -q --verify "refs/tags/anfra-v$version" >/dev/null; then
             git -C facade push origin HEAD:main "refs/tags/anfra-v$version"
           fi
+
+  # After an rc is out, the pull request that releases it (scripts/release-pr.sh --release): on
+  # release/next, it sets the version to the release, promoted_from to the rc, and merges the rc's
+  # changelog sections. It replaces the release PR of an earlier rc. Merging it, once anfra Cloud
+  # runs the rc, is the release.
+  release-pr:
+    needs: [assemble, sdk]
+    if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push release/next
+      pull-requests: write # open its pull request, and close the one it replaces
+    env:
+      # TODO: a GitHub App's token, and its bot as GIT_BOT, as release_pr.yml's.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GIT_BOT: github-actions[bot]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          fetch-depth: 0 # the tags, and the commits since the last release
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0; the version is package.json's packageManager
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Open the release PR
+        run: scripts/release-pr.sh --release "${GITHUB_REF_NAME#v}"
