@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // The repo's Data Apps as their folders hold them: a folder opens and closes in place (its icon
 // gives way to a chevron under the pointer or the focus), an app opens in the viewer, the current
-// one marked. The top level is the sidebar's menu; each folder's contents are a sub-menu below it.
+// one marked. A row's name may be cut short at the sidebar's width, so a row held under the pointer
+// names it in full: an app by its label over its file, a folder by its path. The top level is the
+// sidebar's menu; each folder's contents are a sub-menu below it.
 import { ChevronRight, Folder, FolderOpen } from '@lucide/vue';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AppIcon } from '@/lib/appIcon';
 import type { CatalogEntry } from '@/lib/catalog';
 import { cn } from '@/lib/utils';
@@ -26,6 +29,8 @@ const button = () => (props.depth ? sidebarMenuSubButton : sidebarMenuButton);
 const slot = () => (props.depth ? 'sidebar-menu-sub-button' : 'sidebar-menu-button');
 // Under the pointer or the focus, the folder's icon hides and the chevron shows in its place.
 const folderIcon = 'size-4 icon-weak group-hover/folder:invisible group-focus-visible/folder:invisible';
+// The shell's tooltips open at once; a row's waits, so the pointer passing down the tree opens none.
+const NAME_DELAY = 600;
 </script>
 
 <template>
@@ -33,24 +38,31 @@ const folderIcon = 'size-4 icon-weak group-hover/folder:invisible group-focus-vi
   <ul :class="depth ? cn(sidebarMenuSub, 'mr-0 pr-0') : sidebarMenu" role="group">
     <li v-for="entry in entries" :key="entry.path" class="relative">
       <template v-if="entry.kind === 'folder'">
-        <button
-          type="button"
-          :data-slot="slot()"
-          :class="cn(button(), 'group/folder')"
-          :aria-expanded="open(entry.path)"
-          :data-folder="entry.path"
-          @click="emit('toggle', entry.path)"
-        >
-          <span class="relative grid size-4 shrink-0 place-items-center">
-            <FolderOpen v-if="open(entry.path)" :class="folderIcon" />
-            <Folder v-else :class="folderIcon" />
-            <ChevronRight
-              class="invisible absolute size-4 icon-weak transition-transform duration-160 ease-anfra-out group-hover/folder:visible group-focus-visible/folder:visible group-aria-expanded/folder:rotate-90"
-              data-chevron
-            />
-          </span>
-          <span class="truncate">{{ entry.name }}</span>
-        </button>
+        <Tooltip :delay-duration="NAME_DELAY" disable-hoverable-content>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :data-slot="slot()"
+              :class="cn(button(), 'group/folder')"
+              :aria-expanded="open(entry.path)"
+              :data-folder="entry.path"
+              @click="emit('toggle', entry.path)"
+            >
+              <span class="relative grid size-4 shrink-0 place-items-center">
+                <FolderOpen v-if="open(entry.path)" :class="folderIcon" />
+                <Folder v-else :class="folderIcon" />
+                <ChevronRight
+                  class="invisible absolute size-4 icon-weak transition-transform duration-160 ease-anfra-out group-hover/folder:visible group-focus-visible/folder:visible group-aria-expanded/folder:rotate-90"
+                  data-chevron
+                />
+              </span>
+              <span class="truncate">{{ entry.name }}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" :side-offset="8" class="font-mono" data-testid="row-name">
+            {{ entry.path }}
+          </TooltipContent>
+        </Tooltip>
         <AppTree
           v-if="open(entry.path) && entry.children.length"
           :entries="entry.children"
@@ -61,19 +73,26 @@ const folderIcon = 'size-4 icon-weak group-hover/folder:invisible group-focus-vi
           @toggle="emit('toggle', $event)"
         />
       </template>
-      <button
-        v-else
-        type="button"
-        :data-slot="slot()"
-        :class="button()"
-        :data-active="entry.path === selected || undefined"
-        :aria-current="entry.path === selected ? 'page' : undefined"
-        :data-app="entry.path"
-        :title="entry.path"
-        @click="emit('select', entry.path)"
-      >
-        <AppIcon /><span>{{ entry.label }}</span>
-      </button>
+      <Tooltip v-else :delay-duration="NAME_DELAY" disable-hoverable-content>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            :data-slot="slot()"
+            :class="button()"
+            :data-active="entry.path === selected || undefined"
+            :aria-current="entry.path === selected ? 'page' : undefined"
+            :data-app="entry.path"
+            @click="emit('select', entry.path)"
+          >
+            <AppIcon /><span>{{ entry.label }}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" :side-offset="8" class="flex-col items-start gap-0.5" data-testid="row-name">
+          <span data-line>{{ entry.label }}</span>
+          <!-- Read aloud as one description: the comma keeps the label and the file apart. -->
+          <span class="font-mono" data-line><span class="sr-only">, </span>{{ entry.path }}</span>
+        </TooltipContent>
+      </Tooltip>
     </li>
   </ul>
 </template>

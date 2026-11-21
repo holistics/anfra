@@ -64,6 +64,24 @@ describe('AppTree', () => {
     expect(host.querySelector('[data-app="sales.html"]')!.hasAttribute('data-active')).toBe(false);
   });
 
+  it('names a row in full, label over file, as the sidebar may cut it short', async () => {
+    const label = 'Revenue: monthly recurring revenue by plan and region';
+    const tree = [folder('finance', [{ kind: 'app', path: 'finance/revenue.html', label }])];
+    const { host } = await mount(AppTree, { entries: tree, collapsed: new Set() });
+    host.querySelector<HTMLButtonElement>('[data-app="finance/revenue.html"]')!.focus();
+    await nextTick();
+    const name = document.querySelector('[data-testid="row-name"]')!;
+    expect([...name.querySelectorAll('[data-line]')].map((line) => line.textContent)).toEqual([label, ', finance/revenue.html']);
+    expect(document.querySelector('[role="tooltip"]')!.textContent).toBe(`${label}, finance/revenue.html`);
+  });
+
+  it('names a folder by its path', async () => {
+    const { host } = await mount(AppTree, { entries, collapsed: new Set() });
+    host.querySelector<HTMLButtonElement>('[data-folder="finance"]')!.focus();
+    await nextTick();
+    expect(document.querySelector('[data-testid="row-name"]')!.textContent).toContain('finance');
+  });
+
   it('opens and closes a folder in place', async () => {
     const onToggle = vi.fn();
     const { host } = await mount(AppTree, { entries, collapsed: new Set(['finance']), onToggle });
