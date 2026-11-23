@@ -176,6 +176,49 @@ describe('execute with a run in flight for the current inputs', () => {
     expect(aloneSummary.succeeded).toEqual(['revenue']);
   });
 
+  it('sends the run again when it was aborted just before', async () => {
+    const { app, gates } = setup();
+
+    const first = app.execute();
+    app.abort();
+    const second = app.execute();
+
+    expect(gates).toHaveLength(2);
+
+    gates.forEach((gate) => gate.resolve(undefined));
+    const [, secondSummary] = await Promise.all([first, second]);
+    expect(secondSummary.succeeded).toEqual(['revenue']);
+  });
+
+  it('sends the run again when asked to skip the cache', async () => {
+    const { app, gates, aborted } = setup();
+
+    const first = app.execute();
+    const busting = app.execute({ bustCache: true });
+
+    expect(aborted[0]).toBe(true);
+    expect(gates).toHaveLength(2);
+
+    gates.forEach((gate) => gate.resolve(undefined));
+    await Promise.all([first, busting]);
+  });
+
+  it('leaves the run alone when a listener executes the query as it starts', async () => {
+    const { app, query, gates, aborted } = setup();
+    const reacting: Promise<unknown>[] = [];
+    query.subscribe(() => {
+      if (query.state === 'executing' && reacting.length === 0) reacting.push(query.execute());
+    });
+
+    const first = app.execute();
+
+    expect(aborted[0]).toBe(false);
+    expect(gates).toHaveLength(1);
+
+    gates[0].resolve(undefined);
+    await Promise.all([first, ...reacting]);
+  });
+
   it('still aborts and resends on refresh', async () => {
     const { app, gates, aborted } = setup();
 
