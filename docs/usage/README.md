@@ -6,8 +6,7 @@ Guides for running and building on anfra, beyond using it to write models, queri
 |---|---|
 | [engine](engine.md) | Embedding anfra in another Go application or platform. |
 | [docker](docker.md) | Running anfra from its Docker image, and building images on it. |
-| [telemetry](telemetry.md) | Recording what each command does, to a tool of your own or anfra's telemetry stack. Experimental. |
-| [agent tracing](agent-tracing.md) | Grouping the commands a coding agent runs by its session, to replay and evaluate its work. Work in progress. |
+| [observability and eval](observability-and-eval/README.md) | Seeing what a coding agent did with anfra for one piece of work, and judging it: [telemetry](observability-and-eval/telemetry.md) records each command, and [agent tracing](observability-and-eval/agent-tracing.md) groups them by the agent's session. Work in progress. |
 | [configs](configs.md) | Configuring a setup: a repo's `.anfra/`, `anfra serve`'s flags, environment variables. |
 | [publishing and login](publishing.md) | Signing in to an organization, publishing a repo, and managing stored credentials. |
 | [SDK plugins](sdk-plugins.md) | Writing a plugin for Data Apps on your host: its host half, frame half, types, tests. |

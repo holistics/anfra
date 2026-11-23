@@ -82,7 +82,7 @@ Your own settings for a repo go in `.env` at its root, beside `.anfra/`. It is o
 
 ```sh
 # .env
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   # where this repo's traces go (telemetry.md)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   # where this repo's traces go (observability-and-eval/telemetry.md)
 ANFRA_EXPERIMENTAL_TRACE_DATA=0
 ```
 
@@ -124,7 +124,7 @@ A setting belongs in `.env` when it has to reach agents: an agent can edit a fil
 
 ## Telemetry
 
-anfra can record each command's trace and send it, over OTLP/HTTP, to an OpenTelemetry endpoint you choose ([telemetry](telemetry.md)). Nothing is recorded until an endpoint is set, and nothing is ever sent to Holistics. Telemetry is experimental, as the `EXPERIMENTAL` in its settings says, so they may change in a minor release.
+anfra can record each command's trace and send it, over OTLP/HTTP, to an OpenTelemetry endpoint you choose ([telemetry](observability-and-eval/telemetry.md)). Nothing is recorded until an endpoint is set, and nothing is ever sent to Holistics. Telemetry is experimental, as the `EXPERIMENTAL` in its settings says, so they may change in a minor release.
 
 Each variable below can be set in the environment or in the repo's [`.env`](#your-settings-env). **On your machine,** set the endpoint in the repo's `.env`. Every anfra command in the repo reads it, including the ones your agents run:
 
@@ -140,12 +140,12 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 | `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | anfra sends over HTTP only, and warns when this is `grpc`. Point the endpoint at an HTTP receiver (usually port 4318). |
 | `ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_ENDPOINT` | Another endpoint for canal-query's traces, instead of anfra's. It exports over gRPC then, unless `ANFRA_CANAL_QUERY_ENV_OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`. Default: anfra's endpoint, over HTTP. |
 | `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_TRACES_TIMEOUT`, `OTEL_BSP_EXPORT_TIMEOUT` | How long one export may take, in milliseconds. Default: 1500, so a collector that is down delays a command by no more than that. |
-| `ANFRA_EXPERIMENTAL_TRACE_DATA` | Whether traces record your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack. These can hold your filter values ([what a trace holds](telemetry.md#what-a-trace-holds)). `0` leaves it out. Default: `1`, with a warning on every command when traces go to another machine. |
+| `ANFRA_EXPERIMENTAL_TRACE_DATA` | Whether traces record your data: what a command asked for, the SQL it ran, what came back (never a query's rows), and an error's message and stack. These can hold your filter values ([what a trace holds](observability-and-eval/telemetry.md#what-a-trace-holds)). `0` leaves it out. Default: `1`, with a warning on every command when traces go to another machine. |
 | `ANFRA_EXPERIMENTAL_TRACE_PAYLOAD_LIMIT` | The bytes kept of each input, answer and query; a longer one is cut and marked. A whole number. Default: `16384`. |
-| `ANFRA_SESSION_ID` | The session of the agent that runs anfra's commands, for an agent anfra doesn't detect. Set it where the agent starts, and every command the agent runs inherits it. A detected agent's own id wins over it ([agent tracing](agent-tracing.md)). Default: none. |
+| `ANFRA_SESSION_ID` | The session of the agent that runs anfra's commands, for an agent anfra doesn't detect. Set it where the agent starts, and every command the agent runs inherits it. A detected agent's own id wins over it ([agent tracing](observability-and-eval/agent-tracing.md)). Default: none. |
 | `ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE` | The keys of a caller's W3C baggage that anfra records, on every span of the call: from `BAGGAGE` for the CLI, or the `baggage` header or MCP's `_meta.baggage` for `anfra serve`. A comma-separated list of keys, where `*` and `?` are wildcards, such as `gen_ai.conversation.id,run.id`. `none` lets no baggage in. A key starting with `anfra.` is never let in. Default: `gen_ai.conversation.id`. |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | The traces endpoint alone, a full URL ending in `/v1/traces`, instead of the base URL. |
-| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TRACES_HEADERS` | Headers sent with each export, such as a hosted backend's API key, as `key=value,key=value`. In the repo's `.env`, they reach your agents' commands too ([telemetry](telemetry.md#a-backend-that-needs-a-key)). Default: none, which is what the telemetry stack needs. |
+| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TRACES_HEADERS` | Headers sent with each export, such as a hosted backend's API key, as `key=value,key=value`. In the repo's `.env`, they reach your agents' commands too ([telemetry](observability-and-eval/telemetry.md#a-backend-that-needs-a-key)). Default: none, which is what the telemetry stack needs. |
 | `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Label anfra's traces, in OpenTelemetry's format (`key=value,key=value` for the attributes). Default service name: `anfra`. The sidecars don't inherit them; set theirs with `ANFRA_CANAL_QUERY_ENV_` or `ANFRA_NODE_ENV_` (above). |
 | `OTEL_SDK_DISABLED` | `true` exports nothing, whatever else is set. |
 

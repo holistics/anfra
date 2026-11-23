@@ -1,8 +1,8 @@
-# Tracing an agent's work
+# Agent tracing
 
-How to see every anfra command a coding agent ran for one piece of work, in order, with what each did and how it ended. This guide is for developers who run coding agents on anfra and want to debug or evaluate them. Why it works this way is in [designs/telemetry.md](../designs/telemetry.md#6-phase-1-agent-tracing).
+How to see every anfra command a coding agent ran for one piece of work, in order, with what each did and how it ended. This guide is for developers who run coding agents on anfra and want to debug or evaluate them. Where sessions fit in observability and eval is in the [overview](README.md).
 
-> **Work in progress.** Agent tracing is being built, and its names and settings may change in any release. The changelog says when they do. Each part that isn't built yet is marked where it sits.
+> **Work in progress, and experimental.** Agent tracing is an experimental part of anfra that is still being built. Its names and settings may change in any release, and the changelog says when they do. Each part that isn't built yet is marked where it sits.
 
 You need telemetry on for the repo ([telemetry](telemetry.md#turn-telemetry-on)). Agent tracing has no setup of its own: it labels the traces that telemetry already records.
 
@@ -38,7 +38,7 @@ The id changes when the agent's does. Claude Code, for example, starts a new one
 
 ## 3. Read the session back (coming soon)
 
-Reading a session through anfra isn't built yet. It comes with the trace sample: a model of the spans, with AQL queries and a Data App to read a session by ([designs](../designs/telemetry.md#querying-traces-through-anfra)).
+Reading a session through anfra isn't built yet. It comes with the trace sample: a model of the spans, with AQL queries and a Data App to read a session by ([designs](../../designs/telemetry.md#querying-traces-through-anfra)).
 
 Until then, a session's spans are in the [local telemetry stack](telemetry.md#the-local-telemetry-stack), or the tool you record to. Each command is its own trace, and the session's id is what links them: they are the spans whose `gen_ai.conversation.id` is the id. `anfra.log` records the id too, as `gen_ai_conversation_id` on each request.
 
@@ -60,7 +60,7 @@ Everything else is what telemetry records for any command: each step and its tim
 
 The session groups an agent's commands, but you may need finer labels, such as the eval run and the case a command belongs to. Tag commands with your own ids, in W3C baggage, and anfra records them on every span of each command.
 
-1. Let your keys in, in the repo's `.env`. anfra records only the baggage keys that [`ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE`](configs.md#telemetry) names, and by default it names `gen_ai.conversation.id` alone:
+1. Let your keys in, in the repo's `.env`. anfra records only the baggage keys that [`ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE`](../configs.md#telemetry) names, and by default it names `gen_ai.conversation.id` alone:
 
    ```sh
    ANFRA_EXPERIMENTAL_TRACE_BAGGAGE_INCLUDE=gen_ai.conversation.id,run.id,case.id

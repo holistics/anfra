@@ -60,7 +60,7 @@ Another UID is not supported today. anfra's home is `anfra`'s, and canal-query l
 
 ## Telemetry
 
-Set `OTEL_EXPORTER_OTLP_ENDPOINT` to an OTLP/HTTP collector the container can reach, and anfra records each command's trace there, its sidecars' included. To run anfra's telemetry stack beside the container, see [telemetry](telemetry.md#in-a-container). Settings: [configs.md](configs.md#telemetry). Telemetry is experimental: its settings may change in a minor release.
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to an OTLP/HTTP collector the container can reach, and anfra records each command's trace there, its sidecars' included. To run anfra's telemetry stack beside the container, see [telemetry](observability-and-eval/telemetry.md#in-a-container). Settings: [configs.md](configs.md#telemetry). Telemetry is experimental: its settings may change in a minor release.
 
 ## Platforms
 

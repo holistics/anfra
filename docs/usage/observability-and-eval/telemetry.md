@@ -51,7 +51,7 @@ Then point the repo at it, in the `.env` at the repo's root (create it if it isn
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ```
 
-Every anfra command in the repo from then on is recorded, including the commands an agent runs: anfra reads the file on every command, so there's nothing to set in a shell or an agent's config. The file is yours: `anfra init` git-ignores it, and anfra never reads one that Git tracks ([configs](configs.md#your-settings-env)). A running `anfra serve` reads it when it starts, so restart it.
+Every anfra command in the repo from then on is recorded, including the commands an agent runs: anfra reads the file on every command, so there's nothing to set in a shell or an agent's config. The file is yours: `anfra init` git-ignores it, and anfra never reads one that Git tracks ([configs](../configs.md#your-settings-env)). A running `anfra serve` reads it when it starts, so restart it.
 
 To check where anfra records, run `anfra status`. Its `telemetry` section shows the state (`off`, `on`, or `failing` when the endpoint doesn't accept connections), the endpoint, and what set it, and [what a trace holds](#what-a-trace-holds), each setting with what set it.
 
@@ -100,7 +100,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example.com:4318
 
 Give the base URL of its OTLP/HTTP endpoint. anfra adds `/v1/traces` itself.
 
-The variables work in the environment too, which wins over the file ([configs](configs.md#telemetry)). Use it where an environment is already the way to configure things, such as a container or a service.
+The variables work in the environment too, which wins over the file ([configs](../configs.md#telemetry)). Use it where an environment is already the way to configure things, such as a container or a service.
 
 anfra sends traces over HTTP only. To reach a backend that takes only gRPC, run a collector between the two: it receives HTTP from anfra and exports gRPC.
 

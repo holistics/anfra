@@ -55,7 +55,7 @@ Every goal must also keep anfra safe and cheap for users who don't use telemetry
 
 ### What is built
 
-Phase 0 is built in anfra, as its [checklist](#implementation-details) marks; the sidecars' parts wait on their releases. Details are in [architecture](architecture.md#logs-and-telemetry), [sidecars](sidecars.md#telemetry-and-logs), [logs](logs.md), [errors](errors.md#steps-context-written-once), [configs](../usage/configs.md#telemetry), [Docker](../usage/docker.md#telemetry) and the [usage page](../usage/telemetry.md).
+Phase 0 is built in anfra, as its [checklist](#implementation-details) marks; the sidecars' parts wait on their releases. Details are in [architecture](architecture.md#logs-and-telemetry), [sidecars](sidecars.md#telemetry-and-logs), [logs](logs.md), [errors](errors.md#steps-context-written-once), [configs](../usage/configs.md#telemetry), [Docker](../usage/docker.md#telemetry) and the [usage page](../usage/observability-and-eval/telemetry.md).
 
 #### How the parts fit
 
@@ -334,7 +334,7 @@ The local stack needs no credentials: its ports listen on 127.0.0.1. A hosted ba
 
 A collector and a store, nothing more, one per repo: anfra ships it and the user runs it. Users know it as the **telemetry stack**. Viewing traces is a [non-goal](#non-goals): ClickHouse is a data source like any other, and the [trace sample](#querying-traces-through-anfra) gives a model and AQL questions over its spans, so no separate viewer is needed ([philosophy](philosophy.md)).
 
-**Three steps, from the [usage page](../usage/telemetry.md)** or the hints `anfra experimental telemetry init` answers with:
+**Three steps, from the [usage page](../usage/observability-and-eval/telemetry.md)** or the hints `anfra experimental telemetry init` answers with:
 
 ```sh
 anfra experimental telemetry init    # write this repo's telemetry stack's compose file, for this anfra version
@@ -791,7 +791,7 @@ Until anfra-node's items ship, its spans carry raw errors, stacks and `h.fqn`.
 **Docs**
 
 - [x] **[configs](../usage/configs.md#telemetry),** **[sidecars](sidecars.md#telemetry-and-logs)** and **[Docker](../usage/docker.md#telemetry).**
-- [ ] **The [usage page](../usage/telemetry.md):**
+- [ ] **The [usage page](../usage/observability-and-eval/telemetry.md):**
   - [x] The three steps and "What a trace holds".
   - [ ] A reading section pointing to the trace sample.
 - [ ] **[architecture](architecture.md#logs-and-telemetry):**
