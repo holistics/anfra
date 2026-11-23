@@ -13,8 +13,8 @@ import (
 // Update updates the semantic layer by generating AML from catalog metadata.
 var Update = command.Define(command.Def[UpdateInput, Result]{
 	Name:       "sl.update",
-	Short:      "Update the semantic layer from Postgres metadata",
-	Long:       "Update an AML table model in the semantic layer using Postgres metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes. Other callers receive the content.\n\nRun ingest against the same running server first to load the current database schema.",
+	Short:      "Update the semantic layer from table metadata",
+	Long:       "Update an AML table model in the semantic layer using table metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes.\n\nRun ingest against the same running server first to load the current database schema.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Needs:      func(UpdateInput) command.Sidecars { return command.Sidecars{Node: true} },

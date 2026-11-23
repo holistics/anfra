@@ -591,7 +591,7 @@ func (c *Client) ValidateAQL(ctx context.Context, req CompileToSQLRequest) (Vali
 
 // CatalogIngestRequest mirrors anfra-node's catalog.ingest params: the
 // catalog's context, and optionally the one context source to ingest.
-// anfra-node loads file-backed sources and indexes the supplied source metadata.
+// anfra-node owns source parsing and ingestion internals.
 type CatalogIngestRequest struct {
 	Context CatalogContext `json:"context"`
 	Source  string         `json:"source,omitempty"`

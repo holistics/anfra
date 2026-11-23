@@ -115,8 +115,9 @@ func TestSLOutputAndSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !strings.Contains(stdout.String(), result.Message) || strings.Contains(stdout.String(), result.Content) || !strings.Contains(stderr.String(), "Check the type.") {
-			t.Fatalf("stdout = %q, stderr = %q", stdout.String(), stderr.String())
+		got := stdout.String()
+		if !strings.Contains(got, result.Message) || !strings.Contains(got, result.Content) || !strings.Contains(got, "Check the type.") || stderr.Len() != 0 {
+			t.Fatalf("stdout = %q, stderr = %q", got, stderr.String())
 		}
 
 		output.json = true

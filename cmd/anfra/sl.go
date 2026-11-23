@@ -13,10 +13,8 @@ import (
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func writesSLFiles(name string) bool { return name == "sl.add" || name == "sl.update" }
-
-// writeSLResult is CLI delivery, after a local or forwarded core operation.
-// Neither the engine nor the sidecar writes the repo for an API caller.
+// writeSLResult completes the CLI command by writing the generated AML to the
+// local repo, whether the core operation ran locally or on the server.
 func writeSLResult(name string, body []byte) error {
 	var result sl.Result
 	if err := jsonkit.Unmarshal(body, &result); err != nil {

@@ -111,11 +111,6 @@ const (
 // at a time, each once its view clears the bar (docs/designs/cli-pretty.md).
 var prettyViews = map[string]bool{"query": true, "sl.add": true, "sl.update": true}
 
-// Commands that write semantic-layer files show a summary by default.
-func usesPrettyOutput(name string) bool {
-	return wantsPretty(prettyViews[name]) || writesSLFiles(name) && !structuredAsked()
-}
-
 // The default formats.
 const (
 	formatYAML = "yaml"

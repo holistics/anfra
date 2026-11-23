@@ -36,7 +36,7 @@ func loadMetadata(ctx context.Context, cc command.CommandContext) (*anfranode.Ca
 		// TODO: support more than the first Postgres source when the catalog can
 		// bind a plugin to multiple sources. Keep the host's ordering here.
 		snapshot, err := postgres.Read(ctx, func(ctx context.Context, sql string) ([]postgres.Row, error) {
-			return readPostgresRows(ctx, cc, sources, dialect.Name, sql)
+			return readMetadataRows(ctx, cc, sources, dialect.Name, sql)
 		})
 		if err != nil {
 			return nil, fmt.Errorf("read metadata for data source %q: %w", dialect.Name, err)
@@ -50,7 +50,7 @@ func loadMetadata(ctx context.Context, cc command.CommandContext) (*anfranode.Ca
 	return nil, nil
 }
 
-func readPostgresRows(ctx context.Context, cc command.CommandContext, sources datasource.DataSources, name, sql string) ([]postgres.Row, error) {
+func readMetadataRows(ctx context.Context, cc command.CommandContext, sources datasource.DataSources, name, sql string) ([]postgres.Row, error) {
 	q, err := query.InDataSourceUngoverned(ctx, cc.DataPerms, sources, name, sql)
 	if err != nil {
 		return nil, err

@@ -14,9 +14,9 @@ import (
 // Add adds to the semantic layer by generating AML from catalog metadata.
 var Add = command.Define(command.Def[AddInput, Result]{
 	Name:  "sl.add",
-	Short: "Add a Postgres table to the semantic layer",
-	Long: "Add a Postgres table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file. Other callers receive the content.\n\n" +
-		"Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.",
+	Short: "Add a table to the semantic layer",
+	Long: "Add a table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file.\n\n" +
+		"Run ingest first against the same running server.",
 	ReadOnly:   true,
 	Idempotent: true,
 	Needs:      func(AddInput) command.Sidecars { return command.Sidecars{Node: true} },
