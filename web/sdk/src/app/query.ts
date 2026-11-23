@@ -347,12 +347,13 @@ export class Query extends Observable {
 
   /**
    * @internal What its run in flight will come to, when that run was sent with `signature`: an
-   * `execute()` asking for the same inputs waits for it rather than sending them again.
+   * `execute()` asking for the same inputs waits for it rather than sending them again. Not once
+   * aborted: `abort()` leaves the controller in place until the run's own end clears it.
    */
   runInFlightWith (signature: string): Promise<RunOutcome> | undefined {
     const run = this.startedRun;
-    if (!run || run.controller !== this.controller || run.signature !== signature) return undefined;
-    return run.outcome;
+    if (!run || run.controller !== this.controller || run.controller.signal.aborted) return undefined;
+    return run.signature === signature ? run.outcome : undefined;
   }
 
   /**

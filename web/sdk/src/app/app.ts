@@ -737,8 +737,10 @@ export class App extends Observable implements AppContext {
   /**
    * Runs every query that would produce something new, and resolves with which succeeded and which
    * failed. Never rejects: a failed query sets its own `state` and `error`, because one broken
-   * query must not blank the other four. See docs/adr/0002. A query whose run in flight already has
-   * its current inputs is not sent again: this waits for that run and reports how it ended.
+   * query must not blank the other four. See docs/adr/0002. A query it would run whose run in
+   * flight already has its current inputs is not sent again: this waits for that run and reports
+   * how it ended. A query with nothing new to run is left alone, and not waited for, even while a
+   * run of it (a `refresh()`) is in flight.
    */
   async execute (options: ExecuteOptions = {}): Promise<ExecuteSummary> {
     const targets = [...this._queries.values()].filter((query) => query.shouldRun(options.force));
@@ -786,10 +788,11 @@ export class App extends Observable implements AppContext {
   /**
    * The query's run with its `phase` inputs: the one in flight when it was sent with them, so the
    * same request is not sent twice, or else a new one that supersedes whatever is in flight. With
-   * `force`, always a new one.
+   * `force`, or when asked to skip the server's cache, always a new one: the run in flight may be
+   * answered from that cache, and the signature doesn't say.
    */
   private runWith (query: Query, phase: 'pending' | 'applied', context: SubmitContext, force = false): Promise<RunOutcome> {
-    const inFlight = force ? undefined : query.runInFlightWith(query.signature(phase));
+    const inFlight = force || context.bustCache ? undefined : query.runInFlightWith(query.signature(phase));
     if (inFlight) return inFlight;
     // Supersede: a still-running request for a query this run is about to redo is dead weight.
     query.controller?.abort();
@@ -806,10 +809,13 @@ export class App extends Observable implements AppContext {
     const controller = new AbortController();
     query.controller = controller;
     query.runningSignature = signature;
-    query.markExecuting();
-    const outcome = this.runFirstPage(query, signature, context, controller);
-    // Set after the run started: one that already ended took `controller` away, so it isn't in flight.
+    // Recorded before `markExecuting` notifies: a listener that executes the query in reaction must
+    // find this run and wait for it, not supersede it.
+    let settle!: { resolve: (outcome: RunOutcome) => void; reject: (reason: unknown) => void };
+    const outcome = new Promise<RunOutcome>((resolve, reject) => { settle = { resolve, reject }; });
     query.startedRun = { controller, signature, outcome };
+    query.markExecuting();
+    this.runFirstPage(query, signature, context, controller).then(settle.resolve, settle.reject);
     return outcome;
   }
 
