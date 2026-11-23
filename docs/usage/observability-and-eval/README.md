@@ -86,7 +86,8 @@ anfra builds observability and eval in four parts, each adding to the one before
 
 **Under consideration.**
 
-- **A session for every agent,** inferred by anfra for an agent that doesn't give its id, so you don't have to set `ANFRA_SESSION_ID`.
+- **Sessions for the agents anfra doesn't detect.** anfra detects only Claude Code, Codex, OpenCode and Goose. For any other agent, such as Gemini CLI or Cursor, anfra infers the session itself, so you can trace that agent's work without setting `ANFRA_SESSION_ID`.
+- **A query's lineage, from a Data App back to the session that wrote it.** For an AQL query in a Data App, you find the agent's session that wrote the query, and read that session's conversation: what the user asked, and why the agent picked those fields, metrics and filters.
 
 ### Evaluation: whether the agent did it well
 
@@ -94,12 +95,16 @@ anfra builds observability and eval in four parts, each adding to the one before
 
 **Under consideration.**
 
-- **anfra evaluates your sessions.** anfra checks each session for where the agent:
-  - skipped the semantic layer, such as writing its own SQL instead of querying a dataset
-  - used the semantic layer wrong, such as picking the wrong metric, field or filter
-  - couldn't get its analytics done with anfra at all
-
-  It checks the sessions you run as an evaluation, on questions you write with what a good answer looks like, and your users' real sessions too. You find where your agent needs better skills, prompts or models without reading every session yourself.
+- **anfra provides a framework for eval:**
+  - **Rules for working well with anfra,** a standard that anfra writes and you can adjust. Each rule is a heuristic that anfra can check from a session's trace, such as:
+    - **Stays in the semantic layer:** the agent queries datasets with AQL, instead of writing its own SQL against the warehouse.
+    - **Fixes what failed:** after a query fails, the agent fixes its cause, instead of retrying it unchanged or switching to SQL.
+    - **Takes little effort:** the agent reaches a working query within a few commands, without running the same command twice.
+    - **Asks for what it needs:** the agent's queries don't scan or return far more data than the question needs.
+  - **Tools to check each session against the rules,** which score the session on each rule and name the commands that broke one.
+  - **A choice of when the check runs,** such as after every agent run, or only when you start it.
+- **anfra as a plugin for your eval platform,** such as Langfuse, Braintrust or promptfoo. anfra's rules score each case there, next to the platform's own scores.
+- **Semantic layer eval coverage,** such as the metrics and fields no case tests, or the ones your users ask about most.
 
 ### Read it all in anfra
 
