@@ -195,7 +195,7 @@ With `Attribution` `{"anfra.repo.id": "shop-1a2b3c4d", "gen_ai.conversation.id":
 
 | What | Labelled with |
 |---|---|
-| Every span | `anfra.repo.id=shop-1a2b3c4d`, `gen_ai.conversation.id=s-1` |
+| Every span | `anfra.repo.id=shop-1a2b3c4d`, `gen_ai.conversation.id=s-1`, `session.id=s-1` |
 | Every log record | `anfra_repo_id=shop-1a2b3c4d`, `gen_ai_conversation_id=s-1` |
 
 Keys are span attribute names, dotted as OpenTelemetry's are, since agent-tracing platforms match them exactly. Log keys are snake_case ([logs](logs.md)). Empty values are left out.
@@ -711,7 +711,7 @@ explore {
 
 **Stable span names, later.** Users build queries, dashboards and alerts on span names and attributes, and the [trace sample](#querying-traces-through-anfra) models them. While telemetry is experimental every name may change, noted in the changelog. Before it is declared stable, anfra could list the spans users can rely on, each with its stable attributes, and a test could fail when one loses an attribute. The likely first list: each command's root (`anfra <command path>`, with `anfra.repo.id`), each op's span (`anfra.op.<op>`, with `anfra.op`, `error.type`, `anfra.repo.id`), and the query's (`anfra.op.core.query`, with `anfra.query.*`, `anfra.dataset`, `anfra.data_source`, `db.system.name`, `db.query.text`). Group by `anfra.op` rather than by parsing a span's name.
 
-**Semantic conventions.** OpenTelemetry's names where one exists (`gen_ai.conversation.id`, `error.type`, `db.*`), `anfra.` otherwise. Where a GenAI convention covers a field, its name is the only one: an agent's session is `gen_ai.conversation.id`. The existing `h.step.*` and `h.request.id` stay.
+**Semantic conventions.** OpenTelemetry's names where one exists (`gen_ai.conversation.id`, `error.type`, `db.*`), `anfra.` otherwise. Where a GenAI convention covers a field, its name is the only one, with one exception: an agent's session is `gen_ai.conversation.id`, and also `session.id` on spans, because Langfuse and Claude Code's own telemetry group sessions by `session.id` alone. A log record carries it once, as `gen_ai_conversation_id`. The existing `h.step.*` and `h.request.id` stay.
 
 ### Implementation details
 

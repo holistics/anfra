@@ -64,10 +64,10 @@ func TestByDefaultOnlyTheSessionGetsIn(t *testing.T) {
 // The members the settings include get in; never one of anfra's own keys, nor
 // a long or odd value.
 func TestTheIncludedBaggageGetsIn(t *testing.T) {
-	settings := telemetry.Defaults().WithBaggageInclude([]string{"tenant.id", "user.*", "anfra.*", "error.type", "note"})
+	settings := telemetry.Defaults().WithBaggageInclude([]string{"tenant.id", "user.*", "anfra.*", "error.type", "session.id", "note"})
 	got := allowed(t, settings,
 		"tenant.id=acme", "user.id=u-1", "user.role=admin", "other=x",
-		"anfra.command.id=forged", "error.type=forged",
+		"anfra.command.id=forged", "error.type=forged", "session.id=forged",
 		"note="+strings.Repeat("x", 200))
 	want := map[string]string{"tenant.id": "acme", "user.id": "u-1", "user.role": "admin"}
 	if !maps.Equal(got, want) {
@@ -76,10 +76,10 @@ func TestTheIncludedBaggageGetsIn(t *testing.T) {
 }
 
 // A span records the baggage that got in, as metadata, so even with data off,
-// still never one of anfra's own keys.
+// still never one of anfra's own keys. The session is session.id too.
 func TestASpanRecordsTheBaggageThatGotIn(t *testing.T) {
 	attrs := exportedAttrs(t, withBaggage(t, "gen_ai.conversation.id=conv-1", "tenant.id=acme", "anfra.command.id=forged"), telemetry.NewSettings(false, 0))
-	if attrs["gen_ai.conversation.id"] != "conv-1" || attrs["tenant.id"] != "acme" {
+	if attrs["gen_ai.conversation.id"] != "conv-1" || attrs["session.id"] != "conv-1" || attrs["tenant.id"] != "acme" {
 		t.Errorf("got %v", attrs)
 	}
 	if v, ok := attrs["anfra.command.id"]; ok {

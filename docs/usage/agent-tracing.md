@@ -8,7 +8,7 @@ You need telemetry on for the repo ([telemetry](telemetry.md#turn-telemetry-on))
 
 ## 1. Run your agent
 
-Run your agent in the repo as usual. anfra labels each command the agent runs with the agent's session, as `gen_ai.conversation.id` on every span, and with the agent's name, as `gen_ai.agent.name`.
+Run your agent in the repo as usual. anfra labels each command the agent runs with the agent's session, as `gen_ai.conversation.id` and `session.id` on every span, and with the agent's name, as `gen_ai.agent.name`.
 
 **Claude Code, Codex, OpenCode and Goose need nothing.** They give their session id to every command they run, and anfra reads it.
 
@@ -48,7 +48,7 @@ Agent tracing adds these to every span of a command:
 
 | Attribute | Holds |
 |---|---|
-| `gen_ai.conversation.id` | The session's id |
+| `gen_ai.conversation.id`, `session.id` | The session's id, under both names: OpenTelemetry's for an agent's conversation, and the general one that Langfuse and Claude Code's own telemetry group by |
 | `gen_ai.agent.name` | The agent anfra detected, such as `claude-code`. Absent for an id from `ANFRA_SESSION_ID`, and on the spans `anfra serve` records for a command it runs, because only the session's id reaches the server. |
 | Your own ids, such as `run.id` | The baggage keys you let in ([tag commands with your own ids](#tag-commands-with-your-own-ids)) |
 

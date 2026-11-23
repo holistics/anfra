@@ -49,7 +49,7 @@ func TestEverySpanInTheContextNamesTheCaller(t *testing.T) {
 	}
 	for _, s := range spans {
 		got := attrsOf(s)
-		for k, want := range map[string]string{"gen_ai.conversation.id": "s-1", "gen_ai.agent.name": "claude-code"} {
+		for k, want := range map[string]string{"gen_ai.conversation.id": "s-1", "session.id": "s-1", "gen_ai.agent.name": "claude-code"} {
 			if got[k] != want {
 				t.Errorf("%s: %s = %q, want %q", s.Name(), k, got[k], want)
 			}
@@ -106,7 +106,7 @@ func TestLogRecordsNameTheCallerSnakeCase(t *testing.T) {
 	if !strings.Contains(lines[0], `"gen_ai_agent_name":"codex"`) || !strings.Contains(lines[0], `"gen_ai_conversation_id":"s-1"`) {
 		t.Errorf("got %s", lines[0])
 	}
-	if strings.Contains(lines[0], "gen_ai.") {
+	if strings.Contains(lines[0], "gen_ai.") || strings.Contains(lines[0], "session_id") {
 		t.Errorf("got %s", lines[0])
 	}
 	if strings.Contains(lines[1], "gen_ai_conversation_id") {

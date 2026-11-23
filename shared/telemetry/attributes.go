@@ -64,11 +64,16 @@ func attributesOf(ctx context.Context) map[string]string {
 	return m
 }
 
-// spanAttrs are fields as span attributes, in key order.
+// spanAttrs are fields as span attributes, in key order, with the session's id
+// also as session.id (SessionID), last, so it wins over a field of that name.
+// Log records keep the one name.
 func spanAttrs(fields map[string]string) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 	for _, k := range slices.Sorted(maps.Keys(fields)) {
 		attrs = append(attrs, attribute.String(k, fields[k]))
+	}
+	if id := fields[ConversationID.String()]; id != "" {
+		attrs = append(attrs, attribute.String(SessionID.String(), id))
 	}
 	return attrs
 }

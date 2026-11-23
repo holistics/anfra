@@ -80,7 +80,11 @@ var (
 	RequestID          = meta("h.request.id")
 	HTTPRoute          = meta("http.route")
 	ConversationID     = meta("gen_ai.conversation.id")
-	AgentName          = meta("gen_ai.agent.name")
+	// SessionID is ConversationID again, on spans only, under OpenTelemetry's
+	// general name for a session: Langfuse and Claude Code's own telemetry group
+	// sessions by it alone. A caller's baggage never sets it, since it is declared.
+	SessionID = meta("session.id")
+	AgentName = meta("gen_ai.agent.name")
 	// DroppedKeys names the undeclared keys Filter left out of the span: key
 	// names, which code chose, never their values.
 	DroppedKeys = meta("anfra.telemetry.dropped_keys")
