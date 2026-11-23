@@ -10,7 +10,7 @@
 # Always cut an rc when changing a pin — otherwise no new release is made.
 version: 0.24.0-rc.1
 sidecars:
-  anfra_node: anfra-node-v0.16.1 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
+  anfra_node: anfra-node-v0.17.0 # holistics/holistics-core release tag (anfra_node_build_binaries.yml)
   anfra_canal: anfra-canal-v1.1.1 # holistics/canal release tag (build_and_release_binaries.yml)
   # The services anfra_canal runs, as the releases it contains, for deployments that run each as
   # a service of its own (anfra-cloud's scripts/bump-anfra.sh). scripts/sidecars.sh check holds
