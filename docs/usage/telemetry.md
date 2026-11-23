@@ -86,6 +86,10 @@ For finer rules, such as masking emails or keeping only the attributes you list,
 
 To keep a setting for the repo, put it in its `.env`. With `anfra serve` running, commands run on the server, so its settings apply: restart it after you change the file.
 
+## Trace an agent's work
+
+To see every command a coding agent ran for one piece of work, grouped by the agent's session, see [agent tracing](agent-tracing.md). It works on top of the telemetry set up here, with nothing more to set for Claude Code, Codex, OpenCode or Goose.
+
 ## Record to a tool you already use
 
 Skip the local telemetry stack, and set the endpoint to an OpenTelemetry collector or tool you already have (Jaeger, Langfuse, Honeycomb), in the repo's `.env`:
