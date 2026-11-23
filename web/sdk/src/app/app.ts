@@ -1,5 +1,5 @@
 import { Observable } from './observable';
-import { Query, assertDeclaration, type QueryUpdate } from './query';
+import { Query, assertDeclaration, type QueryUpdate, type RunOutcome } from './query';
 import {
   Control, DateDrillControl, Filter,
 } from './controls';
@@ -737,7 +737,8 @@ export class App extends Observable implements AppContext {
   /**
    * Runs every query that would produce something new, and resolves with which succeeded and which
    * failed. Never rejects: a failed query sets its own `state` and `error`, because one broken
-   * query must not blank the other four. See docs/adr/0002.
+   * query must not blank the other four. See docs/adr/0002. A query whose run in flight already has
+   * its current inputs is not sent again: this waits for that run and reports how it ended.
    */
   async execute (options: ExecuteOptions = {}): Promise<ExecuteSummary> {
     const targets = [...this._queries.values()].filter((query) => query.shouldRun(options.force));
@@ -748,12 +749,6 @@ export class App extends Observable implements AppContext {
     this._appliedSelection = this._selection;
     this.selectionCommitted = true;
 
-    targets.forEach((query) => {
-      // Supersede: a still-running request for a query this run is about to redo is dead weight.
-      query.controller?.abort();
-      query.resetPage();
-    });
-
     const context: SubmitContext = {
       backend: this.backend,
       ...this.queryInputDefaults,
@@ -763,7 +758,7 @@ export class App extends Observable implements AppContext {
     const succeeded: string[] = [];
     const failed: string[] = [];
     await Promise.all(targets.map(async (query) => {
-      const outcome = await this.run(query, query.signature(), context);
+      const outcome = await this.runWith(query, 'pending', context, options.force);
       if (outcome === 'succeeded') succeeded.push(query.name);
       else if (outcome === 'failed') failed.push(query.name);
     }));
@@ -777,13 +772,11 @@ export class App extends Observable implements AppContext {
    */
   async executeQuery (query: Query, options: ExecuteOptions = {}): Promise<ExecuteSummary> {
     if (!query.shouldRunAlone(options.force)) return { succeeded: [], failed: [] };
-    query.controller?.abort();
-    query.resetPage();
-    const outcome = await this.run(query, query.signature('applied'), {
+    const outcome = await this.runWith(query, 'applied', {
       backend: this.backend,
       ...this.queryInputDefaults,
       bustCache: options.bustCache,
-    });
+    }, options.force);
     return {
       succeeded: outcome === 'succeeded' ? [query.name] : [],
       failed: outcome === 'failed' ? [query.name] : [],
@@ -791,15 +784,41 @@ export class App extends Observable implements AppContext {
   }
 
   /**
+   * The query's run with its `phase` inputs: the one in flight when it was sent with them, so the
+   * same request is not sent twice, or else a new one that supersedes whatever is in flight. With
+   * `force`, always a new one.
+   */
+  private runWith (query: Query, phase: 'pending' | 'applied', context: SubmitContext, force = false): Promise<RunOutcome> {
+    const inFlight = force ? undefined : query.runInFlightWith(query.signature(phase));
+    if (inFlight) return inFlight;
+    // Supersede: a still-running request for a query this run is about to redo is dead weight.
+    query.controller?.abort();
+    query.resetPage();
+    // Taken after the reset: the page is part of it, and the new run starts at the first.
+    return this.run(query, query.signature(phase), context);
+  }
+
+  /**
    * One query's run from its first page, with the applied inputs, recorded under `signature`.
    * Undefined when a newer run took the query over, or it was aborted.
    */
-  private async run (query: Query, signature: string, context: SubmitContext): Promise<'succeeded' | 'failed' | undefined> {
+  private run (query: Query, signature: string, context: SubmitContext): Promise<RunOutcome> {
     const controller = new AbortController();
     query.controller = controller;
     query.runningSignature = signature;
     query.markExecuting();
+    const outcome = this.runFirstPage(query, signature, context, controller);
+    // Set after the run started: one that already ended took `controller` away, so it isn't in flight.
+    query.startedRun = { controller, signature, outcome };
+    return outcome;
+  }
 
+  private async runFirstPage (
+    query: Query,
+    signature: string,
+    context: SubmitContext,
+    controller: AbortController,
+  ): Promise<RunOutcome> {
     try {
       const request = buildRequest(
         query,

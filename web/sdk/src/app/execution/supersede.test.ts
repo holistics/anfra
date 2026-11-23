@@ -82,3 +82,110 @@ describe('superseding execute', () => {
     expect(query.state).toBe('success');
   });
 });
+
+describe('execute with a run in flight for the current inputs', () => {
+  /** A backend whose every request hangs until its gate opens, recording whether it was aborted. */
+  function gatedBackend () {
+    const gates: Deferred[] = [];
+    const aborted: boolean[] = [];
+    const backend: Backend = {
+      async submitQuery (_request, signal) {
+        const index = gates.length;
+        gates.push(deferred());
+        aborted[index] = false;
+        signal.addEventListener('abort', () => { aborted[index] = true; });
+        await gates[index].promise;
+        return rows(`RUN ${index}`);
+      },
+      async fieldSuggestions () { return []; },
+    };
+    return { backend, gates, aborted };
+  }
+
+  function setup () {
+    const gated = gatedBackend();
+    const app = createSdk({ datasets: { sales: salesDataset }, user: testUser, backend: gated.backend }).createApp();
+    const query = app.createQuery('revenue', {
+      dataset: 'sales',
+      aql: `
+        explore {
+          dimensions { region: users.region }
+          measures { total: orders | sum(orders.amount) }
+        }
+      `,
+    });
+    const region = app.createFilter('region', { field: 'users.region' });
+    app.mapControl(region, query, { field: 'users.region' });
+    return { ...gated, app, query, region };
+  }
+
+  it('leaves the first run alone', async () => {
+    const { app, gates, aborted } = setup();
+
+    const first = app.execute();
+    expect(app.hasChanges).toBe(false);
+    const second = app.execute();
+
+    expect(aborted[0]).toBe(false);
+    expect(gates).toHaveLength(1);
+
+    // The second call waits for the first run, and reports it as its own.
+    let settled = false;
+    void second.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    gates[0].resolve(undefined);
+    const [firstSummary, secondSummary] = await Promise.all([first, second]);
+    expect(firstSummary.succeeded).toEqual(['revenue']);
+    expect(secondSummary.succeeded).toEqual(['revenue']);
+  });
+
+  it('leaves a later run alone once its inputs were applied', async () => {
+    const { app, query, region, gates, aborted } = setup();
+
+    const first = app.execute();
+    gates[0].resolve(undefined);
+    await first;
+
+    region.setCondition({ operator: 'is', values: ['EMEA'] });
+    const second = app.execute();
+    expect(app.hasChanges).toBe(false);
+    const third = app.execute();
+
+    expect(aborted[1]).toBe(false);
+    expect(gates).toHaveLength(2);
+
+    gates[1].resolve(undefined);
+    const [, thirdSummary] = await Promise.all([second, third]);
+    expect(thirdSummary.succeeded).toEqual(['revenue']);
+    expect(query.result?.rows).toEqual([{ region: 'RUN 1', total: '1' }]);
+  });
+
+  it('leaves the first run alone when the query is executed on its own', async () => {
+    const { app, query, gates, aborted } = setup();
+
+    const first = app.execute();
+    const alone = query.execute();
+
+    expect(aborted[0]).toBe(false);
+    expect(gates).toHaveLength(1);
+
+    gates[0].resolve(undefined);
+    const [, aloneSummary] = await Promise.all([first, alone]);
+    expect(aloneSummary.succeeded).toEqual(['revenue']);
+  });
+
+  it('still aborts and resends on refresh', async () => {
+    const { app, gates, aborted } = setup();
+
+    const first = app.execute();
+    const refreshed = app.refresh();
+
+    expect(aborted[0]).toBe(true);
+    expect(gates).toHaveLength(2);
+
+    gates.forEach((gate) => gate.resolve(undefined));
+    await Promise.all([first, refreshed]);
+  });
+});

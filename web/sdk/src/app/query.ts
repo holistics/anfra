@@ -19,6 +19,16 @@ import type {
   Row,
 } from '../common/types';
 
+/** How a run ended for `execute()`'s summary: undefined when it was aborted or taken over. */
+export type RunOutcome = 'succeeded' | 'failed' | undefined;
+
+/** @internal A run from the first page, as the app started it. */
+export interface StartedRun {
+  controller: AbortController;
+  signature: string;
+  outcome: Promise<RunOutcome>;
+}
+
 /**
  * What `query.update` may change. `pageSize: undefined` drops the paging, and `cache: undefined`
  * goes back to the app's default cache duration.
@@ -109,6 +119,13 @@ export class Query extends Observable {
    * `controller`, so a run the reader is waiting on is not counted as a change.
    */
   runningSignature?: string;
+
+  /**
+   * @internal The last run from its first page the app started, and what it will come to. Still in
+   * flight only while its controller is the query's: whatever ends or takes over the run (its own
+   * end, a newer run, a page, `update`, `remove`) replaces or clears `controller`.
+   */
+  startedRun?: StartedRun;
 
   /** The signature of its last run, when that run failed. */
   private failedSignature?: string;
@@ -326,6 +343,16 @@ export class Query extends Observable {
    */
   shouldRun (force = false): boolean {
     return force || this.runFailed || this.lastRunSignature === undefined || this.isDirty;
+  }
+
+  /**
+   * @internal What its run in flight will come to, when that run was sent with `signature`: an
+   * `execute()` asking for the same inputs waits for it rather than sending them again.
+   */
+  runInFlightWith (signature: string): Promise<RunOutcome> | undefined {
+    const run = this.startedRun;
+    if (!run || run.controller !== this.controller || run.signature !== signature) return undefined;
+    return run.outcome;
   }
 
   /**
