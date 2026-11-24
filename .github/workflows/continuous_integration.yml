@@ -390,10 +390,11 @@ jobs:
 
   # On a push to main, once every check passed on the pushed commit: tag the rc or release when
   # the push changed manifest.yml's version (tag_and_release.yml). So an rc is tagged only on a
-  # commit that passed as merged.
+  # commit that passed as merged. `!cancelled()` stops GitHub adding its implicit success(),
+  # which checks every upstream job, and those skip on a push, so tag would always skip.
   tag:
     needs: ci_passed
-    if: github.event_name == 'push' && needs.ci_passed.result == 'success'
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.ci_passed.result == 'success' }}
     uses: ./.github/workflows/tag_and_release.yml
     with:
       before: ${{ github.event.before }}
