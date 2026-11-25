@@ -65,7 +65,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 ### Checkpoint A
 - [x] T1–T3 pass. The review questions are asked at the end of the run (nothing is pushed or merged in it).
-- [ ] Review with the user: the results, whether to push the holistics-core branch and open its PR, and when anfra's change may merge (before or after the pin bump).
+- [x] Review with the user: the results, whether to push the holistics-core branch and open its PR, and when anfra's change may merge (before or after the pin bump). Not pushed yet: added to the backlog. Everything stays local; the user opens PRs later.
 
 ### - [x] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
 
@@ -134,4 +134,4 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 ### Checkpoint B: Complete
 - [x] Spec success criteria 1–6 met.
-- [ ] Ready for review with the user (and the commit split proposed, for both repos).
+- [x] Ready for review with the user (and the commit split proposed, for both repos). Reviewed; the split kept as is.
