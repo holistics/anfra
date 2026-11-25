@@ -43,7 +43,7 @@ processors:
 
   batch: {}
 
-  # Finer rules than anfra's data switch (docs/usage/telemetry.md): uncomment
+  # Finer rules than anfra's data switch (docs/usage/observability-and-eval/telemetry.md): uncomment
   # it, and add redaction to the traces pipeline below, after memory_limiter.
   # It keeps only the attributes allowed_keys names, so a key a new release
   # adds is dropped, not leaked, and masks each value that matches

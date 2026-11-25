@@ -1,6 +1,6 @@
 # anfra's telemetry stack: an OpenTelemetry collector, receiving what anfra
 # records, and ClickHouse, keeping it for three days, for anfra to query
-# (docs/usage/telemetry.md). Written by `anfra experimental telemetry init`
+# (docs/usage/observability-and-eval/telemetry.md). Written by `anfra experimental telemetry init`
 # for one repo, for anfra {{.Version}}.
 #
 #   docker compose -f compose.yaml up -d    start it; Docker restarts it with itself
@@ -49,7 +49,7 @@ services:
 
   # Query it through anfra, as a data source on port {{.Ports.ClickHouse}} (user anfra, password
   # anfra, database anfra_traces), with a model over otel_traces
-  # (docs/usage/telemetry.md).
+  # (docs/usage/observability-and-eval/telemetry.md).
   clickhouse:
     image: clickhouse/clickhouse-server:26.8.36.3
     environment:
