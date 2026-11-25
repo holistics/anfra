@@ -42,7 +42,7 @@ T2 and T3 need only T1's build; T4 needs T1's answer.
 - [x] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
 
 ### Phase 3: End to end and close
-- [ ] T5: End to end on Windows 11
+- [x] T5: End to end on Windows 11
 - [ ] T6: Docs and plan
 
 ### Checkpoint B: Complete

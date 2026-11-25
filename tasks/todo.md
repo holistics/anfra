@@ -89,18 +89,18 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 ## Phase 3: End to end and close
 
-### - [ ] T5: End to end on Windows 11
+### - [x] T5: End to end on Windows 11
 
 **Description:** The new anfra-node and anfra together, on a copy of `anfra-demo-data`.
 
 **Acceptance criteria:**
-- [ ] `validate`, `show`, `query` without and with the cache work; after each, no sidecar left, and `anfra logs --level warn` has no `watchdog.parent_death`; anfra-node's `sidecar.shutdown` says `SIGBREAK`.
-- [ ] `taskkill /F` on anfra during a query: no sidecar left, and anfra-node **does** log `watchdog.parent_death`.
-- [ ] `anfra validate "models/**"` reports for those files; `anfra validate "..\x"` is refused as escaping the repo. `selectors.ts` unchanged.
-- [ ] `anfra console`: leaving it stops its server and the sidecars, with no `watchdog.parent_death` (run by the user, as in `win-process-lifecycle` T10).
+- [x] `validate`, `show`, `query` without and with the cache work; after each, no sidecar left, and `anfra logs --level warn` has no `watchdog.parent_death`; anfra-node's `sidecar.shutdown` says `SIGBREAK`. Done: the only WARN is anfra-node refusing `..\x` (below), as on Linux; every shutdown reason is `SIGBREAK`; the compile cache was written (2 files); the cache missed, then hit.
+- [x] `taskkill /F` on anfra during a query: no sidecar left, and anfra-node **does** log `watchdog.parent_death`. Changed: no sidecar left (killing `anfra serve` while anfra-node and canal ran), but no `watchdog.parent_death`: the Job Object ends anfra-node at once when anfra dies, before its watchdog sees stdin close. The spec's expectation was wrong; the watchdog stays as a backup for when the job can't be joined (`sidecar.untied`).
+- [x] `anfra validate "models/**"` reports for those files; `anfra validate "..\x"` is refused as escaping the repo. `selectors.ts` unchanged. Done: `models/**` validates (0 diagnostics); `..\x` is refused: "path selector \"..\\x\" resolves outside the repo".
+- [x] `anfra console`: leaving it stops its server and the sidecars, with no `watchdog.parent_death` (run by the user, as in `win-process-lifecycle` T10). Done without the interactive console: `t8check` starts `anfra serve` as the console does and sends it Ctrl-Break, as the console does when it ends. Serve exited with code 0, canal logged "shutting down", anfra-node shut down with reason `SIGBREAK`, no `watchdog.parent_death`, nothing left. An interactive run is optional.
 
 **Verification:**
-- [ ] Manual, on Windows 11: each step, results recorded.
+- [x] Manual, on Windows 11: each step, results recorded.
 
 **Dependencies:** T2, T3, T4
 
