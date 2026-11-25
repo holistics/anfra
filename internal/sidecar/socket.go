@@ -15,7 +15,7 @@ import (
 // address first, and the sidecar would fail to start, or anfra would send its
 // requests to them. Its supervisor removes it with RemoveSocket.
 func SocketPath(name string) (string, error) {
-	dir, err := os.MkdirTemp("", "anfra-")
+	dir, err := privateTempDir()
 	if err != nil {
 		return "", fmt.Errorf("create %s socket dir: %w", name, err)
 	}

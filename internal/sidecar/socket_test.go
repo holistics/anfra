@@ -24,13 +24,7 @@ func TestSocketPath(t *testing.T) {
 	if filepath.Dir(a) == filepath.Dir(b) {
 		t.Errorf("two sockets share the dir %q", filepath.Dir(a))
 	}
-	info, err := os.Stat(filepath.Dir(a))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o700 {
-		t.Errorf("dir mode = %o, want 700", perm)
-	}
+	checkPrivate(t, filepath.Dir(a))
 
 	RemoveSocket(a)
 	if _, err := os.Stat(filepath.Dir(a)); !os.IsNotExist(err) {

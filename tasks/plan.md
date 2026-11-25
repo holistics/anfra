@@ -26,8 +26,9 @@ T1 internal/sidecar compiles (process group, per-OS stop)
          │    └─ T6 canal's duckdb.dll embedded and unpacked
          ├─ T7 serve's busy-port fallback
          └─ T8 the console's background server stops      → Checkpoint B: each behaviour tested on Windows
-              └─ T9 M1 end to end on Windows 11
-                   └─ T10 docs, plan, Linux checks           → Checkpoint C
+              └─ T9 the socket's folder is private on Windows
+                   └─ T10 M1 end to end on Windows 11
+                        └─ T11 docs, plan, Linux checks      → Checkpoint C
 ```
 
 T4–T8 are independent of each other once T3 is settled.
@@ -50,11 +51,12 @@ T4–T8 are independent of each other once T3 is settled.
 - [x] T8: The console's background server stops on Windows
 
 ### Checkpoint B: Each behaviour tested on Windows
-- [ ] T3–T8's Windows tests pass on Windows 11; Linux tests still pass. Review with the user.
+- [x] T3–T8's Windows tests pass on Windows 11; Linux tests still pass. Review with the user.
 
 ### Phase 3: M1 and close
-- [ ] T9: M1 end to end on Windows 11
-- [ ] T10: Docs, plan, and the Linux checks
+- [x] T9: The socket's folder is private on Windows (added at Checkpoint B)
+- [ ] T10: M1 end to end on Windows 11
+- [ ] T11: Docs, plan, and the Linux checks
 
 ### Checkpoint C: Complete
 - [ ] Spec success criteria 1–7 met; ready for review.

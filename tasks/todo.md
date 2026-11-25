@@ -85,7 +85,7 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 - [x] Processes started through `detachProcess` aren't in the job (anfra itself isn't in it, so they don't inherit it).
 
 **Verification:**
-- [x] Manual, on Windows: a `_windows_test.go` helper starts a sidecar from a child process, kills that child with `TerminateProcess`, and checks the sidecar is gone within 1 s; and `taskkill /F` on `anfra.exe` during `anfra query` leaves no `anfra-node` or `anfra-canal`. `TestSidecarDiesWithHost` passes (gone in 0.02 s), and fails when the job is turned off. The `taskkill /F` check moves to T9, which has the sidecars.
+- [x] Manual, on Windows: a `_windows_test.go` helper starts a sidecar from a child process, kills that child with `TerminateProcess`, and checks the sidecar is gone within 1 s; and `taskkill /F` on `anfra.exe` during `anfra query` leaves no `anfra-node` or `anfra-canal`. `TestSidecarDiesWithHost` passes (gone in 0.02 s), and fails when the job is turned off. The `taskkill /F` check moves to T10, which has the sidecars.
 - [x] Build: `GOOS=windows go build ./...`.
 
 **Dependencies:** T3
@@ -160,7 +160,7 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Verification:**
 - [x] Tests pass (Linux): `go test ./cmd/anfra/`; on Windows, new `TestStopServer` passes.
-- [ ] Manual, on Windows: start `anfra console`, run a query (it starts a server), leave; no `anfra serve`, `anfra-node` or `anfra-canal` left. Not yet with the interactive console (moved to T9). Done without it: a check program started `anfra serve` as the console does, ran a query through it, and sent Ctrl-Break: serve exited in 0.1 s with code 0, and no anfra, anfra-node or anfra-canal was left.
+- [ ] Manual, on Windows: start `anfra console`, run a query (it starts a server), leave; no `anfra serve`, `anfra-node` or `anfra-canal` left. Not yet with the interactive console (moved to T10). Done without it: a check program started `anfra serve` as the console does, ran a query through it, and sent Ctrl-Break: serve exited in 0.1 s with code 0, and no anfra, anfra-node or anfra-canal was left.
 
 **Dependencies:** T3
 
@@ -169,16 +169,35 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 **Estimated scope:** S
 
 ### Checkpoint B: Each behaviour tested on Windows
-- Found in T5: `TestSocketPath` fails on Windows ("dir mode = 777, want 700"). Go reports no Unix mode bits on Windows; the socket's folder is private through the per-user temp folder's access list instead. To decide with the user: skip the mode check on Windows, or check the access list.
-- [ ] T3–T8's Windows tests and manual checks pass on Windows 11.
-- [ ] Linux: `go test ./internal/sidecar/... ./cmd/anfra/...` pass.
-- [ ] Review with the user before M1.
+- Found in T5: `TestSocketPath` fails on Windows ("dir mode = 777, want 700"). Go ignores Unix modes on Windows, so the socket's folder is private only when the temp folder is (not with a shared `TMP`, such as `C:\Temp`). Decided with the user: make it private on Windows too, as on Linux and macOS (T9).
+- [x] T3–T8's Windows tests and manual checks pass on Windows 11 (T8's interactive console check moved to T10).
+- [x] Linux: `go test ./internal/sidecar/... ./cmd/anfra/...` pass.
+- [x] Review with the user before M1.
 
 ---
 
 ## Phase 3: M1 and close
 
-### - [ ] T9: M1 end to end on Windows 11
+### - [x] T9: The socket's folder is private on Windows
+
+**Description:** On Linux and macOS, `SocketPath` makes the socket's folder readable by this user only (mode `700`), so another user on the machine can't reach the sidecar. Go ignores that mode on Windows, so there the folder is only as private as the temp folder it's in, which a shared `TMP` (such as `C:\Temp`) opens up. Make it private on Windows too.
+
+**Acceptance criteria:**
+- [x] On Windows, the folder is created with an access list that gives this user full access and no one else, and takes nothing from the folder above (protected), set as it's created, not after.
+- [x] Linux and macOS unchanged (`os.MkdirTemp`, mode `700`), in build-tagged files.
+- [x] `TestSocketPath` checks privacy per OS: mode `700` on Unix, the access list on Windows. A Windows test points `TMP` at a folder everyone may open, and the socket's folder is still private.
+
+**Verification:**
+- [x] Tests pass (Linux): `go test ./internal/sidecar/`.
+- [x] On Windows: the socket tests pass; the sidecar tests and a real query through anfra-node and canal still work with the private folder. With the old code, both socket tests fail: in a shared `TMP`, the folder gave Everyone full access. A query through `anfra serve`, and one with `TMP` moved, both answer.
+
+**Dependencies:** T3
+
+**Files likely touched:** `internal/sidecar/socket.go`, `socket_unix.go`, `socket_windows.go`, `socket_test.go` (+ per-OS test files)
+
+**Estimated scope:** S
+
+### - [ ] T10: M1 end to end on Windows 11
 
 **Description:** The milestone: anfra runs on Windows, using the spikes' sidecars.
 
@@ -192,13 +211,13 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 **Verification:**
 - [ ] Manual, on Windows 11: each step above, results recorded.
 
-**Dependencies:** T4–T8
+**Dependencies:** T4–T9
 
 **Files likely touched:** a results note (PR description or the findings doc)
 
 **Estimated scope:** S
 
-### - [ ] T10: Docs, plan, and the Linux checks
+### - [ ] T11: Docs, plan, and the Linux checks
 
 **Description:** Close the module.
 
@@ -210,7 +229,7 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 **Verification:**
 - [ ] Manual: the spec's Success Criteria 1–7 are each met, ticked here.
 
-**Dependencies:** T9
+**Dependencies:** T10
 
 **Files likely touched:** `docs/designs/sidecars.md`, `WINDOWS-PLAN.md`
 
