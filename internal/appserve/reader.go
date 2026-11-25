@@ -3,7 +3,6 @@ package appserve
 import (
 	"os"
 	"os/user"
-	"path/filepath"
 	"strings"
 )
 
@@ -35,15 +34,14 @@ func LocalReader() Reader {
 	}
 }
 
-// localTimezone is the machine's IANA zone: $TZ, else what /etc/localtime links to, else Etc/UTC.
+// localTimezone is the machine's IANA zone: $TZ, else the system's
+// (systemTimezone), else Etc/UTC.
 func localTimezone() string {
 	if tz := strings.TrimPrefix(os.Getenv("TZ"), ":"); tz != "" {
 		return tz
 	}
-	if target, err := filepath.EvalSymlinks("/etc/localtime"); err == nil {
-		if _, zone, ok := strings.Cut(target, "zoneinfo/"); ok {
-			return zone
-		}
+	if tz := systemTimezone(); tz != "" {
+		return tz
 	}
 	return "Etc/UTC"
 }

@@ -45,7 +45,7 @@ T3–T7 are independent of each other and of T1–T2.
 - [x] T3: Exports: the download removes the CLI's copy; `file:///C:/…` links
 - [x] T4: Path checks: Data App files refuse `\` and `:`; pull refuses names Windows can't hold
 - [x] T5: `RemoveLegacy` does nothing on Windows
-- [ ] T6: Data Apps get Windows' time zone, from ICU
+- [x] T6: Data Apps get Windows' time zone, from ICU
 - [ ] T7: DuckDB's lock message on Windows
 
 ### Checkpoint B

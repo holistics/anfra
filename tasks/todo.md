@@ -98,15 +98,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Estimated scope:** XS
 
-### - [ ] T6: Data Apps get Windows' time zone, from ICU
+### - [x] T6: Data Apps get Windows' time zone, from ICU
 
 **Acceptance criteria:**
-- [ ] On Windows, `localTimezone`: `$TZ`, else the IANA name `icu.dll` gives for the system's zone, else `Etc/UTC`. Unix unchanged.
-- [ ] A missing `icu.dll` or a failed call falls back to `Etc/UTC`, never an error.
+- [x] On Windows, `localTimezone`: `$TZ`, else the IANA name `icu.dll` gives for the system's zone, else `Etc/UTC`. Unix unchanged.
+- [x] A missing `icu.dll` or a failed call falls back to `Etc/UTC`, never an error.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/appserve/`.
-- [ ] On Windows: the name matches Windows' setting (`Get-TimeZone`, mapped by hand once); `$TZ` still wins.
+- [x] Tests pass (Linux): `go test ./internal/appserve/`.
+- [x] On Windows: the name matches Windows' setting (`Get-TimeZone`, mapped by hand once); `$TZ` still wins. Checked by offset instead of by hand: the zone ICU gives has Windows' own offset now (`TestLocalTimezoneIsWindows`, `Etc/UTC` before the fix). Windows here is "SE Asia Standard Time" in Vietnam; ICU answers `Asia/Saigon` (the older name of `Asia/Ho_Chi_Minh`, still ICU's standard ID, which Go and browsers accept).
 
 **Dependencies:** None
 
