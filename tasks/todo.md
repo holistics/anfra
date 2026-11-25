@@ -67,19 +67,19 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 - [x] T1–T3 pass. The review questions are asked at the end of the run (nothing is pushed or merged in it).
 - [ ] Review with the user: the results, whether to push the holistics-core branch and open its PR, and when anfra's change may merge (before or after the pin bump).
 
-### - [ ] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
+### - [x] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
 
 **Description:** With anfra-node handling `SIGBREAK`, anfra stops it like canal. Its stdin pipe is closed only once it has exited, so the watchdog doesn't warn.
 
 **Acceptance criteria:**
-- [ ] `internal/sidecar/stop_windows.go`: send Ctrl-Break to every sidecar (`sendCtrlBreak`); wait; kill after the wait; then close the stdin pipe, if any. The doc comment says why stdin closes last.
-- [ ] `stop_windows_test.go`: a sidecar with a stdin pipe that stops on `os.Interrupt` (and fails if its stdin closes first) is stopped cleanly, code 0, in under 3 s. The tests that no longer fit (stdin EOF as the stop) are changed, not left failing.
-- [ ] `stop_unix.go` unchanged.
+- [x] `internal/sidecar/stop_windows.go`: send Ctrl-Break to every sidecar (`sendCtrlBreak`); wait; kill after the wait; then close the stdin pipe, if any. The doc comment says why stdin closes last.
+- [x] `stop_windows_test.go`: a sidecar with a stdin pipe that stops on `os.Interrupt` (and fails if its stdin closes first) is stopped cleanly, code 0, in under 3 s. The tests that no longer fit (stdin EOF as the stop) are changed, not left failing. `TestCloseClosesStdin` became `TestCloseStdinPipeLast` (failed with the old stop: stdin closed first); `unpack_windows_test.go` uses the new helper.
+- [x] `stop_unix.go` unchanged.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/sidecar/`.
-- [ ] On Windows: `sidecar.test.exe` passes (all of `internal/sidecar`).
-- [ ] Lint, for Windows and Linux.
+- [x] Tests pass (Linux): `go test ./internal/sidecar/`.
+- [x] On Windows: `sidecar.test.exe` passes (all of `internal/sidecar`).
+- [x] Lint, for Windows and Linux.
 
 **Dependencies:** T1 (Checkpoint A)
 

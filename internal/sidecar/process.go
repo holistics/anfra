@@ -118,8 +118,8 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // can log their own events without re-defaulting.
 func (p *Process) Logger() *slog.Logger { return p.logger }
 
-// Close stops the sidecar: it asks it to stop (SIGTERM on Unix; stdin EOF or
-// Ctrl-Break on Windows, see stop), then kills it if it has not exited within 3s.
+// Close stops the sidecar: it asks it to stop (SIGTERM on Unix, Ctrl-Break on
+// Windows, see stop), then kills it if it has not exited within 3s.
 //
 // ctx carries the trace its log record joins, as slog.Handler.Handle's does: it
 // is not for cancellation, so a sidecar closed after Ctrl-C still gets its 3s.

@@ -39,7 +39,7 @@ T2 and T3 need only T1's build; T4 needs T1's answer.
 ### Checkpoint A
 - [x] T1–T3 pass. (The questions for the user, pushing and merge timing, are asked at the end of the run: nothing is pushed or merged in it.) Review with the user, including whether to push the holistics-core branch.
 
-- [ ] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
+- [x] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
 
 ### Phase 3: End to end and close
 - [ ] T5: End to end on Windows 11

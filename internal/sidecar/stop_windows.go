@@ -9,22 +9,20 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// stop asks the sidecar to stop the one way it listens for, since Windows has
-// no SIGTERM: a sidecar with a stdin pipe (anfra-node) stops when it closes; one
-// without (canal) on Ctrl-Break, which Go delivers as os.Interrupt. Not both:
-// Ctrl-Break's default handler ends a process at once, cutting short the
-// shutdown stdin EOF started. It is killed if it has not exited within wait.
+// stop asks the sidecar to stop with Ctrl-Break, since Windows has no SIGTERM:
+// Go delivers it to canal as os.Interrupt, Bun to anfra-node as SIGBREAK. It
+// is killed if it has not exited within wait. Its stdin pipe, if any, closes
+// last: anfra-node's watchdog reads stdin closing as anfra dying.
 func (p *Process) stop(wait time.Duration) {
-	if p.stdin != nil {
-		p.stdin.Close()
-	} else {
-		_ = sendCtrlBreak(uint32(p.cmd.Process.Pid)) //nolint:gosec // G115: a pid fits a DWORD
-	}
+	_ = sendCtrlBreak(uint32(p.cmd.Process.Pid)) //nolint:gosec // G115: a pid fits a DWORD
 
 	select {
 	case <-p.done:
 	case <-time.After(wait):
 		_ = p.cmd.Process.Kill()
+	}
+	if p.stdin != nil {
+		p.stdin.Close()
 	}
 }
 

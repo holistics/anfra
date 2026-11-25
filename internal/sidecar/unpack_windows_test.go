@@ -27,8 +27,8 @@ func TestExtractRuntimeKeepsRunningVersion(t *testing.T) {
 	}
 
 	p, err := StartProcess(context.Background(), ProcSpec{
-		Name: "helper-stdin-eof", Path: v1, Args: []string{"-test.run=^$"},
-		ExtraEnv: []string{helperEnv + "=stdin-eof"}, PipeStdin: true,
+		Name: "helper-stdin-pipe", Path: v1, Args: []string{"-test.run=^$"},
+		ExtraEnv: []string{helperEnv + "=stdin-pipe"}, PipeStdin: true,
 	})
 	if err != nil {
 		t.Fatal(err)

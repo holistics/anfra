@@ -26,8 +26,14 @@ func TestMain(m *testing.M) {
 		signal.Notify(c, os.Interrupt)
 		<-c
 		os.Exit(0)
-	case "stdin-eof": // a sidecar like anfra-node: stops when its stdin closes
-		_, _ = io.Copy(io.Discard, os.Stdin)
+	case "stdin-pipe": // a sidecar like anfra-node: has a stdin pipe, stops on Ctrl-Break
+		go func() { // its watchdog: stdin closing first means its host died
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			os.Exit(4)
+		}()
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		<-c
 		os.Exit(0)
 	case "no-console": // an anfra started with no console, stopping a sidecar like canal
 		os.Exit(stopWithoutConsole())
@@ -75,16 +81,21 @@ func TestCloseSendsCtrlBreak(t *testing.T) {
 	}
 }
 
-// A sidecar with a stdin pipe is stopped by closing it, and exits by itself.
-func TestCloseClosesStdin(t *testing.T) {
-	p := startHelper(t, "stdin-eof", true)
+// A sidecar with a stdin pipe is stopped by Ctrl-Break too, before its stdin
+// closes: closing it first would read as its host dying.
+func TestCloseStdinPipeLast(t *testing.T) {
+	p := startHelper(t, "stdin-pipe", true)
 	start := time.Now()
 	p.Close(context.Background())
 	<-p.Done()
 	if took := time.Since(start); took >= 3*time.Second {
-		t.Errorf("stopped after %s: killed after the wait, not stopped by stdin EOF", took)
+		t.Errorf("stopped after %s: killed after the wait, not stopped by Ctrl-Break", took)
 	}
-	if code := p.cmd.ProcessState.ExitCode(); code != 0 {
+	switch code := p.cmd.ProcessState.ExitCode(); code {
+	case 0:
+	case 4:
+		t.Error("its stdin closed before it was stopped")
+	default:
 		t.Errorf("exit code %d, want 0 (a clean stop)", code)
 	}
 }
