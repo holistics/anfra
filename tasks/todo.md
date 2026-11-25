@@ -26,17 +26,17 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 ## Phase 2: Each side
 
-### - [ ] T2: anfra-node's tests pass; the change committed on its branch
+### - [x] T2: anfra-node's tests pass; the change committed on its branch
 
 **Description:** Keep anfra-node's own checks green, and add a test if its suite can send a signal.
 
 **Acceptance criteria:**
-- [ ] `pnpm --filter @holistics/anfra-node test` passes on Linux, and its lint and type check (the package's own scripts).
-- [ ] A test that `SIGBREAK` leads to `shutdown`, if `main.ts` can be tested that way under vitest; if not, say so, and T1's Windows check stands in.
-- [ ] One commit on `feat/anfra-node-windows-stop`, following holistics-core's commit rules. Not pushed.
+- [x] `pnpm --filter @holistics/anfra-node test` passes on Linux, and its lint and type check (the package's own scripts). 292 tests pass; `tsc --noEmit` and eslint clean. Also: a Bun 1.4.4 Linux build still stops on SIGTERM, logging reason `SIGTERM`.
+- [x] A test that `SIGBREAK` leads to `shutdown`, if `main.ts` can be tested that way under vitest; if not, say so, and T1's Windows check stands in. Not testable: `main.ts` has no tests and starts the server when loaded; T1's Windows check stands in.
+- [x] One commit on `feat/anfra-node-windows-stop`, following holistics-core's commit rules. Not pushed. `4b3059a4f fix(apps.anfra-node): shut down on sigbreak`, with a `patch` changeset (`.changeset/anfra-node-windows-sigbreak.md`), as anfra-node's changes carry.
 
 **Verification:**
-- [ ] Tests, lint and type check pass on Linux.
+- [x] Tests, lint and type check pass on Linux.
 
 **Dependencies:** T1
 
