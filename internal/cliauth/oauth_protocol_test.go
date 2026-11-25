@@ -138,10 +138,7 @@ func TestBrowserLoginProtocol(t *testing.T) {
 	if err != nil || len(logins) != 1 || logins[0].Org != org || logins[0].Name != "Selected Analytics ทีม" || logins[0].LocalState != "stored" {
 		t.Fatalf("inventory %v %v", logins, err)
 	}
-	info, err := os.Stat(filepath.Join(os.Getenv("ANFRA_HOME"), "credentials.json")) //nolint:gosec // G703: this test's isolated credential file
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("mode %v %v", info, err)
-	}
+	assertPrivateFile(t, filepath.Join(os.Getenv("ANFRA_HOME"), "credentials.json"))
 }
 
 func TestBrowserLoginCancellation(t *testing.T) {

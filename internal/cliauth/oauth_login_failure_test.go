@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -240,6 +241,9 @@ func TestCredentialFileErrorsSayTheCause(t *testing.T) {
 		{"contents", 0o600, "contents aren't valid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "permissions" && runtime.GOOS == "windows" {
+				t.Skip("Windows has no file modes; TestCredentialsRefusedWhenShared checks its access list")
+			}
 			dir := t.TempDir()
 			t.Setenv("ANFRA_HOME", dir)
 			path := filepath.Join(dir, "credentials.json")

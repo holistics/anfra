@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -393,6 +394,9 @@ func TestAuthorizationReloadsAfterAnotherProcessRotates(t *testing.T) {
 // A store failure while renewing a login says, in its context, that anfra
 // was renewing it: the message alone names only anfra's folder.
 func TestRenewalFailureSaysTheStepInItsContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("makes anfra's folder unwritable with chmod, which Windows ignores; the context is the same on every OS")
+	}
 	dir := t.TempDir()
 	t.Setenv("ANFRA_HOME", dir)
 	entry := seedCredential(t, "https://cloud.example.com", true)

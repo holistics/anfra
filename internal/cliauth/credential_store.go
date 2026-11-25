@@ -58,32 +58,48 @@ func withCredentialLock(ctx context.Context, use func(*credentialInventory, stri
 	defer filelock.Unlock(lock)
 	path := filepath.Join(dir, "credentials.json")
 	inventory := credentialInventory{Version: 1, Entries: map[string]storedCredential{}}
-	f, err := os.Open(path)
+	raw, err := readCredentialFile(path)
 	if err == nil {
-		defer f.Close()
-		info, err := f.Stat()
-		switch {
-		case err != nil:
-			return clierr.Precondition("can't read the authentication file: %v", err)
-		case !info.Mode().IsRegular():
-			return clierr.Precondition("can't use the authentication file (%s), because it isn't a file", path)
-		case info.Mode().Perm() != 0o600:
-			return clierr.Precondition("can't use the authentication file (%s), because its permissions aren't 600 (read and write for you only). To fix them, run `chmod 600 %s`", path, path)
-		}
-		raw, err := io.ReadAll(io.LimitReader(f, 4<<20+1))
-		if err != nil {
-			return clierr.Precondition("can't read the authentication file: %v", err)
-		}
 		if len(raw) > 4<<20 || jsonkit.Unmarshal(raw, &inventory) != nil || inventory.Version != 1 || inventory.Entries == nil {
 			return invalidCredentialFile(path)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return clierr.Precondition("can't read the authentication file: %v", err)
+		return err
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return use(&inventory, path)
+}
+
+// readCredentialFile reads the authentication file, after checking only this
+// user can read it, and closes it before returning: Windows refuses to rename
+// the next save over a file still open. It answers os.ErrNotExist when there
+// is none.
+func readCredentialFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	if err != nil {
+		return nil, clierr.Precondition("can't read the authentication file: %v", err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	switch {
+	case err != nil:
+		return nil, clierr.Precondition("can't read the authentication file: %v", err)
+	case !info.Mode().IsRegular():
+		return nil, clierr.Precondition("can't use the authentication file (%s), because it isn't a file", path)
+	}
+	if err := checkPrivate(path, info); err != nil {
+		return nil, err
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, 4<<20+1))
+	if err != nil {
+		return nil, clierr.Precondition("can't read the authentication file: %v", err)
+	}
+	return raw, nil
 }
 
 // invalidCredentialFile is the authentication file at path holding what anfra
@@ -104,7 +120,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 	temp := f.Name()
 	defer os.Remove(temp)
 	defer f.Close()
-	if err = f.Chmod(0o600); err == nil {
+	if err = makePrivate(f); err == nil {
 		_, err = f.Write(append(raw, '\n'))
 	}
 	if err == nil {

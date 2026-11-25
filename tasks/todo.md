@@ -24,19 +24,19 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Estimated scope:** M
 
-### - [ ] T2: Saved logins work on Windows, private to the user
+### - [x] T2: Saved logins work on Windows, private to the user
 
 **Description:** Without this, `anfra auth login` and everything that needs it fail on Windows.
 
 **Acceptance criteria:**
-- [ ] On Windows, the temporary credentials file is made with an owner-only access list (this user, nothing inherited) before any token is written; the renamed file keeps it.
-- [ ] On read, Windows refuses a file whose access list lets a reader other than this user, SYSTEM or Administrators read it; the error says so and gives an `icacls` command that fixes it. Unix keeps the `600` check and its message.
-- [ ] The inventory file is closed once read, before the new one is renamed over it.
-- [ ] `syncCredentialDirectory`: checked on Windows; skipped there if a folder can't be synced.
+- [x] On Windows, the temporary credentials file is made with an owner-only access list (this user, nothing inherited) before any token is written; the renamed file keeps it.
+- [x] On read, Windows refuses a file whose access list lets a reader other than this user, SYSTEM or Administrators read it; the error says so and gives an `icacls` command that fixes it. Unix keeps the `600` check and its message.
+- [x] The inventory file is closed once read, before the new one is renamed over it.
+- [x] `syncCredentialDirectory`: checked on Windows; skipped there if a folder can't be synced. It can't: "Access is denied", which made **every login save fail on Windows**, the first one included; now a no-op there.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/cliauth/`.
-- [ ] On Windows (`_windows_test.go`): save, read, save again through the store, with its lock; the saved file's access list is owner-only; a file with an Everyone entry is refused with the fix; a file with the usual inherited list (user, SYSTEM, Administrators) is read.
+- [x] Tests pass (Linux): `go test ./internal/cliauth/`.
+- [x] On Windows (`_windows_test.go`): save, read, save again through the store, with its lock; the saved file's access list is owner-only; a file with an Everyone entry is refused with the fix; a file with the usual inherited list (user, SYSTEM, Administrators) is read. Three existing tests that use `chmod` now check privacy per OS (`assertPrivateFile`) or skip on Windows, saying why.
 
 **Dependencies:** T1
 

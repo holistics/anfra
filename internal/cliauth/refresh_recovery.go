@@ -57,12 +57,3 @@ func clearRefreshRecovery(path string, org cloudapi.Org) error {
 	}
 	return nil
 }
-
-func syncCredentialDirectory(path string) error {
-	dir, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
-}

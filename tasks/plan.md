@@ -36,7 +36,7 @@ T3–T7 are independent of each other and of T1–T2.
 
 ### Phase 1: Saving files, and logins
 - [x] T1: One rename helper that survives another process holding the file, used at the 5 save sites
-- [ ] T2: Saved logins work on Windows, private to the user
+- [x] T2: Saved logins work on Windows, private to the user
 
 ### Checkpoint A
 - [ ] T1–T2's Windows tests pass; you run `anfra auth login` on Windows, then a command that needs it.
