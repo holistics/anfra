@@ -36,10 +36,10 @@ T4–T8 are independent of each other once T3 is settled.
 
 ### Phase 1: It compiles
 - [x] T1: `internal/sidecar` compiles for Windows: process group and the per-OS stop
-- [ ] T2: `cmd/anfra` compiles for Windows: `detachProcess` and `restartConsole`
+- [x] T2: `cmd/anfra` compiles for Windows: `detachProcess` and `restartConsole`
 
 ### Checkpoint A: It compiles
-- [ ] `GOOS=windows go build ./...` and `go vet ./...` pass; Linux tests of the touched packages pass.
+- [x] `GOOS=windows go build ./...` and `go vet ./...` pass; Linux tests of the touched packages pass.
 
 ### Phase 2: Behaviours, one at a time
 - [ ] T3: Stopping sidecars when anfra has no console (Ctrl-Break vs "no window")

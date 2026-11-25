@@ -28,19 +28,19 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** M
 
-### - [ ] T2: `cmd/anfra` compiles for Windows: `detachProcess` and `restartConsole`
+### - [x] T2: `cmd/anfra` compiles for Windows: `detachProcess` and `restartConsole`
 
 **Description:** Add the two Windows versions `cmd/anfra` is missing.
 
 **Acceptance criteria:**
-- [ ] `detach_windows.go`: `detachProcess` starts the child in its own process group, detached from anfra's console (`CREATE_NEW_PROCESS_GROUP`, and `DETACHED_PROCESS` or `CREATE_NO_WINDOW`, per T3's finding for windows), so closing the terminal doesn't end it.
-- [ ] `console_restart_windows.go`: `restartConsole` starts the anfra at `exe` with the same arguments, stdin/stdout/stderr and the `consoleRestarted` variable, waits for it, and exits with its exit code (`syscall.Exec` doesn't exist on Windows).
-- [ ] `GOOS=windows go build ./...` succeeds for the whole repo.
+- [x] `detach_windows.go`: `detachProcess` starts the child in its own process group, detached from anfra's console (`CREATE_NEW_PROCESS_GROUP`, and `DETACHED_PROCESS` or `CREATE_NO_WINDOW`, per T3's finding for windows), so closing the terminal doesn't end it. `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS` for now; T3 may change it.
+- [x] `console_restart_windows.go`: `restartConsole` starts the anfra at `exe` with the same arguments, stdin/stdout/stderr and the `consoleRestarted` variable, waits for it, and exits with its exit code (`syscall.Exec` doesn't exist on Windows).
+- [x] `GOOS=windows go build ./...` succeeds for the whole repo.
 
 **Verification:**
-- [ ] Build: `GOOS=windows GOARCH=amd64 go build ./...` and `go vet ./...`.
-- [ ] Tests pass (Linux): `go test ./cmd/anfra/...`.
-- [ ] Manual, on Windows: `anfra.exe version` runs.
+- [x] Build: `GOOS=windows GOARCH=amd64 go build ./...` and `go vet ./...`.
+- [x] Tests pass (Linux): `go test ./cmd/anfra/...`; on Windows, `TestRestartWith` passes.
+- [x] Manual, on Windows: `anfra.exe version` runs (`0.0.0+d88d0c1.dirty`).
 
 **Dependencies:** T1
 
@@ -49,8 +49,8 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 **Estimated scope:** S
 
 ### Checkpoint A: It compiles
-- [ ] `GOOS=windows GOARCH=amd64 go build ./...` and `go vet ./...` pass.
-- [ ] Linux: `go test ./internal/sidecar/... ./cmd/anfra/...` pass.
+- [x] `GOOS=windows GOARCH=amd64 go build ./...` and `go vet ./...` pass.
+- [x] Linux: `go test ./internal/sidecar/... ./cmd/anfra/...` pass.
 
 ---
 
