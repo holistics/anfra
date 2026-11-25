@@ -43,10 +43,10 @@ T2 and T3 need only T1's build; T4 needs T1's answer.
 
 ### Phase 3: End to end and close
 - [x] T5: End to end on Windows 11
-- [ ] T6: Docs and plan
+- [x] T6: Docs and plan
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–6 met; the commit split reviewed with the user.
+- [x] Spec success criteria 1–6 met; the commit split reviewed with the user.
 
 ## Risks and Mitigations
 

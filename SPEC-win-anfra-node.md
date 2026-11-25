@@ -90,7 +90,7 @@ process.on('SIGBREAK', () => { shutdown('SIGBREAK'); });
 - **anfra-node unit tests** pass on Linux (`pnpm --filter @holistics/anfra-node test`).
 - **anfra:** `stop_windows_test.go` covers a sidecar with a stdin pipe that stops on Ctrl-Break (the test helper waits for `os.Interrupt`, as before); the existing stop tests still pass on Windows; Linux tests unchanged.
 - **The Bun 1.4.4 re-checks** on Windows 11: socket at a `C:\` path (check 1), stdin EOF after a clean stop, a crash and `taskkill /F` (check 5), a stale socket file.
-- **End to end on Windows 11,** with the new anfra-node and anfra: `validate` (with globs, and one escaping the repo), `show`, `query` with and without the cache; after each, no sidecar left, and `anfra logs --level warn` has no `watchdog.parent_death`; `taskkill /F` on anfra during a query still leaves none, and then anfra-node **does** log `watchdog.parent_death`.
+- **End to end on Windows 11,** with the new anfra-node and anfra: `validate` (with globs, and one escaping the repo), `show`, `query` with and without the cache; after each, no sidecar left, and `anfra logs --level warn` has no `watchdog.parent_death`; `taskkill /F` on anfra during a query still leaves none.
 
 ## Boundaries
 
@@ -106,7 +106,7 @@ process.on('SIGBREAK', () => { shutdown('SIGBREAK'); });
 ## Success Criteria
 
 1. On Windows 11, a Bun 1.4.4 build of anfra-node stops on Ctrl-Break: it logs `sidecar.shutdown` with reason `SIGBREAK`, writes its compile cache, and exits with code 0.
-2. On Windows, after any anfra command, `anfra logs --level warn` has no `watchdog.parent_death`; after `taskkill /F` on anfra, anfra-node still stops, and does log it.
+2. On Windows, after any anfra command, `anfra logs --level warn` has no `watchdog.parent_death`; after `taskkill /F` on anfra, no anfra-node is left. (Corrected with the user: the Job Object ends anfra-node at once, so it logs nothing and doesn't write its compile cache. Accepted: it happens only when anfra is killed hard, and loses a log line and some cache work.)
 3. The Bun 1.4.4 re-checks pass on Windows 11: socket at a `C:\` path, stdin EOF in all three cases, a stale socket file.
 4. `anfra validate` with path globs works on Windows, and a path escaping the repo is refused; `selectors.ts` unchanged.
 5. anfra-node's tests pass on Linux; anfra's `internal/sidecar` tests pass on Linux and Windows; on Linux and macOS, neither program's stop changes.

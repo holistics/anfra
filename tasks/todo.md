@@ -108,7 +108,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 **Estimated scope:** S
 
-### - [ ] T6: Docs and plan
+### - [x] T6: Docs and plan
 
 **Description:** Close the module.
 
@@ -118,7 +118,13 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 - [x] With the user's go-ahead: `make check` and `make test` in anfra. `make check` passes. `make test` passes but for `engine`'s `TestOnlyTheAPIPackagesAreExported`, which counts the ignored worktrees in `tmp/`; in a clean checkout of the branch, `engine` passes.
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–6, each ticked here.
+- [x] Manual: the spec's Success Criteria 1–6, each ticked here.
+  - [x] 1. Ctrl-Break stops a Bun 1.4.4 anfra-node: reason `SIGBREAK`, exit code 0 (T1); compile cache written (T5).
+  - [x] 2. No `watchdog.parent_death` after commands; nothing left after `taskkill /F` (T5). Corrected with the user: after `taskkill /F`, the Job Object ends anfra-node at once, with no log; accepted (option A).
+  - [x] 3. The Bun 1.4.4 re-checks pass (T3).
+  - [x] 4. `validate` globs work, `..\x` refused, `selectors.ts` unchanged (T5).
+  - [x] 5. anfra-node's tests pass on Linux (T2); `internal/sidecar` tests pass on Linux and Windows (T4); Linux and macOS stops unchanged.
+  - [x] 6. `sidecars.md`, the findings doc and `WINDOWS-PLAN.md` updated (T3, T6).
 
 **Dependencies:** T5
 
@@ -127,5 +133,5 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 **Estimated scope:** S
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–6 met.
+- [x] Spec success criteria 1–6 met.
 - [ ] Ready for review with the user (and the commit split proposed, for both repos).
