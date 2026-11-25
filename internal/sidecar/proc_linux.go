@@ -16,3 +16,7 @@ func configureProc(cmd *exec.Cmd) {
 		Pdeathsig: syscall.SIGTERM,
 	}
 }
+
+// tieToHost has nothing to do: Pdeathsig, set before the start, ties the
+// sidecar to anfra.
+func tieToHost(*exec.Cmd) error { return nil }

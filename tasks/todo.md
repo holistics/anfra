@@ -75,18 +75,18 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** S
 
-### - [ ] T4: Job Object: sidecars die with anfra
+### - [x] T4: Job Object: sidecars die with anfra
 
 **Description:** Replace Linux's `Pdeathsig` on Windows: every sidecar joins one Job Object that anfra holds, with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so Windows kills them when anfra ends, however it ends. The stop's last step terminates through the job.
 
 **Acceptance criteria:**
-- [ ] A Job Object created on the first sidecar start (once per anfra process), set to kill on close; each sidecar assigned right after `Start` (`windows.AssignProcessToJobObject`).
-- [ ] T1's final "terminate" step terminates the sidecar's process tree.
-- [ ] Processes started through `detachProcess` aren't in the job.
+- [x] A Job Object created on the first sidecar start (once per anfra process), set to kill on close; each sidecar assigned right after `Start` (`windows.AssignProcessToJobObject`).
+- [x] T1's final "terminate" step terminates the sidecar's process tree. Changed: it stays `Process.Kill`, which ends the sidecar alone. Terminating the shared job would end every sidecar, and neither anfra-node nor canal starts children; any child left stays in the job and dies when anfra ends.
+- [x] Processes started through `detachProcess` aren't in the job (anfra itself isn't in it, so they don't inherit it).
 
 **Verification:**
-- [ ] Manual, on Windows: a `_windows_test.go` helper starts a sidecar from a child process, kills that child with `TerminateProcess`, and checks the sidecar is gone within 1 s; and `taskkill /F` on `anfra.exe` during `anfra query` leaves no `anfra-node` or `anfra-canal`.
-- [ ] Build: `GOOS=windows go build ./...`.
+- [x] Manual, on Windows: a `_windows_test.go` helper starts a sidecar from a child process, kills that child with `TerminateProcess`, and checks the sidecar is gone within 1 s; and `taskkill /F` on `anfra.exe` during `anfra query` leaves no `anfra-node` or `anfra-canal`. `TestSidecarDiesWithHost` passes (gone in 0.02 s), and fails when the job is turned off. The `taskkill /F` check moves to T9, which has the sidecars.
+- [x] Build: `GOOS=windows go build ./...`.
 
 **Dependencies:** T3
 

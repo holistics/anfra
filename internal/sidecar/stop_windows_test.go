@@ -4,6 +4,7 @@ package sidecar
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -30,6 +31,16 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	case "no-console": // an anfra started with no console, stopping a sidecar like canal
 		os.Exit(stopWithoutConsole())
+	case "host": // an anfra that starts a sidecar, says its pid, and waits to be killed
+		p, err := StartProcess(context.Background(), ProcSpec{
+			Name: "helper-ctrl-break", Path: os.Args[0], Args: []string{"-test.run=^$"},
+			ExtraEnv: []string{helperEnv + "=ctrl-break"},
+		})
+		if err != nil {
+			os.Exit(1)
+		}
+		fmt.Println(p.cmd.Process.Pid)
+		select {}
 	}
 	os.Exit(m.Run())
 }

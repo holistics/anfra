@@ -16,6 +16,7 @@ import (
 var (
 	eventSpawned = logkit.DefineEvent("sidecar.spawned", "A sidecar process was started.", "name", "child_pid")
 	eventClosing = logkit.DefineEvent("sidecar.closing", "A sidecar process is being stopped.", "name", "child_pid")
+	eventUntied  = logkit.DefineEvent("sidecar.untied", "A sidecar may outlive anfra if anfra is killed: tying it to anfra failed (Windows: its Job Object).", "name", "child_pid", "error")
 	// EventReady is a sidecar answering, started here (socket) or already
 	// running at a URL (owned false).
 	EventReady = logkit.DefineEvent("sidecar.ready", "A sidecar is ready for calls.", "name", "url", "socket", "owned")
@@ -102,6 +103,9 @@ func StartProcess(ctx context.Context, spec ProcSpec) (*Process, error) {
 		return nil, fmt.Errorf("run %s's binary: %w", spec.Name, err)
 	}
 	logger.InfoContext(ctx, "Sidecar started", logkit.EventKey, eventSpawned, "name", spec.Name, "child_pid", cmd.Process.Pid)
+	if err := tieToHost(cmd); err != nil {
+		logger.WarnContext(ctx, "Sidecar may outlive anfra", logkit.EventKey, eventUntied, "name", spec.Name, "child_pid", cmd.Process.Pid, "error", err)
+	}
 	p := &Process{name: spec.Name, cmd: cmd, done: make(chan struct{}), stdin: stdin, logger: logger}
 	go func() { _ = cmd.Wait(); close(p.done) }()
 	return p, nil

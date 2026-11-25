@@ -13,3 +13,6 @@ import (
 func configureProc(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
+
+// tieToHost has nothing to do: the sidecar's own watchdog stops it when anfra goes.
+func tieToHost(*exec.Cmd) error { return nil }
