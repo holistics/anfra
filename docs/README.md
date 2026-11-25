@@ -46,6 +46,8 @@ Findings and options for work not yet designed.
 | Doc | Covers |
 |---|---|
 | [skills install](research/skills-install.md) | Installing the anfra skills into every coding agent, keeping them current, and what each agent supports. |
+| [canal on Windows: the build spike](research/windows-canal-build.md) | Whether `anfra-canal` (Go with DuckDB and other C code) builds for Windows and works there, how much effort it takes, and the go/no-go for native Windows support. |
+| [sidecar transport on Windows](research/windows-sidecar-transport.md) | Whether anfra and its sidecars can keep talking over Unix sockets on Windows: the checks run on a Windows machine, their results, and the decision. |
 
 ## Implementations
 
