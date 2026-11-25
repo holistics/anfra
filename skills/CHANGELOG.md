@@ -1,3 +1,14 @@
+## [0.25.0-rc.1](https://github.com/holistics/anfra/compare/v0.24.0-rc.1...v0.25.0-rc.1) (2026-11-25)
+
+### ⚠ BREAKING CHANGES
+
+* core.lineage's target.child is optional, in the input
+and in each result's target. A client that reads results[].target.child
+must handle it being absent.
+
+### Features
+
+* allow only parent in lineage besides { parent, child } ([b359be1](https://github.com/holistics/anfra/commit/b359be198528d2223e85bc4c6749fd19dbcdfa2a))
 ## [0.24.0](https://github.com/holistics/anfra/compare/v0.23.1...v0.24.0) (2026-11-20)
 
 ### Features
