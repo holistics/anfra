@@ -113,8 +113,8 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 **Description:** Close the module.
 
 **Acceptance criteria:**
-- [ ] `docs/designs/sidecars.md`: the Windows stop (Ctrl-Break to every sidecar, stdin closed last).
-- [ ] `WINDOWS-PLAN.md`: Where it stands marks `win-anfra-node` done (code), with the release row and smoke test left for the CI work; its rows reflect what was learned (`selectors.ts` needs no change; Bun 1.4.4 checked).
+- [x] `docs/designs/sidecars.md`: the Windows stop (Ctrl-Break to every sidecar, stdin closed last).
+- [x] `WINDOWS-PLAN.md`: Where it stands marks `win-anfra-node` done (code), with the release row and smoke test left for the CI work; its rows reflect what was learned (`selectors.ts` needs no change; Bun 1.4.4 checked).
 - [ ] With the user's go-ahead: `make check` and `make test` in anfra.
 
 **Verification:**
