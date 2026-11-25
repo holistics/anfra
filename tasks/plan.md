@@ -42,7 +42,7 @@ T3–T7 are independent of each other and of T1–T2.
 - [ ] T1–T2's Windows tests pass; you run `anfra auth login` on Windows, then a command that needs it.
 
 ### Phase 2: The smaller fixes
-- [ ] T3: Exports: the download removes the CLI's copy; `file:///C:/…` links
+- [x] T3: Exports: the download removes the CLI's copy; `file:///C:/…` links
 - [ ] T4: Path checks: Data App files refuse `\` and `:`; pull refuses names Windows can't hold
 - [ ] T5: `RemoveLegacy` does nothing on Windows
 - [ ] T6: Data Apps get Windows' time zone, from ICU

@@ -18,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/pretty"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoconfig"
@@ -584,8 +585,9 @@ func download(ctx context.Context, link, output string, stdout io.Writer) error 
 	if err != nil {
 		return err
 	}
-	defer src.Close()
-	if err := copyTo(output, src, stdout); err != nil {
+	err = copyTo(output, src, stdout)
+	_ = src.Close() // before the remove: Windows can't remove an open file
+	if err != nil {
 		return err
 	}
 	if f, ok := src.(*os.File); ok {
@@ -618,7 +620,7 @@ func openLink(ctx context.Context, link string) (io.ReadCloser, error) {
 	}
 	switch u.Scheme {
 	case "file":
-		return os.Open(u.Path)
+		return os.Open(exports.FileLinkPath(u))
 	case "http", "https":
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 		if err != nil {

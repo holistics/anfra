@@ -147,7 +147,7 @@ func (e *export) Done(context.Context) (string, time.Time, error) {
 	fs.links[e.token] = link{path: e.Name(), filename: e.filename, contentType: e.contentType, expiresAt: expiresAt}
 	fs.mu.Unlock()
 	if e.store.ServedAt == "" {
-		return (&url.URL{Scheme: "file", Path: e.Name()}).String(), expiresAt, nil
+		return FileLink(e.Name()), expiresAt, nil
 	}
 	return e.store.ServedAt + "/" + e.token + "/" + url.PathEscape(e.filename), expiresAt, nil
 }

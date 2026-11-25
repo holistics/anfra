@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/errcode"
+	"github.com/holistics/anfra/internal/exports"
 	"github.com/holistics/anfra/internal/sidecar"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/httpkit"
@@ -281,8 +281,8 @@ func TestDownload(t *testing.T) {
 	defer srv.Close()
 
 	for link, want := range map[string]string{
-		(&url.URL{Scheme: "file", Path: local}).String(): "a\n1\n",
-		srv.URL + "/exports/x":                           "b\n2\n",
+		exports.FileLink(local): "a\n1\n",
+		srv.URL + "/exports/x":  "b\n2\n",
 	} {
 		out := filepath.Join(dir, "out.csv")
 		if err := download(context.Background(), link, out, io.Discard); err != nil {
@@ -377,7 +377,7 @@ func TestAnswerWarningsOnStderr(t *testing.T) {
 	if err := os.WriteFile(file, []byte("a\n1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	exportBody := []byte(`{"url":"file://` + file + `","filename":"x.csv","format":"csv","row_count":1,"expires_at":"2026-11-16T12:00:00Z",` + warning + `}`)
+	exportBody := []byte(`{"url":"` + exports.FileLink(file) + `","filename":"x.csv","format":"csv","row_count":1,"expires_at":"2026-11-16T12:00:00Z",` + warning + `}`)
 
 	for _, tc := range []struct {
 		name   string

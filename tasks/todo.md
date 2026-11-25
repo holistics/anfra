@@ -50,15 +50,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 ## Phase 2: The smaller fixes
 
-### - [ ] T3: Exports: the download removes the CLI's copy; `file:///C:/…` links
+### - [x] T3: Exports: the download removes the CLI's copy; `file:///C:/…` links
 
 **Acceptance criteria:**
-- [ ] `download` closes the CLI's export file before removing it.
-- [ ] On Windows, the export's `file:` link is `file:///C:/…`, and `openLink` reads it back to the path; Unix links unchanged.
+- [x] `download` closes the CLI's export file before removing it.
+- [x] On Windows, the export's `file:` link is `file:///C:/…`, and `openLink` reads it back to the path; Unix links unchanged. `exports.FileLink` and `exports.FileLinkPath`, with no OS branch: `filepath` already behaves per OS. Before, Windows' link was `file://C:%5CUsers%5C…`, which didn't even parse.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/exports/ ./cmd/anfra/`; a link round-trip test.
-- [ ] On Windows: the round-trip test; a query export downloaded, and the CLI's copy gone after.
+- [x] Tests pass (Linux): `go test ./internal/exports/ ./cmd/anfra/`; a link round-trip test.
+- [x] On Windows: the round-trip test; a query export downloaded, and the CLI's copy gone after (`TestDownload`, which failed before; the real export is in T8). Also found: `internal/exports`' tests shared the real `%TEMP%` on Windows (they set `TMPDIR`, which Windows ignores) and one left an export open; both fixed in the tests. On Windows, an export removed while it's being downloaded stays until the next sweep: Windows can't delete an open file. Accepted.
 
 **Dependencies:** None
 

@@ -17,7 +17,9 @@ import (
 // newFiles is exports' files in a temp directory of the test's own.
 func newFiles(t *testing.T, ttl time.Duration) *Files {
 	t.Helper()
-	t.Setenv("TMPDIR", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir) // os.TempDir on Unix
+	t.Setenv("TMP", dir)    // and on Windows
 	fs := New(ttl)
 	t.Cleanup(func() { _ = fs.Close() })
 	return fs
@@ -73,11 +75,11 @@ func TestFileLink(t *testing.T) {
 	if err != nil || u.Scheme != "file" {
 		t.Fatalf("link = %s, want file://", link)
 	}
-	if b, err := os.ReadFile(u.Path); err != nil || string(b) != "x\n" {
+	if b, err := os.ReadFile(FileLinkPath(u)); err != nil || string(b) != "x\n" {
 		t.Errorf("the file at the link: %q %v", b, err)
 	}
-	if !strings.HasPrefix(u.Path, Dir()) {
-		t.Errorf("the file is at %s, outside %s", u.Path, Dir())
+	if !strings.HasPrefix(FileLinkPath(u), Dir()) {
+		t.Errorf("the file is at %s, outside %s", FileLinkPath(u), Dir())
 	}
 }
 
@@ -87,17 +89,19 @@ func TestFileLink(t *testing.T) {
 func TestExpiry(t *testing.T) {
 	fs := newFiles(t, time.Hour)
 	u, _ := url.Parse(finish(t, Store{Files: fs}, "x\n"))
-	token := filepath.Base(u.Path)
+	token := filepath.Base(FileLinkPath(u))
 
 	old := time.Now().Add(-3 * time.Hour)
-	_ = os.Chtimes(u.Path, old, old)
+	_ = os.Chtimes(FileLinkPath(u), old, old)
 	fs.Sweep(time.Now())
-	if _, ok := fs.Open(token); !ok {
+	f, ok := fs.Open(token)
+	if !ok {
 		t.Fatal("a live link was swept for its file's time")
 	}
+	f.Close() // Windows can't remove a file still open
 
 	fs.Sweep(time.Now().Add(2 * time.Hour))
-	if _, err := os.Stat(u.Path); !os.IsNotExist(err) {
+	if _, err := os.Stat(FileLinkPath(u)); !os.IsNotExist(err) {
 		t.Error("a sweep left an expired export's file")
 	}
 	if _, ok := fs.Open(token); ok {
@@ -140,7 +144,9 @@ func TestAbortAndClose(t *testing.T) {
 // A new store removes what an earlier process left past its links' life, and
 // nothing a live link may still reach.
 func TestSweep(t *testing.T) {
-	t.Setenv("TMPDIR", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir) // os.TempDir on Unix
+	t.Setenv("TMP", dir)    // and on Windows
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +211,9 @@ func TestFilenameIsNotOnDisk(t *testing.T) {
 // Making exports' files touches nothing on disk; the first export makes the
 // folder.
 func TestNewTouchesNothing(t *testing.T) {
-	t.Setenv("TMPDIR", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir) // os.TempDir on Unix
+	t.Setenv("TMP", dir)    // and on Windows
 	fs := New(time.Hour)
 	defer fs.Close()
 	if _, err := os.Stat(Dir()); !os.IsNotExist(err) {
