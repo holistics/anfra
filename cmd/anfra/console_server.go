@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/holistics/anfra/internal/cliui"
@@ -96,7 +95,7 @@ func (cs *consoleServer) ensure(ctx context.Context) {
 	cmd := exec.Command(exe, "serve", "--idle-timeout", consoleServerIdle.String()) //nolint:gosec // our own binary, fixed args
 	cmd.Dir = cs.repoDir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil // it logs to the repo's log
-	detachProcess(cmd)
+	configureServer(cmd)
 	if err := cmd.Start(); err != nil {
 		return
 	}
@@ -160,7 +159,7 @@ func (cs *consoleServer) stop() {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	if cs.started != nil {
-		_ = cs.started.Signal(syscall.SIGTERM)
+		stopServer(cs.started)
 		cs.started, cs.url = nil, ""
 	}
 }

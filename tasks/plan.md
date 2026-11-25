@@ -47,7 +47,7 @@ T4–T8 are independent of each other once T3 is settled.
 - [x] T5: Windows unpack: a folder per version, `.exe`, pruning that skips folders in use
 - [x] T6: canal's `duckdb.dll`, embedded and unpacked beside it
 - [x] T7: `anfra serve`'s busy-port fallback on Windows
-- [ ] T8: The console's background server stops on Windows
+- [x] T8: The console's background server stops on Windows
 
 ### Checkpoint B: Each behaviour tested on Windows
 - [ ] T3–T8's Windows tests pass on Windows 11; Linux tests still pass. Review with the user.

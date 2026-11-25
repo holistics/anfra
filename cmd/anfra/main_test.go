@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json/jsontext"
 	"os"
+	"os/signal"
 	"slices"
 	"strings"
 	"testing"
@@ -11,9 +12,19 @@ import (
 	"github.com/holistics/anfra/shared/apperr"
 )
 
+// waitInterruptEnv makes the test binary wait for os.Interrupt instead of
+// running tests.
+const waitInterruptEnv = "ANFRA_TEST_WAIT_INTERRUPT"
+
 // The tests run as the binary does by default (main): causes shown, since
 // ANFRA_HIDE_ERROR_CAUSES is unset.
 func TestMain(m *testing.M) {
+	if os.Getenv(waitInterruptEnv) != "" { // a process that runs until interrupted, as anfra serve does
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		<-c
+		os.Exit(0)
+	}
 	apperr.DisableErrorEncapsulation()
 	os.Exit(m.Run())
 }

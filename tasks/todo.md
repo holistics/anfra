@@ -150,17 +150,17 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** XS
 
-### - [ ] T8: The console's background server stops on Windows
+### - [x] T8: The console's background server stops on Windows
 
 **Description:** (From T3: the server started with `DETACHED_PROCESS` has no console to attach to; start it with `CREATE_NO_WINDOW` instead.) `consoleServer.stop` sends SIGTERM (`console_server.go:163`), which Windows can't deliver, so the server the console started keeps running for up to its idle timeout.
 
 **Acceptance criteria:**
-- [ ] On Windows, `stop` ends the server another way (Ctrl-Break to its process group, which Go delivers as `os.Interrupt` and `anfra serve` already handles; or a shutdown call), in build-tagged code.
-- [ ] On Windows: leaving `anfra console` stops the server it started, and its sidecars with it; a server the console found running is left alone, as today.
+- [x] On Windows, `stop` ends the server another way (Ctrl-Break to its process group, which Go delivers as `os.Interrupt` and `anfra serve` already handles; or a shutdown call), in build-tagged code. Chosen: Ctrl-Break. On Windows the server is started on the console's own console (`CREATE_NEW_PROCESS_GROUP`, not `DETACHED_PROCESS`), since Ctrl-Break reaches only processes on the sender's console, and attaching to another console would take the console off the user's terminal. Closing the terminal ends the server too, as leaving the console does. `anfra update`'s background check keeps `detachProcess`.
+- [x] On Windows: leaving `anfra console` stops the server it started, and its sidecars with it; a server the console found running is left alone, as today.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./cmd/anfra/ -run Console`.
-- [ ] Manual, on Windows: start `anfra console`, run a query (it starts a server), leave; no `anfra serve`, `anfra-node` or `anfra-canal` left.
+- [x] Tests pass (Linux): `go test ./cmd/anfra/`; on Windows, new `TestStopServer` passes.
+- [ ] Manual, on Windows: start `anfra console`, run a query (it starts a server), leave; no `anfra serve`, `anfra-node` or `anfra-canal` left. Not yet with the interactive console (moved to T9). Done without it: a check program started `anfra serve` as the console does, ran a query through it, and sent Ctrl-Break: serve exited in 0.1 s with code 0, and no anfra, anfra-node or anfra-canal was left.
 
 **Dependencies:** T3
 
