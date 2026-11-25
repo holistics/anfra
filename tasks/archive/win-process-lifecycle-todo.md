@@ -1,6 +1,6 @@
 # Tasks: win-process-lifecycle
 
-Plan: [plan.md](plan.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Spec: [SPEC-win-process-lifecycle.md](../SPEC-win-process-lifecycle.md).
+Plan: [plan.md](win-process-lifecycle-plan.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Spec: [SPEC-win-process-lifecycle.md](../../SPEC-win-process-lifecycle.md).
 
 Code changes go on `feat/windows-installer` (anfra). Windows-only tests are built in WSL (`GOOS=windows go test -c`) and run on the Windows host from `C:\Users\nuita\wincheck`. Go checks run one command at a time (AGENTS.md); the full suite (`make check`, `make test`) when the user asks. Nothing is committed without asking.
 

@@ -1,10 +1,10 @@
 # Implementation Plan: win-process-lifecycle
 
-Spec: [SPEC-win-process-lifecycle.md](../SPEC-win-process-lifecycle.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Task checklist: [todo.md](todo.md). Earlier modules' tasks: [archive/](archive/).
+Spec: [SPEC-win-process-lifecycle.md](../../SPEC-win-process-lifecycle.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Task checklist: [todo.md](win-process-lifecycle-todo.md). Earlier modules' tasks: [archive/](./).
 
 ## Overview
 
-What this module delivers and why: the spec's [Objective](../SPEC-win-process-lifecycle.md#objective). This file holds how: the task order, the checkpoints, and task-level decisions and risks. First anfra compiles for Windows, then the riskiest behaviour (stopping sidecars without a console) is settled, then each behaviour is built and tested on its own, and M1 proves it all end to end on Windows 11.
+What this module delivers and why: the spec's [Objective](../../SPEC-win-process-lifecycle.md#objective). This file holds how: the task order, the checkpoints, and task-level decisions and risks. First anfra compiles for Windows, then the riskiest behaviour (stopping sidecars without a console) is settled, then each behaviour is built and tested on its own, and M1 proves it all end to end on Windows 11.
 
 ## Architecture Decisions
 
