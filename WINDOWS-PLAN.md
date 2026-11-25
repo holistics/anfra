@@ -4,12 +4,12 @@ The [brief](#summary) is for reviewing, deciding and estimating: the summary, th
 
 ## Summary
 
-- **Today:** anfra runs only on macOS and Linux. `install.sh` refuses other OSes, the release builds only 4 targets (linux/darwin × x64/arm64), and `GOOS=windows go build ./cmd/anfra` fails (`internal/sidecar/proc_other.go:14` Setpgid, `internal/sidecar/process.go:133` syscall.Kill). A Windows user needs WSL or Docker first, and some features don't work there ([Alternatives](#alternatives-wsl-and-docker)). The README "one prompt" quickstart runs `curl | bash`, so it breaks at step 1 in PowerShell.
+- **Today:** anfra runs only on macOS and Linux. `install.sh` refuses other OSes, the release builds only 4 targets (linux/darwin × x64/arm64), and `GOOS=windows go build ./cmd/anfra` failed until `win-process-lifecycle` (on this branch, not released). A Windows user needs WSL or Docker first, and some features don't work there ([Alternatives](#alternatives-wsl-and-docker)). The README "one prompt" quickstart runs `curl | bash`, so it breaks at step 1 in PowerShell.
 - **Goal:** a Windows user runs one PowerShell line, and then every anfra feature works the same as on Mac/Linux: the CLI, `anfra serve`, `anfra console`, publish/pull, update, and agent setup.
 - **Recommendation:** build native Windows support (windows-x64). Ship WSL docs now as the interim path. Keep Docker for hosting.
 - **Cost:** **≈ 32–46.5 engineer-days** one-time, with Claude helping ([Estimate](#estimate)); about 4–6 calendar weeks with 2 engineers. Plus ongoing upkeep, mostly in canal's Windows build and the release ([Long-term maintenance](#long-term-maintenance)).
 - **Decision:** **go** (2026-11-24). Both checks passed: the transport, and canal building and running on Windows (~1 ED, no canal code change). MotherDuck on Windows: supported, by linking DuckDB's official `duckdb.dll` ([Decisions made](#decisions-made)).
-- **Status:** `win-sidecar-transport` and `win-canal` done (canal's Windows CI deferred): anfra, anfra-node and canal talk over Unix sockets on Windows, and canal builds and works there, MotherDuck included, with no code change in any repo. Next: `win-process-lifecycle` (M1) and `win-anfra-node` ([Where it stands](#where-it-stands)).
+- **Status:** **M1 reached** (2026-11-25): anfra runs on Windows 11. `win-sidecar-transport`, `win-canal` (CI deferred) and `win-process-lifecycle` are done: `version`, `validate`, `show` and `query`, with and without the cache, work with the sidecars, and no sidecar outlives anfra. Next: `win-anfra-node` ([Where it stands](#where-it-stands)).
 
 
 
@@ -144,7 +144,7 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | `win-sidecar-transport` | **Done.** All 5 checks passed (T2–T6); no fixes needed in any repo (T7–T9 skipped); decision: Unix sockets. | [Spec](SPEC-win-sidecar-transport.md), [tasks](tasks/archive/win-sidecar-transport-todo.md), [findings](docs/research/windows-sidecar-transport.md) |
 | `win-canal` | **Done** (CI deferred). canal builds and works on Windows with no code change; the Windows build links DuckDB's official `duckdb.dll`, for MotherDuck (live query tested). Left for the CI step: canal's Windows release row and PR check. | [Spec](SPEC-win-canal.md), [tasks](tasks/archive/win-canal-todo.md), [findings](docs/research/windows-canal-build.md) |
-| `win-process-lifecycle` | Spec approved; tasks planned. Next to build (M1). | [Spec](SPEC-win-process-lifecycle.md), [tasks](tasks/todo.md) |
+| `win-process-lifecycle` | **Done** (M1, 2026-11-25). anfra compiles and runs on Windows 11 with its sidecars: stops them cleanly with or without a console, ends them with anfra (Job Object), unpacks a folder per version with `duckdb.dll`, keeps the socket's folder private. The `GOOS=windows go vet` CI step waits for the CI work. | [Spec](SPEC-win-process-lifecycle.md), [tasks](tasks/todo.md), [findings](docs/research/windows-sidecar-transport.md#later-stopping-canal-with-ctrl-break-with-and-without-a-console) |
 | `win-anfra-node`, `win-files-auth`, `win-line-endings`, `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
 | Interim WSL docs | Not started | — |
 | Code-signing purchase | Not started | — |
@@ -155,7 +155,7 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 ## Milestones
 
 1. `win-sidecar-transport` **and** `win-canal`**'s build spike**, in parallel. Start the code-signing purchase and the interim WSL docs the same day. **Go/no-go** after both ([Decisions needed](#decisions-needed)).
-2. **M1: it compiles** — `win-process-lifecycle` + the `GOOS=windows go vet` CI step. `anfra version`, `validate`, `show` and `query` work on Windows, with a locally built `anfra-node.exe` and the build spike's `anfra-canal.exe`. Re-estimate the rest here. (~2 weeks)
+2. **M1: it compiles** (reached 2026-11-25, the CI step deferred with the rest of CI) — `win-process-lifecycle` + the `GOOS=windows go vet` CI step. `anfra version`, `validate`, `show` and `query` work on Windows, with a locally built `anfra-node.exe` and the build spike's `anfra-canal.exe`. Re-estimate the rest here. (~2 weeks)
 3. **M2: sidecars ship** — `win-canal` and `win-anfra-node`, then `build_release.yml` produces a signed `anfra-windows-x64.exe`. Can run in parallel with M1. (~2 weeks)
 4. **M3: everything works** — `win-files-auth`, `win-line-endings`, `win-terminal`, `win-self-update`, and the Windows CI test job (`win-release`). (~2–3 weeks)
 5. **M4: users can get it** — `install.ps1`, skills, README and docs (`win-release`, `win-skills-docs`), end-to-end testing, announce. (~1–2 weeks)
@@ -273,8 +273,14 @@ Note: the local `/home/nui/works/canal` checkout is old. Work from `origin/maste
 | `cmd/anfra/console_server.go:163` stop: stop the background server without a signal: call a shutdown op on loopback, or send CTRL_BREAK to its process group. | 0.25–0.5 |
 | `cmd/anfra/serve.go:292`: Windows returns `WSAEADDRINUSE`, not `syscall.EADDRINUSE`. Add a build-tagged `isAddrInUse(err)` so serve moves to a free port. | 0.25 |
 
+**Result: done** (2026-11-25), tested on Windows 11 ([tasks](tasks/todo.md)). What changed from the rows above:
 
-
+- **Console flags:** a sidecar gets `CREATE_NO_WINDOW` only when anfra has no console. With it, Ctrl-Break sent directly doesn't reach the sidecar's hidden console; so anfra without a console attaches to the sidecar's console for a moment to send it. With a console, the sidecar shares it, and Ctrl-Break goes directly ([findings](docs/research/windows-sidecar-transport.md#later-stopping-canal-with-ctrl-break-with-and-without-a-console)).
+- **Stop:** one signal per sidecar, never both: closing stdin for anfra-node, Ctrl-Break for canal, since Ctrl-Break's default handler would cut anfra-node's shutdown short. After the wait, the sidecar alone is killed (`Process.Kill`); ending the shared Job Object would end every sidecar.
+- **The console's server** starts on the console's own console (`CREATE_NEW_PROCESS_GROUP`, not `detachProcess`), so Ctrl-Break can reach it; `detachProcess` stays for the update check.
+- **Added at review:** the socket's folder is now private on Windows too (an access list for this user only), as mode `700` makes it on Linux and macOS. Before, a shared `TMP` such as `C:\Temp` gave everyone access.
+- **The cache needs anfra-node 0.16.0** on Windows, built for M1 from its tag (Bun 1.2.10 cross-compiles it from Linux); the spike's 0.13.1 gives no cache key.
+- **For `win-anfra-node`:** each command logs a `watchdog.parent_death` warning, since closing stdin is how anfra stops anfra-node on Windows. Handling `SIGBREAK` (its row) lets anfra stop it with Ctrl-Break instead, and ends the noise.
 
 ### `win-files-auth`
 

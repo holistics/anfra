@@ -224,8 +224,8 @@ Found, for `win-anfra-node`: each command logs a `watchdog.parent_death` warning
 **Description:** Close the module.
 
 **Acceptance criteria:**
-- [ ] `docs/designs/sidecars.md`: a Windows section (process group and console flags, the stop sequence, the Job Object, the folder layout with `duckdb.dll`).
-- [ ] `WINDOWS-PLAN.md`: Where it stands marks `win-process-lifecycle` done; the Summary's status and M1 are updated; its work rows reflect what was learned.
+- [x] `docs/designs/sidecars.md`: a Windows section (process group and console flags, the stop sequence, the Job Object, the folder layout with `duckdb.dll`).
+- [x] `WINDOWS-PLAN.md`: Where it stands marks `win-process-lifecycle` done; the Summary's status and M1 are updated; its work rows reflect what was learned.
 - [ ] With the user's go-ahead: `make check` and `make test` pass on Linux.
 
 **Verification:**
