@@ -3,12 +3,14 @@ package home
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestDir(t *testing.T) {
 	userHome := t.TempDir()
-	t.Setenv("HOME", userHome)
+	t.Setenv("HOME", userHome)        // os.UserHomeDir on Unix
+	t.Setenv("USERPROFILE", userHome) // and on Windows
 
 	t.Setenv("ANFRA_HOME", "")
 	if got, want := Dir(), filepath.Join(userHome, ".anfra"); got != want {
@@ -23,6 +25,9 @@ func TestDir(t *testing.T) {
 
 // What anfra kept in the user's cache folder goes; the rest of that folder stays.
 func TestRemoveLegacy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no legacy folder, and ignores XDG_CACHE_HOME: TestRemoveLegacyLeavesWindowsCacheAlone")
+	}
 	cache := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cache)
 	legacy := filepath.Join(cache, "anfra", "runtime")

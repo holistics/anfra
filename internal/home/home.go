@@ -34,7 +34,7 @@ func Dir() string {
 // kept everything in Dir: the unpacked sidecars and the last update check,
 // which are made again on demand. Best-effort, and cheap once it is gone.
 func RemoveLegacy() {
-	if cache, err := os.UserCacheDir(); err == nil {
-		_ = os.RemoveAll(filepath.Join(cache, "anfra"))
+	if dir := legacyDir(); dir != "" {
+		_ = os.RemoveAll(dir)
 	}
 }

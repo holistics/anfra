@@ -83,14 +83,14 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Estimated scope:** M
 
-### - [ ] T5: `RemoveLegacy` does nothing on Windows
+### - [x] T5: `RemoveLegacy` does nothing on Windows
 
 **Acceptance criteria:**
-- [ ] On Windows, `RemoveLegacy` removes nothing; Linux and macOS unchanged. The comment says why (anfra never kept files there on Windows).
+- [x] On Windows, `RemoveLegacy` removes nothing; Linux and macOS unchanged. The comment says why (anfra never kept files there on Windows).
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/home/`.
-- [ ] On Windows: a test with `%LOCALAPPDATA%` pointed at a temporary folder holding `anfra\`: it's still there after.
+- [x] Tests pass (Linux): `go test ./internal/home/`.
+- [x] On Windows: a test with `%LOCALAPPDATA%` pointed at a temporary folder holding `anfra\`: it's still there after. It was deleted before the fix. `TestRemoveLegacy` (Linux's `XDG_CACHE_HOME`) now skips on Windows: run there, it deleted the real `%LOCALAPPDATA%\anfra`, as did every embedded anfra build's unpack in earlier modules. None exists on the Windows host now; whether one did before isn't known. `TestDir` also sets `USERPROFILE`, which Windows reads instead of `HOME`.
 
 **Dependencies:** None
 
