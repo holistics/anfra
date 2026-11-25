@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -15,9 +16,9 @@ import (
 var Add = command.Define(command.Def[AddInput, Result]{
 	Name:  "sl.add",
 	Short: "Add a table to the semantic layer",
-	Long: "Add a table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file.\n\n" +
+	Long: "Add a table to the semantic layer by generating an AML model from catalog metadata and writing it under models in the repo.\n\n" +
 		"Run ingest first against the same running server.",
-	ReadOnly:   true,
+	Errors:     []apperr.AnyCode{repo.WriteFailed},
 	Idempotent: true,
 	Needs:      func(AddInput) command.Sidecars { return command.Sidecars{Node: true} },
 	Check:      AddInput.check,
@@ -29,11 +30,19 @@ var Add = command.Define(command.Def[AddInput, Result]{
 		result, err := cc.Clients.Node.SLAdd(ctx, anfranode.SLAddRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), Table: in.Table, DataSource: in.DataSource,
 		})
-		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"table": "table", "dataSource": "data_source"}); ok {
-			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
+		if err != nil {
+			if v, ok := anfranode.Violation(err, anfranode.ArgMap{"table": "table", "dataSource": "data_source"}); ok {
+				return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
+			}
+			return Result{}, err
 		}
 
-		return newResult(result, false), err
+		writes := cc.Repo.WriteFiles([]repo.File{{Path: result.Path, Content: result.Content}})
+		if err := writes[0].Err; err != nil {
+			return Result{}, err
+		}
+
+		return newResult(result, true), nil
 	},
 })
 

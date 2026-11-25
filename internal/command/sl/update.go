@@ -2,10 +2,12 @@ package sl
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -14,8 +16,8 @@ import (
 var Update = command.Define(command.Def[UpdateInput, Result]{
 	Name:       "sl.update",
 	Short:      "Update the semantic layer from table metadata",
-	Long:       "Update an AML table model in the semantic layer using table metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes.\n\nRun ingest against the same running server first to load the current database schema.",
-	ReadOnly:   true,
+	Long:       "Update an AML table model in the repo from catalog metadata. Keep custom fields, comments, and user properties. Write the file only when its content changes.\n\nRun ingest against the same running server first to load the current database schema.",
+	Errors:     []apperr.AnyCode{repo.WriteFailed},
 	Idempotent: true,
 	Needs:      func(UpdateInput) command.Sidecars { return command.Sidecars{Node: true} },
 	Check:      UpdateInput.check,
@@ -24,14 +26,27 @@ var Update = command.Define(command.Def[UpdateInput, Result]{
 			return Result{}, err
 		}
 
-		file, err := cc.Clients.Node.SLUpdate(ctx, anfranode.SLUpdateRequest{
+		result, err := cc.Clients.Node.SLUpdate(ctx, anfranode.SLUpdateRequest{
 			Context: anfranode.CatalogContextOf(cc.Repo, ""), ModelName: in.ModelName,
 		})
-		if v, ok := anfranode.Violation(err, anfranode.ArgMap{"modelName": "model_name"}); ok {
-			return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
+		if err != nil {
+			if v, ok := anfranode.Violation(err, anfranode.ArgMap{"modelName": "model_name"}); ok {
+				return Result{}, apperr.EncapsulateWith(err, apperr.ValidationFailed, v.Message, apperr.Violate(v))
+			}
+			return Result{}, err
+		}
+		if result.Changed == nil {
+			return Result{}, errors.New("the model update did not report whether its content changed")
 		}
 
-		return newResult(file, true), err
+		if *result.Changed {
+			writes := cc.Repo.WriteFiles([]repo.File{{Path: result.Path, Content: result.Content}})
+			if err := writes[0].Err; err != nil {
+				return Result{}, err
+			}
+		}
+
+		return newResult(result, *result.Changed), nil
 	},
 })
 

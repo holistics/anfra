@@ -2,21 +2,27 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/command/sl"
 	"github.com/holistics/anfra/internal/dataperm"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/sidecar/anfranode"
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
-func TestSLAddUsesManagedCatalogWithoutAConnection(t *testing.T) {
+func TestSLAddReportsManagedRepoWriteFailure(t *testing.T) {
 	var node fakeNode
 	want := anfranode.SLResult{ModelName: "public_orders", Path: "models/public_orders.model.aml", Content: "Model public_orders {}", Warnings: []string{}}
 	srv := node.serve(t, want)
@@ -25,14 +31,9 @@ func TestSLAddUsesManagedCatalogWithoutAConnection(t *testing.T) {
 		Repo:    managedRepo(t), DataPerms: dataperm.Ungoverned(),
 	}
 
-	result, err := Invoke(context.Background(), cc, "sl.add", []byte(`{"table":"public.orders","data_source":"warehouse"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	file, ok := result.(sl.Result)
-	if !ok || file.ModelName != want.ModelName || file.Content != want.Content {
-		t.Fatalf("file = %+v", result)
+	_, err := Invoke(t.Context(), cc, "sl.add", []byte(`{"table":"public.orders","data_source":"warehouse"}`))
+	if !errors.Is(err, repo.WriteFailed) || !strings.Contains(apperr.From(err).Response("").Message, want.Path) {
+		t.Fatalf("write failure = %v", err)
 	}
 	if len(node.calls) != 1 || node.calls[0] != "sl.add" {
 		t.Fatalf("calls = %v", node.calls)
@@ -42,6 +43,63 @@ func TestSLAddUsesManagedCatalogWithoutAConnection(t *testing.T) {
 	ctx := params["context"].(map[string]any)
 	if params["table"] != "public.orders" || params["dataSource"] != "warehouse" || ctx["revision"] == nil || ctx["metadata"] != nil {
 		t.Fatalf("params = %+v", params)
+	}
+}
+
+func TestSLWritesGeneratedContentToTheLocalRepo(t *testing.T) {
+	local := repo.Resolve(t.TempDir())
+	file := anfranode.SLResult{ModelName: "orders", Path: "models/orders.model.aml", Content: "Model orders {}\n"}
+	path := filepath.Join(local.Dir, file.Path)
+	run := func(name, args string) {
+		t.Helper()
+		var node fakeNode
+		srv := node.serve(t, file)
+		cc := command.CommandContext{
+			Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
+			Repo:    local.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned(),
+		}
+		answer, err := Invoke(t.Context(), cc, name, []byte(args))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := answer.(sl.Result)
+		content, err := os.ReadFile(path)
+		if err != nil || string(content) != file.Content || got.Content != file.Content || got.Path != file.Path {
+			t.Fatalf("%s: result %+v, file %q, read error %v", name, got, content, err)
+		}
+	}
+	run("sl.add", `{"table":"public.orders","data_source":"warehouse"}`)
+
+	changed := true
+	file.Changed = &changed
+	file.Content = "// updated\n" + file.Content
+	run("sl.update", `{"model_name":"orders"}`)
+
+	past := time.Unix(1000, 0)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatal(err)
+	}
+	changed = false
+	run("sl.update", `{"model_name":"orders"}`)
+	info, err := os.Stat(path)
+	if err != nil || !info.ModTime().Equal(past) {
+		t.Fatalf("unchanged model attributes: %v, %v", info, err)
+	}
+}
+
+func TestSLUpdateRequiresChanged(t *testing.T) {
+	local := repo.Resolve(t.TempDir())
+	var node fakeNode
+	srv := node.serve(t, anfranode.SLResult{Path: "orders.aml", Content: "Model orders {}"})
+	cc := command.CommandContext{
+		Clients: command.Clients{Node: anfranode.NewClientHTTP(srv.URL)},
+		Repo:    local.Repo(), AllowLocalRepo: true, DataPerms: dataperm.Ungoverned(),
+	}
+	if _, err := Invoke(t.Context(), cc, "sl.update", []byte(`{"model_name":"orders"}`)); err == nil {
+		t.Fatal("accepted an update without changed")
+	}
+	if entries, err := os.ReadDir(local.Dir); err != nil || len(entries) != 0 {
+		t.Fatalf("repo after invalid updates = %v, %v", entries, err)
 	}
 }
 

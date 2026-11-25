@@ -88,6 +88,10 @@ type (
 	// (ManagedRepo). It exposes no directory: a command that needs one (the search
 	// catalog) refuses a managed repo, rather than reading an empty path.
 	Repo = repo.Repo
+	// RepoFile is a repo-relative path and its full content for Repo.WriteFiles.
+	RepoFile = repo.File
+	// RepoWriteResult is the outcome of writing one file with Repo.WriteFiles.
+	RepoWriteResult = repo.WriteResult
 
 	// DataSource is one data source: its name, its type (the SQL dialect), its
 	// connection, which never leaves the host, and its settings for the query
@@ -236,6 +240,8 @@ var (
 	// LocalRepoNotAllowed: an Invocation on a local repo (OpenRepo) without
 	// AllowLocalRepo. A host mistake, never declared by an op.
 	LocalRepoNotAllowed = errcode.LocalRepoNotAllowed
+	// RepoWriteFailed means a file could not be written to the invocation's repo.
+	RepoWriteFailed = repo.WriteFailed
 
 	// CacheDisabled: an operation on the query cache (core.cache.clean), or a
 	// query with cache.cached_only, when the invocation has none, or it is

@@ -751,6 +751,34 @@ components:
         - message
         - request_id
       type: object
+    ErrorBodyRepoWriteFailed:
+      additionalProperties: false
+      description: The file could not be written to the repo.
+      properties:
+        code:
+          const: repo_write_failed
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
     ErrorBodyResultTooLarge:
       additionalProperties: false
       description: The query's result is larger than this server allows.
@@ -2901,7 +2929,7 @@ paths:
   /core.sl.add:
     post:
       description: |-
-        Add a table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file.
+        Add a table to the semantic layer by generating an AML model from catalog metadata and writing it under models in the repo.
 
         Run ingest first against the same running server.
       operationId: core.sl.add
@@ -2946,11 +2974,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoWriteFailed"
                 required:
                   - error
                 type: object
-          description: internal_server_error
+          description: internal_server_error, repo_write_failed
         "503":
           content:
             application/json:
@@ -2963,13 +2993,13 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Add a table to the semantic layer
-      x-destructive: false
+      x-destructive: true
       x-idempotent: true
-      x-read-only: true
+      x-read-only: false
   /core.sl.update:
     post:
       description: |-
-        Update an AML table model in the semantic layer using table metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes.
+        Update an AML table model in the repo from catalog metadata. Keep custom fields, comments, and user properties. Write the file only when its content changes.
 
         Run ingest against the same running server first to load the current database schema.
       operationId: core.sl.update
@@ -3014,11 +3044,13 @@ paths:
               schema:
                 properties:
                   error:
-                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoWriteFailed"
                 required:
                   - error
                 type: object
-          description: internal_server_error
+          description: internal_server_error, repo_write_failed
         "503":
           content:
             application/json:
@@ -3031,9 +3063,9 @@ paths:
                 type: object
           description: sidecar_unavailable
       summary: Update the semantic layer from table metadata
-      x-destructive: false
+      x-destructive: true
       x-idempotent: true
-      x-read-only: true
+      x-read-only: false
   /core.status:
     post:
       description: |-

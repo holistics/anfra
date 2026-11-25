@@ -212,10 +212,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Add a Postgres table to the semantic layer
-         * @description Add a Postgres table to the semantic layer by generating an AML model from catalog metadata. The CLI writes it under models without replacing an existing file. Other callers receive the content.
+         * Add a table to the semantic layer
+         * @description Add a table to the semantic layer by generating an AML model from catalog metadata and writing it under models in the repo.
          *
-         *     Run ingest first against the same running server. The catalog is held in memory and is lost when the server stops.
+         *     Run ingest first against the same running server.
          */
         post: operations["core.sl.add"];
         delete?: never;
@@ -234,8 +234,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Update the semantic layer from Postgres metadata
-         * @description Update an AML table model in the semantic layer using Postgres metadata already in the catalog. Keep custom fields, comments, and user properties. The CLI writes the file only when it changes. Other callers receive the content.
+         * Update the semantic layer from table metadata
+         * @description Update an AML table model in the repo from catalog metadata. Keep custom fields, comments, and user properties. Write the file only when its content changes.
          *
          *     Run ingest against the same running server first to load the current database schema.
          */
@@ -672,6 +672,18 @@ export interface components {
             request_id: string;
             /** @constant */
             scope: "user";
+            /** @constant */
+            status: 500;
+        };
+        /** @description The file could not be written to the repo. */
+        ErrorBodyRepoWriteFailed: {
+            /** @constant */
+            code: "repo_write_failed";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "server";
             /** @constant */
             status: 500;
         };
@@ -2205,14 +2217,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description internal_server_error */
+            /** @description internal_server_error, repo_write_failed */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoWriteFailed"];
                     };
                 };
             };
@@ -2273,14 +2285,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description internal_server_error */
+            /** @description internal_server_error, repo_write_failed */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoWriteFailed"];
                     };
                 };
             };

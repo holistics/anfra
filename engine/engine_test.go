@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -104,6 +105,23 @@ func TestConnectRequiresBothURLs(t *testing.T) {
 		_, _, err := engine.Connect(context.Background(), tc.node, tc.canal)
 		if err == nil {
 			t.Errorf("Connect(%q, %q) succeeded; both URLs are required", tc.node, tc.canal)
+		}
+	}
+}
+
+func TestManagedRepoReportsEachWriteFailure(t *testing.T) {
+	r, err := engine.ManagedRepo("sales", "sales@"+strings.Repeat("a", 40))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []engine.RepoFile{{Path: "a.aml"}, {Path: "b.aml"}}
+	results := r.WriteFiles(files)
+	if len(results) != len(files) {
+		t.Fatalf("results = %+v", results)
+	}
+	for i, result := range results {
+		if result.Path != files[i].Path || !errors.Is(result.Err, engine.RepoWriteFailed) {
+			t.Errorf("result %d = %+v", i, result)
 		}
 	}
 }

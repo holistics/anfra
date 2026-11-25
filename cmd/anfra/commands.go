@@ -400,13 +400,6 @@ func applyStdin(args []command.Arg, values map[string]any) error {
 	return nil
 }
 
-// resultHandlers finish a command's CLI work using its core result. A handler
-// must succeed before the result is delivered.
-var resultHandlers = map[string]func(name string, body []byte) error{
-	"sl.add":    writeSLResult,
-	"sl.update": writeSLResult,
-}
-
 // runCommand runs a command as its op: on the repo's running server when there
 // is one (found through its runtime file), otherwise in this process, spawning
 // only the sidecars it needs.
@@ -420,12 +413,6 @@ func runCommand(ctx context.Context, c command.Command, args map[string]any, d d
 	body, err := invoke(ctx, c, args)
 	if err != nil {
 		return err
-	}
-
-	if handle := resultHandlers[c.Name()]; handle != nil {
-		if err := handle(c.Name(), body); err != nil {
-			return err
-		}
 	}
 
 	return deliver(ctx, c, body, d)

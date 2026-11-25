@@ -8,7 +8,6 @@ import (
 )
 
 // Result is the generated AML and warnings from a semantic-layer operation.
-// The core never writes it to the repo.
 type Result struct {
 	Message     string   `json:"message" doc:"what was generated or whether the model is already up to date"`
 	ModelName   string   `json:"model_name" doc:"the model's fully qualified name"`
@@ -19,21 +18,18 @@ type Result struct {
 	Hints       []string `json:"hints,omitempty" doc:"what to do next, if any"`
 }
 
-func newResult(file anfranode.SLResult, update bool) Result {
-	message := fmt.Sprintf("Generated AML for model %q.", file.ModelName)
-	if update {
-		message = fmt.Sprintf("Generated updated AML for model %q.", file.ModelName)
-		if file.Changed != nil && !*file.Changed {
-			message = fmt.Sprintf("Model %q is up to date.", file.ModelName)
-		}
+func newResult(result anfranode.SLResult, written bool) Result {
+	message := fmt.Sprintf("Model %q is up to date.", result.ModelName)
+	if written {
+		message = fmt.Sprintf("Wrote model %q to %q.", result.ModelName, result.Path)
 	}
 
-	warnings := file.Warnings
+	warnings := result.Warnings
 	if warnings == nil {
 		warnings = []string{}
 	}
 
-	return Result{Message: message, ModelName: file.ModelName, Path: file.Path, WarningList: warnings, Changed: file.Changed, Content: file.Content}
+	return Result{Message: message, ModelName: result.ModelName, Path: result.Path, WarningList: warnings, Changed: result.Changed, Content: result.Content}
 }
 
 // Warnings lets pretty output report conversion warnings on stderr.

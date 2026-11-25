@@ -47,8 +47,8 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	fixture, err := filepath.Abs("testdata/repo")
-	if err != nil {
+	fixture := t.TempDir()
+	if err := os.CopyFS(fixture, os.DirFS("testdata/repo")); err != nil {
 		t.Fatal(err)
 	}
 	valid := repo.Resolve(fixture).Repo()

@@ -1,4 +1,4 @@
-// Package repo is a command's AML repo: where its files are read from, and the
+// Package repo is a command's AML repo: where its files are read and written, and the
 // identity anfra-node keys its compile cache by.
 //
 // A repo is one of two kinds, and the types keep them apart:

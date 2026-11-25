@@ -3,7 +3,6 @@ package anfranode
 import "context"
 
 // SLResult is the generated AML and warnings from a semantic-layer operation.
-// Only the CLI writes it to the local repo.
 type SLResult struct {
 	ModelName string   `json:"modelName"`
 	Path      string   `json:"path"`
