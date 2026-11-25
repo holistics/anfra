@@ -149,3 +149,26 @@ What it hands on:
 - `win-canal`: `lakeclient.Location` and `utils.Listen` need no change (checks 2 and 3).
 
 Not covered here: anfra itself on Windows (it doesn't compile there yet; these checks copied its socket code), and canal built with DuckDB (these checks built canal's Go code without cgo). Those are `win-process-lifecycle` and `win-canal`'s build spike.
+
+## Later: stopping canal with Ctrl-Break, with and without a console
+
+Checked for `win-process-lifecycle` (task T3). Windows has no SIGTERM, so anfra stops canal with Ctrl-Break, which Go delivers as `os.Interrupt`. Ctrl-Break only reaches processes on the sender's console. The question: does it reach canal when canal has a hidden console of its own (`CREATE_NO_WINDOW`, so no window opens), or when anfra has no console at all (started by an agent, or detached)?
+
+- What ran: a small check program in anfra's ignored `tmp/` starts the DLL build of `anfra-canal.exe query`, waits for `/health`, sends Ctrl-Break, and waits 5 s. "Clean" means canal logged "shutting down", exited with code 0, and removed its socket. It ran once in a console, and once re-started with `DETACHED_PROCESS` (no console).
+- Result:
+
+  | anfra | canal started with | How Ctrl-Break is sent | canal |
+  |---|---|---|---|
+  | has a console | `CREATE_NEW_PROCESS_GROUP` (shares anfra's console) | directly | **clean**, at once |
+  | has a console | `+ CREATE_NO_WINDOW` (its own hidden console) | directly | not reached; killed after 5 s |
+  | has a console | `+ CREATE_NO_WINDOW` | anfra attaches to canal's console, sends, leaves | **clean**, at once |
+  | no console | `CREATE_NEW_PROCESS_GROUP` | directly | fails: "The handle is invalid"; killed |
+  | no console | `+ CREATE_NO_WINDOW` | directly | fails the same way; killed |
+  | no console | `+ CREATE_NO_WINDOW` | anfra attaches to canal's console, sends, leaves | **clean**, at once |
+
+- What it means, and what `internal/sidecar` now does:
+  - **anfra has a console:** sidecars share it (`CREATE_NEW_PROCESS_GROUP` only), so no window opens and Ctrl-Break is sent directly. Attaching would mean anfra leaving its own console, so it isn't used here.
+  - **anfra has no console:** sidecars get a hidden one (`CREATE_NO_WINDOW`, or Windows would open a window), and anfra stops one by attaching to its console (`AttachConsole(pid)`), sending Ctrl-Break, and leaving (`FreeConsole`). One stop attaches at a time.
+  - Whether anfra has a console is read once, with `GetConsoleCP`. `GetConsoleWindow` isn't used: it answered "none" when run from WSL, though Ctrl-Break worked (that console has no window).
+  - No fallback is needed: canal stops cleanly in every case. Killing after the wait stays, for a sidecar that doesn't stop.
+  - For `win-process-lifecycle` T8: `anfra serve` started by the console with `DETACHED_PROCESS` has no console, so the console can't reach it with Ctrl-Break this way. Starting it with `CREATE_NO_WINDOW` instead gives it a hidden console to attach to.

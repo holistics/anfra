@@ -56,17 +56,18 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 ## Phase 2: Behaviours, one at a time
 
-### - [ ] T3: Stopping sidecars when anfra has no console (Ctrl-Break vs "no window")
+### - [x] T3: Stopping sidecars when anfra has no console (Ctrl-Break vs "no window")
 
 **Description:** Settle the spec's risk before building on it. Ctrl-Break only reaches processes that share the caller's console; a sidecar started with `CREATE_NO_WINDOW` gets its own, and an anfra started by an agent may have none.
 
 **Acceptance criteria:**
-- [ ] Tried, with canal (the DLL build) as the sidecar, and the results recorded: (a) anfra in a PowerShell window, sidecar with `CREATE_NEW_PROCESS_GROUP`; (b) the same plus `CREATE_NO_WINDOW`; (c) anfra started hidden with no console (`Start-Process -WindowStyle Hidden`, and as a detached process); for each: does a window appear, and does Ctrl-Break stop canal cleanly (its log says "shutting down", its socket is removed)?
-- [ ] The chosen flags (and, if needed, a hidden console for anfra) are in `proc_windows.go`, with a one-line comment saying why.
-- [ ] If no option stops canal cleanly without a console, the fallback (terminate after the wait) is recorded, and the user told.
+- [x] Tried, with canal (the DLL build) as the sidecar, and the results recorded: (a) anfra in a PowerShell window, sidecar with `CREATE_NEW_PROCESS_GROUP`; (b) the same plus `CREATE_NO_WINDOW`; (c) anfra started hidden with no console (`Start-Process -WindowStyle Hidden`, and as a detached process); for each: does a window appear, and does Ctrl-Break stop canal cleanly (its log says "shutting down", its socket is removed)?
+- [x] The chosen flags (and, if needed, a hidden console for anfra) are in `proc_windows.go`, with a one-line comment saying why.
+- [x] (Not needed: canal stops cleanly in every case.) If no option stops canal cleanly without a console, the fallback (terminate after the wait) is recorded, and the user told.
 
 **Verification:**
-- [ ] Manual, on Windows: the three cases above, results in the PR description (or a short note in `docs/research/windows-sidecar-transport.md`).
+- [x] Manual, on Windows: the cases above, results in `docs/research/windows-sidecar-transport.md` ("Later: stopping canal with Ctrl-Break"). With a console, sidecars share it; without one, they get `CREATE_NO_WINDOW` and stop attaches to their console to send Ctrl-Break.
+- [x] On Windows: `TestCloseSendsCtrlBreak`, `TestCloseClosesStdin`, and the new `TestCloseSendsCtrlBreakWithoutConsole` pass.
 
 **Dependencies:** T2
 
@@ -151,7 +152,7 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 ### - [ ] T8: The console's background server stops on Windows
 
-**Description:** `consoleServer.stop` sends SIGTERM (`console_server.go:163`), which Windows can't deliver, so the server the console started keeps running for up to its idle timeout.
+**Description:** (From T3: the server started with `DETACHED_PROCESS` has no console to attach to; start it with `CREATE_NO_WINDOW` instead.) `consoleServer.stop` sends SIGTERM (`console_server.go:163`), which Windows can't deliver, so the server the console started keeps running for up to its idle timeout.
 
 **Acceptance criteria:**
 - [ ] On Windows, `stop` ends the server another way (Ctrl-Break to its process group, which Go delivers as `os.Interrupt` and `anfra serve` already handles; or a shutdown call), in build-tagged code.

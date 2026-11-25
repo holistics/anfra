@@ -42,7 +42,7 @@ T4–T8 are independent of each other once T3 is settled.
 - [x] `GOOS=windows go build ./...` and `go vet ./...` pass; Linux tests of the touched packages pass.
 
 ### Phase 2: Behaviours, one at a time
-- [ ] T3: Stopping sidecars when anfra has no console (Ctrl-Break vs "no window")
+- [x] T3: Stopping sidecars when anfra has no console (Ctrl-Break vs "no window")
 - [ ] T4: Job Object: sidecars die with anfra
 - [ ] T5: Windows unpack: a folder per version, `.exe`, pruning that skips folders in use
 - [ ] T6: canal's `duckdb.dll`, embedded and unpacked beside it
