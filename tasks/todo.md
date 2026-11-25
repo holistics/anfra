@@ -4,19 +4,19 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 ## Phase 1: The risk
 
-### - [ ] T1: anfra-node shuts down on `SIGBREAK`, checked on Windows with a Bun 1.4.4 build
+### - [x] T1: anfra-node shuts down on `SIGBREAK`, checked on Windows with a Bun 1.4.4 build
 
 **Description:** Settle the spec's unknown first: does Bun, on Windows, deliver Ctrl-Break to `process.on('SIGBREAK')`, and let `shutdown` finish?
 
 **Acceptance criteria:**
-- [ ] holistics-core: a worktree at `tmp/hc-win` on a new branch `feat/anfra-node-windows-stop` from `origin/master` (after `git fetch`); dependencies installed and the workspace packages built, as the release does.
-- [ ] `src/main.ts`: `process.on('SIGBREAK', () => { shutdown('SIGBREAK'); })`, with a one-line comment saying why.
-- [ ] Bun 1.4.4 downloaded into `tmp/` and used by path; `anfra-node.exe` built with it for `bun-windows-x64`.
-- [ ] On Windows: started in its own process group with a stdin pipe (as anfra starts it), sent Ctrl-Break, anfra-node logs `sidecar.shutdown` with reason `SIGBREAK`, no `watchdog.parent_death`, writes its compile cache, and exits with code 0. Also: the same build without the handler is ended at once (the default), to show the handler is what makes the difference.
-- [ ] If Bun doesn't deliver it: stop, record what happened, and ask the user (the spec's open question).
+- [x] holistics-core: a worktree at `tmp/hc-win` on a new branch `feat/anfra-node-windows-stop` from `origin/master` (after `git fetch`); dependencies installed and the workspace packages built, as the release does. `origin/master` was `78cfd8c49` (anfra-node 0.17.1). The install rewrote `pnpm-lock.yaml`; it is restored before committing.
+- [x] `src/main.ts`: `process.on('SIGBREAK', () => { shutdown('SIGBREAK'); })`, with a one-line comment saying why.
+- [x] Bun 1.4.4 downloaded into `tmp/` and used by path; `anfra-node.exe` built with it for `bun-windows-x64`.
+- [x] On Windows: started in its own process group with a stdin pipe (as anfra starts it), sent Ctrl-Break, anfra-node logs `sidecar.shutdown` with reason `SIGBREAK`, no `watchdog.parent_death`, writes its compile cache, and exits with code 0. Also: the same build without the handler is ended at once (the default), to show the handler is what makes the difference. With the handler: `Shutting down`, reason `SIGBREAK`, exit code 0, no `watchdog.parent_death`. Without: ended at once, exit code `0xC000013A`, no shutdown. (The compile-cache write needs a compile: checked in T5.)
+- [x] (Not needed: Bun delivers it.) If Bun doesn't deliver it: stop, record what happened, and ask the user (the spec's open question).
 
 **Verification:**
-- [ ] Manual, on Windows 11: a small check program in anfra's `tmp/` (as in `win-process-lifecycle` T3), results recorded.
+- [x] Manual, on Windows 11: a small check program in anfra's `tmp/` (as in `win-process-lifecycle` T3), results recorded.
 
 **Dependencies:** None
 

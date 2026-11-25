@@ -30,7 +30,7 @@ T2 and T3 need only T1's build; T4 needs T1's answer.
 ## Task List
 
 ### Phase 1: The risk
-- [ ] T1: anfra-node shuts down on `SIGBREAK`, checked on Windows with a Bun 1.4.4 build
+- [x] T1: anfra-node shuts down on `SIGBREAK`, checked on Windows with a Bun 1.4.4 build
 
 ### Phase 2: Each side
 - [ ] T2: anfra-node's tests pass; the change committed on its branch
