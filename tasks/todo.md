@@ -115,7 +115,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 **Acceptance criteria:**
 - [x] `docs/designs/sidecars.md`: the Windows stop (Ctrl-Break to every sidecar, stdin closed last).
 - [x] `WINDOWS-PLAN.md`: Where it stands marks `win-anfra-node` done (code), with the release row and smoke test left for the CI work; its rows reflect what was learned (`selectors.ts` needs no change; Bun 1.4.4 checked).
-- [ ] With the user's go-ahead: `make check` and `make test` in anfra.
+- [x] With the user's go-ahead: `make check` and `make test` in anfra. `make check` passes. `make test` passes but for `engine`'s `TestOnlyTheAPIPackagesAreExported`, which counts the ignored worktrees in `tmp/`; in a clean checkout of the branch, `engine` passes.
 
 **Verification:**
 - [ ] Manual: the spec's Success Criteria 1–6, each ticked here.
