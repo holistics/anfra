@@ -10,7 +10,7 @@ import (
 // nothing, and take it from the environment variable env.
 func Binary(name, env string, embedded []byte) (string, error) {
 	if len(embedded) > 0 {
-		return extractRuntime(name, embedded)
+		return extractRuntime(name, embedded, nil)
 	}
 	if path := os.Getenv(env); path != "" {
 		return path, nil
@@ -20,9 +20,16 @@ func Binary(name, env string, embedded []byte) (string, error) {
 
 // Unpack writes the embedded binary name to anfra's folder, as Binary does, and
 // returns its path: for a sidecar whose binary Binary's one variable can't
-// choose.
-func Unpack(name string, embedded []byte) (string, error) {
-	return extractRuntime(name, embedded)
+// choose. libs are unpacked beside it.
+func Unpack(name string, embedded []byte, libs ...Library) (string, error) {
+	return extractRuntime(name, embedded, libs)
+}
+
+// Library is a shared library a sidecar's binary loads from its own folder, as
+// canal loads duckdb.dll on Windows.
+type Library struct {
+	Name string // its file name: duckdb.dll
+	Data []byte
 }
 
 // unpackErr names the step that failed and where anfra's folder comes from,

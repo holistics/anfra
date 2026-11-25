@@ -64,5 +64,5 @@ func (s Service) Command() (Command, error) {
 // unpack writes the embedded binary to anfra's folder once per process, though
 // several services start at once.
 var unpack = sync.OnceValues(func() (string, error) {
-	return sidecar.Unpack(Name, embedded)
+	return sidecar.Unpack(Name, embedded, libs...)
 })

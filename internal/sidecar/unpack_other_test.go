@@ -12,14 +12,14 @@ import (
 // unpacking a new version removes the old one.
 func TestExtractRuntimeLayout(t *testing.T) {
 	t.Setenv("ANFRA_HOME", t.TempDir())
-	old, err := extractRuntime("anfra-test", []byte("v1"))
+	old, err := extractRuntime("anfra-test", []byte("v1"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := filepath.Join(os.Getenv("ANFRA_HOME"), "sidecars", "anfra-test-3bfc269594ef6492"); old != want {
 		t.Errorf("unpacked to %s, want %s", old, want)
 	}
-	if _, err := extractRuntime("anfra-test", []byte("v2")); err != nil {
+	if _, err := extractRuntime("anfra-test", []byte("v2"), nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(old); !os.IsNotExist(err) {

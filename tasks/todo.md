@@ -113,18 +113,18 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** M
 
-### - [ ] T6: canal's `duckdb.dll`, embedded and unpacked beside it
+### - [x] T6: canal's `duckdb.dll`, embedded and unpacked beside it
 
 **Description:** Windows builds of anfra carry DuckDB's `duckdb.dll` with canal (the `win-canal` decision), and unpack it into canal's version folder.
 
 **Acceptance criteria:**
-- [ ] `internal/sidecar/anfracanal`: a Windows-only embed for `assets/duckdb.dll` (release builds, `embed_sidecar`), passed to the unpack with canal's bytes; dev builds embed nothing, as today (`ANFRA_CANAL_BIN`'s folder must hold `duckdb.dll`, as with any DLL build of canal).
-- [ ] The folder hash covers both files, so a new DLL is a new folder.
-- [ ] Linux/macOS embed and unpack unchanged.
+- [x] `internal/sidecar/anfracanal`: a Windows-only embed for `assets/duckdb.dll` (release builds, `embed_sidecar`), passed to the unpack with canal's bytes; dev builds embed nothing, as today (`ANFRA_CANAL_BIN`'s folder must hold `duckdb.dll`, as with any DLL build of canal).
+- [x] The folder hash covers both files, so a new DLL is a new folder.
+- [x] Linux/macOS embed and unpack unchanged. (The release pipeline, `build_release.yml`, doesn't copy `duckdb.dll` yet: that is `win-release`.)
 
 **Verification:**
-- [ ] Build: `GOOS=windows GOARCH=amd64 go build -tags embed_sidecar ./cmd/anfra` with the spike's `anfra-canal.exe`, `duckdb.dll` and `anfra-node.exe` copied into the assets folders (not committed).
-- [ ] Manual, on Windows: that `anfra.exe` unpacks `anfra-canal-<hash>\{anfra-canal.exe, duckdb.dll}` and `anfra query` works with it.
+- [x] Build: `GOOS=windows GOARCH=amd64 go build -tags embed_sidecar ./cmd/anfra` with the spike's `anfra-canal.exe`, `duckdb.dll` and `anfra-node.exe` copied into the assets folders (not committed).
+- [x] Manual, on Windows: that `anfra.exe` unpacks `anfra-canal-<hash>\{anfra-canal.exe, duckdb.dll}` and `anfra query` works with it. Done on a copy of `anfra-demo-data`: a SQL query and an AQL query (`orders | count(orders.id)`) both answer, `anfra-node-<hash>\anfra-node.exe` unpacks too, and no sidecar is left running. `TestExtractRuntimeLibraries` passes on Windows.
 
 **Dependencies:** T5
 

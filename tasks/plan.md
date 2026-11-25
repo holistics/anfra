@@ -45,7 +45,7 @@ T4–T8 are independent of each other once T3 is settled.
 - [x] T3: Stopping sidecars when anfra has no console (Ctrl-Break vs "no window")
 - [x] T4: Job Object: sidecars die with anfra
 - [x] T5: Windows unpack: a folder per version, `.exe`, pruning that skips folders in use
-- [ ] T6: canal's `duckdb.dll`, embedded and unpacked beside it
+- [x] T6: canal's `duckdb.dll`, embedded and unpacked beside it
 - [ ] T7: `anfra serve`'s busy-port fallback on Windows
 - [ ] T8: The console's background server stops on Windows
 

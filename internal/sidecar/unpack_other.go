@@ -14,8 +14,9 @@ import (
 
 // extractRuntime writes an embedded sidecar binary to anfra's folder, keyed by
 // content hash (<home>/sidecars/<name>-<hash>), writing only when missing so
-// concurrent runs converge on the same file.
-func extractRuntime(name string, data []byte) (string, error) {
+// concurrent runs converge on the same file. There are no libs to unpack on
+// Linux and macOS, where canal links DuckDB in.
+func extractRuntime(name string, data []byte, _ []Library) (string, error) {
 	home.RemoveLegacy()
 	dir := filepath.Join(home.Dir(), "sidecars")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
