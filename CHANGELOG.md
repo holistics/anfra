@@ -1,3 +1,21 @@
+## [0.25.0-rc.1](https://github.com/holistics/anfra/compare/v0.24.0-rc.1...v0.25.0-rc.1) (2026-11-25)
+
+### ⚠ BREAKING CHANGES
+
+* core.lineage's target.child is optional, in the input
+and in each result's target. A client that reads results[].target.child
+must handle it being absent.
+
+### Features
+
+* allow only parent in lineage besides { parent, child } ([b359be1](https://github.com/holistics/anfra/commit/b359be198528d2223e85bc4c6749fd19dbcdfa2a))
+* **engine.sidecar:** bump anfra-node ([b9138cb](https://github.com/holistics/anfra/commit/b9138cb36a96f1f3fb37958c33d668a47d572376))
+* **engine.sidecar:** bump anfra node ([67c6014](https://github.com/holistics/anfra/commit/67c601442dfb1555b3775fa0cfaef60904686e10))
+
+### Bug Fixes
+
+* **sdk.app:** wait for a run in flight with the same inputs instead of resending it ([7ec2ae1](https://github.com/holistics/anfra/commit/7ec2ae1aba907e9ec591b659560ec7c46d1b4ac2))
+* **sdk.app:** resend after an abort or a cache bust, and join from listeners ([19f81bd](https://github.com/holistics/anfra/commit/19f81bd0cc2c688b6042d1cbd6f2c7ad75572d42))
 ## [0.24.0](https://github.com/holistics/anfra/compare/v0.23.1...v0.24.0) (2026-11-20)
 
 ### Features
