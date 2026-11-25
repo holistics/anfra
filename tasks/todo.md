@@ -94,18 +94,18 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** M
 
-### - [ ] T5: Windows unpack: a folder per version, `.exe`, pruning that skips folders in use
+### - [x] T5: Windows unpack: a folder per version, `.exe`, pruning that skips folders in use
 
 **Description:** On Windows, unpack each sidecar version into `sidecars\<name>-<hash>\<name>.exe`, so it runs and sits beside other versions; prune old folders, skipping any still in use. Linux and macOS are unchanged.
 
 **Acceptance criteria:**
-- [ ] `unpack_windows.go`: the folder layout, the `.exe` name, the hash over every file the folder holds, a temp name per writer, and a prune that tries to remove each older folder and leaves it when Windows refuses (in use).
-- [ ] `unpack_other.go` keeps today's `extractRuntime` behaviour; a Linux test pins `sidecars/<name>-<hash>` and the prune.
-- [ ] `binary.go`'s `Binary` and `Unpack` return the `.exe`'s path on Windows.
+- [x] `unpack_windows.go`: the folder layout, the `.exe` name, the hash over every file the folder holds (only the `.exe` until T6), a temp name per writer, and a prune that tries to remove each older folder and leaves it when Windows refuses (in use).
+- [x] `unpack_other.go` keeps today's `extractRuntime` behaviour; a Linux test pins `sidecars/<name>-<hash>` and the prune.
+- [x] `binary.go`'s `Binary` and `Unpack` return the `.exe`'s path on Windows.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/sidecar/`.
-- [ ] Manual, on Windows (`_windows_test.go`): two versions unpacked side by side; with the older `.exe` running, the prune leaves its folder, and removes it once it has exited.
+- [x] Tests pass (Linux): `go test ./internal/sidecar/` (`TestExtractRuntimeLayout`).
+- [x] Manual, on Windows (`_windows_test.go`): two versions unpacked side by side; with the older `.exe` running, the prune leaves its folder, and removes it once it has exited. `TestExtractRuntimeKeepsRunningVersion` passes.
 
 **Dependencies:** T3
 
@@ -169,6 +169,7 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 **Estimated scope:** S
 
 ### Checkpoint B: Each behaviour tested on Windows
+- Found in T5: `TestSocketPath` fails on Windows ("dir mode = 777, want 700"). Go reports no Unix mode bits on Windows; the socket's folder is private through the per-user temp folder's access list instead. To decide with the user: skip the mode check on Windows, or check the access list.
 - [ ] T3–T8's Windows tests and manual checks pass on Windows 11.
 - [ ] Linux: `go test ./internal/sidecar/... ./cmd/anfra/...` pass.
 - [ ] Review with the user before M1.
