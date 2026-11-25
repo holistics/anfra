@@ -35,7 +35,7 @@ T4–T8 are independent of each other once T3 is settled.
 ## Task List
 
 ### Phase 1: It compiles
-- [ ] T1: `internal/sidecar` compiles for Windows: process group and the per-OS stop
+- [x] T1: `internal/sidecar` compiles for Windows: process group and the per-OS stop
 - [ ] T2: `cmd/anfra` compiles for Windows: `detachProcess` and `restartConsole`
 
 ### Checkpoint A: It compiles

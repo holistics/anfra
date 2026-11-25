@@ -8,19 +8,19 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 ## Phase 1: It compiles
 
-### - [ ] T1: `internal/sidecar` compiles for Windows: process group and the per-OS stop
+### - [x] T1: `internal/sidecar` compiles for Windows: process group and the per-OS stop
 
 **Description:** Replace the two Unix-only calls with per-OS code. Windows starts each sidecar in its own process group, and stops it with the spec's sequence: close stdin for a `PipeStdin` sidecar, Ctrl-Break otherwise, then terminate after the wait (by process for now; T4 makes it the Job Object).
 
 **Acceptance criteria:**
-- [ ] `proc_other.go` is `//go:build !linux && !windows`; new `proc_windows.go` sets `CREATE_NEW_PROCESS_GROUP` (console flags settled in T3).
-- [ ] `Process.Close` calls a per-OS `stop`: `stop_unix.go` keeps today's SIGTERM → 3 s → `Kill(-pid)` exactly; `stop_windows.go` closes stdin or sends Ctrl-Break (`windows.GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid)`), waits 3 s, then terminates.
-- [ ] `GOOS=windows go build ./internal/...` succeeds.
+- [x] `proc_other.go` is `//go:build !linux && !windows`; new `proc_windows.go` sets `CREATE_NEW_PROCESS_GROUP` (console flags settled in T3).
+- [x] `Process.Close` calls a per-OS `stop`: `stop_unix.go` keeps today's SIGTERM → 3 s → `Kill(-pid)` exactly; `stop_windows.go` closes stdin or sends Ctrl-Break (`windows.GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid)`), waits 3 s, then terminates.
+- [x] `GOOS=windows go build ./internal/...` succeeds (`go vet` clean for Windows and macOS too).
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/sidecar/...`.
-- [ ] Build: `GOOS=windows GOARCH=amd64 go build ./internal/...`.
-- [ ] Manual, on Windows: a `_windows_test.go` starts a small helper process that waits for Ctrl-Break, and checks `Close` stops it within 3 s; and one with `PipeStdin` that exits on stdin EOF.
+- [x] Tests pass (Linux): `go test ./internal/sidecar/...`.
+- [x] Build: `GOOS=windows GOARCH=amd64 go build ./internal/...`.
+- [x] Manual, on Windows: a `_windows_test.go` starts a small helper process that waits for Ctrl-Break, and checks `Close` stops it within 3 s; and one with `PipeStdin` that exits on stdin EOF. Both pass on Windows 11 (`stop_windows_test.go`: each exits cleanly, code 0, in ~0.5 s).
 
 **Dependencies:** None
 

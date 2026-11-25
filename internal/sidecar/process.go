@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"github.com/holistics/anfra/shared/logkit"
@@ -115,8 +114,8 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // can log their own events without re-defaulting.
 func (p *Process) Logger() *slog.Logger { return p.logger }
 
-// Close stops the sidecar: SIGTERM, then SIGKILL to its process group if it has
-// not exited within 3s.
+// Close stops the sidecar: it asks it to stop (SIGTERM on Unix; stdin EOF or
+// Ctrl-Break on Windows, see stop), then kills it if it has not exited within 3s.
 //
 // ctx carries the trace its log record joins, as slog.Handler.Handle's does: it
 // is not for cancellation, so a sidecar closed after Ctrl-C still gets its 3s.
@@ -125,14 +124,5 @@ func (p *Process) Close(ctx context.Context) {
 		return
 	}
 	p.logger.InfoContext(ctx, "Closing sidecar", logkit.EventKey, eventClosing, "name", p.name, "child_pid", p.cmd.Process.Pid)
-	_ = p.cmd.Process.Signal(syscall.SIGTERM)
-
-	select {
-	case <-p.done:
-	case <-time.After(3 * time.Second):
-		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
-	}
-	if p.stdin != nil {
-		p.stdin.Close()
-	}
+	p.stop(3 * time.Second)
 }
