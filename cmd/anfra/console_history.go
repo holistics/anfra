@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/holistics/anfra/internal/home"
+	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -96,5 +97,5 @@ func (h consoleHistory) rewrite(entries []string) {
 	if err := tmp.Close(); err != nil {
 		return
 	}
-	_ = os.Rename(tmp.Name(), h.path)
+	_ = robustio.Rename(tmp.Name(), h.path)
 }

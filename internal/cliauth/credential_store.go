@@ -13,6 +13,7 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/filelock"
 	"github.com/holistics/anfra/internal/home"
+	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -114,7 +115,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 		err = closeErr
 	}
 	if err == nil {
-		err = os.Rename(temp, path)
+		err = robustio.Rename(temp, path)
 	}
 	if err == nil {
 		err = syncCredentialDirectory(path)

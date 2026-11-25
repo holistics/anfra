@@ -15,6 +15,7 @@ import (
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -59,7 +60,7 @@ func writeRuntime(r repo.Local, f runtimeFile) error {
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, runtimePath(r))
+	return robustio.Rename(tmp, runtimePath(r))
 }
 
 func readRuntime(path string) (runtimeFile, bool) {

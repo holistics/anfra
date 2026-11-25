@@ -17,6 +17,7 @@ import (
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/repoconfig"
 )
 
@@ -300,7 +301,7 @@ func replaceFile(path string, content []byte) error {
 		_ = os.Remove(lock)
 		return err
 	}
-	if err := os.Rename(lock, path); err != nil {
+	if err := robustio.Rename(lock, path); err != nil {
 		_ = os.Remove(lock)
 		return err
 	}

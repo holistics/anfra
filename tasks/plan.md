@@ -35,7 +35,7 @@ T3–T7 are independent of each other and of T1–T2.
 ## Task List
 
 ### Phase 1: Saving files, and logins
-- [ ] T1: One rename helper that survives another process holding the file, used at the 5 save sites
+- [x] T1: One rename helper that survives another process holding the file, used at the 5 save sites
 - [ ] T2: Saved logins work on Windows, private to the user
 
 ### Checkpoint A

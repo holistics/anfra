@@ -18,6 +18,7 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/filelock"
 	"github.com/holistics/anfra/internal/repo"
+	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/jsonkit"
 )
 
@@ -222,5 +223,5 @@ func writeAtomic(path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return robustio.Rename(tmp.Name(), path)
 }

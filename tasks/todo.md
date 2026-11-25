@@ -4,19 +4,19 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 ## Phase 1: Saving files, and logins
 
-### - [ ] T1: One rename helper that survives another process holding the file, used at the 5 save sites
+### - [x] T1: One rename helper that survives another process holding the file, used at the 5 save sites
 
 **Description:** anfra saves by writing a temporary file and renaming it over the old one. On Windows the rename fails while another process has the old file open. One helper retries briefly there.
 
 **Acceptance criteria:**
-- [ ] A new `internal/` package: on Windows, rename, retrying for about a second on access-denied and sharing-violation errors; elsewhere, `os.Rename`. Named per `docs/dev/naming.md`.
-- [ ] Used at `cmd/anfra/console_history.go:99`, `cmd/anfra/runtime.go:62`, `internal/cliauth/credential_store.go:117`, `internal/repoconfig/repoconfig.go:303`, `internal/publish/syncstate/syncstate.go:225`.
-- [ ] After the retries, the error names the file and says another program has it open.
+- [x] A new `internal/` package: on Windows, rename, retrying for about a second on access-denied and sharing-violation errors; elsewhere, `os.Rename`. Named per `docs/dev/naming.md`: `internal/robustio`, `robustio.Rename`, after Go's `cmd/go/internal/robustio`; a drop-in for `os.Rename`.
+- [x] Used at `cmd/anfra/console_history.go:99`, `cmd/anfra/runtime.go:62`, `internal/cliauth/credential_store.go:117`, `internal/repoconfig/repoconfig.go:303`, `internal/publish/syncstate/syncstate.go:225`.
+- [x] After the retries, the error names the file and says another program has it open.
 
 **Verification:**
-- [ ] Tests pass (Linux): the new package, and the 4 packages of the save sites.
-- [ ] On Windows (`_windows_test.go`): a rename over a file held open by another handle succeeds once that handle closes within the retry time; fails with the clear error when it never closes. Fails without the helper (a plain `os.Rename`).
-- [ ] Lint for Windows and Linux.
+- [x] Tests pass (Linux): the new package, and the 4 packages of the save sites.
+- [x] On Windows (`_windows_test.go`): a rename over a file held open by another handle succeeds once that handle closes within the retry time; fails with the clear error when it never closes. Fails without the helper (a plain `os.Rename`). `TestPlainRenameFailsWhileOpen` shows a plain rename fails while a reader holds the file; the two others failed against a stub, then pass (the give-up in 1.04 s).
+- [x] Lint for Windows and Linux.
 
 **Dependencies:** None
 
