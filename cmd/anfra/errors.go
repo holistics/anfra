@@ -79,17 +79,10 @@ func (e *commandError) Unwrap() error { return e.err }
 // in message, as it is over HTTP (see main for when causes are shown).
 func printError(w io.Writer, err error, hint string) {
 	ce, _ := errors.AsType[*commandError](err)
-	if ce != nil {
-		err = ce.err
-	}
-	var resp apperr.Response
+	resp := answered(err)
 	var body []byte
 	if re, ok := errors.AsType[*remoteError](err); ok {
-		resp, body = re.resp, re.raw
-	} else if ce, ok := errors.AsType[*cloudapi.Error](err); ok && !coded(err) {
-		resp = ce.Response // the org's server's, as it answered
-	} else {
-		resp = apperr.From(err).Response("")
+		body = re.raw
 	}
 	var jerr error
 	if body == nil {
@@ -251,19 +244,26 @@ func failureHint(err error) string {
 	if stderrIsInteractive() || os.Getenv("CI") != "" || updateNotifyDisabled() {
 		return ""
 	}
-	if ce, ok := errors.AsType[*commandError](err); ok {
-		err = ce.err
-	}
-	scope := apperr.From(err).Code.Scope()
-	if re, ok := errors.AsType[*remoteError](err); ok {
-		scope = re.resp.Scope
-	} else if ce, ok := errors.AsType[*cloudapi.Error](err); ok && !coded(err) {
-		scope = ce.Response.Scope
-	}
-	if scope != apperr.User && scope != apperr.Client {
+	if scope := answered(err).Scope; scope != apperr.User && scope != apperr.Client {
 		return ""
 	}
 	return agents.Failed(agents.System(), repoDirIfAny(), time.Now())
+}
+
+// answered is the failed command's error as its answer gives it, its code and
+// scope included: a running server's, as it answered a forwarded command; the
+// org's server's, as it answered; or anfra's own.
+func answered(err error) apperr.Response {
+	if ce, ok := errors.AsType[*commandError](err); ok {
+		err = ce.err
+	}
+	if re, ok := errors.AsType[*remoteError](err); ok {
+		return re.resp
+	}
+	if ce, ok := errors.AsType[*cloudapi.Error](err); ok && !coded(err) {
+		return ce.Response
+	}
+	return apperr.From(err).Response("")
 }
 
 // coded reports whether err carries a code of its own, at its top: a code

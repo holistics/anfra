@@ -327,3 +327,18 @@ func TestPrintErrorSidecarHelp(t *testing.T) {
 		t.Errorf("got:\n%s", out.String())
 	}
 }
+
+// A failed command's code is the one its answer gives, through the command's
+// wrapping: its own, or a running server's for a forwarded command.
+func TestAFailedCommandAnswersItsOwnCode(t *testing.T) {
+	for want, err := range map[string]error{
+		"validation_failed": &commandError{path: "anfra query", err: apperr.New(apperr.ValidationFailed, "no query")},
+		"query_invalid": &commandError{path: "anfra query", err: &remoteError{resp: apperr.Response{
+			Code: "query_invalid", Scope: apperr.User, Message: "no such field"}}},
+		"internal_server_error": &commandError{path: "anfra query", err: errors.New("boom")},
+	} {
+		if got := answered(err).Code; got != want {
+			t.Errorf("%v answered %q, want %q", err, got, want)
+		}
+	}
+}

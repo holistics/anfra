@@ -15,6 +15,8 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
+	"github.com/holistics/anfra/shared/apptracing"
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
 // MaxPageSize is the most rows a page holds: page_size's maximum, and the page
@@ -108,6 +110,7 @@ type queryRun struct {
 // data source, a malformed limit: — it refuses here, before any work, as an
 // ordinary error rather than in a stream.
 func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequestParams) (QueryRun, error) {
+	named(ctx, in)
 	in, err := in.withRepoDefaults(cc)
 	if err != nil {
 		return QueryRun{}, err
@@ -137,6 +140,22 @@ func newQueryRun(ctx context.Context, cc command.CommandContext, in QueryRequest
 		r.src, r.aql, r.limit = src, aql, limit
 	}
 	return QueryRun{Page: r.page, Stream: r.stream}, nil
+}
+
+// named records the query's kind, and its dataset as the data settings allow,
+// on the span as soon as the query is read, so a query that fails before it
+// compiles still says what it asked of which dataset. The query observer
+// records them again once it compiles.
+func named(ctx context.Context, in QueryRequestParams) {
+	kind := "aql"
+	if in.Lang == "sql" {
+		kind = "sql"
+	}
+	var dataset any
+	if kind == "aql" && in.Dataset != "" {
+		dataset = in.Dataset
+	}
+	apptracing.SetAttributes(ctx, caller.QueryKind.Is(kind), caller.Dataset.Is(dataset))
 }
 
 // sink receives a run's result as it is produced.

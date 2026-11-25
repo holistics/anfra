@@ -36,7 +36,25 @@ The id is the agent's own, so it matches the agent's own records. Ask the agent 
 
 The id changes when the agent's does. Claude Code, for example, starts a new one after `/clear`. Codex's subagents share their session's id. An agent run by another agent inherits the outer agent's id too, so its commands may carry the outer agent's session.
 
-## 3. Read the session back (coming soon)
+## 3. Mark each message's work as a task
+
+A session holds everything the agent did, for every message you sent it. A **task** groups the commands it ran for one message, so you can read and evaluate its work message by message. The anfra block of the repo's `AGENTS.md`, which `anfra agent setup` writes, tells the agent to mark tasks, so you set nothing.
+
+For each message that asks for data, the agent:
+
+1. Runs `anfra experimental telemetry task start "<your message>"`, which prints the task's id, such as `t_7f3a91c0d2e4`.
+2. Passes `--task <id>` on every anfra command it runs for the message. Over MCP, it passes the id as the `task` argument of each tool call.
+3. Gives a subagent its own task under it: the subagent runs `task start "<its part>" --parent <id>`, and passes its own id.
+
+The agent can also record what it found, a change of approach, or its answer, for you to read later:
+
+```sh
+anfra experimental telemetry task note --task t_7f3a91c0d2e4 --kind summary "Revenue last month was $1.2M."
+```
+
+A task has no end. It is the commands that carry its id. A `--task` that isn't an id that `task start` printed fails the command, so a typo shows at once. With telemetry off, `task start` still prints an id, and says that nothing was recorded, so the agent skips tasks for the rest of the session.
+
+## 4. Read the session back (coming soon)
 
 Reading a session through anfra isn't built yet. It comes with the trace sample: a model of the spans, with AQL queries and a Data App to read a session by ([designs](../../designs/telemetry.md#querying-traces-through-anfra)).
 
@@ -50,6 +68,9 @@ Agent tracing adds these to every span of a command:
 |---|---|
 | `gen_ai.conversation.id`, `session.id` | The session's id, under both names: OpenTelemetry's for an agent's conversation, and the general one that Langfuse and Claude Code's own telemetry group by |
 | `gen_ai.agent.name` | The agent anfra detected, such as `claude-code`. Absent for an id from `ANFRA_SESSION_ID`, and on the spans `anfra serve` records for a command it runs, because only the session's id reaches the server. |
+| `anfra.task.id` | The task a command ran for, from its `--task`, on every span of the command, those `anfra serve` records included |
+| `anfra.task.parent_id`, `anfra.task.goal` | On `task start`'s span: the task's parent, for a subtask, and its goal, which is data |
+| `anfra.task.note.kind`, `anfra.task.note.text` | On `task note`'s span: the note's kind, and its text, which is data |
 | Your own ids, such as `run.id` | The baggage keys you let in ([tag commands with your own ids](#tag-commands-with-your-own-ids)) |
 
 Everything else is what telemetry records for any command: each step and its timing, its error code, and by default your data, such as what the agent asked for, the SQL it ran and what came back ([what a trace holds](telemetry.md#what-a-trace-holds)). What an agent asks for often repeats the user's own question, and `ANFRA_EXPERIMENTAL_TRACE_DATA=0` leaves it out. The ids above are always recorded.

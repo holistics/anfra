@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -31,13 +32,26 @@ const maxBaggageValue = 128
 // baggage: the ids it names a caller by. Every other declared key is anfra's.
 var baggageKeys = map[string]bool{"gen_ai.conversation.id": true}
 
+// formattedKeys are anfra's keys a caller may set through baggage, whatever
+// the allowlist says, but only in their own format, which holds nothing of the
+// user's: a task's id, which the CLI passes to the anfra serve it forwards a
+// command to, as it passes the session.
+var formattedKeys = map[string]func(string) bool{TaskID.String(): ValidTaskID}
+
+// taskIDPattern is a task's id: t_ and 12 lowercase hex digits.
+var taskIDPattern = regexp.MustCompile(`^t_[0-9a-f]{12}$`)
+
+// ValidTaskID reports whether id is a task's id, as anfra makes one
+// (internal/command/task).
+func ValidTaskID(id string) bool { return taskIDPattern.MatchString(id) }
+
 // AllowedBaggage is the members of a caller's baggage b that s lets into
 // anfra: matching an include pattern (BaggageIncludeVar), not anfra's, and
 // short. A host applies it wherever baggage
 // enters, from any caller: an HTTP request's header (httpkit), an MCP call's
 // _meta, the CLI's BAGGAGE.
 func AllowedBaggage(b baggage.Baggage, s Settings) baggage.Baggage {
-	kept := safeMembers(b, func(key string) bool { return includes(s.BaggageInclude(), key) })
+	kept := safeMembers(b, func(key string) bool { return includes(s.BaggageInclude(), key) || formattedKeys[key] != nil })
 	out, err := baggage.New(kept...)
 	if err != nil {
 		return baggage.Baggage{}
@@ -59,7 +73,8 @@ func WithAllowedBaggage(ctx context.Context, s Settings) context.Context {
 // (WithAttributes), also in its baggage, as far as s lets them in
 // (AllowedBaggage): sent with each call made in ctx, so the spans of the
 // processes it calls, a forwarded anfra serve or a sidecar, carry them too. Of
-// anfra's own keys, only gen_ai.conversation.id gets through. Empty values are left out.
+// anfra's own keys, only gen_ai.conversation.id and a task's id get through.
+// Empty values are left out.
 func WithCallerBaggage(ctx context.Context, fields map[string]string, s Settings) context.Context {
 	b := baggage.FromContext(ctx)
 	for _, k := range slices.Sorted(maps.Keys(fields)) {
@@ -85,7 +100,7 @@ func WithCallerBaggage(ctx context.Context, fields map[string]string, s Settings
 func safeMembers(b baggage.Baggage, keep func(key string) bool) []baggage.Member {
 	var out []baggage.Member
 	for _, m := range b.Members() {
-		if keep(m.Key()) && !anfras(m.Key()) && plain(m.Value()) {
+		if keep(m.Key()) && !anfras(m.Key()) && plain(m.Value()) && wellFormed(m.Key(), m.Value()) {
 			out = append(out, m)
 		}
 	}
@@ -118,12 +133,23 @@ func includes(patterns []string, key string) bool {
 }
 
 // anfras reports whether key is one of anfra's own, which a caller's baggage
-// never sets: in its namespace, or declared, other than a caller's id.
+// never sets: in its namespace, or declared, other than a caller's id or a
+// formatted key.
 func anfras(key string) bool {
+	if formattedKeys[key] != nil {
+		return false
+	}
 	if strings.HasPrefix(key, "anfra.") {
 		return true
 	}
 	return Declared(key) && !baggageKeys[key]
+}
+
+// wellFormed reports whether v is in key's format, for a formatted key; any
+// other key's value is.
+func wellFormed(key, v string) bool {
+	f := formattedKeys[key]
+	return f == nil || f(v)
 }
 
 // plain reports whether v can name a caller: short, with no control character.

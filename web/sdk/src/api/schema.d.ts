@@ -48,6 +48,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/core.experimental.telemetry.task.note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record in a task what you found, a change of approach, or your answer, for your user to read later
+         * @description Record in a task what you found, a change of approach, or your answer, for your user to read later. Pass the task's id as --task, as on every command you run for the task.
+         *
+         *     --kind says what the note is:
+         *       - finding: something you learned, such as a field that doesn't mean what its name says
+         *       - pivot: a change of approach, such as why you are about to write your own SQL
+         *       - progress: where you are, in a long task
+         *       - summary: your answer to the task's goal, and what you are unsure of
+         *
+         *     Notes are for people to read. Evaluating your work never depends on them. A note is your user's data, which isn't recorded when ANFRA_EXPERIMENTAL_TRACE_DATA=0.
+         */
+        post: operations["core.experimental.telemetry.task.note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core.experimental.telemetry.task.start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a task for a message from your user that asks for data, and get the task's id to pass on every command
+         * @description Start a task for a message from your user that asks for data, and get the task's id to pass on every command. Pass the id as --task <id> on every anfra command you run for that message, so anfra records the commands in the task and your work can be evaluated per message.
+         *
+         *     Start one task per message from your user, before your first anfra command for it, with the message as the goal. A message with several questions is still one task. You can split it into subtasks with --parent.
+         *
+         *     If another agent gave you a task's id, you are its subagent. Start a task of your own with --parent <that id>, and pass your own task's id on your commands, so your commands stay apart from the other agent's.
+         *
+         *     A task has no end. It is the commands that carry its id. Its goal is your user's data, which isn't recorded when ANFRA_EXPERIMENTAL_TRACE_DATA=0. A task is recorded only while telemetry is on, which `anfra status` shows.
+         */
+        post: operations["core.experimental.telemetry.task.start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core.ingest": {
         parameters: {
             query?: never;
@@ -718,6 +772,21 @@ export interface components {
             parent: string;
         };
         NoInput: Record<string, never>;
+        NoteInput: {
+            /**
+             * @description what the note is: finding, pivot, progress, or summary
+             * @enum {string}
+             */
+            kind: "finding" | "pivot" | "progress" | "summary";
+            /** @description the note, in a sentence or a short paragraph. At most 4 KiB. */
+            text: string;
+        };
+        NoteResult: {
+            /** @description the outcome, in a sentence */
+            message: string;
+            /** @description whether the note is in the trace. False while telemetry is off, when the note is lost. */
+            recorded: boolean;
+        };
         PageLimit: {
             /** Format: int64 */
             max_bytes: number;
@@ -1259,6 +1328,20 @@ export interface components {
             latest?: string;
             version?: string;
         };
+        StartInput: {
+            /** @description your user's message, in their words, or for a subtask the part of it you work on. At most 4 KiB. */
+            goal: string;
+            /** @description the id of the task this one is part of: the task another agent gave you when you are its subagent, or your own when you split a message into subtasks */
+            parent?: string;
+        };
+        StartResult: {
+            /** @description the outcome, in a sentence */
+            message: string;
+            /** @description whether the task's start is in the trace. False while telemetry is off, when nothing about the task is recorded. */
+            recorded: boolean;
+            /** @description the task's id. Pass it as --task on every anfra command you run for the task. */
+            task: string;
+        };
         StatusResult: {
             /** @description the repo's caches, read without changing them. Absent when the server keeps none. */
             cache?: components["schemas"]["CacheStatus"];
@@ -1510,6 +1593,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CacheStatusResult"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+        };
+    };
+    "core.experimental.telemetry.task.note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResult"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+        };
+    };
+    "core.experimental.telemetry.task.start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartResult"];
                 };
             };
             /** @description invalid_request */

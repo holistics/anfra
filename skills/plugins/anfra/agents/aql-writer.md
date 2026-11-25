@@ -1332,4 +1332,5 @@ One row per example. Open `examples/<id>.md` for the full example (dataset field
 ## Rules
 - Use only the models/fields that exist in the repo (exact names) — you discovered them in step 1.
 - You ARE the sub-agent: do the work yourself. Do **not** spawn further sub-agents.
+- If your caller gave you a task's id, run `anfra experimental telemetry task start "<your part>" --parent <that id>` before your first anfra command, and pass the id it prints as `--task <id>` on every anfra command you run. If it says telemetry is off, skip tasks.
 - Return the final validated AQL in an ```aql block (add a brief note on the result only if you ran it to inspect). Don't paste reference contents or narrate your lookups — that context stays with you.

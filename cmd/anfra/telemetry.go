@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"slices"
@@ -22,6 +23,7 @@ import (
 	"github.com/holistics/anfra/internal/agentsession"
 	"github.com/holistics/anfra/internal/attribution"
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/command/task"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoenv"
@@ -70,9 +72,12 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 		if dir, err := os.Getwd(); err == nil {
 			ctx = caller.WithAttributes(ctx, repoAttribution(repo.Resolve(dir)))
 		}
-		session := sessionAttribution(os.Getenv)
-		// The session goes in the command's baggage too, for the calls it makes.
-		ctx = caller.WithCallerBaggage(caller.WithAttributes(ctx, session), session, traceData.Settings())
+		named := attribution.Fields{}
+		maps.Copy(named, sessionAttribution(os.Getenv))
+		maps.Copy(named, taskAttribution(cmd))
+		// The session and the task go in the command's baggage too, for the calls
+		// it makes, so a command forwarded to anfra serve carries both there.
+		ctx = caller.WithCallerBaggage(caller.WithAttributes(ctx, named), named, traceData.Settings())
 		ctx, span = otel.Tracer(tracerName).Start(ctx, cmd.CommandPath()) //nolint:spancheck // ended by end, once the command returns
 		apptracing.SetAttributes(ctx, caller.Command.Is(true))
 		ctx = caller.WithAttributes(ctx, map[string]string{caller.CommandID.String(): span.SpanContext().SpanID().String()})
@@ -82,6 +87,9 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 	pre := root.PersistentPreRunE
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error { //nolint:contextcheck // the command's own context, which cobra passes as cmd.Context()
 		cmd.SetContext(start(cmd.Context(), cmd))
+		if err := checkTaskFlag(cmd); err != nil {
+			return err
+		}
 		if pre == nil {
 			return nil
 		}
@@ -111,8 +119,13 @@ func traceCommands(ctx context.Context, root *cobra.Command, args []string) (end
 			span.SetStatus(otelcodes.Error, fmt.Sprintf("exit code %d", code))
 			return
 		}
-		apptracing.MarkFailed(span, traceData.Settings(), err)
-		span.SetStatus(otelcodes.Error, apperr.From(err).Code.Public().String())
+		// The code is the one the command answered, a forwarded command's the
+		// server's, so the span says whose fault it was. Its message is
+		// recorded as the data settings say, whoever's fault it was.
+		resp := answered(err)
+		apptracing.SetAttributes(spanCtx, caller.ErrorType.Is(resp.Code))
+		caller.RecordError(span, traceData.Settings(), err, false)
+		span.SetStatus(otelcodes.Error, resp.Code)
 	}
 }
 
@@ -128,6 +141,54 @@ func sessionAttribution(getenv func(string) string) attribution.Fields {
 		return nil
 	}
 	return sessionFields(s)
+}
+
+// addTaskFlag puts --task on every command: the task a command is run for
+// (internal/command/task).
+func addTaskFlag(root *cobra.Command) {
+	root.PersistentFlags().String(task.Flag, "", task.FlagUsage)
+}
+
+// commandTask is the --task cmd is run with, "" for none.
+func commandTask(cmd *cobra.Command) string {
+	f := cmd.Flags().Lookup(task.Flag)
+	if f == nil {
+		return ""
+	}
+	return strings.TrimSpace(f.Value.String())
+}
+
+// checkTaskFlag refuses a --task that isn't a task's id, so a typo fails at
+// once instead of recording the command in no task.
+func checkTaskFlag(cmd *cobra.Command) error {
+	if id := commandTask(cmd); id != "" && !task.ValidID(id) {
+		return flagViolated("--"+task.Flag, task.InvalidIDMessage(id))
+	}
+	return nil
+}
+
+// taskAttribution names the task cmd is run for, from its --task, on every span
+// and log record of the command, so a task's commands are found by its id,
+// whichever agent of a session ran them, and whenever. A malformed id names
+// none: checkTaskFlag refuses it.
+func taskAttribution(cmd *cobra.Command) attribution.Fields {
+	id := commandTask(cmd)
+	if !task.ValidID(id) {
+		return nil
+	}
+	return attribution.Fields{caller.TaskID.String(): id}
+}
+
+// mcpTask names the task an MCP tool call is made for, from its task
+// argument, for apikit.MCP.CallArgs, and refuses an id that isn't a task's, as
+// checkTaskFlag does.
+func mcpTask(id string) (map[string]string, error) {
+	if !task.ValidID(id) {
+		msg := task.InvalidIDMessage(id)
+		return nil, apperr.NewWith(apperr.ValidationFailed, msg,
+			apperr.Violate(apperr.Violation{Field: task.Flag, Code: "invalid", Message: msg}))
+	}
+	return map[string]string{caller.TaskID.String(): id}, nil
 }
 
 // metaSession names the session of the agent that makes an MCP tool call, from

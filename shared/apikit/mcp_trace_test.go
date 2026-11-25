@@ -2,6 +2,7 @@ package apikit_test
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -197,3 +198,78 @@ func TestEachMCPRequestHasItsOwnSpan(t *testing.T) {
 }
 
 func keys[V any](m map[string]V) []string { return slices.Sorted(maps.Keys(m)) }
+
+// Every tool takes the host's call args beside its op's input: listed in its
+// schema, not required, taken out before the op reads its input, and recorded
+// on the op's span. A value the host doesn't take fails the call, before the op
+// runs.
+func TestMCPToolsTakeTheHostsCallArgs(t *testing.T) {
+	from := record(t)
+	m := apikit.MCP[request]{
+		Name: "test", Version: "1", Codes: codes,
+		CallArgs: []apikit.CallArg{{Name: "task", Description: "the task", Fields: func(v string) (map[string]string, error) {
+			if v != "t1" {
+				return nil, errors.New("not a task")
+			}
+			return map[string]string{"anfra.task.id": v}, nil
+		}}},
+		Request: func(r *http.Request) (request, error) { return request{user: r.Header.Get("User")}, nil },
+	}
+	srv := httptest.NewServer(httpkit.Wrap(m.Handler(runtime(), discoverable()), httpkit.Config{}))
+	defer srv.Close()
+	ctx := context.Background()
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "client"}, nil).Connect(ctx,
+		&mcp.StreamableClientTransport{Endpoint: srv.URL, HTTPClient: &http.Client{Transport: userHeader("ann")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		if tool.Name != "greetings.create" {
+			continue
+		}
+		schema, _ := tool.InputSchema.(map[string]any)
+		props, _ := schema["properties"].(map[string]any)
+		if _, ok := props["task"]; !ok {
+			t.Errorf("greetings.create's schema has no task: %v", keys(props))
+		}
+		if required, _ := schema["required"].([]any); slices.Contains(required, any("task")) {
+			t.Error("task is required")
+		}
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "greetings.create", Arguments: map[string]any{"name": "Zed", "task": "t1"}})
+	if err != nil || res.IsError {
+		t.Fatalf("a call with a task failed: %v %+v", err, res)
+	}
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "greetings.create", Arguments: map[string]any{"name": "Zed", "task": "bogus"}})
+	if err != nil || !res.IsError {
+		t.Errorf("a call with a task the host doesn't take: %v, error result %v, want one", err, res != nil && res.IsError)
+	}
+	session.Close()
+	srv.Close() // every span of the calls has ended
+
+	var ops []sdktrace.ReadOnlySpan
+	for _, s := range spanRecorder().Ended()[from:] {
+		if s.Name() == "test_host.op.greetings.create" {
+			ops = append(ops, s)
+		}
+	}
+	if len(ops) != 1 {
+		t.Fatalf("got %d op spans, want 1: the refused call runs no op", len(ops))
+	}
+	var task string
+	for _, a := range ops[0].Attributes() {
+		if a.Key == "anfra.task.id" {
+			task = a.Value.AsString()
+		}
+	}
+	if task != "t1" {
+		t.Errorf("op's anfra.task.id %q, want t1", task)
+	}
+}

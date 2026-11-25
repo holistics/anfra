@@ -7,6 +7,7 @@ import (
 	"github.com/holistics/anfra/internal/command/query"
 	"github.com/holistics/anfra/internal/command/show"
 	"github.com/holistics/anfra/internal/command/status"
+	"github.com/holistics/anfra/internal/command/task"
 	"github.com/holistics/anfra/internal/command/validate"
 )
 
@@ -28,6 +29,8 @@ var Commands = []command.Command{
 	validate.Validate,
 	cache.Status,
 	cache.Clean,
+	task.Start,
+	task.Note,
 }
 
 // Find returns the registered command by name.

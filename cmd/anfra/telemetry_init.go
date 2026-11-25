@@ -32,7 +32,9 @@ func newExperimentalCmd() *cobra.Command {
 }
 
 // newTelemetryCmd groups the commands for recording what anfra does in the
-// user's own endpoint (docs/designs/telemetry.md). CLI commands only, never ops.
+// user's own endpoint (docs/designs/telemetry.md). Its own commands are
+// CLI-only. The task ops (internal/command/task) join them, under task
+// (appCommands).
 func newTelemetryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "telemetry",

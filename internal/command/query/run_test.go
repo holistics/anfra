@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/holistics/anfra/internal/command"
 	"github.com/holistics/anfra/internal/datasource"
@@ -19,6 +21,7 @@ import (
 	"github.com/holistics/anfra/shared/apikit"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/jsonkit"
+	caller "github.com/holistics/anfra/shared/telemetry"
 )
 
 // progressLines are what canal-query reports of a BigQuery run before its
@@ -333,5 +336,34 @@ func TestTheQueryObserverIsToldOfAnExport(t *testing.T) {
 	want := "compiled true on warehouse: select id from t|on the warehouse true as job_42|finished true: 3 rows, 2048 bytes, 8 steps, "
 	if got := strings.Join(obs.calls, "|"); got != want {
 		t.Errorf("told %q, want %q", got, want)
+	}
+}
+
+// A query refused before it compiles still says what kind it is, and which
+// dataset it asked of when data is recorded, so its failure can be told apart.
+func TestARefusedQueryNamesItsKindAndDataset(t *testing.T) {
+	for _, tc := range []struct {
+		data          bool
+		in            QueryDefinition
+		kind, dataset string
+	}{
+		{true, QueryDefinition{Query: "orders | select(id)", Dataset: "ecommerce"}, "aql", "ecommerce"},
+		{false, QueryDefinition{Query: "orders | select(id)", Dataset: "ecommerce"}, "aql", ""},
+		{true, QueryDefinition{Query: "select 1", Lang: "sql", DataSource: "nope"}, "sql", ""},
+	} {
+		rec := tracetest.NewSpanRecorder()
+		ctx := caller.WithSettings(context.Background(), caller.NewSettings(tc.data, 0))
+		ctx, span := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec)).Tracer("test").Start(ctx, "op")
+		if _, err := newQueryRun(ctx, command.CommandContext{DataSources: datasource.Set{}}, QueryRequestParams{QueryDefinition: tc.in}); err == nil {
+			t.Fatalf("%+v ran, want it refused", tc.in)
+		}
+		span.End()
+		got := map[string]string{}
+		for _, kv := range rec.Ended()[0].Attributes() {
+			got[string(kv.Key)] = kv.Value.String()
+		}
+		if got["anfra.query.kind"] != tc.kind || got["anfra.dataset"] != tc.dataset {
+			t.Errorf("data %v, %+v: kind %q, dataset %q, want %q, %q", tc.data, tc.in, got["anfra.query.kind"], got["anfra.dataset"], tc.kind, tc.dataset)
+		}
 	}
 }

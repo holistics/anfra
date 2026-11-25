@@ -119,6 +119,17 @@ This is an anfra repo.
   errors included, which help when building and debugging.
 - Docs: anfra at https://anfra.ai/docs, AML and AQL at https://amql.org/docs.
 
+Marking your work as tasks, so it can be evaluated per message:
+
+- For each message from your user that asks for data, run
+  `anfra experimental telemetry task start "<their message>"` before your first anfra command for it, and
+  pass `--task <id>` on every anfra command for it.
+- When you hand part of it to a subagent, tell it to run
+  `anfra experimental telemetry task start "<its part>" --parent <id>` first, and to pass its own id with `--task`.
+- `anfra experimental telemetry task note --task <id> --kind finding|pivot|summary "<text>"` records what you found,
+  a change of approach, or your answer, for your user to read later.
+- If task start says telemetry is off, skip tasks for the rest of the session.
+
 Keeping the skills working:
 
 - Once per session, before your first anfra command, run `anfra version --skills <version>`, with the version

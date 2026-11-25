@@ -106,6 +106,20 @@ var (
 	CommandID = meta("anfra.command.id")
 )
 
+// A task, the agent's work on one of its user's messages, or a part of it
+// (internal/command/task). TaskID is on every span and log record of a command
+// run for the task, and on its task start's span. Its ids are anfra's own,
+// checked as they arrive, so they hold nothing of the user's: metadata. The
+// goal and a note's text are the user's words or the agent's about the user's
+// data.
+var (
+	TaskID       = meta("anfra.task.id")
+	TaskParentID = meta("anfra.task.parent_id")
+	TaskGoal     = data("anfra.task.goal")
+	TaskNoteKind = meta("anfra.task.note.kind")
+	TaskNoteText = data("anfra.task.note.text")
+)
+
 // An MCP request's span, as OpenTelemetry's MCP conventions name it: the
 // method, and for a tool call, the tool, an op's name or a discovery tool's.
 var (

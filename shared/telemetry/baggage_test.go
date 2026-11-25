@@ -153,3 +153,29 @@ func TestBaggageIncludeIsResolved(t *testing.T) {
 		}
 	}
 }
+
+// A task's id gets in whatever the allowlist says, none included, so a command
+// the CLI forwards to anfra serve keeps its task there. Only a task's id, as
+// anfra makes it, gets in, so it holds nothing of the user's, and the span
+// records it even with data off.
+func TestATasksIDGetsInOnlyAsOne(t *testing.T) {
+	none := telemetry.Defaults().WithBaggageInclude([]string{})
+	for _, settings := range []telemetry.Settings{telemetry.Defaults(), none} {
+		if got := allowed(t, settings, "anfra.task.id=t_7f3a91c0d2e4"); got["anfra.task.id"] != "t_7f3a91c0d2e4" {
+			t.Errorf("a task's id: got %v", got)
+		}
+		for _, bad := range []string{"revenue", "t_7F3A91C0D2E4", "t_123"} {
+			if got := allowed(t, settings, "anfra.task.id="+bad); len(got) != 0 {
+				t.Errorf("%q got in: %v", bad, got)
+			}
+		}
+	}
+	b := baggage.FromContext(telemetry.WithCallerBaggage(context.Background(), map[string]string{"anfra.task.id": "t_7f3a91c0d2e4"}, telemetry.Defaults()))
+	if b.Member("anfra.task.id").Value() != "t_7f3a91c0d2e4" {
+		t.Errorf("the CLI's task isn't passed on: baggage %q", b)
+	}
+	attrs := exportedAttrs(t, withBaggage(t, "anfra.task.id=t_7f3a91c0d2e4"), telemetry.NewSettings(false, 0))
+	if attrs["anfra.task.id"] != "t_7f3a91c0d2e4" {
+		t.Errorf("a span with data off: got %v", attrs)
+	}
+}

@@ -22,6 +22,7 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/command"
 	cachecmd "github.com/holistics/anfra/internal/command/cache"
+	"github.com/holistics/anfra/internal/command/task"
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/errcode"
 	"github.com/holistics/anfra/internal/exports"
@@ -369,7 +370,8 @@ func serveHandler(c serveConfig) http.Handler {
 	if c.serveMCP {
 		mux.Handle("/mcp", apikit.MCP[command.CommandContext]{
 			Name: "anfra", Version: meta.Version, Codes: codes, TrustMeta: trusted, TraceSettings: traceData.Settings(), MetaCaller: metaSession,
-			Request: func(r *http.Request) (command.CommandContext, error) { return contextFor(r), nil },
+			CallArgs: []apikit.CallArg{{Name: task.Flag, Description: task.FlagUsage, Fields: mcpTask}},
+			Request:  func(r *http.Request) (command.CommandContext, error) { return contextFor(r), nil },
 		}.Handler(rt, reg))
 	}
 	if c.apps != nil {

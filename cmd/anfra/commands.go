@@ -39,8 +39,10 @@ import (
 // registered command.Command, nested by its dotted name ("query.compile" is
 // `query compile`). Flags are generated from each command's args, so a command
 // added to the registry shows up in the CLI automatically — no separate CLI
-// registration to keep in sync.
-func appCommands() []*cobra.Command {
+// registration to keep in sync. A command whose group is one of root's
+// CLI-only commands, such as experimental.telemetry, goes under it, and so does
+// a group of commands whose own group is.
+func appCommands(root *cobra.Command) []*cobra.Command {
 	byName := map[string]*cobra.Command{}
 	var top []*cobra.Command
 	// A group's command is registered before its subcommands (fewer dots first),
@@ -57,14 +59,25 @@ func appCommands() []*cobra.Command {
 			top = append(top, cc)
 			continue
 		}
-		parent, ok := byName[c.Name()[:i]]
+		group := c.Name()[:i]
+		parent, ok := byName[group]
 		if !ok {
-			short, isGroup := groups[c.Name()[:i]]
+			parent, ok = cliCommand(root, group)
+		}
+		if !ok {
+			short, isGroup := groups[group]
 			if !isGroup {
-				panic("command " + c.Name() + " has no registered group " + c.Name()[:i])
+				panic("command " + c.Name() + " has no registered group " + group)
 			}
-			parent = &cobra.Command{Use: c.Name()[:i], Short: short, Args: cobra.NoArgs}
-			byName[c.Name()[:i]], top = parent, append(top, parent)
+			parent = &cobra.Command{Use: group[strings.LastIndex(group, ".")+1:], Short: short, Args: cobra.NoArgs}
+			byName[group] = parent
+			if j := strings.LastIndex(group, "."); j < 0 {
+				top = append(top, parent)
+			} else if under, ok := cliCommand(root, group[:j]); ok {
+				under.AddCommand(parent)
+			} else {
+				panic("group " + group + " is under " + group[:j] + ", which isn't a CLI command")
+			}
 		}
 		parent.AddCommand(cc)
 	}
@@ -74,7 +87,22 @@ func appCommands() []*cobra.Command {
 // groups are the CLI's groups that are no command of their own, only their
 // subcommands': their one-line help.
 var groups = map[string]string{
-	"cache": "Manage the repo's caches",
+	"cache":                       "Manage the repo's caches",
+	"experimental.telemetry.task": "Mark your work on each message from your user as a task, so it is evaluated per message",
+}
+
+// cliCommand is root's command at the dotted path, such as
+// "experimental.telemetry", and whether there is one.
+func cliCommand(root *cobra.Command, path string) (*cobra.Command, bool) {
+	cmd := root
+	for name := range strings.SplitSeq(path, ".") {
+		i := slices.IndexFunc(cmd.Commands(), func(c *cobra.Command) bool { return c.Name() == name })
+		if i < 0 {
+			return nil, false
+		}
+		cmd = cmd.Commands()[i]
+	}
+	return cmd, true
 }
 
 func buildCobraCommand(c command.Command) *cobra.Command {

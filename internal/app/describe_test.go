@@ -121,6 +121,9 @@ func TestSpecsAgreeWithTheSchema(t *testing.T) {
 		for _, a := range s.Args {
 			if a.Required {
 				valid[a.Name] = "x"
+				if len(a.Enum) > 0 {
+					valid[a.Name] = a.Enum[0]
+				}
 			}
 		}
 		for _, g := range s.ExactlyOne {

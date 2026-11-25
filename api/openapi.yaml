@@ -918,6 +918,39 @@ components:
     NoInput:
       additionalProperties: false
       type: object
+    NoteInput:
+      additionalProperties: false
+      properties:
+        kind:
+          description: "what the note is: finding, pivot, progress, or summary"
+          enum:
+            - finding
+            - pivot
+            - progress
+            - summary
+          minLength: 1
+          type: string
+        text:
+          description: the note, in a sentence or a short paragraph. At most 4 KiB.
+          minLength: 1
+          type: string
+      required:
+        - kind
+        - text
+      type: object
+    NoteResult:
+      additionalProperties: false
+      properties:
+        message:
+          description: the outcome, in a sentence
+          type: string
+        recorded:
+          description: whether the note is in the trace. False while telemetry is off, when the note is lost.
+          type: boolean
+      required:
+        - recorded
+        - message
+      type: object
     PageLimit:
       additionalProperties: false
       properties:
@@ -1852,6 +1885,36 @@ components:
         version:
           type: string
       type: object
+    StartInput:
+      additionalProperties: false
+      properties:
+        goal:
+          description: your user's message, in their words, or for a subtask the part of it you work on. At most 4 KiB.
+          minLength: 1
+          type: string
+        parent:
+          description: "the id of the task this one is part of: the task another agent gave you when you are its subagent, or your own when you split a message into subtasks"
+          type: string
+      required:
+        - goal
+      type: object
+    StartResult:
+      additionalProperties: false
+      properties:
+        message:
+          description: the outcome, in a sentence
+          type: string
+        recorded:
+          description: whether the task's start is in the trace. False while telemetry is off, when nothing about the task is recorded.
+          type: boolean
+        task:
+          description: the task's id. Pass it as --task on every anfra command you run for the task.
+          type: string
+      required:
+        - task
+        - recorded
+        - message
+      type: object
     StatusResult:
       additionalProperties: false
       properties:
@@ -2284,6 +2347,130 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+  /core.experimental.telemetry.task.note:
+    post:
+      description: |-
+        Record in a task what you found, a change of approach, or your answer, for your user to read later. Pass the task's id as --task, as on every command you run for the task.
+
+        --kind says what the note is:
+          - finding: something you learned, such as a field that doesn't mean what its name says
+          - pivot: a change of approach, such as why you are about to write your own SQL
+          - progress: where you are, in a long task
+          - summary: your answer to the task's goal, and what you are unsure of
+
+        Notes are for people to read. Evaluating your work never depends on them. A note is your user's data, which isn't recorded when ANFRA_EXPERIMENTAL_TRACE_DATA=0.
+      operationId: core.experimental.telemetry.task.note
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+      summary: Record in a task what you found, a change of approach, or your answer, for your user to read later
+      x-destructive: false
+      x-idempotent: false
+      x-read-only: false
+  /core.experimental.telemetry.task.start:
+    post:
+      description: |-
+        Start a task for a message from your user that asks for data, and get the task's id to pass on every command. Pass the id as --task <id> on every anfra command you run for that message, so anfra records the commands in the task and your work can be evaluated per message.
+
+        Start one task per message from your user, before your first anfra command for it, with the message as the goal. A message with several questions is still one task. You can split it into subtasks with --parent.
+
+        If another agent gave you a task's id, you are its subagent. Start a task of your own with --parent <that id>, and pass your own task's id on your commands, so your commands stay apart from the other agent's.
+
+        A task has no end. It is the commands that carry its id. Its goal is your user's data, which isn't recorded when ANFRA_EXPERIMENTAL_TRACE_DATA=0. A task is recorded only while telemetry is on, which `anfra status` shows.
+      operationId: core.experimental.telemetry.task.start
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                required:
+                  - error
+                type: object
+          description: internal_server_error
+      summary: Start a task for a message from your user that asks for data, and get the task's id to pass on every command
+      x-destructive: false
+      x-idempotent: false
+      x-read-only: false
   /core.ingest:
     post:
       operationId: core.ingest

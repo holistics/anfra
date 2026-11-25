@@ -103,8 +103,10 @@ func TestEveryCommandIsTheRootOfItsTrace(t *testing.T) {
 	for _, a := range r[0].Attributes() {
 		attrs[string(a.Key)] = a.Value.String()
 	}
-	if attrs["error.type"] == "" || attrs["process.exit.code"] != "1" || r[0].Status().Code != otelcodes.Error {
-		t.Errorf("refused: error.type %q, exit code %q, status %v; want a code, 1 and an error status",
+	// The code is the one the command answered: the caller's mistake is never
+	// recorded as anfra's own.
+	if attrs["error.type"] == "" || attrs["error.type"] == "internal_server_error" || attrs["process.exit.code"] != "1" || r[0].Status().Code != otelcodes.Error {
+		t.Errorf("refused: error.type %q, exit code %q, status %v; want the answer's code, 1 and an error status",
 			attrs["error.type"], attrs["process.exit.code"], r[0].Status())
 	}
 }

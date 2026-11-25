@@ -5,6 +5,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -68,6 +69,21 @@ type MCP[Call any] struct {
 	// baggage as far as TraceSettings let it in, for the sidecars the op calls
 	// (telemetry.WithCallerBaggage). Nil: none.
 	MetaCaller func(meta map[string]any) map[string]string
+	// CallArgs are arguments every op's tool takes beside the op's input. They
+	// name the call rather than change what it does, such as the task an agent
+	// makes it for. Each is added to every tool's input schema, unless the op's
+	// input has an argument of that name, and taken out of a call's arguments
+	// before the op reads them. The fields it names are recorded on every span
+	// and log record of the call, as MetaCaller's are. Nil: none.
+	CallArgs []CallArg
+}
+
+// CallArg is a string argument every tool takes (MCP.CallArgs).
+type CallArg struct {
+	Name, Description string
+	// Fields are what a value names, recorded on the call's spans and log
+	// records, or the error the call fails with for a value it doesn't take.
+	Fields func(value string) (map[string]string, error)
 }
 
 // Handler is the MCP endpoint, to mount at /mcp behind the same middleware and
@@ -168,6 +184,8 @@ func (m MCP[Call]) server(ctx context.Context, rt *Runtime, reg OpSet[Call], req
 		if input["type"] == nil {
 			input["type"] = "object" // MCP requires an object schema, even for no input
 		}
+		callArgs := m.callArgsOf(input)
+		input = withCallArgs(input, callArgs)
 		// The description is the op's doc when it has one, as a CLI's --help
 		// shows it: a doc stands alone, opening with what the summary says, so
 		// adding the summary would load that sentence twice in every session.
@@ -184,7 +202,11 @@ func (m MCP[Call]) server(ctx context.Context, rt *Runtime, reg OpSet[Call], req
 			Name: meta.Name, Description: description, InputSchema: input,
 			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: idempotent, DestructiveHint: destructive},
 		}, func(ctx context.Context, call *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			out, err := o.Invoke(ctx, rt, req, call.Params.Arguments)
+			arguments, ctx, err := takeCallArgs(ctx, call.Params.Arguments, callArgs)
+			if err != nil {
+				return m.failed(ctx, err)
+			}
+			out, err := o.Invoke(ctx, rt, req, arguments)
 			if err != nil {
 				// A failure goes in the result, so the model sees it and can correct
 				// its next call: the body HTTP would answer, byte for byte.
@@ -195,6 +217,81 @@ func (m MCP[Call]) server(ctx context.Context, rt *Runtime, reg OpSet[Call], req
 	}
 	m.discoveryTools(s, rt, reg, req, d, served)
 	return s, nil
+}
+
+// callArgsOf are the CallArgs a tool whose input schema is input takes: those
+// its op's input has no argument of the same name for.
+func (m MCP[Call]) callArgsOf(input map[string]any) []CallArg {
+	props, _ := input["properties"].(map[string]any)
+	var args []CallArg
+	for _, a := range m.CallArgs {
+		if _, own := props[a.Name]; !own {
+			args = append(args, a)
+		}
+	}
+	return args
+}
+
+// withCallArgs is input with args among its properties, none of them
+// required. input is copied, not changed: it may be the op's own schema.
+func withCallArgs(input map[string]any, args []CallArg) map[string]any {
+	if len(args) == 0 {
+		return input
+	}
+	out := maps.Clone(input)
+	props, _ := input["properties"].(map[string]any)
+	props = maps.Clone(props)
+	if props == nil {
+		props = map[string]any{}
+	}
+	for _, a := range args {
+		props[a.Name] = map[string]any{"type": "string", "description": a.Description}
+	}
+	out["properties"] = props
+	return out
+}
+
+// takeCallArgs is a tool call's arguments without args, which ctx then names,
+// on the call's span and every span and log record under it. A call arg that
+// isn't a string, or whose value its Fields doesn't take, fails the call.
+func takeCallArgs(ctx context.Context, raw []byte, args []CallArg) ([]byte, context.Context, error) {
+	if len(args) == 0 || len(raw) == 0 {
+		return raw, ctx, nil
+	}
+	var all map[string]jsontext.Value
+	if err := jsonkit.Unmarshal(raw, &all); err != nil {
+		return raw, ctx, nil // the op's own decoding reports it
+	}
+	taken := false
+	for _, a := range args {
+		v, ok := all[a.Name]
+		if !ok {
+			continue
+		}
+		delete(all, a.Name)
+		taken = true
+		var value string
+		if err := jsonkit.Unmarshal(v, &value); err != nil {
+			return raw, ctx, apperr.NewWith(apperr.ValidationFailed, a.Name+" must be a string.",
+				apperr.Violate(apperr.Violation{Field: a.Name, Code: "invalid", Message: a.Name + " must be a string."}))
+		}
+		if value == "" {
+			continue
+		}
+		fields, err := a.Fields(value)
+		if err != nil {
+			return raw, ctx, err
+		}
+		ctx = telemetry.WithAttributes(ctx, fields)
+	}
+	if !taken {
+		return raw, ctx, nil
+	}
+	rest, err := jsonkit.Marshal(all)
+	if err != nil {
+		return raw, ctx, err
+	}
+	return rest, ctx, nil
 }
 
 // discoveryTools are list_operations and describe_operation: the index or a
