@@ -329,6 +329,8 @@ Compiling needs no change: the AML parser already treats a CR as whitespace and 
 | `internal/update/update.go:79` `assetName`: add `windows/amd64` → the Windows asset ([format still open](#decisions-needed): `anfra-windows-x64.zip` recommended, which needs `anfra update` to unzip; `.exe.gz` keeps the update code as it is). | 0.1–0.5 |
 | `minio/selfupdate` already renames the running exe to `.anfra.exe.old`. Before updating, try to delete an old `.old`; if it's in use (a running `serve`), say so clearly instead of failing. `update.go:249`: point the reinstall advice to `install.ps1`. | 0.5–0.75 |
 
+Also check, on Windows, `anfra update` from inside `anfra console`: the console restarts on the new anfra (`restartConsole`, from `win-process-lifecycle`, tested there by `TestRestartWith` only, since it needs a released Windows build).
+
 
 
 

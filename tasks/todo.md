@@ -219,17 +219,24 @@ Found, for `win-anfra-node`: each command logs a `watchdog.parent_death` warning
 
 **Estimated scope:** S
 
-### - [ ] T11: Docs, plan, and the Linux checks
+### - [x] T11: Docs, plan, and the Linux checks
 
 **Description:** Close the module.
 
 **Acceptance criteria:**
 - [x] `docs/designs/sidecars.md`: a Windows section (process group and console flags, the stop sequence, the Job Object, the folder layout with `duckdb.dll`).
 - [x] `WINDOWS-PLAN.md`: Where it stands marks `win-process-lifecycle` done; the Summary's status and M1 are updated; its work rows reflect what was learned.
-- [ ] With the user's go-ahead: `make check` and `make test` pass on Linux.
+- [x] With the user's go-ahead: `make check` and `make test` pass on Linux. `make check` passes. `make test` passes but for `engine`'s `TestOnlyTheAPIPackagesAreExported`, which walks every folder and counts the spikes' ignored worktrees in `tmp/` (each its own module); in a clean checkout of the branch, `engine` passes.
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–7 are each met, ticked here.
+- [x] Manual: the spec's Success Criteria 1–7 are each met, ticked here.
+  - [x] 1. Builds and vets for Windows (Checkpoint A).
+  - [x] 2. Linux: tests, `make check`, `make test` pass (above); the layout is pinned by `TestExtractRuntimeLayout`, process handling unchanged (`stop_unix.go`).
+  - [x] 3. `version`, `validate`, `show`, `query` with and without the cache on Windows 11 (T10).
+  - [x] 4. No sidecar outlives anfra; Ctrl-C in the console keeps them; no windows without a console (T3, T4, T10).
+  - [x] 5. A folder per version, `duckdb.dll` beside canal, the running one kept (T5, T6).
+  - [x] 6. Serve's free port (T7), the console's server stops (T8, T10). The console's restart after an update is covered by `TestRestartWith` only; the end-to-end check, with a released Windows build, moves to `win-self-update` (agreed with the user).
+  - [x] 7. `docs/designs/sidecars.md` describes the Windows lifecycle and layout.
 
 **Dependencies:** T10
 
@@ -238,5 +245,5 @@ Found, for `win-anfra-node`: each command logs a `watchdog.parent_death` warning
 **Estimated scope:** S
 
 ### Checkpoint C: Complete
-- [ ] Spec success criteria 1–7 met.
+- [x] Spec success criteria 1–7 met.
 - [ ] Ready for review with the user (and the commit split proposed).
