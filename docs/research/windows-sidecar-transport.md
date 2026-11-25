@@ -172,3 +172,19 @@ Checked for `win-process-lifecycle` (task T3). Windows has no SIGTERM, so anfra 
   - Whether anfra has a console is read once, with `GetConsoleCP`. `GetConsoleWindow` isn't used: it answered "none" when run from WSL, though Ctrl-Break worked (that console has no window).
   - No fallback is needed: canal stops cleanly in every case. Killing after the wait stays, for a sidecar that doesn't stop.
   - For `win-process-lifecycle` T8: `anfra serve` started by the console with `DETACHED_PROCESS` has no console, so the console can't reach it with Ctrl-Break this way. Starting it with `CREATE_NO_WINDOW` instead gives it a hidden console to attach to.
+
+## Later: anfra-node with Bun 1.4.4
+
+Checked for `win-anfra-node` (tasks T1 and T3). anfra-node's release builds with Bun 1.4.4; the checks above used 1.2.10. Rebuilt from holistics-core `78cfd8c49` (anfra-node 0.17.1) with Bun 1.4.4, cross-compiled from Linux (`bun-windows-x64`), with the `SIGBREAK` handler added.
+
+| Check | Result |
+|---|---|
+| Check 1: anfra's Go client reaches anfra-node on a Unix socket at a `C:\` path (`dialnode`) | **pass** |
+| Check 5, close: the host closes stdin | **pass**: exits at once, reason "host stdin closed (EOF)" |
+| Check 5, exit: the host exits without stopping it | **pass**: gone; logs `watchdog.parent_death`, then shuts down |
+| Check 5, kill: `taskkill /F` on the host | **pass**: gone 1 s after |
+| Stale socket: anfra-node killed with `taskkill /F`, its socket file left, a new one started on the same path | **pass**: the new one listens (`server.ts` removes the stale file) |
+| Ctrl-Break, with the `SIGBREAK` handler | **pass**: logs "Shutting down", reason `SIGBREAK`, exit code 0, no `watchdog.parent_death` |
+| Ctrl-Break, without the handler (anfra-node as released) | Ended at once, exit code `0xC000013A`; its shutdown doesn't run |
+
+So Bun 1.4.4 changes nothing for anfra-node on Windows, and Bun delivers Ctrl-Break to `process.on('SIGBREAK')`: anfra can stop anfra-node with Ctrl-Break, as it stops canal, once anfra-node has the handler.

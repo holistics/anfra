@@ -34,10 +34,10 @@ T2 and T3 need only T1's build; T4 needs T1's answer.
 
 ### Phase 2: Each side
 - [x] T2: anfra-node's tests pass; the change committed on its branch
-- [ ] T3: The Bun 1.4.4 re-checks on Windows
+- [x] T3: The Bun 1.4.4 re-checks on Windows
 
 ### Checkpoint A
-- [ ] T1–T3 pass; review with the user, including whether to push the holistics-core branch.
+- [x] T1–T3 pass. (The questions for the user, pushing and merge timing, are asked at the end of the run: nothing is pushed or merged in it.) Review with the user, including whether to push the holistics-core branch.
 
 - [ ] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
 

@@ -44,18 +44,18 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 
 **Estimated scope:** XS
 
-### - [ ] T3: The Bun 1.4.4 re-checks on Windows
+### - [x] T3: The Bun 1.4.4 re-checks on Windows
 
 **Description:** The release builds anfra-node with Bun 1.4.4; the Windows checks used 1.2.10. Re-run them with T1's build.
 
 **Acceptance criteria:**
-- [ ] Check 1: anfra-node listens on a Unix socket at a `C:\` path, and anfra's client (`dialnode`) gets answers.
-- [ ] Check 5: anfra-node stops on stdin EOF after a clean stop, a crash of its host, and `taskkill /F` of its host (`stdinwatch`).
-- [ ] Stale socket: after anfra-node is killed, leaving its socket file, a new one starts on the same path (`server.ts`'s `fs.unlinkSync`).
-- [ ] Results recorded in `docs/research/windows-sidecar-transport.md`, beside the 1.2.10 ones.
+- [x] Check 1: anfra-node listens on a Unix socket at a `C:\` path, and anfra's client (`dialnode`) gets answers.
+- [x] Check 5: anfra-node stops on stdin EOF after a clean stop, a crash of its host, and `taskkill /F` of its host (`stdinwatch`).
+- [x] Stale socket: after anfra-node is killed, leaving its socket file, a new one starts on the same path (`server.ts`'s `fs.unlinkSync`).
+- [x] Results recorded in `docs/research/windows-sidecar-transport.md`, beside the 1.2.10 ones.
 
 **Verification:**
-- [ ] Manual, on Windows 11: each check above.
+- [x] Manual, on Windows 11: each check above.
 
 **Dependencies:** T1
 
@@ -64,7 +64,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.
 **Estimated scope:** S
 
 ### Checkpoint A
-- [ ] T1–T3 pass.
+- [x] T1–T3 pass. The review questions are asked at the end of the run (nothing is pushed or merged in it).
 - [ ] Review with the user: the results, whether to push the holistics-core branch and open its PR, and when anfra's change may merge (before or after the pin bump).
 
 ### - [ ] T4: anfra stops every sidecar with Ctrl-Break on Windows, and closes stdin after
