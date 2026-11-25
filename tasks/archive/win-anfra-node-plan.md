@@ -1,10 +1,10 @@
 # Implementation Plan: win-anfra-node
 
-Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Task checklist: [todo.md](todo.md). Earlier modules' tasks: [archive/](archive/).
+Spec: [SPEC-win-anfra-node.md](../../SPEC-win-anfra-node.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Task checklist: [todo.md](win-anfra-node-todo.md). Earlier modules' tasks: [archive/](./).
 
 ## Overview
 
-What this module delivers and why: the spec's [Objective](../SPEC-win-anfra-node.md#objective). This file holds how: the task order, the checkpoints, and task-level decisions and risks. The unknown comes first (does Bun deliver `SIGBREAK` on Windows?), because the rest of the stop change depends on it. Then the Bun 1.4.4 re-checks, then anfra's side of the stop, then everything end to end on Windows 11.
+What this module delivers and why: the spec's [Objective](../../SPEC-win-anfra-node.md#objective). This file holds how: the task order, the checkpoints, and task-level decisions and risks. The unknown comes first (does Bun deliver `SIGBREAK` on Windows?), because the rest of the stop change depends on it. Then the Bun 1.4.4 re-checks, then anfra's side of the stop, then everything end to end on Windows 11.
 
 ## Architecture Decisions
 

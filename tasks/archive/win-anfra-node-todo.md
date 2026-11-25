@@ -1,6 +1,6 @@
 # Tasks: win-anfra-node
 
-Plan: [plan.md](plan.md). Spec: [SPEC-win-anfra-node.md](../SPEC-win-anfra-node.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md).
+Plan: [plan.md](win-anfra-node-plan.md). Spec: [SPEC-win-anfra-node.md](../../SPEC-win-anfra-node.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md).
 
 ## Phase 1: The risk
 
