@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -36,7 +38,8 @@ func TestStatementsNeverChangeWhatIsThere(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.out = ""
-	if err := c.CreateDatabaseFrom(context.Background(), "northwind", "/data/it's here.duckdb"); err != nil {
+	path := absPath("/data/it's here.duckdb")
+	if err := c.CreateDatabaseFrom(context.Background(), "northwind", path); err != nil {
 		t.Fatal(err)
 	}
 	for _, call := range f.calls {
@@ -46,7 +49,8 @@ func TestStatementsNeverChangeWhatIsThere(t *testing.T) {
 		}
 	}
 	upload := f.calls[1][len(f.calls[1])-1]
-	if !regexp.MustCompile(`^ATTACH '/data/it''s here\.duckdb' AS anfra_upload_[0-9a-f]{16} \(READ_ONLY\); CREATE DATABASE northwind FROM anfra_upload_[0-9a-f]{16}$`).MatchString(upload) {
+	quoted := regexp.QuoteMeta("'" + strings.ReplaceAll(path, "'", "''") + "'")
+	if !regexp.MustCompile(`^ATTACH ` + quoted + ` AS anfra_upload_[0-9a-f]{16} \(READ_ONLY\); CREATE DATABASE northwind FROM anfra_upload_[0-9a-f]{16}$`).MatchString(upload) {
 		t.Errorf("upload: %q", upload)
 	}
 	if !strings.Contains(strings.Join(f.calls[1], " "), "--timeout 86400") {
@@ -130,20 +134,20 @@ func TestQueryErrors(t *testing.T) {
 		out: `{"success":false,"error":"IO Error: Could not set lock on file \"/d/n.duckdb\": Conflicting lock is held in /home/a/.anfra/sidecars/canal-query-1a2b (PID 4242) by user a. See also https://duckdb.org/docs/connect/concurrency"}`,
 		err: errors.New("exit status 1"),
 	}
-	err := f.cli().CreateDatabaseFrom(context.Background(), "n", "/d/n.duckdb")
+	err := f.cli().CreateDatabaseFrom(context.Background(), "n", absPath("/d/n.duckdb"))
 	holder, pid, locked := LockedBy(err)
 	if !locked || holder != "/home/a/.anfra/sidecars/canal-query-1a2b" || pid != 4242 {
 		t.Errorf("LockedBy(%v) = %q, %d, %v", err, holder, pid, locked)
 	}
 	// DuckDB on Windows, as v1.5.6 says it (checked on Windows 11).
 	f.out = `{"success":false,"error":"IO Error: Cannot open file \"C:\\d\\n.duckdb\": The process cannot access the file because it is being used by another process.\n\nFile is already open in \nC:\\Users\\a\\.anfra\\sidecars\\anfra-canal-1a2b\\anfra-canal.exe (PID 4242)"}`
-	err = f.cli().CreateDatabaseFrom(context.Background(), "n", "/d/n.duckdb")
+	err = f.cli().CreateDatabaseFrom(context.Background(), "n", absPath("/d/n.duckdb"))
 	holder, pid, locked = LockedBy(err)
 	if !locked || holder != `C:\Users\a\.anfra\sidecars\anfra-canal-1a2b\anfra-canal.exe` || pid != 4242 {
 		t.Errorf("Windows: LockedBy(%v) = %q, %d, %v", err, holder, pid, locked)
 	}
 	f.out = `{"success":false,"error":"Binder Error: database with name \"n\" already exists"}`
-	err = f.cli().CreateDatabaseFrom(context.Background(), "n", "/d/n.duckdb")
+	err = f.cli().CreateDatabaseFrom(context.Background(), "n", absPath("/d/n.duckdb"))
 	var q *QueryError
 	if !errors.As(err, &q) || !strings.Contains(q.Message, "already exists") {
 		t.Errorf("err %v", err)
@@ -181,4 +185,12 @@ func TestReadOnly(t *testing.T) {
 			t.Errorf("%q taken for a MotherDuck token", token)
 		}
 	}
+}
+
+// absPath is p, absolute on this OS: on Windows, on drive C:.
+func absPath(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
 }
