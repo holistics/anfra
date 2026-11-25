@@ -109,7 +109,7 @@ const (
 
 // prettyViews are the core commands whose results have a pretty view: one
 // at a time, each once its view clears the bar (docs/designs/cli-pretty.md).
-var prettyViews = map[string]bool{"query": true}
+var prettyViews = map[string]bool{"query": true, "sl.add": true, "sl.update": true}
 
 // The default formats.
 const (

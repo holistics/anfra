@@ -17,6 +17,21 @@ components:
         - message
         - severity
       type: object
+    AddInput:
+      additionalProperties: false
+      properties:
+        data_source:
+          description: the Postgres data source that was ingested
+          minLength: 1
+          type: string
+        table:
+          description: the table as schema.table, using its exact name without SQL identifier quotes
+          minLength: 1
+          type: string
+      required:
+        - table
+        - data_source
+      type: object
     CacheCleanRequestParams:
       additionalProperties: false
       properties:
@@ -725,6 +740,34 @@ components:
           type: string
         scope:
           const: user
+          type: string
+        status:
+          const: 500
+          type: integer
+      required:
+        - code
+        - scope
+        - status
+        - message
+        - request_id
+      type: object
+    ErrorBodyRepoWriteFailed:
+      additionalProperties: false
+      description: The file could not be written to the repo.
+      properties:
+        code:
+          const: repo_write_failed
+          type: string
+        context:
+          items:
+            $ref: "#/components/schemas/ContextEntry"
+          type: array
+        message:
+          type: string
+        request_id:
+          type: string
+        scope:
+          const: server
           type: string
         status:
           const: 500
@@ -1634,6 +1677,41 @@ components:
         - message
         - request_id
       type: object
+    Result:
+      additionalProperties: false
+      properties:
+        changed:
+          description: whether the content differs from the existing file. Present for sl.update.
+          type: boolean
+        content:
+          description: the complete AML file content, validated in memory
+          type: string
+        hints:
+          description: what to do next, if any
+          items:
+            type: string
+          type: array
+        message:
+          description: what was generated or whether the model is already up to date
+          type: string
+        model_name:
+          description: the model's fully qualified name
+          type: string
+        path:
+          description: the AML file's path relative to the repo
+          type: string
+        warnings:
+          description: source metadata or fields that need attention
+          items:
+            type: string
+          type: array
+      required:
+        - message
+        - model_name
+        - path
+        - warnings
+        - content
+      type: object
     ResultLimit:
       additionalProperties: false
       properties:
@@ -2040,6 +2118,16 @@ components:
       required:
         - latest
         - available
+      type: object
+    UpdateInput:
+      additionalProperties: false
+      properties:
+        model_name:
+          description: "the AML table model's name, with dots or :: separating namespaces"
+          minLength: 1
+          type: string
+      required:
+        - model_name
       type: object
     ValidateInput:
       additionalProperties: false
@@ -2838,6 +2926,146 @@ paths:
       x-destructive: false
       x-idempotent: true
       x-read-only: true
+  /core.sl.add:
+    post:
+      description: |-
+        Add a table to the semantic layer by generating an AML model from catalog metadata and writing it under models in the repo.
+
+        Run ingest first against the same running server.
+      operationId: core.sl.add
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoWriteFailed"
+                required:
+                  - error
+                type: object
+          description: internal_server_error, repo_write_failed
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
+      summary: Add a table to the semantic layer
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
+  /core.sl.update:
+    post:
+      description: |-
+        Update an AML table model in the repo from catalog metadata. Keep custom fields, comments, and user properties. Write the file only when its content changes.
+
+        Run ingest against the same running server first to load the current database schema.
+      operationId: core.sl.update
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyInvalidRequest"
+                required:
+                  - error
+                type: object
+          description: invalid_request
+        "422":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodyValidationFailed"
+                required:
+                  - error
+                type: object
+          description: validation_failed
+        "500":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    oneOf:
+                      - $ref: "#/components/schemas/ErrorBodyInternalServerError"
+                      - $ref: "#/components/schemas/ErrorBodyRepoWriteFailed"
+                required:
+                  - error
+                type: object
+          description: internal_server_error, repo_write_failed
+        "503":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    $ref: "#/components/schemas/ErrorBodySidecarUnavailable"
+                required:
+                  - error
+                type: object
+          description: sidecar_unavailable
+      summary: Update the semantic layer from table metadata
+      x-destructive: true
+      x-idempotent: true
+      x-read-only: false
   /core.status:
     post:
       description: |-

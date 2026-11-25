@@ -202,6 +202,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/core.sl.add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a table to the semantic layer
+         * @description Add a table to the semantic layer by generating an AML model from catalog metadata and writing it under models in the repo.
+         *
+         *     Run ingest first against the same running server.
+         */
+        post: operations["core.sl.add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core.sl.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update the semantic layer from table metadata
+         * @description Update an AML table model in the repo from catalog metadata. Keep custom fields, comments, and user properties. Write the file only when its content changes.
+         *
+         *     Run ingest against the same running server first to load the current database schema.
+         */
+        post: operations["core.sl.update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core.status": {
         parameters: {
             query?: never;
@@ -274,6 +318,12 @@ export interface components {
             line?: number;
             message: string;
             severity: string;
+        };
+        AddInput: {
+            /** @description the Postgres data source that was ingested */
+            data_source: string;
+            /** @description the table as schema.table, using its exact name without SQL identifier quotes */
+            table: string;
         };
         CacheCleanRequestParams: {
             /** @description the query cache's entries to remove, by what their queries read. Every field given must match, and with none, every entry of the query cache is removed. Without query, every cache of the repo is cleaned, which today is the query cache alone. */
@@ -622,6 +672,18 @@ export interface components {
             request_id: string;
             /** @constant */
             scope: "user";
+            /** @constant */
+            status: 500;
+        };
+        /** @description The file could not be written to the repo. */
+        ErrorBodyRepoWriteFailed: {
+            /** @constant */
+            code: "repo_write_failed";
+            context?: components["schemas"]["ContextEntry"][];
+            message: string;
+            request_id: string;
+            /** @constant */
+            scope: "server";
             /** @constant */
             status: 500;
         };
@@ -1149,6 +1211,22 @@ export interface components {
             /** Format: int64 */
             status?: number;
         };
+        Result: {
+            /** @description whether the content differs from the existing file. Present for sl.update. */
+            changed?: boolean;
+            /** @description the complete AML file content, validated in memory */
+            content: string;
+            /** @description what to do next, if any */
+            hints?: string[];
+            /** @description what was generated or whether the model is already up to date */
+            message: string;
+            /** @description the model's fully qualified name */
+            model_name: string;
+            /** @description the AML file's path relative to the repo */
+            path: string;
+            /** @description source metadata or fields that need attention */
+            warnings: string[];
+        };
         ResultLimit: {
             /** Format: int64 */
             max_bytes?: number;
@@ -1366,6 +1444,10 @@ export interface components {
         UpdateInfo: {
             available: boolean;
             latest: string;
+        };
+        UpdateInput: {
+            /** @description the AML table model's name, with dots or :: separating namespaces */
+            model_name: string;
         };
         ValidateInput: {
             /** @description globs of the files to report diagnostics for, every file by default */
@@ -2075,6 +2157,142 @@ export interface operations {
                 content: {
                     "application/json": {
                         error: components["schemas"]["ErrorBodyInternalServerError"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.sl.add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error, repo_write_failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoWriteFailed"];
+                    };
+                };
+            };
+            /** @description sidecar_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodySidecarUnavailable"];
+                    };
+                };
+            };
+        };
+    };
+    "core.sl.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInvalidRequest"];
+                    };
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyValidationFailed"];
+                    };
+                };
+            };
+            /** @description internal_server_error, repo_write_failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: components["schemas"]["ErrorBodyInternalServerError"] | components["schemas"]["ErrorBodyRepoWriteFailed"];
                     };
                 };
             };

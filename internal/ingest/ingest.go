@@ -11,10 +11,9 @@ import (
 	"github.com/holistics/anfra/internal/sidecar/canalquery"
 )
 
-// Run asks anfra-node to build the repo's catalog. Go owns orchestration
-// (sidecars, which repo, canal endpoint); the Node sidecar owns source parsing
-// and catalog writes.
-func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Repo, source string) (string, error) {
+// Run asks anfra-node to build the repo's catalog, including the source
+// metadata Go collected. Node loads file-backed sources and indexes the catalog.
+func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, r repo.Repo, source string, metadata *anfranode.CatalogMetadata) (string, error) {
 	if node == nil {
 		return "", fmt.Errorf("ingest requires the anfra-node sidecar")
 	}
@@ -26,6 +25,8 @@ func Run(ctx context.Context, node *anfranode.Client, canal *canalquery.Client, 
 		Context: anfranode.CatalogContextOf(r, canal.BaseURL()),
 		Source:  source,
 	}
+	req.Context.Metadata = metadata
+
 	if err := node.IngestCatalog(ctx, req); err != nil {
 		return "", err
 	}

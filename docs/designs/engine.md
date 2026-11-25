@@ -14,6 +14,7 @@ The public packages are `engine` and `shared/*` (`apperr`, `appstep`, `apptracin
 |---|---|
 | `Connect(ctx, nodeURL, canalQueryURL, …)` | dial the sidecars, which run on their own ([sidecars.md](sidecars.md)) |
 | `OpenRepo(dir)`, `ManagedRepo(id, revision)` | the repo to act on: a directory, or a managed repo, which the platform keeps (its git service) and the engine reads at a revision |
+| `Repo.WriteFiles(files)` | create or replace files in a local repo, with one result per path in input order. A managed repo returns a write error for each path. |
 | `Governed(attrs)`, `Ungoverned()` | state how the caller's queries may read the data |
 | `Dispatch(ctx, inv, req)` | run one command |
 | `Ops()` | every command as an `apikit` op (`core.<command>`), to serve as it is |

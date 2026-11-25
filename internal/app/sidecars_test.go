@@ -47,8 +47,8 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	fixture, err := filepath.Abs("testdata/repo")
-	if err != nil {
+	fixture := t.TempDir()
+	if err := os.CopyFS(fixture, os.DirFS("testdata/repo")); err != nil {
 		t.Fatal(err)
 	}
 	valid := repo.Resolve(fixture).Repo()
@@ -94,6 +94,9 @@ func TestCommandsAgainstRealSidecars(t *testing.T) {
 		{"cache status, a server with no query cache", valid, clients, Request{Command: "cache.status"}, ok, nil},
 		{"cache clean, a server with no query cache", valid, clients, Request{Command: "cache.clean"}, "", errcode.CacheDisabled},
 		{"ingest", valid, clients, Request{Command: "ingest"}, ok, nil},
+		{"sl add, after ingest", valid, clients, Request{Command: "sl.add", Args: map[string]any{"table": "public.products", "data_source": "demo"}}, ok, nil},
+		{"sl update, after ingest", valid, clients, Request{Command: "sl.update", Args: map[string]any{"model_name": "products"}}, ok, nil},
+		{"sl update, missing model", valid, clients, Request{Command: "sl.update", Args: map[string]any{"model_name": "missing_model"}}, "", apperr.ValidationFailed},
 		{"search, after ingest", valid, clients, Request{Command: "search", Args: map[string]any{"query": []any{"products"}}}, ok, nil},
 		{"lineage, after ingest", valid, clients, Request{Command: "lineage", Args: map[string]any{"targets": []any{map[string]any{"parent": "products", "child": "name"}}}}, ok, nil},
 		{"show, the repo", valid, clients, Request{Command: "show"}, ok, nil},
