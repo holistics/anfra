@@ -246,4 +246,4 @@ Found, for `win-anfra-node`: each command logs a `watchdog.parent_death` warning
 
 ### Checkpoint C: Complete
 - [x] Spec success criteria 1–7 met.
-- [ ] Ready for review with the user (and the commit split proposed).
+- [x] Ready for review with the user (and the commit split proposed). Reviewed; the split kept as is.
