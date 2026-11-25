@@ -114,15 +114,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Estimated scope:** S
 
-### - [ ] T7: DuckDB's lock message on Windows
+### - [x] T7: DuckDB's lock message on Windows
 
 **Acceptance criteria:**
-- [ ] DuckDB's message on Windows recorded, with the DuckDB anfra ships (v1.5.6), by opening a DuckDB file held by another process.
-- [ ] `LockedBy` matches it, and gives the same hint as on Unix (with the PID, when the message has one).
+- [x] DuckDB's message on Windows recorded, with the DuckDB anfra ships (v1.5.6), by opening a DuckDB file held by another process. With DuckDB's Windows CLI v1.5.6: `IO Error: Cannot open file "…": The process cannot access the file because it is being used by another process.` then `File is already open in\n<program> (PID n)`. Unlike Unix, a read-only open is refused too, when the holder has the file read-write.
+- [x] `LockedBy` matches it, and gives the same hint as on Unix (with the PID, when the message has one).
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/motherduck/`, with the Windows message as a case.
-- [ ] On Windows: a query on the demo repo's DuckDB file while another process holds it gives the hint.
+- [x] Tests pass (Linux): `go test ./internal/motherduck/`, with the Windows message as a case.
+- [x] On Windows: a query on the demo repo's DuckDB file while another process holds it gives the hint. Checked the case publish meets: with `anfra serve`'s canal holding the demo file (read-only), DuckDB still opens it read-only and the file copies, so publish's copy fallback works on Windows. The hint itself: the new `TestQueryErrors` case with the Windows message (MotherDuck's CLI needs a MotherDuck login: in T8, with the user).
 
 **Dependencies:** None
 

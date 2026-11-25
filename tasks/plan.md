@@ -46,7 +46,7 @@ T3–T7 are independent of each other and of T1–T2.
 - [x] T4: Path checks: Data App files refuse `\` and `:`; pull refuses names Windows can't hold
 - [x] T5: `RemoveLegacy` does nothing on Windows
 - [x] T6: Data Apps get Windows' time zone, from ICU
-- [ ] T7: DuckDB's lock message on Windows
+- [x] T7: DuckDB's lock message on Windows
 
 ### Checkpoint B
 - [ ] T3–T7's tests pass on Linux and Windows; review with you.

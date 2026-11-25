@@ -266,13 +266,20 @@ type QueryError struct {
 
 func (e *QueryError) Error() string { return e.Message }
 
-var lockPattern = regexp.MustCompile(`Conflicting lock is held in (.+?) \(PID (\d+)\)`)
+// lockPattern names the process holding a DuckDB file, as DuckDB says it on
+// Unix ("Conflicting lock is held in <program> (PID n)") and on Windows ("File
+// is already open in\n<program> (PID n)").
+var lockPattern = regexp.MustCompile(`(?:Conflicting lock is held|File is already open) in\s*(.+?) \(PID (\d+)\)`)
 
 // LockedBy reports whether err is a local file being held by another process,
 // which DuckDB then does not open at all, and names that process.
 func LockedBy(err error) (holder string, pid int, ok bool) {
 	var q *QueryError
-	if !errors.As(err, &q) || !strings.Contains(q.Message, "Could not set lock on file") {
+	if !errors.As(err, &q) {
+		return "", 0, false
+	}
+	if !strings.Contains(q.Message, "Could not set lock on file") && // Unix
+		!strings.Contains(q.Message, "being used by another process") { // Windows
 		return "", 0, false
 	}
 	m := lockPattern.FindStringSubmatch(q.Message)

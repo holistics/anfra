@@ -135,6 +135,13 @@ func TestQueryErrors(t *testing.T) {
 	if !locked || holder != "/home/a/.anfra/sidecars/canal-query-1a2b" || pid != 4242 {
 		t.Errorf("LockedBy(%v) = %q, %d, %v", err, holder, pid, locked)
 	}
+	// DuckDB on Windows, as v1.5.6 says it (checked on Windows 11).
+	f.out = `{"success":false,"error":"IO Error: Cannot open file \"C:\\d\\n.duckdb\": The process cannot access the file because it is being used by another process.\n\nFile is already open in \nC:\\Users\\a\\.anfra\\sidecars\\anfra-canal-1a2b\\anfra-canal.exe (PID 4242)"}`
+	err = f.cli().CreateDatabaseFrom(context.Background(), "n", "/d/n.duckdb")
+	holder, pid, locked = LockedBy(err)
+	if !locked || holder != `C:\Users\a\.anfra\sidecars\anfra-canal-1a2b\anfra-canal.exe` || pid != 4242 {
+		t.Errorf("Windows: LockedBy(%v) = %q, %d, %v", err, holder, pid, locked)
+	}
 	f.out = `{"success":false,"error":"Binder Error: database with name \"n\" already exists"}`
 	err = f.cli().CreateDatabaseFrom(context.Background(), "n", "/d/n.duckdb")
 	var q *QueryError
