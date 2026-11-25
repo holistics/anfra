@@ -37,3 +37,38 @@ In the console only, as YAML and JSON: an agent running anfra in a terminal of i
 A command's long description (`Long`, and an op's `Doc`) is written for an agent as much as a person: `query`'s opens with three paragraphs on pages, `has_more`, exporting and NDJSON streaming, which an agent reading `--help` needs and a person at `anfra console`'s `\?` skims past. So `\?` shows a command's one-line `Short` and its flags, not its `Long` ([console.md](../designs/console.md#lines)).
 
 To decide: whether one description can serve both, rewritten (the outcome first, the details after, as cli-pretty.md's message-then-hints), or a command needs one for each, a person's beside the agent's (a `Person` field on `command.Def`, say). Start by rewriting `query`'s and seeing whether both readers are served.
+
+## Third-party license notices in releases
+
+anfra's releases ship other projects' code inside their binaries, on every OS, with none of their license notices. Checked on 2026-11-24 ([windows-canal-build.md, Licenses](../research/windows-canal-build.md#licenses)):
+
+- anfra has `LICENSE` (Apache-2.0) and a `NOTICE` with only its own copyright. The release (`.github/workflows/build_release.yml`) ships the gzipped binary alone; the Docker image only labels `licenses=Apache-2.0`.
+- canal has no `LICENSE` or `NOTICE`. anfra-node (holistics-core `apps/anfra-node`) has no `LICENSE` and no `license` in `package.json`.
+- Inside the binaries: DuckDB (MIT), statically linked into canal on every OS; Apache Arrow (Apache-2.0, whose `NOTICE` must be passed on); godror and ODPI-C (Apache-2.0 / UPL); Bun's runtime with WebKit's JavaScriptCore (its own terms), compiled into anfra-node; and hundreds of Go and npm modules. None of their notices are shipped, and none are in the binaries.
+
+MIT, for one, asks that "the above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software" ([DuckDB's LICENSE](https://github.com/duckdb/duckdb/blob/main/LICENSE)). DuckDB's own Windows download, `libduckdb-windows-amd64.zip`, holds no license file, so passing it along doesn't carry the notice either.
+
+Native Windows support depends on it: anfra will ship DuckDB's official `duckdb.dll` beside canal, for MotherDuck, only if these notices are handled; otherwise the Windows build stays static and MotherDuck isn't supported on native Windows ([WINDOWS-PLAN.md, Decisions needed](../../WINDOWS-PLAN.md#decisions-needed)). The static build ships DuckDB too, so the notices are needed either way.
+
+To do:
+
+- Confirm with whoever owns licensing at Holistics what to ship and where, Bun's WebKit part in particular.
+- Generate a `THIRD_PARTY_NOTICES` file at build time, from all three repos: `go-licenses` for anfra's and canal's Go modules, a license tool for anfra-node's npm bundle, and hand-written entries for what those tools can't see (DuckDB and its bundled libraries, Bun's runtime).
+- Ship it in every release archive, and make it readable from the binary (a command or a docs page), since anfra unpacks its sidecars where users don't look.
+- Fail CI when a new dependency's license isn't on an allowed list.
+
+### DuckDB, for the Windows `duckdb.dll`
+
+The part native Windows depends on. Linux and macOS already ship DuckDB linked inside `anfra-canal`, so it's needed there too; Windows only makes it visible, as its own file.
+
+- **DuckDB's notice:** the copyright line ("Copyright 2018-2026 Stichting DuckDB Foundation") and the MIT text, from DuckDB's `LICENSE` at the shipped version (v1.5.6 today). DuckDB's `libduckdb-windows-amd64.zip` holds no license file, so anfra adds it.
+- **What's built into `duckdb.dll`:** DuckDB compiles other libraries in, each with its own license and notice: `fmt`, `re2`, `utf8proc`, `yyjson`, `zstd`, `miniz`, `mbedtls`, `fsst`, `fastpforlib`, `hyperloglog`, `skiplistlib`, `pg_query`, and the built-in `icu`, `json` and `parquet` extensions (MIT, BSD, Apache-2.0, the Unicode license for ICU, the PostgreSQL license for `pg_query`). Their texts are in DuckDB's source, under `third_party/` and the extension folders, at the same version. The list above is from the static build's link line; check it against the shipped version.
+- **Where users see it:** the DLL is unpacked into `%USERPROFILE%\.anfra\sidecars\…`, where nobody looks, so the notices go in a `THIRD_PARTY_NOTICES.txt` inside the release zip, next to `anfra.exe`, and in a docs page or an `anfra licenses` command.
+- **Kept in step:** generate the DuckDB part from the same DuckDB version as the shipped DLL, at release time; CI fails if the two differ.
+- **Ship the DLL unmodified:** `duckdb.dll` is signed by "Stichting DuckDB Foundation" (checked 2026-11-25: signature valid). Changing it breaks that signature, and re-signing it as Holistics would misstate who made it.
+- **Not ours to license:** extensions DuckDB downloads at run time (MotherDuck's, and `json`/`icu` for a static build) come from DuckDB's and MotherDuck's servers to the user's machine; anfra doesn't ship them. MotherDuck's service and extension have their own terms between the user and MotherDuck.
+- **Trademark:** "DuckDB" is the DuckDB Foundation's trademark. Saying anfra uses DuckDB is fine; implying DuckDB endorses anfra isn't.
+
+Effort for the DuckDB part alone: ~0.5–1 engineer-day with Claude, plus the licensing review. It's a subset of the whole item.
+
+Rough effort for the whole item: 1–2 engineer-days with Claude, plus the licensing review.
