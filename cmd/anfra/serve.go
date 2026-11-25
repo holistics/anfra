@@ -14,7 +14,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/holistics/anfra/internal/app"
@@ -289,7 +288,7 @@ func listen(r repo.Local, addr string) (net.Listener, error) {
 	if err == nil {
 		return ln, nil
 	}
-	if !errors.Is(err, syscall.EADDRINUSE) {
+	if !isAddrInUse(err) {
 		return nil, clierr.Precondition("Can't listen on %s: %v.", addr, err)
 	}
 	if explicit {

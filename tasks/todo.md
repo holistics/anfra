@@ -132,17 +132,17 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** S
 
-### - [ ] T7: `anfra serve`'s busy-port fallback on Windows
+### - [x] T7: `anfra serve`'s busy-port fallback on Windows
 
 **Description:** Windows reports a taken port as `WSAEADDRINUSE`, which `syscall.EADDRINUSE` doesn't match, so serve fails instead of moving to a free port.
 
 **Acceptance criteria:**
-- [ ] `isAddrInUse(err)` in `addrinuse_windows.go` / `addrinuse_other.go`; `serve.go:292` uses it.
-- [ ] On Windows, with the default port taken, `anfra serve` starts on a free one; with `--addr` on a taken port, it refuses with today's message.
+- [x] `isAddrInUse(err)` in `addrinuse_windows.go` / `addrinuse_unix.go` (the folder's naming); `serve.go:292` uses it.
+- [x] On Windows, with the default port taken, `anfra serve` starts on a free one; with `--addr` on a taken port, it refuses with today's message.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./cmd/anfra/ -run Serve` (behaviour unchanged).
-- [ ] Manual, on Windows: hold the default port with another listener, run `anfra serve`.
+- [x] Tests pass (Linux): `go test ./cmd/anfra/`; new `TestIsAddrInUse` passes on Linux and Windows, as does `TestListen` on Windows.
+- [x] Manual, on Windows: hold the default port with another listener, run `anfra serve`. Port 7878 was held by WSL's relay: serve listened on 127.0.0.1:62657; `--addr 127.0.0.1:7878` refused ("another program is already using it"). After `Stop-Process -Force` on serve, no sidecar was left (T4's job, with real sidecars).
 
 **Dependencies:** T2
 
