@@ -70,6 +70,11 @@ func appFile(repoDir, rel string) string {
 	if apps, err = filepath.Abs(apps); err != nil {
 		return ""
 	}
+	// Neither belongs in a Data App file's path: Windows reads \ as a separator,
+	// which would get past the dot-file rule below, and : as a file's hidden stream.
+	if strings.ContainsAny(rel, `\:`) {
+		return ""
+	}
 	for _, part := range strings.Split(rel, "/") {
 		if part == "" || strings.HasPrefix(part, ".") {
 			return ""

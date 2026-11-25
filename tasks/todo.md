@@ -66,16 +66,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Estimated scope:** S
 
-### - [ ] T4: Path checks: Data App files refuse `\` and `:`; pull refuses names Windows can't hold
+### - [x] T4: Path checks: Data App files refuse `\` and `:`; pull refuses names Windows can't hold
 
 **Acceptance criteria:**
-- [ ] `appFile` returns "" for a path holding `\` or `:`, on every OS (neither belongs in a URL path to a Data App file).
-- [ ] On Windows, `checkPath` refuses device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, with or without an extension, any case), `:` and `<>"|?*`, control characters, and a trailing dot or space in any part, each with an `UnsafePathError` saying why.
-- [ ] Linux and macOS: `checkPath` accepts what it accepted.
+- [x] `appFile` returns "" for a path holding `\` or `:`, on every OS (neither belongs in a URL path to a Data App file).
+- [x] On Windows, `checkPath` refuses device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, with or without an extension, any case), `:` and `<>"|?*`, control characters, and a trailing dot or space in any part, each with an `UnsafePathError` saying why.
+- [x] Linux and macOS: `checkPath` accepts what it accepted.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/appserve/ ./internal/publish/...`, with `appFile` cases for `\` and `:`.
-- [ ] On Windows: `checkPath` cases for each kind; before the fix, `apps/sub\.x` is served (shown, then fixed).
+- [x] Tests pass (Linux): `go test ./internal/appserve/ ./internal/publish/...`, with `appFile` cases for `\` and `:`.
+- [x] On Windows: `checkPath` cases for each kind; before the fix, `apps/sub\.x` is served (shown, then fixed). Before: `appFile("sub\\.secret")` served `apps\sub\.secret`, and 15 of 18 bad names passed `checkPath`; after: all refused, each with its reason. Found, outside this module: on Windows, the Data Apps live-reload watcher also gets folder events, so it reports apps that didn't change (`TestWatch`, `TestLiveReloadWatchesOnlyWhileAStreamIsOpen` fail there); and `TestFiles` and `TestCheckPath` need symlinks, which Windows allows only to administrators or in developer mode. Reported to the user.
 
 **Dependencies:** None
 

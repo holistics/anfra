@@ -180,6 +180,11 @@ func checkPath(repo *os.Root, p string) error {
 		return &UnsafePathError{p, "it isn't a file publish sends"}
 	}
 	parts := strings.Split(p, "/")
+	for _, part := range parts {
+		if why := nameProblem(part); why != "" {
+			return &UnsafePathError{p, why}
+		}
+	}
 	for i := range parts {
 		prefix := strings.Join(parts[:i+1], "/")
 		info, err := repo.Lstat(filepath.FromSlash(prefix))
