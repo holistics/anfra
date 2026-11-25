@@ -72,3 +72,15 @@ The part native Windows depends on. Linux and macOS already ship DuckDB linked i
 Effort for the DuckDB part alone: ~0.5–1 engineer-day with Claude, plus the licensing review. It's a subset of the whole item.
 
 Rough effort for the whole item: 1–2 engineer-days with Claude, plus the licensing review.
+
+## Ship anfra-node's Windows stop
+
+anfra stops anfra-node on Windows with Ctrl-Break, which reaches it as `SIGBREAK` (`internal/sidecar/stop_windows.go`, commit "stop anfra-node with ctrl-break on windows"). The anfra-node that handles it is only on a local holistics-core branch, `feat/anfra-node-windows-stop` (commit `4b3059a4f`, "fix(apps.anfra-node): shut down on sigbreak", with a `patch` changeset), not pushed ([SPEC-win-anfra-node.md](../../SPEC-win-anfra-node.md)).
+
+Without the handler, Windows ends anfra-node at once on Ctrl-Break: its shutdown doesn't run and its compile cache isn't written. So, before anfra ships on Windows (`win-release`):
+
+1. Push the holistics-core branch and open its PR.
+2. Release an anfra-node with it.
+3. Move anfra's pin (`manifest.yml`, `anfra_node`) to that release.
+
+Until then, only anfra built from source on Windows meets an anfra-node without the handler.
