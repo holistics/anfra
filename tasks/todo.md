@@ -160,7 +160,7 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Verification:**
 - [x] Tests pass (Linux): `go test ./cmd/anfra/`; on Windows, new `TestStopServer` passes.
-- [ ] Manual, on Windows: start `anfra console`, run a query (it starts a server), leave; no `anfra serve`, `anfra-node` or `anfra-canal` left. Not yet with the interactive console (moved to T10). Done without it: a check program started `anfra serve` as the console does, ran a query through it, and sent Ctrl-Break: serve exited in 0.1 s with code 0, and no anfra, anfra-node or anfra-canal was left.
+- [x] Manual, on Windows: start `anfra console`, run a query (it starts a server), leave; no `anfra serve`, `anfra-node` or `anfra-canal` left. Done in T10, by the user. Done without it: a check program started `anfra serve` as the console does, ran a query through it, and sent Ctrl-Break: serve exited in 0.1 s with code 0, and no anfra, anfra-node or anfra-canal was left.
 
 **Dependencies:** T3
 
@@ -197,19 +197,21 @@ Code changes go on `feat/windows-installer` (anfra). Windows-only tests are buil
 
 **Estimated scope:** S
 
-### - [ ] T10: M1 end to end on Windows 11
+### - [x] T10: M1 end to end on Windows 11
 
 **Description:** The milestone: anfra runs on Windows, using the spikes' sidecars.
 
 **Acceptance criteria:**
-- [ ] On a copy of `anfra-demo-data` on `C:`, with `ANFRA_NODE_BIN` and `ANFRA_CANAL_BIN` set: `anfra version`, `validate`, `show`, and `query` (without the cache, and with it, so canal-lake runs) work.
-- [ ] After each command: no `anfra-node` or `anfra-canal` left; `taskkill /F` on anfra during a query leaves none.
-- [ ] In `anfra console`: Ctrl-C during a query cancels it and leaves the sidecars running; leaving the console stops everything it started.
-- [ ] Started with no console, anfra opens no windows (T3's case c).
-- [ ] With T6's embedded build: the same `query` works from the unpacked folder.
+- [x] On a copy of `anfra-demo-data` on `C:`, with `ANFRA_NODE_BIN` and `ANFRA_CANAL_BIN` set: `anfra version`, `validate`, `show`, and `query` (without the cache, and with it, so canal-lake runs) work. The cache needs anfra-node 0.16.0 (the pinned one): with the spike's 0.13.1 it answers `cache_unavailable` (no compiler key). 0.16.0 was cross-compiled for Windows from the `anfra-node-v0.16.0` tag (Bun 1.2.10, `bun-windows-x64`): first run a miss, written to Parquet by canal-lake; second run a hit.
+- [x] After each command: no `anfra-node` or `anfra-canal` left; `taskkill /F` on anfra during a query leaves none.
+- [x] In `anfra console`: Ctrl-C during a query cancels it and leaves the sidecars running; leaving the console stops everything it started. Run by the user in a PowerShell window, twice; from the log: the console started a server, Ctrl-C cut the slow query short (2.7 s, where it runs over 4 s), the sidecars stayed until the session ended, then canal logged "shutting down Canal Query", and no anfra process was left.
+- [x] Started with no console, anfra opens no windows (T3's case c). Run with `DETACHED_PROCESS`: the query answers, no new window, no sidecar left.
+- [x] With T6's embedded build: the same `query` works from the unpacked folder (T6).
 
 **Verification:**
-- [ ] Manual, on Windows 11: each step above, results recorded.
+- [x] Manual, on Windows 11: each step above, results recorded.
+
+Found, for `win-anfra-node`: each command logs a `watchdog.parent_death` warning from anfra-node, because closing its stdin is how anfra stops it on Windows, and anfra-node reads that as its host gone. Noise, not a failure; anfra-node handling Ctrl-Break as a normal stop would end it.
 
 **Dependencies:** T4–T9
 

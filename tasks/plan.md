@@ -55,7 +55,7 @@ T4–T8 are independent of each other once T3 is settled.
 
 ### Phase 3: M1 and close
 - [x] T9: The socket's folder is private on Windows (added at Checkpoint B)
-- [ ] T10: M1 end to end on Windows 11
+- [x] T10: M1 end to end on Windows 11
 - [ ] T11: Docs, plan, and the Linux checks
 
 ### Checkpoint C: Complete
