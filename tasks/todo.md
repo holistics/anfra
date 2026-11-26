@@ -160,7 +160,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Acceptance criteria:**
 - [ ] With the login from Checkpoint A: a command that needs it still works after a token refresh, if one can be triggered.
-- [ ] An export downloaded; Data App paths with `\` and `:` refused; the Data App time zone shown is Windows'; the DuckDB lock hint shows.
+- [x] An export downloaded; Data App paths with `\` and `:` refused; the Data App time zone shown is Windows'; the DuckDB lock hint shows. Done on Windows 11 (2026-11-26): `query export -o` wrote the file and left no CLI copy; `--link` gave `file:///C:/Users/…/anfra-exports/…`; through `anfra serve`, `apps/x.html` is 200 and `sub%5C.secret`, `x.html%3Ahidden`, `sub/.secret` are 404; the reader's zone is `Asia/Saigon`; `init`'s `data_sources.yml` and serve's `serve.json` hold one entry, the user, full control, nothing inherited. The lock hint needs MotherDuck's CLI and a MotherDuck login: with the publish check below.
 - [ ] Publish and pull to an org: **only with your go-ahead**, which org, and whether you run it.
 
 **Verification:**
