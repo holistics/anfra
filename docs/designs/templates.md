@@ -321,7 +321,7 @@ anfra template add <owner>/anfra-templates/ecommerce-overview \
 
 It writes the apps to `apps/<template>/`. It never overwrites or renames anything: an existing folder fails the install, with a hint to use `--into`.
 
-**--demo** installs the apps unmapped, plus the template's demo data template if the repo doesn't have it yet. The demo's files are copied as they are, and its DuckDB data source is added to the local config with an absolute path. A cloud org doesn't accept DuckDB, so the CLI warns that a demo install must be mapped before `anfra publish`.
+**--demo** installs the apps unmapped, plus the template's demo data template if the repo doesn't have it yet. The demo's files are copied as they are, and its DuckDB data source is added to the local config with an absolute path. A cloud org doesn't accept DuckDB, so the CLI warns that a demo install must be mapped before `anfra publish`. How a demo is recorded, reused and upgraded, and how its names may clash, is undecided ([open questions](#open-questions)).
 
 **map** replays the rewrite. The record keeps the confirmed mapping, so the base can be recomputed instead of stored:
 
@@ -361,3 +361,9 @@ The parser calls ship in an anfra-node release before core can use them. A sidec
 
 1. **Apps that mix literal and runtime-built queries.** A marker for AQL fragments (``Anfra.aql`revenue` ``) would let an app compose queries in JS while still telling the installer which strings are AQL. `app.extract` would return each marked fragment, and `aql.references` would parse it as an expression. Wait for a template that needs it.
 2. **Mapper weights and the `--yes` threshold.** These need a set of realistic user datasets to tune on.
+3. **Demo data on install (undecided).** `--demo` decides a demo is already installed by its names, so a second template whose demo differs, by version or by publisher, would reuse the wrong data. Proposals, none settled:
+   - **Its own record entry.** The demo data template gets a `templates.yml` entry (template ID, version, file hashes). "Already installed" then means the same template ID, and `remove` can remove it.
+   - **Same ID, older version.** Upgrade in place when its files are unedited, and refuse otherwise, naming the edited files. This needs `check` to enforce that a demo's new version only adds models, fields and rows, never renames or removes them, so the apps installed against it keep working.
+   - **Different ID, clashing names.** A model or dataset name that already exists in the repo, from another demo or the user's own AML, fails the install, naming the clash and its owner. Inside one templates repo, `check` fails when two demo data templates share a model or dataset name.
+   - **Installing alongside.** Renaming a clashing demo on install (`orders` to `orders_2`, every reference rewritten) waits for templates that ship AML, which need an `aml.references` call.
+   - **Flags.** `--demo` refuses mapping flags and `--plan`, since it installs unmapped.
