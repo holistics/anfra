@@ -12,6 +12,7 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/filelock"
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -120,7 +121,7 @@ func saveCredentialInventory(path string, inventory *credentialInventory) error 
 	temp := f.Name()
 	defer os.Remove(temp)
 	defer f.Close()
-	if err = makePrivate(f); err == nil {
+	if err = fileperm.OwnerOnly(f); err == nil {
 		_, err = f.Write(append(raw, '\n'))
 	}
 	if err == nil {

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/internal/meta"
 	"github.com/holistics/anfra/internal/repo"
@@ -57,7 +58,7 @@ func writeRuntime(r repo.Local, f runtimeFile) error {
 	}
 	// Written whole, then renamed, so a reader never sees half of it.
 	tmp := runtimePath(r) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	if err := fileperm.WriteFile(tmp, b); err != nil {
 		return err
 	}
 	return robustio.Rename(tmp, runtimePath(r))

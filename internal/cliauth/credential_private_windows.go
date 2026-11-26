@@ -11,27 +11,6 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 )
 
-// makePrivate gives the new authentication file an access list of its own,
-// this user only and nothing inherited from its folder: Windows has no mode
-// 600, and ANFRA_HOME may be a folder others can open. It is set before any
-// token is written; the rename over the old file keeps it.
-func makePrivate(f *os.File) error {
-	user, err := windows.GetCurrentProcessToken().GetTokenUser()
-	if err != nil {
-		return err
-	}
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;" + user.User.Sid.String() + ")")
-	if err != nil {
-		return err
-	}
-	dacl, _, err := sd.DACL()
-	if err != nil {
-		return err
-	}
-	return windows.SetNamedSecurityInfo(f.Name(), windows.SE_FILE_OBJECT,
-		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
-}
-
 // checkPrivate refuses the authentication file when its access list lets
 // anyone but this user read it. SYSTEM and Administrators may: they stand where
 // root does on Unix, which mode 600 doesn't keep out either.

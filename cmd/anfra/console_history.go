@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/home"
 	"github.com/holistics/anfra/internal/robustio"
 	"github.com/holistics/anfra/shared/jsonkit"
@@ -71,6 +72,9 @@ func (h consoleHistory) add(entry string) {
 		return
 	}
 	defer f.Close()
+	if fileperm.OwnerOnly(f) != nil {
+		return
+	}
 	_, _ = f.Write(append(line, '\n'))
 }
 
@@ -90,6 +94,10 @@ func (h consoleHistory) rewrite(entries []string) {
 		return
 	}
 	defer os.Remove(tmp.Name())
+	if fileperm.OwnerOnly(tmp) != nil {
+		_ = tmp.Close()
+		return
+	}
 	if _, err := tmp.Write(b.Bytes()); err != nil {
 		_ = tmp.Close()
 		return

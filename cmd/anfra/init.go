@@ -23,6 +23,7 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/publish"
 	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoconfig"
@@ -505,6 +506,12 @@ func writeNew(content []byte, perm fs.FileMode) func(path string) (bool, error) 
 		}
 		if err != nil {
 			return false, err
+		}
+		if perm == 0o600 { // a file only you may read, which Windows doesn't take from perm
+			if err := fileperm.OwnerOnly(f); err != nil {
+				_ = f.Close()
+				return false, err
+			}
 		}
 		if _, err := f.Write(content); err != nil {
 			_ = f.Close()

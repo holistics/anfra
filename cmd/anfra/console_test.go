@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/holistics/anfra/internal/fileperm"
 )
 
 func TestSplitArgs(t *testing.T) {
@@ -242,8 +244,8 @@ func TestConsoleHistory(t *testing.T) {
 	if got := openConsoleHistory().load(); !slices.Equal(got, []string{"validate", "orders\n| count()"}) {
 		t.Fatalf("the next session's history = %q", got)
 	}
-	if info, err := os.Stat(first.path); err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("history file: %v, %v", info, err)
+	if ok, err := fileperm.IsOwnerOnly(first.path); !ok || err != nil {
+		t.Fatalf("history file: only you can read it = %v, %v", ok, err)
 	}
 
 	for i := range 2*historyKept + 1 {

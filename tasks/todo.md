@@ -133,19 +133,19 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 ### Checkpoint B
 - [x] T3–T7's tests pass on Linux and Windows; review with you. Found: the files below (T8); `anfra logs`, the live-reload watcher and symlink tests fail on Windows, added to `win-terminal` in `WINDOWS-PLAN.md`; Windows ran out of memory from WSL's file cache (work is lighter now: `GOMAXPROCS=4 GOFLAGS=-p=2`, one build and lint per task).
 
-### - [ ] T8: Other files only you may read, on Windows too
+### - [x] T8: Other files only you may read, on Windows too
 
 **Description:** Added at Checkpoint B. On Unix, `data_sources.yml` (database passwords), the console history and `runtime.json` are mode `600`; on Windows they get whatever their folder allows.
 
 **Acceptance criteria:**
-- [ ] `internal/fileperm`: `OwnerOnly(f)` (mode `600` on Unix; on Windows an access list of this user only, nothing inherited), `WriteFile(name, data)`, and `IsOwnerOnly(path)` for tests on both OSes.
-- [ ] Used by `init`'s `data_sources.yml`, the console history (appended and rewritten), `runtime.json`, and the login file (replacing `cliauth`'s own `makePrivate`).
-- [ ] Unix behaviour unchanged (mode `600`).
+- [x] `internal/fileperm`: `OwnerOnly(f)` (mode `600` on Unix; on Windows an access list of this user only, nothing inherited), `WriteFile(name, data)`, and `IsOwnerOnly(path)` for tests on both OSes.
+- [x] Used by `init`'s `data_sources.yml`, the console history (appended and rewritten), `runtime.json`, and the login file (replacing `cliauth`'s own `makePrivate`).
+- [x] Unix behaviour unchanged (mode `600`).
 
 **Verification:**
-- [ ] Tests pass (Linux): the new package, `./cmd/anfra/`, `./internal/cliauth/`.
-- [ ] On Windows: `TestConsoleHistory` and `TestInitSetsUpARepo`'s mode checks (failing today) pass through `IsOwnerOnly`; the `fileperm` tests pass.
-- [ ] Lint once, for Windows and Linux.
+- [x] Tests pass (Linux): the new package, `./cmd/anfra/`, `./internal/cliauth/`.
+- [x] On Windows: `TestConsoleHistory` and `TestInitSetsUpARepo`'s mode checks (failing today) pass through `IsOwnerOnly`; the `fileperm` tests pass. Also passing now on Windows: `TestAuthStatusExplainsDamagedCredentials` (it looked for a path with `\` in a JSON answer, which writes `\\`; fixed in the test, `997a0a3`). The new access check accepts an ordinary file there, as it should.
+- [x] Lint once, for Windows and Linux.
 
 **Dependencies:** T2
 

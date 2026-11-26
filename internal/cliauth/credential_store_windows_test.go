@@ -67,21 +67,6 @@ func TestCredentialsSavedPrivate(t *testing.T) {
 	assertPrivateFile(t, filepath.Join(home, "credentials.json"))
 }
 
-// assertPrivateFile fails t unless path's access list is protected (nothing
-// inherited) and holds one entry: this user, full access.
-func assertPrivateFile(t *testing.T, path string) {
-	t.Helper()
-	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := sd.String() // D:P<flags>(A;;FA;;;<sid>)
-	head, entries, _ := strings.Cut(got, "(")
-	if !strings.HasPrefix(head, "D:P") || "("+entries != "(A;;FA;;;"+currentUserSID(t)+")" {
-		t.Errorf("%s's access list is %s, want this user only, nothing inherited", path, got)
-	}
-}
-
 // A file others can read is refused, with how to fix it.
 func TestCredentialsRefusedWhenShared(t *testing.T) {
 	home := t.TempDir()

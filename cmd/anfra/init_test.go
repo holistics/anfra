@@ -17,6 +17,7 @@ import (
 	"github.com/holistics/anfra/internal/app"
 	"github.com/holistics/anfra/internal/clierr"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/publish/workdir"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
@@ -65,8 +66,8 @@ func TestInitSetsUpARepo(t *testing.T) {
 		t.Errorf("the template: %+v", sources)
 	}
 	// It holds credentials: the owner's alone, and out of Git.
-	if info, _ := os.Stat(filepath.Join(dir, ".anfra/data_sources.yml")); info.Mode().Perm() != 0o600 {
-		t.Errorf("data_sources.yml is %v, want 0600", info.Mode().Perm())
+	if ok, err := fileperm.IsOwnerOnly(filepath.Join(dir, ".anfra/data_sources.yml")); !ok || err != nil {
+		t.Errorf("data_sources.yml: only you can read it = %v, %v", ok, err)
 	}
 	ignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
 	if !strings.Contains(string(ignore), "\n.anfra/data_sources.yml\n") {

@@ -9,9 +9,6 @@ import (
 	"github.com/holistics/anfra/internal/clierr"
 )
 
-// makePrivate makes the new authentication file readable by this user only.
-func makePrivate(f *os.File) error { return f.Chmod(0o600) }
-
 // checkPrivate refuses the authentication file unless only this user can read it.
 func checkPrivate(path string, info os.FileInfo) error {
 	if info.Mode().Perm() != 0o600 {

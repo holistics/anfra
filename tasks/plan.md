@@ -53,7 +53,7 @@ T3–T7 are independent of each other and of T1–T2.
 - [x] T3–T7's tests pass on Linux and Windows; review with you.
 
 ### Phase 3: End to end and close
-- [ ] T8: Other files only you may read, on Windows too (added at Checkpoint B)
+- [x] T8: Other files only you may read, on Windows too (added at Checkpoint B)
 - [ ] T9: End to end on Windows 11
 - [ ] T10: Docs, backlog, plan, and the Linux checks
 
