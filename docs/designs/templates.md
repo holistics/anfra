@@ -88,7 +88,7 @@ Extraction is static, so apps follow these rules. `anfra template check` enforce
 - An AQL literal contains no escape sequences, so its source text is its value. Use a backtick literal for AQL with quotes or line breaks.
 - Every output column has an alias, so the row keys the app's JS reads survive the rewrite.
 - A field is compared with a literal, not with a `const` holding one (`orders.status == 'completed'`, not `orders.status == k`). A value reached through a const isn't listed, so it can't be mapped.
-- An alias never reuses the name of a field of the demo dataset. The rewrite tells an alias from a field by scope, and a shared name would be read differently by the v1 and v2 compilers.
+- No name the query defines (an alias, a `select` column, a `const`, a function parameter, a declaration) reuses the name of a field of the demo dataset. The rewrite tells a defined name from a field by scope, and a shared name is read differently by the v1 and v2 compilers, sometimes as the field.
 - A query gives the same references under both AQL compilers ([v1 and v2](#v1-and-v2)), so it installs into a repo on either.
 - Date ranges are relative to the demo data's latest date, not today.
 - Each app queries one dataset. A `mapControl` field belongs to its target query's dataset, which static extraction can't follow through variables.
@@ -214,9 +214,9 @@ Both calls are pure functions of their input. They take no repo, read no files, 
 ```
 
 - A `field` reference is any name the query reads from its dataset: `model.field` (with `model` set), or a bare name, such as a dataset metric. Its span covers the whole reference, `ecommerce_orders.created_at`, so Go replaces it in one piece.
-- A name the query itself defines, where the compiler can see it, is not a reference. That covers an alias, a `select` column, and a declaration (`metric`, `dimension`, `const`, `function`). A visible alias wins over a dataset field of the same name. An unaliased dimension binds no name: after `dimensions { orders.status }`, a bare `status` is read from the dataset, so it is a field. Names in `sorts` and query options are never references, since they name output columns and options.
+- A name the query itself defines, where the compiler can see it, is not a reference. That covers an alias, a `select` column, and a declaration (`metric`, `dimension`, `const`, `function`). When such a name is also a dataset field's, the compilers disagree on which one a later read means, so the authoring rules forbid it. An unaliased dimension binds no name: after `dimensions { orders.status }`, a bare `status` is read from the dataset, so it is a field. Names in `sorts` and query options are never references, since they name output columns and options.
 - Function names, grains (`month()`, `interval(1 month)`, `'week'`) and keywords (`true`, `null`) are never references.
-- A bare model name looks like a bare field, so it is a problem rather than a reference where it is one: when it also qualifies a field in the query (`orders.status`), as an argument of `of_all`, `exclude` or `keep`, as the first argument of an aggregation with two or more arguments, and at the head of a pipe into a table function (`orders | filter(…)`, `orders | count()`). Anywhere else, `check` catches it against the demo dataset.
+- A bare model name looks like a bare field. When the same name also qualifies a field in the query (`orders.status`), it is a problem rather than a reference. Anywhere else it is listed as a field, and `check` and `index` refuse it against the demo dataset. The call doesn't guess which function arguments are models: guessing wrong drops a real reference, as in `exclude(revenue, orders.status)`, where the first argument is a measure.
 - A `literal` is a string literal compared with a field reference by `==`, `!=`, `is`, `is not`, `in` or `not in`, with either side first, in an expression or a filter's params. `is null` and `is true` compare no string. Its `field` is that reference's full name, followed through an alias of a plain field (`s == 'a'` where `s: orders.status` gives `orders.status`). Its span includes the quotes, since Go writes a whole new literal.
 - The call is syntactic. It does not resolve names against a dataset, because at install the template's demo dataset is not in the user's repo, and a platform reads repos by revision. Whether a bare name is a metric or a dimension, and its type, comes from the index, which is built where the demo dataset exists.
 - AQL that doesn't parse returns no references and one problem. The parser has no error recovery.
@@ -231,7 +231,8 @@ A repo picks its AQL compiler in `.anfra/config.yml` (`aql.compiler.version`). B
 - **Name clashes:** when an alias has the same name as a dataset metric, v2's `having` reads the metric and v1's reads the alias.
 - **Constants:** a `const` body sees later metrics in v1, and only earlier declarations in v2.
 - **Result filters:** a measure alias is visible only in a filter on the result, one that compares the bare alias. v2 looks for it through `and`, `or` and `not(…)`. v1 looks only at the filter's top.
-- **Both:** a dimension alias is visible in measures, every filter and having, and a measure alias in having. An alias is never visible in its own definition, so in `revenue: revenue * 2` the inner `revenue` is the metric. A metric, dimension or function body sees every declaration in its program, and the query itself sees only those above it. A `select` column is visible to later pipe stages only. Params see no aliases.
+- **Both:** a dimension alias is visible in measures, every filter and having, and a measure alias in having. An alias is never visible in its own definition, so in `revenue: revenue * 2` the inner `revenue` is the metric. A metric, dimension or function body sees every declaration in its program, consts included, and the query itself sees only those above it. A `select` column is visible to later pipe stages only. Params see no aliases.
+- **Sort keys:** v1 resolves a `sorts` key that isn't an output column against the dataset, and v2 refuses it. The call never lists sort keys, which is safe because every template query must validate under v2.
 
 So `aql.references` takes `options.useV2Compiler` (default `true`), as `aql.validate` does, and scopes as that compiler does. The installer passes the user's repo's setting. `check` runs every query under both and fails where the references differ, which with the alias rule keeps a template installable into a repo on either compiler.
 
@@ -340,7 +341,7 @@ It writes the apps to `apps/<template>/`. It never overwrites or renames anythin
 - `manifest.json` is invalid or lists missing files, `demo` doesn't resolve, or `preview.png` is missing;
 - `network` isn't empty;
 - `app.extract` returns a problem, or, for an app marked `"mapping": "none"`, returns any literal `dataset`, `field` or `aql` argument;
-- `aql.references` gives different references under v1 and v2, or an alias reuses the name of a field of the demo dataset;
+- `aql.references` gives different references under v1 and v2, a name the query defines reuses the name of a field of the demo dataset, or a bare name it lists is a model of the demo dataset;
 - a query has an output column without an alias, or doesn't validate against the demo dataset;
 - a metric the apps use has no `description`, or `fields` describes a field no query uses;
 - in a pull request, the template's files changed but `version` didn't, or `version` isn't greater than its latest tag.
