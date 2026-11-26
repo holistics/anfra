@@ -35,6 +35,7 @@ Why anfra is the way it is: read these before changing the parts they cover.
 | [MotherDuck copy](designs/motherduck-copy.md) | `anfra publish` offering to copy a DuckDB data source to MotherDuck, through MotherDuck's CLI, with a token of the org's own. |
 | [release](designs/release.md) | From `manifest.yml` to a release, through a release candidate anfra Cloud runs first: binaries, the Docker image, versions, updates. |
 | [CI](designs/ci.md) | Checks run only for the areas a change touches; why that's safe without a merge queue (push CI on `main`, tagging only what passed); hourly full runs; the plan. |
+| [app templates](designs/templates.md) | Proposal: ready-made Data Apps installed and mapped to a user's fields, rewritten once at install by a deterministic mapper; the `shared/templates` package, the parser calls it needs from anfra-node, the install record and the `anfra template` commands. |
 | [init sample](designs/init-sample.md) | `anfra init --example`: the e-commerce sample from its own public repo, asked in a terminal and offered to agents. |
 | [anfra console](designs/console.md) | A session at a terminal: AQL typed directly, commands behind a `\`, the output coloured for the person typing, a warm server. |
 | [agent setup](designs/agent-setup.md) | Installing the anfra skills into coding agents, keeping them current, and telling agents when they aren't. |
