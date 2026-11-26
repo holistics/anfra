@@ -142,7 +142,8 @@ func TestAuthStatusExplainsDamagedCredentials(t *testing.T) {
 		t.Fatal("damaged credentials accepted")
 	}
 	printError(&diagnostics, err, "")
-	for _, want := range []string{path, "Delete it", "`anfra auth login` again for each organization", "doesn't revoke its logins on the server"} {
+	inJSON := strings.ReplaceAll(path, `\`, `\\`) // a Windows path, as --json writes it
+	for _, want := range []string{inJSON, "Delete it", "`anfra auth login` again for each organization", "doesn't revoke its logins on the server"} {
 		if !strings.Contains(diagnostics.String(), want) {
 			t.Fatalf("missing %q in %s", want, &diagnostics)
 		}
