@@ -1009,10 +1009,14 @@ NOTE: The source model should be on the "many" side of the relationship.
 We can **ONLY** use dimension and measure **aliases** inside `explore.sorts`.
 
 ### Aliases in explore filters and having
+An alias in `explore.dimensions` or `explore.measures` names a column of the explore's **result table**. AQL uses the name to decide what a condition targets:
+* An alias targets the result table column. The condition filters the result rows **after** aggregation.
+* A metric name targets the metric. A model dimension (e.g. `orders.status`) targets the model rows.
+
 * Metrics: put a metric condition in `explore.having`, by its **metric name**, **NEVER** by its alias in `explore.measures`. The metric doesn't need to be in `explore.measures`.
   * DO: `measures { country_rank: country_rank_by_order_count }` + `having { country_rank_by_order_count < 11 }`
-  * DON'T: `measures { country_rank: country_rank_by_order_count }` + `having { country_rank < 11 }` — a measure alias in `having` is not supported right now.
-  * NOTE: a metric condition also works in `explore.filters`, by its measure **alias** instead of its metric name (e.g. `filters { country_rank < 11 }`). It gives the same result as `having`, but the metric must be in `explore.measures`.
+  * DON'T: `measures { country_rank: country_rank_by_order_count }` + `having { country_rank < 11 }`. `having` targets metrics, so an alias there that is not a metric name gives a type-check error. The error suggests the same condition in `filters`.
+  * NOTE: to filter the result rows instead, put the measure **alias** in `explore.filters` (e.g. `filters { country_rank < 11 }`). The metric must be in `explore.measures`.
 * Dimensions: in `explore.filters`, the left operand decides when the filter is applied:
   * Model dimension (e.g. `orders.status == 'delivered'`): applied **before** aggregation, to the rows the measures aggregate.
   * Dimension alias (e.g. `status == 'delivered'`): applied **after** aggregation, to the explore result rows.
