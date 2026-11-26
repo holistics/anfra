@@ -342,7 +342,7 @@ It writes the apps to `apps/<template>/`. It never overwrites or renames anythin
 - `network` isn't empty;
 - `app.extract` returns a problem, or, for an app marked `"mapping": "none"`, returns any literal `dataset`, `field` or `aql` argument;
 - `aql.references` gives different references under v1 and v2, a name the query defines reuses the name of a field of the demo dataset, or a bare name it lists is a model of the demo dataset;
-- a query has an output column without an alias, or doesn't validate against the demo dataset;
+- a query has an output column without an alias, or doesn't validate against the demo dataset under both v1 and v2;
 - a metric the apps use has no `description`, or `fields` describes a field no query uses;
 - in a pull request, the template's files changed but `version` didn't, or `version` isn't greater than its latest tag.
 
