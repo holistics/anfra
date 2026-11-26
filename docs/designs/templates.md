@@ -137,7 +137,7 @@ Only referenced spans change, so the installed app keeps the template's formatti
 
 Both calls are pure functions of their input. They take no repo, read no files, keep no cache and generate no seeds, so they behave the same in every build and on every host, and need no repo id.
 
-**Spans.** A span is `{ "start": n, "end": m }`: byte offsets into the input as UTF-8, start inclusive and end exclusive. Byte offsets, not JavaScript string indexes, because Go slices bytes. Input with any character outside ASCII would otherwise splice at the wrong place. Splicing every returned span with its own text must reproduce the input byte for byte.
+**Spans.** A span is `{ "start": n, "end": m }`: byte offsets into the input as UTF-8, start inclusive and end exclusive. Byte offsets, not JavaScript string indexes, because Go slices bytes. Input with any character outside ASCII would otherwise splice at the wrong place. Splicing every returned span with its own text must reproduce the input byte for byte. The spans are only valid if the text anfra-node receives encodes back to the file's bytes, so Go refuses an app that isn't valid UTF-8 (`utf8.Valid`) before calling `app.extract`: JSON would turn each invalid byte into U+FFFD and shift every later span.
 
 **Problems.** Neither call fails on input it can't fully handle. It returns what it found, plus a `problems` list, each `{ "message", "line", "column" }` with 1-based positions. A column counts UTF-16 code units, as amql's diagnostics do. A JSON-RPC error means the call itself failed (bad params, a crash), never that the app or query was wrong.
 
