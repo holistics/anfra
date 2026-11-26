@@ -146,7 +146,8 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 | `win-canal` | **Done** (CI deferred). canal builds and works on Windows with no code change; the Windows build links DuckDB's official `duckdb.dll`, for MotherDuck (live query tested). Left for the CI step: canal's Windows release row and PR check. | [Spec](SPEC-win-canal.md), [tasks](tasks/archive/win-canal-todo.md), [findings](docs/research/windows-canal-build.md) |
 | `win-process-lifecycle` | **Done** (M1, 2026-11-25). anfra compiles and runs on Windows 11 with its sidecars: stops them cleanly with or without a console, ends them with anfra (Job Object), unpacks a folder per version with `duckdb.dll`, keeps the socket's folder private. The `GOOS=windows go vet` CI step waits for the CI work. | [Spec](SPEC-win-process-lifecycle.md), [tasks](tasks/archive/win-process-lifecycle-todo.md), [findings](docs/research/windows-sidecar-transport.md#later-stopping-canal-with-ctrl-break-with-and-without-a-console) |
 | `win-anfra-node` | **Code done** (2026-11-25); its release row and Windows smoke test wait for the CI work. anfra-node shuts down on `SIGBREAK` (holistics-core branch `feat/anfra-node-windows-stop`, not pushed), and anfra stops it with Ctrl-Break, so no `watchdog.parent_death` after each command. Checked on Windows with Bun 1.4.4, as the release uses. anfra's change waits for anfra's pin to an anfra-node release with the handler. | [Spec](SPEC-win-anfra-node.md), [tasks](tasks/archive/win-anfra-node-todo.md), [findings](docs/research/windows-sidecar-transport.md#later-anfra-node-with-bun-144) |
-| `win-files-auth`, `win-line-endings`, `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
+| `win-files-auth` | **Code done** (2026-11-26); the login, publish and pull checks on Windows wait for the user. Logins save and stay private (they all failed before), saving survives readers, exports get `file:///C:/` links, Data Apps can't reach hidden files (they could) and get Windows' time zone, pull refuses names Windows can't hold, private files are private on Windows too. | [Spec](SPEC-win-files-auth.md), [tasks](tasks/todo.md) |
+| `win-line-endings`, `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
 | Interim WSL docs | Not started | — |
 | Code-signing purchase | Not started | — |
 
@@ -303,8 +304,17 @@ Note: the local `/home/nui/works/canal` checkout is old. Work from `origin/maste
 | `internal/appserve/reader.go:43`: use the time zone from `time.Local` (Windows has no `/etc/localtime`), mapping Windows zone names to IANA names. | 0.25–0.5 |
 | `internal/motherduck/cli.go:269`: also match DuckDB's Windows lock message ("being used by another process"). | 0.1 |
 
+**Result: code done** (2026-11-26), tested on Windows 11 ([tasks](tasks/todo.md)). What changed from the rows above:
 
-
+- **Logins failed outright on Windows,** before any permission check: syncing anfra's folder is "Access is denied" there. Skipped on Windows (NTFS journals the rename).
+- **Private files:** not skipped, as the first row said, but kept private the Windows way (decided with the user): `internal/fileperm` gives an owner-only access list, for the login file (refused when others can read it, with an `icacls` fix) and also `data_sources.yml`, the console history and `serve.json`.
+- **The rename helper** is `internal/robustio` (`shared/` is public API); 5 save sites. `workdir/apply.go:231` no longer renamed anything.
+- **Data Apps could serve a hidden file** on Windows (`apps/sub\.secret`): now refused, on every OS.
+- **Time zone:** from the ICU Windows ships, no table to keep up.
+- **DuckDB's Windows lock message** is different ("being used by another process", "File is already open in"), and a read-only open is refused too when the holder has the file read-write.
+- **`RemoveLegacy`** had a different reason to skip Windows: anfra never kept files there.
+- **Moved elsewhere:** file names that differ only in case, and names Windows can't hold on publish ([backlog](docs/todos/backlog.md)); `anfra logs`, the live-reload watcher and symlink tests failing on Windows (`win-terminal`).
+- **Asked at the end:** export files and MotherDuck's upload copy hold the user's data, and aren't owner-only on Windows yet.
 
 ### `win-line-endings`
 

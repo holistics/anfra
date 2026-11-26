@@ -40,7 +40,8 @@ origin, or HTTP on literal `127.0.0.1` or `[::1]` for local testing; see
 ## Stored credentials and logout
 
 Credentials are in `<ANFRA_HOME>/credentials.json`, defaulting to
-`~/.anfra/credentials.json`, with mode `0600`. Keep this file private and out of git.
+`~/.anfra/credentials.json`, with mode `0600`; on Windows, which has no file modes, an access
+list that lets only you read it. Keep this file private and out of git.
 Multiple server/org logins coexist. Status lists cached names and canonical URLs without
 network access or tokens, so a login revoked on its server still shows as valid. It marks
 the current repo's org (its publish destination), not a global active org, and lists that

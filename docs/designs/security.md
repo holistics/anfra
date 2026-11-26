@@ -47,8 +47,9 @@ Under a dev frontend (`ANFRA_APPSERVE_DEV_URL`, maintainers only), pages redirec
 
 Data source credentials live in the repo's `.anfra/data_sources.yml`.
 
-- `anfra init` creates it readable by its owner only, adds it to `.gitignore`, and writes a `data_sources.yml.example` without credentials to commit instead (`cmd/anfra/init.go`).
+- `anfra init` creates it readable by its owner only (mode `600`; on Windows an access list of the owner alone, nothing inherited: `internal/fileperm`), adds it to `.gitignore`, and writes a `data_sources.yml.example` without credentials to commit instead (`cmd/anfra/init.go`).
 - anfra reads it per call and passes each connection only to canal-query, which runs queries. anfra-node, which compiles them, receives only each source's name and type, for its SQL dialect (`CompileDataSources` in `internal/sidecar/anfranode/client.go`), so credentials never cross into the compiler.
+- The other files only their owner may read are kept so the same way: anfra's logins (`credentials.json`, which anfra also refuses to use when others can read it), the console history and `serve.json`. Windows has no file modes, so `internal/fileperm` gives each an owner-only access list there; SYSTEM and Administrators may still read a login file, as root may on Unix.
 - An image built with the repo copied in carries the file. Such an image is as secret as the credentials, and belongs only in a private registry.
 
 ## The engine makes no access decisions

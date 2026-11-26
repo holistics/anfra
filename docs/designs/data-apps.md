@@ -74,7 +74,7 @@ The next three sections follow these steps: what a Data App starts with (2 and 3
 Steps 2 and 3: before the definition's first script runs, the frame is given everything it needs to describe and query the repo, so a definition never fetches its own setup.
 
 - **Datasets: one `core.show` of the repo.** It answers every dataset in full: models, fields, metrics, as AQL can query them (`internal/command/show`, from anfra-node's `aml.show`). `toDescriptor` maps each to the SDK's `DatasetDescriptor`, named by its fqn. A dataset that can't be shown in full comes in outline with a diagnostic saying why; `loadDatasets` leaves it out rather than failing the rest, and reports the diagnostics, so a Data App that doesn't use it still runs. Diagnostics also report the repo's files that don't compile and a data source the repo doesn't configure.
-- **The reader** (`User`): the platform's to say. On `anfra serve` it is the local user, with every permission and the machine's time zone (`internal/appserve/reader.go`). The permissions are rendering hints only; every query is authorised again by whoever answers it.
+- **The reader** (`User`): the platform's to say. On `anfra serve` it is the local user, with every permission and the machine's time zone (`internal/appserve/reader.go`): `$TZ`, else `/etc/localtime` on Unix, or on Windows the IANA name the ICU Windows ships gives (Windows 10 1903 and later), else `Etc/UTC`. The permissions are rendering hints only; every query is authorised again by whoever answers it.
 - **The plugins the host installed**, by name and version: what it can do beyond queries. A definition reads them as `Anfra.plugins`, and finds each one's API under its name (`query.export`, `Anfra.render`, `Anfra.lineage`) only where it is installed ([sdk-plugins.md](sdk-plugins.md)).
 - **The base URL and the host's origin**, from step 3.
 
@@ -173,7 +173,7 @@ appserve is also the layer to replace. A team building its own platform, or brin
 | `/appserve/assets/…` | The frontend's built files. |
 | `/appserve/apps` | The tree of Data App definitions, with their titles. |
 | `/appserve/context` | The repo's name, the reader, whether live reload is on. |
-| `/appserve/files/<path>` | Any file under `apps/`, as written: confined to `apps/` (through symlinks too), no dot-files. Served with `Content-Security-Policy: sandbox allow-scripts` and `nosniff`, so opening a definition's URL directly never runs it at the API's origin. |
+| `/appserve/files/<path>` | Any file under `apps/`, as written: confined to `apps/` (through symlinks too), no dot-files, and no `\` or `:` (on Windows, a separator that would get past the dot-file rule, and a file's hidden stream). Served with `Content-Security-Policy: sandbox allow-scripts` and `nosniff`, so opening a definition's URL directly never runs it at the API's origin. |
 | `/appserve/events` | Live reload's event stream (SSE), when it is on. |
 | `POST /appserve/log` | A Data App's runtime error, console line or mount, written to the repo's `anfra.log` as `"service":"app"`, so an agent reads them without a browser. Same origin and JSON only, capped, rate-limited per Data App; off with `ANFRA_NO_APP_LOGS`. See [errors/data-apps.md](errors/data-apps.md#where-they-go-per-host). |
 

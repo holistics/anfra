@@ -84,3 +84,10 @@ Without the handler, Windows ends anfra-node at once on Ctrl-Break: its shutdown
 3. Move anfra's pin (`manifest.yml`, `anfra_node`) to that release.
 
 Until then, only anfra built from source on Windows meets an anfra-node without the handler.
+
+## File names Windows can't keep apart, or hold
+
+Found in `win-files-auth` ([SPEC-win-files-auth.md](../../SPEC-win-files-auth.md)).
+
+- **Names that differ only in case** (`Orders.aml`, `orders.aml`): Windows' file names ignore case, so pull on Windows writes one over the other. Pull should refuse them on Windows, naming both.
+- **Names Windows can't hold:** on Windows, pull now refuses device names (`CON`, `aux.aml`…), `:` `<>"|?*`, control characters and a trailing dot or space (`internal/publish/workdir`). A repo published from Linux or macOS can still hold them, and then can't be pulled on Windows. Publish could warn about them, on every OS, so a repo stays usable by a teammate on Windows.

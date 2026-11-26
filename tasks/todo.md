@@ -175,9 +175,9 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 ### - [ ] T10: Docs, backlog, plan, and the Linux checks
 
 **Acceptance criteria:**
-- [ ] The design and usage docs that describe each area say what differs on Windows: logins (`docs/usage/publishing.md`, `docs/designs/security.md`), exports (`docs/designs/exports.md`), Data Apps (`docs/designs/data-apps.md`).
-- [ ] `docs/todos/backlog.md`: file names that differ only in case; publish refusing names Windows can't hold.
-- [ ] `WINDOWS-PLAN.md`: Where it stands, and the module's result.
+- [x] The design and usage docs that describe each area say what differs on Windows: logins (`docs/usage/publishing.md`, `docs/designs/security.md`), exports (`docs/designs/exports.md`), Data Apps (`docs/designs/data-apps.md`).
+- [x] `docs/todos/backlog.md`: file names that differ only in case; publish refusing names Windows can't hold.
+- [x] `WINDOWS-PLAN.md`: Where it stands, and the module's result.
 - [ ] With your go-ahead: `make check` and `make test`. (Run lightly: `GOMAXPROCS=4 GOFLAGS=-p=2`.)
 
 **Verification:**
