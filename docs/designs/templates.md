@@ -173,9 +173,10 @@ Both calls are pure functions of their input. They take no repo, read no files, 
 }
 ```
 
-- It reads every inline `<script>` in the HTML, classic or module, finding them as an HTML tokenizer does. Nothing inside a comment or a raw-text element (`style`, `textarea`, `title`, `xmp`, `iframe`, `noembed`, `noframes`, `noscript`) is a script. Inside a script, a nested `<!--<script>…</script>` doesn't end it.
-- A `<script src>`, and a data script (`application/json`, `application/ld+json`, `importmap`, `speculationrules`), are skipped without a problem. A script of any other non-JS type, such as `text/babel`, is a problem.
-- A script that doesn't parse is a problem, and the others are still read. A comment, a `<script` tag or a script that is never closed is a problem. Nothing after an unclosed comment is read.
+- It reads every inline `<script>` in the HTML, classic or module, finding them as a browser's HTML parser does. Nothing inside a comment or a raw-text element (`style`, `textarea`, `title`, `xmp`, `iframe`, `noembed`, `noframes`, `noscript`) is a script. Inside a script, a nested `<!--<script>…</script>` doesn't end it.
+- A `<script src>` (or an SVG script with `href`), and a data script (`application/json`, `application/ld+json`, `importmap`, `speculationrules`), are skipped without a problem. A script of any other non-JS type, such as `text/babel`, is a problem. The type comes from `type`, or from `language` when `type` is absent.
+- An SVG `<script>` is read when its text is plain. One holding markup, character references or CDATA is a problem. So is a `<script>` inside a `<template>`, which the browser never runs.
+- A script that doesn't parse is a problem, and the others are still read. A comment, a script, or any other element whose content is text (`<plaintext>` included) that is never closed is a problem. So is input that ends inside a tag. Nothing after an unclosed comment is read.
 - A call is recognized by its method name and the number of its arguments, whatever the receiver is called: `app.createQuery(…)`, `a?.createQuery(…)`, `a['createQuery'](…)`. A call with the wrong number of arguments for the SDK's signature isn't the SDK's, and is skipped. A bare `createQuery(…)` isn't recognized, which the authoring rules cover.
 
 | Method | Arguments returned |
