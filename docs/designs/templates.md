@@ -45,7 +45,7 @@ type Catalog interface {
 // Parser is the parser process: extraction, references and validation.
 type Parser interface {
 	AppExtract(ctx context.Context, html string) (Extraction, error)
-	AQLReferences(ctx context.Context, aql string) (References, error)
+	AQLReferences(ctx context.Context, aql string, v2 bool) (References, error)
 	ValidateAQL(ctx context.Context, dataset, aql string) ([]Diagnostic, error)
 }
 ```
@@ -76,17 +76,34 @@ Any folder with a `manifest.json` is a template, and its ID is the folder's path
 
 `manifest.json` holds only what authors know and the code can't say: title, description, version, `min_anfra_version`, category, tags, authors, the `demo` template, the `apps` list, and per field a `description` (required for metrics), `synonyms` and the meaning of each literal value that can be mapped (`values`). `network` lists extra origins the apps load from, and must be empty in phase 1, since in a published repo only an Admin can change `apps.allow_origins`. Names, kinds and types are derived from the apps and the demo data by `anfra template index`, never restated by the author.
 
+An entry of `apps` is a path, or `{ "path": …, "mapping": "none" }` for an app that needs no mapping ([below](#apps-that-need-no-mapping)).
+
 ### What authors may write
 
 Extraction is static, so apps follow these rules. `anfra template check` enforces each one.
 
 - Every query is a `createQuery(name, { dataset, aql, ... })` call whose `dataset` and `aql` are literals. A template literal may not contain `${}`.
 - `createFilter` and `mapControl` take literal field names.
-- No SDK call changes a query's AQL after it is created, and no code wraps or rebinds SDK methods.
+- No SDK call changes a query's AQL after it is created, and no code wraps or rebinds SDK methods. SDK methods are called on the app (`app.createQuery(…)`), not destructured from it.
 - An AQL literal contains no escape sequences, so its source text is its value. Use a backtick literal for AQL with quotes or line breaks.
 - Every output column has an alias, so the row keys the app's JS reads survive the rewrite.
+- An alias never reuses the name of a field of the demo dataset. The rewrite tells an alias from a field by scope, and a shared name would be read differently by the v1 and v2 compilers.
+- A query gives the same references under both AQL compilers ([v1 and v2](#v1-and-v2)), so it installs into a repo on either.
 - Date ranges are relative to the demo data's latest date, not today.
-- Each app queries one dataset. See [open questions](#open-questions).
+- Each app queries one dataset. A `mapControl` field belongs to its target query's dataset, which static extraction can't follow through variables.
+
+These rules apply to apps that are mapped. An app marked `"mapping": "none"` follows the opposite rule.
+
+### Apps that need no mapping
+
+Some apps name no field of the template's at all. A data explorer or a metric explorer lists the reader's datasets and fields at runtime (`Anfra.datasets`) and builds its queries from what the reader picks. Its interface is empty, so there is nothing to map, and installing it is a copy.
+
+Static extraction can't tell such an app from one that hides a template field in JS, so the author says which it is, with `"mapping": "none"` on the app's entry in `apps`. For that app:
+
+- `check` skips the literal rules, and fails instead if `app.extract` finds any literal `dataset`, `field` or `aql` argument, since that would be a template field left unmapped.
+- `add` copies it byte for byte, with no Plan, and records it with an empty mapping, so `remove` and updates treat it like any other install.
+
+A template can mix both kinds, such as mapped dashboards beside a generic explorer. An app that mixes literal queries with queries built at runtime isn't supported yet ([open questions](#open-questions)).
 
 ## Fetch
 
@@ -121,7 +138,7 @@ Both calls are pure functions of their input. They take no repo, read no files, 
 
 **Spans.** A span is `{ "start": n, "end": m }`: byte offsets into the input as UTF-8, start inclusive and end exclusive. Byte offsets, not JavaScript string indexes, because Go slices bytes. Input with any character outside ASCII would otherwise splice at the wrong place. Splicing every returned span with its own text must reproduce the input byte for byte.
 
-**Problems.** Neither call fails on input it can't fully handle. It returns what it found, plus a `problems` list, each `{ "message", "line", "column" }` with 1-based positions. A JSON-RPC error means the call itself failed (bad params, a crash), never that the app or query was wrong.
+**Problems.** Neither call fails on input it can't fully handle. It returns what it found, plus a `problems` list, each `{ "message", "line", "column" }` with 1-based positions. A column counts UTF-16 code units, as amql's diagnostics do. A JSON-RPC error means the call itself failed (bad params, a crash), never that the app or query was wrong.
 
 #### `app.extract`
 
@@ -155,8 +172,8 @@ Both calls are pure functions of their input. They take no repo, read no files, 
 }
 ```
 
-- It reads every inline `<script>` in the HTML, classic or module. A `<script src>` is skipped.
-- A call is recognized by its method name and the shape of its arguments, whatever the receiver is called (`app.createQuery`, `a.createQuery`).
+- It reads every inline `<script>` in the HTML, classic or module. A `<script src>`, a script inside an HTML comment, and a script of a non-JS type (`application/json`, `importmap`, `text/template`) are skipped without a problem. A script that doesn't parse is a problem, and the others are still read.
+- A call is recognized by its method name and the number of its arguments, whatever the receiver is called: `app.createQuery(…)`, `a?.createQuery(…)`, `a['createQuery'](…)`. A call with the wrong number of arguments for the SDK's signature isn't the SDK's, and is skipped. A bare `createQuery(…)` isn't recognized, which the authoring rules cover.
 
 | Method | Arguments returned |
 |---|---|
@@ -167,14 +184,17 @@ Both calls are pure functions of their input. They take no repo, read no files, 
 
 - `name` is the first argument when it is a string literal.
 - A `span` covers the literal's contents, without its quotes or backticks.
-- `value` is the literal's value. Under the authoring rules it equals the spanned source text.
-- An argument the table names that is not a literal is a problem with its line, never silently skipped. That covers a variable, a call, a template literal with `${}`, an object spread over the declaration, and a literal containing an escape sequence.
+- `value` is the spanned source text. Under the authoring rules it is also the literal's value, except that JS reads a CRLF in a template literal as LF. Keeping the source text keeps `aql.references`' offsets valid inside it.
+- An argument the table names that is not a literal is a problem with its line, never silently skipped. That covers a variable, a call, a template literal with `${}`, and a literal containing any backslash, a line continuation included.
+- A declaration that isn't an object literal is a problem. So is a spread, in the call's arguments or in the declaration; in the declaration, its explicit literal properties are still returned. A missing required key (`dataset` or `aql` in `createQuery`, `field` in `mapControl`) is a problem.
+- A `createFilter` without `field` is a manual filter. It is listed with no arguments and no problem.
+- Filter `default` and `options` values are not returned. `check` refuses them on a field that has mapped literals.
 
 #### `aql.references`
 
 ```json
-// params
-{ "aql": "explore {\n  dimensions { m: ecommerce_orders.created_at | month() }\n  measures { revenue }\n  filters { ecommerce_orders.status == 'completed' }\n}" }
+// params (options may be left out)
+{ "options": { "useV2Compiler": true }, "aql": "explore {\n  dimensions { m: ecommerce_orders.created_at | month() }\n  measures { revenue }\n  filters { ecommerce_orders.status == 'completed' }\n}" }
 
 // result
 {
@@ -189,12 +209,24 @@ Both calls are pure functions of their input. They take no repo, read no files, 
 ```
 
 - A `field` reference is any name the query reads from its dataset: `model.field` (with `model` set), or a bare name, such as a dataset metric. Its span covers the whole reference, `ecommerce_orders.created_at`, so Go replaces it in one piece.
-- A name the query itself defines is not a reference. That covers an alias, a column named in `dimensions` or `measures`, and a variable. The parser knows its own scopes.
-- A `literal` is a string literal compared with a field reference: `==`, `!=`, `in`, and the same in filters. Its `field` is that reference's full name. Its span includes the quotes, since Go writes a whole new literal.
+- A name the query itself defines is not a reference. That covers an alias, a column named in `dimensions` or `measures`, a `select` column, and a declaration (`metric`, `dimension`, `const`, `function`). A visible alias wins over a dataset field of the same name. Names in `sorts` and query options are never references, since they name output columns and options.
+- Function names, grains (`month()`, `interval(1 month)`, `'week'`) and keywords (`true`, `null`) are never references.
+- A bare model name, as in `of_all(orders)`, looks like a bare field. When the same name also qualifies a field in the query (`orders.status`), it is a problem rather than a reference. A model name used only bare is listed as a field, which `check` catches against the demo dataset.
+- A `literal` is a string literal compared with a field reference: `==`, `!=`, `in` and `not in` in an expression, with either side first, and `is`, `is not`, `==`, `!=`, `in` and `not in` in a filter's params. Its `field` is that reference's full name, followed through an alias of a plain field (`s == 'a'` where `s: orders.status` gives `orders.status`). Its span includes the quotes, since Go writes a whole new literal.
 - The call is syntactic. It does not resolve names against a dataset, because at install the template's demo dataset is not in the user's repo, and a platform reads repos by revision. Whether a bare name is a metric or a dimension, and its type, comes from the index, which is built where the demo dataset exists.
-- AQL that doesn't parse returns its parse errors as problems, and the references found before them.
+- AQL that doesn't parse returns no references and one problem. The parser has no error recovery.
 
 A metric reference is told from a dimension by the index, not by this call. The difference matters only to the mapper's hard filter, which reads the index.
+
+#### v1 and v2
+
+A repo picks its AQL compiler in `.anfra/config.yml` (`aql.compiler.version`). Both compilers use the same parser, but their scopes differ:
+
+- **v1 only:** an alias can be read by a later sibling in the same block, in `dimensions` (and from pivot `rows` into `columns`) and in `measures`. `measures { n: count(orders.id), m: n * 2 }` is valid in v1, and v2 reports that `n` is not defined.
+- **Name clashes:** when an alias has the same name as a dataset metric, v2's `having` reads the metric and v1's reads the alias.
+- **Both:** a dimension alias is visible in measures, filters and having, and a measure alias in filters and having. An alias is never visible in its own definition, so in `revenue: revenue * 2` the inner `revenue` is the metric. A declaration is visible only after it. A `select` column is visible to later pipe stages only.
+
+So `aql.references` takes `options.useV2Compiler` (default `true`), as `aql.validate` does, and scopes as that compiler does. The installer passes the user's repo's setting. `check` runs every query under both and fails where the references differ, which with the alias rule keeps a template installable into a repo on either compiler.
 
 ### The rewrite
 
@@ -225,6 +257,7 @@ The result lists, per field, the top three candidates with their scores and the 
 - Every typed artifact has a handler that extracts its references and rewrites them. Phase 1 ships the app handler. A later phase adds AML, with an `aml.references` call.
 - The template's interface is the union of its handlers' references, less those the template satisfies itself.
 - Every field in the interface needs a target. A missing one fails `Apply` and names the field.
+- An app marked `"mapping": "none"` is copied as it is, whatever the mapping.
 - A rewritten query that fails `aql.validate` fails `Apply`, naming the app, the query and the mapped fields it uses.
 - Same template, commit and mapping give the same bytes. The record's file hashes depend on it, and so does re-mapping.
 
@@ -299,7 +332,8 @@ It writes the apps to `apps/<template>/`. It never overwrites or renames anythin
 
 - `manifest.json` is invalid or lists missing files, `demo` doesn't resolve, or `preview.png` is missing;
 - `network` isn't empty;
-- `app.extract` returns a problem;
+- `app.extract` returns a problem, or, for an app marked `"mapping": "none"`, returns any literal `dataset`, `field` or `aql` argument;
+- `aql.references` gives different references under v1 and v2, or an alias reuses the name of a field of the demo dataset;
 - a query has an output column without an alias, or doesn't validate against the demo dataset;
 - a metric the apps use has no `description`, or `fields` describes a field no query uses;
 - in a pull request, the template's files changed but `version` didn't, or `version` isn't greater than its latest tag.
@@ -310,7 +344,7 @@ It writes the apps to `apps/<template>/`. It never overwrites or renames anythin
 
 The parser calls ship in an anfra-node release before core can use them. A sidecar's wire contract is versioned with anfra ([sidecars](sidecars.md#where-the-binaries-come-from)), so:
 
-1. anfra-node adds `app.extract` and `aql.references`, and cuts a release.
+1. anfra-node adds `app.extract` and `aql.references` (in review), and cuts a release.
 2. Core bumps `manifest.yml`'s anfra-node pin, and adds `AppExtract` and `AQLReferences` to its client, with tests against the real binary. Until the release, those tests run against a local build through `ANFRA_NODE_BIN`.
 3. In parallel, nothing needing the parser: the install record and its `Publishable` change.
 4. `shared/templates`: Fetch and Apply with the app handler, then Plan.
@@ -318,8 +352,5 @@ The parser calls ship in an anfra-node release before core can use them. A sidec
 
 ## Open questions
 
-1. **Literal escapes.** The authoring rules forbid escape sequences in AQL literals, so a span's text is the value and splicing stays exact. Is that too strict for authors? The alternative is for `app.extract` to return raw and cooked offsets for each literal, and for Go to re-encode a rewritten literal.
-2. **Filter values.** `createFilter`'s `default` and `options` can hold literal values of a field with mapped literals. Phase 1 proposes that `check` refuses them on such a field. Should `app.extract` return them, so the rewrite can map them?
-3. **Several datasets in one app.** A `mapControl` field belongs to its target query's dataset, which static extraction can't follow through variables. Phase 1 proposes one dataset per app. Is that enough for the launch set?
-4. **Bare names in AQL.** `aql.references` proposes that any bare name the query doesn't define is a dataset field. The anfra-node owner should confirm that holds for every AQL construct, such as function names, grains and keywords used as identifiers.
-5. **Mapper weights and the `--yes` threshold.** These need a set of realistic user datasets to tune on.
+1. **Apps that mix literal and runtime-built queries.** A marker for AQL fragments (``Anfra.aql`revenue` ``) would let an app compose queries in JS while still telling the installer which strings are AQL. `app.extract` would return each marked fragment, and `aql.references` would parse it as an expression. Wait for a template that needs it.
+2. **Mapper weights and the `--yes` threshold.** These need a set of realistic user datasets to tune on.
