@@ -325,6 +325,7 @@ Compiling needs no change: the AML parser already treats a CR as whitespace and 
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | At startup on Windows, turn on `ENABLE_VIRTUAL_TERMINAL_PROCESSING` for stdout/stderr (`internal/cliui`), so colors work in old cmd and PowerShell 5 windows. `internal/pretty/pretty.go:741` `utf8Terminal` → true on Windows. `internal/cliui/entry.go:180`: say "Ctrl-Z then Enter" on Windows. | 0.25–0.5 |
 | Manually test `anfra console` (bubbletea) and the publish prompt (`muesli/cancelreader`) in Windows Terminal, PowerShell 5 and cmd, and fix what breaks. | 1.25–1.75 |
+| Found in `win-files-auth` (tests failing on Windows, causes not yet looked into): `anfra logs` and following the log (`cmd/anfra`: `TestLogsPretty`, `TestLogsNarrowed`, `TestLogsHintsWhyNoAppReports`, `TestLogsFollow`, `TestReadLinesEndWithTheirContext`); the Data Apps live-reload watcher gets folder events on Windows, so it reports apps that didn't change (`internal/appserve`: `TestWatch`, `TestLiveReloadWatchesOnlyWhileAStreamIsOpen`). Tests that need symlinks (`TestFiles`, `TestCheckPath`, `TestInitRefusesASymlinkedGitignore`) need administrator rights or developer mode on Windows: run them so in the Windows CI job, or skip them there. | not estimated |
 
 
 

@@ -26,8 +26,9 @@ T5 RemoveLegacy skipped on Windows
 T6 time zone from ICU
 T7 DuckDB's lock message on Windows
                                                                        → Checkpoint B
-T8 end to end on Windows 11 (needs T1–T7)
- └─ T9 docs, backlog, plan, make check / make test                    → Checkpoint C
+T8 other private files (fileperm), added at Checkpoint B (needs T2)
+T9 end to end on Windows 11 (needs T1–T8)
+ └─ T10 docs, backlog, plan, make check / make test                   → Checkpoint C
 ```
 
 T3–T7 are independent of each other and of T1–T2.
@@ -49,14 +50,15 @@ T3–T7 are independent of each other and of T1–T2.
 - [x] T7: DuckDB's lock message on Windows
 
 ### Checkpoint B
-- [ ] T3–T7's tests pass on Linux and Windows; review with you.
+- [x] T3–T7's tests pass on Linux and Windows; review with you.
 
 ### Phase 3: End to end and close
-- [ ] T8: End to end on Windows 11
-- [ ] T9: Docs, backlog, plan, and the Linux checks
+- [ ] T8: Other files only you may read, on Windows too (added at Checkpoint B)
+- [ ] T9: End to end on Windows 11
+- [ ] T10: Docs, backlog, plan, and the Linux checks
 
 ### Checkpoint C: Complete
-- [ ] Spec success criteria 1–8 met; the commit split reviewed with you.
+- [ ] Spec success criteria 1–9 met; the commit split reviewed with you.
 
 ## Risks and Mitigations
 

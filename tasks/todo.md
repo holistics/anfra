@@ -131,11 +131,32 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 **Estimated scope:** S
 
 ### Checkpoint B
-- [ ] T3–T7's tests pass on Linux and Windows; review with you.
+- [x] T3–T7's tests pass on Linux and Windows; review with you. Found: the files below (T8); `anfra logs`, the live-reload watcher and symlink tests fail on Windows, added to `win-terminal` in `WINDOWS-PLAN.md`; Windows ran out of memory from WSL's file cache (work is lighter now: `GOMAXPROCS=4 GOFLAGS=-p=2`, one build and lint per task).
+
+### - [ ] T8: Other files only you may read, on Windows too
+
+**Description:** Added at Checkpoint B. On Unix, `data_sources.yml` (database passwords), the console history and `runtime.json` are mode `600`; on Windows they get whatever their folder allows.
+
+**Acceptance criteria:**
+- [ ] `internal/fileperm`: `OwnerOnly(f)` (mode `600` on Unix; on Windows an access list of this user only, nothing inherited), `WriteFile(name, data)`, and `IsOwnerOnly(path)` for tests on both OSes.
+- [ ] Used by `init`'s `data_sources.yml`, the console history (appended and rewritten), `runtime.json`, and the login file (replacing `cliauth`'s own `makePrivate`).
+- [ ] Unix behaviour unchanged (mode `600`).
+
+**Verification:**
+- [ ] Tests pass (Linux): the new package, `./cmd/anfra/`, `./internal/cliauth/`.
+- [ ] On Windows: `TestConsoleHistory` and `TestInitSetsUpARepo`'s mode checks (failing today) pass through `IsOwnerOnly`; the `fileperm` tests pass.
+- [ ] Lint once, for Windows and Linux.
+
+**Dependencies:** T2
+
+**Files likely touched:** `internal/fileperm/` (new), `cmd/anfra/init.go`, `console_history.go`, `runtime.go`, `internal/cliauth/` (+ tests)
+
+**Estimated scope:** M
+
 
 ## Phase 3: End to end and close
 
-### - [ ] T8: End to end on Windows 11
+### - [ ] T9: End to end on Windows 11
 
 **Acceptance criteria:**
 - [ ] With the login from Checkpoint A: a command that needs it still works after a token refresh, if one can be triggered.
@@ -145,29 +166,29 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 **Verification:**
 - [ ] Manual, on Windows 11: each step, results recorded.
 
-**Dependencies:** T1–T7
+**Dependencies:** T1–T8
 
 **Files likely touched:** none (results here)
 
 **Estimated scope:** S
 
-### - [ ] T9: Docs, backlog, plan, and the Linux checks
+### - [ ] T10: Docs, backlog, plan, and the Linux checks
 
 **Acceptance criteria:**
 - [ ] The design and usage docs that describe each area say what differs on Windows: logins (`docs/usage/publishing.md`, `docs/designs/security.md`), exports (`docs/designs/exports.md`), Data Apps (`docs/designs/data-apps.md`).
 - [ ] `docs/todos/backlog.md`: file names that differ only in case; publish refusing names Windows can't hold.
 - [ ] `WINDOWS-PLAN.md`: Where it stands, and the module's result.
-- [ ] With your go-ahead: `make check` and `make test`.
+- [ ] With your go-ahead: `make check` and `make test`. (Run lightly: `GOMAXPROCS=4 GOFLAGS=-p=2`.)
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–8, each ticked here.
+- [ ] Manual: the spec's Success Criteria 1–9, each ticked here.
 
-**Dependencies:** T8
+**Dependencies:** T9
 
 **Files likely touched:** the docs above, `docs/todos/backlog.md`, `WINDOWS-PLAN.md`
 
 **Estimated scope:** S
 
 ### Checkpoint C: Complete
-- [ ] Spec success criteria 1–8 met.
+- [ ] Spec success criteria 1–9 met.
 - [ ] Ready for review with you (and the commit split proposed).

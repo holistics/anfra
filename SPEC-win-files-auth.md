@@ -21,6 +21,8 @@ anfra compiles and runs on Windows (M1), but the code that saves logins, replace
 6. **Time zone** (`internal/appserve/reader.go:38`, `localTimezone`): `$TZ`, else `/etc/localtime`'s link, else `Etc/UTC`. Windows has no `/etc/localtime`, so every Data App gets `Etc/UTC`. **Decided with the user:** on Windows, after `$TZ`, ask Windows' own ICU (`icu.dll`, Windows 10 1903+) for the IANA name of the system's zone; fall back to `Etc/UTC` when it's missing (Windows 10 1803/1809, out of support) or fails. No new dependency and no table to keep up: Windows Update keeps ICU's data current ([Microsoft: ICU in Windows](https://devblogs.microsoft.com/oldnewthing/20210527-00/?p=105255)).
 7. **DuckDB's lock message** (`internal/motherduck/cli.go:269-278`, `LockedBy`): matches "Could not set lock on file" and "Conflicting lock is held in … (PID n)". DuckDB's message on Windows isn't recorded yet: check it (a DuckDB file open in two processes), and match it too, so the hint naming the process holding the file shows on Windows.
 
+8. **Other files only you may read** (added at Checkpoint B, decided with the user). On Unix, anfra writes `data_sources.yml` (database passwords, by `anfra init`, `cmd/anfra/init.go:250`), the console history (`cmd/anfra/console_history.go:69`) and `runtime.json` (`cmd/anfra/runtime.go:60`) as mode `600`. On Windows they get whatever their folder allows. One helper, `internal/fileperm`, makes a file only you can read (mode `600` on Unix, an owner-only access list on Windows), used for these three and the login file. Export files and the MotherDuck upload's temporary copy also hold your data: asked about at the end.
+
 **Users:** anyone on Windows who logs in, publishes or pulls, exports, or runs Data Apps.
 
 **Out of scope:**
@@ -112,6 +114,7 @@ func checkPrivate(path string) error { … }
 6. On Windows, Data Apps get the system's IANA zone (matching `Get-TimeZone`); `$TZ` still wins; `Etc/UTC` when ICU is missing.
 7. On Windows, DuckDB's lock message gives the same hint as on Unix.
 8. Linux tests, `make check` and `make test` pass; the design docs and `WINDOWS-PLAN.md` are updated; the backlog has the case-only item.
+9. On Windows, `data_sources.yml` from `anfra init`, the console history and `runtime.json` have an owner-only access list; on Unix, mode `600` as before.
 
 ## Open Questions
 
