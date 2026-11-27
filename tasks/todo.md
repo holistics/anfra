@@ -40,15 +40,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 ## Phase 2: The files anfra writes
 
-### - [ ] T3: `anfra init` writes `.gitattributes`
+### - [x] T3: `anfra init` writes `.gitattributes`
 
 **Acceptance criteria:**
-- [ ] `models/** datasets/** apps/** .anfra/** text=auto eol=lf`, each with a short comment saying why, as `.gitignore`'s entries have.
-- [ ] An existing `.gitattributes` gets only the lines it lacks; a non-regular one is refused, as `.gitignore`.
-- [ ] `init`'s help and its summary list the file.
+- [x] `models/** datasets/** apps/** .anfra/** text=auto eol=lf`, each with a short comment saying why, as `.gitignore`'s entries have.
+- [x] An existing `.gitattributes` gets only the lines it lacks; a non-regular one is refused, as `.gitignore`. A line already setting a path (whatever its attributes) is left to the repo. `ignoreLines`' body is now `gitLines`, shared by both, with `ignoreLines` unchanged in what it does.
+- [x] `init`'s help and its summary list the file.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./cmd/anfra/ -run Init` with a new and an existing `.gitattributes`.
+- [x] Tests pass (Linux): `go test ./cmd/anfra/ -run Init` with a new and an existing `.gitattributes`.
 
 **Dependencies:** None
 

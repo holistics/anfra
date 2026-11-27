@@ -26,7 +26,7 @@ import (
 )
 
 var initFiles = []string{
-	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".gitignore", ".anfra/context_sources.yml",
+	".anfra/data_sources.yml", ".anfra/data_sources.yml.example", ".gitignore", ".gitattributes", ".anfra/context_sources.yml",
 	"models/.gitkeep", "datasets/.gitkeep", "apps/.gitkeep", "AGENTS.md", ".anfra/config.yml",
 }
 
@@ -44,7 +44,7 @@ func TestInitSetsUpARepo(t *testing.T) {
 			t.Errorf("not reported as created: %s\n%+v", f, res.Files)
 		}
 	}
-	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 9 files." || len(res.Hints) != 2 {
+	if res.Dir != dir || res.Message != "Set up an anfra repo in "+dir+", with 10 files." || len(res.Hints) != 2 {
 		t.Errorf("result: %+v", res)
 	}
 	// The settings file reads back as anfra's own defaults: a new repo behaves as one without it.
@@ -359,5 +359,33 @@ func TestInitWritesNothingToPublishButDefaults(t *testing.T) {
 	}
 	if changed := sharedrepoconfig.Diff(sharedrepoconfig.Config{}, settings); len(changed) > 0 {
 		t.Errorf("init's settings change %v from anfra's defaults", changed)
+	}
+}
+
+// .gitattributes keeps anfra's folders LF in git, whatever the OS, and leaves
+// binary files alone; a path the repo's own file already sets is left to it.
+func TestInitWritesGitattributes(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "shop")
+	if _, err := initRepo(context.Background(), dir, initOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, ".gitattributes"))
+	for _, line := range []string{"models/** text=auto eol=lf", "datasets/** text=auto eol=lf", "apps/** text=auto eol=lf", ".anfra/** text=auto eol=lf"} {
+		if !strings.Contains(string(got), "\n"+line+"\n") {
+			t.Errorf(".gitattributes lacks %q:\n%s", line, got)
+		}
+	}
+
+	dir = t.TempDir()
+	mine := "*.png binary\nmodels/** text eol=crlf\n"
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte(mine), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := initRepo(context.Background(), dir, initOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = os.ReadFile(filepath.Join(dir, ".gitattributes"))
+	if !strings.HasPrefix(string(got), mine) || strings.Contains(string(got), "models/** text=auto") || !strings.Contains(string(got), "\napps/** text=auto eol=lf\n") {
+		t.Errorf("an existing .gitattributes: %q; want its lines kept, models/** left to it, the others added", got)
 	}
 }

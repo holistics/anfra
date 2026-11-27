@@ -141,6 +141,7 @@ func newInitCmd() *cobra.Command {
 			"  .anfra/config.yml                the repo's settings, such as its queries' defaults, each at anfra's own\n" +
 			"  models/, datasets/, apps/        AML models, AML datasets, Data Apps\n" +
 			"  .gitignore                       + .anfra/data_sources.yml, .anfra/config.local.yml\n" +
+			"  .gitattributes                   + models/, datasets/, apps/, .anfra/ stored with LF line endings\n" +
 			"  AGENTS.md                        + the anfra block, telling coding agents to use the anfra skills\n" +
 			"                                     (and @AGENTS.md in an existing CLAUDE.md)\n\n" +
 			"It changes no existing file beyond adding those, so it is safe to run in a repo that has some of these already.\n" +
@@ -258,6 +259,13 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 	}
 	steps = append(steps, initStep{".gitignore", ignoreLines(ignored)})
 	if !opts.dataSourcesOnly {
+		// LF in git for anfra's folders, as publish sends them, whatever the OS
+		// each member saves on; text=auto leaves binaries, as images, alone.
+		var lf []ignoreEntry
+		for _, d := range append(slices.Clone(initLayout), filepath.ToSlash(config)) {
+			lf = append(lf, ignoreEntry{d + "/** text=auto eol=lf", d + "/ stored with LF line endings"})
+		}
+		steps = append(steps, initStep{".gitattributes", attributeLines(lf)})
 		steps = append(steps, initStep{filepath.ToSlash(filepath.Join(config, "context_sources.yml")), writeNew([]byte(contextSourcesTemplate), 0o644)})
 		for _, d := range initLayout {
 			steps = append(steps, initStep{d + "/.gitkeep", writeNew(nil, 0o644)})
@@ -521,8 +529,8 @@ func writeNew(content []byte, perm fs.FileMode) func(path string) (bool, error) 
 	}
 }
 
-// ignoreEntry is a pattern for a .gitignore, and what the comment above it
-// says it is.
+// ignoreEntry is a line for a .gitignore or a .gitattributes, and what the
+// comment above it says it is.
 type ignoreEntry struct{ pattern, what string }
 
 // ignoreLines adds each entry's pattern to a .gitignore, creating it, unless a
@@ -531,21 +539,35 @@ type ignoreEntry struct{ pattern, what string }
 // symlinked one, so the lines would not ignore anything, and writing through
 // the link would change a file outside the repo.
 func ignoreLines(entries []ignoreEntry) func(path string) (bool, error) {
+	return gitLines(entries, hasLine, "ignore rules")
+}
+
+// attributeLines adds each entry's line to a .gitattributes, as ignoreLines
+// does to a .gitignore, unless a line already sets attributes for its path:
+// the repo has decided for those files.
+func attributeLines(entries []ignoreEntry) func(path string) (bool, error) {
+	return gitLines(entries, setsPath, "attributes")
+}
+
+// gitLines adds each entry not yet in a git file (has) to it, after a comment
+// saying what it is for, creating the file; refused when the file is not a
+// regular one, saying to add them to the repo's rules (what) by hand.
+func gitLines(entries []ignoreEntry, has func(content []byte, line string) bool, rules string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
 		if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
 			patterns := make([]string, len(entries))
 			for i, e := range entries {
 				patterns[i] = e.pattern
 			}
-			return false, fmt.Errorf("it's a symlink, which Git doesn't follow. Add %s to the repo's ignore rules yourself", strings.Join(patterns, " and "))
+			return false, fmt.Errorf("it's a symlink, which Git doesn't follow. Add %s to the repo's %s yourself", strings.Join(patterns, " and "), rules)
 		}
-		existing, err := os.ReadFile(path) //nolint:gosec // G304: the .gitignore of the repo being set up
+		existing, err := os.ReadFile(path) //nolint:gosec // G304: a git file of the repo being set up
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return false, err
 		}
 		var add bytes.Buffer
 		for _, e := range entries {
-			if hasLine(existing, e.pattern) {
+			if has(existing, e.pattern) {
 				continue
 			}
 			if add.Len() == 0 && len(existing) > 0 && !bytes.HasSuffix(existing, []byte("\n")) {
@@ -568,6 +590,18 @@ func ignoreLines(entries []ignoreEntry) func(path string) (bool, error) {
 		}
 		return true, f.Close()
 	}
+}
+
+// setsPath reports whether a .gitattributes' content has a line setting
+// attributes for line's path (its first field), whatever they are.
+func setsPath(content []byte, line string) bool {
+	path, _, _ := strings.Cut(line, " ")
+	for l := range strings.SplitSeq(string(content), "\n") {
+		if f := strings.Fields(l); len(f) > 0 && f[0] == path {
+			return true
+		}
+	}
+	return false
 }
 
 // hasLine reports whether a .gitignore's content has a line that is pattern,

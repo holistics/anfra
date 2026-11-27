@@ -33,7 +33,7 @@ T5 round trip on Windows with acme (needs T1–T2)
 - [x] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
 
 ### Phase 2: The files anfra writes
-- [ ] T3: `anfra init` writes `.gitattributes`
+- [x] T3: `anfra init` writes `.gitattributes`
 - [ ] T4: Lines added to `config.yml` and `AGENTS.md` keep the file's line ending
 
 ### Checkpoint A
