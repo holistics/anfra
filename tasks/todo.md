@@ -22,15 +22,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 **Estimated scope:** M
 
-### - [ ] T2: Each release publishes `SHA256SUMS`
+### - [x] T2: Each release publishes `SHA256SUMS`
 
 **Acceptance criteria:**
-- [ ] `build_release.yml` writes `release/SHA256SUMS` (`sha256sum` over the assets, by file name) after the assets are built, and uploads it with them; a branch's test build keeps it in its artifacts too.
-- [ ] Committed with T1, so a verifying anfra never ships without it; the PR description says not to split them.
+- [x] `build_release.yml` writes `release/SHA256SUMS` (`sha256sum` over the assets, by file name) after the assets are built, and uploads it with them; a branch's test build keeps it in its artifacts too.
+- [x] Committed with T1, so a verifying anfra never ships without it; the PR description says not to split them.
 
 **Verification:**
-- [ ] The step's shell run locally over sample files gives lines `sha256sum -c` accepts.
-- [ ] The workflow parses (`actionlint`, if available, else a YAML check).
+- [x] The step's shell run locally over sample files gives lines `sha256sum -c` accepts.
+- [x] The workflow parses (`actionlint`, if available, else a YAML check). `actionlint` isn't installed here: the YAML parses. Also: `SHA256SUMS` uploads before the assets, in a call of its own, since `anfra update` takes a release as out once its asset is.
 
 **Dependencies:** T1
 

@@ -128,6 +128,9 @@ jobs:
             gzip -9 "release/anfra-$t"   # replaces anfra-$t with anfra-$t.gz
             file "release/anfra-$t.gz" || true
           done
+          # The assets' sha256, which anfra update checks a download against (internal/update).
+          (cd release && sha256sum anfra-* > SHA256SUMS)
+          cat release/SHA256SUMS
           ls -la release
 
       # The image: anfra serve on the release's own Linux binaries, for amd64 and arm64
@@ -182,6 +185,9 @@ jobs:
           else
             gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
           fi
+          # The checksums first: anfra update takes a release as out once its asset is,
+          # and refuses an asset with no checksum.
+          gh release upload "$TAG" release/SHA256SUMS --clobber
           gh release upload "$TAG" release/anfra-* --clobber
 
       - name: Upload artifacts
@@ -189,7 +195,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: anfra-binaries
-          path: release/anfra-*
+          path: |
+            release/anfra-*
+            release/SHA256SUMS
           if-no-files-found: error
 
   # The SDK and the design package, published to npm as @holistics/anfra-sdk and
