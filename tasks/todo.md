@@ -122,4 +122,4 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 ### Checkpoint B: Complete
 - [x] Spec success criteria 1–7 met.
-- [ ] Ready for review with you (and the commit split proposed).
+- [x] Ready for review with you (and the commit split proposed). Reviewed; the split kept as is.

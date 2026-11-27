@@ -44,7 +44,7 @@ T5 round trip on Windows with acme (needs T1–T2)
 - [x] T6: Docs and plan
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–7 met; the commit split reviewed with you.
+- [x] Spec success criteria 1–7 met; the commit split reviewed with you.
 
 ## Risks and Mitigations
 
