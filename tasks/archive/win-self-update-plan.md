@@ -1,10 +1,10 @@
 # Implementation Plan: win-self-update
 
-Spec: [SPEC-win-self-update.md](../SPEC-win-self-update.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Task checklist: [todo.md](todo.md). Earlier modules' tasks: [archive/](archive/).
+Spec: [SPEC-win-self-update.md](../../SPEC-win-self-update.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Task checklist: [todo.md](win-self-update-todo.md). Earlier modules' tasks: [archive/](./).
 
 ## Overview
 
-What this module delivers and why: the spec's [Objective](../SPEC-win-self-update.md#objective). This file holds how. The checksum first, on every OS, with the release step that publishes `SHA256SUMS` in the same change (decided with the user: the order stays safe in one PR). Then the Windows `.zip`, the old binary and the advice. Then an end-to-end check on Windows against a local fake release.
+What this module delivers and why: the spec's [Objective](../../SPEC-win-self-update.md#objective). This file holds how. The checksum first, on every OS, with the release step that publishes `SHA256SUMS` in the same change (decided with the user: the order stays safe in one PR). Then the Windows `.zip`, the old binary and the advice. Then an end-to-end check on Windows against a local fake release.
 
 ## Architecture Decisions
 

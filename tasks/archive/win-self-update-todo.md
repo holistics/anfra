@@ -1,6 +1,6 @@
 # Tasks: win-self-update
 
-Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-update.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md).
+Plan: [plan.md](win-self-update-plan.md). Spec: [SPEC-win-self-update.md](../../SPEC-win-self-update.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md).
 
 ## Phase 1: The update
 
