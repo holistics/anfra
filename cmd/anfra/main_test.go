@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/shared/apperr"
 )
 
@@ -19,6 +20,9 @@ const waitInterruptEnv = "ANFRA_TEST_WAIT_INTERRUPT"
 // The tests run as the binary does by default (main): causes shown, since
 // ANFRA_HIDE_ERROR_CAUSES is unset.
 func TestMain(m *testing.M) {
+	// No background update check: it runs the program again, which here is
+	// the test program, running the whole suite (TestTestsStartNoUpdateCheck).
+	_ = os.Setenv(envflag.NoUpdateNotifier, "1")
 	if os.Getenv(waitInterruptEnv) != "" { // a process that runs until interrupted, as anfra serve does
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
@@ -121,5 +125,16 @@ func TestConsoleAllPretty(t *testing.T) {
 	run(t.Context(), []string{"version", "--yaml"}, &out, &errOut, runOptions{inConsole: true})
 	if !strings.HasPrefix(out.String(), "version: ") {
 		t.Errorf("version --yaml in a console: %q", &out)
+	}
+}
+
+// The tests never start the background update check: it runs the program
+// again, which in a test is the test program, so each check would run the
+// whole suite, starting more. go test deletes its program after the run,
+// which ends the chain on Linux; a test program kept on disk, as on Windows,
+// multiplies until the machine gives out.
+func TestTestsStartNoUpdateCheck(t *testing.T) {
+	if !updateNotifyDisabled() {
+		t.Fatalf("%s isn't set in the tests: a command they run would start copies of the test program", envflag.NoUpdateNotifier)
 	}
 }
