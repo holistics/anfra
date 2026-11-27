@@ -324,7 +324,18 @@ func runningAnfra() anfraFile {
 	if err != nil {
 		return anfraFile{}
 	}
-	info, _ := os.Stat(path)
+	return anfraFileAt(path)
+}
+
+// anfraFileAt is the file at path now.
+func anfraFileAt(path string) anfraFile {
+	info, err := os.Stat(path)
+	if err != nil {
+		return anfraFile{}
+	}
+	// On Windows, os.SameFile reads the file's ID by its path on first use;
+	// after an update, that would be the new file's.
+	os.SameFile(info, info)
 	return anfraFile{path: path, info: info}
 }
 

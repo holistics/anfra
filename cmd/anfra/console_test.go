@@ -289,6 +289,26 @@ func TestReplaced(t *testing.T) {
 	}
 }
 
+// The console asks only after update: the file it started from has to be
+// known by then, not looked up at its path again.
+func TestReplacedAskedOnlyAfter(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "anfra")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := anfraFileAt(path)
+	if err := os.Rename(path, filepath.Join(dir, ".anfra.old")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !f.replaced() {
+		t.Fatal("a new file at the path not told apart")
+	}
+}
+
 // A flag the mode's command requires and nothing gives is warned of before an
 // entry fails for it, by the command's own check: the mode's flags and the
 // session's both count.
