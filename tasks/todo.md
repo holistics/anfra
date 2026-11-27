@@ -95,21 +95,23 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 - PSScriptAnalyzer 1.25.0 (installed for your user): only `PSAvoidUsingWriteHost`, which suits a script that talks to a person; nothing else.
 - Not checked: PowerShell 7 (not installed here); ARM, by reading the code only.
 
-### - [ ] T5: `install.sh` on Git Bash points to `install.ps1`
+### - [x] T5: `install.sh` on Git Bash points to `install.ps1`
 
 **Acceptance criteria:**
-- [ ] On Git Bash, MSYS or Cygwin (`uname -s` starting `MINGW`, `MSYS` or `CYGWIN`), `install.sh` stops with a message giving `irm https://anfra.ai/install.ps1 | iex`, instead of "unsupported OS".
-- [ ] Its header comment no longer says verification is still to come in `anfra update`: `anfra update` verifies now.
+- [x] On Git Bash, MSYS or Cygwin (`uname -s` starting `MINGW`, `MSYS` or `CYGWIN`), `install.sh` stops with a message giving `irm https://anfra.ai/install.ps1 | iex`, instead of "unsupported OS".
+- [x] Its header comment no longer says verification is still to come in `anfra update`: `anfra update` verifies now.
 
 **Verification:**
-- [ ] Run with a stubbed `uname` for each of the three; and on Linux, unchanged.
-- [ ] `shellcheck install.sh`, if available.
+- [x] Run with a stubbed `uname` for each of the three; and on Linux, unchanged.
+- [ ] `shellcheck install.sh`: not installed here.
 
 **Dependencies:** T4
 
 **Files likely touched:** `install.sh`
 
 **Estimated scope:** XS
+
+**Result** (2026-11-27): with `uname -s` stubbed as `MINGW64_NT`, `MSYS_NT` and `CYGWIN_NT`, `install.sh` stops with the PowerShell line; `FreeBSD` still gets "unsupported OS"; Linux goes on to the download as before. In Git Bash on Windows 11, the same message.
 
 ### Checkpoint B
 - [ ] On Windows 11, `install.ps1` from a local release installs T3's `.zip`; `anfra` answers queries in a new terminal, MotherDuck's extension included; a wrong checksum refuses.

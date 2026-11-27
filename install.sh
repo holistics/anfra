@@ -15,9 +15,10 @@
 #   ANFRA_NO_MODIFY_PATH if set, don't touch shell rc files; just print the hint
 #
 # Downloads from public GitHub Releases (no auth). Trust model: downloads over
-# HTTPS from GitHub Releases (TOFU). Signature
-# verification is not done here yet — `anfra update` is where verification will
-# live (see .agents/projects/anfra/signing.md).
+# HTTPS from GitHub Releases (TOFU). This script doesn't check the download
+# against the release's SHA256SUMS yet; `anfra update` and install.ps1 do.
+#
+# On Windows, install with PowerShell instead: irm https://anfra.ai/install.ps1 | iex
 
 set -euo pipefail
 
@@ -59,7 +60,11 @@ os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$os" in
     linux)  os="linux";  os_label="Linux" ;;
     darwin) os="darwin"; os_label="macOS" ;;
-    *)      err "unsupported OS: $os (anfra supports linux and macOS)" ;;
+    # Git Bash, MSYS2 and Cygwin on Windows.
+    mingw*|msys*|cygwin*)
+        err "this is Windows, where anfra installs from PowerShell instead. Run this in PowerShell:
+  irm https://anfra.ai/install.ps1 | iex" ;;
+    *)      err "unsupported OS: $os (anfra supports Linux, macOS and Windows)" ;;
 esac
 
 arch="$(uname -m)"
