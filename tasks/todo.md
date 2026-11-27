@@ -4,16 +4,18 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 
 ## Phase 1: The sidecars build for Windows
 
-### - [ ] T1: canal's `windows-x64` row
+### - [x] T1: canal's `windows-x64` row
 
 **Acceptance criteria:**
-- [ ] `build_and_release_binaries.yml` (on a branch from canal's `origin/master`) has `{ target: windows-x64, runner: windows-2022 }`. On it: MinGW-Builds GCC 14.2.0 (posix, SEH, UCRT) and DuckDB's `libduckdb-windows-amd64.zip` (the version the bindings pin, v1.5.6), each downloaded by URL with its sha256 checked; the build with `CGO_LDFLAGS=-L<dll folder>` and `-tags=duckdb_arrow,duckdb_use_lib`.
-- [ ] It outputs `<app>-windows-x64.exe` and `<app>-windows-x64-duckdb.dll`, both in the row's artifact and so in the release; `<app>-windows-x64.exe --version` answers beside the DLL.
-- [ ] The other rows' steps are unchanged.
+- [x] `build_and_release_binaries.yml` (on a branch from canal's `origin/master`) has `{ target: windows-x64, runner: windows-2022 }`. On it: MinGW-Builds GCC 14.2.0 (posix, SEH, UCRT) and DuckDB's `libduckdb-windows-amd64.zip` (the version the bindings pin, v1.5.6), each downloaded by URL with its sha256 checked; the build with `CGO_LDFLAGS=-L<dll folder>` and `-tags=duckdb_arrow,duckdb_use_lib`.
+- [x] It outputs `<app>-windows-x64.exe` and `<app>-windows-x64-duckdb.dll`, both in the row's artifact and so in the release; `<app>-windows-x64.exe --version` answers beside the DLL.
+- [x] The other rows' steps are unchanged.
 
 **Verification:**
-- [ ] By hand on Windows (memory checked first): the row's commands, run in Git Bash or as the same commands in PowerShell, build `anfra-canal-windows-x64.exe`, and `--version` answers.
-- [ ] The workflow parses (`actionlint`, else a YAML parse).
+- [x] By hand on Windows (memory checked first): the row's commands, run in Git Bash or as the same commands in PowerShell, build `anfra-canal-windows-x64.exe`, and `--version` answers.
+- [x] The workflow parses (`actionlint`, else a YAML parse). `actionlint` isn't installed: the YAML parses.
+
+**Result** (2026-11-27, canal `feat/windows-release` `4f7cbb9`, a worktree at `../canal-win` from `origin/master`, as the local checkout has someone's changes): the row's three scripts, taken from the YAML, ran in Git Bash on Windows 11 with the runner's variables faked. MinGW's and DuckDB's checksums matched; the build used the row's `gcc`; `anfra-canal-windows-x64.exe` (164 MB) answered `--version` beside its DLL (`1.1.1`, `canal-query 2.28.0`, `canal-lake 2.10.0`); out came the `.exe` and `-duckdb.dll`. Also: the step fails when `go.mod`'s `duckdb-go-bindings` isn't the DLL's version, so the two can't drift apart.
 
 **Dependencies:** None
 
@@ -21,23 +23,25 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 
 **Estimated scope:** S
 
-### - [ ] T2: holistics-core's `windows-x64` row
+### - [x] T2: holistics-core's `windows-x64` row
 
 **Acceptance criteria:**
-- [ ] `anfra_node_build_release.yml` (on a branch after `feat/anfra-node-windows-stop`) has `{ target: windows-x64, runner: windows-2022 }`, with the same steps, producing `anfra-node-windows-x64.exe` and `anfra-node-windows-x64-unminified.exe`, uploaded as the others are, so the release publishes them.
-- [ ] A smoke step: the minified binary starts and answers (its `--version`, or what anfra-node offers instead).
-- [ ] The `docker` job still takes only the Linux binary; the other rows' steps are unchanged.
+- [x] `anfra_node_build_release.yml` (on a branch after `feat/anfra-node-windows-stop`) has `{ target: windows-x64, runner: windows-2022 }`, with the same steps, producing `anfra-node-windows-x64.exe` and `anfra-node-windows-x64-unminified.exe`, uploaded as the others are, so the release publishes them.
+- [x] A smoke step: the minified binary starts and answers (its `--version`, or what anfra-node offers instead).
+- [x] The `docker` job still takes only the Linux binary; the other rows' steps are unchanged.
 
 **Verification:**
-- [ ] The build script's output path with `.exe` checked in WSL (`BUN_COMPILE_TARGET=bun-windows-x64`), and the binary's answer on Windows.
-- [ ] The workflow parses.
-- [ ] The native Windows build itself only on GitHub (Checkpoint A). A failure caused by the runner is fixed in the row; one in holistics-core's own code or packages goes to you, with the error.
+- [x] Changed: rather than a cross-build in WSL, the row's steps ran natively on Windows 11 (portable Node 24, pnpm 11.1.3, Bun 1.4.4 in `wincheck\toolchain`), as the runner would.
+- [x] The workflow parses.
+- [x] The native Windows build itself only on GitHub (Checkpoint A). A failure caused by the runner is fixed in the row; one in holistics-core's own code or packages goes to you, with the error.
 
 **Dependencies:** None
 
 **Files likely touched:** holistics-core `.github/workflows/anfra_node_build_release.yml`
 
 **Estimated scope:** S
+
+**Result** (2026-11-27, holistics-core `feat/anfra-node-windows-release`, on top of the SIGBREAK commit; draft PR holistics/holistics-core#3379): the native Windows build needed two fixes in holistics-core, each its own commit: `packages/aml-std`'s build keyed `.aml` files by `path.relative`, backslashes on Windows, so the build failed (`d48ee0b40`); `build-sidecar.sh` read `package.json` through a `/c/...` path Node can't open, so the version was `unknown` (`2226ad94c`). Then the row (`1d2769991`): checkout keeps LF, the npmrc step runs in bash (PowerShell read `${GH_TOKEN}` as its own variable), and the smoke test refuses `unknown`. Both binaries built; `--version` answers `0.17.1` (aml 9.9.0). Locally, GitHub Packages was slow (0.3 MB/s), so pnpm's fetch timeout was raised for these runs only.
 
 ### Checkpoint A
 - [ ] Both Windows binaries built by hand, `--version` answers.
