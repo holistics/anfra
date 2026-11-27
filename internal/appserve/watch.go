@@ -100,6 +100,13 @@ func (s *Server) watch(ctx context.Context) error {
 						addTree(ev.Name)
 					}
 				}
+				if ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+					// Windows also reports a folder changed when a file in it is:
+					// the file's own event says which app.
+					if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
+						continue
+					}
+				}
 				if app, aml, ok := classify(rel); ok {
 					d.add(app, aml)
 				}

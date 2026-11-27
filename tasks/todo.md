@@ -36,15 +36,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 
 **Estimated scope:** XS
 
-### - [ ] T3: Data Apps live reload ignores changes on folders
+### - [x] T3: Data Apps live reload ignores changes on folders
 
 **Acceptance criteria:**
-- [ ] A change event on a path that is a folder is ignored; a new folder is still added to the watch.
-- [ ] Linux and macOS unchanged.
+- [x] A change event on a path that is a folder is ignored; a new folder is still added to the watch.
+- [x] Linux and macOS unchanged.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/appserve/`.
-- [ ] Windows: `TestWatch` and `TestLiveReloadWatchesOnlyWhileAStreamIsOpen` pass (failing today).
+- [x] Tests pass (Linux): `go test ./internal/appserve/`.
+- [x] Windows: `TestWatch` and `TestLiveReloadWatchesOnlyWhileAStreamIsOpen` pass (failing today). Both pass on Windows now.
 
 **Dependencies:** None
 
