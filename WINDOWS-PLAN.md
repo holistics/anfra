@@ -398,7 +398,8 @@ Nobody develops anfra on Windows, so the goal is not "every test passes on Windo
 The fixes, where they fall in those packages:
 
 - Permission-mode tests (`internal/sidecar/socket_test.go:31`, `cmd/anfra/init_test.go:68`, `console_test.go:245`, `internal/cliauth/*_test.go`, `syncstate_test.go:132`): skip the mode check on Windows.
-- Tests that set `HOME` (`internal/home/home_test.go`, `internal/repo/repo_test.go`, `cmd/anfra/serve_test.go`, `publish_test.go`, `internal/app/*_test.go`): set `ANFRA_HOME` instead (or also `USERPROFILE`). `home_test.go` must never touch the real `%LOCALAPPDATA%`.
+- Tests that set `HOME` (`internal/home/home_test.go`, `internal/repo/repo_test.go`, `cmd/anfra/serve_test.go`, `publish_test.go`, `internal/app/*_test.go`): set `ANFRA_HOME` instead (or also `USERPROFILE`). `home_test.go` must never touch the real `%LOCALAPPDATA%`. (`home_test.go` done in `win-files-auth`; `repo_test.go`'s `TestCatalogPathUsesPerRepoDataDir` still fails on Windows.)
+- Found 2026-11-27 (`win-terminal`), test setup only: `internal/publish`'s MotherDuck tests make a symlink (`link.duckdb`), which Windows allows only to administrators or developer mode: skip just what needs it, as `internal/appserve`'s `symlink` helper does. `TestPublishWarnsOfOverriddenChangesAndLocalSettings` reads `Etc/UTC` as no time zone on Windows: the `publish` test program lacks Go's zone database, which anfra itself carries (`internal/command/query/input.go` imports `time/tzdata`); import it in that package's tests.
 - Fake `#!/bin/sh` binaries (`canallake_test.go:22`) and `/bin/echo` (`agents_test.go:316`): use a small Go helper, or skip on Windows.
 - Symlink tests: skip when `os.Symlink` returns a privilege error.
 - Hard-coded `/tmp` and `/home/a` paths: use `t.TempDir()` and `filepath.Join`.
