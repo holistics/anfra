@@ -38,9 +38,9 @@ T5 your hand checks in four terminals (needs T1, T2)
 - [x] T1–T4's tests pass on Linux and Windows; review with you before T5.
 
 ### Phase 2: By hand, and close
-- [ ] T5: Your hand checks in Windows Terminal, PowerShell 5, `cmd` and VS Code
+- [x] T5: Your hand checks (Windows Terminal only, decided by you)
 - [x] T5a: Typed answers on Windows (found in T5: `cancelreader`'s raw mode; the console's mode put back)
-- [ ] T6: Docs and plan
+- [x] T6: Docs and plan
 
 ### Checkpoint B: Complete
 - [ ] Spec success criteria 1–6 met; the commit split reviewed with you.

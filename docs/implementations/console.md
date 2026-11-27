@@ -52,7 +52,7 @@ So step 2 needs no reader of its own for the session: each program reads stdin w
 - **Enter on an empty entry does nothing**, rather than adding a line; and a `\` command is one line, so a `\` after a first line isn't one.
 - **The text area grows with the entry**, rather than taking three lines from the start.
 
-Not covered, for real terminals: macOS (Terminal.app, iTerm2: Option as Alt), replies' real timing over SSH, Windows Terminal (`cancelreader` supports its console).
+Not covered, for real terminals: macOS (Terminal.app, iTerm2: Option as Alt), replies' real timing over SSH. Windows Terminal: checked by hand (2026-11-27): typing and history, Ctrl-C during a query, Ctrl-D, and a question's answer. `cancelreader` puts a Windows console in raw mode, where a typed answer wasn't shown and Enter didn't end it; `newLineReader` (`cmd/anfra/linereader_windows.go`) puts the console's own mode back, and Ctrl-C with an answer half-typed still ends the read. The old console host (a `cmd` or PowerShell 5 window outside Windows Terminal) wasn't checked.
 
 ## 2. The skeleton
 

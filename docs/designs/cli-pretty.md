@@ -92,7 +92,7 @@ Files:
 - **Lines, not indentation alone**, as `tree`, `npm ls` and `cargo tree` draw them: `│` ties a folder's entries together across distance, `└──` ends it. Sections and blocks elsewhere nest by 2 spaces: they aren't trees.
 - **Folders first, then files**, each sorted. A folder with one entry stays on its parent's line (`models/.gitkeep`), as GitHub shows it.
 - **The other columns align**: a line's prefix is part of its first column's width.
-- **ASCII without a UTF-8 terminal** (`LANG`, `LC_ALL`): `|--`, `` `-- `` and `|`, as `tree --charset=ascii`. The lines are faint.
+- **ASCII without a UTF-8 terminal** (`LANG`, `LC_ALL`): `|--`, `` `-- `` and `|`, as `tree --charset=ascii`. The lines are faint. Windows sets no locale, and Go writes to its console in UTF-16 whatever its code page, so Windows always gets Unicode lines (`internal/pretty/utf8_windows.go`).
 - A path can't be copied whole from a tree; `--yaml` keeps every path whole.
 
 ## Color

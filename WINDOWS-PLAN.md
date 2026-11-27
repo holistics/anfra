@@ -147,7 +147,8 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 | `win-anfra-node` | **Code done** (2026-11-25); its release row and Windows smoke test wait for the CI work. anfra-node shuts down on `SIGBREAK` (holistics-core branch `feat/anfra-node-windows-stop`, not pushed), and anfra stops it with Ctrl-Break, so no `watchdog.parent_death` after each command. Checked on Windows with Bun 1.4.4, as the release uses. anfra's change waits for anfra's pin to an anfra-node release with the handler. | [Spec](SPEC-win-anfra-node.md), [tasks](tasks/archive/win-anfra-node-todo.md), [findings](docs/research/windows-sidecar-transport.md#later-anfra-node-with-bun-144) |
 | `win-files-auth` | **Done** (2026-11-27). Login, pull and publish checked on Windows against `acme`. Logins save and stay private (they all failed before), saving survives readers, exports get `file:///C:/` links, Data Apps can't reach hidden files (they could) and get Windows' time zone, pull refuses names Windows can't hold, private files are private on Windows too. Login checked on Windows by the user. | [Spec](SPEC-win-files-auth.md), [tasks](tasks/archive/win-files-auth-todo.md) |
 | `win-line-endings` | **Done** (2026-11-27). publish and pull read text files as LF, so a file saved on Windows publishes only for real changes and merges cleanly; pull keeps each file's own line ending; `anfra init` writes `.gitattributes`; `config.yml` and `AGENTS.md` keep theirs. Round trip on Windows with `acme`. | [Spec](SPEC-win-line-endings.md), [tasks](tasks/archive/win-line-endings-todo.md) |
-| `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
+| `win-terminal` | **Done** (2026-11-27), checked by hand in Windows Terminal only (the user decided): colors, Unicode trees, the console, typed answers to questions (fixed: `cancelreader`'s raw mode), the publish prompt. Also fixed on the way: the home folder taken for a repo (every OS), and the test copies' update-check cascade. | [Spec](SPEC-win-terminal.md), [tasks](tasks/todo.md) |
+| `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
 | Interim WSL docs | Not started | — |
 | Code signing | Not needed for the first release: unsigned first, signing later (2026-11-27) | [Decisions made](#decisions-made) |
 
@@ -345,8 +346,14 @@ Compiling needs no change: the AML parser already treats a CR as whitespace and 
 | Manually test `anfra console` (bubbletea) and the publish prompt (`muesli/cancelreader`) in Windows Terminal, PowerShell 5 and cmd, and fix what breaks. | 1.25–1.75 |
 | Found in `win-files-auth` (tests failing on Windows, causes not yet looked into): `anfra logs` and following the log (`cmd/anfra`: `TestLogsPretty`, `TestLogsNarrowed`, `TestLogsHintsWhyNoAppReports`, `TestLogsFollow`, `TestReadLinesEndWithTheirContext`); the Data Apps live-reload watcher gets folder events on Windows, so it reports apps that didn't change (`internal/appserve`: `TestWatch`, `TestLiveReloadWatchesOnlyWhileAStreamIsOpen`). Tests that need symlinks (`TestFiles`, `TestCheckPath`, `TestInitRefusesASymlinkedGitignore`) need administrator rights or developer mode on Windows: run them so in the Windows CI job, or skip them there. | not estimated |
 
+**Result: done** (2026-11-27), tested on Windows 11 ([tasks](tasks/todo.md)). What changed from the rows above:
 
-
+- **Colors:** anfra turns on escape-code processing at startup on Windows (`colorprofile` only detects it). Windows Terminal shows colors; the old console host (`cmd`, PowerShell 5 windows outside Windows Terminal) wasn't checked by hand (the user decided).
+- **Unicode trees:** `utf8Terminal` is true on Windows. No "Ctrl-Z then Enter": the console reads keys through Bubble Tea, and Ctrl-D leaves it on Windows too.
+- **Typed answers to questions** (found by hand): `cancelreader` puts a Windows console in raw mode, so answers weren't shown and Enter didn't end them. The console's own mode is put back on Windows; one way of asking on every OS (option A, chosen over Bubble Tea on Windows only).
+- **The `anfra logs` tests** failed on Windows because of the update-check cascade from `cmd/anfra`'s test program (`d3d2150`, which also crashed the Windows machine once). The live-reload watcher now ignores folder events; tests needing symlinks skip on Windows, saying why.
+- **Found on the way, every OS:** the home folder was taken for a repo, as anfra's own folder is `~/.anfra` (`8667b4c`).
+- **Not done here:** Ctrl-C during a query forwarded to `anfra serve` prints "unavailable … interrupt signal received" rather than "Interrupted." (the same on Linux; the user decided against a backlog item).
 
 ### `win-self-update`
 

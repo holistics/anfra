@@ -74,15 +74,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 
 ## Phase 2: By hand, and close
 
-### - [ ] T5: Your hand checks in four terminals
+### - [x] T5: Your hand checks in four terminals
 
 **Acceptance criteria:**
-- [ ] In Windows Terminal, a PowerShell 5 window, a `cmd` window and VS Code's terminal, with an `anfra.exe` I build: `anfra auth status` and `anfra show` (colors, Unicode trees, no raw codes); `anfra console` (typing, history with the arrow keys, Ctrl-C during a slow query, leaving with `\q` and with Ctrl-D); `anfra publish` on a folder without an org (the prompt shows, a choice works, Ctrl-C at it publishes nothing).
-- [ ] What breaks is fixed here when small; a fix over half a day goes to you first.
+- [x] In Windows Terminal (the other three skipped: the user decided, so the old console host's colors, T1, stay unchecked by hand), a PowerShell 5 window, a `cmd` window and VS Code's terminal, with an `anfra.exe` I build: `anfra auth status` and `anfra show` (colors, Unicode trees, no raw codes); `anfra console` (typing, history with the arrow keys, Ctrl-C during a slow query, leaving with `\q` and with Ctrl-D); `anfra publish` on a folder without an org (the prompt shows, a choice works, Ctrl-C at it publishes nothing).
+- [x] What breaks is fixed here when small; a fix over half a day goes to you first.
 - Results so far (2026-11-27, Windows Terminal, run from the home folder): colors ✅, Unicode trees ✅, the console draws ✅, Ctrl-C at publish ("Interrupted: not published.") ✅. Found: anfra took the home folder for a repo (its `.anfra` is anfra's own folder): `publish check` listed 250 files from all over it, and `publish` wrote `config.yml` and `publish/` into `~\.anfra`. Fixed for every OS (`8667b4c`): publish, pull and init refuse it; checked on Windows. Cleaned up with the user's go-ahead: those two in `~\.anfra`, and 1,345 test folders in `%TEMP%` left by the runaway test copies. Then, in Windows Terminal: `publish check` from `demo` (9 files, Unicode tree) ✅; `auth status` (current repo true) ✅; `publish` from `demo`, `pull_required`, nothing published ✅; the publish org list shows and Enter chooses an org (saved to `noorg`'s `config.yml`), then `pull_required` ✅; `init`'s sample question takes `y` after T5a ✅. The console, in `demo`: `validate` ✅; the Up arrow brings it back ✅; Ctrl-C during a query cancels it and the console stays ✅; Ctrl-D leaves ✅. (After Ctrl-C, a query forwarded to `anfra serve` prints "unavailable … interrupt signal received" rather than "Interrupted.": the same on Linux, so not Windows'; exit code 130 is right.) Still to do: PowerShell 5, `cmd`, VS Code.
 
 **Verification:**
-- [ ] Manual, by you, with steps I give; results recorded here.
+- [x] Manual, by you, with steps I give; results recorded here.
 
 **Dependencies:** T1, T2
 
@@ -102,14 +102,20 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 - [x] By you, on Windows 11 (2026-11-27), with a check program built from `readLines`' logic: typed `yes` + Enter arrived, letters shown; `abc` + Ctrl-C ended the read; the next question got `next`, nothing taken. And `anfra init`: the sample question took `y`.
 - [x] Linux: `go test ./cmd/anfra/`; lint for Linux and Windows. (No automated Windows test: it needs a real console; `win-release`'s Windows CI can't type either.)
 
-### - [ ] T6: Docs and plan
+### - [x] T6: Docs and plan
 
 **Acceptance criteria:**
-- [ ] Docs where a Windows terminal differs, if anything visible does.
-- [ ] `WINDOWS-PLAN.md`: Where it stands, and the module's result (the `anfra logs` tests were the update-check cascade, `d3d2150`).
+- [x] Docs where a Windows terminal differs, if anything visible does. `docs/designs/cli-pretty.md` (Unicode on Windows), `docs/implementations/console.md` (Windows Terminal checked; the line reader's console mode).
+- [x] `WINDOWS-PLAN.md`: Where it stands, and the module's result (the `anfra logs` tests were the update-check cascade, `d3d2150`).
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–6, each ticked here.
+- [x] Manual: the spec's Success Criteria 1–6, each ticked here.
+  - [x] 1. Colors: Windows Terminal ✅; the old console host not checked by hand (the user decided); turning escape codes on there is in (T1).
+  - [x] 2. Unicode trees on Windows (T2, by hand).
+  - [x] 3. The console and the publish prompt in Windows Terminal (the other three terminals skipped, the user decided); typed answers fixed (T5a).
+  - [x] 4. `cmd/anfra` and `internal/appserve` pass in full on Windows (T4).
+  - [x] 5. Live reload names only changed apps on Windows (T3).
+  - [x] 6. `WINDOWS-PLAN.md` and the docs updated (T6).
 
 **Dependencies:** T5
 
@@ -118,5 +124,5 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 **Estimated scope:** XS
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–6 met.
+- [x] Spec success criteria 1–6 met.
 - [ ] Ready for review with you (and the commit split proposed).
