@@ -1,15 +1,15 @@
 # Implementation Plan: win-files-auth
 
-Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Task checklist: [todo.md](todo.md). Earlier modules' tasks: [archive/](archive/).
+Spec: [SPEC-win-files-auth.md](../../SPEC-win-files-auth.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Task checklist: [todo.md](win-files-auth-todo.md). Earlier modules' tasks: [archive/](./).
 
 ## Overview
 
-What this module delivers and why: the spec's [Objective](../SPEC-win-files-auth.md#objective). This file holds how: the order, the checkpoints, task-level decisions and risks. First the shared piece (replacing a file by rename), then logins, which every publish and pull needs and you check by hand. Then the smaller fixes, each its own task, then everything on Windows end to end.
+What this module delivers and why: the spec's [Objective](../../SPEC-win-files-auth.md#objective). This file holds how: the order, the checkpoints, task-level decisions and risks. First the shared piece (replacing a file by rename), then logins, which every publish and pull needs and you check by hand. Then the smaller fixes, each its own task, then everything on Windows end to end.
 
 ## Architecture Decisions
 
 - **Per-OS code in build-tagged files,** as in `internal/sidecar` and `cmd/anfra`: a `_windows.go` beside a `!windows` file; no `runtime.GOOS` branches in shared functions.
-- **One rename helper, in its own `internal/` package,** named per [naming](../docs/dev/naming.md) when it's written. On Windows it retries for a short, bounded time (about a second) on `ERROR_ACCESS_DENIED` and `ERROR_SHARING_VIOLATION`, as `cmd/go/internal/robustio` does; elsewhere it is `os.Rename`. The credential store uses it too.
+- **One rename helper, in its own `internal/` package,** named per [naming](../../docs/dev/naming.md) when it's written. On Windows it retries for a short, bounded time (about a second) on `ERROR_ACCESS_DENIED` and `ERROR_SHARING_VIOLATION`, as `cmd/go/internal/robustio` does; elsewhere it is `os.Rename`. The credential store uses it too.
 - **The login file's access list is set as the file is made,** the way the socket folder is (`internal/sidecar/socket_windows.go`), before any token is written. Read side: refuse the file when an allow entry lets a reader other than this user, SYSTEM or Administrators read it. SYSTEM and Administrators stand where root does on Linux, which mode `600` doesn't keep out either. The error says which, and gives an `icacls` command that fixes it.
 - **The time zone through `icu.dll`,** loaded lazily as `internal/sidecar` loads `kernel32.dll`; any failure falls back to `Etc/UTC`, so a Data App never fails over it.
 - **Pull's Windows name checks live in `checkPath`'s Windows file;** Linux and macOS keep accepting what they accept.

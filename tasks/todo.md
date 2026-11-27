@@ -1,0 +1,113 @@
+# Tasks: win-line-endings
+
+Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endings.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md).
+
+## Phase 1: publish and pull
+
+### - [ ] T1: publish reads files "as published": a CRLF file hashes and uploads as LF
+
+**Acceptance criteria:**
+- [ ] `workdir`: one function giving a file's content as published (CRLF → LF in text; binary, by git's rule, as is; a lone CR kept).
+- [ ] `Read` hashes it, and `publish.go:345` uploads it (its "changed during the publish" check compares it).
+- [ ] The hash format and `shared/repoformat` unchanged.
+
+**Verification:**
+- [ ] Tests pass (Linux): `go test ./internal/publish/...`, with: the function's cases (CRLF, LF, lone CR, binary with CR, NUL past 8 KB); a CRLF repo hashes as the LF one; publish sends nothing for line endings alone, and a really edited CRLF file as LF.
+- [ ] Lint once, Linux and Windows.
+
+**Dependencies:** None
+
+**Files likely touched:** `internal/publish/workdir/tree.go` (or a new file beside it), `internal/publish/publish.go` (+ tests)
+
+**Estimated scope:** M
+
+### - [ ] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
+
+**Acceptance criteria:**
+- [ ] `ReadBlob` (the merge's local side), `pull.go:208` (conflict markers gone?), `pullhints.go:35` (data source names), `settings.go:174` (`init`'s config?) read as published; `ReadBlob`'s "changed while reading" check compares the normalised content.
+- [ ] `Apply`: a file whose line breaks are all CRLF is written with CRLF (conflict markers included); new, LF, mixed and binary files as given. `backup` keeps exact bytes.
+- [ ] `pull --abort` and `--take local` still put back the exact original bytes.
+
+**Verification:**
+- [ ] Tests pass (Linux): pull over unedited CRLF files updates them, no "edited here" refusal, and they stay CRLF; a change on both sides of one CRLF file merges cleanly, written CRLF; a conflict in a CRLF file has CRLF markers, and `resolved` sees it once fixed; a new file is LF; a binary file is written as is; `--abort` restores a CRLF file byte for byte.
+- [ ] Lint once, Linux and Windows.
+
+**Dependencies:** T1
+
+**Files likely touched:** `internal/publish/workdir/tree.go`, `apply.go`, `internal/publish/pull.go`, `pullhints.go`, `settings.go` (+ tests)
+
+**Estimated scope:** M
+
+## Phase 2: The files anfra writes
+
+### - [ ] T3: `anfra init` writes `.gitattributes`
+
+**Acceptance criteria:**
+- [ ] `models/** datasets/** apps/** .anfra/** text=auto eol=lf`, each with a short comment saying why, as `.gitignore`'s entries have.
+- [ ] An existing `.gitattributes` gets only the lines it lacks; a non-regular one is refused, as `.gitignore`.
+- [ ] `init`'s help and its summary list the file.
+
+**Verification:**
+- [ ] Tests pass (Linux): `go test ./cmd/anfra/ -run Init` with a new and an existing `.gitattributes`.
+
+**Dependencies:** None
+
+**Files likely touched:** `cmd/anfra/init.go`, `cmd/anfra/init_test.go`
+
+**Estimated scope:** S
+
+### - [ ] T4: Lines added to `config.yml` and `AGENTS.md` keep the file's line ending
+
+**Acceptance criteria:**
+- [ ] `repoconfig.appendBlock`: the block in the file's line ending (CRLF when its line breaks are CRLF).
+- [ ] `agents.withBlock`: finds its existing block in a CRLF `AGENTS.md` (no second block), and writes the block in the file's line ending.
+
+**Verification:**
+- [ ] Tests pass (Linux): `go test ./internal/repoconfig/ ./internal/agents/`, each with a CRLF and an LF file.
+
+**Dependencies:** None
+
+**Files likely touched:** `internal/repoconfig/repoconfig.go`, `internal/agents/agentsmd.go` (+ tests)
+
+**Estimated scope:** S
+
+### Checkpoint A
+- [ ] T1–T4's tests pass on Linux; lint clean on Linux and Windows; review with you.
+
+## Phase 3: Windows and close
+
+### - [ ] T5: Round trip on Windows 11 with `acme`
+
+**Acceptance criteria:**
+- [ ] In `C:\Users\nuita\wincheck\pulled`, after pulling `acme`'s latest: save `models/sales/products.model.aml` with CRLF; `publish status` shows nothing to publish.
+- [ ] Change one line, `publish check` lists only that file, publish it; pulled into a fresh folder, it is LF.
+- [ ] Put the line back, publish again: `acme` holds the files it held before.
+- [ ] A pull into the CRLF folder keeps the file CRLF.
+
+**Verification:**
+- [ ] Manual, on Windows 11 (the user approved publishing to `acme`), results recorded here.
+
+**Dependencies:** T1, T2
+
+**Files likely touched:** none (results here)
+
+**Estimated scope:** S
+
+### - [ ] T6: Docs and plan
+
+**Acceptance criteria:**
+- [ ] `docs/usage/publishing.md` and `docs/designs/publish.md`: what publish and pull do with line endings, and the first publish of a repo already published with CRLF.
+- [ ] `WINDOWS-PLAN.md`: Where it stands, and the module's result (the six places were five; `backup` keeps exact bytes; `withBlock`'s second block).
+
+**Verification:**
+- [ ] Manual: the spec's Success Criteria 1–7, each ticked here.
+
+**Dependencies:** T5
+
+**Files likely touched:** the docs above, `WINDOWS-PLAN.md`
+
+**Estimated scope:** S
+
+### Checkpoint B: Complete
+- [ ] Spec success criteria 1–7 met.
+- [ ] Ready for review with you (and the commit split proposed).

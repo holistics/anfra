@@ -1,6 +1,6 @@
 # Tasks: win-files-auth
 
-Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md).
+Plan: [plan.md](win-files-auth-plan.md). Spec: [SPEC-win-files-auth.md](../../SPEC-win-files-auth.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md).
 
 ## Phase 1: Saving files, and logins
 
