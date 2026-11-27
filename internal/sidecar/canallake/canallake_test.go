@@ -15,13 +15,26 @@ import (
 
 var ctx = context.Background()
 
+// exitAtOnce makes this test program a canal-lake that exits as it starts.
+const exitAtOnce = "CANALLAKE_TEST_EXIT_AT_ONCE"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(exitAtOnce) != "" {
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
 // A canal-lake that exits as it starts fails Start at once, rather than after
 // the wait for it to listen, and is tried again at the next Start.
 func TestStartExited(t *testing.T) {
-	bin := filepath.Join(t.TempDir(), "canal-lake")
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil { //nolint:gosec // G306: a test's fake binary must be executable
+	// This test program, started again, as a fake canal-lake: a script can't
+	// run on Windows.
+	bin, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv(exitAtOnce, "1")
 	t.Setenv(anfracanal.Lake.BinEnv, bin)
 	s, err := New(sidecar.Config{}, filepath.Join(t.TempDir(), "lake"))
 	if err != nil {

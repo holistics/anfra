@@ -134,21 +134,27 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 
 **Estimated scope:** XS
 
-### - [ ] T7: the package list's tests pass on Windows
+### - [x] T7: the package list's tests pass on Windows
 
 **Acceptance criteria:**
-- [ ] `go test` passes on Windows 11 for `internal/sidecar/...`, `internal/cliauth`, `cmd/anfra`, `internal/publish/...`, `internal/exports`, `internal/home`, `internal/update`, `internal/fileperm`, `internal/robustio`.
-- [ ] Each test that failed only because of its setup is fixed, or skipped on Windows with the reason in the skip; none of a real bug is skipped (a real one is fixed, or brought to you).
+- [x] `go test` passes on Windows 11 for `internal/sidecar/...`, `internal/cliauth`, `cmd/anfra`, `internal/publish/...`, `internal/exports`, `internal/home`, `internal/update`, `internal/fileperm`, `internal/robustio`.
+- [x] Each test that failed only because of its setup is fixed, or skipped on Windows with the reason in the skip; none of a real bug is skipped (a real one is fixed, or brought to you).
 
 **Verification:**
-- [ ] First a list of what fails on Windows today, per package; past a handful, split into tasks by package and tell you.
-- [ ] Then the list passes on Windows (one test build per package, memory checked first, the notifier off, no copies left); the changed packages pass on Linux; lint, Linux and Windows.
+- [x] First a list of what fails on Windows today, per package; past a handful, split into tasks by package and tell you.
+- [x] Then the list passes on Windows (one test build per package, memory checked first, the notifier off, no copies left); the changed packages pass on Linux; lint, Linux and Windows.
 
 **Dependencies:** None
 
 **Files likely touched:** `*_test.go` in those packages
 
 **Estimated scope:** M (to be confirmed by the list)
+
+**Result** (2026-11-27, `go test` natively on Windows 11 with Go 1.27.3, the committed source, `GOMAXPROCS=4 -p=2`): of the 15 packages, 13 passed as they were, thanks to the earlier modules. Two failed, both for test setup:
+- `internal/sidecar/canallake` `TestStartExited`: its fake canal-lake was a `#!/bin/sh` script. Now it's the test program itself, started again and told to exit at once (`TestMain`), on every OS.
+- `internal/publish`, 9 tests: `duckRepo` makes a symlink, which Windows allows only to administrators or developer mode. A hard link was tried and isn't the same: publish names the copy after the file a symlink leads to. So without symlinks they skip, saying why, as `appserve`'s tests do. GitHub's Windows runners are administrators, so they run there.
+
+Then all 15 passed on Windows and on Linux; no test-program copies left; lint clean, Linux and Windows.
 
 ### - [ ] T8: the required `windows` CI job
 

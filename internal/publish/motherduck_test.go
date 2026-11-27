@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -135,6 +136,11 @@ func duckRepo(t *testing.T) string {
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"a.aml": "a", ".anfra/data_sources.yml": duckSources, "data/n.duckdb": "DUCK"})
 	if err := os.Symlink(filepath.Join(dir, "data", "n.duckdb"), filepath.Join(dir, "link.duckdb")); err != nil {
+		// Windows lets only administrators, or developer mode, make one. A hard link
+		// won't do: publish names the copy after the file a symlink leads to.
+		if runtime.GOOS == "windows" {
+			t.Skipf("no symlinks here (%v), which this test needs", err)
+		}
 		t.Fatal(err)
 	}
 	return dir
