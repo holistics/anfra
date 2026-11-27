@@ -219,4 +219,4 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 ### Checkpoint C: Complete
 - [x] Spec success criteria 1–9 met.
-- [ ] Ready for review with you (and the commit split proposed).
+- [x] Ready for review with you (and the commit split proposed). Reviewed; the split kept as is.
