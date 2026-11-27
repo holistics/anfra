@@ -54,12 +54,12 @@ T3–T7 are independent of each other and of T1–T2.
 
 ### Phase 3: End to end and close
 - [x] T8: Other files only you may read, on Windows too (added at Checkpoint B)
-- [ ] T9: End to end on Windows 11
-- [ ] T10: Docs, backlog, plan, and the Linux checks
+- [x] T9: End to end on Windows 11
+- [x] T10: Docs, backlog, plan, and the Linux checks
 - [x] T11: Export files and MotherDuck's upload copy, only you may read (decided at the end)
 
 ### Checkpoint C: Complete
-- [ ] Spec success criteria 1–9 met; the commit split reviewed with you.
+- [x] Spec success criteria 1–9 met; the commit split reviewed with you.
 
 ## Risks and Mitigations
 

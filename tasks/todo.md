@@ -156,15 +156,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 ## Phase 3: End to end and close
 
-### - [ ] T9: End to end on Windows 11
+### - [x] T9: End to end on Windows 11
 
 **Acceptance criteria:**
-- [ ] With the login from Checkpoint A: a command that needs it still works after a token refresh, if one can be triggered.
+- [x] With the login from Checkpoint A: a command that needs it still works after a token refresh, if one can be triggered. Not triggered: a refresh happens once the access token expires; left for normal use. The commands above all used the login.
 - [x] An export downloaded; Data App paths with `\` and `:` refused; the Data App time zone shown is Windows'; the DuckDB lock hint shows. Done on Windows 11 (2026-11-26): `query export -o` wrote the file and left no CLI copy; `--link` gave `file:///C:/Users/…/anfra-exports/…`; through `anfra serve`, `apps/x.html` is 200 and `sub%5C.secret`, `x.html%3Ahidden`, `sub/.secret` are 404; the reader's zone is `Asia/Saigon`; `init`'s `data_sources.yml` and serve's `serve.json` hold one entry, the user, full control, nothing inherited. The lock hint needs MotherDuck's CLI and a MotherDuck login: with the publish check below.
-- [ ] Publish and pull to an org: **only with your go-ahead**, which org, and whether you run it. Org `acme`, approved by the user (2026-11-27). **Pull works:** into a new folder (after `anfra init`), 7 files from `acme`, sync state saved, `publish status` in step. **Publish refused, correctly:** from the demo copy, `pull_required` (`acme` holds the user's `sales` repo, published 2026-11-23, never pulled there): nothing changed in `acme`. A publish that uploads is not yet tried: `acme` holds another repo, so it waits for the user's choice.
+- [x] Publish and pull to an org: **only with your go-ahead**, which org, and whether you run it. Org `acme`, approved by the user (2026-11-27). **Pull works:** into a new folder (after `anfra init`), 7 files from `acme`, sync state saved, `publish status` in step. **Publish refused, correctly:** from the demo copy, `pull_required` (`acme` holds the user's `sales` repo, published 2026-11-23, never pulled there): nothing changed in `acme`. **Publish uploads** (the user's option A, a round trip in the pulled folder): one comment line added to `models/sales/products.model.aml` (Unix line ending), published as `…@7beb8e3c`; the file's original bytes put back (SHA-1 `5ef68d27…`), published as `…@2b59b278`. Each publish sent 8 files, `.anfra/config.yml` among them, made by this folder's `anfra init` with `acme`'s address; pull hadn't listed it as a change, so `acme`'s was most likely the same, but the final revision ID differs from the original (`…@f5e3a659`): the user is to compare them in `acme`'s history.
 
 **Verification:**
-- [ ] Manual, on Windows 11: each step, results recorded.
+- [x] Manual, on Windows 11: each step, results recorded.
 
 **Dependencies:** T1–T8
 
@@ -172,7 +172,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 
 **Estimated scope:** S
 
-### - [ ] T10: Docs, backlog, plan, and the Linux checks
+### - [x] T10: Docs, backlog, plan, and the Linux checks
 
 **Acceptance criteria:**
 - [x] The design and usage docs that describe each area say what differs on Windows: logins (`docs/usage/publishing.md`, `docs/designs/security.md`), exports (`docs/designs/exports.md`), Data Apps (`docs/designs/data-apps.md`).
@@ -181,7 +181,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 - [x] With your go-ahead: `make check` and `make test`. (Run lightly: `GOMAXPROCS=4 GOFLAGS=-p=2`.) Not run, decided by the user: CI runs them on the PR.
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–9, each ticked here.
+- [x] Manual: the spec's Success Criteria 1–9, each ticked here.
+  - [x] 1. Login on Windows works, the file is owner-only, one others can read is refused with a fix; Unix `600` unchanged (T2, Checkpoint A).
+  - [x] 2. Saves survive a reader holding the file (T1).
+  - [x] 3. `file:///C:/…` links; the download removes the CLI's copy (T3, T9).
+  - [x] 4. `RemoveLegacy` touches nothing on Windows (T5).
+  - [x] 5. Data App paths with `\` and `:` refused; pull refuses names Windows can't hold; Unix unchanged (T4, T9).
+  - [x] 6. Windows' IANA zone; `$TZ` wins; `Etc/UTC` without ICU (T6, T9).
+  - [x] 7. DuckDB's Windows lock message recognised (T7; the live hint needs MotherDuck's CLI, covered by its test).
+  - [x] 8. Linux tests of every touched package pass; docs, `WINDOWS-PLAN.md` and the backlog updated. `make check` / `make test` not run, decided by the user: CI runs them.
+  - [x] 9. `data_sources.yml`, the console history, `serve.json`, export files and MotherDuck's upload copy are owner-only on Windows (T8, T11).
 
 **Dependencies:** T9
 
@@ -209,5 +218,5 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 **Estimated scope:** S
 
 ### Checkpoint C: Complete
-- [ ] Spec success criteria 1–9 met.
+- [x] Spec success criteria 1–9 met.
 - [ ] Ready for review with you (and the commit split proposed).
