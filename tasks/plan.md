@@ -32,10 +32,10 @@ T5 your hand checks in four terminals (needs T1, T2)
 - [x] T1: Colors in `cmd` and PowerShell 5 windows (escape codes turned on, or no styles)
 - [x] T2: Unicode trees and boxes on Windows
 - [x] T3: Data Apps live reload ignores changes on folders
-- [ ] T4: The tests on Windows: skips where Windows can't, then `cmd/anfra` and `internal/appserve` in full
+- [x] T4: The tests on Windows: skips where Windows can't, then `cmd/anfra` and `internal/appserve` in full
 
 ### Checkpoint A
-- [ ] T1–T4's tests pass on Linux and Windows; review with you.
+- [x] T1–T4's tests pass on Linux and Windows; review with you before T5.
 
 ### Phase 2: By hand, and close
 - [ ] T5: Your hand checks in Windows Terminal, PowerShell 5, `cmd` and VS Code

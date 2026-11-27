@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -63,12 +64,25 @@ func TestCatalog(t *testing.T) {
 	}
 }
 
+// symlink makes newname a symlink to oldname, and reports whether it could:
+// Windows lets only administrators, or developer mode, make one, and then what
+// needs it isn't checked, which the test log says.
+func symlink(t *testing.T, oldname, newname string) bool {
+	t.Helper()
+	if err := os.Symlink(oldname, newname); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Logf("no symlinks here (%v): what needs %s isn't checked", err, filepath.Base(newname))
+			return false
+		}
+		t.Fatal(err)
+	}
+	return true
+}
+
 // A file under apps/ is served sandboxed, never sniffed; nothing outside apps/, nothing hidden.
 func TestFiles(t *testing.T) {
 	dir := repo(t)
-	if err := os.Symlink(filepath.Join(dir, ".anfra", "data_sources.yml"), filepath.Join(dir, "apps", "leak.html")); err != nil {
-		t.Fatal(err)
-	}
+	symlink(t, filepath.Join(dir, ".anfra", "data_sources.yml"), filepath.Join(dir, "apps", "leak.html"))
 	s := New(Options{RepoDir: dir})
 
 	w := get(s, "/appserve/files/team/overview.html")
@@ -85,12 +99,10 @@ func TestFiles(t *testing.T) {
 		t.Errorf("a file a definition refers to: %d", w.Code)
 	}
 	// A repo reached through a symlink (macOS's /var, say) serves its files all the same.
-	link := filepath.Join(t.TempDir(), "repo")
-	if err := os.Symlink(dir, link); err != nil {
-		t.Fatal(err)
-	}
-	if w := get(New(Options{RepoDir: link}), "/appserve/files/sales.html"); w.Code != http.StatusOK {
-		t.Errorf("through a symlinked repo: %d", w.Code)
+	if link := filepath.Join(t.TempDir(), "repo"); symlink(t, dir, link) {
+		if w := get(New(Options{RepoDir: link}), "/appserve/files/sales.html"); w.Code != http.StatusOK {
+			t.Errorf("through a symlinked repo: %d", w.Code)
+		}
 	}
 	for _, path := range []string{
 		"/appserve/files/../.anfra/data_sources.yml",

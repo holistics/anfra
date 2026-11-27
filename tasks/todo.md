@@ -52,16 +52,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 
 **Estimated scope:** XS
 
-### - [ ] T4: The tests on Windows
+### - [x] T4: The tests on Windows
 
 **Acceptance criteria:**
-- [ ] `TestReadLinesEndWithTheirContext` skips on Windows, saying a pipe can't be cancelled there and that T5's Ctrl-C at the prompt checks it.
-- [ ] `TestFiles` (`internal/appserve`) and `TestInitRefusesASymlinkedGitignore` (`cmd/anfra`) skip when a symlink can't be made, as `TestCheckPath` does.
-- [ ] `cmd/anfra` and `internal/appserve` pass in full on Windows (the four `anfra logs` tests included); afterwards no copy of the test program is running, and it's deleted.
+- [x] `TestReadLinesEndWithTheirContext` skips on Windows, saying a pipe can't be cancelled there and that T5's Ctrl-C at the prompt checks it.
+- [x] `TestFiles` (`internal/appserve`) and `TestInitRefusesASymlinkedGitignore` (`cmd/anfra`) skip when a symlink can't be made, as `TestCheckPath` does. `TestFiles` skips only its two checks that need one (a `symlink` helper logs why); its sandbox, dot-file and outside-`apps/` checks still run on Windows.
+- [x] `cmd/anfra` and `internal/appserve` pass in full on Windows (the four `anfra logs` tests included); afterwards no copy of the test program is running, and it's deleted. Done 2026-11-27: both PASS on Windows, the four `anfra logs` tests included; 0 copies 8 s after; program deleted.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./cmd/anfra/ ./internal/appserve/`.
-- [ ] Windows: the two full runs above, after checking free memory. Lint once, Linux and Windows.
+- [x] Tests pass (Linux): `go test ./cmd/anfra/ ./internal/appserve/`.
+- [x] Windows: the two full runs above, after checking free memory. Lint once, Linux and Windows.
 
 **Dependencies:** T1, T2, T3
 
@@ -70,7 +70,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 **Estimated scope:** S
 
 ### Checkpoint A
-- [ ] T1–T4's tests pass on Linux and Windows; review with you.
+- [x] T1–T4's tests pass on Linux and Windows. Review with you before T5's hand checks.
 
 ## Phase 2: By hand, and close
 

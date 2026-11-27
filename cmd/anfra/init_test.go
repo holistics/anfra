@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -124,6 +125,9 @@ func TestInitRefusesASymlinkedGitignore(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(outside, filepath.Join(dir, ".gitignore")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skip("no symlinks here (Windows allows them only to administrators or in developer mode):", err)
+		}
 		t.Fatal(err)
 	}
 	_, err := initRepo(context.Background(), dir, initOptions{})

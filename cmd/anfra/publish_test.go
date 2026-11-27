@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -862,6 +863,9 @@ func TestStdinPromptAnswersAndStopsOnCancel(t *testing.T) {
 // A question's read of stdin ends with the question: the next line goes to
 // whoever reads next, a console's prompt, not to a read left waiting.
 func TestReadLinesEndWithTheirContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("on Windows a read from a pipe can't be cancelled, only one from a console; the publish prompt's Ctrl-C is checked by hand there")
+	}
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
