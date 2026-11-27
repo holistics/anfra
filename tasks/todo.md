@@ -69,23 +69,31 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 
 **Result** (2026-11-27): the workflow's own scripts, taken from the YAML, ran in WSL with T1's and T2's Windows binaries (placeholders for the other platforms, the loop cut to `windows-x64`). The check passed with every file there, and with the DLL taken away failed naming it and both pins. The loop gave `anfra-windows-x64.zip` (127 MB: `anfra.exe` 355 MB and `THIRD_PARTY_NOTICES.txt`). On Windows 11, unzipped with `Expand-Archive`: `anfra version` 9.9.8; `anfra init demo --example`; `anfra show`; a query answered 4 rows through `duckdb.dll` (both sidecars unpacked, the DLL beside `anfra-canal.exe`). A MotherDuck data source with a made-up token got MotherDuck's own refusal (`Your request is not authenticated`), which needs the `windows_amd64` extension loaded. The notice is LF, as the repo has no `.gitattributes`; Notepad reads it.
 
-### - [ ] T4: `install.ps1`
+### - [x] T4: `install.ps1`
 
 **Acceptance criteria:**
-- [ ] A new `install.ps1`, mirroring `install.sh`: the same overrides (`ANFRA_HOME`, `ANFRA_INSTALL_DIR`, `ANFRA_VERSION`, `ANFRA_NO_MODIFY_PATH`) plus `ANFRA_DOWNLOAD_URL`; downloads the `.zip` and `SHA256SUMS`, refuses a mismatch or a missing line, saying why and what to do; installs `anfra.exe` and `THIRD_PARTY_NOTICES.txt`; adds the folder to the user PATH; says to open a new terminal; the same next steps.
-- [ ] On ARM, installs x64 with the note; another CPU refuses, saying so.
-- [ ] No `exit`; plain ASCII, no byte-order mark; works in PowerShell 5.1 (and 7). Every message naming it says `irm https://anfra.ai/install.ps1 | iex`.
+- [x] A new `install.ps1`, mirroring `install.sh`: the same overrides (`ANFRA_HOME`, `ANFRA_INSTALL_DIR`, `ANFRA_VERSION`, `ANFRA_NO_MODIFY_PATH`) plus `ANFRA_DOWNLOAD_URL`; downloads the `.zip` and `SHA256SUMS`, refuses a mismatch or a missing line, saying why and what to do; installs `anfra.exe` and `THIRD_PARTY_NOTICES.txt`; adds the folder to the user PATH; says to open a new terminal; the same next steps.
+- [x] On ARM, installs x64 with the note; another CPU refuses, saying so.
+- [x] No `exit`; plain ASCII, no byte-order mark; works in PowerShell 5.1 (and 7). Every message naming it says `irm https://anfra.ai/install.ps1 | iex`.
 
 **Verification:**
-- [ ] Windows, PowerShell 5.1, with `ANFRA_HOME` in a temporary folder: from the file (`Get-Content install.ps1 -Raw | iex`); through the pipe (`irm http://localhost:8000/install.ps1 | iex`, served from WSL); from a local release (`ANFRA_DOWNLOAD_URL`), installing and then refusing a wrong `SHA256SUMS`. The window stays open on each failure; `anfra version` runs in a new terminal.
-- [ ] A fresh Windows user account, for a clean machine (you, if you agree).
-- [ ] `Invoke-ScriptAnalyzer install.ps1` (PSScriptAnalyzer: installing it is asked first).
+- [x] Windows, PowerShell 5.1, with `ANFRA_HOME` in a temporary folder: from the file (`Get-Content install.ps1 -Raw | iex`); through the pipe (`irm http://localhost:8000/install.ps1 | iex`, served from WSL); from a local release (`ANFRA_DOWNLOAD_URL`), installing and then refusing a wrong `SHA256SUMS`. The window stays open on each failure; `anfra version` runs in a new terminal.
+- [ ] A fresh Windows user account, for a clean machine: skipped for now (decided with you), to try with the first real release.
+- [x] `Invoke-ScriptAnalyzer install.ps1` (PSScriptAnalyzer: installing it is asked first).
 
 **Dependencies:** T3 (its `.zip`)
 
 **Files likely touched:** `install.ps1`
 
 **Estimated scope:** M
+
+**Result** (2026-11-27, Windows 11, Windows PowerShell 5.1, a local release served from WSL with T3's `.zip`):
+- Through the pipe (`irm http://localhost:8000/install.ps1 | iex`) and from the file: installed, checksum shown, `anfra version` 9.9.8 in the same window.
+- A wrong `SHA256SUMS`, and nothing at the URL: refused, nothing installed, the window open, no temporary files left.
+- Reinstalling while `anfra serve` runs from the folder: refused, saying to stop anfra and how to run it again.
+- The user PATH (yours, saved first and restored exactly, value and type): the folder added once, a second run adds nothing, a new session finds `anfra`. Found and fixed on the way: `[Environment]::SetEnvironmentVariable` would have rewritten the user PATH expanded, turning `%...%` entries into fixed paths, and as another registry type. The script reads and writes the registry value as stored, keeping its type, and sets and clears a user variable so open programs hear of the change.
+- PSScriptAnalyzer 1.25.0 (installed for your user): only `PSAvoidUsingWriteHost`, which suits a script that talks to a person; nothing else.
+- Not checked: PowerShell 7 (not installed here); ARM, by reading the code only.
 
 ### - [ ] T5: `install.sh` on Git Bash points to `install.ps1`
 
