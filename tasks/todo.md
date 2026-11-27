@@ -49,23 +49,25 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 
 ## Phase 2: anfra's release and its installers
 
-### - [ ] T3: anfra's release builds `anfra-windows-x64.zip`
+### - [x] T3: anfra's release builds `anfra-windows-x64.zip`
 
 **Acceptance criteria:**
-- [ ] `packaging/windows/THIRD_PARTY_NOTICES.txt`: DuckDB's MIT license (v1.5.6), saying what it covers (`duckdb.dll`, inside `anfra.exe`).
-- [ ] `build_release.yml` downloads `anfra-node-windows-x64.exe`, `anfra-canal-windows-x64.exe` and `anfra-canal-windows-x64-duckdb.dll`, then checks that every expected sidecar file is there, failing with the missing ones' names.
-- [ ] `windows-x64` is in the target loop: the three files at `assets/anfra-node`, `assets/anfra-canal`, `assets/duckdb.dll`; `anfra.exe` built with `GOOS=windows GOARCH=amd64` and the same flags; packed as `release/anfra-windows-x64.zip` with `anfra.exe` and `THIRD_PARTY_NOTICES.txt` at its top. `SHA256SUMS`, the upload and the artifacts take it without change. Linux and macOS unchanged.
+- [x] `packaging/windows/THIRD_PARTY_NOTICES.txt`: DuckDB's MIT license (v1.5.6), saying what it covers (`duckdb.dll`, inside `anfra.exe`).
+- [x] `build_release.yml` downloads `anfra-node-windows-x64.exe`, `anfra-canal-windows-x64.exe` and `anfra-canal-windows-x64-duckdb.dll`, then checks that every expected sidecar file is there, failing with the missing ones' names.
+- [x] `windows-x64` is in the target loop: the three files at `assets/anfra-node`, `assets/anfra-canal`, `assets/duckdb.dll`; `anfra.exe` built with `GOOS=windows GOARCH=amd64` and the same flags; packed as `release/anfra-windows-x64.zip` with `anfra.exe` and `THIRD_PARTY_NOTICES.txt` at its top. `SHA256SUMS`, the upload and the artifacts take it without change. Linux and macOS unchanged.
 
 **Verification:**
-- [ ] The loop's commands, run by hand with T1's and T2's binaries, give the `.zip`. On Windows 11 it unzips, `anfra version` runs, a DuckDB query answers, and MotherDuck's extension loads (a MotherDuck query only if you set a token).
-- [ ] The missing-file check, run by hand with a file taken away, names it.
-- [ ] The workflow parses.
+- [x] The loop's commands, run by hand with T1's and T2's binaries, give the `.zip`. On Windows 11 it unzips, `anfra version` runs, a DuckDB query answers, and MotherDuck's extension loads (a MotherDuck query only if you set a token).
+- [x] The missing-file check, run by hand with a file taken away, names it.
+- [x] The workflow parses.
 
 **Dependencies:** T1, T2 (their binaries, for the check by hand)
 
 **Files likely touched:** `.github/workflows/build_release.yml`, `packaging/windows/THIRD_PARTY_NOTICES.txt`
 
 **Estimated scope:** S
+
+**Result** (2026-11-27): the workflow's own scripts, taken from the YAML, ran in WSL with T1's and T2's Windows binaries (placeholders for the other platforms, the loop cut to `windows-x64`). The check passed with every file there, and with the DLL taken away failed naming it and both pins. The loop gave `anfra-windows-x64.zip` (127 MB: `anfra.exe` 355 MB and `THIRD_PARTY_NOTICES.txt`). On Windows 11, unzipped with `Expand-Archive`: `anfra version` 9.9.8; `anfra init demo --example`; `anfra show`; a query answered 4 rows through `duckdb.dll` (both sidecars unpacked, the DLL beside `anfra-canal.exe`). A MotherDuck data source with a made-up token got MotherDuck's own refusal (`Your request is not authenticated`), which needs the `windows_amd64` extension loaded. The notice is LF, as the repo has no `.gitattributes`; Notepad reads it.
 
 ### - [ ] T4: `install.ps1`
 

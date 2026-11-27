@@ -98,21 +98,34 @@ jobs:
           # The minified anfra-node per target, not the -unminified ones beside them,
           # which are for development (scripts/sidecars.sh).
           node_assets=()
-          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do node_assets+=(-p "anfra-node-$t"); done
+          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64.exe; do node_assets+=(-p "anfra-node-$t"); done
           gh release download -R holistics/holistics-core "$NODE_TAG"  -D sidecars "${node_assets[@]}"
           gh release download -R holistics/canal          "$CANAL_TAG" -D sidecars -p 'anfra-canal-*'
           ls -la sidecars
+          # A pin to a release without one of these would ship anfra without that platform.
+          missing=()
+          for f in anfra-{node,canal}-{linux-x64,linux-arm64,darwin-x64,darwin-arm64} \
+                   anfra-{node,canal}-windows-x64.exe anfra-canal-windows-x64-duckdb.dll; do
+            [ -f "sidecars/$f" ] || missing+=("$f")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "The pinned sidecar releases ($NODE_TAG, $CANAL_TAG) lack: ${missing[*]}. Pin releases that have them in manifest.yml." >&2
+            exit 1
+          fi
 
       - name: Cross-build every target
         env:
           VERSION: ${{ steps.m.outputs.version }}
         run: |
-          declare -A OS=([linux-x64]=linux [linux-arm64]=linux [darwin-x64]=darwin [darwin-arm64]=darwin)
-          declare -A ARCH=([linux-x64]=amd64 [linux-arm64]=arm64 [darwin-x64]=amd64 [darwin-arm64]=arm64)
+          declare -A OS=([linux-x64]=linux [linux-arm64]=linux [darwin-x64]=darwin [darwin-arm64]=darwin [windows-x64]=windows)
+          declare -A ARCH=([linux-x64]=amd64 [linux-arm64]=arm64 [darwin-x64]=amd64 [darwin-arm64]=arm64 [windows-x64]=amd64)
           mkdir -p release internal/sidecar/anfranode/assets internal/sidecar/anfracanal/assets
-          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            cp "sidecars/anfra-node-$t"  internal/sidecar/anfranode/assets/anfra-node
-            cp "sidecars/anfra-canal-$t" internal/sidecar/anfracanal/assets/anfra-canal
+          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
+            ext=""; [ "${OS[$t]}" = windows ] && ext=".exe"
+            cp "sidecars/anfra-node-$t$ext"  internal/sidecar/anfranode/assets/anfra-node
+            cp "sidecars/anfra-canal-$t$ext" internal/sidecar/anfracanal/assets/anfra-canal
+            # Windows' anfra-canal loads DuckDB's own DLL (embed_release_windows.go).
+            [ "${OS[$t]}" = windows ] && cp "sidecars/anfra-canal-$t-duckdb.dll" internal/sidecar/anfracanal/assets/duckdb.dll
             # -s -w strips the host's symbol table + DWARF (Phase 0).
             GOOS="${OS[$t]}" GOARCH="${ARCH[$t]}" go build -tags embed_sidecar \
               -ldflags "-s -w -X github.com/holistics/anfra/internal/meta.Version=$VERSION -X 'main.defaultCloudURL=$ANFRA_CLOUD_URL' -X 'main.defaultCloudSupportEmail=$ANFRA_CLOUD_SUPPORT_EMAIL'" \
@@ -122,6 +135,17 @@ jobs:
             if [ "${OS[$t]}" = linux ]; then
               mkdir -p "image/linux/${ARCH[$t]}"
               cp "release/anfra-$t" "image/linux/${ARCH[$t]}/anfra"
+            fi
+            # Windows gets a .zip, which opens with a double-click: anfra.exe and
+            # DuckDB's notice at its top, where anfra update and install.ps1 look.
+            if [ "${OS[$t]}" = windows ]; then
+              dir="$RUNNER_TEMP/anfra-$t"
+              mkdir -p "$dir"
+              mv "release/anfra-$t" "$dir/anfra.exe"
+              cp packaging/windows/THIRD_PARTY_NOTICES.txt "$dir/"
+              (cd "$dir" && zip -9 -q "$GITHUB_WORKSPACE/release/anfra-$t.zip" anfra.exe THIRD_PARTY_NOTICES.txt)
+              unzip -l "release/anfra-$t.zip"
+              continue
             fi
             # Transport compression (Phase 1, see compression.md): publish only the
             # .gz. The embed stays uncompressed so the binary remains delta-friendly.
