@@ -29,7 +29,7 @@ T5 round trip on Windows with acme (needs T1–T2)
 ## Task List
 
 ### Phase 1: publish and pull
-- [ ] T1: publish reads files "as published": a CRLF file hashes and uploads as LF
+- [x] T1: publish reads files "as published": a CRLF file hashes and uploads as LF
 - [ ] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
 
 ### Phase 2: The files anfra writes

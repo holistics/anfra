@@ -470,6 +470,32 @@ func TestPublish(t *testing.T) {
 	}
 }
 
+// Line endings alone aren't a change: a folder saved with CRLF publishes
+// nothing more than the LF one did, and an edited CRLF file is sent as LF.
+func TestPublishLineEndings(t *testing.T) {
+	s, url := newServer(t)
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"models/a.aml": "a\n1\n", "models/b.aml": "b\n"})
+	o := Options{SetOrg: url}
+	if _, _, err := run(t, dir, o, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	uploads := s.uploads
+	write(t, dir, map[string]string{"models/a.aml": "a\r\n1\r\n", "models/b.aml": "b\r\n"})
+	if out, _, err := run(t, dir, o, never(t)); err != nil || !strings.Contains(out, "Nothing changed") || s.uploads != uploads {
+		t.Errorf("saved with CRLF: %q, %v, %d uploads; want nothing changed", out, err, s.uploads-uploads)
+	}
+	write(t, dir, map[string]string{"models/a.aml": "a\r\n2\r\n"})
+	if _, _, err := run(t, dir, o, never(t)); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range s.deployed {
+		if f.Path == "models/a.aml" && string(s.blobs[f.OID]) != "a\n2\n" {
+			t.Errorf("sent %q, want the LF content", s.blobs[f.OID])
+		}
+	}
+}
+
 // Uploads are batched within the server's limits, not the client's.
 func TestPublishBatchesUploads(t *testing.T) {
 	s, url := newServer(t)

@@ -30,7 +30,7 @@ func Read(dir string) (Tree, error) {
 	}
 	t := Tree{dir: dir, files: make(map[string]string, len(paths)), byID: make(map[string]string, len(paths)), sizes: make(map[string]int, len(paths))}
 	for _, p := range paths {
-		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
+		content, err := ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
 		if err != nil {
 			return Tree{}, err
 		}
@@ -78,7 +78,7 @@ func (t Tree) ReadBlob(_ context.Context, id string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("no file in %s has blob %s", t.dir, id)
 	}
-	content, err := os.ReadFile(filepath.Join(t.dir, filepath.FromSlash(p)))
+	content, err := ReadFile(filepath.Join(t.dir, filepath.FromSlash(p)))
 	if err != nil {
 		return nil, err
 	}

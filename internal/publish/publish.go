@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -342,7 +341,7 @@ func (u uploader) upload(ctx context.Context, oids []string) error {
 	}
 	for _, oid := range oids {
 		path := byOID[oid]
-		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(path)))
+		content, err := workdir.ReadFile(filepath.Join(dir, filepath.FromSlash(path)))
 		if err != nil {
 			return err
 		}

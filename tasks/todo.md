@@ -4,16 +4,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 ## Phase 1: publish and pull
 
-### - [ ] T1: publish reads files "as published": a CRLF file hashes and uploads as LF
+### - [x] T1: publish reads files "as published": a CRLF file hashes and uploads as LF
 
 **Acceptance criteria:**
-- [ ] `workdir`: one function giving a file's content as published (CRLF → LF in text; binary, by git's rule, as is; a lone CR kept).
-- [ ] `Read` hashes it, and `publish.go:345` uploads it (its "changed during the publish" check compares it).
-- [ ] The hash format and `shared/repoformat` unchanged.
+- [x] `workdir`: one function giving a file's content as published (CRLF → LF in text; binary, by git's rule, as is; a lone CR kept).
+- [x] `Read` hashes it, and `publish.go:345` uploads it (its "changed during the publish" check compares it).
+- [x] The hash format and `shared/repoformat` unchanged.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/publish/...`, with: the function's cases (CRLF, LF, lone CR, binary with CR, NUL past 8 KB); a CRLF repo hashes as the LF one; publish sends nothing for line endings alone, and a really edited CRLF file as LF.
-- [ ] Lint once, Linux and Windows.
+- [x] Tests pass (Linux): `go test ./internal/publish/...`, with: the function's cases (CRLF, LF, lone CR, binary with CR, NUL past 8,000 bytes: git's limit, not 8 KB); a CRLF repo hashes as the LF one; publish sends nothing for line endings alone, and a really edited CRLF file as LF.
+- [x] Lint once, Linux and Windows.
 
 **Dependencies:** None
 
