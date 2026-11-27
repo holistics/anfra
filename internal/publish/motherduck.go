@@ -15,6 +15,7 @@ import (
 	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/datasource"
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/motherduck"
 	"github.com/holistics/anfra/shared/apperr"
 )
@@ -585,6 +586,10 @@ func copyFile(from, to string) error {
 	defer func() { _ = src.Close() }()
 	dst, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
+		return err
+	}
+	if err := fileperm.OwnerOnly(dst); err != nil { // a copy of a database: on Windows, 0o600 isn't enough
+		_ = dst.Close()
 		return err
 	}
 	if _, err := io.Copy(dst, src); err != nil {

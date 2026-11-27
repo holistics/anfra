@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/holistics/anfra/internal/fileperm"
 	"github.com/holistics/anfra/internal/motherduck"
 )
 
@@ -329,6 +330,11 @@ func TestCopyForUploadRefusesAChangingFile(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(copied + ".wal"); string(b) != "LOG" {
 		t.Errorf("log %q", b)
+	}
+	for _, f := range []string{copied, copied + ".wal"} {
+		if ok, err := fileperm.IsOwnerOnly(f); !ok || err != nil {
+			t.Errorf("%s: only you can read it = %v, %v", f, ok, err)
+		}
 	}
 	cleanup()
 	if _, err := os.Stat(filepath.Dir(copied)); !os.IsNotExist(err) {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/fileperm"
 )
 
 // Files are exports' files, one per export, named by a token no one can guess,
@@ -124,6 +125,11 @@ func (s Store) Create(_ context.Context, filename, contentType string) (command.
 	f, err := os.OpenFile(filepath.Join(Dir(), token), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err // the export command names the step
+	}
+	if err := fileperm.OwnerOnly(f); err != nil { // query results: on Windows, 0o600 isn't enough
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return nil, err
 	}
 	return &export{File: f, store: s, token: token, filename: filename, contentType: contentType}, nil
 }

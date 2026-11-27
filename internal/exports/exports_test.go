@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/holistics/anfra/internal/command"
+	"github.com/holistics/anfra/internal/fileperm"
 )
 
 // newFiles is exports' files in a temp directory of the test's own.
@@ -77,6 +78,9 @@ func TestFileLink(t *testing.T) {
 	}
 	if b, err := os.ReadFile(FileLinkPath(u)); err != nil || string(b) != "x\n" {
 		t.Errorf("the file at the link: %q %v", b, err)
+	}
+	if ok, err := fileperm.IsOwnerOnly(FileLinkPath(u)); !ok || err != nil {
+		t.Errorf("the export: only you can read it = %v, %v", ok, err)
 	}
 	if !strings.HasPrefix(FileLinkPath(u), Dir()) {
 		t.Errorf("the file is at %s, outside %s", FileLinkPath(u), Dir())

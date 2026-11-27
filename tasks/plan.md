@@ -40,7 +40,7 @@ T3–T7 are independent of each other and of T1–T2.
 - [x] T2: Saved logins work on Windows, private to the user
 
 ### Checkpoint A
-- [ ] T1–T2's Windows tests pass; you run `anfra auth login` on Windows, then a command that needs it.
+- [x] T1–T2's Windows tests pass; you run `anfra auth login` on Windows, then a command that needs it.
 
 ### Phase 2: The smaller fixes
 - [x] T3: Exports: the download removes the CLI's copy; `file:///C:/…` links
@@ -56,6 +56,7 @@ T3–T7 are independent of each other and of T1–T2.
 - [x] T8: Other files only you may read, on Windows too (added at Checkpoint B)
 - [ ] T9: End to end on Windows 11
 - [ ] T10: Docs, backlog, plan, and the Linux checks
+- [x] T11: Export files and MotherDuck's upload copy, only you may read (decided at the end)
 
 ### Checkpoint C: Complete
 - [ ] Spec success criteria 1–9 met; the commit split reviewed with you.

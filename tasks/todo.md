@@ -45,8 +45,8 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 **Estimated scope:** M
 
 ### Checkpoint A
-- [ ] T1–T2's Windows tests pass; Linux tests pass.
-- [ ] You run `anfra auth login` on Windows, then a command that needs the login (I'll give the exact steps).
+- [x] T1–T2's Windows tests pass; Linux tests pass.
+- [x] You run `anfra auth login` on Windows, then a command that needs the login (I'll give the exact steps). Done by the user (2026-11-27): signed in to `https://us.anfra.ai/o/acme`; `auth status`: saved login `valid`. `credentials.json`: `LAPTOP\nuita` full control, nothing inherited.
 
 ## Phase 2: The smaller fixes
 
@@ -178,7 +178,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 - [x] The design and usage docs that describe each area say what differs on Windows: logins (`docs/usage/publishing.md`, `docs/designs/security.md`), exports (`docs/designs/exports.md`), Data Apps (`docs/designs/data-apps.md`).
 - [x] `docs/todos/backlog.md`: file names that differ only in case; publish refusing names Windows can't hold.
 - [x] `WINDOWS-PLAN.md`: Where it stands, and the module's result.
-- [ ] With your go-ahead: `make check` and `make test`. (Run lightly: `GOMAXPROCS=4 GOFLAGS=-p=2`.)
+- [x] With your go-ahead: `make check` and `make test`. (Run lightly: `GOMAXPROCS=4 GOFLAGS=-p=2`.) Not run, decided by the user: CI runs them on the PR.
 
 **Verification:**
 - [ ] Manual: the spec's Success Criteria 1–9, each ticked here.
@@ -186,6 +186,25 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-files-auth.md](../SPEC-win-files-auth.
 **Dependencies:** T9
 
 **Files likely touched:** the docs above, `docs/todos/backlog.md`, `WINDOWS-PLAN.md`
+
+**Estimated scope:** S
+
+### - [x] T11: Export files and MotherDuck's upload copy, only you may read
+
+**Description:** Asked at the end, decided by the user. Both hold your data (query results; a copy of a DuckDB file) and are mode `600` on Unix, in the temp folder, which `TMP` may point at a shared folder.
+
+**Acceptance criteria:**
+- [x] `internal/exports`: an export's file is made with `fileperm.OwnerOnly` before anything is written.
+- [x] `internal/publish`'s `copyFile` (MotherDuck's upload copy, and its log): the same.
+- [x] Unix unchanged (mode `600`).
+
+**Verification:**
+- [x] Tests pass (Linux): `go test ./internal/exports/ ./internal/publish/`, each checking its file with `fileperm.IsOwnerOnly`.
+- [x] On Windows: the same tests, one build each; lint once per OS. Both failed on Windows before the change (not owner-only), and pass after.
+
+**Dependencies:** T8
+
+**Files likely touched:** `internal/exports/exports.go`, `internal/publish/motherduck.go` (+ tests)
 
 **Estimated scope:** S
 
