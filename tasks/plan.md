@@ -41,7 +41,7 @@ T5 round trip on Windows with acme (needs T1–T2)
 
 ### Phase 3: Windows and close
 - [x] T5: Round trip on Windows 11 with `acme`
-- [ ] T6: Docs and plan
+- [x] T6: Docs and plan
 
 ### Checkpoint B: Complete
 - [ ] Spec success criteria 1–7 met; the commit split reviewed with you.

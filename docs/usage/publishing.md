@@ -95,6 +95,12 @@ this machine, put it in `.anfra/config.local.yml`, which is never published ([co
 anfra](configs.md#configlocalyml)). An org's server from before settings were published doesn't take the
 file: publish then leaves it out, and says so.
 
+**Line endings.** Publish sends text files with LF line endings, as git stores them, whatever the
+OS you saved them on: a file saved on Windows (CRLF) that differs only in its line endings isn't
+a change, and isn't sent. Pull keeps each file's line ending: a CRLF file stays CRLF, and a new
+file arrives with LF. Binary files, such as images in `apps/`, are sent and written as they are.
+A repo already published from Windows sends its CRLF files once more, as LF, at its next publish.
+
 `anfra publish check` lists the files a publish would send, and where to, without authentication
 or config writes: the preflight, which checks more as it grows. It was `--list`, and before it
 `--dry-run`, which still work for now, with a warning. `--yes` is deprecated and does nothing.

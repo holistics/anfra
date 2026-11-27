@@ -98,14 +98,21 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 **Estimated scope:** S
 
-### - [ ] T6: Docs and plan
+### - [x] T6: Docs and plan
 
 **Acceptance criteria:**
-- [ ] `docs/usage/publishing.md` and `docs/designs/publish.md`: what publish and pull do with line endings, and the first publish of a repo already published with CRLF.
-- [ ] `WINDOWS-PLAN.md`: Where it stands, and the module's result (the six places were five; `backup` keeps exact bytes; `withBlock`'s second block).
+- [x] `docs/usage/publishing.md` and `docs/designs/publish.md`: what publish and pull do with line endings, and the first publish of a repo already published with CRLF.
+- [x] `WINDOWS-PLAN.md`: Where it stands, and the module's result (the six places were five; `backup` keeps exact bytes; `withBlock`'s second block).
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–7, each ticked here.
+- [x] Manual: the spec's Success Criteria 1–7, each ticked here.
+  - [x] 1. CRLF and LF repos hash the same; nothing sent for line endings alone; an edited file sent as LF (T1, T5).
+  - [x] 2. pull updates unedited CRLF files, merges both sides cleanly, keeps CRLF; new files LF (T2, T5).
+  - [x] 3. Binary files byte for byte (T1, T2).
+  - [x] 4. `.gitattributes` from `init`, missing lines added to an existing one (T3).
+  - [x] 5. `config.yml` and `AGENTS.md` keep their line ending (T4).
+  - [x] 6. The round trip on Windows with `acme` (T5).
+  - [x] 7. Tests of every touched package pass on Linux; the Windows check recorded; docs and `WINDOWS-PLAN.md` updated. `make check` / `make test` left to CI.
 
 **Dependencies:** T5
 
@@ -114,5 +121,5 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 **Estimated scope:** S
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–7 met.
+- [x] Spec success criteria 1–7 met.
 - [ ] Ready for review with you (and the commit split proposed).

@@ -147,7 +147,8 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 | `win-process-lifecycle` | **Done** (M1, 2026-11-25). anfra compiles and runs on Windows 11 with its sidecars: stops them cleanly with or without a console, ends them with anfra (Job Object), unpacks a folder per version with `duckdb.dll`, keeps the socket's folder private. The `GOOS=windows go vet` CI step waits for the CI work. | [Spec](SPEC-win-process-lifecycle.md), [tasks](tasks/archive/win-process-lifecycle-todo.md), [findings](docs/research/windows-sidecar-transport.md#later-stopping-canal-with-ctrl-break-with-and-without-a-console) |
 | `win-anfra-node` | **Code done** (2026-11-25); its release row and Windows smoke test wait for the CI work. anfra-node shuts down on `SIGBREAK` (holistics-core branch `feat/anfra-node-windows-stop`, not pushed), and anfra stops it with Ctrl-Break, so no `watchdog.parent_death` after each command. Checked on Windows with Bun 1.4.4, as the release uses. anfra's change waits for anfra's pin to an anfra-node release with the handler. | [Spec](SPEC-win-anfra-node.md), [tasks](tasks/archive/win-anfra-node-todo.md), [findings](docs/research/windows-sidecar-transport.md#later-anfra-node-with-bun-144) |
 | `win-files-auth` | **Done** (2026-11-27). Login, pull and publish checked on Windows against `acme`. Logins save and stay private (they all failed before), saving survives readers, exports get `file:///C:/` links, Data Apps can't reach hidden files (they could) and get Windows' time zone, pull refuses names Windows can't hold, private files are private on Windows too. Login checked on Windows by the user. | [Spec](SPEC-win-files-auth.md), [tasks](tasks/archive/win-files-auth-todo.md) |
-| `win-line-endings`, `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
+| `win-line-endings` | **Done** (2026-11-27). publish and pull read text files as LF, so a file saved on Windows publishes only for real changes and merges cleanly; pull keeps each file's own line ending; `anfra init` writes `.gitattributes`; `config.yml` and `AGENTS.md` keep theirs. Round trip on Windows with `acme`. | [Spec](SPEC-win-line-endings.md), [tasks](tasks/todo.md) |
+| `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
 | Interim WSL docs | Not started | — |
 | Code-signing purchase | Not started | — |
 
@@ -327,6 +328,14 @@ Note: the local `/home/nui/works/canal` checkout is old. Work from `origin/maste
 | Tests: a repo with CRLF files publishes with the LF hashes and uploads only the really edited file; a pull over CRLF files updates untouched files without an "edited" refusal; a pull with a real change on each side of one CRLF file merges cleanly; a binary file with CR bytes is untouched; appending to a CRLF config file keeps CRLF. | 0.25 |
 
 Compiling needs no change: the AML parser already treats a CR as whitespace and rebuilds multi-line values (`'''…'''`, `@sql … ;;`, `@aql … ;;`) with LF (`aml` repo: `parser/lexer.ts`, `modules/expression/string/utils.ts`), so `validate` and `query` give the same results for CRLF and LF files. Only publish and pull, which compare raw bytes, need this module.
+
+**Result: done** (2026-11-27), tested on Windows 11 with `acme` ([tasks](tasks/todo.md)). What changed from the rows above:
+
+- **Five places, not six:** `workdir/apply.go:102` is `backup`, which must keep exact bytes for `--abort`. And of the five, three need nothing (`pull.go:208`, `pullhints.go:35`, `settings.go:174` already read CRLF right): only `Read`, `ReadBlob` and the upload changed.
+- **Pull keeps each file's own line ending** (decided with the user, as editors do): a CRLF file stays CRLF, conflict markers included.
+- **`.gitattributes`:** `text=auto eol=lf` for anfra's folders (decided with the user): the row's `apps/** text` would have damaged images and fonts in git.
+- **`AGENTS.md`:** the block was found in CRLF files too; the problem was `CheckBlock` comparing exactly, so a CRLF block read as outdated each time.
+- **On Windows with `acme`:** a model saved CRLF shows nothing to publish; a change made on LF pulls into a CRLF folder as CRLF; removed there and published, `acme` holds the original bytes again.
 
 ### `win-terminal`
 
