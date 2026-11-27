@@ -31,10 +31,11 @@ To cut a release, on a branch:
 1. **The frontend,** once: `pnpm build:web`, into `internal/appserve/dist`, which every target embeds. It fails without `dist/index.html`: a binary without its pages is a broken release.
 2. **Checks:** the tag matches the manifest's version, so does the SDK's, and `CHANGELOG.md` has a section for it. Both fail before anything is built.
 3. **The sidecars:** the pinned releases' binaries, downloaded from their repositories (a cross-repository read token, `ANFRA_DIST_TOKEN`).
-4. **Every target,** cross-built on one runner (anfra is pure Go): each target's sidecars copied into the embed assets, `go build -tags embed_sidecar` with the version injected, then gzipped. Only the `.gz` is published, as a transport compression: the sidecars embedded in the binary stay uncompressed, so the binary itself stays delta-friendly.
-5. **The image,** below.
-6. **The GitHub Release,** created (or, on a re-run, edited) with the binaries.
-7. **The SDK,** once the release is out: below.
+4. **Every target,** cross-built on one runner (anfra is pure Go): each target's sidecars copied into the embed assets, `go build -tags embed_sidecar` with the version injected, then gzipped. Only the `.gz` is published, as a transport compression: the sidecars embedded in the binary stay uncompressed, so the binary itself stays delta-friendly. Windows' asset (`win-release`) is a `.zip` instead, which Windows opens with a double-click: `anfra-windows-x64.zip`, holding `anfra.exe` at its top, as `anfra update` expects.
+5. **`SHA256SUMS`:** the sha256 of each asset, by file name, in `sha256sum`'s format, which `anfra update` checks a download against (below).
+6. **The image,** below.
+7. **The GitHub Release,** created (or, on a re-run, edited) with the binaries. `SHA256SUMS` is uploaded first, in a call of its own: `anfra update` takes a release as out once its asset is, and must find the checksum by then.
+8. **The SDK,** once the release is out: below.
 
 **Release notes** are the version's section of `CHANGELOG.md`, under "Changelog", followed by GitHub's own generated notes: the pull requests, new contributors and compare link (`scripts/release-notes.sh`, which also previews them locally). So a release says what the changelog says, and a re-run brings its notes back in line.
 
@@ -83,5 +84,7 @@ Build metadata leaves the version's order alone, and a release never carries any
 A running `anfra serve` keeps the version it started with, and so do the commands forwarded to it, until it is restarted. The CLI warns of one with a `server_version_mismatch` warning: a command forwarded to it before its answer, `anfra version`, which is never forwarded and reports the CLI's own version, and `anfra update` at its end, for each server still running another version ([cli-vs-warm-server.md](cli-vs-warm-server.md#version-mismatch)). An MCP client, which talks to the server alone, gets no such warning.
 
 After an update, or before one with `anfra update check`, `anfra update` prints what the new version brings: the changelog of each release since the running one, the skipped ones included, read from `CHANGELOG.md` at the new version's tag, of which each release's notes are a section, rather than from GitHub's rate-limited API (`internal/update/notes.go`). It shows the newest three and links to the rest. The notes are best-effort: when they can't be fetched, it prints a link to the releases instead, and the update still succeeds.
+
+`anfra update` downloads the asset to a temporary file, and installs it only when its sha256 matches its line in the release's `SHA256SUMS`. A mismatch, or a release without `SHA256SUMS` or without the asset's line, refuses the update and changes nothing; the message says how to install by hand (`install.sh`, or `install.ps1` on Windows). The temporary file is removed whatever happens. On Windows, `minio/selfupdate` renames the running `anfra.exe` to `.anfra.exe.old`, which Windows allows; the next update removes it, and while an older anfra still runs from it (an `anfra serve`, say), moves the running file aside under a name of its own instead.
 
 None of this applies to a build from source: it was built on purpose, and a release would replace it with something else. It is never told of updates, and `anfra update` refuses to replace it.

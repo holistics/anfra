@@ -31,6 +31,7 @@ func newUpdateCmd() *cobra.Command {
 		Use:   "update",
 		Short: "Update anfra to the latest release",
 		Long: "Update anfra to the latest release, replacing this binary. `anfra update check` only checks.\n\n" +
+			"It installs a download only when it matches the checksum the release publishes (SHA256SUMS).\n\n" +
 			"Its result is `anfra version`'s answer, checked after the update.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

@@ -39,11 +39,12 @@ T5 end to end on Windows: update, and update inside the console (needs T1–T4)
 - [x] T1–T4's tests pass on Linux and Windows; review with you at the end of the run.
 
 ### Phase 2: End to end, and close
-- [ ] T5: End to end on Windows with a local fake release
-- [ ] T6: Docs and plan
+- [x] T5: End to end on Windows with a local fake release
+- [x] T6: Docs and plan
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–6 met; the commit split reviewed with you.
+- [x] Spec success criteria 1–6 met.
+- [ ] The commit split reviewed with you.
 
 ## Risks and Mitigations
 

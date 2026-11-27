@@ -76,15 +76,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 ## Phase 2: End to end, and close
 
-### - [ ] T5: End to end on Windows with a local fake release
+### - [x] T5: End to end on Windows with a local fake release
 
 **Acceptance criteria:**
-- [ ] Two Windows builds: an "old" `anfra.exe` whose update looks at a local server (`-ldflags -X …/internal/update.webBase=…`, and `rawBase`), and a "new" one, zipped as `anfra-windows-x64.zip` with its `SHA256SUMS`, served from WSL at the paths `Latest` uses.
-- [ ] `anfra update` from PowerShell replaces the old with the new (`anfra version` shows it); with a wrong `SHA256SUMS`, it refuses and the old stays.
-- [ ] Inside `anfra console`, `update` restarts the console on the new anfra (by you).
+- [x] Two Windows builds: an "old" `anfra.exe` whose update looks at a local server (`-ldflags -X …/internal/update.webBase=…`, and `rawBase`), and a "new" one, zipped as `anfra-windows-x64.zip` with its `SHA256SUMS`, served from WSL at the paths `Latest` uses.
+- [x] `anfra update` from PowerShell replaces the old with the new (`anfra version` shows it); with a wrong `SHA256SUMS`, it refuses and the old stays.
+- [x] Inside `anfra console`, `update` restarts the console on the new anfra (by you). It didn't at first: on Windows, `os.SameFile` reads a file's ID on first use, by its path, so the console compared the new anfra with itself. Fixed by reading the ID when the console starts (`anfraFileAt`, `TestReplacedAskedOnlyAfter`, passing on Linux and Windows), then checked again by you: "Restarted on anfra 9.9.9."
 
 **Verification:**
-- [ ] Manual, on Windows 11; results recorded here.
+- [x] Manual, on Windows 11 (2026-11-27), served from WSL: from PowerShell, "Updated anfra 0.1.0 → 9.9.9." and `anfra version` 9.9.9, the old file moved to `.anfra.exe.old`; with a wrong `SHA256SUMS`, refused (`precondition_failed`, advising `irm https://anfra.ai/install.ps1 | iex`), the old anfra 0.1.0 kept, no download left in `%TEMP%`.
 
 **Dependencies:** T1–T4
 
@@ -92,14 +92,20 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 **Estimated scope:** S
 
-### - [ ] T6: Docs and plan
+### - [x] T6: Docs and plan
 
 **Acceptance criteria:**
-- [ ] `docs/designs/release.md` (the assets, `SHA256SUMS`, the `.zip`'s layout) and the `anfra update` usage doc: what update checks.
-- [ ] `WINDOWS-PLAN.md`: the download format moved to "Decisions made" (`.zip`, and update verifying on every OS); Where it stands; the module's result.
+- [x] `docs/designs/release.md` (the assets, `SHA256SUMS`, the `.zip`'s layout) and the `anfra update` usage doc: what update checks. There is no usage page for update: its `--help` says it instead.
+- [x] `WINDOWS-PLAN.md`: the download format moved to "Decisions made" (`.zip`, and update verifying on every OS); Where it stands; the module's result.
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–6, each ticked here.
+- [x] Manual: the spec's Success Criteria 1–6, each ticked here.
+  - [x] 1. Windows finds, unzips and applies the `.zip` (T3, T5); Linux and macOS keep `.gz` (`TestAssetName`).
+  - [x] 2. Every OS checks `SHA256SUMS`; a mismatch or none refuses and changes nothing (T1, T5).
+  - [x] 3. A leftover `.anfra.exe.old` is removed; one in use doesn't stop the update (T4: a name of its own, rather than a message).
+  - [x] 4. Windows' advice is `install.ps1` (T4, T5).
+  - [x] 5. The console restarts on the new anfra on Windows (T5, after the fix).
+  - [x] 6. `build_release.yml` publishes `SHA256SUMS` (T2); docs and `WINDOWS-PLAN.md` updated (T6).
 
 **Dependencies:** T5
 
@@ -108,5 +114,5 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 **Estimated scope:** S
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–6 met.
+- [x] Spec success criteria 1–6 met.
 - [ ] Ready for review with you (and the commit split proposed).
