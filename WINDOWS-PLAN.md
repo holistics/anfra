@@ -7,7 +7,7 @@ The [brief](#summary) is for reviewing, deciding and estimating: the summary, th
 - **Today:** anfra runs only on macOS and Linux. `install.sh` refuses other OSes, the release builds only 4 targets (linux/darwin × x64/arm64), and `GOOS=windows go build ./cmd/anfra` failed until `win-process-lifecycle` (on this branch, not released). A Windows user needs WSL or Docker first, and some features don't work there ([Alternatives](#alternatives-wsl-and-docker)). The README "one prompt" quickstart runs `curl | bash`, so it breaks at step 1 in PowerShell.
 - **Goal:** a Windows user runs one PowerShell line, and then every anfra feature works the same as on Mac/Linux: the CLI, `anfra serve`, `anfra console`, publish/pull, update, and agent setup.
 - **Recommendation:** build native Windows support (windows-x64). Ship WSL docs now as the interim path. Keep Docker for hosting.
-- **Cost:** **≈ 30.5–44.5 engineer-days** one-time (signing left for later), with Claude helping ([Estimate](#estimate)); about 4–6 calendar weeks with 2 engineers. Plus ongoing upkeep, mostly in canal's Windows build and the release ([Long-term maintenance](#long-term-maintenance)).
+- **Cost:** **≈ 31–45 engineer-days** one-time (signing left for later), with Claude helping ([Estimate](#estimate)); about 4–6 calendar weeks with 2 engineers. Plus ongoing upkeep, mostly in canal's Windows build and the release ([Long-term maintenance](#long-term-maintenance)).
 - **Decision:** **go** (2026-11-24). Both checks passed: the transport, and canal building and running on Windows (~1 ED, no canal code change). MotherDuck on Windows: supported, by linking DuckDB's official `duckdb.dll` ([Decisions made](#decisions-made)).
 - **Status:** **M1 reached** (2026-11-25): anfra runs on Windows 11. `win-sidecar-transport`, `win-canal` (CI deferred) and `win-process-lifecycle` are done: `version`, `validate`, `show` and `query`, with and without the cache, work with the sidecars, and no sidecar outlives anfra. Next: `win-anfra-node` ([Where it stands](#where-it-stands)).
 
@@ -62,15 +62,15 @@ The only place effort is added up. Every figure assumes **Claude helping**. Each
 | `win-files-auth` | 2.45–3.2 | Medium: the list comes from reading code; more may appear | Done once; new code may repeat its mistakes |
 | `win-line-endings` | 1.5–2 | Medium: touches publish hashing | Done once; new code must follow its rule |
 | `win-terminal` | 1.5–2.25 | Medium: mostly manual testing | Mostly done once |
-| `win-release` | 3.5–4.5 | Medium: the Windows CI build is new; signing (1–1.5) left for later | Keeps costing effort, often |
+| `win-release` | 4–5 | Medium: the Windows CI build is new; signing (1–1.5) left for later | Keeps costing effort, often |
 | `win-self-update` | 0.6–1.25 | High: the library already handles Windows | Mostly done once |
 | `win-skills-docs` | 2.7–3.6 | High: text work | Keeps costing effort, sometimes |
 | Guard: Windows smoke tests in canal's and holistics-core's CI | 0.5–1 | High | — |
 | Guard: CI check of the release binaries' minimum OS versions | 0.25–0.5 | High | — |
 | End-to-end testing on Windows ([Verification](#verification)) | 3–4 | Medium | — |
-| **Subtotal** | **≈ 25.5–37** |  |  |
+| **Subtotal** | **≈ 26–37.5** |  |  |
 | Buffer for review, CI waits, release coordination, surprises (20%) | 5–7.5 |  |  |
-| **Total** | **≈ 30.5–44.5 ED (6–9 engineer-weeks)** |  |  |
+| **Total** | **≈ 31–45 ED (6–9 engineer-weeks)** |  |  |
 
 
 Not in the total:
@@ -122,7 +122,7 @@ Judged only on what we control:
 | Data App live reload | Works | Often broken for repos on `C:\`, and file access is slow | Works for repos inside WSL |
 | Agent commands | `anfra …`, as on Mac/Linux | `docker exec anfra-serve anfra …` everywhere; skills need a Docker version | `anfra …`, with the agent run inside WSL |
 | Line endings (`win-line-endings`) | Needed | Also needed (files edited on Windows are CRLF) | Needed if files are edited from Windows |
-| Our one-time cost | ~30.5–44.5 ED | ~2–4 ED (login fix, skills, docs) | ~0.5–1 ED (docs, skills note) |
+| Our one-time cost | ~31–45 ED | ~2–4 ED (login fix, skills, docs) | ~0.5–1 ED (docs, skills note) |
 | Our ongoing cost | ~3–6 ED a quarter, across 3 repos | ~0 | ~0 |
 
 
@@ -372,7 +372,8 @@ Also check, on Windows, `anfra update` from inside `anfra console`: the console 
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | `.github/workflows/build_release.yml`: add `windows-x64` (`GOOS=windows GOARCH=amd64`), download `anfra-node-windows-x64.exe` and `anfra-canal-windows-x64.exe`, output the Windows asset in the [chosen format](#decisions-needed) (`anfra-windows-x64.zip` recommended). `manifest.yml`: bump the sidecar tags to versions with Windows builds. | 0.5 |
 | **Later, not in the first release (decided 2026-11-27):** code signing. Set up Azure Trusted Signing or buy an OV certificate, then add a signing step (signtool / `azure/trusted-signing-action`) to this repo's release; the other two repos reuse it. Identity checks take days to weeks. | (1–1.5, later) |
-| New `install.ps1` in the repo root, next to `install.sh`: detect the arch, download into `%USERPROFILE%\.anfra\bin\anfra.exe`, **verify its SHA-256** against the release's checksums and refuse a mismatch (what stands in for signing at first), add the folder to the user PATH, say to open a new terminal, refuse arm64 for now with a clear message. `install.sh`: on Git Bash/MSYS/Cygwin, point to `install.ps1`. **Merge order:** the script goes live the moment it reaches `main` (users fetch it from `main`, not from a release), so merge `install.ps1` only **after** the first release that has the Windows asset. Otherwise it downloads a file that doesn't exist yet. | 1–1.25 |
+| New `install.ps1` in the repo root, next to `install.sh`: detect the arch, download into `%USERPROFILE%\.anfra\bin\anfra.exe`, **verify its SHA-256** against the release's checksums and refuse a mismatch (what stands in for signing at first), add the folder to the user PATH, say to open a new terminal, refuse arm64 for now with a clear message. The same overrides as `install.sh` (`ANFRA_HOME`, `ANFRA_INSTALL_DIR`, `ANFRA_VERSION`, `ANFRA_NO_MODIFY_PATH`), plus `ANFRA_DOWNLOAD_URL`, where to download the release from, for testing. No `exit` in the script: under `irm … \| iex` it runs in the user's session and would close their window; `return` or `throw` instead. Plain ASCII, no byte-order mark. `install.sh`: on Git Bash/MSYS/Cygwin, point to `install.ps1`. **Merge order:** the script goes live the moment it reaches `main` (users fetch it from `main`, not from a release), so merge `install.ps1` only **after** the first release that has the Windows asset. Otherwise it downloads a file that doesn't exist yet. | 1–1.25 |
+| **Test `install.ps1` before it goes live** (decided 2026-11-27), each layer on its own: (1) from a local file, `Get-Content install.ps1 -Raw \| iex`; (2) the real pipe from a local web server, `python3 -m http.server` in WSL and `irm http://localhost:8000/install.ps1 \| iex` on Windows, which catches an `exit` closing the window, encoding, and PowerShell 5.1 vs 7 (syntax, TLS); (3) downloads from a local build through `ANFRA_DOWNLOAD_URL`, with `ANFRA_HOME` in a temporary folder and `ANFRA_NO_MODIFY_PATH=1`, including a changed `SHA256SUMS` that must be refused; (4) before the Cloudflare redirect, a pushed branch's raw URL (the repo is public), `irm https://raw.githubusercontent.com/holistics/anfra/<branch>/install.ps1 \| iex`; (5) a clean machine: Windows Sandbox (Windows 10/11 Pro), with PowerShell 5.1 and 7, for the first run, PATH and antivirus; (6) `Invoke-ScriptAnalyzer install.ps1` (PSScriptAnalyzer), also in CI. | 0.5 |
 | `.github/workflows/continuous_integration.yml`: a `windows-latest` job running `go build ./...`, and `go test` on the packages with Windows logic (see the tests below), plus `GOOS=windows go vet ./...` in the Linux lint job, so Windows compile breaks show early. | 0.75–1 |
 | `internal/sidecar/{anfranode,anfracanal}/embed_release.go`: keep the same embed path; the build copies the Windows sidecar into it. | 0.25 |
 | Windows also embeds DuckDB's official `duckdb.dll` (from DuckDB's release `libduckdb-windows-amd64.zip`, the version the Go bindings pin, checksum checked), built with canal by `build-windows-dll.ps1`'s flags (`duckdb_use_lib`). A release check that the DLL's DuckDB version equals the bindings' (`select version()` through canal, or the file's version). | 0.5 |
