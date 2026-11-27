@@ -1,10 +1,10 @@
 # Implementation Plan: win-terminal
 
-Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Task checklist: [todo.md](todo.md). Earlier modules' tasks: [archive/](archive/).
+Spec: [SPEC-win-terminal.md](../../SPEC-win-terminal.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Task checklist: [todo.md](win-terminal-todo.md). Earlier modules' tasks: [archive/](./).
 
 ## Overview
 
-What this module delivers and why: the spec's [Objective](../SPEC-win-terminal.md#objective). This file holds how. First the code changes, each small and testable on its own (colors, Unicode, live reload, the tests that fail on Windows), then one full Windows run of `cmd/anfra` and `internal/appserve`, then your hand checks in four terminals, then docs.
+What this module delivers and why: the spec's [Objective](../../SPEC-win-terminal.md#objective). This file holds how. First the code changes, each small and testable on its own (colors, Unicode, live reload, the tests that fail on Windows), then one full Windows run of `cmd/anfra` and `internal/appserve`, then your hand checks in four terminals, then docs.
 
 ## Architecture Decisions
 
@@ -12,7 +12,7 @@ What this module delivers and why: the spec's [Objective](../SPEC-win-terminal.m
 - **`utf8Terminal` per OS:** Windows answers true (Go writes to a console with `WriteConsoleW`, whatever its code page); Unix keeps reading `LC_ALL`/`LC_CTYPE`/`LANG`.
 - **The watcher ignores a change on a folder** (not its creation, which still adds the folder's watches). Shared code; no OS branch: Linux and macOS don't send such events.
 - **Tests that can't run on Windows skip, saying why,** with the check that replaces them named.
-- **Working safely on Windows** ([memory](archive/win-files-auth-todo.md#checkpoint-b), and the update-check cascade fixed in `d3d2150`): `GOMAXPROCS=4 GOFLAGS=-p=2`; one Windows build per task; Windows' free memory checked first; after a run of `cmd/anfra`'s test program, no copies left (checked) and the program deleted.
+- **Working safely on Windows** ([memory](win-files-auth-todo.md#checkpoint-b), and the update-check cascade fixed in `d3d2150`): `GOMAXPROCS=4 GOFLAGS=-p=2`; one Windows build per task; Windows' free memory checked first; after a run of `cmd/anfra`'s test program, no copies left (checked) and the program deleted.
 
 ## Dependency graph
 

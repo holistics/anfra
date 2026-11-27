@@ -1,6 +1,6 @@
 # Tasks: win-terminal
 
-Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md).
+Plan: [plan.md](win-terminal-plan.md). Spec: [SPEC-win-terminal.md](../../SPEC-win-terminal.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md).
 
 ## Phase 1: The code
 
