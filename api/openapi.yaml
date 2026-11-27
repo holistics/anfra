@@ -1723,6 +1723,11 @@ components:
           items:
             $ref: "#/components/schemas/ShowRelationship"
           type: array
+        tags:
+          description: its @tags, in the order the AML writes them. Absent when it has none.
+          items:
+            $ref: "#/components/schemas/ShowTag"
+          type: array
       required:
         - kind
         - fqn
@@ -1800,6 +1805,11 @@ components:
           type: string
         name:
           type: string
+        tags:
+          description: its @tags, in the order the AML writes them. Absent when it has none.
+          items:
+            $ref: "#/components/schemas/ShowTag"
+          type: array
       required:
         - fqn
         - name
@@ -1878,6 +1888,21 @@ components:
       required:
         - object
         - diagnostics
+      type: object
+    ShowTag:
+      additionalProperties: false
+      properties:
+        color:
+          description: its color, as the Tag that declares it gives it. Absent when no Tag declares it, or the Tag gives none.
+          type: string
+        description:
+          description: its description, as the Tag that declares it gives it. Absent when no Tag declares it, or the Tag gives none.
+          type: string
+        name:
+          description: the tag's name, as the AML writes it
+          type: string
+      required:
+        - name
       type: object
     SidecarHealth:
       additionalProperties: false
@@ -2775,7 +2800,7 @@ paths:
       description: |-
         Show the repo's datasets, or one dataset, with their models, fields, and metrics, as AQL can query them.
 
-        With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. It shows names, labels, types, roles, and AQL definitions, never SQL or tables. Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, or a data source the repo doesn't configure.
+        With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. It shows names, labels, types, roles, @tags, and AQL definitions, never SQL or tables. Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, or a data source the repo doesn't configure.
       operationId: core.show
       requestBody:
         content:

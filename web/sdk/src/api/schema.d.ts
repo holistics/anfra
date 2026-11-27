@@ -193,7 +193,7 @@ export interface paths {
          * Show the repo's datasets, or one dataset, with their models, fields, and metrics
          * @description Show the repo's datasets, or one dataset, with their models, fields, and metrics, as AQL can query them.
          *
-         *     With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. It shows names, labels, types, roles, and AQL definitions, never SQL or tables. Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, or a data source the repo doesn't configure.
+         *     With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. It shows names, labels, types, roles, @tags, and AQL definitions, never SQL or tables. Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, or a data source the repo doesn't configure.
          */
         post: operations["core.show"];
         delete?: never;
@@ -1201,6 +1201,8 @@ export interface components {
             name: string;
             /** @description the relationships between its models. Absent if the dataset failed to load. */
             relationships?: components["schemas"]["ShowRelationship"][];
+            /** @description its @tags, in the order the AML writes them. Absent when it has none. */
+            tags?: components["schemas"]["ShowTag"][];
         };
         ShowField: {
             /** @description a measure's aggregation, such as sum or count distinct; custom for a custom one */
@@ -1240,6 +1242,8 @@ export interface components {
             fqn: string;
             label?: string;
             name: string;
+            /** @description its @tags, in the order the AML writes them. Absent when it has none. */
+            tags?: components["schemas"]["ShowTag"][];
         };
         ShowRelationship: {
             /** @description whether queries join through it by default */
@@ -1275,6 +1279,14 @@ export interface components {
             diagnostics: components["schemas"]["CompileError"][];
             /** @description the object shown, by kind; a client must accept a kind it does not know */
             object: components["schemas"]["ShowRepo"] | components["schemas"]["ShowDataset"];
+        };
+        ShowTag: {
+            /** @description its color, as the Tag that declares it gives it. Absent when no Tag declares it, or the Tag gives none. */
+            color?: string;
+            /** @description its description, as the Tag that declares it gives it. Absent when no Tag declares it, or the Tag gives none. */
+            description?: string;
+            /** @description the tag's name, as the AML writes it */
+            name: string;
         };
         SidecarHealth: {
             "canal-query": string;

@@ -96,6 +96,7 @@ type ShowDataset struct {
 	Name          string             `json:"name"`
 	Label         string             `json:"label,omitempty"`
 	Description   string             `json:"description,omitempty"`
+	Tags          []ShowTag          `json:"tags,omitempty" doc:"its @tags, in the order the AML writes them. Absent when it has none."`
 	Models        []ShowModel        `json:"models,omitempty" doc:"the models the dataset uses. Absent when the dataset is shown in outline."`
 	Metrics       []ShowField        `json:"metrics,omitempty" doc:"the dataset's metrics. Absent when the dataset is shown in outline."`
 	Relationships []ShowRelationship `json:"relationships,omitempty" doc:"the relationships between its models. Absent if the dataset failed to load."`
@@ -119,6 +120,7 @@ type ShowModel struct {
 	Name        string      `json:"name"`
 	Label       string      `json:"label,omitempty"`
 	Description string      `json:"description,omitempty"`
+	Tags        []ShowTag   `json:"tags,omitempty" doc:"its @tags, in the order the AML writes them. Absent when it has none."`
 	Fields      []ShowField `json:"fields"`
 }
 
@@ -135,6 +137,14 @@ type ShowField struct {
 	Format           any    `json:"format,omitzero" doc:"how a value displays, as the AML declares it"`
 	Definition       string `json:"definition,omitempty" doc:"the definition of a field or metric written in AQL"`
 	DefinedInDataset bool   `json:"definedInDataset,omitzero" doc:"a dimension the dataset declares on one of its models"`
+}
+
+// ShowTag is a @tag on a dataset or a model. A Tag that declares the name
+// gives its color and description.
+type ShowTag struct {
+	Name        string `json:"name" doc:"the tag's name, as the AML writes it"`
+	Color       string `json:"color,omitempty" doc:"its color, as the Tag that declares it gives it. Absent when no Tag declares it, or the Tag gives none."`
+	Description string `json:"description,omitempty" doc:"its description, as the Tag that declares it gives it. Absent when no Tag declares it, or the Tag gives none."`
 }
 
 // ShowAML shows an object of the repo, read from its compiled AML.

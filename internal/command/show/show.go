@@ -21,7 +21,7 @@ var Show = command.Define(command.Def[ShowInput, anfranode.ShowResult]{
 	Short: "Show the repo's datasets, or one dataset, with their models, fields, and metrics",
 	Long: "Show the repo's datasets, or one dataset, with their models, fields, and metrics, as AQL can query them.\n\n" +
 		"With no fqn, it shows the repo and every dataset in full, and with a dataset's fqn, that dataset in full. " +
-		"It shows names, labels, types, roles, and AQL definitions, never SQL or tables. " +
+		"It shows names, labels, types, roles, @tags, and AQL definitions, never SQL or tables. " +
 		"Problems that affect the result come with it as diagnostics, such as a file that doesn't compile, " +
 		"or a data source the repo doesn't configure.",
 	ReadOnly:   true,
