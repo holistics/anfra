@@ -29,3 +29,19 @@ func ReadFile(path string) ([]byte, error) {
 	}
 	return AsPublished(content), nil
 }
+
+// allCRLF reports whether content is a text file whose every line break is
+// CRLF: one saved on Windows, which pull writes back the same way, as an
+// editor does.
+func allCRLF(content []byte) bool {
+	lf := bytes.Count(content, []byte("\n"))
+	return lf > 0 && !binary(content) && bytes.Count(content, []byte("\r\n")) == lf
+}
+
+// withCRLF is LF text content with its line breaks as CRLF.
+func withCRLF(content []byte) []byte {
+	if binary(content) {
+		return content
+	}
+	return bytes.ReplaceAll(AsPublished(content), []byte("\n"), []byte("\r\n"))
+}

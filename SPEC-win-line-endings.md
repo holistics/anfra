@@ -15,7 +15,9 @@ Compiling is fine already: the AML parser treats CR as whitespace and rebuilds m
 
 1. **publish and pull read every file "as published":** text files with CRLF turned into LF; binary files untouched. Git's rules: a file with a zero byte in its first 8 KB is binary; a lone CR is kept. One function in `internal/publish/workdir`, used at the places publish and pull read the working folder to compare or send it (checked 2026-11-27):
    - `workdir/tree.go:33` (`Read`: the hashes, which also decide pull's "was it edited here?") and `:81` (`ReadBlob`, the merge's local side);
-   - `publish.go:345` (the upload, which checks each file still has the hash `Read` gave it), `pull.go:208` (whether a conflict's markers are gone), `pullhints.go:35` (the data sources AML names), `settings.go:174` (whether the folder's config is `init`'s).
+   - `publish.go:345` (the upload, which checks each file still has the hash `Read` gave it).
+
+   Found while building: `pull.go:208` (whether a conflict's markers are gone), `pullhints.go:35` (the data sources AML names) and `settings.go:174` (whether the folder's config is `init`'s) need no change: each already reads CRLF right.
 
    Not `workdir/apply.go:102` (`backup`), which the plan listed: it keeps a file's exact bytes, for `pull --abort` and `--take local` to put back.
 

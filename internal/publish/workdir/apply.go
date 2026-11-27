@@ -71,12 +71,14 @@ func Apply(dir, backupDir string, changes []Change, begin func(before map[string
 	}
 	defer backups.Close()
 	before := make(map[string]string, len(changes))
+	crlf := map[string]bool{} // paths whose file has CRLF line breaks, which their new content keeps
 	for _, c := range changes {
-		id, err := backup(repo, backups, c.Path)
+		id, content, err := backup(repo, backups, c.Path)
 		if err != nil {
 			return err
 		}
 		before[c.Path] = id
+		crlf[c.Path] = allCRLF(content)
 	}
 	if err := begin(before); err != nil {
 		return err
@@ -89,7 +91,11 @@ func Apply(dir, backupDir string, changes []Change, begin func(before map[string
 			}
 			continue
 		}
-		if err := writeFile(repo, name, c.Content); err != nil {
+		content := c.Content
+		if crlf[c.Path] {
+			content = withCRLF(content)
+		}
+		if err := writeFile(repo, name, content); err != nil {
 			return err
 		}
 	}
@@ -97,20 +103,22 @@ func Apply(dir, backupDir string, changes []Change, begin func(before map[string
 }
 
 // backup copies a path's current content into backups, by blob id, and
-// answers the id; "" when the path doesn't exist.
-func backup(repo, backups *os.Root, p string) (string, error) {
+// answers the id and the content; "" and nil when the path doesn't exist. It
+// keeps the exact bytes, not the content as published: restoring them is
+// putting the file back as it was.
+func backup(repo, backups *os.Root, p string) (string, []byte, error) {
 	content, err := repo.ReadFile(filepath.FromSlash(p))
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
+		return "", nil, nil
 	}
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	id := repoformat.BlobID(content)
 	if _, err := backups.Stat(id); err == nil {
-		return id, nil // the same content, already kept
+		return id, content, nil // the same content, already kept
 	}
-	return id, writeFile(backups, id, content)
+	return id, content, writeFile(backups, id, content)
 }
 
 // Restore puts each path in before back as it was: its content from the

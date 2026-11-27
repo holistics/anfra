@@ -30,7 +30,7 @@ T5 round trip on Windows with acme (needs T1–T2)
 
 ### Phase 1: publish and pull
 - [x] T1: publish reads files "as published": a CRLF file hashes and uploads as LF
-- [ ] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
+- [x] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
 
 ### Phase 2: The files anfra writes
 - [ ] T3: `anfra init` writes `.gitattributes`

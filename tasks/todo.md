@@ -21,16 +21,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 **Estimated scope:** M
 
-### - [ ] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
+### - [x] T2: pull merges CRLF files as LF, and writes each file back with its own line ending
 
 **Acceptance criteria:**
-- [ ] `ReadBlob` (the merge's local side), `pull.go:208` (conflict markers gone?), `pullhints.go:35` (data source names), `settings.go:174` (`init`'s config?) read as published; `ReadBlob`'s "changed while reading" check compares the normalised content.
-- [ ] `Apply`: a file whose line breaks are all CRLF is written with CRLF (conflict markers included); new, LF, mixed and binary files as given. `backup` keeps exact bytes.
-- [ ] `pull --abort` and `--take local` still put back the exact original bytes.
+- [x] `ReadBlob` (the merge's local side), `pull.go:208` (conflict markers gone?), `pullhints.go:35` (data source names), `settings.go:174` (`init`'s config?) read as published; `ReadBlob`'s "changed while reading" check compares the normalised content. Done for `ReadBlob` (in T1). The other three need nothing: `textmerge.Resolved` already takes `\r\n` after a marker; the hint's pattern reads only between quotes; `adoptOrgConfig` parses YAML, which reads CRLF, and a CRLF copy only makes it write the org's identical file. Left as they are (YAGNI).
+- [x] `Apply`: a file whose line breaks are all CRLF is written with CRLF (conflict markers included); new, LF, mixed and binary files as given. `backup` keeps exact bytes.
+- [x] `pull --abort` and `--take local` still put back the exact original bytes.
 
 **Verification:**
-- [ ] Tests pass (Linux): pull over unedited CRLF files updates them, no "edited here" refusal, and they stay CRLF; a change on both sides of one CRLF file merges cleanly, written CRLF; a conflict in a CRLF file has CRLF markers, and `resolved` sees it once fixed; a new file is LF; a binary file is written as is; `--abort` restores a CRLF file byte for byte.
-- [ ] Lint once, Linux and Windows.
+- [x] Tests pass (Linux): pull over unedited CRLF files updates them, no "edited here" refusal, and they stay CRLF; a change on both sides of one CRLF file merges cleanly, written CRLF; a conflict in a CRLF file has CRLF markers, and `resolved` sees it once fixed; a new file is LF; a binary file is written as is; `--abort` restores a CRLF file byte for byte.
+- [x] Lint once, Linux and Windows.
 
 **Dependencies:** T1
 
