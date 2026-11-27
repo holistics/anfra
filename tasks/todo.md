@@ -156,14 +156,14 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 
 Then all 15 passed on Windows and on Linux; no test-program copies left; lint clean, Linux and Windows.
 
-### - [ ] T8: the required `windows` CI job
+### - [x] T8: the required `windows` CI job
 
 **Acceptance criteria:**
-- [ ] `continuous_integration.yml` has a `windows` job on `windows-2022`, gated by the `changes` job as the `test` job is, running `go test -count=1` on T7's list, with `ANFRA_NO_UPDATE_NOTIFIER=1`.
-- [ ] `ci_passed` requires it.
+- [x] `continuous_integration.yml` has a `windows` job on `windows-2022`, gated by the `changes` job as the `test` job is, running `go test -count=1` on T7's list, with `ANFRA_NO_UPDATE_NOTIFIER=1`.
+- [x] `ci_passed` requires it.
 
 **Verification:**
-- [ ] The workflow parses; its `go test` line, run on Windows here, is T7's.
+- [x] The workflow parses; its `go test` line, run on Windows here, is T7's.
 - [ ] On GitHub only with a pushed PR: listed for you.
 
 **Dependencies:** T7
@@ -172,8 +172,10 @@ Then all 15 passed on Windows and on Linux; no test-program copies left; lint cl
 
 **Estimated scope:** XS
 
+**Result** (2026-11-27): the `windows` job (`windows-2022`, gated by `changes` like `test`, with `ANFRA_NO_UPDATE_NOTIFIER=1`) runs T7's package list, the same `go test` line that passed on Windows here. `ci_passed` needs it, and allows it to be skipped when only `skills/` changed, as `test` is. No branch-protection change: `ci_passed` stays the one required check. The YAML parses; it hasn't run on GitHub.
+
 ### Checkpoint C
-- [ ] The package list passes on Windows here; the workflows parse.
+- [x] The package list passes on Windows here; the workflows parse.
 
 ## Phase 4: Close
 

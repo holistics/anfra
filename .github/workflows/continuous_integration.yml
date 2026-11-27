@@ -112,6 +112,30 @@ jobs:
         run: GOOS=windows go vet ./...
       - run: go test -race -count=1 ./...
 
+  # go test on Windows, for the packages whose code differs there: the sidecars'
+  # processes, logins, publish and pull's files, exports, anfra's folder, update.
+  # Not the whole module: nobody develops anfra on Windows, so this guards what
+  # Windows users run, without making every test Windows-proof.
+  windows:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-2022
+    env:
+      # Tests run anfra's commands, whose background update check would start the
+      # test program again.
+      ANFRA_NO_UPDATE_NOTIFIER: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: go test, the packages with Windows logic
+        shell: bash
+        run: |
+          go test -count=1 \
+            ./internal/sidecar/... ./internal/cliauth ./cmd/anfra ./internal/publish/... \
+            ./internal/exports ./internal/home ./internal/update ./internal/fileperm ./internal/robustio
+
   # The core API's contract: the committed api/openapi.yaml is what the registry
   # publishes, and a breaking change against the base branch is declared by a
   # commit (`feat!:`, or a `BREAKING CHANGE:` footer). See scripts/openapi.sh.
@@ -261,7 +285,7 @@ jobs:
   # Single required status check: green only when every needed job succeeded.
   # Handles skipped-but-required jobs (re-actors/alls-green).
   ci_passed:
-    needs: [changes, commitlint, lint, test, api, web, skills, dependency-review]
+    needs: [changes, commitlint, lint, test, windows, api, web, skills, dependency-review]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -274,7 +298,7 @@ jobs:
           # Skipped in the merge queue: they judged the PR already.
           if [ "$EVENT" = merge_group ]; then skips+=(commitlint dependency-review); fi
           # Skipped when only skills/ changed.
-          if [ "$CODE" = false ]; then skips+=(lint test api web); fi
+          if [ "$CODE" = false ]; then skips+=(lint test windows api web); fi
           echo "list=$(IFS=,; echo "${skips[*]}")" >> "$GITHUB_OUTPUT"
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
