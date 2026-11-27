@@ -1,6 +1,6 @@
 # Tasks: win-line-endings
 
-Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endings.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md).
+Plan: [plan.md](win-line-endings-plan.md). Spec: [SPEC-win-line-endings.md](../../SPEC-win-line-endings.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md).
 
 ## Phase 1: publish and pull
 

@@ -1,18 +1,18 @@
 # Implementation Plan: win-line-endings
 
-Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endings.md). Project plan: [WINDOWS-PLAN.md](../WINDOWS-PLAN.md). Task checklist: [todo.md](todo.md). Earlier modules' tasks: [archive/](archive/).
+Spec: [SPEC-win-line-endings.md](../../SPEC-win-line-endings.md). Project plan: [WINDOWS-PLAN.md](../../WINDOWS-PLAN.md). Task checklist: [todo.md](win-line-endings-todo.md). Earlier modules' tasks: [archive/](./).
 
 ## Overview
 
-What this module delivers and why: the spec's [Objective](../SPEC-win-line-endings.md#objective). This file holds how: the order, the checkpoints, task-level decisions and risks. Publish first (reading files "as published"), then pull (merging and writing back with each file's own line ending), then the two smaller writers, then the round trip on Windows with `acme`.
+What this module delivers and why: the spec's [Objective](../../SPEC-win-line-endings.md#objective). This file holds how: the order, the checkpoints, task-level decisions and risks. Publish first (reading files "as published"), then pull (merging and writing back with each file's own line ending), then the two smaller writers, then the round trip on Windows with `acme`.
 
 ## Architecture Decisions
 
 - **One function decides "as published",** in `internal/publish/workdir`, beside `Read`: CRLF → LF for a text file, a binary one (a zero byte in its first 8 KB) as it is, a lone CR kept. Every read that compares or sends goes through it; `backup` doesn't (it keeps exact bytes for restore).
 - **The write-back rule lives in `Apply`,** which already reads each file before writing it (`backup`): a file whose line breaks are all CRLF gets its new content with CRLF. New, LF, mixed or binary files are written as given.
-- **The two appenders share no code with publish:** `repoconfig` and `agents` each match the file's line ending where they add lines. They're small and in different packages; a shared helper would only be baggage ([naming](../docs/dev/naming.md)).
+- **The two appenders share no code with publish:** `repoconfig` and `agents` each match the file's line ending where they add lines. They're small and in different packages; a shared helper would only be baggage ([naming](../../docs/dev/naming.md)).
 - **No per-OS code:** line endings are bytes; nearly every test runs on Linux.
-- **Working lightly** ([memory](../tasks/archive/win-files-auth-todo.md#checkpoint-b)): `GOMAXPROCS=4 GOFLAGS=-p=2`, one Windows build and one lint per task, Windows' free memory checked first; `make check` / `make test` left to CI.
+- **Working lightly** ([memory](./win-files-auth-todo.md#checkpoint-b)): `GOMAXPROCS=4 GOFLAGS=-p=2`, one Windows build and one lint per task, Windows' free memory checked first; `make check` / `make test` left to CI.
 
 ## Dependency graph
 
