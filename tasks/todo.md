@@ -4,17 +4,17 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 ## Phase 1: The update
 
-### - [ ] T1: `anfra update` verifies the release's checksum, on every OS
+### - [x] T1: `anfra update` verifies the release's checksum, on every OS
 
 **Acceptance criteria:**
-- [ ] The asset downloads to a temporary file, hashed while written; its sha256 is compared with its line in the release's `SHA256SUMS` before anything is unpacked or replaced.
-- [ ] A mismatch, or a release without `SHA256SUMS` (or without the asset's line), refuses: the message says why, and how to install by hand. Nothing is replaced.
-- [ ] The temporary file is removed after, whatever happens.
-- [ ] `Apply` keeps its signature; an unexported `applyTo` takes the target path, for tests.
+- [x] The asset downloads to a temporary file, hashed while written; its sha256 is compared with its line in the release's `SHA256SUMS` before anything is unpacked or replaced.
+- [x] A mismatch, or a release without `SHA256SUMS` (or without the asset's line), refuses: the message says why, and how to install by hand. Nothing is replaced.
+- [x] The temporary file is removed after, whatever happens.
+- [x] `Apply` keeps its signature; an unexported `applyTo` takes the target path, for tests.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/update/`, with a fake release: a matching sum applies (to a temporary target); a wrong sum, a missing `SHA256SUMS`, a missing line each refuse and leave the target as it was; no temporary file left.
-- [ ] Lint once, Linux and Windows.
+- [x] Tests pass (Linux): `go test ./internal/update/`, with a fake release: a matching sum applies (to a temporary target); a wrong sum, a missing `SHA256SUMS`, a missing line each refuse and leave the target as it was; no temporary file left.
+- [x] Lint once, Linux and Windows.
 
 **Dependencies:** None
 

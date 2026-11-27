@@ -10,6 +10,8 @@ package update
 import (
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -221,32 +223,37 @@ func canonicalVersion(v string) string {
 	return "v" + tagVersion(v)
 }
 
-// Apply downloads the platform asset and atomically replaces the running binary.
-// If progress is non-nil, download progress is rendered to it (a single, in-place
-// updated line); pass nil for a silent download (agents/CI).
+// Apply downloads the platform asset, checks it against the release's
+// checksums, and atomically replaces the running binary. If progress is
+// non-nil, download progress is rendered to it (a single, in-place updated
+// line); pass nil for a silent download (agents/CI).
 func Apply(ctx context.Context, r *Release, progress io.Writer) error {
-	resp, err := get(ctx, r.AssetURL, downloadTimeout)
+	return applyTo(ctx, r, progress, "")
+}
+
+// applyTo is Apply, replacing the binary at target ("": the running one).
+func applyTo(ctx context.Context, r *Release, progress io.Writer, target string) error {
+	asset, sum, err := download(ctx, r, progress)
 	if err != nil {
-		return clierr.Unreachablef(clierr.GitHub, err, "download %s: %v", r.Tag, err)
+		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return clierr.Unreachablef(clierr.GitHub, nil, "download %s: GitHub returned %s", r.Tag, resp.Status)
+	defer os.Remove(asset)
+	if err := checkSum(ctx, r, sum); err != nil {
+		return err
 	}
-	// Progress tracks the compressed bytes actually transferred; gzip.Reader then
-	// decompresses to the real binary for the self-replace (embed stays uncompressed).
-	var src io.Reader = resp.Body
-	if progress != nil {
-		src = &progressReader{r: resp.Body, total: resp.ContentLength, w: progress}
+	f, err := os.Open(asset) //nolint:gosec // G304: the download this function made
+	if err != nil {
+		return err
 	}
-	gz, err := gzip.NewReader(src)
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("decompress %s: %w", r.Tag, err)
 	}
 	defer gz.Close()
-	if err := selfupdate.Apply(gz, selfupdate.Options{}); err != nil {
+	if err := selfupdate.Apply(gz, selfupdate.Options{TargetPath: target}); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
-			return fmt.Errorf("Couldn't replace this anfra (%v), or put it back (%v). Reinstall it with `curl -fsSL https://anfra.ai/install.sh | bash`.", err, rerr) //nolint:staticcheck // ST1005: the whole message, shown as it is
+			return fmt.Errorf("Couldn't replace this anfra (%v), or put it back (%v). Reinstall it with `%s`.", err, rerr, installCommand) //nolint:staticcheck // ST1005: the whole message, shown as it is
 		}
 		if errors.Is(err, fs.ErrPermission) {
 			return clierr.Precondition("Can't replace this anfra: %v. Update it as the user that installed it.", err)
@@ -255,6 +262,77 @@ func Apply(ctx context.Context, r *Release, progress io.Writer) error {
 	}
 	return nil
 }
+
+// download writes r's asset to a temporary file, never held in memory (a
+// release with its sidecars is hundreds of MB), and answers its path and
+// sha256. The caller removes the file.
+func download(ctx context.Context, r *Release, progress io.Writer) (path, sum string, err error) {
+	resp, err := get(ctx, r.AssetURL, downloadTimeout)
+	if err != nil {
+		return "", "", clierr.Unreachablef(clierr.GitHub, err, "download %s: %v", r.Tag, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", clierr.Unreachablef(clierr.GitHub, nil, "download %s: GitHub returned %s", r.Tag, resp.Status)
+	}
+	var src io.Reader = resp.Body
+	if progress != nil {
+		src = &progressReader{r: resp.Body, total: resp.ContentLength, w: progress}
+	}
+	f, err := os.CreateTemp("", "anfra-update-*")
+	if err != nil {
+		return "", "", err
+	}
+	h := sha256.New()
+	_, err = io.Copy(io.MultiWriter(f, h), src)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", "", clierr.Unreachablef(clierr.GitHub, err, "download %s: %v", r.Tag, err)
+	}
+	return f.Name(), hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// checkSum refuses an asset whose sha256 isn't the one r's SHA256SUMS gives
+// it, or that it gives none: an update replaces anfra itself, so it must be
+// the file the release published, whole.
+func checkSum(ctx context.Context, r *Release, sum string) error {
+	// SHA256SUMS sits beside the asset in the release.
+	i := strings.LastIndex(r.AssetURL, "/")
+	file, err := url.PathUnescape(r.AssetURL[i+1:])
+	if err != nil {
+		return err
+	}
+	want := ""
+	resp, err := get(ctx, r.AssetURL[:i+1]+"SHA256SUMS", lookupTimeout)
+	if err != nil {
+		return clierr.Unreachablef(clierr.GitHub, err, "download %s's checksums: %v", r.Tag, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil {
+			return clierr.Unreachablef(clierr.GitHub, err, "download %s's checksums: %v", r.Tag, err)
+		}
+		for line := range strings.Lines(string(body)) {
+			if f := strings.Fields(line); len(f) == 2 && strings.TrimPrefix(f[1], "*") == file {
+				want = strings.ToLower(f[0])
+			}
+		}
+	}
+	switch {
+	case want == "":
+		return clierr.Precondition("Not updated, because anfra %s's release has no checksum for %s (SHA256SUMS), so the download can't be checked. Install it by hand: `%s`.", r.Version, file, installCommand)
+	case want != sum:
+		return clierr.Precondition("Not updated, because the downloaded %s doesn't match the checksum anfra %s's release gives it: it may have been cut short or changed. Try again, or install it by hand: `%s`.", file, r.Version, installCommand)
+	}
+	return nil
+}
+
+// installCommand installs anfra by hand, for when an update can't.
+const installCommand = "curl -fsSL https://anfra.ai/install.sh | bash"
 
 // progressReader wraps the download stream and renders a single, carriage-return
 // updated progress line as bytes flow through. It redraws only when the whole
