@@ -21,14 +21,14 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 
 **Estimated scope:** S
 
-### - [ ] T2: Unicode trees and boxes on Windows
+### - [x] T2: Unicode trees and boxes on Windows
 
 **Acceptance criteria:**
-- [ ] `utf8Terminal` is true on Windows; on Unix it reads `LC_ALL`, `LC_CTYPE`, `LANG` as today.
+- [x] `utf8Terminal` is true on Windows; on Unix it reads `LC_ALL`, `LC_CTYPE`, `LANG` as today.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/pretty/`.
-- [ ] Windows: a test that it's true; trees seen by hand in T5.
+- [x] Tests pass (Linux): `go test ./internal/pretty/`.
+- [x] Windows: a test that it's true; trees seen by hand in T5. `internal/pretty` passes on Windows; `TestRowsFallbacks`' ASCII check runs only where an ASCII fallback exists (Unix).
 
 **Dependencies:** None
 

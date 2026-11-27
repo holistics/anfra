@@ -10,7 +10,6 @@ import (
 	"io"
 	"maps"
 	"math"
-	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -735,17 +734,6 @@ func treeLines(paths []string, utf8 bool) []prettyCell {
 	}
 	walk(root, "")
 	return out
-}
-
-// utf8Terminal reports whether the locale is UTF-8, for tree's lines.
-func utf8Terminal() bool {
-	for _, k := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
-		if v := os.Getenv(k); v != "" {
-			v = strings.ToUpper(v)
-			return strings.Contains(v, "UTF-8") || strings.Contains(v, "UTF8")
-		}
-	}
-	return false
 }
 
 // relativeTime is t as a person says it, from now: today, yesterday, n days

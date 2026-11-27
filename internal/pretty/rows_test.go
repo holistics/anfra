@@ -86,7 +86,7 @@ func TestRowsFallbacks(t *testing.T) {
 	t.Setenv("LANG", "C")
 	var b bytes.Buffer
 	_ = Render(&b, sampleRows(), 0)
-	if !strings.Contains(b.String(), "+-----------+-------------+\n  | Status    | Count of Id |") {
+	if !utf8Terminal() && !strings.Contains(b.String(), "+-----------+-------------+\n  | Status    | Count of Id |") { // Windows has no ASCII fallback: utf8Terminal
 		t.Errorf("ASCII:\n%s", &b)
 	}
 	b.Reset()
