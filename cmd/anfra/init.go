@@ -232,6 +232,9 @@ func initRepo(ctx context.Context, dir string, opts initOptions) (initResult, er
 		return res, clierr.Precondition("Can't create %s: %v.", dir, err)
 	}
 	r := repo.Resolve(dir)
+	if r.ConfigIsHome() {
+		return res, clierr.Precondition("Not set up, because %s.", repo.HomeFolderRefusal)
+	}
 	config, err := filepath.Rel(dir, r.ConfigDir)
 	if err != nil {
 		return res, err

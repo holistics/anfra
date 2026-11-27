@@ -75,6 +75,9 @@ type TakenSide struct {
 // o.Take or o.Abort, resolves or undoes the last pull
 // (docs/designs/publish.md).
 func Pull(ctx context.Context, dir string, o PullOptions, env Env) (PullResult, error) {
+	if repo.Resolve(dir).ConfigIsHome() {
+		return PullResult{}, clierr.Precondition("Not pulled, because %s.", repo.HomeFolderRefusal)
+	}
 	if _, err := os.Stat(filepath.Join(dir, repo.ConfigDirName)); err != nil {
 		return PullResult{}, clierr.Precondition("Not pulled, because this folder isn't an anfra repo. Run `anfra init` first, then `anfra pull`.")
 	}

@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -89,5 +90,25 @@ func TestManagedRefuses(t *testing.T) {
 	}
 	if _, err := Managed(testRepoID, testRepoID+"@"+strings.Repeat("a", 64)); err != nil {
 		t.Errorf("a SHA-256 revision: %v", err)
+	}
+}
+
+// A home folder holds anfra's own folder (~/.anfra), which shares its name with
+// a repo's settings folder: that doesn't make it a repo.
+func TestConfigIsHome(t *testing.T) {
+	user := t.TempDir()
+	t.Setenv("ANFRA_HOME", filepath.Join(user, ".anfra"))
+	if err := os.MkdirAll(filepath.Join(user, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if !Resolve(user).ConfigIsHome() {
+		t.Error("the home folder's .anfra, anfra's own, read as a repo's")
+	}
+	other := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(other, ".anfra"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if Resolve(other).ConfigIsHome() {
+		t.Error("a repo's .anfra read as anfra's own")
 	}
 }

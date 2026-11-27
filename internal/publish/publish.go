@@ -23,6 +23,7 @@ import (
 	"github.com/holistics/anfra/internal/cloudapi"
 	"github.com/holistics/anfra/internal/publish/syncstate"
 	"github.com/holistics/anfra/internal/publish/workdir"
+	"github.com/holistics/anfra/internal/repo"
 	"github.com/holistics/anfra/internal/repoconfig"
 	"github.com/holistics/anfra/shared/apperr"
 	"github.com/holistics/anfra/shared/repoformat"
@@ -92,6 +93,9 @@ type Env struct {
 // server's answer. With o.Check it checks instead: a CheckResult; else a
 // Result. Progress and questions go to env.ErrOut; warnings to env.Warn.
 func Run(ctx context.Context, dir string, o Options, env Env) (any, error) {
+	if repo.Resolve(dir).ConfigIsHome() {
+		return nil, clierr.Precondition("Not published, because %s.", repo.HomeFolderRefusal)
+	}
 	t := &told{warn: env.Warn}
 	org, configured, err := readOrg(dir)
 	if o.SetOrg != "" {

@@ -393,3 +393,32 @@ func TestInitWritesGitattributes(t *testing.T) {
 		t.Errorf("an existing .gitattributes: %q; want its lines kept, models/** left to it, the others added", got)
 	}
 }
+
+// anfra init refuses the home folder: its .anfra is anfra's own folder, where a
+// repo's files, data source credentials among them, don't belong.
+func TestInitRefusesTheHomeFolder(t *testing.T) {
+	user := t.TempDir()
+	t.Setenv("ANFRA_HOME", filepath.Join(user, ".anfra"))
+	if err := os.MkdirAll(filepath.Join(user, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := initRepo(context.Background(), user, initOptions{}); err == nil || !strings.Contains(err.Error(), "anfra's own folder") {
+		t.Fatalf("err = %v, want a refusal about anfra's own folder", err)
+	}
+	if _, err := os.Stat(filepath.Join(user, ".anfra", "data_sources.yml")); !os.IsNotExist(err) {
+		t.Error("wrote data_sources.yml into anfra's own folder")
+	}
+}
+
+// The home folder isn't an anfra repo, though it holds a .anfra (anfra's own).
+func TestHomeFolderIsNoRepo(t *testing.T) {
+	user := t.TempDir()
+	t.Setenv("ANFRA_HOME", filepath.Join(user, ".anfra"))
+	if err := os.MkdirAll(filepath.Join(user, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(user)
+	if dir, ok := anfraRepoDir(); ok {
+		t.Errorf("the home folder read as the repo %s", dir)
+	}
+}

@@ -250,6 +250,18 @@ func TestPullRefusals(t *testing.T) {
 	if _, err := pull(t, t.TempDir(), PullOptions{SetOrg: url}); err == nil || !strings.Contains(err.Error(), "isn't an anfra repo") {
 		t.Errorf("not a repo: %v", err)
 	}
+	// The home folder holds anfra's own folder, not a repo's settings.
+	user := t.TempDir()
+	t.Setenv("ANFRA_HOME", filepath.Join(user, ".anfra"))
+	if err := os.MkdirAll(filepath.Join(user, ".anfra"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pull(t, user, PullOptions{SetOrg: url}); err == nil || !strings.Contains(err.Error(), "anfra's own folder") {
+		t.Errorf("the home folder: %v", err)
+	}
+	if _, err := Run(context.Background(), user, Options{Check: true}, Env{}); err == nil || !strings.Contains(err.Error(), "anfra's own folder") {
+		t.Errorf("publish check in the home folder: %v", err)
+	}
 	// A pull stopped while writing refuses until it's undone.
 	dir := newRepo(t, nil)
 	if err := syncstate.For(dir).Save(syncstate.State{url: {Pending: &syncstate.Pending{Revision: "r", Stage: syncstate.Writing}}}); err != nil {

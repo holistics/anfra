@@ -139,7 +139,8 @@ func anfraRepoDir() (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if fi, err := os.Stat(repo.Resolve(dir).ConfigDir); err != nil || !fi.IsDir() {
+	r := repo.Resolve(dir)
+	if fi, err := os.Stat(r.ConfigDir); err != nil || !fi.IsDir() || r.ConfigIsHome() {
 		return "", false
 	}
 	return dir, true

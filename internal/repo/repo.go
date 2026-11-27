@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 
@@ -76,6 +77,24 @@ func Resolve(repoDir string) Local {
 		ConfigDir: filepath.Join(repoDir, ConfigDirName),
 	}
 }
+
+// ConfigIsHome reports whether the repo's settings folder is anfra's own folder
+// (home.Dir()): the two share the name .anfra, so a home folder seems to hold
+// a repo's settings by default. It isn't a repo: a command there would take
+// every file under the home folder for the repo's, and write a repo's files
+// into anfra's own folder.
+func (p Local) ConfigIsHome() bool {
+	config, err := os.Stat(p.ConfigDir)
+	if err != nil {
+		return false
+	}
+	own, err := os.Stat(home.Dir())
+	return err == nil && os.SameFile(config, own)
+}
+
+// HomeFolderRefusal is the end of a refusal in a folder whose settings folder
+// is anfra's own (ConfigIsHome): what the folder is, and what to do instead.
+const HomeFolderRefusal = "this folder holds anfra's own folder (.anfra, or ANFRA_HOME), not a repo's settings. Run `anfra init` in a folder of its own, such as a new one here"
 
 // Repo is a command's repo: a Local, or a managed repo. Its fields are
 // unexported, so it is only ever built by Local.Repo or Managed, and holds
