@@ -43,7 +43,7 @@ T5 your hand checks in four terminals (needs T1, T2)
 - [x] T6: Docs and plan
 
 ### Checkpoint B: Complete
-- [ ] Spec success criteria 1–6 met; the commit split reviewed with you.
+- [x] Spec success criteria 1–6 met; the commit split reviewed with you.
 
 ## Risks and Mitigations
 
