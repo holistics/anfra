@@ -44,7 +44,7 @@ T5 end to end on Windows: update, and update inside the console (needs T1–T4)
 
 ### Checkpoint B: Complete
 - [x] Spec success criteria 1–6 met.
-- [ ] The commit split reviewed with you.
+- [x] The commit split reviewed with you (kept).
 
 ## Risks and Mitigations
 

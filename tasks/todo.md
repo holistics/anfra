@@ -115,4 +115,4 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 ### Checkpoint B: Complete
 - [x] Spec success criteria 1–6 met.
-- [ ] Ready for review with you (and the commit split proposed).
+- [x] Ready for review with you (and the commit split proposed): kept.
