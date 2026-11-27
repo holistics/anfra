@@ -1,8 +1,6 @@
 package update
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,20 +11,6 @@ import (
 	"strings"
 	"testing"
 )
-
-// packAsset is content as a release publishes this platform's asset.
-func packAsset(t *testing.T, content []byte) []byte {
-	t.Helper()
-	var b bytes.Buffer
-	zw := gzip.NewWriter(&b)
-	if _, err := zw.Write(content); err != nil {
-		t.Fatal(err)
-	}
-	if err := zw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return b.Bytes()
-}
 
 // fakeRelease serves asset under its name, and sums as the release's
 // SHA256SUMS ("" for none), and answers the Release that points at them.
@@ -57,9 +41,6 @@ func assetFile(t *testing.T) string {
 	name, err := assetName()
 	if err != nil {
 		t.Skip(err)
-	}
-	if !strings.Contains(name, ".") {
-		name += ".gz"
 	}
 	return name
 }

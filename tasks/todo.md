@@ -38,16 +38,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 **Estimated scope:** XS
 
-### - [ ] T3: The Windows asset: `anfra-windows-x64.zip`, unzipped
+### - [x] T3: The Windows asset: `anfra-windows-x64.zip`, unzipped
 
 **Acceptance criteria:**
-- [ ] `assetName`: `windows/amd64` → `anfra-windows-x64.zip`; Linux and macOS names gain `.gz` there, and `Latest` uses the full name (no `+ ".gz"`).
-- [ ] On Windows, the verified `.zip`'s `anfra.exe` (at the archive's top) is what's applied; a `.zip` without it refuses, saying so.
-- [ ] Linux and macOS unchanged (`.gz`).
+- [x] `assetName`: `windows/amd64` → `anfra-windows-x64.zip`; Linux and macOS names gain `.gz` there, and `Latest` uses the full name (no `+ ".gz"`).
+- [x] On Windows, the verified `.zip`'s `anfra.exe` (at the archive's top) is what's applied; a `.zip` without it refuses, saying so.
+- [x] Linux and macOS unchanged (`.gz`).
 
 **Verification:**
-- [ ] Tests pass (Linux): `TestAssetName` and the `Latest` tests with full names.
-- [ ] Windows (`_windows_test.go`): a fake release with a `.zip` applies to a temporary target; a `.zip` without `anfra.exe` refuses.
+- [x] Tests pass (Linux): `TestAssetName` and the `Latest` tests with full names.
+- [x] Windows (`_windows_test.go`): a fake release with a `.zip` applies to a temporary target; a `.zip` without `anfra.exe` refuses. `internal/update` passes in full on Windows; `TestLatestFailsInItsStep` looked for Linux's "connection refused" and now accepts Windows' "actively refused it".
 
 **Dependencies:** T1
 

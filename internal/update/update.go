@@ -8,7 +8,6 @@
 package update
 
 import (
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -77,18 +76,21 @@ type Release struct {
 	AssetURL string // where this platform's asset downloads
 }
 
-// assetName maps the running platform to its release asset name (anfra-<target>),
-// matching build_release.yml's per-target output. Windows is not built yet.
+// assetName maps the running platform to its release asset's file name,
+// matching build_release.yml's: anfra-<target>.gz, gzipped for transport, or on
+// Windows anfra-windows-x64.zip, what Windows opens with a double-click.
 func assetName() (string, error) {
 	switch runtime.GOOS + "/" + runtime.GOARCH {
 	case "linux/amd64":
-		return "anfra-linux-x64", nil
+		return "anfra-linux-x64.gz", nil
 	case "linux/arm64":
-		return "anfra-linux-arm64", nil
+		return "anfra-linux-arm64.gz", nil
 	case "darwin/amd64":
-		return "anfra-darwin-x64", nil
+		return "anfra-darwin-x64.gz", nil
 	case "darwin/arm64":
-		return "anfra-darwin-arm64", nil
+		return "anfra-darwin-arm64.gz", nil
+	case "windows/amd64":
+		return "anfra-windows-x64.zip", nil
 	default:
 		return "", clierr.Precondition("There's no anfra release build for %s/%s.", runtime.GOOS, runtime.GOARCH)
 	}
@@ -119,13 +121,10 @@ var checkUpdateStep = appstep.Define(clierr.NS, "check_update", appstep.Public("
 func Latest(ctx context.Context) (_ *Release, err error) {
 	ctx, span := apptracing.Start(ctx, checkUpdateStep)
 	defer span.End(&err)
-	base, err := assetName()
+	want, err := assetName()
 	if err != nil {
 		return nil, err
 	}
-	// Release binaries are published gzip-compressed for transport (see the
-	// compression plan); Apply decompresses on the way in.
-	want := base + ".gz"
 	page := fmt.Sprintf("%s/%s/releases/latest", webBase, repoSlug)
 	resp, err := noRedirect(ctx, http.MethodGet, page)
 	if err != nil {
@@ -241,17 +240,12 @@ func applyTo(ctx context.Context, r *Release, progress io.Writer, target string)
 	if err := checkSum(ctx, r, sum); err != nil {
 		return err
 	}
-	f, err := os.Open(asset) //nolint:gosec // G304: the download this function made
+	bin, err := unpack(asset)
 	if err != nil {
-		return err
+		return fmt.Errorf("unpack %s: %w", r.Tag, err)
 	}
-	defer f.Close()
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return fmt.Errorf("decompress %s: %w", r.Tag, err)
-	}
-	defer gz.Close()
-	if err := selfupdate.Apply(gz, selfupdate.Options{TargetPath: target}); err != nil {
+	defer bin.Close()
+	if err := selfupdate.Apply(bin, selfupdate.Options{TargetPath: target}); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return fmt.Errorf("Couldn't replace this anfra (%v), or put it back (%v). Reinstall it with `%s`.", err, rerr, installCommand) //nolint:staticcheck // ST1005: the whole message, shown as it is
 		}
@@ -330,6 +324,14 @@ func checkSum(ctx context.Context, r *Release, sum string) error {
 	}
 	return nil
 }
+
+// readCloser is an unpacked binary that closes what it's read from too.
+type readCloser struct {
+	io.Reader
+	close func() error
+}
+
+func (r readCloser) Close() error { return r.close() }
 
 // installCommand installs anfra by hand, for when an update can't.
 const installCommand = "curl -fsSL https://anfra.ai/install.sh | bash"

@@ -114,8 +114,13 @@ func TestAssetName(t *testing.T) {
 		// Only fails on a platform anfra isn't built for; skip rather than fail.
 		t.Skipf("no build for this platform: %v", err)
 	}
-	if name == "" {
-		t.Fatal("assetName returned empty name with no error")
+	want := map[string]string{
+		"linux/amd64": "anfra-linux-x64.gz", "linux/arm64": "anfra-linux-arm64.gz",
+		"darwin/amd64": "anfra-darwin-x64.gz", "darwin/arm64": "anfra-darwin-arm64.gz",
+		"windows/amd64": "anfra-windows-x64.zip",
+	}[runtime.GOOS+"/"+runtime.GOARCH]
+	if name != want {
+		t.Errorf("assetName() = %q, want %q", name, want)
 	}
 }
 
@@ -133,7 +138,7 @@ func fakeGitHub(t *testing.T, manifestStatus int, manifest string) {
 		switch r.URL.Path {
 		case "/holistics/anfra/releases/latest":
 			http.Redirect(w, r, srv.URL+"/holistics/anfra/releases/tag/v9.0.0", http.StatusFound)
-		case "/holistics/anfra/releases/download/v9.0.0/" + asset + ".gz":
+		case "/holistics/anfra/releases/download/v9.0.0/" + asset:
 			http.Redirect(w, r, "https://objects.example.com/anfra", http.StatusFound)
 		case "/holistics/anfra-skills/main/plugins/anfra/.claude-plugin/plugin.json":
 			w.WriteHeader(manifestStatus)
@@ -309,7 +314,7 @@ func TestLatestFromTheSite(t *testing.T) {
 		t.Fatal(err)
 	}
 	asset, _ := assetName()
-	if r.Tag != "v9.0.0" || r.Version != "9.0.0" || r.AssetURL != webBase+"/holistics/anfra/releases/download/v9.0.0/"+asset+".gz" {
+	if r.Tag != "v9.0.0" || r.Version != "9.0.0" || r.AssetURL != webBase+"/holistics/anfra/releases/download/v9.0.0/"+asset {
 		t.Errorf("got %+v", r)
 	}
 }
@@ -361,7 +366,7 @@ func TestLatestFailsInItsStep(t *testing.T) {
 	if len(r.Context) != 1 || r.Context[0].Step != "anfra_cli.check_update" || r.Context[0].Text != "check for a newer anfra" {
 		t.Errorf("context %+v, want the check_update step", r.Context)
 	}
-	if strings.Contains(r.Message, "check for a newer anfra") || !strings.Contains(err.Error(), "connection refused") {
+	if strings.Contains(r.Message, "check for a newer anfra") || !strings.Contains(err.Error(), "refused") { // "connection refused"; on Windows, "actively refused it"
 		t.Errorf("message %q (%v), want the failure's own", r.Message, err)
 	}
 }
