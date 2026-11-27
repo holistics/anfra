@@ -56,14 +56,14 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 **Estimated scope:** S
 
-### - [ ] T4: Lines added to `config.yml` and `AGENTS.md` keep the file's line ending
+### - [x] T4: Lines added to `config.yml` and `AGENTS.md` keep the file's line ending
 
 **Acceptance criteria:**
-- [ ] `repoconfig.appendBlock`: the block in the file's line ending (CRLF when its line breaks are CRLF).
-- [ ] `agents.withBlock`: finds its existing block in a CRLF `AGENTS.md` (no second block), and writes the block in the file's line ending.
+- [x] `repoconfig.appendBlock`: the block in the file's line ending (CRLF when its line breaks are CRLF).
+- [x] `agents.withBlock`: finds its existing block in a CRLF `AGENTS.md` (no second block), and writes the block in the file's line ending. The plan's guess was off: the markers are found in CRLF too; the real problem was `CheckBlock` comparing exactly, so a CRLF block always read as outdated and was rewritten each time. Now compared as LF.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/repoconfig/ ./internal/agents/`, each with a CRLF and an LF file.
+- [x] Tests pass (Linux): `go test ./internal/repoconfig/ ./internal/agents/`, each with a CRLF and an LF file.
 
 **Dependencies:** None
 
@@ -72,7 +72,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 **Estimated scope:** S
 
 ### Checkpoint A
-- [ ] T1–T4's tests pass on Linux; lint clean on Linux and Windows; review with you.
+- [x] T1–T4's tests pass on Linux; lint clean on Linux and Windows. Review with you at the end of the run (nothing published before T5's round trip, which you approved in the spec).
 
 ## Phase 3: Windows and close
 

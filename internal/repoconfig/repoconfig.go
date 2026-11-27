@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
@@ -200,12 +201,18 @@ func lookup(m *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
+// appendBlock is original with block after it, in original's line ending:
+// a file saved on Windows (CRLF) stays CRLF.
 func appendBlock(original []byte, block string) []byte {
+	nl := "\n"
+	if n := bytes.Count(original, []byte("\n")); n > 0 && bytes.Count(original, []byte("\r\n")) == n {
+		nl = "\r\n"
+	}
 	out := bytes.Clone(original)
 	if !bytes.HasSuffix(out, []byte("\n")) {
-		out = append(out, '\n')
+		out = append(out, nl...)
 	}
-	return append(out, block...)
+	return append(out, strings.ReplaceAll(block, "\n", nl)...)
 }
 
 // scalarSpan is where n, a one-line scalar, is in src: its bytes, quotes

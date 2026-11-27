@@ -34,10 +34,10 @@ T5 round trip on Windows with acme (needs T1–T2)
 
 ### Phase 2: The files anfra writes
 - [x] T3: `anfra init` writes `.gitattributes`
-- [ ] T4: Lines added to `config.yml` and `AGENTS.md` keep the file's line ending
+- [x] T4: Lines added to `config.yml` and `AGENTS.md` keep the file's line ending
 
 ### Checkpoint A
-- [ ] T1–T4's tests pass on Linux; review with you.
+- [x] T1–T4's tests pass on Linux; review with you at the end of the run.
 
 ### Phase 3: Windows and close
 - [ ] T5: Round trip on Windows 11 with `acme`

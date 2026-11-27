@@ -302,3 +302,18 @@ func TestReadLocalRefuses(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// A block added to a file saved on Windows (CRLF) is CRLF too: the file keeps
+// its line ending, as an editor does; an LF file stays LF.
+func TestEditConfigStringKeepsLineEnding(t *testing.T) {
+	for _, eol := range []string{"\r\n", "\n"} {
+		in := "# Our settings" + eol + "query:" + eol + "  cache:" + eol + "    enabled: true" + eol
+		got, err := editString([]byte(in), "org", "url", "https://x/o/a")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := in + "org:" + eol + "  url: https://x/o/a" + eol; string(got) != want {
+			t.Errorf("%q: got %q, want %q", eol, got, want)
+		}
+	}
+}

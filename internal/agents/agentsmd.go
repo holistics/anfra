@@ -85,7 +85,7 @@ func CheckBlock(repoDir string) (Block, error) {
 	switch current, found := currentBlock(md); {
 	case !found:
 		b.State = BlockMissing
-	case current != block:
+	case strings.ReplaceAll(current, "\r\n", "\n") != block: // a CRLF file's block reads as LF
 		b.State = BlockOutdated
 	default:
 		b.State = BlockUpToDate
@@ -199,8 +199,11 @@ func currentBlock(md []byte) (string, bool) {
 		return "", false
 	}
 	end += begin + len(blockEnd)
-	if strings.HasPrefix(s[end:], "\n") {
+	switch {
+	case strings.HasPrefix(s[end:], "\n"):
 		end++
+	case strings.HasPrefix(s[end:], "\r\n"):
+		end += 2
 	}
 	return s[begin:end], true
 }
@@ -209,17 +212,21 @@ func currentBlock(md []byte) (string, bool) {
 // appended after a blank line.
 func withBlock(md []byte) []byte {
 	s := string(md)
+	nl, b := "\n", block
+	if n := strings.Count(s, "\n"); n > 0 && strings.Count(s, "\r\n") == n { // saved on Windows: kept CRLF
+		nl, b = "\r\n", strings.ReplaceAll(block, "\n", "\r\n")
+	}
 	if current, ok := currentBlock(md); ok {
-		return []byte(strings.Replace(s, current, block, 1))
+		return []byte(strings.Replace(s, current, b, 1))
 	}
 	switch {
-	case s == "", strings.HasSuffix(s, "\n\n"):
-	case strings.HasSuffix(s, "\n"):
-		s += "\n"
+	case s == "", strings.HasSuffix(s, nl+nl):
+	case strings.HasSuffix(s, nl):
+		s += nl
 	default:
-		s += "\n\n"
+		s += nl + nl
 	}
-	return []byte(s + block)
+	return []byte(s + b)
 }
 
 func hasLine(md []byte, line string) bool {

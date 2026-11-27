@@ -120,3 +120,27 @@ func TestWriteBlockRefusesASymlink(t *testing.T) {
 		t.Errorf("the link's target was written: %q", got)
 	}
 }
+
+// An AGENTS.md saved on Windows (CRLF) gets the block in CRLF, which then
+// reads as up to date: written once, not again.
+func TestWriteBlockKeepsCRLF(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "AGENTS.md")
+	mine := "# Our repo\r\n\r\nRun the tests.\r\n"
+	if err := os.WriteFile(path, []byte(mine), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := WriteBlock(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	if want := mine + "\r\n" + strings.ReplaceAll(block, "\n", "\r\n"); string(got) != want {
+		t.Errorf("AGENTS.md: %q", got)
+	}
+	if b, _ := CheckBlock(dir); b.State != BlockUpToDate {
+		t.Errorf("the CRLF block reads as %v, want up to date", b.State)
+	}
+	if wrote, _, err := WriteBlock(dir); wrote || err != nil {
+		t.Errorf("written again: %v, %v", wrote, err)
+	}
+}
