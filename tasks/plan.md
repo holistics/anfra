@@ -29,7 +29,7 @@ T5 your hand checks in four terminals (needs T1, T2)
 ## Task List
 
 ### Phase 1: The code
-- [ ] T1: Colors in `cmd` and PowerShell 5 windows (escape codes turned on, or no styles)
+- [x] T1: Colors in `cmd` and PowerShell 5 windows (escape codes turned on, or no styles)
 - [ ] T2: Unicode trees and boxes on Windows
 - [ ] T3: Data Apps live reload ignores changes on folders
 - [ ] T4: The tests on Windows: skips where Windows can't, then `cmd/anfra` and `internal/appserve` in full

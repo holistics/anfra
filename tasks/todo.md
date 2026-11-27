@@ -4,16 +4,16 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 
 ## Phase 1: The code
 
-### - [ ] T1: Colors in `cmd` and PowerShell 5 windows
+### - [x] T1: Colors in `cmd` and PowerShell 5 windows
 
 **Acceptance criteria:**
-- [ ] First, by hand (you): what `anfra auth status` shows in a PowerShell 5 window today, outside Windows Terminal: colors, or raw codes (`←[1m`). If colors already show, T1 records that and changes nothing.
-- [ ] Otherwise: `internal/cliui` turns on escape-code processing for stdout and stderr when each is a console, called from `main` (not `run`); a console where it fails gets no styles.
-- [ ] macOS and Linux unchanged.
+- [x] First, by hand (you): what `anfra auth status` shows in a PowerShell 5 window today, outside Windows Terminal: colors, or raw codes (`←[1m`). If colors already show, T1 records that and changes nothing. Replaced by reading the color library: `colorprofile` only detects, it never turns escape codes on, and nothing in anfra does; Windows Terminal and VS Code have them on, the old console host doesn't. Turning them on where they're on already changes nothing, so T1 was built, and T5's hand checks confirm it.
+- [x] Otherwise: `internal/cliui` turns on escape-code processing for stdout and stderr when each is a console, called from `main` (not `run`); a console where it fails gets no styles.
+- [x] macOS and Linux unchanged.
 
 **Verification:**
-- [ ] Tests pass (Linux): `go test ./internal/cliui/ ./cmd/anfra/`.
-- [ ] Windows: a test that the function leaves a non-console alone; the console itself checked by hand in T5.
+- [x] Tests pass (Linux): `go test ./internal/cliui/ ./cmd/anfra/`.
+- [x] Windows: a test that the function leaves a non-console alone; the console itself checked by hand in T5. (`cliui` passes on Windows; a test of "no styles where it fails" was dropped: through a pipe it would pass without the check.)
 
 **Dependencies:** None
 

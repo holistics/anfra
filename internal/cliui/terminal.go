@@ -69,7 +69,7 @@ var (
 // violet chip; of 16 colors, bold magenta, without a fill.
 func NewTerminalStyles(out io.Writer) TerminalStyles {
 	_, noColor := os.LookupEnv("NO_COLOR")
-	if noColor || !terminalEnvironment() || !isTerminal(out) {
+	if noColor || !terminalEnvironment() || !isTerminal(out) || escapesOff(out) {
 		return TerminalStyles{}
 	}
 	var accent color.Color = lipgloss.ANSIColor(5) // magenta: of 16 colors, the nearest violet that isn't a key's bright blue

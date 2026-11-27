@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/holistics/anfra/internal/clierr"
+	"github.com/holistics/anfra/internal/cliui"
 	"github.com/holistics/anfra/internal/envflag"
 	"github.com/holistics/anfra/internal/errcode"
 
@@ -52,6 +53,7 @@ func main() {
 
 	// Traces, when an OTEL_* endpoint asks for them; flushed before any exit below.
 	flush := startTelemetry(ctx)
+	cliui.EnableEscapeCodes(os.Stdout, os.Stderr)
 	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr, runOptions{})
 	flush()
 	stop()
