@@ -150,7 +150,8 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 | `win-line-endings` | **Done** (2026-11-27). publish and pull read text files as LF, so a file saved on Windows publishes only for real changes and merges cleanly; pull keeps each file's own line ending; `anfra init` writes `.gitattributes`; `config.yml` and `AGENTS.md` keep theirs. Round trip on Windows with `acme`. | [Spec](SPEC-win-line-endings.md), [tasks](tasks/archive/win-line-endings-todo.md) |
 | `win-terminal` | **Done** (2026-11-27), checked by hand in Windows Terminal only (the user decided): colors, Unicode trees, the console, typed answers to questions (fixed: `cancelreader`'s raw mode), the publish prompt. Also fixed on the way: the home folder taken for a repo (every OS), and the test copies' update-check cascade. | [Spec](SPEC-win-terminal.md), [tasks](tasks/archive/win-terminal-todo.md) |
 | `win-self-update` | **Done** (2026-11-27). `anfra update` verifies the release's `SHA256SUMS` on every OS (published by `build_release.yml` from now on), unzips `anfra-windows-x64.zip` on Windows, gets past an `.anfra.exe.old` still in use, and advises `install.ps1` on failure. Checked on Windows with a local fake release: from PowerShell, a wrong checksum refused, and inside `anfra console`, which restarts on the new anfra (fixed: it didn't restart on Windows). | [Spec](SPEC-win-self-update.md), [tasks](tasks/archive/win-self-update-todo.md) |
-| `win-release`, `win-skills-docs` | Not started | — |
+| `win-release` | **Built, waiting for GitHub** (2026-11-27). All three repos build Windows like their other platforms: canal's and holistics-core's `windows-x64` rows (draft PRs holistics/canal#138, holistics/holistics-core#3379), anfra's release makes `anfra-windows-x64.zip` with DuckDB's notice, `install.ps1` installs it, and a required `windows` CI job tests anfra's Windows code. Each checked by hand on Windows 11 with the workflows' own steps; nothing has run on GitHub yet, by your choice. holistics-core needed two fixes to build on Windows. | [Spec](SPEC-win-release.md), [tasks](tasks/todo.md) |
+| `win-skills-docs` | Not started | — |
 | Interim WSL docs | Not started | — |
 | Code signing | Not needed for the first release: unsigned first, signing later (2026-11-27) | [Decisions made](#decisions-made) |
 
@@ -418,6 +419,14 @@ The fixes, where they fall in those packages:
 - Hard-coded `/tmp` and `/home/a` paths: use `t.TempDir()` and `filepath.Join`.
 
 
+
+**Result: built, waiting for GitHub** (2026-11-27, [tasks](tasks/todo.md)). What changed from the rows above:
+
+- **The sidecars' Windows rows are in their own repos,** each built natively like that repo's other platforms (decided with you): canal's with MinGW-Builds GCC 14.2.0 and DuckDB's own DLL, checked by checksum, and failing if the DLL's version and the Go bindings' drift apart; holistics-core's with Bun 1.4.4. Each Windows row checks its binary answers `--version` before upload.
+- **holistics-core didn't build on Windows,** for two reasons in its own code, now fixed in #3379: `packages/aml-std` keyed its `.aml` files with backslashes, and `build-sidecar.sh` read `package.json` through a Git Bash path Node can't open, so the version was `unknown`. The row also keeps LF line endings and runs its npmrc step in bash.
+- **`install.ps1`** keeps the user PATH's `%...%` entries and type, which `[Environment]::SetEnvironmentVariable` would have rewritten.
+- **The minimum-OS check** is left out (decided with you): it covers every platform, and Linux and macOS have no stated minimum yet.
+- **Left for GitHub, by your choice:** the sidecar rows' test builds, the `windows` CI job's first run, the releases in the [order of merging](docs/designs/release.md#the-first-release-with-windows). And a clean-machine install, with the first real release.
 
 ### `win-skills-docs`
 

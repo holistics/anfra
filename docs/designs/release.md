@@ -30,14 +30,34 @@ To cut a release, on a branch:
 
 1. **The frontend,** once: `pnpm build:web`, into `internal/appserve/dist`, which every target embeds. It fails without `dist/index.html`: a binary without its pages is a broken release.
 2. **Checks:** the tag matches the manifest's version, so does the SDK's, and `CHANGELOG.md` has a section for it. Both fail before anything is built.
-3. **The sidecars:** the pinned releases' binaries, downloaded from their repositories (a cross-repository read token, `ANFRA_DIST_TOKEN`).
-4. **Every target,** cross-built on one runner (anfra is pure Go): each target's sidecars copied into the embed assets, `go build -tags embed_sidecar` with the version injected, then gzipped. Only the `.gz` is published, as a transport compression: the sidecars embedded in the binary stay uncompressed, so the binary itself stays delta-friendly. Windows' asset (`win-release`) is a `.zip` instead, which Windows opens with a double-click: `anfra-windows-x64.zip`, holding `anfra.exe` at its top, as `anfra update` expects.
+3. **The sidecars:** the pinned releases' binaries, downloaded from their repositories (a cross-repository read token, `ANFRA_DIST_TOKEN`). Each sidecar repo builds every platform natively, one runner per platform, and publishes `<name>-<os>-<arch>`, with `.exe` on Windows. canal's Windows build also publishes `anfra-canal-windows-x64-duckdb.dll`: it links DuckDB's own `duckdb.dll`, the only DuckDB that loads MotherDuck's extension on Windows, and needs it beside it ([windows-canal-build.md](../research/windows-canal-build.md)). The release fails, naming the missing files, when a pinned release lacks any platform's: a pin must move to releases that have them all.
+4. **Every target,** cross-built on one runner (anfra is pure Go): each target's sidecars copied into the embed assets, `go build -tags embed_sidecar` with the version injected, then gzipped. Only the `.gz` is published, as a transport compression: the sidecars embedded in the binary stay uncompressed, so the binary itself stays delta-friendly. Windows' asset is a `.zip` instead, which Windows opens with a double-click: `anfra-windows-x64.zip`, holding `anfra.exe` and `THIRD_PARTY_NOTICES.txt` at its top, where `anfra update` and `install.ps1` look. `anfra.exe` embeds `duckdb.dll` beside anfra-canal, and the notice (`packaging/windows/THIRD_PARTY_NOTICES.txt`) carries DuckDB's MIT license. Notices for every platform are still to come ([backlog](../todos/backlog.md#third-party-license-notices-in-releases)).
 5. **`SHA256SUMS`:** the sha256 of each asset, by file name, in `sha256sum`'s format, which `anfra update` checks a download against (below).
 6. **The image,** below.
 7. **The GitHub Release,** created (or, on a re-run, edited) with the binaries. `SHA256SUMS` is uploaded first, in a call of its own: `anfra update` takes a release as out once its asset is, and must find the checksum by then.
 8. **The SDK,** once the release is out: below.
 
 **Release notes** are the version's section of `CHANGELOG.md`, under "Changelog", followed by GitHub's own generated notes: the pull requests, new contributors and compare link (`scripts/release-notes.sh`, which also previews them locally). So a release says what the changelog says, and a re-run brings its notes back in line.
+
+## Installing
+
+Users install a release with a script fetched from `main`, not from the release: `https://anfra.ai/install.sh` and `https://anfra.ai/install.ps1` redirect to the repo's raw files. So a change to an installer is live the moment it reaches `main`.
+
+- **`install.sh`** (Linux, macOS): `curl -fsSL https://anfra.ai/install.sh | bash`. In Git Bash, MSYS2 or Cygwin it points to `install.ps1`. It doesn't check `SHA256SUMS` yet.
+- **`install.ps1`** (Windows): `irm https://anfra.ai/install.ps1 | iex`, the only way the docs give, since PowerShell's default execution policy refuses to run a downloaded `.ps1` file. It mirrors `install.sh` section by section: the same overrides (`ANFRA_HOME`, `ANFRA_INSTALL_DIR`, `ANFRA_VERSION`, `ANFRA_NO_MODIFY_PATH`) plus `ANFRA_DOWNLOAD_URL`, a folder to download from instead of the release, for testing. It installs only a `.zip` matching the release's `SHA256SUMS`, which stands in for signing while the Windows binaries are unsigned. It adds the install folder to the user PATH as the registry stores it, keeping the PATH's other entries and its type. Run through `iex`, it runs in the user's own session, so it never calls `exit`, which would close their window, and keeps to ASCII, which Windows PowerShell 5.1 and PowerShell 7 read alike. On ARM it installs the x64 build, which Windows runs emulated.
+
+## Windows in the pull request checks
+
+Nobody develops anfra on Windows, so `continuous_integration.yml` guards it: `GOOS=windows go vet ./...` in the `test` job, and a `windows` job that runs `go test` on a Windows runner for the packages whose code differs there (the sidecars' processes, logins, publish and pull's files, exports, anfra's folder, update). `ci_passed` requires it. Tests that need what Windows withholds from a normal user, such as symlinks, skip there and say why.
+
+## The first release with Windows
+
+Windows needs releases from all three repos, merged in this order:
+
+1. holistics-core: anfra-node's Windows row, and its shutdown on Ctrl-Break, then an anfra-node release.
+2. canal: its Windows row, then an anfra-canal release.
+3. anfra: `manifest.yml` pinned to those two releases, then a release, the first with `anfra-windows-x64.zip`.
+4. `install.ps1` on `main` only after that release is out, because users fetch it from `main` and it would download a file that doesn't exist yet. `https://anfra.ai/install.ps1` needs its Cloudflare redirect too, like `install.sh`'s.
 
 ## The Docker image
 

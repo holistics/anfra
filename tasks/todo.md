@@ -44,8 +44,8 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 **Result** (2026-11-27, holistics-core `feat/anfra-node-windows-release`, on top of the SIGBREAK commit; draft PR holistics/holistics-core#3379): the native Windows build needed two fixes in holistics-core, each its own commit: `packages/aml-std`'s build keyed `.aml` files by `path.relative`, backslashes on Windows, so the build failed (`d48ee0b40`); `build-sidecar.sh` read `package.json` through a `/c/...` path Node can't open, so the version was `unknown` (`2226ad94c`). Then the row (`1d2769991`): checkout keeps LF, the npmrc step runs in bash (PowerShell read `${GH_TOKEN}` as its own variable), and the smoke test refuses `unknown`. Both binaries built; `--version` answers `0.17.1` (aml 9.9.0). Locally, GitHub Packages was slow (0.3 MB/s), so pnpm's fetch timeout was raised for these runs only.
 
 ### Checkpoint A
-- [ ] Both Windows binaries built by hand, `--version` answers.
-- [ ] You decide: push both branches and run each workflow as a test build (no release)?
+- [x] Both Windows binaries built by hand, `--version` answers.
+- [x] You decide: push both branches and run each workflow as a test build (no release)? The branches are pushed, as draft PRs; no test builds on GitHub for now (your choice).
 
 ## Phase 2: anfra's release and its installers
 
@@ -179,14 +179,20 @@ Then all 15 passed on Windows and on Linux; no test-program copies left; lint cl
 
 ## Phase 4: Close
 
-### - [ ] T9: Docs and plan
+### - [x] T9: Docs and plan
 
 **Acceptance criteria:**
-- [ ] `docs/designs/release.md`: the Windows target (the sidecars it downloads, the `.zip` and its notice), `install.ps1`, the Windows PR checks, and the order of merging.
-- [ ] `WINDOWS-PLAN.md`: Where it stands, the module's result, and what's left only GitHub can check.
+- [x] `docs/designs/release.md`: the Windows target (the sidecars it downloads, the `.zip` and its notice), `install.ps1`, the Windows PR checks, and the order of merging.
+- [x] `WINDOWS-PLAN.md`: Where it stands, the module's result, and what's left only GitHub can check.
 
 **Verification:**
-- [ ] Manual: the spec's Success Criteria 1–6, each ticked here, or marked as waiting for GitHub.
+- [x] Manual: the spec's Success Criteria 1–6, each ticked here, or marked as waiting for GitHub.
+  - [x] 1. canal's and holistics-core's `windows-x64` rows, like their others; each Windows binary answers `--version` on Windows (T1, T2). Waiting for GitHub: the test builds, which you chose not to run.
+  - [x] 2. `anfra-windows-x64.zip` with `anfra.exe` and the notice, in `SHA256SUMS`; a missing sidecar fails by name; by hand, its `anfra.exe` queries DuckDB and loads MotherDuck's extension on Windows 11 (T3).
+  - [x] 3. `install.ps1`: installs, adds to the user PATH, a new session finds anfra; a wrong checksum refuses; the window stays open; PSScriptAnalyzer clean but for `Write-Host` (T4). Not checked: PowerShell 7 (not installed here), ARM by reading only.
+  - [x] 4. `install.sh` on Git Bash points to `install.ps1` (T5).
+  - [x] 5. `GOOS=windows go vet` and the required `windows` job; its package list passes on Windows (T6–T8). Waiting for GitHub: its first run.
+  - [x] 6. `release.md` and `WINDOWS-PLAN.md` (T9).
 
 **Dependencies:** T1–T8
 
@@ -195,5 +201,5 @@ Then all 15 passed on Windows and on Linux; no test-program copies left; lint cl
 **Estimated scope:** S
 
 ### Checkpoint D: Complete
-- [ ] Spec success criteria 1–6 met, or what only GitHub can check listed, with the order of merging.
+- [x] Spec success criteria 1–6 met, or what only GitHub can check listed, with the order of merging.
 - [ ] Ready for review with you (and the commit split proposed).

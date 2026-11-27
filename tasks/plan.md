@@ -40,33 +40,33 @@ T6–T8 don't depend on T1–T5 and could go first; they stay after, so the risk
 ## Task List
 
 ### Phase 1: The sidecars build for Windows
-- [ ] T1: canal's `windows-x64` row
-- [ ] T2: holistics-core's `windows-x64` row
+- [x] T1: canal's `windows-x64` row
+- [x] T2: holistics-core's `windows-x64` row
 
 ### Checkpoint A
-- [ ] Both Windows binaries built by hand with the rows' commands, and `--version` answers; you decide whether to push both branches and run each workflow as a test build.
+- [x] Both Windows binaries built by hand with the rows' commands, and `--version` answers; you decide whether to push both branches and run each workflow as a test build.
 
 ### Phase 2: anfra's release and its installers
-- [ ] T3: anfra's release builds `anfra-windows-x64.zip`
-- [ ] T4: `install.ps1`
-- [ ] T5: `install.sh` on Git Bash points to `install.ps1`
+- [x] T3: anfra's release builds `anfra-windows-x64.zip`
+- [x] T4: `install.ps1`
+- [x] T5: `install.sh` on Git Bash points to `install.ps1`
 
 ### Checkpoint B
-- [ ] On Windows 11, from a local release: `install.ps1` installs the `.zip` T3's commands built, `anfra` answers queries in a new terminal (MotherDuck's extension included), and a wrong checksum refuses.
+- [x] On Windows 11, from a local release: `install.ps1` installs the `.zip` T3's commands built, `anfra` answers queries in a new terminal (MotherDuck's extension included), and a wrong checksum refuses.
 
 ### Phase 3: anfra's PR checks
-- [ ] T6: `GOOS=windows go vet ./...` in the Linux checks
-- [ ] T7: the package list's tests pass on Windows
-- [ ] T8: the required `windows` CI job
+- [x] T6: `GOOS=windows go vet ./...` in the Linux checks
+- [x] T7: the package list's tests pass on Windows
+- [x] T8: the required `windows` CI job
 
 ### Checkpoint C
-- [ ] The package list passes on Windows here; the workflows parse.
+- [x] The package list passes on Windows here; the workflows parse.
 
 ### Phase 4: Close
-- [ ] T9: Docs and plan
+- [x] T9: Docs and plan
 
 ### Checkpoint D: Complete
-- [ ] Spec success criteria 1–6 met; what only GitHub can check listed for you, with the order of merging; the commit split reviewed with you.
+- [x] Spec success criteria 1–6 met; what only GitHub can check listed for you, with the order of merging; the commit split reviewed with you.
 
 ## Risks and Mitigations
 
