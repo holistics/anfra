@@ -76,16 +76,21 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-line-endings.md](../SPEC-win-line-endi
 
 ## Phase 3: Windows and close
 
-### - [ ] T5: Round trip on Windows 11 with `acme`
+### - [x] T5: Round trip on Windows 11 with `acme`
 
 **Acceptance criteria:**
-- [ ] In `C:\Users\nuita\wincheck\pulled`, after pulling `acme`'s latest: save `models/sales/products.model.aml` with CRLF; `publish status` shows nothing to publish.
-- [ ] Change one line, `publish check` lists only that file, publish it; pulled into a fresh folder, it is LF.
-- [ ] Put the line back, publish again: `acme` holds the files it held before.
-- [ ] A pull into the CRLF folder keeps the file CRLF.
+- [x] In `C:\Users\nuita\wincheck\pulled`, after pulling `acme`'s latest: save `models/sales/products.model.aml` with CRLF; `publish status` shows nothing to publish.
+- [x] Change one line, `publish check` lists only that file, publish it; pulled into a fresh folder, it is LF.
+- [x] Put the line back, publish again: `acme` holds the files it held before.
+- [x] A pull into the CRLF folder keeps the file CRLF.
 
 **Verification:**
-- [ ] Manual, on Windows 11 (the user approved publishing to `acme`), results recorded here.
+- [x] Manual, on Windows 11 (the user approved publishing to `acme`), results recorded here. Done 2026-11-27, in this order:
+  1. `pulled`, with `products.model.aml` saved CRLF: `pull` up to date; `publish status`: "Everything here is published".
+  2. `pulled2` (new, `init` + `pull`): the file arrived LF, SHA-1 `5ef68d27…` (the original).
+  3. `pulled2`: one comment line added; `publish status` listed only `products.model.aml`; published (`…@9fb694ed`).
+  4. `pulled` (CRLF): `pull` updated the file, no refusal; all 12 lines CRLF, the new one included.
+  5. `pulled`: the line removed (file still CRLF); `publish status` listed only that file; published (`…@7ed5738d`). Pulled into `pulled2`: the original bytes again, LF, SHA-1 `5ef68d27…`.
 
 **Dependencies:** T1, T2
 
