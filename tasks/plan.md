@@ -39,6 +39,7 @@ T5 your hand checks in four terminals (needs T1, T2)
 
 ### Phase 2: By hand, and close
 - [ ] T5: Your hand checks in Windows Terminal, PowerShell 5, `cmd` and VS Code
+- [x] T5a: Typed answers on Windows (found in T5: `cancelreader`'s raw mode; the console's mode put back)
 - [ ] T6: Docs and plan
 
 ### Checkpoint B: Complete

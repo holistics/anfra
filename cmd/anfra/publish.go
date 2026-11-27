@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/muesli/cancelreader"
 	"github.com/spf13/cobra"
 
 	"github.com/holistics/anfra/internal/app"
@@ -217,7 +216,7 @@ func readLines(ctx context.Context, in io.Reader) chan string {
 	lines := make(chan string)
 	go func() {
 		defer close(lines)
-		cr, err := cancelreader.NewReader(in)
+		cr, err := newLineReader(in)
 		if err != nil {
 			return
 		}

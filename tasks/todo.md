@@ -90,6 +90,18 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-terminal.md](../SPEC-win-terminal.md).
 
 **Estimated scope:** M
 
+### - [x] T5a: Typed answers on Windows (found in T5)
+
+**Description:** Found in your hand check: `anfra init`'s y/n question took no typing on Windows. `cancelreader` (which lets a question's read be stopped, so in `anfra console` a question ended by Ctrl-C doesn't take the next line) also puts the Windows console in raw mode: no echo, Enter doesn't end the line, Ctrl-C is a key. Linux and macOS weren't affected.
+
+**Acceptance criteria:**
+- [x] Option A, decided with you after weighing C (Bubble Tea on Windows only): on Windows, the console's own mode is put back right after `cancelreader` makes its reader (`cmd/anfra/linereader_windows.go`), keeping its stoppable wait; one way of asking questions on every OS. Linux and macOS unchanged (`linereader_unix.go`).
+- [x] The one uncertain case checked first: Ctrl-C with an answer half-typed ends the read.
+
+**Verification:**
+- [x] By you, on Windows 11 (2026-11-27), with a check program built from `readLines`' logic: typed `yes` + Enter arrived, letters shown; `abc` + Ctrl-C ended the read; the next question got `next`, nothing taken. And `anfra init`: the sample question took `y`.
+- [x] Linux: `go test ./cmd/anfra/`; lint for Linux and Windows. (No automated Windows test: it needs a real console; `win-release`'s Windows CI can't type either.)
+
 ### - [ ] T6: Docs and plan
 
 **Acceptance criteria:**
