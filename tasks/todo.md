@@ -114,19 +114,19 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-release.md](../SPEC-win-release.md). P
 **Result** (2026-11-27): with `uname -s` stubbed as `MINGW64_NT`, `MSYS_NT` and `CYGWIN_NT`, `install.sh` stops with the PowerShell line; `FreeBSD` still gets "unsupported OS"; Linux goes on to the download as before. In Git Bash on Windows 11, the same message.
 
 ### Checkpoint B
-- [ ] On Windows 11, `install.ps1` from a local release installs T3's `.zip`; `anfra` answers queries in a new terminal, MotherDuck's extension included; a wrong checksum refuses.
+- [x] On Windows 11, `install.ps1` from a local release installs T3's `.zip`; `anfra` answers queries in a new terminal, MotherDuck's extension included; a wrong checksum refuses.
 - [ ] Review with you.
 
 ## Phase 3: anfra's PR checks
 
-### - [ ] T6: `GOOS=windows go vet ./...` in the Linux checks
+### - [x] T6: `GOOS=windows go vet ./...` in the Linux checks
 
 **Acceptance criteria:**
-- [ ] `continuous_integration.yml`'s `test` job runs `GOOS=windows go vet ./...` after its `go vet`.
+- [x] `continuous_integration.yml`'s `test` job runs `GOOS=windows go vet ./...` after its `go vet`.
 
 **Verification:**
-- [ ] It passes here (lightly).
-- [ ] The workflow parses.
+- [x] It passes here (lightly).
+- [x] The workflow parses. `actionlint` isn't installed: the YAML parses.
 
 **Dependencies:** None
 
