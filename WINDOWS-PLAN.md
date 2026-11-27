@@ -7,7 +7,7 @@ The [brief](#summary) is for reviewing, deciding and estimating: the summary, th
 - **Today:** anfra runs only on macOS and Linux. `install.sh` refuses other OSes, the release builds only 4 targets (linux/darwin × x64/arm64), and `GOOS=windows go build ./cmd/anfra` failed until `win-process-lifecycle` (on this branch, not released). A Windows user needs WSL or Docker first, and some features don't work there ([Alternatives](#alternatives-wsl-and-docker)). The README "one prompt" quickstart runs `curl | bash`, so it breaks at step 1 in PowerShell.
 - **Goal:** a Windows user runs one PowerShell line, and then every anfra feature works the same as on Mac/Linux: the CLI, `anfra serve`, `anfra console`, publish/pull, update, and agent setup.
 - **Recommendation:** build native Windows support (windows-x64). Ship WSL docs now as the interim path. Keep Docker for hosting.
-- **Cost:** **≈ 32–46.5 engineer-days** one-time, with Claude helping ([Estimate](#estimate)); about 4–6 calendar weeks with 2 engineers. Plus ongoing upkeep, mostly in canal's Windows build and the release ([Long-term maintenance](#long-term-maintenance)).
+- **Cost:** **≈ 30.5–44.5 engineer-days** one-time (signing left for later), with Claude helping ([Estimate](#estimate)); about 4–6 calendar weeks with 2 engineers. Plus ongoing upkeep, mostly in canal's Windows build and the release ([Long-term maintenance](#long-term-maintenance)).
 - **Decision:** **go** (2026-11-24). Both checks passed: the transport, and canal building and running on Windows (~1 ED, no canal code change). MotherDuck on Windows: supported, by linking DuckDB's official `duckdb.dll` ([Decisions made](#decisions-made)).
 - **Status:** **M1 reached** (2026-11-25): anfra runs on Windows 11. `win-sidecar-transport`, `win-canal` (CI deferred) and `win-process-lifecycle` are done: `version`, `validate`, `show` and `query`, with and without the cache, work with the sidecars, and no sidecar outlives anfra. Next: `win-anfra-node` ([Where it stands](#where-it-stands)).
 
@@ -18,7 +18,6 @@ The [brief](#summary) is for reviewing, deciding and estimating: the summary, th
 
 | Decision | Options | Recommended | Needed by | What it changes |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signing: how | A bought certificate; or Azure Trusted Signing | Azure Trusted Signing (renews its short-lived certificates itself) | Start now (identity checks take days to weeks); used by `win-release` | Upkeep: no yearly renewal to remember |
 | **Third-party license notices** | Generate and ship a `THIRD_PARTY_NOTICES` file with every release, on every OS (DuckDB, Arrow, godror/ODPI-C, Bun and the Go and npm modules); or don't | Ship them, for all OSes. **Note:** the static build also contains DuckDB, on Linux and macOS today, so this is needed whichever Windows build is chosen; nothing ships these notices now. Confirm with whoever owns licensing (Bun's WebKit part has its own terms). | Before `win-release`; it decides the MotherDuck row above | Ships: the Windows DLL build (MotherDuck). Doesn't ship: the static Windows build, MotherDuck not on native Windows yet. ~1–2 ED, all OSes, outside this plan's total: tracked in the [backlog](docs/todos/backlog.md#third-party-license-notices-in-releases) ([findings](docs/research/windows-canal-build.md#licenses)) |
 | Windows download format | `anfra-windows-x64.zip` (opens with a double-click; `anfra update` learns to unzip, ~0.25 ED) or `anfra-windows-x64.exe.gz` (no update-code change, but Windows can't open it by hand) | `.zip` | `win-release`, `win-self-update` | `install.ps1`, `anfra update`, docs |
 | Windows versions supported | "Windows 10 1803+" (what AF_UNIX needs) or "Windows 10 22H2 and Windows 11, x64" | Windows 10 22H2 and Windows 11, x64 | `win-skills-docs` (docs), the test matrix | Windows 10 support ended in October 2025 (paid extended updates run to October 2026). anfra technically needs Windows 10 1803+, but a stated policy such as "Windows 10 22H2 and Windows 11, x64" keeps old Windows bugs from becoming upkeep |
@@ -40,7 +39,7 @@ The [brief](#summary) is for reviewing, deciding and estimating: the summary, th
 | Repos | All 3: anfra, canal (anfra-canal), holistics-core (anfra-node) | anfra embeds the other two; no Windows sidecars, no Windows anfra |
 | Install | `install.ps1` only (`irm https://anfra.ai/install.ps1 \| iex`) | The same pattern as `install.sh`, and what the one-prompt quickstart needs |
 | Transport | Keep Unix sockets (AF_UNIX) on Windows; no fallback transport needed | All five `win-sidecar-transport` checks passed on Windows 11, with no code change in any repo: anfra → anfra-node, canal-query → canal-lake (gRPC), canal's restart on a leftover socket, socket path length, anfra-node's stdin watchdog ([findings](docs/research/windows-sidecar-transport.md)) |
-| Signing | Sign every Windows `.exe` in CI | An unsigned `.exe` is warned about or blocked on download |
+| Signing | **Unsigned first, signing later** (2026-11-27) | `install.ps1` downloads `anfra.exe` through PowerShell, which doesn't mark it as from the internet, so SmartScreen doesn't warn; anfra's sidecars and `anfra update` don't come through a browser either. `install.ps1` verifies the release's SHA-256 instead. What unsigned costs: a browser download from GitHub warns ("More info → Run anyway"), and antivirus false alarms are more likely. Revisit when those show up, or manual downloads matter: Azure Trusted Signing (~$10/month, if Holistics is eligible) or an OV certificate (~$220–440/year, plus a cloud signing service for CI). |
 | Developing anfra | Windows users can *use* anfra natively; contributors still develop in WSL. CI gets a Windows job. | Users need it; contributors don't |
 | Line endings | `anfra init` writes `.gitattributes` (LF), and publish/pull hash text files with CRLF→LF | No change to the hash format or the server |
 | Tests on Windows | CI runs `GOOS=windows go vet ./...`, and `go test` on Windows only for packages with Windows logic | Catches Windows bugs in the PR that causes them, without fixing tests that only fail because of test setup |
@@ -63,15 +62,15 @@ The only place effort is added up. Every figure assumes **Claude helping**. Each
 | `win-files-auth` | 2.45–3.2 | Medium: the list comes from reading code; more may appear | Done once; new code may repeat its mistakes |
 | `win-line-endings` | 1.5–2 | Medium: touches publish hashing | Done once; new code must follow its rule |
 | `win-terminal` | 1.5–2.25 | Medium: mostly manual testing | Mostly done once |
-| `win-release` | 4.5–6 | Medium: signing is new; the certificate's lead time isn't in the ED | Keeps costing effort, often |
+| `win-release` | 3.5–4.5 | Medium: the Windows CI build is new; signing (1–1.5) left for later | Keeps costing effort, often |
 | `win-self-update` | 0.6–1.25 | High: the library already handles Windows | Mostly done once |
 | `win-skills-docs` | 2.7–3.6 | High: text work | Keeps costing effort, sometimes |
 | Guard: Windows smoke tests in canal's and holistics-core's CI | 0.5–1 | High | — |
 | Guard: CI check of the release binaries' minimum OS versions | 0.25–0.5 | High | — |
 | End-to-end testing on Windows ([Verification](#verification)) | 3–4 | Medium | — |
-| **Subtotal** | **≈ 26.5–38.5** |  |  |
+| **Subtotal** | **≈ 25.5–37** |  |  |
 | Buffer for review, CI waits, release coordination, surprises (20%) | 5–7.5 |  |  |
-| **Total** | **≈ 32–46.5 ED (6.5–9.5 engineer-weeks)** |  |  |
+| **Total** | **≈ 30.5–44.5 ED (6–9 engineer-weeks)** |  |  |
 
 
 Not in the total:
@@ -89,7 +88,7 @@ Not in the total:
 - Each figure is a range: the low end is "works first time", the high end covers the Windows surprises that are likely.
 - Each work row was estimated by what Claude speeds up. Code, tests, scripts and docs go about 2–3× faster. Manual testing on Windows, CI round trips (the canal MinGW/DuckDB build), the signing setup, steps a person does (the Cloudflare rule) and cross-team coordination barely speed up. Claude can write Windows code from WSL but can't fully test it; a person on Windows, or the Windows CI job, does that. The speed-ups are judgment, not measured.
 - Code review, waiting on CI and release coordination aren't in the module rows; the 20% buffer covers them.
-- **Calendar time:** with 2 engineers (one on anfra, one on canal + anfra-node, then both on anfra), about **4–6 weeks**. The code-signing certificate runs in parallel and must be ready by M2.
+- **Calendar time:** with 2 engineers (one on anfra, one on canal + anfra-node, then both on anfra), about **4–6 weeks**.
 - **Re-estimate at M1,** when anfra first runs on Windows.
 
 
@@ -123,7 +122,7 @@ Judged only on what we control:
 | Data App live reload | Works | Often broken for repos on `C:\`, and file access is slow | Works for repos inside WSL |
 | Agent commands | `anfra …`, as on Mac/Linux | `docker exec anfra-serve anfra …` everywhere; skills need a Docker version | `anfra …`, with the agent run inside WSL |
 | Line endings (`win-line-endings`) | Needed | Also needed (files edited on Windows are CRLF) | Needed if files are edited from Windows |
-| Our one-time cost | ~32–46.5 ED | ~2–4 ED (login fix, skills, docs) | ~0.5–1 ED (docs, skills note) |
+| Our one-time cost | ~30.5–44.5 ED | ~2–4 ED (login fix, skills, docs) | ~0.5–1 ED (docs, skills note) |
 | Our ongoing cost | ~3–6 ED a quarter, across 3 repos | ~0 | ~0 |
 
 
@@ -150,16 +149,16 @@ Tested by hand (Docker on Windows, with Claude installing Docker from one prompt
 | `win-line-endings` | **Done** (2026-11-27). publish and pull read text files as LF, so a file saved on Windows publishes only for real changes and merges cleanly; pull keeps each file's own line ending; `anfra init` writes `.gitattributes`; `config.yml` and `AGENTS.md` keep theirs. Round trip on Windows with `acme`. | [Spec](SPEC-win-line-endings.md), [tasks](tasks/todo.md) |
 | `win-terminal`, `win-release`, `win-self-update`, `win-skills-docs` | Not started | — |
 | Interim WSL docs | Not started | — |
-| Code-signing purchase | Not started | — |
+| Code signing | Not needed for the first release: unsigned first, signing later (2026-11-27) | [Decisions made](#decisions-made) |
 
 
 
 
 ## Milestones
 
-1. `win-sidecar-transport` **and** `win-canal`**'s build spike**, in parallel. Start the code-signing purchase and the interim WSL docs the same day. **Go/no-go** after both ([Decisions needed](#decisions-needed)).
+1. `win-sidecar-transport` **and** `win-canal`**'s build spike**, in parallel. Start the interim WSL docs the same day. **Go/no-go** after both ([Decisions needed](#decisions-needed)).
 2. **M1: it compiles** (reached 2026-11-25, the CI step deferred with the rest of CI) — `win-process-lifecycle` + the `GOOS=windows go vet` CI step. `anfra version`, `validate`, `show` and `query` work on Windows, with a locally built `anfra-node.exe` and the build spike's `anfra-canal.exe`. Re-estimate the rest here. (~2 weeks)
-3. **M2: sidecars ship** — `win-canal` and `win-anfra-node`, then `build_release.yml` produces a signed `anfra-windows-x64.exe`. Can run in parallel with M1. (~2 weeks)
+3. **M2: sidecars ship** — `win-canal` and `win-anfra-node`, then `build_release.yml` produces `anfra-windows-x64` (unsigned at first). Can run in parallel with M1. (~2 weeks)
 4. **M3: everything works** — `win-files-auth`, `win-line-endings`, `win-terminal`, `win-self-update`, and the Windows CI test job (`win-release`). (~2–3 weeks)
 5. **M4: users can get it** — `install.ps1`, skills, README and docs (`win-release`, `win-skills-docs`), end-to-end testing, announce. (~1–2 weeks)
 
@@ -177,11 +176,11 @@ The work below, split into modules that each ship and are checked on their own. 
 | `win-sidecar-transport` | Prove that Unix sockets work on Windows between anfra (Go), anfra-node (Bun) and canal (Go and gRPC). Fix socket path length, the stale-socket check, and the gRPC `unix:` address with `C:\`. | all 3 | — | [SPEC-win-sidecar-transport.md](SPEC-win-sidecar-transport.md), in progress |
 | `win-process-lifecycle` | anfra compiles on Windows. Job Object, clean stop, `.exe` sidecar unpack, `detach` and console restart, the console's background server stop, serve's busy-port fallback. | anfra | `win-sidecar-transport` | [SPEC-win-process-lifecycle.md](SPEC-win-process-lifecycle.md) |
 | `win-canal` | canal builds for windows-x64 (MinGW, DuckDB fork) and stops cleanly on Ctrl-Break (already handled). Its Windows CI (release row, PR check) and signing come later. | canal | — (the build spike); `win-sidecar-transport` (the rest) | [SPEC-win-canal.md](SPEC-win-canal.md) |
-| `win-anfra-node` | anfra-node builds for windows-x64 (Bun cross-compile, signing), `SIGBREAK`, path fallback (the watchdog already works on Windows). A Windows smoke test in holistics-core's CI. Input: `win-sidecar-transport`'s check 5 (stdin watchdog) result. | holistics-core | `win-sidecar-transport` | — |
+| `win-anfra-node` | anfra-node builds for windows-x64 (Bun cross-compile; signing later), `SIGBREAK`, path fallback (the watchdog already works on Windows). A Windows smoke test in holistics-core's CI. Input: `win-sidecar-transport`'s check 5 (stdin watchdog) result. | holistics-core | `win-sidecar-transport` | — |
 | `win-files-auth` | Saved logins, safe file replace, export `file:` links, `RemoveLegacy` guard, path checks (security), time zone, DuckDB lock message. | anfra | `win-process-lifecycle` | — |
 | `win-line-endings` | `.gitattributes` from `init`, reading files as LF on publish and pull (hashes, uploads, pull's merge), keeping each file's own line ending when anfra edits it. | anfra | `win-process-lifecycle` | — |
 | `win-terminal` | Colors in old cmd and PowerShell, UTF-8 trees, console keys, prompts. | anfra | `win-process-lifecycle` | — |
-| `win-release` | The Windows target in `build_release.yml`, embedding the Windows sidecars, signing, `install.ps1`, the Windows CI job and its tests, the binaries' minimum-OS check. | anfra | `win-process-lifecycle`, `win-canal`, `win-anfra-node` | — |
+| `win-release` | The Windows target in `build_release.yml`, embedding the Windows sidecars, `install.ps1` (signing later), the Windows CI job and its tests, the binaries' minimum-OS check. | anfra | `win-process-lifecycle`, `win-canal`, `win-anfra-node` | — |
 | `win-self-update` | The `anfra update` asset name, the `.old` exe left behind, the reinstall hint. | anfra | `win-release` | — |
 | `win-skills-docs` | Skill hooks (bash JSON parse, `.ps1` versions), skill text for PowerShell. Install docs: README, the anfra.ai Installation page, the Cloudflare redirect for `anfra.ai/install.ps1`, release notes. Design and dev docs. | anfra | `win-release` | — |
 
@@ -255,7 +254,7 @@ Note: the local `/home/nui/works/canal` checkout is old. Work from `origin/maste
 
 | Work | ED |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `.github/workflows/anfra_node_build_release.yml`: add `windows-x64` (Bun cross-compiles `bun-windows-x64` from Linux; there are no native modules, and `@holistics/aml` already ships `win32-x64-msvc` plus a WASM fallback). Output `anfra-node-windows-x64.exe` and sign it. Check that Bun 1.2.10 is fine (the research says yes for sockets), or bump it. | 0.5–1 |
+| `.github/workflows/anfra_node_build_release.yml`: add `windows-x64` (Bun cross-compiles `bun-windows-x64` from Linux; there are no native modules, and `@holistics/aml` already ships `win32-x64-msvc` plus a WASM fallback). Output `anfra-node-windows-x64.exe` (signing later, as anfra's). Check that Bun 1.2.10 is fine (the research says yes for sockets), or bump it. | 0.5–1 |
 | `src/rpc/server.ts:51-113`: keep `listen(path)` with a normal file path; never pass a `\\.\pipe\` name (see the research). Make sure the stale-file `fs.unlinkSync` works on Windows. | 0.1–0.25 |
 | `src/main.ts:89-90`: also handle `SIGBREAK`, for anfra's Ctrl-Break stop. The watchdog needs no change: `win-sidecar-transport`'s check 5 showed stdin EOF stops anfra-node on Windows, cleanly, after a crash, and after `taskkill /F` of anfra; the parent-PID check never fires there, but never misfires either. | 0.25 |
 | `src/amql-shell/source/selectors.ts:10-14`: the `'/repo'` fallback should be a real Windows path. | 0.25 |
@@ -372,8 +371,8 @@ Also check, on Windows, `anfra update` from inside `anfra console`: the console 
 | Work | ED |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | `.github/workflows/build_release.yml`: add `windows-x64` (`GOOS=windows GOARCH=amd64`), download `anfra-node-windows-x64.exe` and `anfra-canal-windows-x64.exe`, output the Windows asset in the [chosen format](#decisions-needed) (`anfra-windows-x64.zip` recommended). `manifest.yml`: bump the sidecar tags to versions with Windows builds. | 0.5 |
-| **Code signing:** buy an OV certificate or set up Azure Trusted Signing, then add a signing step (signtool / `azure/trusted-signing-action`) to this repo's release. The other two repos reuse it. **Start the purchase now: identity checks take days to weeks.** | 1–1.5 |
-| New `install.ps1` in the repo root, next to `install.sh`: detect the arch, download into `%USERPROFILE%\.anfra\bin\anfra.exe`, print the checksum (like `install.sh`, which doesn't verify it yet), add the folder to the user PATH, say to open a new terminal, refuse arm64 for now with a clear message. `install.sh`: on Git Bash/MSYS/Cygwin, point to `install.ps1`. **Merge order:** the script goes live the moment it reaches `main` (users fetch it from `main`, not from a release), so merge `install.ps1` only **after** the first release that has the Windows asset. Otherwise it downloads a file that doesn't exist yet. | 1–1.25 |
+| **Later, not in the first release (decided 2026-11-27):** code signing. Set up Azure Trusted Signing or buy an OV certificate, then add a signing step (signtool / `azure/trusted-signing-action`) to this repo's release; the other two repos reuse it. Identity checks take days to weeks. | (1–1.5, later) |
+| New `install.ps1` in the repo root, next to `install.sh`: detect the arch, download into `%USERPROFILE%\.anfra\bin\anfra.exe`, **verify its SHA-256** against the release's checksums and refuse a mismatch (what stands in for signing at first), add the folder to the user PATH, say to open a new terminal, refuse arm64 for now with a clear message. `install.sh`: on Git Bash/MSYS/Cygwin, point to `install.ps1`. **Merge order:** the script goes live the moment it reaches `main` (users fetch it from `main`, not from a release), so merge `install.ps1` only **after** the first release that has the Windows asset. Otherwise it downloads a file that doesn't exist yet. | 1–1.25 |
 | `.github/workflows/continuous_integration.yml`: a `windows-latest` job running `go build ./...`, and `go test` on the packages with Windows logic (see the tests below), plus `GOOS=windows go vet ./...` in the Linux lint job, so Windows compile breaks show early. | 0.75–1 |
 | `internal/sidecar/{anfranode,anfracanal}/embed_release.go`: keep the same embed path; the build copies the Windows sidecar into it. | 0.25 |
 | Windows also embeds DuckDB's official `duckdb.dll` (from DuckDB's release `libduckdb-windows-amd64.zip`, the version the Go bindings pin, checksum checked), built with canal by `build-windows-dll.ps1`'s flags (`duckdb_use_lib`). A release check that the DLL's DuckDB version equals the bindings' (`select version()` through canal, or the file's version). | 0.5 |
@@ -435,7 +434,7 @@ The fixes, where they fall in those packages:
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------- |
 | `docs/designs/architecture.md:94`, `internal/home/home.go:5` (comment) | `bin/anfra` → `bin/anfra` (`bin\anfra.exe` on Windows), "the installer's binary (`install.sh`, `install.ps1`)" | 0.1 |
 | `docs/designs/sidecars.md` | A Windows section: Job Object, graceful stop, Unix sockets on Windows (from `win-sidecar-transport`'s findings doc) | 0.1–0.25 |
-| `docs/designs/release.md` | The Windows target, the `.zip` asset, signing, `install.ps1` | 0.1 |
+| `docs/designs/release.md` | The Windows target, the `.zip` asset, `install.ps1` and its checksum check, unsigned at first | 0.1 |
 | `DEVELOPMENT.md` | One line: on Windows, develop in WSL; the Windows CI job tests the Windows code | 0.1 |
 | `docs/README.md` | List the `win-sidecar-transport` findings doc under Research (done in its T1) | — |
 
@@ -460,7 +459,7 @@ What brings work back after each module ships, what happens if that work is miss
 | `win-files-auth` | One-off | New code that saves files by rename, checks Unix permissions, builds `file:` links, or splits paths on `/` | Random "Access is denied" errors, failed logins, broken export links, on Windows only | Use the shared helpers the fixes add (safe file replace, `file:` links), not copies. The Windows CI job tests those packages. A review checklist item. | Low |
 | `win-line-endings` | One-off | New code that hashes, compares or writes repo files; new file types in a repo. | False "changed" files and conflicts for Windows users in mixed teams | One function for reading repo text, normalizing line endings. CRLF test files in the publish tests. `.gitattributes` covers new file types. | Low |
 | `win-terminal` | One-off | New terminal UI | Garbled colors in old cmd/PowerShell windows. Low impact: Windows 11 uses Windows Terminal by default. | Route all output through `internal/cliui`. A quick manual look at each minor release. | Low |
-| `win-release` | Keeps costing effort, on every release, and whenever the signing certificate or the build machines change. | Every release; **the signing certificate expiring**; GitHub changing the Windows runner image | **Users can't install anfra:** the release fails, or ships unsigned and SmartScreen blocks it | A CI step that checks the signature (`signtool verify`) and fails the release without it. Azure Trusted Signing (renews itself), or a calendar reminder and owner for a bought certificate. Pin the runner image (`windows-2022`). The minimum-OS check. | High |
+| `win-release` | Keeps costing effort, on every release, and whenever the signing certificate or the build machines change. | Every release; GitHub changing the Windows runner image; once signing is added, **the signing certificate expiring** | **Users can't install anfra:** the release fails, or its checksums don't match | `install.ps1` refuses a checksum mismatch. Pin the runner image (`windows-2022`). The minimum-OS check. Once signing is added: a CI step that checks the signature (`signtool verify`), and Azure Trusted Signing (renews itself) or a calendar reminder and owner for a bought certificate. | High |
 | `win-self-update` | One-off | The release file name lives in **three places**: `build_release.yml`, `assetName`, `install.ps1` | `anfra update` says "no release build", or `install.ps1` downloads nothing | One source of truth for target names (`manifest.yml`), and a test that the three agree. A Windows CI test that updates from the previous release. | Low–Medium |
 | `win-skills-docs` | Keeps costing a little effort: every new skill, hook or doc page needs a Windows version. | Every new skill, doc page or hook with shell commands | Agents on Windows fail, or skip hooks silently; docs drift back to Mac/Linux only | Move the hook logic into the `anfra` binary (e.g. `anfra hook check-update`), so there is one version, not `.sh` and `.ps1` copies. A "Windows?" item in the PR template. | Low |
 
