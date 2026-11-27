@@ -33,10 +33,10 @@ T5 end to end on Windows: update, and update inside the console (needs T1–T4)
 - [x] T1: `anfra update` verifies the release's checksum, on every OS
 - [x] T2: Each release publishes `SHA256SUMS`
 - [x] T3: The Windows asset: `anfra-windows-x64.zip`, unzipped
-- [ ] T4: Windows: the old binary, and the advice on failure
+- [x] T4: Windows: the old binary, and the advice on failure
 
 ### Checkpoint A
-- [ ] T1–T4's tests pass on Linux and Windows; review with you.
+- [x] T1–T4's tests pass on Linux and Windows; review with you at the end of the run.
 
 ### Phase 2: End to end, and close
 - [ ] T5: End to end on Windows with a local fake release

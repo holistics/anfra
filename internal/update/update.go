@@ -245,7 +245,7 @@ func applyTo(ctx context.Context, r *Release, progress io.Writer, target string)
 		return fmt.Errorf("unpack %s: %w", r.Tag, err)
 	}
 	defer bin.Close()
-	if err := selfupdate.Apply(bin, selfupdate.Options{TargetPath: target}); err != nil {
+	if err := selfupdate.Apply(bin, selfupdate.Options{TargetPath: target, OldSavePath: oldSavePath(target)}); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return fmt.Errorf("Couldn't replace this anfra (%v), or put it back (%v). Reinstall it with `%s`.", err, rerr, installCommand) //nolint:staticcheck // ST1005: the whole message, shown as it is
 		}
@@ -332,9 +332,6 @@ type readCloser struct {
 }
 
 func (r readCloser) Close() error { return r.close() }
-
-// installCommand installs anfra by hand, for when an update can't.
-const installCommand = "curl -fsSL https://anfra.ai/install.sh | bash"
 
 // progressReader wraps the download stream and renders a single, carriage-return
 // updated progress line as bytes flow through. It redraws only when the whole

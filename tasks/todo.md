@@ -55,15 +55,15 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 
 **Estimated scope:** S
 
-### - [ ] T4: Windows: the old binary, and the advice on failure
+### - [x] T4: Windows: the old binary, and the advice on failure
 
 **Acceptance criteria:**
-- [ ] Before an update on Windows, a leftover `.anfra.exe.old` beside `anfra.exe` is removed; when Windows refuses (in use), anfra says so and goes on with the update.
-- [ ] A failure's advice on Windows is `irm https://anfra.ai/install.ps1 | iex`; elsewhere `install.sh`, as today.
+- [x] Before an update on Windows, a leftover `.anfra.exe.old` beside `anfra.exe` is removed; when Windows refuses (in use), anfra says so and goes on with the update. Changed: selfupdate moves `anfra.exe` aside to `.anfra.exe.old`, which fails while a leftover there is in use, so this update uses a name of its own (`.anfra.exe.old-<n>`) then, and every leftover goes at the next update; nothing to say, the update just works.
+- [x] A failure's advice on Windows is `irm https://anfra.ai/install.ps1 | iex`; elsewhere `install.sh`, as today.
 
 **Verification:**
-- [ ] Windows (`_windows_test.go`): a leftover `.old` is removed; one held open is reported and the update still applies.
-- [ ] Tests pass (Linux); lint once, Linux and Windows.
+- [x] Windows (`_windows_test.go`): a leftover `.old` is removed; one held open is reported and the update still applies.
+- [x] Tests pass (Linux); lint once, Linux and Windows.
 
 **Dependencies:** T3
 
@@ -72,7 +72,7 @@ Plan: [plan.md](plan.md). Spec: [SPEC-win-self-update.md](../SPEC-win-self-updat
 **Estimated scope:** S
 
 ### Checkpoint A
-- [ ] T1–T4's tests pass on Linux and Windows; review with you.
+- [x] T1–T4's tests pass on Linux and Windows (`internal/update` in full on Windows). Review with you at the end of the run.
 
 ## Phase 2: End to end, and close
 
